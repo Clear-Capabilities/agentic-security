@@ -39,7 +39,7 @@ import { withEntryTimeout, EntryTimeout } from '../_lib/watchdog.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, '..', '..', 'scanner', 'bin', 'agentic-security.js');
-const LABELS = path.join(HERE, 'labels.json');
+const LABELS = process.env.SCA_REPLAY_LABELS || path.join(HERE, 'labels.json');
 const RESULT = path.join(HERE, 'RESULT.json');
 
 // Generous, because the point of a watchdog is to bound a hang, not to race a
@@ -91,6 +91,7 @@ function pct(n, d) { return d === 0 ? null : Number(((n / d) * 100).toFixed(2));
 async function main() {
   const showHeldOut = process.argv.includes('--show-heldout');
   const asJson = process.argv.includes('--json');
+  const checkMode = process.argv.includes('--check');
   const manifest = readManifest();
 
   if (!fs.existsSync(LABELS)) {
@@ -247,6 +248,8 @@ async function main() {
     entries: perEntry.map((r) => (r.heldOut && !showHeldOut ? { id: r.id, heldOut: true, status: r.status, withheld: 'per-entry detail withheld; pass --show-heldout' } : r)),
   };
 
+  if (checkMode) { process.exit(checkAgainstBaseline(result)); }
+
   fs.writeFileSync(RESULT, JSON.stringify(result, null, 2) + '\n');
 
   if (asJson) { process.stdout.write(JSON.stringify(result, null, 2) + '\n'); return; }
@@ -270,6 +273,28 @@ async function main() {
     process.stdout.write(`UNSCORED: ${result.unscored.map((u) => `${u.id} (${u.reason})`).join(', ')}\n`);
   }
   process.stdout.write(`\nwrote ${path.relative(process.cwd(), RESULT)}\n`);
+}
+
+// `--check` (the release gate): compare this run to the committed RESULT.json and write nothing. A drop in version recall or precision beyond the
+// tolerance fails, and so does a lost scored entry. A rise passes (the advisory database grows; both sides read the same one), and the file is
+// re-recorded deliberately by running the bench without --check. Unreachable advisory data lowers recall, so it fails closed. Recall has the wider tolerance (6 points) because check.mjs re-labels against live data and the engine's own advisory lookups age differently on a warm local cache and a cold hosted runner; precision, which is not affected that way, holds to 2.
+const CHECK_TOLERANCE_PCT = { recall: 6, precision: 2 };
+function checkAgainstBaseline(result) {
+  const base = JSON.parse(fs.readFileSync(RESULT, 'utf8'));
+  const problems = [];
+  for (const slice of ['totals', 'heldOut']) {
+    const b = base[slice], r = result[slice];
+    if (r.entries < b.entries) problems.push(`${slice}: ${r.entries} scored entries, baseline ${b.entries}`);
+    for (const m of ['recall', 'precision']) {
+      if (r[m].pct === null || r[m].pct < b[m].pct - CHECK_TOLERANCE_PCT[m]) problems.push(`${slice} version ${m} ${r[m].pct}% is below baseline ${b[m].pct}% (tolerance ${CHECK_TOLERANCE_PCT[m]} points)`);
+    }
+  }
+  if (problems.length) {
+    process.stderr.write(`sca-replay check FAILED:\n${problems.map((x) => '  ' + x).join('\n')}\n`);
+    return 1;
+  }
+  process.stdout.write(`sca-replay check ok: version recall ${result.totals.recall.pct}% (baseline ${base.totals.recall.pct}%), precision ${result.totals.precision.pct}% (baseline ${base.totals.precision.pct}%), held-out recall ${result.heldOut.recall.pct}%\n`);
+  return 0;
 }
 
 main().catch((e) => { process.stderr.write(`runner failed: ${e.stack}\n`); process.exit(1); });

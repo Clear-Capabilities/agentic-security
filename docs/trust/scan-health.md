@@ -58,6 +58,8 @@ A scan that skipped a file because it was too large or too dense (minified bundl
 
 ## What scan health does not tell you
 
+<!-- limits-verified: 2026-10-19 -->
+
 - It does not rate the code. `complete` means the analysis finished, not that the code is good.
 - It does not say the analyzers found everything. Recall is measured separately; see [benchmarking methodology](benchmarking-methodology.md).
 - A stale feed can only be detected relative to its own timestamp. A cache that is wrong but recent is not flagged.

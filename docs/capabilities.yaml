@@ -16,6 +16,15 @@
 #   - the capability tables in README.md and docs/how-it-works/assurance-lifecycle.md are GENERATED
 #     from this file (node scripts/check-positioning-docs.mjs --write), and a stale table fails.
 #
+# The GA bar (docs/how-it-works/maturity-model.md#the-ga-bar). A GA record also carries:
+#   since          the version it was promoted in
+#   contract       the reference page that lists its flags, exit codes, fields and state files
+#   contractTest   the compatibility test (a scanner test script runs it; `contract-conformance` runs it at release)
+#   gate           a check that scripts/release-check.mjs evaluates
+#   platforms      [os:job, ...] with at least one linux job that exists in .github/workflows
+#   limits         page#anchor of its "does not do" section, which carries a limits-verified date
+# A Preview record carries `contract` or a dated `contractNote`.
+#
 # Maturity was assigned from the code, tests and existing status pages, conservatively. Nothing is
 # GA because the positioning would benefit from it. To promote a capability, change it here and
 # let the checker show every page that still disagrees.
@@ -60,6 +69,12 @@ capabilities:
     name: Deterministic security analysis
     lifecycleStages: [discover]
     maturity: GA
+    since: 0.178.0
+    contract: docs/reference/output-schema.md
+    contractTest: scanner/test/finding-schema.test.js
+    gate: corpus-gate
+    platforms: [linux:test-shard, linux:corpus, macos:determinism-attest]
+    limits: docs/trust/trust-and-limitations.md#known-limits-worth-knowing-first
     establishes: A candidate weakness at a file and line, found by mechanical rules (SAST, secrets, IaC, auth, prompt-injection, MCP audit), with no model in the loop.
     docs:
       - docs/guides/scanning.md
@@ -73,6 +88,12 @@ capabilities:
     name: Dependency risk with function-level reachability
     lifecycleStages: [discover, corroborate]
     maturity: GA
+    since: 0.178.0
+    contract: docs/reference/dependency-finding-contract.md
+    contractTest: scanner/test/contracts/dependency-finding.contract.test.js
+    gate: sca-replay-gate
+    platforms: [linux:test-shard]
+    limits: docs/guides/scanning.md#what-a-scan-does-not-do
     establishes: Which vulnerable dependencies exist, which are actively exploited, and whether the vulnerable function is actually reachable.
     docs:
       - docs/guides/scanning.md
@@ -84,6 +105,9 @@ capabilities:
     name: Agentic discovery (hunt)
     lifecycleStages: [discover]
     maturity: Preview
+    contract: docs/reference/agentic-discovery-contract.md
+    contractTest: scanner/test/contracts/agentic-discovery.contract.test.js
+    contractNote: Report and coverage fields are frozen at version 1; candidates are model proposals, and no precision for them is published because the small hosted model produced none the gates accepted; reviewed 2026-10-20.
     establishes: Model-proposed candidate weaknesses that no rule encodes, each routed back through the deterministic engine before it is reported. Advisory; needs a configured model endpoint.
     docs:
       - docs/discover/README.md
@@ -95,6 +119,7 @@ capabilities:
     name: Deterministic context intelligence
     lifecycleStages: [discover, corroborate]
     maturity: Preview
+    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
     establishes: Per-entry-point, hash-bound context bundles and citation-checked focused reviews. Opt-in.
     docs:
       - docs/guides/context-intelligence.md
@@ -105,6 +130,7 @@ capabilities:
     name: Haskell and Nix/NixOS analysis
     lifecycleStages: [discover, corroborate]
     maturity: Preview
+    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
     establishes: Static findings for Haskell and Nix/NixOS, with support measured per capability on a synthetic corpus and some legs honestly blocked.
     docs:
       - docs/language-support.md
@@ -117,6 +143,12 @@ capabilities:
     name: Taint flow and reachability corroboration
     lifecycleStages: [corroborate]
     maturity: GA
+    since: 0.178.0
+    contract: docs/reference/taint-flow-contract.md
+    contractTest: scanner/test/contracts/taint-flow.contract.test.js
+    gate: layer-recall-gate
+    platforms: [linux:test-shard]
+    limits: docs/METRICS.md#reading-it-honestly
     establishes: A hop-by-hop path from where untrusted data entered to the sink, and whether the flow is reachable from an entry point.
     docs:
       - docs/corroborate/README.md
@@ -129,6 +161,12 @@ capabilities:
     name: Falsification of findings
     lifecycleStages: [corroborate]
     maturity: GA
+    since: 0.178.0
+    contract: docs/walkthroughs/finding-evidence.md
+    contractTest: scanner/test/falsification.test.js
+    gate: mutation-gate
+    platforms: [linux:test-shard]
+    limits: docs/trust/trust-and-limitations.md#what-a-clean-result-means
     establishes: Whether a context-matched control on the path (a sanitizer or dominating guard) blocks the finding. Lowers confidence only; never removes a finding and never changes severity.
     docs:
       - docs/concepts.md
@@ -140,6 +178,9 @@ capabilities:
     name: Model-assisted validation
     lifecycleStages: [corroborate]
     maturity: Preview
+    contract: docs/reference/model-validation-contract.md
+    contractTest: scanner/test/contracts/model-validation.contract.test.js
+    contractNote: Finding fields, verdicts and statuses are frozen at version 1; the decision logic is tested with recorded replies and no precision is published for the model's own judgments; reviewed 2026-10-20.
     establishes: A second-opinion verdict on a finding, recorded separately from the deterministic evidence. A no-op unless a model endpoint is configured.
     docs:
       - docs/how-it-works/deterministic-and-agentic.md
@@ -149,8 +190,14 @@ capabilities:
   - id: exploit-proof
     name: Execution-backed exploit proof
     lifecycleStages: [prove]
-    maturity: Preview
-    establishes: Whether a bounded, serialized reproducer (supplied, or generated by `proof generate`), run in a confined sandbox and judged by a deterministic oracle, reproduces the effect. Container isolation has been exercised only against a fake engine, and the feature has been exercised on macOS only.
+    maturity: GA
+    since: 0.183.1
+    contract: docs/reference/exploit-proof-contract.md
+    contractTest: scanner/test/contracts/exploit-proof.contract.test.js
+    gate: remote-ci-green
+    platforms: [linux:proof-linux, linux:proof-container]
+    limits: docs/reference/exploit-proof-contract.md#what-this-does-not-do
+    establishes: Whether a bounded, serialized reproducer (supplied, or generated by `proof generate`), run in a confined sandbox and judged by a deterministic oracle, reproduces the effect. Hosted CI exercises it on Linux under local confinement and in a real container, and the measurements are committed.
     docs:
       - docs/guides/exploit-proof-fabric.md
       - docs/prove/README.md
@@ -159,7 +206,10 @@ capabilities:
   - id: rule-compiler
     name: Finding-to-rule compiler
     lifecycleStages: [learn]
-    maturity: Labs
+    maturity: Preview
+    contract: docs/reference/rule-compiler-contract.md
+    contractTest: scanner/test/contracts/rule-compiler.contract.test.js
+    contractNote: Rule format and records are frozen at version 1; the rule is text matching with structure, not a syntax-tree pattern; reviewed 2026-10-19.
     establishes: Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence.
     docs:
       - docs/guides/rule-compiler.md
@@ -190,9 +240,16 @@ capabilities:
   - id: root-cause-sweep
     name: Repository-wide sibling sweep
     lifecycleStages: [scale]
-    maturity: Preview
+    maturity: GA
+    since: 0.181.0
+    contract: docs/reference/root-cause-sweep.md
+    contractTest: scanner/test/contracts/root-cause-sweep.contract.test.js
+    gate: sibling-sweep-gate
+    platforms: [linux:test-shard]
+    limits: docs/reference/root-cause-sweep.md#what-the-sweep-does-not-do
     establishes: Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately.
     docs:
+      - docs/reference/root-cause-sweep.md
       - docs/scale/README.md
     evidence:
       - scanner/src/posture/root-cause-sweep.js
@@ -200,7 +257,10 @@ capabilities:
   - id: fleet-scan
     name: Fleet scanning and dependency blast radius
     lifecycleStages: [scale]
-    maturity: Labs
+    maturity: Preview
+    contract: docs/reference/fleet-contract.md
+    contractTest: scanner/test/contracts/fleet.contract.test.js
+    contractNote: Manifest keys and result shapes are frozen at version 1; scheduling is local to one machine; reviewed 2026-10-19.
     establishes: Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue.
     docs:
       - docs/guides/fleet.md
@@ -210,9 +270,16 @@ capabilities:
   - id: federation
     name: Cross-repository graph federation
     lifecycleStages: [scale, trace]
-    maturity: Preview
+    maturity: GA
+    since: 0.181.0
+    contract: docs/reference/federation.md
+    contractTest: scanner/test/contracts/federation.contract.test.js
+    gate: contract-conformance
+    platforms: [linux:test-shard]
+    limits: docs/reference/federation.md#what-federation-does-not-do
     establishes: A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified.
     docs:
+      - docs/reference/federation.md
       - docs/guides/data-flow-explorer.md
       - docs/scale/README.md
     evidence:
@@ -221,12 +288,21 @@ capabilities:
   - id: runtime-corroboration
     name: Runtime corroboration of the scanned graph
     lifecycleStages: [observe]
-    maturity: Preview
+    maturity: GA
+    since: 0.184.0
+    contract: docs/reference/runtime-corroboration-contract.md
+    contractTest: scanner/test/contracts/runtime-corroboration.contract.test.js
+    gate: contract-conformance
+    platforms: [linux:test-shard, linux:telemetry-capture]
+    limits: docs/reference/runtime-corroboration-contract.md#what-this-does-not-do
     establishes: Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live.
     docs:
+      - docs/reference/runtime-corroboration-contract.md
       - docs/guides/runtime-twin.md
       - docs/observe/README.md
     evidence:
+      - scanner/src/lineage/observation-adapters.js
+      - scanner/test/fixtures/telemetry-packs
       - scanner/src/lineage/runtime-assurance.js
       - scanner/src/lineage/observation-correlation.js
   - id: live-runtime-observation
@@ -243,6 +319,7 @@ capabilities:
     name: Code Boundaries security graph
     lifecycleStages: [trace]
     maturity: Preview
+    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
     establishes: Field-level sources, sinks, protection state, sensitive-data classes and findings as one signed graph, browsable locally. Opt-in at scan time.
     docs:
       - docs/security-graph/code-boundaries.md
@@ -254,7 +331,13 @@ capabilities:
   - id: blast-radius
     name: Blast-radius assessment
     lifecycleStages: [trace]
-    maturity: Preview
+    maturity: GA
+    since: 0.181.0
+    contract: docs/security-graph/blast-radius.md
+    contractTest: scanner/test/contracts/blast-radius.contract.test.js
+    gate: blast-radius-gate
+    platforms: [linux:test-shard]
+    limits: docs/security-graph/blast-radius.md#what-blast-radius-does-not-establish
     establishes: What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph.
     docs:
       - docs/security-graph/blast-radius.md
@@ -266,6 +349,7 @@ capabilities:
     name: Finding provenance from Git history
     lifecycleStages: [trace]
     maturity: Preview
+    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
     establishes: Which commit introduced a finding, resolved from Git history, with the resolution quality stated.
     docs:
       - docs/guides/finding-provenance.md
@@ -276,8 +360,14 @@ capabilities:
   - id: artifact-provenance
     name: Source-to-artifact provenance
     lifecycleStages: [trace]
-    maturity: Preview
-    establishes: Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine and registry paths were tested against stand-ins, not a real daemon or registry.
+    maturity: GA
+    since: 0.183.1
+    contract: docs/reference/artifact-provenance-contract.md
+    contractTest: scanner/test/contracts/artifact-provenance.contract.test.js
+    gate: remote-ci-green
+    platforms: [linux:artifact-real]
+    limits: docs/reference/artifact-provenance-contract.md#what-this-does-not-do
+    establishes: Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine, registry and signing paths are exercised by a hosted job against a real container engine, a real registry and a real signing tool.
     docs:
       - docs/guides/artifact-provenance.md
       - docs/security-graph/provenance.md
@@ -287,6 +377,12 @@ capabilities:
     name: Fix synthesis
     lifecycleStages: [fix]
     maturity: GA
+    since: 0.178.0
+    contract: docs/guides/fixing-vulnerabilities.md
+    contractTest: scanner/test/fix-verify-loop.test.js
+    gate: fix-verification-gate
+    platforms: [linux:test-shard]
+    limits: docs/trust/verified-remediation.md#what-verification-does-not-establish
     establishes: A candidate patch, deterministic or agent-composed, with a preview, a backup and a revert path. A patch is never written without passing verification.
     docs:
       - docs/guides/fixing-vulnerabilities.md
@@ -298,6 +394,12 @@ capabilities:
     name: Verified remediation
     lifecycleStages: [verify]
     maturity: GA
+    since: 0.178.0
+    contract: docs/trust/verified-remediation.md
+    contractTest: scanner/test/fix-verify-tests.test.js
+    gate: fix-verification-gate
+    platforms: [linux:test-shard]
+    limits: docs/trust/verified-remediation.md#what-verification-does-not-establish
     establishes: Whether a patch passed its rescan, lint and test legs, which legs were skipped, and a completeness tier of FULL, MITIGATION or WORKAROUND.
     docs:
       - docs/trust/verified-remediation.md
@@ -309,7 +411,13 @@ capabilities:
   - id: proof-gated-fix
     name: Proof-gated fix
     lifecycleStages: [verify]
-    maturity: Preview
+    maturity: GA
+    since: 0.183.1
+    contract: docs/reference/exploit-proof-contract.md
+    contractTest: scanner/test/contracts/exploit-proof.contract.test.js
+    gate: remote-ci-green
+    platforms: [linux:proof-linux, linux:proof-container]
+    limits: docs/reference/exploit-proof-contract.md#what-this-does-not-do
     establishes: With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it.
     docs:
       - docs/guides/exploit-proof-fabric.md
@@ -321,7 +429,10 @@ capabilities:
     name: Detection and response (dnr)
     aliases: [dnr, detection generation]
     lifecycleStages: [detect]
-    maturity: Labs
+    maturity: Preview
+    contract: docs/reference/dnr-contract.md
+    contractTest: scanner/test/contracts/dnr.contract.test.js
+    contractNote: Record schemas and exit codes are frozen at version 1; renderers for the three newest targets (Elastic, YARA-L, Datadog) were not run against a live product; reviewed 2026-10-19.
     establishes: A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection.
     docs:
       - docs/guides/detection-and-response.md
@@ -341,6 +452,12 @@ capabilities:
     name: Scan health
     lifecycleStages: [corroborate]
     maturity: GA
+    since: 0.178.0
+    contract: docs/trust/scan-health.md
+    contractTest: scanner/test/scan-health.test.js
+    gate: contract-conformance
+    platforms: [linux:test-shard]
+    limits: docs/trust/scan-health.md#what-scan-health-does-not-tell-you
     establishes: Whether every analyzer finished, which files and feeds were incomplete or stale, and therefore whether a clean result may be called clean.
     docs:
       - docs/trust/scan-health.md
@@ -352,6 +469,12 @@ capabilities:
     name: Assurance gate modes
     lifecycleStages: [verify]
     maturity: GA
+    since: 0.178.0
+    contract: docs/trust/assurance-modes.md
+    contractTest: scanner/test/assurance-mode.test.js
+    gate: contract-conformance
+    platforms: [linux:test-shard]
+    limits: docs/trust/assurance-modes.md#what-assurance-modes-do-not-do
     establishes: Whether CI fails on an incomplete analysis (strict) or only reports it (advisory, standard).
     docs:
       - docs/trust/assurance-modes.md
@@ -363,6 +486,12 @@ capabilities:
     name: Model egress policy
     lifecycleStages: [cross-cutting]
     maturity: GA
+    since: 0.178.0
+    contract: docs/trust/model-egress.md
+    contractTest: scanner/test/egress-policy.test.js
+    gate: contract-conformance
+    platforms: [linux:test-shard]
+    limits: docs/trust/model-egress.md#what-egress-policy-does-not-do
     establishes: An allow or deny decision on every outbound model call before a prompt is built, with local-only mode and redaction.
     docs:
       - docs/trust/model-egress.md
@@ -374,6 +503,12 @@ capabilities:
     name: AI-written-code guardrails
     lifecycleStages: [discover]
     maturity: GA
+    since: 0.178.0
+    contract: docs/roles/ai-engineering.md
+    contractTest: scanner/test/bodyguard.test.js
+    gate: contract-conformance
+    platforms: [linux:test-shard]
+    limits: docs/roles/ai-engineering.md#what-the-guardrails-do-not-do
     establishes: Insecure edits (injectable SQL, hardcoded keys, eval on user input) intercepted before they reach disk, and destructive shell commands blocked.
     docs:
       - docs/roles/ai-engineering.md
@@ -385,6 +520,12 @@ capabilities:
     name: MCP server and agent-tool audit
     lifecycleStages: [discover]
     maturity: GA
+    since: 0.178.0
+    contract: docs/reference/mcp-tool-contract.md
+    contractTest: scanner/test/mcp-protocol-smoke.test.js
+    gate: contract-conformance
+    platforms: [linux:test-shard]
+    limits: docs/reference/mcp-tool-contract.md#what-the-classification-means-and-what-it-does-not
     establishes: A hardened MCP surface for agents (including two write tools) and an audit of the agent tools a project exposes.
     docs:
       - docs/reference/mcp-tool-contract.md
@@ -396,6 +537,9 @@ capabilities:
     name: Local model support
     lifecycleStages: [discover]
     maturity: Preview
+    contract: docs/reference/local-models-contract.md
+    contractTest: scanner/test/contracts/local-models.contract.test.js
+    contractNote: The loopback rule, configuration shapes and error codes are frozen at version 1; the smallest supported model is exercised in a hosted job but is not evidence of what a larger model does; reviewed 2026-10-20.
     establishes: Validation, fix proposal and hunt against a model on loopback, refusing non-loopback endpoints and never falling back to a cloud provider.
     docs:
       - docs/guides/ollama.md
@@ -406,6 +550,12 @@ capabilities:
     name: CI gating
     lifecycleStages: [verify]
     maturity: GA
+    since: 0.178.0
+    contract: docs/guides/ci-setup.md
+    contractTest: scanner/test/ci-templates.test.js
+    gate: contract-conformance
+    platforms: [linux:test-shard]
+    limits: docs/guides/ci-setup.md#what-ci-gating-does-not-do
     establishes: A baseline-aware pull request scan that writes SARIF, JUnit and JSON and applies a severity gate and an assurance gate.
     docs:
       - docs/guides/ci-setup.md
@@ -417,6 +567,7 @@ capabilities:
     name: Compliance control evidence
     lifecycleStages: [trace]
     maturity: Preview
+    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
     establishes: Automated technical-control evidence mapped to bundled frameworks, with unassessed and manual controls kept out of the satisfied count. Not a certification.
     docs:
       - docs/guides/compliance.md
@@ -436,11 +587,28 @@ capabilities:
     evidence:
       - scanner/src/capabilities
 
+  - id: strategic-metrics
+    name: Strategic metrics
+    aliases: [assurance coverage, evidence conversion, verified remediation rate]
+    lifecycleStages: [cross-cutting]
+    maturity: Preview
+    contract: docs/reference/strategic-metrics.md
+    contractTest: scanner/test/contracts/strategic-metrics.contract.test.js
+    contractNote: Report schema version 1 is frozen; the three figures describe one scan and the recorded fix attempts, and the Security Learning Rate stays unmeasured; reviewed 2026-10-19.
+    establishes: Assurance Coverage, Evidence Conversion and Verified Remediation Rate for the last scan and the recorded fix attempts, each with its numerator, denominator and basis. The Security Learning Rate is reported as not measured.
+    docs:
+      - docs/reference/strategic-metrics.md
+      - docs/how-it-works/maturity-model.md
+    evidence:
+      - scanner/src/posture/strategic-metrics.js
   - id: eval-lab
     name: Eval Lab and model router
     aliases: [eval lab, model router]
     lifecycleStages: [cross-cutting]
-    maturity: Labs
+    maturity: Preview
+    contract: docs/reference/eval-lab-report.md
+    contractTest: scanner/test/contracts/eval-lab-report.contract.test.js
+    contractNote: Report schema version 1 is frozen; the SARD integration is not built by design; reviewed 2026-10-19.
     establishes: A measured comparison of a deterministic baseline and any number of models on detection, exploit proof, remediation, cost, latency and repeatability, and routing of each task to a model. Only a local Ollama server has a built-in adapter, tested against a stand-in.
     docs:
       - docs/guides/eval-lab.md
@@ -450,8 +618,11 @@ capabilities:
   - id: release-assurance
     name: Release assurance
     lifecycleStages: [verify]
-    maturity: Labs
-    establishes: A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; the package is assembled by a demo script and library functions.
+    maturity: Preview
+    contract: docs/reference/release-assurance-contract.md
+    contractTest: scanner/test/contracts/release-assurance.contract.test.js
+    contractNote: Package schema 1.0.0 and verdict reason codes are frozen; the signing key is the holder own; reviewed 2026-10-19.
+    establishes: A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; `release-package build` assembles the package from the last scan, and the independent verifier checks it offline.
     docs:
       - docs/guides/release-assurance.md
     evidence:

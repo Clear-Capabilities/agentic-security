@@ -32,6 +32,15 @@ Other policy keys narrow it further: `allowedProviders`, `deniedPaths`, `maxCont
 
 `explore`, the Code Boundaries server, makes no model calls: it loads the already-scanned, already-signed graph and serves it on loopback. The scan step that builds the graph is the one covered by the egress policy.
 
+## What egress policy does not do
+
+<!-- limits-verified: 2026-10-19 -->
+
+- **It governs the model calls this tool makes.** A model your editor or agent host calls on its own is outside it.
+- **Vulnerability-feed lookups are a separate path.** OSV, KEV and EPSS lookups are deterministic network reads that carry no source code, and the policy does not describe them. A scan is never described as fully offline because model egress is denied.
+- **Redaction is pattern-based.** It masks PII, configured customer-data patterns and proprietary paths. Sensitive text that matches none of them is not recognized, so `local-only` or `deny` is the setting for code that must not leave at all.
+- **The audit log is local.** A denied call leaves a tamper-evident entry on the machine that made the call; nothing is sent to a third party.
+
 ## Go deeper
 
 - [Walkthrough: model egress policy](../walkthroughs/model-egress.md), with a real policy and audit log

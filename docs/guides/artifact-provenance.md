@@ -1,6 +1,6 @@
 # Source-to-Artifact Security & Provenance
 
-**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+**Maturity:** GA. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
 
 **Status: new.** A finding in Git tells you a dependency is vulnerable. It does not tell you whether the
 container image actually running in production was built before or after the fix — or whether the
@@ -138,19 +138,15 @@ is free of vulnerabilities.
 
 ## What this does not do
 
-Disclosed, not silently dropped:
+<!-- limits-verified: 2026-10-19 -->
 
-- **No local Docker-daemon image input.** `image scan` takes a local docker-archive/oci-archive tar file
-  path only — not `docker save <name>` piped in. Shelling out to `docker` would be this codebase's first
-  external-process invocation in the CLI entrypoint and needs its own timeout/cancellation discipline; not
-  attempted in this increment.
-- **No remote OCI registry reference.** `image scan registry.example.com/app:tag` needs an OCI Distribution
-  API v2 client (manifest/blob GET, bearer-token auth) — genuinely new network capability, out of scope.
-- **No keyless/Rekor-transparency-log signature verification.** `image verify` checks a real signature given
-  an explicit public key; it does not query Rekor to discover one, the way `sca/sigstore-verify.js` already
-  does for ordinary dependency packages.
-- **No "which digest is running where" discovery.** A deployment node in the provenance graph only ever
-  appears when you declare one yourself via `--deployment-id`/`--deployment-digest` — nothing here polls a
-  running cluster or registry on its own.
+Disclosed, not silently dropped. The reference page [lists every field and exit code](../reference/artifact-provenance-contract.md); these are the limits.
+
+- **Keyless signature verification needs cosign and the public transparency log.** `image verify --cosign` delegates it to cosign; this tool does not query the log itself. A key-signed image from a registry with no transparency log verifies only with the explicit `--ignore-tlog` opt-in, and the result says the log was not checked.
+- **Nothing discovers which digest is running where.** A deployment node in the provenance graph only appears when you declare one with `--deployment-id` and `--deployment-digest`; nothing polls a running cluster or registry.
+- **The registry client fetches one named image.** It does not browse a registry or discover tags, it needs HTTPS (plain HTTP only to a loopback registry you allow), and it reads credentials only for the registry you named.
+- **One platform per scan.** A multi-platform index resolves to the platform you ask for (`linux/amd64` by default).
+- **Advisory data is the OSV database.** A package it does not know is not reported.
+- **The commit is the image's own label.** An image built without `org.opencontainers.image.revision` has an unknown commit, and nothing is inferred from git history.
 
 See `docs/implementation-status/source-to-artifact-provenance.md` for the full, itemized status.

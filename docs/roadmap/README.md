@@ -7,7 +7,7 @@
 | Direction | Lifecycle stage | What would be true when it ships | What exists today instead |
 |---|---|---|---|
 | Continuous production runtime observation | Observe | Live collection of production behavior and exercised vulnerable functions would corroborate static findings | Offline import of exported telemetry, edge states and a static explorer page |
-| Connected production detection | Detect | Detections would be deployed to and read back from a connected SIEM or EDR, and exploitation observed in live telemetry | The Labs `dnr` loop generates and hunts locally; every renderer is text-only |
+| Connected production detection | Detect | Detections would be deployed to and read back from a connected SIEM or EDR, and exploitation observed in live telemetry | The Preview `dnr` loop generates and hunts locally; every renderer is text-only |
 | Security learning rate | Learn | A measured share of novel confirmed weakness patterns converted into reusable rules, tests or controls | The Labs promotion machinery, with no metric over it |
 
 Other non-goals of the current positioning work: universal exploit proof, fleet-wide scanning as a supported capability, and promoting any Labs feature to GA.

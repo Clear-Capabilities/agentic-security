@@ -1,0 +1,302 @@
+{
+  "schema": "sibling-sweep/v1",
+  "total": {
+    "cases": 9,
+    "siblings": {
+      "found": 159,
+      "planted": 159
+    },
+    "differentlyWritten": {
+      "found": 1,
+      "planted": 9
+    },
+    "known": {
+      "calledKnown": 8,
+      "planted": 8
+    },
+    "nearMisses": {
+      "falselyReported": 0,
+      "planted": 17
+    },
+    "ownSiteReported": 0,
+    "accountingHolds": 9
+  },
+  "cases": [
+    {
+      "id": "js-sql-db-query",
+      "lang": "js",
+      "ran": true,
+      "sib": {
+        "tp": 1,
+        "d": 1
+      },
+      "form": {
+        "tp": 0,
+        "d": 1
+      },
+      "known": {
+        "ok": 1,
+        "d": 1
+      },
+      "near": {
+        "fp": 0,
+        "d": 2
+      },
+      "lim": {
+        "src/admin.js:3": "reported"
+      },
+      "ownSiteReported": false,
+      "accounting": true,
+      "counts": {
+        "found": 3,
+        "candidates": 2,
+        "mitigated": 1
+      },
+      "truncatedDisclosed": null
+    },
+    {
+      "id": "js-command-exec",
+      "lang": "js",
+      "ran": true,
+      "sib": {
+        "tp": 1,
+        "d": 1
+      },
+      "form": {
+        "tp": 0,
+        "d": 1
+      },
+      "known": {
+        "ok": 1,
+        "d": 1
+      },
+      "near": {
+        "fp": 0,
+        "d": 2
+      },
+      "lim": {
+        "lib/ops.js:2": "not reported"
+      },
+      "ownSiteReported": false,
+      "accounting": true,
+      "counts": {
+        "found": 2,
+        "candidates": 1,
+        "mitigated": 1
+      },
+      "truncatedDisclosed": null
+    },
+    {
+      "id": "js-fs-read",
+      "lang": "js",
+      "ran": true,
+      "sib": {
+        "tp": 2,
+        "d": 2
+      },
+      "form": {
+        "tp": 0,
+        "d": 2
+      },
+      "known": {
+        "ok": 1,
+        "d": 1
+      },
+      "near": {
+        "fp": 0,
+        "d": 2
+      },
+      "lim": {},
+      "ownSiteReported": false,
+      "accounting": true,
+      "counts": {
+        "found": 3,
+        "candidates": 2,
+        "mitigated": 1
+      },
+      "truncatedDisclosed": null
+    },
+    {
+      "id": "py-sql-execute",
+      "lang": "py",
+      "ran": true,
+      "sib": {
+        "tp": 1,
+        "d": 1
+      },
+      "form": {
+        "tp": 0,
+        "d": 1
+      },
+      "known": {
+        "ok": 1,
+        "d": 1
+      },
+      "near": {
+        "fp": 0,
+        "d": 2
+      },
+      "lim": {
+        "app/orders.py:4": "reported"
+      },
+      "ownSiteReported": false,
+      "accounting": true,
+      "counts": {
+        "found": 3,
+        "candidates": 2,
+        "mitigated": 1
+      },
+      "truncatedDisclosed": null
+    },
+    {
+      "id": "py-os-system",
+      "lang": "py",
+      "ran": true,
+      "sib": {
+        "tp": 1,
+        "d": 1
+      },
+      "form": {
+        "tp": 0,
+        "d": 1
+      },
+      "known": {
+        "ok": 1,
+        "d": 1
+      },
+      "near": {
+        "fp": 0,
+        "d": 3
+      },
+      "lim": {},
+      "ownSiteReported": false,
+      "accounting": true,
+      "counts": {
+        "found": 2,
+        "candidates": 1,
+        "mitigated": 1
+      },
+      "truncatedDisclosed": null
+    },
+    {
+      "id": "py-pickle-loads",
+      "lang": "py",
+      "ran": true,
+      "sib": {
+        "tp": 1,
+        "d": 1
+      },
+      "form": {
+        "tp": 0,
+        "d": 1
+      },
+      "known": {
+        "ok": 1,
+        "d": 1
+      },
+      "near": {
+        "fp": 0,
+        "d": 2
+      },
+      "lim": {},
+      "ownSiteReported": false,
+      "accounting": true,
+      "counts": {
+        "found": 2,
+        "candidates": 1,
+        "mitigated": 1
+      },
+      "truncatedDisclosed": null
+    },
+    {
+      "id": "java-statement-query",
+      "lang": "java",
+      "ran": true,
+      "sib": {
+        "tp": 1,
+        "d": 1
+      },
+      "form": {
+        "tp": 0,
+        "d": 1
+      },
+      "known": {
+        "ok": 1,
+        "d": 1
+      },
+      "near": {
+        "fp": 0,
+        "d": 2
+      },
+      "lim": {},
+      "ownSiteReported": false,
+      "accounting": true,
+      "counts": {
+        "found": 2,
+        "candidates": 1,
+        "mitigated": 1
+      },
+      "truncatedDisclosed": null
+    },
+    {
+      "id": "java-runtime-exec",
+      "lang": "java",
+      "ran": true,
+      "sib": {
+        "tp": 1,
+        "d": 1
+      },
+      "form": {
+        "tp": 1,
+        "d": 1
+      },
+      "known": {
+        "ok": 1,
+        "d": 1
+      },
+      "near": {
+        "fp": 0,
+        "d": 2
+      },
+      "lim": {},
+      "ownSiteReported": false,
+      "accounting": true,
+      "counts": {
+        "found": 3,
+        "candidates": 2,
+        "mitigated": 1
+      },
+      "truncatedDisclosed": null
+    },
+    {
+      "id": "js-many-siblings",
+      "lang": "js",
+      "ran": true,
+      "sib": {
+        "tp": 150,
+        "d": 150
+      },
+      "form": {
+        "tp": 0,
+        "d": 0
+      },
+      "known": {
+        "ok": 0,
+        "d": 0
+      },
+      "near": {
+        "fp": 0,
+        "d": 0
+      },
+      "lim": {},
+      "ownSiteReported": false,
+      "accounting": true,
+      "counts": {
+        "found": 150,
+        "candidates": 150,
+        "mitigated": 0
+      },
+      "truncatedDisclosed": true
+    }
+  ]
+}

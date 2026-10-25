@@ -289,12 +289,16 @@ No benchmark scores are published in this repository, see `bench/README.md` for 
 |---|---|---|
 | NIST AI 600-1 (2024): Generative AI Profile | `nist-ai-600-1` | [coverage](../compliance/nist-ai-600-1-coverage.md) |
 | NIST SP 800-171 Rev. 3: Protecting CUI¹ | `nist-800-171-r3` | [coverage](../compliance/nist-800-171-r3-coverage.md) · [demo](../brand/nist-800-171-demo.gif) |
-| NIST Cybersecurity Framework 2.0 | `nist-csf-2` |: |
+| NIST Cybersecurity Framework 2.0 | `nist-csf-2` | [coverage](../compliance/nist-csf-2-coverage.md) |
 | NIST Privacy Framework 1.1 | `nist-privacy-1-1` | [coverage](../compliance/nist-privacy-1-1-coverage.md) |
 | OWASP ASVS 5.0 | `owasp-asvs-5` | [coverage](../compliance/owasp-asvs-coverage.md) |
 | OWASP Top 10 for LLM Applications 2025 | `owasp-llm-top-10` | [coverage](../compliance/owasp-llm-top10-coverage.md) |
-| EU AI Act | `eu-ai-act` | [`scripts/eu-ai-act/`](../../scripts/eu-ai-act/) |
-| GDPR · HIPAA Security Rule · CCPA | `gdpr` · `hipaa-security-rule` · `ccpa` |: |
+| EU AI Act | `eu-ai-act` | [coverage](../compliance/eu-ai-act-coverage.md) · [`scripts/eu-ai-act/`](../../scripts/eu-ai-act/) |
+| GDPR | `gdpr` | [coverage](../compliance/gdpr-coverage.md) |
+| HIPAA Security Rule | `hipaa-security-rule` | [coverage](../compliance/hipaa-security-rule-coverage.md) |
+| CCPA | `ccpa` | [coverage](../compliance/ccpa-coverage.md) |
+
+Every bundled framework has a per-control map; the [summary](../compliance/COVERAGE.md) counts them all from the framework files and is checked for drift.
 
 ¹ 800-171 is the control basis for CMMC Level 2 and DFARS 252.204-7012 contracts, but this
 tool does **not** perform a CMMC assessment, compute an SPRS score, or issue a certification —

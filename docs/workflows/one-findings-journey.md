@@ -25,14 +25,14 @@ Each stage ends with **Evidence created**, the transition into the next stage.
 |---|---|---|---|
 | 1 | Discover | [GA] deterministic, [Preview] agentic | Found by three deterministic analyses. `hunt` could not run (no model endpoint) and said so |
 | 2 | Corroborate | [GA] | Three analyses agree; no blocking control found; scan was `partial` |
-| 3 | Prove | [Preview] | Nothing ran: no reproducer exists and none can be generated for CWE-89 |
-| 4 | Learn | [Labs] | Not run for this finding |
-| 5 | Scale | [Preview] / [Labs] | Repo sweep seeded elsewhere; fleet not configured |
+| 3 | Prove | [GA] | Nothing ran: no reproducer exists and none can be generated for CWE-89 |
+| 4 | Learn | [Preview] | Not run for this finding |
+| 5 | Scale | [GA] / [Preview] | Repo sweep seeded elsewhere; fleet not configured |
 | 6 | Observe | [Preview] / [Roadmap] | No telemetry imported: status `unavailable` |
-| 7 | Trace | [Preview] | Graph built; blast radius from the database computed; no Git provenance |
+| 7 | Trace | [GA] / [Preview] | Graph built; blast radius from the database computed; no Git provenance |
 | 8 | Fix | [GA] | No mechanical fix exists; the CLI said so |
 | 9 | Verify | [GA] | Finding verifier returned `cannot-verify`; no fix existed to verify |
-| 10 | Detect | [Labs] / [Roadmap] | A static-only detection was refused without a proof, and drafted only when forced, unvalidated |
+| 10 | Detect | [Preview] / [Roadmap] | A static-only detection was refused without a proof, and drafted only when forced, unvalidated |
 
 Seeing "nothing ran" in half the stages is the point. A tool that filled those rows in would be telling you something it had not established.
 
@@ -160,7 +160,7 @@ agentic-security rules status 'struct:server.js:11:SQL_Injection_(Template_Liter
 No history for rule struct:server.js:11:SQL_Injection_(Template_Literal).
 ```
 
-When a finding *is* a miss (no rule caught it), the Labs rule compiler (`agentic-security rules synthesize`, then `evaluate` and `promote`) can turn one proven instance into a reviewed deterministic rule with its own corpus, mutation set and shared false-positive corpus. A promotion is decided by evidence, never by a model. See [the rule compiler](../guides/rule-compiler.md).
+When a finding *is* a miss (no rule caught it), the Preview rule compiler (`agentic-security rules synthesize`, then `evaluate` and `promote`) can turn one proven instance into a reviewed deterministic rule with its own corpus, mutation set and shared false-positive corpus. A promotion is decided by evidence, never by a model. See [the rule compiler](../guides/rule-compiler.md).
 
 The Security Learning Rate, which would measure how often this happens across the system, is Roadmap and does not exist yet.
 
@@ -170,7 +170,7 @@ The Security Learning Rate, which would measure how often this happens across th
 
 *Where else does this weakness exist?*
 
-The repository sweep (Preview) counts siblings of a confirmed finding as found, candidate and mitigated. In this scan it ran from this finding and from the prompt-injection finding:
+The repository sweep (GA) counts siblings of a confirmed finding as found, candidate and mitigated. In this scan it ran from this finding and from the prompt-injection finding:
 
 ```json
 { "totals": { "found": 0, "candidates": 0, "mitigated": 0 } }
@@ -178,7 +178,7 @@ The repository sweep (Preview) counts siblings of a confirmed finding as found, 
 
 Zero siblings of this pattern were found by the sweep. The deterministic scan itself separately reported the Python SQL injection in `report.py:16` (CWE-89, critical) as its own finding, which is the more useful cross-reference here.
 
-Across repositories, `fleet` (Labs) schedules leased scan jobs for a declared set of repositories and answers "which of my repositories depend on this one". It needs a `fleet.yaml` naming the repositories, which a single demo app does not have.
+Across repositories, `fleet` (Preview) schedules leased scan jobs for a declared set of repositories and answers "which of my repositories depend on this one". It needs a `fleet.yaml` naming the repositories, which a single demo app does not have.
 
 **Evidence created:** a sweep result; no fleet rollup.
 
@@ -296,7 +296,7 @@ Verified 1 finding(s):
 
 *Was exploitation observed and can recurrence be detected?* [Labs]
 
-The Labs `dnr` loop turns a *proven* vulnerability into a validated detection, hunts local historical logs, and scopes the exposure window. Everything is local and text-only. Captured, first the honest state of this finding:
+The Preview `dnr` loop turns a *proven* vulnerability into a validated detection, hunts local historical logs, and scopes the exposure window. Everything is local and text-only. Captured, first the honest state of this finding:
 
 ```bash
 agentic-security dnr status 'struct:server.js:11:SQL_Injection_(Template_Literal)'

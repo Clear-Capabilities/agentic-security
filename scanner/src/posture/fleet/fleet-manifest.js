@@ -14,11 +14,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { load as loadYaml } from '../../util/yaml.js';
 
-const FLEET_MANIFEST_SCHEMA_KEYS = Object.freeze(['organization', 'repositories', 'workers', 'perRepoTimeout', 'retries', 'resources']);
-const REPO_KEYS = Object.freeze(['id', 'path', 'required', 'kind', 'internetFacing', 'environment', 'dataClasses', 'trustZone', 'calls', 'produces', 'consumes', 'reads', 'writes', 'providers', 'aliases']);
-const RESOURCE_KEYS = Object.freeze(['id', 'kind', 'dataClasses', 'trustZone', 'internetFacing', 'environment', 'aliases']);
-const REPO_KINDS = Object.freeze(['service', 'library', 'frontend', 'worker', 'gateway']);
-const RESOURCE_KINDS = Object.freeze(['queue', 'database', 'external-provider', 'gateway']);
+export const FLEET_MANIFEST_SCHEMA_KEYS = Object.freeze(['organization', 'repositories', 'workers', 'perRepoTimeout', 'retries', 'resources']);
+export const REPO_KEYS = Object.freeze(['id', 'path', 'required', 'kind', 'internetFacing', 'environment', 'dataClasses', 'trustZone', 'calls', 'produces', 'consumes', 'reads', 'writes', 'providers', 'aliases']);
+export const RESOURCE_KEYS = Object.freeze(['id', 'kind', 'dataClasses', 'trustZone', 'internetFacing', 'environment', 'aliases']);
+export const REPO_KINDS = Object.freeze(['service', 'library', 'frontend', 'worker', 'gateway']);
+export const RESOURCE_KINDS = Object.freeze(['queue', 'database', 'external-provider', 'gateway']);
 export const ENVIRONMENTS = Object.freeze(['production', 'staging', 'development']);
 const NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
 const DURATION_RE = /^(\d+)(s|m|h)$/;

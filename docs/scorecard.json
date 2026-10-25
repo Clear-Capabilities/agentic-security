@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.179.0",
-    "bundleSha256": "aac0d45601a5a8ab4be37086c34bf2986e4cb73622eb2b5196d931b97078322e",
-    "commit": "11c21fe52b801031c1672d94587cecb9e25ddd57",
-    "worktreeClean": true,
+    "engineVersion": "0.184.0",
+    "bundleSha256": "67680e1b40c9d8dc41e14c0f181e2a7b2191c5c48fae1b2790415ac4793ff542",
+    "commit": "d5d7994d8b5138d32c016e97107430afa1ba03fc",
+    "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-19T06:17:32.419Z",
+    "generatedAt": "2026-10-20T16:49:30.363Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -600,7 +600,7 @@
         }
       },
       "scanner/src": {
-        "total": 737,
+        "total": 738,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -723,6 +723,7 @@
           "posture/assurance/bounded-io.js": 1,
           "posture/assurance/config.js": 1,
           "posture/assurance/evidence-registry.js": 1,
+          "posture/assurance/release-package-cli.js": 1,
           "posture/assurance/rollback.js": 2,
           "posture/assurance/waiver.js": 1,
           "posture/attack-playbooks.js": 2,
@@ -842,7 +843,6 @@
           "posture/remediation-ledger.js": 1,
           "posture/retention-policy.js": 1,
           "posture/risk-dollars.js": 3,
-          "posture/root-cause-sweep.js": 1,
           "posture/router.js": 3,
           "posture/rule-compiler/cli.js": 5,
           "posture/rule-compiler/mutation.js": 2,
@@ -864,6 +864,7 @@
           "posture/security-trend.js": 1,
           "posture/stack-playbook.js": 1,
           "posture/state-dir.js": 1,
+          "posture/strategic-metrics-cli.js": 1,
           "posture/streak.js": 1,
           "posture/suppressions.js": 4,
           "posture/telemetry-ingest.js": 3,
@@ -925,7 +926,7 @@
         }
       },
       "scripts": {
-        "total": 109,
+        "total": 113,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -934,6 +935,7 @@
           "calibration-holdout-check.mjs": 1,
           "capability-ledger/check.mjs": 1,
           "check-assurance-docs.mjs": 3,
+          "check-release-assurance.mjs": 4,
           "detector-fuzz-runner.mjs": 3,
           "engineering-excellence/analysis-cache-measure.mjs": 2,
           "engineering-excellence/completion-analysis.mjs": 2,
@@ -975,8 +977,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 396,
-    "d": 618
+    "n": 382,
+    "d": 623
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2130,6 +2132,58 @@
       "mappedFraction": 0.9
     }
   ],
+  "strategicMetrics": {
+    "source": "a scan of examples/assurance-demo (network off)",
+    "remediationSource": "the three patches the committed end-to-end demo verified",
+    "metrics": {
+      "schema": "agentic-security/strategic-metrics",
+      "version": 1,
+      "assuranceCoverage": {
+        "status": "measured",
+        "files": {
+          "numerator": 3,
+          "denominator": 3,
+          "percent": 100,
+          "skipped": 0,
+          "unanalysed": 0,
+          "timedOut": 0
+        },
+        "analyzers": {
+          "numerator": 120,
+          "denominator": 120,
+          "percent": 100,
+          "failed": 0,
+          "timedOut": 0,
+          "skippedByPolicy": 0
+        },
+        "percent": 100,
+        "scanStatus": "partial"
+      },
+      "evidenceConversion": {
+        "numerator": 2,
+        "denominator": 11,
+        "percent": 18.2,
+        "byState": {
+          "single-signal": 9,
+          "corroborated": 2,
+          "taint-confirmed": 0,
+          "execution-proven": 0
+        },
+        "basis": "findings that reached corroborated or stronger, over all findings"
+      },
+      "verifiedRemediationRate": {
+        "numerator": 2,
+        "denominator": 3,
+        "percent": 66.7,
+        "disappearedOnly": 0,
+        "basis": "attempts that passed the re-scan, the project tests and the independent attack replay, over all attempts. A lower bound where a class has no replay"
+      },
+      "securityLearningRate": {
+        "status": "not-measured",
+        "reason": "the rule compiler grades its rules against a corpus built from the same finding; no independent measurement of novel weaknesses converted into reusable knowledge exists"
+      }
+    }
+  },
   "evaluationGates": {
     "measuredThisRun": false,
     "status": "unmeasured",
@@ -2138,11 +2192,11 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.179.0",
-    "commit": "11c21fe52b801031c1672d94587cecb9e25ddd57",
-    "bundleSha256": "aac0d45601a5a8ab4be37086c34bf2986e4cb73622eb2b5196d931b97078322e",
-    "cleanMeasurement": true,
-    "identity": "the commit and bundle below identify exactly the tree that was measured",
+    "engineVersion": "0.184.0",
+    "commit": "d5d7994d8b5138d32c016e97107430afa1ba03fc",
+    "bundleSha256": "67680e1b40c9d8dc41e14c0f181e2a7b2191c5c48fae1b2790415ac4793ff542",
+    "cleanMeasurement": false,
+    "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",
     "currentEngineIndependentReason": "the latest independent run (a72968195aa1) measured engine 0.172.0, not the engine above; it is a historical record",
     "independentRun": {

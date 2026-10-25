@@ -1,0 +1,54 @@
+{
+  "description": "Model replies to the hunt pipeline, played back through an injected llmInvoke (helpers/model-replay.js, replayPipeline). Written by hand to the documented reply shapes; the live path is the hosted local-model job.",
+  "hunter": {
+    "injection": {
+      "candidates": [
+        {
+          "file": "app.js",
+          "line": 3,
+          "title": "SQL built from request",
+          "rationale": "the id is concatenated into the query",
+          "entryPoint": "get",
+          "sink": "db.query"
+        }
+      ]
+    },
+    "empty": {
+      "candidates": []
+    },
+    "no-location": {
+      "candidates": [
+        {
+          "title": "no place to point to",
+          "rationale": "x"
+        }
+      ]
+    },
+    "two": {
+      "candidates": [
+        {
+          "file": "app.js",
+          "line": 3,
+          "title": "first",
+          "rationale": "a"
+        },
+        {
+          "file": "app.js",
+          "line": 4,
+          "title": "second",
+          "rationale": "b"
+        }
+      ]
+    }
+  },
+  "vote": {
+    "keep": {
+      "refuted": false,
+      "reason": "cannot refute on this angle"
+    },
+    "refute": {
+      "refuted": true,
+      "reason": "the value is parameterised upstream"
+    }
+  }
+}

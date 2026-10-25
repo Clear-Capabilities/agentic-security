@@ -8392,7 +8392,12 @@ function _osvQueryVersion(raw){
   return fallback?fallback[1]:null;
 }
 
+// What the advisory lookup could and could not answer on the last scan. A scan that never consulted advisories for some
+// dependencies must not read as a scan that found none: the stats feed scanHealth.freshness.advisories.
+let _osvStats = null;
+function advisoryCoverageMeta() { return _osvStats; }
 async function queryOSV(components,allFileContents){
+  _osvStats = { source: 'none-needed', componentsChecked: 0, answered: 0, unanswered: 0 };
   const OSV_ECO={npm:'npm',pypi:'PyPI',packagist:'Packagist',rubygems:'RubyGems',golang:'Go',cargo:'crates.io',maven:'Maven',pub:'Pub'};
   const results=[];
   const queryable=components.filter(c=>OSV_ECO[c.ecosystem]&&c.version&&/\d+\.\d+/.test(c.version));
@@ -8419,7 +8424,9 @@ async function queryOSV(components,allFileContents){
   }
 
   const _osvOffline=process.env.AGENTIC_SECURITY_OFFLINE==='1';
+  _osvStats = { source: queries.length ? (_osvOffline ? 'offline-cache-only' : 'live') : 'cache', componentsChecked: queryable.length, answered: queryable.length - queries.length, unanswered: queries.length };
   if(queries.length&&!_osvOffline){
+    let _answered=0;
     for(let i=0;i<queries.length;i+=1000){
       const chunkQ=queries.slice(i,i+1000),chunkC=uncached.slice(i,i+1000);
       try{
@@ -8428,11 +8435,15 @@ async function queryOSV(components,allFileContents){
         for(let idx=0;idx<(data.results||[]).length;idx++){
           const{comp,ck}=chunkC[idx];
           const vids=(data.results[idx].vulns||[]).map(v=>v.id).filter(Boolean);
+          _answered++;
           _osvCacheSet(ck,vids);
           for(const vid of vids){if(!vulnAffects[vid])vulnAffects[vid]=[];vulnAffects[vid].push(comp);}
         }
       }catch(_){/* OSV unreachable, use whatever was cached */}
     }
+    _osvStats.answered += _answered;
+    _osvStats.unanswered = queries.length - _answered;
+    if (_osvStats.unanswered > 0) _osvStats.source = _answered > 0 ? 'live-partial' : 'unreachable';
   }
 
   // External-identifier exception (TOS compliance note):
@@ -11230,6 +11241,7 @@ function _deterministicFileTimings(timings) {
     epss: epssLiveMeta(),
     calibration: calibrationFreshness(),
     compliance: _complianceReport ? { stale: _complianceReport.summary?.stale || 0 } : null,
+    advisories: advisoryCoverageMeta(),
   });
   } // end if (!skipAnnotators) — FR-PROV-029
   setDetectorTimingSink(null);

@@ -21,6 +21,7 @@ import {
   TIMESTAMP_MARKER,
 } from '../src/posture/accuracy-scorecard.js';
 import { mappingCoverageOf } from '../src/posture/auditor-walkthrough.js';
+import { computeStrategicMetrics } from '../src/posture/strategic-metrics.js';
 
 // ── Hand-computable fixture ─────────────────────────────────────────────────
 // 6 scored entries + 1 env-error (must be excluded from every denominator).
@@ -692,4 +693,31 @@ test('renderScorecardMarkdown: Compliance mapping coverage section is cleanly OM
   const md = renderScorecardMarkdown(model);
   assert.doesNotMatch(md, /## Compliance mapping coverage/);
   assert.deepEqual(model.complianceMappingCoverage, []);
+});
+
+// ── strategic metrics (GA promotion Wave 3) ──────────────────────────────────
+
+test('renderScorecardMarkdown: Strategic metrics renders each figure with its numerator and denominator, and says the learning rate is not measured', () => {
+  const metrics = computeStrategicMetrics({
+    scan: { scanHealth: { status: 'complete', files: { expected: 4, scanned: 4 }, analyzers: { expected: 10, completed: 10 } }, findings: [{ parser: 'REGEX' }, { parser: 'IR-TAINT' }, { parser: 'REGEX', corroboration: { by: ['a', 'b'] } }] },
+    fixAttempts: [{ verifiedFull: true }, { verifiedFull: false }, { verifiedFull: true }],
+  });
+  const model = buildScorecard({ ...fixtureInputs(), strategicMetrics: { source: 'a fixture', remediationSource: 'three fixture patches', metrics } });
+  const md = renderScorecardMarkdown(model);
+  assert.match(md, /## Strategic metrics/);
+  assert.match(md, /\| Assurance Coverage \| 100% \(files 4\/4 \(100%\), analyzers 10\/10 \(100%\)\)/);
+  assert.match(md, /\| Evidence Conversion \| 2\/3 \(66\.7%\)/);
+  assert.match(md, /\| Verified Remediation Rate \| 2\/3 \(66\.7%\) \| three fixture patches/);
+  assert.match(md, /\| Security Learning Rate \| not measured \|/);
+  assert.match(md, /Evidence states reached: single-signal 1, corroborated 1, taint-confirmed 1, execution-proven 0\./);
+});
+
+test('renderScorecardMarkdown: Strategic metrics is cleanly OMITTED when none was supplied, and an empty denominator reads not measurable', () => {
+  const none = buildScorecard(fixtureInputs());
+  assert.equal(none.strategicMetrics, null);
+  assert.doesNotMatch(renderScorecardMarkdown(none), /## Strategic metrics/);
+  const metrics = computeStrategicMetrics({ scan: null, fixAttempts: [] });
+  const md = renderScorecardMarkdown(buildScorecard({ ...fixtureInputs(), strategicMetrics: { source: 'nothing', remediationSource: 'no attempts', metrics } }));
+  assert.match(md, /\| Assurance Coverage \| not measurable/);
+  assert.match(md, /\| Verified Remediation Rate \| 0\/0 \(not measurable\)/);
 });

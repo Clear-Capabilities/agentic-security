@@ -271,8 +271,12 @@ async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
   }
 
   const candidates = candidatesFromParsed(parsed, focusArea, lens);
-  appendEntry(transcript, { phase: 'result', candidateCount: candidates.length });
-  return { ...base, candidates, degraded: false, reason: null };
+  // A proposed candidate with no file and line has nowhere to point and is dropped; say how many, so a reply full of them
+  // does not read as a reply that found nothing.
+  const proposed = Array.isArray(parsed?.candidates) ? parsed.candidates.length : 0;
+  const discarded = proposed - candidates.length;
+  appendEntry(transcript, { phase: 'result', candidateCount: candidates.length, discarded });
+  return { ...base, candidates, degraded: false, reason: null, discarded };
 }
 
 // EXTERNAL MODULE: ./src/discovery/confirm.js
@@ -835,7 +839,9 @@ async function runDiscovery(ctx = {}, opts = {}) {
   const budget = makeBudget(opts);
   // PRD C4 — what previous runs already judged. scanRoot absent => no memory,
   // which is the correct default for a library call with nowhere to persist.
-  const memory = opts.scanRoot ? loadMemory(opts.scanRoot) : null;
+  let memory = opts.scanRoot ? loadMemory(opts.scanRoot) : null;
+  // `--forget-refuted`: a model, a ruleset or the code changed, so what an earlier run refuted is worth examining again.
+  if (memory && opts.forgetRefuted) memory = forgetRefuted(memory);
   // Every LLM call in this pipeline goes through this one wrapped callback.
   const llmInvoke = budget.wrap(opts.llmInvoke);
 
@@ -870,6 +876,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
       const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot }, { llmInvoke, scanRoot: opts.scanRoot });
       runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
+      if (run.discarded > 0) reasons.push(`${area.label} × ${lens.key}: ${run.discarded} proposed candidate(s) had no usable file and line and were discarded`);
       if (run.degraded) areaDegradedCount += 1;
       else hunted.add(area.id);
       candidates = candidates.concat(run.candidates);

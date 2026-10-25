@@ -8,7 +8,7 @@
 
 This lane draws the line between what exists (a local, Labs detection loop plus exported evidence) and what does not (connection to production systems), in one place.
 
-## Exists today (Labs): `dnr`
+## Exists today (Preview): `dnr`
 
 `agentic-security dnr generate|validate|hunt|window|show|status <finding-id>` turns a *proven* vulnerability into a validated detection, hunts local historical logs, and scopes the exposure window. Everything is local and text-only: no network call, no model call.
 
@@ -42,4 +42,4 @@ When any of these ships it will be added to [the registry](../capabilities.yaml)
 
 ## How to contribute to the loop
 
-A weakness you prove and fix can be encoded as a deterministic rule with the Labs rule compiler (`rules synthesize`, then `evaluate` and `promote`), so the next scan finds it without a model. See [the rule compiler](../guides/rule-compiler.md).
+A weakness you prove and fix can be encoded as a deterministic rule with the Preview rule compiler (`rules synthesize`, then `evaluate` and `promote`), so the next scan finds it without a model. See [the rule compiler](../guides/rule-compiler.md).

@@ -142,6 +142,8 @@ Commands:
   verify [--finding <id>]      Re-run the verifier loop on last-scan findings (use --live --target <url> to execute PoCs)
   ask "<question>" [target]    Bounded local-model Q&A with read-only tool access (requires AGENTIC_SECURITY_LLM_PRESET=ollama)
   release-view <package.json>  Developer, CISO and auditor views of one signed release package (--view, --format text|json|html, --previous, --public-key)
+  metrics [path]               Assurance Coverage, Evidence Conversion and Verified Remediation Rate for the last scan, each with numerator and denominator (--format text|json)
+  release-package build|verify Build a signed release package from the last scan (--private-key, --output, --fix-records), or check one offline (--public-key)
   reset [--yes] [--keep ...]   Right-to-delete: wipe accumulated learned state under .agentic-security/ (preserves operator-authored config)
                                --expired    only remove artifacts past their retention-class TTL
                                Every run writes a deletion-report.json proving what was planned/deleted/preserved/failed.
@@ -201,6 +203,9 @@ Commands:
                                --filter <path.json>   {nodeIds,edgeIds} to scope the export (no-op + warning for csv/coverage)
                                --audience board|ciso|privacy|compliance|regulator|technical
                                                       (default: technical; briefing only — wording/verbosity, never facts)
+  dataflow plan-cuts [path] --candidates <file.json> --output <file> [--query <file.json>] [--format json|markdown]
+                               Plan a minimum-cost, hypothetical control placement (graph cut) over the
+                               already-scanned lineage graph. Never verifies a remediation.
   dataflow scenario apply [path] --operations <file.json> --output <file> [--format json|markdown]
                                Simulate a hypothetical architecture change against the
                                already-scanned lineage graph — never mutates the real scan.
@@ -2741,6 +2746,7 @@ async function cmdHunt(args) {
       maxCostUsd: numFlag('max-cost-usd'),
       // PRD C4 — persist and consult cross-run memory.
       scanRoot: args.flags['no-memory'] ? undefined : scanRoot,
+      forgetRefuted: !!args.flags['forget-refuted'],
       // PRD C2 — a comma-separated endpoint list turns on consensus.
       endpoints: args.flags.endpoints,
       costPerCallUsd: numFlag('cost-per-call-usd'),
@@ -5091,6 +5097,49 @@ async function cmdDataflowScenarioApply(args) {
   return 0;
 }
 
+// agentic-security dataflow plan-cuts [path] --candidates <file.json>
+// --output <file> [--query <file.json>] [--format json|markdown] — DAG-09.
+// Plans a minimum-cost control placement over the already-scanned,
+// already-signed graph. HYPOTHETICAL: never writes remediation state or
+// the scan artifact. Exit codes: 0 success, 1 graph-load failure, 2
+// argument problem.
+async function cmdDataflowPlanCuts(args) {
+  const targetAbs = path.resolve(args._[2] || '.');
+  const candFlag = args.flags.candidates;
+  const outputPath = args.flags.output;
+  const format = args.flags.format || 'json';
+  if (!candFlag || typeof candFlag !== 'string') { process.stderr.write('agentic-security dataflow plan-cuts: --candidates <file> is required.\n'); return 2; }
+  if (!outputPath || typeof outputPath !== 'string') { process.stderr.write('agentic-security dataflow plan-cuts: --output <file> is required.\n'); return 2; }
+  if (format !== 'json' && format !== 'markdown') { process.stderr.write('agentic-security dataflow plan-cuts: --format must be one of json|markdown.\n'); return 2; }
+  let candidates; let query = {};
+  try {
+    candidates = JSON.parse(await fsp.readFile(path.resolve(candFlag), 'utf8'));
+    if (typeof args.flags.query === 'string') query = JSON.parse(await fsp.readFile(path.resolve(args.flags.query), 'utf8'));
+  } catch (e) { process.stderr.write(`agentic-security dataflow plan-cuts: could not read/parse input: ${e.message}\n`); return 2; }
+  if (!Array.isArray(candidates)) { process.stderr.write('agentic-security dataflow plan-cuts: --candidates must be a JSON array.\n'); return 2; }
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const loaded = loadSignedGraph(targetAbs);
+  if (!loaded.ok) { process.stderr.write(`agentic-security dataflow plan-cuts: ${loaded.message}\n`); return 1; }
+  const { planCuts } = await import('../src/lineage/cut-planner.js');
+  const plan = planCuts(loaded.graph, query, candidates);
+  let data;
+  if (format === 'json') data = JSON.stringify(plan, null, 2);
+  else {
+    const lines = ['# Control placement plan (hypothetical)', '', `Status: ${plan.status}. Total coverage: ${plan.completeness.totalCoverage}. Not verified.`, '', '## Proposed controls', ''];
+    for (const c of plan.cut.controls) lines.push(`- ${c.location.type} \`${c.location.id}\` (${c.semantics}, owner ${c.owner}, cost ${c.cost})`);
+    lines.push('', '## Residual bypass paths', '');
+    for (const r of plan.validation?.residualPaths ?? []) lines.push(`- to \`${r.sink}\` via ${r.nodes.map((n) => `\`${n}\``).join(' -> ')}`);
+    lines.push('', '## Limitations', '');
+    for (const l of plan.limitations) lines.push(`- ${l}`);
+    data = lines.join('\n') + '\n';
+  }
+  try {
+    await fsp.mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
+    await fsp.writeFile(path.resolve(outputPath), data);
+  } catch (e) { process.stderr.write(`agentic-security dataflow plan-cuts: could not write --output: ${e.message}\n`); return 2; }
+  return 0;
+}
+
 // agentic-security dataflow impact assess [path] --target <canonical-id>
 // --output <file> [--format json|markdown] — M5 deliverable #4
 // (FR-507). Loads the already-scanned, already-signed graph via
@@ -6144,7 +6193,7 @@ async function cmdImageVerify(args) {
     const { verifyWithCosign } = await import('../src/artifact/cosign.js');
     const repo = typeof args.flags.repository === 'string' ? args.flags.repository : (resolved.record.source?.kind === 'registry' ? `${resolved.record.source.registry}/${resolved.record.source.repository}` : null);
     signatureResult = repo
-      ? await verifyWithCosign({ repository: repo, digest: inventory.digest, publicKeyPem, certificateIdentity: args.flags['certificate-identity'], certificateOidcIssuer: args.flags['certificate-oidc-issuer'] })
+      ? await verifyWithCosign({ repository: repo, digest: inventory.digest, publicKeyPem, ignoreTlog: !!args.flags['ignore-tlog'], certificateIdentity: args.flags['certificate-identity'], certificateOidcIssuer: args.flags['certificate-oidc-issuer'] })
       : { state: 'unavailable', via: 'cosign', reason: 'cosign verifies against a registry: give --repository <registry/repo>, or scan with --registry so the repository is known' };
   }
   const attestationResult = verifyProvenanceAttestation({ digest: inventory.digest, envelope: attestation, publicKeyPem });
@@ -6192,8 +6241,17 @@ async function cmdProvenanceTrace(args) {
     }
     const sourceScan = JSON.parse(fs.readFileSync(lastScanPath, 'utf8'));
     const { detectSourceArtifactMismatch } = await import('../src/artifact/mismatch.js');
+    // A full scan keeps its dependency findings in `supplyChain`; a scan limited with `--only sca` keeps them in `findings`. Reading only the first
+    // made a source that carried the same advisories look fixed, which is the one reading this comparison must never produce, so both are read
+    // and a source scan with no dependency data at all is refused instead of treated as clean.
+    const sourceVulns = (sourceScan.supplyChain && sourceScan.supplyChain.length) ? sourceScan.supplyChain : (sourceScan.findings || []).filter((x) => x && x.type === 'vulnerable_dep');
+    const sourceHasData = Array.isArray(sourceScan.supplyChain) || sourceVulns.length > 0 || !!(sourceScan.components && sourceScan.components.length);
+    if (!sourceHasData) {
+      process.stderr.write(`agentic-security provenance trace: --source "${args.flags.source}" carries no dependency data (no components and no dependency findings), so nothing can be compared; run "scan" there with SCA enabled.\n`);
+      return 1;
+    }
     mismatch = detectSourceArtifactMismatch({
-      sourceVulnerabilities: sourceScan.supplyChain || [],
+      sourceVulnerabilities: sourceVulns,
       artifactVulnerabilities: vulnerabilities,
       artifactComponents: [...inventory.osPackages, ...inventory.appPackages],
     });
@@ -7858,6 +7916,12 @@ async function main() {
       case 'attest':   process.exit(await cmdAttest(args));
       case 'verify-attestation': process.exit(await cmdVerifyAttestation(args));
       case 'release-view': process.exit(await cmdReleaseView(args));
+      case 'metrics': process.exit(await (await import('../src/posture/strategic-metrics-cli.js')).cmdMetrics(args));
+      case 'release-package': {
+        const { spawnSync } = await import('node:child_process');
+        const git = (root, ...a) => { const r = spawnSync('git', a, { cwd: root, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
+        process.exit(await (await import('../src/posture/assurance/release-package-cli.js')).cmdReleasePackage(args, { git }));
+      }
       case 'policy-explain': process.exit(await cmdPolicyExplain(args));
       case 'policy-sign': process.exit(await cmdPolicySign(args));
       case 'rule-synth': process.exit(await cmdRuleSynth(args));
@@ -7948,6 +8012,7 @@ async function main() {
           }
           break;
         }
+        else if (sub === 'plan-cuts') { process.exit(await cmdDataflowPlanCuts(args)); }
         else if (sub === 'impact') {
           const impactSub = args._[2];
           if (impactSub === 'assess') { process.exit(await cmdDataflowImpactAssess(args)); }

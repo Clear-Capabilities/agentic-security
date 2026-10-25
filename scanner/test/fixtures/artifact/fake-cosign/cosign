@@ -14,6 +14,7 @@ if (mode === 'ok-other') { process.stdout.write(payload(`sha256:${'9'.repeat(64)
 if (mode === 'ok-garbage') { process.stdout.write('verified!'); process.exit(0); }
 if (mode === 'missing') { process.stderr.write('Error: no signatures found\n'); process.exit(1); }
 if (mode === 'invalid') { process.stderr.write('Error: invalid signature when validating ASN.1 encoded signature\n'); process.exit(1); }
+if (mode === 'wrong-key') { process.stderr.write('Error: no matching signatures: invalid signature when validating ASN.1 encoded signature\n'); process.exit(1); }
 if (mode === 'netfail') { process.stderr.write('Error: getting Rekor: dial tcp: lookup rekor.sigstore.dev: no such host\n'); process.exit(1); }
 if (mode === 'hang') { setTimeout(() => {}, 600000); }
 else process.exit(2);

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-19T00:00:44.662Z",
-  "commit": "b3035a288fce8a1139dc52ceedbbf681a11f0fe2",
+  "generatedAt": "2026-10-19T22:00:43.621Z",
+  "commit": "14933b229bfe6b3908c4efb7a1b9da4c4f9959b3",
   "targets": {
     "hooks": {
       "total": 21,
@@ -18,7 +18,7 @@
       }
     },
     "scripts": {
-      "total": 109,
+      "total": 113,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -27,6 +27,7 @@
         "calibration-holdout-check.mjs": 1,
         "capability-ledger/check.mjs": 1,
         "check-assurance-docs.mjs": 3,
+        "check-release-assurance.mjs": 4,
         "detector-fuzz-runner.mjs": 3,
         "engineering-excellence/analysis-cache-measure.mjs": 2,
         "engineering-excellence/completion-analysis.mjs": 2,
@@ -61,7 +62,7 @@
       }
     },
     "scanner/src": {
-      "total": 737,
+      "total": 738,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -184,6 +185,7 @@
         "posture/assurance/bounded-io.js": 1,
         "posture/assurance/config.js": 1,
         "posture/assurance/evidence-registry.js": 1,
+        "posture/assurance/release-package-cli.js": 1,
         "posture/assurance/rollback.js": 2,
         "posture/assurance/waiver.js": 1,
         "posture/attack-playbooks.js": 2,
@@ -303,7 +305,6 @@
         "posture/remediation-ledger.js": 1,
         "posture/retention-policy.js": 1,
         "posture/risk-dollars.js": 3,
-        "posture/root-cause-sweep.js": 1,
         "posture/router.js": 3,
         "posture/rule-compiler/cli.js": 5,
         "posture/rule-compiler/mutation.js": 2,
@@ -325,6 +326,7 @@
         "posture/security-trend.js": 1,
         "posture/stack-playbook.js": 1,
         "posture/state-dir.js": 1,
+        "posture/strategic-metrics-cli.js": 1,
         "posture/streak.js": 1,
         "posture/suppressions.js": 4,
         "posture/telemetry-ingest.js": 3,

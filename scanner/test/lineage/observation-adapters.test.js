@@ -366,10 +366,20 @@ test('AD/ENVOY-1: a real Envoy JSON access log line maps upstream_host/cluster/p
   assert.deepEqual(_roundTrip(d), { valid: true, errors: [] });
 });
 
-test('AD/ENVOY-2: a non-empty response_flags reads network.securityDecision as denied', () => {
+test('AD/ENVOY-2: an authorization denial (UAEX) reads network.securityDecision as denied', () => {
   const line = JSON.stringify({ upstream_host: '10.0.4.12:8443', response_flags: 'UAEX' });
   const { drafts } = parseEnvoyAccessLogObservations(line + '\n', baseContext({ adapter: 'envoy-access-log' }));
   assert.equal(drafts[0].attributes['network.securityDecision'], 'denied');
+});
+
+test('AD/ENVOY-2b: an operational flag (upstream failure, no route, timeout) is not a security decision in either direction', () => {
+  for (const flag of ['UF', 'NR', 'UT', 'DC', 'UF,URX']) {
+    const line = JSON.stringify({ upstream_host: '10.0.4.12:8443', response_flags: flag });
+    const { drafts } = parseEnvoyAccessLogObservations(line + '\n', baseContext({ adapter: 'envoy-access-log' }));
+    assert.equal(drafts[0].attributes['network.securityDecision'], undefined, `${flag} must not read as allowed or denied`);
+  }
+  const mixed = JSON.stringify({ upstream_host: '10.0.4.12:8443', response_flags: 'UF,UAEX' });
+  assert.equal(parseEnvoyAccessLogObservations(mixed + '\n', baseContext({ adapter: 'envoy-access-log' })).drafts[0].attributes['network.securityDecision'], 'denied');
 });
 
 test('AD/ENVOY-3: a malformed line is one error naming its line number; other lines still parse', () => {
@@ -378,6 +388,16 @@ test('AD/ENVOY-3: a malformed line is one error naming its line number; other li
   assert.equal(errors.length, 1);
   assert.equal(errors[0].line, 1);
   assert.equal(drafts.length, 1);
+});
+
+test('AD/K8S-1b: only 401 and 403 read as denied; a not-found, a conflict and a server error make no claim; below 400 is allowed', () => {
+  const decisionFor = (code) => {
+    const line = JSON.stringify({ objectRef: { resource: 'configmaps', namespace: 'payments' }, responseStatus: { code } });
+    return parseK8sAuditLogObservations(line + '\n', baseContext({ adapter: 'k8s-audit-log' })).drafts[0].attributes['network.securityDecision'];
+  };
+  for (const c of [200, 201, 204, 302]) assert.equal(decisionFor(c), 'allowed', String(c));
+  for (const c of [401, 403]) assert.equal(decisionFor(c), 'denied', String(c));
+  for (const c of [400, 404, 409, 422, 500, 503]) assert.equal(decisionFor(c), undefined, `${c} is not an authorization outcome`);
 });
 
 test('AD/K8S-1: a real k8s audit event maps objectRef/responseStatus safely, never the username', () => {

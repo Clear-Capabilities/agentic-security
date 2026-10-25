@@ -309,6 +309,55 @@ export const CHECKS = [
       'adapter logic deliberately, re-pin with `node scripts/verification-conformance-check.mjs --update-pins` and say why in the commit.',
   },
   {
+    // GA promotion G3: the dependency-risk capability is measured by bench/sca-replay against third-party labels. Until this
+    // existed the measurement ran only by hand, so a recall drop would have shipped unseen. `--check` compares to the committed
+    // RESULT.json (a rise passes, a drop beyond half a point or a lost scored entry fails) and writes nothing. It fetches the
+    // pinned manifests first and queries the public advisory database, so it needs network and is excluded from the offline
+    // pre-push gate; an unreachable database lowers recall, which fails closed.
+    id: 'sca-replay-gate',
+    title: 'Dependency risk (SCA) recall and precision hold against third-party labels',
+    slow: true,
+    remedy: 'Run `npm run bench:sca-replay:check` in scanner/. A real regression is an engine defect to fix; an accepted change is ' +
+      're-recorded by running `npm run bench:sca-replay` and committing bench/sca-replay/RESULT.json with the reason.',
+  },
+  {
+    // GA promotion, Wave 1: the repository-wide sibling sweep is measured on seeded sibling sets (bench/sibling-sweep). The gate
+    // compares for equality: a drop is a regression and a rise is an unrecorded change, so both fail until the baseline is updated
+    // on purpose. It is deterministic, offline and takes well under a second, so it also runs under --fast.
+    id: 'sibling-sweep-gate',
+    title: 'Sibling sweep recall, known-site classification and look-alike rejection match the recorded baseline',
+    slow: false,
+    remedy: 'Run `npm run bench:sibling-sweep:check` in scanner/. A real regression is a defect in root-cause-sweep.js; a deliberate ' +
+      'change is re-recorded with `npm run bench:sibling-sweep:update-baseline` and the reason goes in the commit.',
+  },
+  {
+    // GA promotion, Wave 1: blast-radius assessment is measured against an independent reference over seeded graphs
+    // (bench/blast-radius). Equality gate; deterministic, offline and under a second, so it also runs under --fast.
+    id: 'blast-radius-gate',
+    title: 'Blast-radius assessment agrees with the independent reference on every seeded graph',
+    slow: false,
+    remedy: 'Run `npm run bench:blast-radius:check` in scanner/. A real regression is a defect in lineage/impact-engine.js; a deliberate ' +
+      'change is re-recorded with `npm run bench:blast-radius:update-baseline` and the reason goes in the commit.',
+  },
+  {
+    // GA promotion G1: every Preview and GA capability names a contract page and a compatibility test in docs/capabilities.yaml.
+    // This check runs exactly those tests, so a contract test that exists but is not run by anything cannot count as evidence.
+    id: 'contract-conformance',
+    title: 'Every capability contract test named in the registry passes',
+    slow: true,
+    remedy: 'Run `node scripts/check-ga-contracts.mjs` and fix the test named. A deliberate contract change updates the reference page ' +
+      'and the test in the same commit and adds a version note to the page.',
+  },
+  {
+    // GA promotion Wave 3: release assurance runs in the release gate. A package is built from a scan of a project the repository ships,
+    // the independent offline verifier must accept it, and a lowered severity, a restated verdict and an unsigned scan must each be refused.
+    id: 'release-assurance-gate',
+    title: 'A release assurance package built from a scan verifies offline, and tampering is refused',
+    slow: true,
+    remedy: 'Run `node scripts/check-release-assurance.mjs`. The message names which direction failed: the verifier rejecting a good package is a ' +
+      'producer defect (posture/assurance/release-package*.js); accepting a tampered one is a verifier defect (release-package-verify.js).',
+  },
+  {
     // REL-001: the new assurance suites plus the existing controller, smoke, build/bundle-source, documentation, scorecard and
     // Haskell/Nix/core-language compatibility checks, run against ONE exact commit (scripts/release-closure.mjs). The local gate
     // holds only when every locally runnable step passes with no skip, the tree is clean and the record binds suite versions and
@@ -400,7 +449,7 @@ export const HOSTED_CLOSURE_NOTE = 'hosted runner: only the static closure (plan
 
 export const RELEASE_GROUPS = {
   tests: ['test-suite'],
-  'benches-a': ['provenance-gate', 'corpus-gate', 'ttff-gate'],
+  'benches-a': ['provenance-gate', 'corpus-gate', 'ttff-gate', 'sca-replay-gate'],
   'benches-b': ['self-scan-gate', 'layer-recall-gate', 'memory-gate', 'verification-conformance-gate'],
   closure: ['release-closure-gate'],
 };
@@ -1086,6 +1135,17 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   evaluate('memory-gate', () => runNpmGate('bench:memory:check'));
   evaluate('provenance-gate', () => runNpmGate('bench:provenance:check'));
   evaluate('verification-conformance-gate', () => runNpmGate('verification:conformance:check'));
+  evaluate('sca-replay-gate', () => runNpmGate('bench:sca-replay:check'));
+  evaluate('sibling-sweep-gate', () => runNpmGate('bench:sibling-sweep:check'));
+  evaluate('blast-radius-gate', () => runNpmGate('bench:blast-radius:check'));
+  evaluate('contract-conformance', () => {
+    const r = run('node', [path.join(REPO, 'scripts', 'check-ga-contracts.mjs')], { cwd: REPO, stdio: 'inherit' });
+    return evaluateCommandGate({ label: 'node scripts/check-ga-contracts.mjs', exitCode: r.status });
+  });
+  evaluate('release-assurance-gate', () => {
+    const r = run('node', [path.join(REPO, 'scripts', 'check-release-assurance.mjs')], { cwd: REPO, stdio: 'inherit' });
+    return evaluateCommandGate({ label: 'node scripts/check-release-assurance.mjs', exitCode: r.status });
+  });
   evaluate('release-closure-gate', () => {
     const script = closureGateScript();
     const r = runNpmGate(script);

@@ -75,7 +75,7 @@
     },
     {
       "id": "U-10",
-      "title": "DCI corpus is synthetic and author-labelled; Flask mostly unresolved; two false positives; router-mounted routes unresolved",
+      "title": "DCI corpus is synthetic and author-labelled; Flask cases cover only the SQLAlchemy data layer; router-mounted routes unresolved",
       "priority": "P1",
       "blocksRelease": false,
       "task": "E4-06",

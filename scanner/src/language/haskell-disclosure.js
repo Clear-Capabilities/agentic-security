@@ -138,6 +138,18 @@ export function buildChain(fn, finding) {
   return [{ line: source.line, label: source.label, provenance: source.provenance }, ...ordered.filter((s) => s.line > source.line)];
 }
 
+/** A callee as text. A Haskell finding carries a string; an IR finding carries `{kind:'ident', name}` or `{kind:'member', object, prop}`. */
+function calleeText(callee) {
+  if (typeof callee === 'string') return callee;
+  if (!callee || typeof callee !== 'object') return '';
+  if (typeof callee.name === 'string') return callee.name;
+  if (callee.kind === 'member') {
+    const obj = calleeText(callee.object);
+    return obj && callee.prop ? `${obj}.${callee.prop}` : String(callee.prop || '');
+  }
+  return '';
+}
+
 /** The last hop of an evidence chain is the sink itself, so a SARIF code flow ends where the finding is reported. */
 function appendSinkStep(f) {
   if (!Array.isArray(f.chain) || !f.chain.length) return;
@@ -146,7 +158,7 @@ function appendSinkStep(f) {
   const last = f.chain[f.chain.length - 1];
   if (!Number.isInteger(sinkLine) || (last && last.kind === 'sink')) return;
   if (last && last.line === sinkLine && (last.file || f.file) === sinkFile && !/^source|standard input|stdin|argument|environment/i.test(String(last.label || ''))) { last.kind = 'sink'; return; }
-  f.chain.push({ file: sinkFile, line: sinkLine, label: `sink: ${String(f.callee || '').replace(/^.*\./, '') || 'call'}`, kind: 'sink' });
+  f.chain.push({ file: sinkFile, line: sinkLine, label: `sink: ${calleeText(f.callee).replace(/^.*\./, '') || 'call'}`, kind: 'sink' });
 }
 
 export function attachEvidenceChains(findings, perFile) {

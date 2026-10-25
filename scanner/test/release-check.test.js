@@ -314,7 +314,7 @@ test('release-gate — attestation-self-check passes on a real compute/verify ro
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all twenty-nine checks in order', () => {
+test('release-gate — full run plans all thirty-three checks in order', () => {
   // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
   // slow, both were previously unreachable from every gate including this one.
   // A Stage-6 correctness follow-up added attestation-self-check +
@@ -355,7 +355,11 @@ test('release-gate — full run plans all twenty-nine checks in order', () => {
   // exists to guard against for detector findings, with no equivalent gate.
   const ids = plannedCheckIds({ fast: false });
   // E3-08 added fix-verification-gate: slow, wiring bench/fix-verification/ (fake-but-green fixes must stay rejected).
-  assert.equal(ids.length, 29);
+  // GA promotion Phase 0 added sca-replay-gate (slow, the dependency-risk measurement) and contract-conformance (slow, runs the
+  // contract test every GA capability names in the registry).
+  // Wave 1 added sibling-sweep-gate and blast-radius-gate (fast: deterministic, offline, well under a second).
+  // Wave 3 added release-assurance-gate (slow: it scans a project and builds, verifies and tampers with a package).
+  assert.equal(ids.length, 34);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -380,9 +384,9 @@ test('release-gate — attestation-self-check and nist-catalog-freshness are reg
 test('release-gate — --fast skips only the slow gates, keeping every fast check', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
-  assert.equal(slowIds.length, 14);
+  assert.equal(slowIds.length, 17);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 15);
+  assert.equal(ids.length, 17);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
   // The four cheap correctness gates, the two new fast checks,
   // package-contents, both provenance gates, the doc-link gate, the two
@@ -405,7 +409,7 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
 test('release-gate — the slow checks are the six command gates, the three measurement gates (FR-906\'s ttff/memory plus the Finding Provenance M2 provenance gate), and the registry gate', () => {
   assert.deepEqual(
     CHECKS.filter(c => c.slow).map(c => c.id),
-    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'fix-verification-gate', 'layer-recall-gate', 'language-support-gate', 'ttff-gate', 'memory-gate', 'provenance-gate', 'verification-conformance-gate', 'release-closure-gate', 'dependency-currency']
+    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'fix-verification-gate', 'layer-recall-gate', 'language-support-gate', 'ttff-gate', 'memory-gate', 'provenance-gate', 'verification-conformance-gate', 'sca-replay-gate', 'contract-conformance', 'release-assurance-gate', 'release-closure-gate', 'dependency-currency']
   );
 });
 

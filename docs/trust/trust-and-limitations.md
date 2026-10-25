@@ -26,6 +26,8 @@ This page is the front door to everything the product will not claim. It replace
 
 ## What a clean result means
 
+<!-- limits-verified: 2026-10-19 -->
+
 | You see | It means | It does not mean |
 |---|---|---|
 | Zero actionable findings, `scanHealth.status: complete` | Nothing actionable was found by the analyses that ran, and they all finished | Nothing is wrong |
@@ -38,11 +40,13 @@ This page is the front door to everything the product will not claim. It replace
 
 ## Known limits worth knowing first
 
+<!-- limits-verified: 2026-10-19 -->
+
 - **Independent accuracy is low, and measured.** On code the engine was not built from (278 of 283 entries scored), localized precision was 6/19 and recall 6/278, F1 0.040 (95% interval 0.013 to 0.075). Every miss is classified, and the number is the headline of the evidence, not a footnote. See [Engineering excellence evidence](../engineering-excellence/README.md) and [benchmarking methodology](benchmarking-methodology.md).
 - **The regression corpus is a regression net, not a recall measurement.** Most of its entries are self-authored synthetic fixtures.
 - **Taint recall is partial and measured per language.** The published figures and their date are in [METRICS](../METRICS.md); the graph carries the same coverage tiers per language.
 - **Haskell and Nix support is measured on a synthetic corpus.** A score of 100% there describes robustness over those shapes, not arbitrary real-world code, and some legs (a Nix evaluation, a NixOS host) are blocked on hosts without the tool. See [language support](../language-support.md).
-- **Exploit proof needs a reproducer.** You can supply one, and `proof generate` builds one only for CWE-78, CWE-22 and CWE-918. Container isolation has been exercised only against a fake engine, and the feature has been exercised on macOS only. Without a container runtime it runs in a lower-assurance local sandbox and says so.
+- **Exploit proof needs a reproducer.** You can supply one, and `proof generate` builds one only for CWE-78, CWE-22 and CWE-918. It is measured on macOS and, in hosted CI, on Linux under local confinement and in a real Docker container (the numbers are in the exploit proof contract). Without a container runtime it runs in a lower-assurance local sandbox and says so.
 - **Runtime support is offline import.** It matches destinations, not functions or identities.
 - **Image scanning reads archives, a local Docker or Podman engine, or one named registry reference.** The engine and registry paths were tested against stand-ins and a mock registry, not a real daemon or registry. See [Source-to-artifact provenance](../guides/artifact-provenance.md).
 - **Fleet matching is by declared package name only,** with no remote-worker store, and its scaling was measured once on a toy workload.

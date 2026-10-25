@@ -6,7 +6,7 @@ Every major capability uses exactly one of four labels. The labels live in one p
 
 | Label | Meaning | What you can rely on |
 |---|---|---|
-| **GA** | Production-supported | Implemented, tested, and supported for production use. A GA capability must name implementation evidence that exists in the repository. |
+| **GA** | Production-supported | Implemented, tested, and supported for production use. A GA capability meets the [GA bar](#the-ga-bar) below, and the registry names the evidence for each criterion. |
 | **Preview** | Implemented and usable, still being hardened | It works as documented. Its limits are written next to it, and its behavior may still tighten. |
 | **Labs** | Experimental; the interface may change materially | It is real code, but do not build a process on its exact output shape. |
 | **Roadmap** | Strategic direction; not shipped | Nothing. It is described in the future or conditional tense, and the registry lists no implementation evidence for it. |
@@ -20,12 +20,29 @@ Every major capability uses exactly one of four labels. The labels live in one p
 
 The labels describe the *capability*, not the quality of any one result. A GA capability can return a `partial` scan; that is the system working as designed.
 
+## The GA bar
+
+GA is earned, not assigned. A capability is GA only when every criterion below holds. Criteria marked mechanical are checked from fields in the registry, and the checker fails when a named page, test, gate, job or section does not exist.
+
+| # | Criterion | How it is checked |
+|---|---|---|
+| G1 | **Frozen contract.** The flags, exit codes, output fields and state files the capability exposes are listed on a reference page and covered by a compatibility test. | Mechanical: `contract` names the page, `contractTest` names a test that a scanner test script runs, and the `contract-conformance` release check runs every named test. |
+| G2 | **Both-direction tests.** Every claim on the capability's page has a test that proves it fires and a test that proves it stays quiet. | Reviewed, and recorded per capability in the [promotion record](../implementation-status/ga-promotion.md). |
+| G3 | **Measured, with the denominator.** A bench or gate measures the capability, is evaluated by the release gate, and fails closed on a regression. | Mechanical: `gate` must be a check that `scripts/release-check.mjs` evaluates. |
+| G4 | **Platform coverage stated and tested.** The capability runs in hosted CI on Linux, and on macOS where the maintainer machine is the only other evidence. | Mechanical: `platforms` lists `os:job` pairs, at least one `linux`, each job present in `.github/workflows/`. |
+| G5 | **Limits are current.** The page has a "does not do" section, dated and re-read. | Mechanical: `limits` is `page#anchor`; the section must exist and carry a `limits-verified` date no more than 90 days before the checkout's HEAD commit. |
+| G6 | **Stable across releases.** No contract-breaking change for two releases, and `since` records the version of promotion. | Mechanical for `since`; the compatibility test enforces the rest from then on. |
+| G7 | **Degradation is honest.** Every way the capability can fail to run produces a named degraded state, never a clean result. | Reviewed, and recorded in the promotion record. |
+
+A **Preview** capability needs a frozen `contract` page, or a dated `contractNote` that says which fields may still change. **Labs** and **Roadmap** are unchanged. The bar applies to every GA capability, the twelve that existed first included; one that fails it is fixed or demoted with the reason written on its page.
+
 ## What is checked
 
 `node scripts/check-positioning-docs.mjs` (also run by `check-doc-drift.mjs --gate`, which the release gate runs) fails on:
 
 - an unknown maturity or lifecycle stage;
 - a GA, Preview or Labs capability with no implementation evidence, or evidence that does not exist;
+- a GA capability that does not meet the mechanical criteria of the GA bar, or a Preview capability with neither a contract page nor a dated contract note;
 - a Roadmap capability that lists implementation evidence;
 - a page that states a maturity different from the registry (for example `[GA]` beside a Labs capability);
 - a Roadmap capability described in the present tense as shipped, or a Labs capability described as production-ready;
@@ -46,23 +63,23 @@ Natural-language checks are imperfect, so a line can carry `<!-- positioning-ign
 | [Taint flow and reachability corroboration](../corroborate/README.md) | Corroborate | **GA** | A hop-by-hop path from where untrusted data entered to the sink, and whether the flow is reachable from an entry point. |
 | [Falsification of findings](../concepts.md) | Corroborate | **GA** | Whether a context-matched control on the path (a sanitizer or dominating guard) blocks the finding. Lowers confidence only; never removes a finding and never changes severity. |
 | [Model-assisted validation](./deterministic-and-agentic.md) | Corroborate | **Preview** | A second-opinion verdict on a finding, recorded separately from the deterministic evidence. A no-op unless a model endpoint is configured. |
-| [Execution-backed exploit proof](../guides/exploit-proof-fabric.md) | Prove | **Preview** | Whether a bounded, serialized reproducer (supplied, or generated by `proof generate`), run in a confined sandbox and judged by a deterministic oracle, reproduces the effect. Container isolation has been exercised only against a fake engine, and the feature has been exercised on macOS only. |
-| [Finding-to-rule compiler](../guides/rule-compiler.md) | Learn | **Labs** | Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence. |
+| [Execution-backed exploit proof](../guides/exploit-proof-fabric.md) | Prove | **GA** | Whether a bounded, serialized reproducer (supplied, or generated by `proof generate`), run in a confined sandbox and judged by a deterministic oracle, reproduces the effect. Hosted CI exercises it on Linux under local confinement and in a real container, and the measurements are committed. |
+| [Finding-to-rule compiler](../guides/rule-compiler.md) | Learn | **Preview** | Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence. |
 | [Detector spec synthesis](../../commands/labs.md) | Learn | **Labs** | A detector-spec proposal drafted from sample vulnerable files, written for a human to review and never incorporated automatically. |
 | [Security learning rate metric](../roadmap/README.md) | Learn | **Roadmap** | The long-term measure of how many novel confirmed weakness patterns became reusable rules, tests or controls. Not an existing KPI. |
-| [Repository-wide sibling sweep](../scale/README.md) | Scale | **Preview** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
-| [Fleet scanning and dependency blast radius](../guides/fleet.md) | Scale | **Labs** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
-| [Cross-repository graph federation](../guides/data-flow-explorer.md) | Scale, Trace | **Preview** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
-| [Runtime corroboration of the scanned graph](../guides/runtime-twin.md) | Observe | **Preview** | Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live. |
+| [Repository-wide sibling sweep](../reference/root-cause-sweep.md) | Scale | **GA** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
+| [Fleet scanning and dependency blast radius](../guides/fleet.md) | Scale | **Preview** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
+| [Cross-repository graph federation](../reference/federation.md) | Scale, Trace | **GA** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
+| [Runtime corroboration of the scanned graph](../reference/runtime-corroboration-contract.md) | Observe | **GA** | Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live. |
 | [Continuous production runtime observation](../roadmap/README.md) | Observe | **Roadmap** | Live collection of production behavior and exercised vulnerable functions. Not shipped; today's runtime support is offline telemetry import. |
 | [Code Boundaries security graph](../security-graph/code-boundaries.md) | Trace | **Preview** | Field-level sources, sinks, protection state, sensitive-data classes and findings as one signed graph, browsable locally. Opt-in at scan time. |
-| [Blast-radius assessment](../security-graph/blast-radius.md) | Trace | **Preview** | What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph. |
+| [Blast-radius assessment](../security-graph/blast-radius.md) | Trace | **GA** | What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph. |
 | [Finding provenance from Git history](../guides/finding-provenance.md) | Trace | **Preview** | Which commit introduced a finding, resolved from Git history, with the resolution quality stated. |
-| [Source-to-artifact provenance](../guides/artifact-provenance.md) | Trace | **Preview** | Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine and registry paths were tested against stand-ins, not a real daemon or registry. |
+| [Source-to-artifact provenance](../guides/artifact-provenance.md) | Trace | **GA** | Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine, registry and signing paths are exercised by a hosted job against a real container engine, a real registry and a real signing tool. |
 | [Fix synthesis](../guides/fixing-vulnerabilities.md) | Fix | **GA** | A candidate patch, deterministic or agent-composed, with a preview, a backup and a revert path. A patch is never written without passing verification. |
 | [Verified remediation](../trust/verified-remediation.md) | Verify | **GA** | Whether a patch passed its rescan, lint and test legs, which legs were skipped, and a completeness tier of FULL, MITIGATION or WORKAROUND. |
-| [Proof-gated fix](../guides/exploit-proof-fabric.md) | Verify | **Preview** | With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it. |
-| [Detection and response (dnr)](../guides/detection-and-response.md) | Detect | **Labs** | A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection. |
+| [Proof-gated fix](../guides/exploit-proof-fabric.md) | Verify | **GA** | With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it. |
+| [Detection and response (dnr)](../guides/detection-and-response.md) | Detect | **Preview** | A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection. |
 | [Connected production detection](../detect/README.md) | Detect | **Roadmap** | Detections deployed to and read back from a connected SIEM or EDR, and exploitation observed in live production telemetry. Not shipped; today's detections are generated and hunted locally. |
 | [Scan health](../trust/scan-health.md) | Corroborate | **GA** | Whether every analyzer finished, which files and feeds were incomplete or stale, and therefore whether a clean result may be called clean. |
 | [Assurance gate modes](../trust/assurance-modes.md) | Verify | **GA** | Whether CI fails on an incomplete analysis (strict) or only reports it (advisory, standard). |
@@ -73,22 +90,23 @@ Natural-language checks are imperfect, so a line can carry `<!-- positioning-ign
 | [CI gating](../guides/ci-setup.md) | Verify | **GA** | A baseline-aware pull request scan that writes SARIF, JUnit and JSON and applies a severity gate and an assurance gate. |
 | [Compliance control evidence](../guides/compliance.md) | Trace | **Preview** | Automated technical-control evidence mapped to bundled frameworks, with unassessed and manual controls kept out of the satisfied count. Not a certification. |
 | [Runner-level capability enforcement](../trust/agent-threat-model.md) | Cross-cutting | **Labs** | Filesystem, command and network limits enforced by the task runner. Off by default and operator-only; Linux is partially verified. |
-| [Eval Lab and model router](../guides/eval-lab.md) | Cross-cutting | **Labs** | A measured comparison of a deterministic baseline and any number of models on detection, exploit proof, remediation, cost, latency and repeatability, and routing of each task to a model. Only a local Ollama server has a built-in adapter, tested against a stand-in. |
-| [Release assurance](../guides/release-assurance.md) | Verify | **Labs** | A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; the package is assembled by a demo script and library functions. |
+| [Strategic metrics](../reference/strategic-metrics.md) | Cross-cutting | **Preview** | Assurance Coverage, Evidence Conversion and Verified Remediation Rate for the last scan and the recorded fix attempts, each with its numerator, denominator and basis. The Security Learning Rate is reported as not measured. |
+| [Eval Lab and model router](../guides/eval-lab.md) | Cross-cutting | **Preview** | A measured comparison of a deterministic baseline and any number of models on detection, exploit proof, remediation, cost, latency and repeatability, and routing of each task to a model. Only a local Ollama server has a built-in adapter, tested against a stand-in. |
+| [Release assurance](../guides/release-assurance.md) | Verify | **Preview** | A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; `release-package build` assembles the package from the last scan, and the independent verifier checks it offline. |
 <!-- generated:capabilities:end -->
 
 ## Strategic metrics and their maturity
 
-None of the four is reported as a product number today. The inputs for the first three exist; the aggregation does not.
+Three of the four are reported as product numbers by `agentic-security metrics` and in the [scorecard](../SCORECARD.md), each with its numerator, denominator and basis; they are one **Preview** capability, [Strategic metrics](../reference/strategic-metrics.md). The fourth is not reported, and says so.
 
-| Metric | Definition | Inputs that exist today | Maturity as a reported metric |
+| Metric | Definition | Inputs | Maturity as a reported metric |
 |---|---|---|---|
-| Assurance Coverage | Percent of requested scope that completed the required analysis | `scanHealth` files and analyzers, expected vs. completed | Roadmap |
-| Evidence Conversion | Percent of candidates that reach stronger evidence states | Per-finding proof states, `corroboration`, `reachable` | Roadmap |
-| Verified Remediation Rate | Percent of remediation attempts reaching the strongest applicable verification tier | Per-fix verification tier and legs; the fix loop's own acceptance rate | Roadmap |
-| Security Learning Rate | Percent of novel confirmed weakness patterns converted into reusable deterministic rules, tests or controls | The Labs promotion machinery | Roadmap |
+| Assurance Coverage | Percent of requested scope that completed the required analysis | `scanHealth` files and analyzers, expected vs. completed | Preview |
+| Evidence Conversion | Percent of candidates that reach stronger evidence states | Per-finding proof states, `corroboration`, taint confirmation | Preview |
+| Verified Remediation Rate | Percent of remediation attempts reaching the strongest applicable verification tier | Per-fix verification tier and legs; the fix loop's own acceptance rate | Preview |
+| Security Learning Rate | Percent of novel confirmed weakness patterns converted into reusable deterministic rules, tests or controls | The rule compiler's promotion machinery | Roadmap |
 
-The Security Learning Rate is a long-term metric and is not an existing KPI. Nothing measures it yet.
+The Security Learning Rate is a long-term metric and is not an existing KPI. Nothing measures it yet: the rule compiler grades its rules against a corpus built from the same finding, so the compiler cannot also be the instrument that says how often it learns.
 
 ## Related
 

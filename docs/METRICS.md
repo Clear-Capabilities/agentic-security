@@ -218,6 +218,8 @@ thing it claims to protect.
 
 ### Reading it honestly
 
+<!-- limits-verified: 2026-10-19 -->
+
 - Taint recall is computed over **all** entries for a language, not over the
   detected ones. Dividing by detected would report 100% for a language where
   taint fired once and regex carried the rest.

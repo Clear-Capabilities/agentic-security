@@ -45,6 +45,15 @@ On a run whose status is `complete`, the last line reads `[ci] assurance gate PA
 - Use `strict` where a clean result is used as a release signal. It makes "the scan did not finish" a failure instead of a footnote.
 - Use `standard` or `advisory` while you are adopting, or where a flaky feed must not block merges. The condition is still printed.
 
+## What assurance modes do not do
+
+<!-- limits-verified: 2026-10-19 -->
+
+- **They do not gate on findings.** `strict` fails only when `scanHealth.status` is not `complete`. Whether real vulnerabilities fail the build is the separate severity gate, `--fail-on`.
+- **`standard` is not a middle setting.** It behaves exactly like `advisory`; only `strict` can fail the build over an incomplete analysis.
+- **`--assurance` exists on `ci` only.** `scan` has no such flag, so a local scan never fails on completeness by itself.
+- **A `complete` status is not a clean bill.** It says the analyzers finished, not that nothing is wrong. See [trust and limitations](trust-and-limitations.md).
+
 ## Go deeper
 
 - [Walkthrough: assurance modes](../walkthroughs/assurance-modes.md)

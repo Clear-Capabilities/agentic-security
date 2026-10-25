@@ -2,7 +2,7 @@
 
 Autonomous Security Assurance Platform for the AI Software Era (a Claude Code plugin and CLI; also described as an agentic security harness). Full ASPM + LLMSecOps. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.179.0  
+**Version:** 0.184.0  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -52,6 +52,7 @@ Autonomous Security Assurance Platform for the AI Software Era (a Claude Code pl
 | `docs/language-support.{md,json}`, `docs/language-toolchain.json` | Generated Haskell/Nix support registry (do not edit by hand) and the recorded tool versions. | |
 | `docs/POSITIONING.md` | ICP statement: vibecoder-first; pro follow-on. |  |
 | `docs/capabilities.yaml` | **Capability registry: the single source of truth for GA / Preview / Labs / Roadmap.** Every page that states a maturity is checked against it; the README and lifecycle capability tables are generated from it (`npm run docs:positioning` writes them, `npm run docs:check-positioning` checks). Promote or demote a capability here, with evidence, never by rewriting a page. A Roadmap capability lists no implementation evidence. Also run by `node scripts/check-doc-drift.mjs --gate`. | |
+| `scripts/check-ga-contracts.mjs` + `docs/implementation-status/ga-promotion.md` | The GA bar: a GA capability in `docs/capabilities.yaml` must carry `since`, `contract`, `contractTest`, `gate`, `platforms` and `limits`, and the checker verifies each named thing exists (`bar` and `limits` rules). `check-ga-contracts.mjs` runs the registry's contract tests as the `contract-conformance` release check. The promotion record lists each capability against the bar and what is still open. Promote only by changing the registry with evidence. | |
 | `docs/STYLE-AND-TERMINOLOGY.md` | Product vocabulary: the one ten-stage lifecycle ordering, the avoid-list (unqualified secure/safe/guarantees/compliant/certified), the "verified" and "proven" rules, no em-dashes in prose. Enforced mechanically by `scripts/check-positioning-docs.mjs` for the pages the repositioning owns. | |
 | `docs/DOCS-MIGRATION.md` | Where every pre-repositioning doc path and README section lives now. No page was moved or deleted. | |
 | `docs/OSCAL.md` | NIST OSCAL output: which model and why, and what an OSCAL document must REFUSE to claim (an unassessed control gets no finding). Read before changing `src/report/oscal.js`. |  |

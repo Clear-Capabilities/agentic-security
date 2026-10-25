@@ -163,6 +163,15 @@ registry freshness check and the offline stress suite, each step with a deadline
 and runs the criteria that need a compiler; `nixos-runtime` installs a pinned Nix and is informational. The first two are
 required checks.
 
+## What CI gating does not do
+
+<!-- limits-verified: 2026-10-19 -->
+
+- **It writes nothing until you apply it.** `setup --ci` is a dry run by default.
+- **Only GitHub Actions is generated inline.** The other providers come from the templates in `scripts/ci-templates/`, which you review before use.
+- **A pull request scan compares against a base.** With no baseline ref it runs a full scan and says so; it then gates on everything it finds, not only what the pull request changed.
+- **A passing gate is not a clean result.** The severity gate reads findings. Whether the analysis finished is the separate assurance gate, and only `--assurance strict` fails on it.
+
 ## Related
 
 - [Scanning](scanning.md) — modes and exit codes the gate relies on

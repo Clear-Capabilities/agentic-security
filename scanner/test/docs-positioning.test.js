@@ -16,6 +16,7 @@ import {
   parseRegistry, loadRegistry, validateRegistry, renderTable, renderLifecycleTable, renderCounts, checkTables,
   checkMaturityConsistency, checkOverclaims, checkCommands, checkLifecycleOrder, checkStyle, checkLinks,
   checkVisuals, checkNavigation, checkReadmeHero, checkPositioningDocs, slug,
+  checkGaBar, checkLimitsFreshness, sectionByAnchor, LIMITS_MAX_AGE_DAYS,
 } from '../../scripts/check-positioning-docs.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -429,15 +430,15 @@ test('real checkout: no Roadmap capability lists evidence; every GA capability n
 
 test('real checkout: conservative assignments hold (nothing promoted because the positioning would benefit)', () => {
   const by = Object.fromEntries(loadRegistry(REPO).capabilities.map(c => [c.id, c.maturity]));
-  assert.equal(by['rule-compiler'], 'Labs');
-  assert.equal(by['fleet-scan'], 'Labs');
-  assert.equal(by['exploit-proof'], 'Preview');
-  assert.equal(by['runtime-corroboration'], 'Preview');
+  assert.equal(by['rule-compiler'], 'Preview');
+  assert.equal(by['fleet-scan'], 'Preview');
+  assert.equal(by['exploit-proof'], 'GA');
+  assert.equal(by['runtime-corroboration'], 'GA', 'promoted in 0.184.0 on adapters tested against files the real tools wrote');
   assert.equal(by['live-runtime-observation'], 'Roadmap');
-  assert.equal(by['detection-and-response'], 'Labs');
+  assert.equal(by['detection-and-response'], 'Preview');
   assert.equal(by['connected-production-detection'], 'Roadmap');
-  assert.equal(by['eval-lab'], 'Labs');
-  assert.equal(by['release-assurance'], 'Labs');
+  assert.equal(by['eval-lab'], 'Preview');
+  assert.equal(by['release-assurance'], 'Preview');
   assert.equal(by['security-learning-rate'], 'Roadmap');
   assert.equal(by['verified-remediation'], 'GA');
   assert.equal(by['scan-health'], 'GA');
@@ -472,4 +473,133 @@ test('real checkout: the README states the maturity labels it renders and never 
   for (const m of MATURITIES) assert.match(readme, new RegExp(`\\*\\*${m}\\*\\*`));
   assert.match(readme, /<!-- generated:capabilities:start -->/);
   assert.match(readme, /<!-- generated:lifecycle:start -->/);
+});
+
+
+// ------------------------------------------------------------------------------------------------ the GA bar
+
+const BAR_CAP = (extra = '') => `  - id: alpha-scan
+    name: Alpha scan
+    lifecycleStages: [discover]
+    maturity: GA
+    since: 0.178.0
+    contract: docs/ref/alpha.md
+    contractTest: scanner/test/alpha.test.js
+    gate: corpus-gate
+    platforms: [linux:test-shard, macos:determinism-attest]
+    limits: docs/alpha.md#what-alpha-does-not-do
+    establishes: A candidate at a location.
+    docs:
+      - docs/alpha.md
+    evidence:
+      - src/alpha.js
+${extra}`;
+const barFiles = () => ({
+  ...baseFiles(),
+  'docs/alpha.md': '# Alpha\n\n## What alpha does not do\n\n<!-- limits-verified: 2026-10-19 -->\n\n- a limit\n\n## Other\n',
+  'docs/ref/alpha.md': '# Alpha reference\n',
+  'scanner/test/alpha.test.js': '// test\n',
+  'scanner/package.json': JSON.stringify({ scripts: { 'test:alpha': 'node --test test/alpha.test.js' } }),
+  'scripts/release-check.mjs': "evaluate('corpus-gate', () => 1);\nevaluate('mutation-gate', () => 1);\n",
+  '.github/workflows/ci.yml': 'name: ci\non: push\njobs:\n  test-shard:\n    runs-on: ubuntu-latest\n  determinism-attest:\n    runs-on: macos-latest\n',
+});
+const barRepo = (overrides = {}, cap = BAR_CAP()) => {
+  const files = { ...barFiles(), ...overrides, 'docs/capabilities.yaml': registryYaml(cap) };
+  for (const k of Object.keys(files)) if (files[k] === null) delete files[k];
+  return mkRepo(files);
+};
+const barFindings = (dir) => checkGaBar(loadRegistry(dir), dir);
+
+test('GA bar: a GA capability that names every piece of evidence passes', () => {
+  assert.deepEqual(barFindings(barRepo()), []);
+});
+
+test('GA bar: each missing field fails, naming the field', () => {
+  for (const k of ['since', 'contract', 'contractTest', 'gate', 'platforms', 'limits']) {
+    const cap = BAR_CAP().split('\n').filter(l => !l.startsWith(`    ${k}:`)).join('\n');
+    const f = barFindings(barRepo({}, cap));
+    assert.ok(f.some(x => x.rule === 'bar' && x.message.includes(`\`${k}\``)), `${k}: ${JSON.stringify(f)}`);
+  }
+});
+
+test('GA bar: a contract page, a contract test or a limits page that does not exist fails', () => {
+  assert.ok(barFindings(barRepo({ 'docs/ref/alpha.md': null })).some(x => /contract page/.test(x.message)));
+  assert.ok(barFindings(barRepo({ 'scanner/test/alpha.test.js': null })).some(x => /contract test .* does not exist/.test(x.message)));
+  assert.ok(barFindings(barRepo({ 'docs/alpha.md': null })).some(x => /limits must be an existing/.test(x.message)));
+});
+
+test('GA bar: a contract test that no scanner script runs is not evidence', () => {
+  const f = barFindings(barRepo({ 'scanner/package.json': JSON.stringify({ scripts: { 'test:alpha': 'node --test test/other.test.js' } }) }));
+  assert.ok(f.some(x => /not run by any scanner test script/.test(x.message)), JSON.stringify(f));
+});
+
+test('GA bar: a gate that release-check does not evaluate fails, one it does passes', () => {
+  const f = barFindings(barRepo({ 'scripts/release-check.mjs': "evaluate('mutation-gate', () => 1);\n" }));
+  assert.ok(f.some(x => /gate "corpus-gate" is not a check/.test(x.message)), JSON.stringify(f));
+  assert.deepEqual(barFindings(barRepo()), []);
+});
+
+test('GA bar: platforms need os:job pairs, a job that exists, and a linux job', () => {
+  const swap = (pl) => BAR_CAP().replace('[linux:test-shard, macos:determinism-attest]', pl);
+  assert.ok(barFindings(barRepo({}, swap('[linux:no-such-job]'))).some(x => /not a job in \.github\/workflows/.test(x.message)));
+  assert.ok(barFindings(barRepo({}, swap('[windows:test-shard]'))).some(x => /must be os:job/.test(x.message)));
+  assert.ok(barFindings(barRepo({}, swap('[test-shard]'))).some(x => /must be os:job/.test(x.message)));
+  assert.ok(barFindings(barRepo({}, swap('[macos:determinism-attest]'))).some(x => /needs a linux job/.test(x.message)));
+});
+
+test('GA bar: a limits anchor that is not a heading, or has no verified marker, fails', () => {
+  assert.ok(barFindings(barRepo({}, BAR_CAP().replace('#what-alpha-does-not-do', '#nope'))).some(x => /is not a heading/.test(x.message)));
+  const noMarker = { 'docs/alpha.md': '# Alpha\n\n## What alpha does not do\n\n- a limit\n' };
+  assert.ok(barFindings(barRepo(noMarker)).some(x => /no <!-- limits-verified/.test(x.message)));
+});
+
+test('GA bar: a marker in a different section does not satisfy the anchor', () => {
+  const f = barFindings(barRepo({ 'docs/alpha.md': '# Alpha\n\n<!-- limits-verified: 2026-10-19 -->\n\n## What alpha does not do\n\n- a limit\n' }));
+  assert.ok(f.some(x => /no <!-- limits-verified/.test(x.message)), JSON.stringify(f));
+});
+
+test('GA bar: Preview needs a contract page or a contractNote; Labs and Roadmap are not held to it', () => {
+  const preview = (extra) => `  - id: beta\n    name: Beta\n    lifecycleStages: [discover]\n    maturity: Preview\n${extra}    establishes: x\n    docs:\n      - docs/alpha.md\n    evidence:\n      - src/alpha.js\n`;
+  assert.ok(barFindings(barRepo({}, preview(''))).some(x => /Preview needs a `contract`/.test(x.message)));
+  assert.deepEqual(barFindings(barRepo({}, preview('    contractNote: may still change; reviewed 2026-10-19.\n'))), []);
+  const labs = preview('').replace('Preview', 'Labs');
+  assert.deepEqual(barFindings(barRepo({}, labs)), []);
+});
+
+test('GA bar: sectionByAnchor stops at the next heading of the same or a higher level', () => {
+  const t = '# A\n\n## One\n\nbody one\n\n### Sub\n\nsub body\n\n## Two\n\nbody two\n';
+  assert.match(sectionByAnchor(t, 'one'), /sub body/);
+  assert.doesNotMatch(sectionByAnchor(t, 'one'), /body two/);
+  assert.equal(sectionByAnchor(t, 'missing'), null);
+});
+
+test('limits freshness: a recent marker passes; a stale or future one fails; an unreadable HEAD date is a finding', () => {
+  const dir = barRepo();
+  const reg = loadRegistry(dir);
+  assert.deepEqual(checkLimitsFreshness(reg, dir, { headDate: '2026-10-19' }), []);
+  assert.deepEqual(checkLimitsFreshness(reg, dir, { headDate: '2026-12-01' }), []);
+  const stale = checkLimitsFreshness(reg, dir, { headDate: '2027-03-01' });
+  assert.ok(stale.some(x => /more than 90 days/.test(x.message)), JSON.stringify(stale));
+  const future = checkLimitsFreshness(reg, dir, { headDate: '2026-09-01' });
+  assert.ok(future.some(x => /after the HEAD commit/.test(x.message)), JSON.stringify(future));
+  assert.equal(LIMITS_MAX_AGE_DAYS, 90);
+  assert.ok(checkLimitsFreshness(reg, dir, { headDate: 'nonsense' }).some(x => x.rule === 'limits'));
+});
+
+test('GA bar: the real registry meets its own bar, and every GA capability names a gate release-check evaluates', () => {
+  const reg = loadRegistry(REPO);
+  assert.deepEqual(checkGaBar(reg, REPO), []);
+  const ga = reg.capabilities.filter(c => c.maturity === 'GA');
+  assert.ok(ga.length >= 12);
+  for (const c of ga) for (const k of ['contract', 'contractTest', 'gate', 'limits', 'since']) assert.ok(c[k], `${c.id} lacks ${k}`);
+});
+
+test('contract-conformance runs exactly the tests the registry names for GA and Preview, and none for Labs', async () => {
+  const { contractTests } = await import('../../scripts/check-ga-contracts.mjs');
+  const reg = parseRegistry(registryYaml(BAR_CAP() + BAR_CAP().replace('alpha-scan', 'lab-thing').replace('maturity: GA', 'maturity: Labs').replace('scanner/test/alpha.test.js', 'scanner/test/lab.test.js')));
+  assert.deepEqual(contractTests(reg), ['scanner/test/alpha.test.js']);
+  assert.deepEqual(contractTests({ capabilities: [] }), []);
+  const real = contractTests(loadRegistry(REPO));
+  assert.ok(real.length >= 12);
+  for (const t of real) assert.ok(fs.existsSync(path.join(REPO, t)), `${t} is named by the registry but does not exist`);
 });

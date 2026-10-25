@@ -1,6 +1,6 @@
 # Release assurance: package, verdict, views, offline verification
 
-**Maturity:** Labs. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
 
 A release package is one signed file holding the evidence for one build: the scan's health, the findings, any fix verification records and any runtime explanations. It answers one question, **"is there anything in this evidence that blocks the release?"**, and it answers it the same way every time, because the answer is a function of the package alone.
 
@@ -39,6 +39,17 @@ The steps, as the implementation printed them:
 [sign] release package with 10 evidence records signed with a throwaway Ed25519 key; the verdict computed from its own contents is not_deployable
 [verify-offline] the independent verifier accepted the package (exit 0); a copy with one finding's severity lowered was rejected (exit 1); the stated verdict matches the one recomputed from the contents
 ```
+
+### Build and check one from your own scan
+
+```sh
+agentic-security scan .
+openssl genpkey -algorithm ed25519 -out release-key.pem
+agentic-security release-package build . --private-key release-key.pem --public-key-out release-key.pub.pem --output release-package.json
+node scripts/verify-release-package.mjs release-package.json --public-key release-key.pub.pem
+```
+
+`build` refuses a scan whose signature is missing or does not verify. It records the scan's health and one record per finding, computes the verdict from the package's own contents, and signs with your key. The key is yours: the package says `independentlyCertified: false`. The [release assurance contract](../reference/release-assurance-contract.md) lists every field, reason code and exit code, and the release gate runs this path on every release, including the refusals.
 
 ### Reading the package for a CISO
 

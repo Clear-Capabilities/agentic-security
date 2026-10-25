@@ -32,6 +32,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_DEFAULT = path.resolve(HERE, '..');
@@ -59,7 +60,7 @@ const ROLES = ['developer', 'appsec', 'ciso', 'platform-engineering', 'ai-engine
 // Registry reader
 // ---------------------------------------------------------------------------
 
-const LIST_KEYS = new Set(['lifecycleStages', 'aliases']);
+const LIST_KEYS = new Set(['lifecycleStages', 'aliases', 'platforms']);
 const BLOCK_LIST_KEYS = new Set(['docs', 'evidence', 'aliases']);
 
 function scalar(v) {
@@ -714,6 +715,144 @@ export function checkReadmeHero(repo = REPO_DEFAULT) {
 }
 
 // ---------------------------------------------------------------------------
+// The GA bar (GA promotion PRD, section 3)
+// ---------------------------------------------------------------------------
+//
+// A capability is GA only when the registry names the evidence for each mechanical criterion and every named thing exists:
+//   G1 contract + contractTest : a reference page and a compatibility test that a scanner test script runs
+//   G3 gate                    : a release-gate check id that `release-check.mjs` actually evaluates
+//   G4 platforms               : `os:job` pairs, at least one linux, each job present in .github/workflows
+//   G5 limits                  : `page#anchor` whose section exists and carries a `limits-verified` date
+//   G6 since                   : the version the capability was promoted in
+// G2 (both-direction tests) and G7 (honest degradation) are reviewed, not mechanical; the promotion record lists them.
+// Preview needs a frozen `contract` or a dated `contractNote` saying which fields may still change.
+
+export const GA_PLATFORMS = ['linux', 'macos'];
+const VERIFIED_RE = /<!--\s*limits-verified:\s*(\d{4}-\d{2}-\d{2})\s*-->/;
+export const LIMITS_MAX_AGE_DAYS = 90;
+
+function workflowJobs(repo) {
+  const dir = path.join(repo, '.github', 'workflows');
+  const jobs = new Set();
+  for (const f of fs.readdirSync(dir)) {
+    if (!/\.ya?ml$/.test(f)) continue;
+    let inJobs = false;
+    for (const line of fs.readFileSync(path.join(dir, f), 'utf8').split('\n')) {
+      if (/^jobs:\s*$/.test(line)) { inJobs = true; continue; }
+      if (inJobs && /^[A-Za-z]/.test(line)) inJobs = false;
+      const m = inJobs ? /^  ([A-Za-z0-9_-]+):\s*$/.exec(line) : null;
+      if (m) jobs.add(m[1]);
+    }
+  }
+  return jobs;
+}
+
+function releaseGateIds(repo) {
+  const text = read(repo, 'scripts/release-check.mjs');
+  return new Set([...text.matchAll(/evaluate\('([a-z0-9-]+)'/g)].map(m => m[1]));
+}
+
+/** The text of the section under `anchor` (up to the next heading of the same or a higher level), or null. */
+export function sectionByAnchor(text, anchor) {
+  const lines = blankFences(text).split('\n');
+  const count = new Map();
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(lines[i]);
+    if (!m) continue;
+    let sl = slug(m[2].replace(/<[^>]+>/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1'));
+    const n = count.get(sl) || 0;
+    count.set(sl, n + 1);
+    if (n) sl = `${sl}-${n}`;
+    if (sl !== anchor) continue;
+    const level = m[1].length;
+    const body = [];
+    for (let j = i + 1; j < lines.length; j++) {
+      const h = /^(#{1,6})\s/.exec(lines[j]);
+      if (h && h[1].length <= level) break;
+      body.push(lines[j]);
+    }
+    return body.join('\n');
+  }
+  return null;
+}
+
+/** The date in a GA capability's limits section, or null (shared with the freshness check). */
+function limitsMarker(repo, limits) {
+  const [page, anchor] = String(limits).split('#');
+  if (!page || !anchor || !exists(repo, page)) return null;
+  const body = sectionByAnchor(fs.readFileSync(path.join(repo, page), 'utf8'), anchor);
+  const m = body === null ? null : VERIFIED_RE.exec(body);
+  return m ? m[1] : null;
+}
+
+export function checkGaBar(reg, repo = REPO_DEFAULT) {
+  const out = [];
+  const file = 'docs/capabilities.yaml';
+  const jobs = workflowJobs(repo);
+  const gates = releaseGateIds(repo);
+  const scripts = JSON.stringify((JSON.parse(read(repo, 'scanner/package.json')).scripts) || {});
+  for (const c of reg.capabilities) {
+    const at = c._line;
+    if (c.maturity === 'Preview') {
+      if (!c.contract && !c.contractNote) out.push(F('bar', file, at, `${c.id}: Preview needs a \`contract\` page or a dated \`contractNote\` saying which fields may still change`));
+      if (c.contract && !exists(repo, c.contract)) out.push(F('bar', file, at, `${c.id}: contract page ${c.contract} does not exist`));
+      continue;
+    }
+    if (c.maturity !== 'GA') continue;
+    for (const k of ['contract', 'contractTest', 'gate', 'limits', 'since']) {
+      if (!c[k]) out.push(F('bar', file, at, `${c.id}: GA requires \`${k}\` (the GA bar, docs/how-it-works/maturity-model.md)`));
+    }
+    if (c.since && !/^\d+\.\d+\.\d+$/.test(c.since)) out.push(F('bar', file, at, `${c.id}: since "${c.since}" is not a version`));
+    if (c.contract && !exists(repo, c.contract)) out.push(F('bar', file, at, `${c.id}: contract page ${c.contract} does not exist`));
+    if (c.contractTest) {
+      if (!exists(repo, c.contractTest)) out.push(F('bar', file, at, `${c.id}: contract test ${c.contractTest} does not exist`));
+      else if (!scripts.includes(c.contractTest.replace(/^scanner\//, ''))) out.push(F('bar', file, at, `${c.id}: contract test ${c.contractTest} is not run by any scanner test script`));
+    }
+    if (c.gate && !gates.has(c.gate)) out.push(F('bar', file, at, `${c.id}: gate "${c.gate}" is not a check release-check.mjs evaluates`));
+    const plats = c.platforms || [];
+    if (!plats.length) out.push(F('bar', file, at, `${c.id}: GA requires \`platforms\` (os:job pairs)`));
+    for (const pl of plats) {
+      const m = /^([a-z]+):([A-Za-z0-9_-]+)$/.exec(pl);
+      if (!m || !GA_PLATFORMS.includes(m[1])) { out.push(F('bar', file, at, `${c.id}: platform "${pl}" must be os:job with os in ${GA_PLATFORMS.join(', ')}`)); continue; }
+      if (!jobs.has(m[2])) out.push(F('bar', file, at, `${c.id}: platform job "${m[2]}" is not a job in .github/workflows`));
+    }
+    if (plats.length && !plats.some(pl => pl.startsWith('linux:'))) out.push(F('bar', file, at, `${c.id}: GA needs a linux job`));
+    if (c.limits) {
+      const [page, anchor] = c.limits.split('#');
+      if (!page || !anchor || !exists(repo, page)) out.push(F('bar', file, at, `${c.id}: limits must be an existing page#anchor, got "${c.limits}"`));
+      else {
+        const body = sectionByAnchor(fs.readFileSync(path.join(repo, page), 'utf8'), anchor);
+        if (body === null) out.push(F('bar', file, at, `${c.id}: limits anchor #${anchor} is not a heading in ${page}`));
+        else if (!VERIFIED_RE.test(body)) out.push(F('bar', file, at, `${c.id}: the section ${c.limits} has no <!-- limits-verified: YYYY-MM-DD --> marker`));
+      }
+    }
+  }
+  return out;
+}
+
+/** A GA limits section must have been re-read recently, measured against the checkout's own HEAD date so the result is stable. */
+export function checkLimitsFreshness(reg, repo = REPO_DEFAULT, { headDate = null } = {}) {
+  const out = [];
+  const file = 'docs/capabilities.yaml';
+  let head = headDate;
+  if (!head) {
+    const r = spawnSync('git', ['log', '-1', '--format=%cs'], { cwd: repo, encoding: 'utf8' });
+    head = r.status === 0 ? r.stdout.trim() : null;
+  }
+  if (!head || !/^\d{4}-\d{2}-\d{2}$/.test(head)) return [F('limits', file, 0, 'cannot read the HEAD commit date, so limits freshness is unverified')];
+  const headMs = Date.parse(head);
+  for (const c of reg.capabilities.filter(x => x.maturity === 'GA' && x.limits)) {
+    const d = limitsMarker(repo, c.limits);
+    if (!d) continue;                                        // a missing marker is reported by checkGaBar
+    const ms = Date.parse(d);
+    if (Number.isNaN(ms)) out.push(F('limits', file, c._line, `${c.id}: limits-verified "${d}" is not a date`));
+    else if (ms > headMs + 2 * 86400000) out.push(F('limits', file, c._line, `${c.id}: limits-verified ${d} is after the HEAD commit (${head})`));
+    else if (headMs - ms > LIMITS_MAX_AGE_DAYS * 86400000) out.push(F('limits', file, c._line, `${c.id}: limits-verified ${d} is more than ${LIMITS_MAX_AGE_DAYS} days before HEAD (${head}); re-read ${c.limits} and update the date`));
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Orchestration
 // ---------------------------------------------------------------------------
 
@@ -727,6 +866,8 @@ export function checkPositioningDocs(repo = REPO_DEFAULT, { write = false } = {}
   try { reg = loadRegistry(repo); } catch (e) { return [F('registry', 'docs/capabilities.yaml', 0, `cannot read registry: ${e.message}`)]; }
   const findings = [
     ...guarded('registry', () => validateRegistry(reg, repo)),
+    ...guarded('bar', () => checkGaBar(reg, repo)),
+    ...guarded('limits', () => checkLimitsFreshness(reg, repo)),
     ...guarded('structure', () => checkRequiredPages(repo)),
   ];
   if (exists(repo, 'README.md')) findings.push(...guarded('readme', () => checkReadmeHero(repo)));

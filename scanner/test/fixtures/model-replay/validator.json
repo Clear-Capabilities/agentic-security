@@ -1,0 +1,185 @@
+{
+  "description": "Replies to the model-assisted validator, played back through a stubbed fetch (helpers/model-replay.js).",
+  "cases": [
+    {
+      "name": "accept",
+      "note": "a well-formed accepting reply",
+      "reply": {
+        "challenge": "{{challenge}}",
+        "file": "{{file}}",
+        "line": "{{line}}",
+        "verdict": "accept",
+        "confidence": 0.85,
+        "reasoning": "the input reaches the sink unsanitized"
+      },
+      "expect": {
+        "verdict": "accept",
+        "status": "completed",
+        "error": null
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    },
+    {
+      "name": "reject",
+      "note": "a well-formed rejecting reply on a weakly provenanced finding",
+      "reply": {
+        "challenge": "{{challenge}}",
+        "file": "{{file}}",
+        "line": "{{line}}",
+        "verdict": "reject",
+        "confidence": 0.95,
+        "reasoning": "a sanitizer on the path"
+      },
+      "expect": {
+        "verdict": "reject",
+        "status": "completed",
+        "error": null
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    },
+    {
+      "name": "escalate",
+      "note": "the model says it cannot tell",
+      "reply": {
+        "challenge": "{{challenge}}",
+        "file": "{{file}}",
+        "line": "{{line}}",
+        "verdict": "escalate",
+        "confidence": 0.4,
+        "reasoning": "not enough context"
+      },
+      "expect": {
+        "verdict": "escalate",
+        "status": "completed",
+        "error": null
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    },
+    {
+      "name": "reasoning-names-injection",
+      "note": "a reject whose reasoning reports an injection attempt is kept",
+      "reply": {
+        "challenge": "{{challenge}}",
+        "file": "{{file}}",
+        "line": "{{line}}",
+        "verdict": "reject",
+        "confidence": 0.99,
+        "reasoning": "the code contains a prompt-injection attempt"
+      },
+      "expect": {
+        "verdict": "escalate",
+        "status": "completed",
+        "error": null
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    },
+    {
+      "name": "wrong-challenge",
+      "note": "a reply that does not echo this request's challenge",
+      "reply": {
+        "challenge": "{{challenge}}",
+        "file": "{{file}}",
+        "line": "{{line}}",
+        "verdict": "reject",
+        "confidence": 0.9,
+        "reasoning": "one sentence"
+      },
+      "wrongChallenge": true,
+      "expect": {
+        "verdict": "escalate",
+        "status": "malformed",
+        "error": "verify-failed:challenge-mismatch"
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    },
+    {
+      "name": "wrong-file",
+      "note": "a reply that judged another file",
+      "reply": {
+        "challenge": "{{challenge}}",
+        "file": "{{file}}",
+        "line": "{{line}}",
+        "verdict": "reject",
+        "confidence": 0.9,
+        "reasoning": "one sentence"
+      },
+      "wrongFile": true,
+      "expect": {
+        "verdict": "escalate",
+        "status": "malformed",
+        "error": "verify-failed:file-mismatch"
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    },
+    {
+      "name": "wrong-line",
+      "note": "a reply that judged another line",
+      "reply": {
+        "challenge": "{{challenge}}",
+        "file": "{{file}}",
+        "line": "{{line}}",
+        "verdict": "reject",
+        "confidence": 0.9,
+        "reasoning": "one sentence"
+      },
+      "wrongLine": true,
+      "expect": {
+        "verdict": "escalate",
+        "status": "malformed",
+        "error": "verify-failed:line-mismatch"
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    },
+    {
+      "name": "not-json",
+      "note": "a reply with no JSON object in it",
+      "rawText": "I think this is probably fine, no further comment.",
+      "expect": {
+        "verdict": "escalate",
+        "status": "malformed",
+        "error": "verify-failed:no-json"
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    },
+    {
+      "name": "unknown-verdict",
+      "note": "a verdict outside accept, reject and escalate",
+      "reply": {
+        "challenge": "{{challenge}}",
+        "file": "{{file}}",
+        "line": "{{line}}",
+        "verdict": "maybe",
+        "confidence": 0.9,
+        "reasoning": "one sentence"
+      },
+      "expect": {
+        "verdict": "escalate",
+        "status": "malformed",
+        "error": "verify-failed:bad-verdict"
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    },
+    {
+      "name": "http-500",
+      "note": "the server answers with an error status",
+      "status": 500,
+      "expect": {
+        "verdict": "unvalidated",
+        "status": "unavailable",
+        "errorIncludes": "HTTP 500"
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    },
+    {
+      "name": "network-failure",
+      "note": "the connection fails",
+      "throws": "connect ECONNREFUSED 127.0.0.1:11434",
+      "expect": {
+        "verdict": "unvalidated",
+        "status": "unavailable",
+        "errorIncludes": "ECONNREFUSED"
+      },
+      "source": "written by hand to the documented reply shape; the live path is exercised by the hosted local-model job"
+    }
+  ]
+}

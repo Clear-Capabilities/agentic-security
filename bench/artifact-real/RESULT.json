@@ -1,0 +1,119 @@
+{
+  "schema": "agentic-security/artifact-real-evidence",
+  "generatedAt": "2026-10-20T00:22:46.495Z",
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v24.22.0"
+  },
+  "tools": {
+    "docker": "28.0.4",
+    "cosign": "GitVersion:    v2.4.1"
+  },
+  "checks": [
+    {
+      "name": "scan by archive exits 0",
+      "ok": true
+    },
+    {
+      "name": "scan by engine exits 0",
+      "ok": true
+    },
+    {
+      "name": "scan by registry exits 0",
+      "ok": true
+    },
+    {
+      "name": "scan by clean via registry exits 0",
+      "ok": true
+    },
+    {
+      "name": "the vulnerable image carries real advisories",
+      "ok": true,
+      "detail": "10 advisories"
+    },
+    {
+      "name": "archive, engine and registry report the same advisories",
+      "ok": true,
+      "detail": "archive 10, engine 10, registry 10"
+    },
+    {
+      "name": "the clean image reports strictly fewer advisories",
+      "ok": true,
+      "detail": "clean 3, vulnerable 10"
+    },
+    {
+      "name": "the registry scan is bound to the registry manifest",
+      "ok": true,
+      "detail": "scanned sha256:449a785cd4214e5468ae331c7f8788b75bccdf484398ad81b3292e5e7ef0abbb, pushed sha256:449a785cd4214e5468ae331c7f8788b75bccdf484398ad81b3292e5e7ef0abbb"
+    },
+    {
+      "name": "the revision label is read as the source commit",
+      "ok": true
+    },
+    {
+      "name": "the signed image verifies with its own key",
+      "ok": true,
+      "detail": "{\"status\":0,\"state\":\"verified\",\"reason\":\"\"}"
+    },
+    {
+      "name": "the same image is INVALID, not merely unverified, with another key",
+      "ok": true,
+      "detail": "{\"status\":1,\"state\":\"invalid\",\"reason\":\"cosign rejected the signature or the identity\"}"
+    },
+    {
+      "name": "an unsigned image is reported as having no signature",
+      "ok": true,
+      "detail": "{\"status\":0,\"state\":\"missing\",\"reason\":\"no signature exists for this digest\"}"
+    },
+    {
+      "name": "source patched but image still vulnerable is reported",
+      "ok": true,
+      "detail": "{\"scenarioA\":7}"
+    },
+    {
+      "name": "source equal to the image is not flagged",
+      "ok": true,
+      "detail": "{\"scenarioA\":0}"
+    }
+  ],
+  "images": {
+    "vuln": {
+      "ref": "localhost:5000/agsec/vuln:1",
+      "digest": "sha256:449a785cd4214e5468ae331c7f8788b75bccdf484398ad81b3292e5e7ef0abbb"
+    },
+    "clean": {
+      "ref": "localhost:5000/agsec/clean:1",
+      "digest": "sha256:5a4b4a4b84e24534825b0b1bebb4f7e7300c2cf741fbfcc4a0bfed3e86d6b1d7"
+    }
+  },
+  "advisories": {
+    "vulnerable": 10,
+    "clean": 3
+  },
+  "verification": {
+    "signedWithItsKey": {
+      "status": 0,
+      "state": "verified",
+      "reason": ""
+    },
+    "signedWithAnotherKey": {
+      "status": 1,
+      "state": "invalid",
+      "reason": "cosign rejected the signature or the identity"
+    },
+    "unsigned": {
+      "status": 0,
+      "state": "missing",
+      "reason": "no signature exists for this digest"
+    }
+  },
+  "mismatch": {
+    "patchedSource": {
+      "scenarioA": 7
+    },
+    "sameSource": {
+      "scenarioA": 0
+    }
+  }
+}

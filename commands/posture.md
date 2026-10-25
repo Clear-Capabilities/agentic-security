@@ -1,6 +1,6 @@
 ---
 description: Posture + reporting. Status snapshot, A-F report card, harness score, trend, threat model, stack playbook.
-argument-hint: "[--status|--report-card|--harness|--trend|--threat|--playbook|--mgmt|--cache]"
+argument-hint: "[--status|--report-card|--metrics|--harness|--trend|--threat|--playbook|--mgmt|--cache]"
 ---
 
 # /posture
@@ -14,6 +14,7 @@ Posture + reporting dispatcher. One command, multiple views.
 | (default) | **Combined dashboard** — health snapshot + A–F grade + trend arrow in one screen (see below) |
 | `--status` | One-screen plugin + project health snapshot — version, last scan, findings by severity, hook activation, suppressions. (Cache economics is a separate view — see `--cache`.) |
 | `--report-card` | Single A–F letter grade + one explanation + one next action |
+| `--metrics` | Strategic metrics for the last scan and the recorded fix attempts: Assurance Coverage, Evidence Conversion and Verified Remediation Rate, each with numerator and denominator ([contract](../docs/reference/strategic-metrics.md)). The Security Learning Rate is reported as not measured |
 | `--harness` | Score this project's AI agent harness against the six-domain rubric |
 | `--trend` | Findings delta between the last two scans — introduced/fixed/net change |
 | `--threat` | Threat model views: STRIDE, personas, playbook, bounty, adversary, surface, boundary, SPOF |
@@ -78,6 +79,8 @@ case "$FLAG" in
         }, null, 2));
       });
     " ;;
+  --metrics)
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs metrics . ;;
   --harness)
     # harness-score.cjs deliberately exits 1 when the overall level is below
     # "Operating" (it's also a CI gate via `npm run harness-score`) — but

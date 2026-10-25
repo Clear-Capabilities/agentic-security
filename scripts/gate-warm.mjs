@@ -27,7 +27,13 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_DEFAULT = path.resolve(HERE, '..');
 export const EXIT = Object.freeze({ passed: 0, failed: 1, running: 2, none: 3 });
 
-const GIT_ENV_KEYS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_PREFIX', 'GIT_COMMON_DIR'];
+const GIT_ENV_KEYS = [
+  'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_PREFIX', 'GIT_COMMON_DIR',
+  // `git commit` exports the commit's author and committer to its hooks. Left in, they override the identity every test sets in its own
+  // fixture repository, so a test that commits and then reads the author sees the maintainer's name instead (the provenance-flags
+  // failure that only ever happened in a warm-up run).
+  'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_DATE', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GIT_COMMITTER_DATE',
+];
 /** The environment for any git or gate child: a hook's own GIT_* variables must not leak into a run that reads the repository. */
 export function cleanEnv(env = process.env) {
   const out = { ...env };

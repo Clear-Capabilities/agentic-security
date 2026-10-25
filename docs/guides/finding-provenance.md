@@ -216,20 +216,33 @@ per scan.
 
 ## Known limitations — read before relying on this for anything load-bearing
 
-- **Renamed files degrade to `partial`.** A finding in a file renamed after
-  introduction does not resolve to its true pre-rename origin commit — this
-  is a known, traced gap, not fixed as of this release.
-- **Known-origin accuracy: 92.3% (12/13)** measured on the labeled corpus,
-  against a PRD target of ≥98%.
-- **Provenance coverage: 91.2% (311/341)** measured on this project's own
-  repository, against a target of ≥95%. All 30 shortfall findings resolve to
-  `partial` — reduced confidence, not a pipeline failure — none land on
-  `error` or `not_available`.
-- **Performance overhead is real and currently well over target.**
-  Cold-cache: roughly 27x wall-clock (p95) against a target of ≤1.3x (≤30%
-  overhead); warm-cache is roughly 2x. Memory overhead cold is roughly 13x
-  against a ≤1.2x target. If you provenance-scan a large repository on every
-  CI run with a cold cache, budget for this.
+- **Renamed files are followed.** The history walk follows a file back through
+  renames and moves, so a finding in a renamed file resolves to the commit that
+  introduced it. The labelled corpus includes a rename scenario and it passes.
+  Rename detection is git's own, so a file rewritten so heavily that git does not
+  see it as the same file is not followed.
+- **Known-origin accuracy: 13 of 13** fixtures in the labelled corpus resolve to
+  their documented origin (`bench/provenance-accuracy`). The corpus is small and
+  written by the project's own authors, so this is a regression check on thirteen
+  scenarios, not an accuracy rate on real repositories. The earlier figure of
+  12 of 13 was the rename scenario, which has since been fixed.
+- **Provenance coverage: 83.8% of eligible findings (393 of 469)** on this
+  project's own `scanner/src` in deep mode, against a target of 95% that is not
+  met. 64 of the unattributed findings come from whole-project analyses (a
+  state-machine check, a concurrency check, a specification-drift check, a
+  cross-file prompt check) that replaying one file at an old commit cannot
+  reproduce, so the history walk never confirms them. They resolve to `partial`:
+  reduced confidence, not a pipeline failure. The method and the causes are in
+  [Provenance coverage](../engineering-excellence/PROVENANCE_COVERAGE.md).
+- **Performance overhead is real.** On a 15-finding fixture a scan with
+  provenance and a cold cache took about 1.06 seconds against 44 milliseconds
+  without it (24 times at the median, 26 times at the 95th percentile); with a
+  warm cache it took 75 milliseconds (1.7 times). The cost is the git processes
+  the history walk starts, roughly 70 milliseconds per file with findings, so the
+  ratio is large on a small project and the absolute cost is what to budget for on
+  a large one. The target of 1.3 times is not met and cannot be on a cold cache.
+  If you provenance-scan a large repository on every CI run with a cold cache,
+  keep the cache directory between runs.
 - **Shallow clones degrade to `partial`, and say so.** The status carries
   the reason and, where resolvable, the boundary commit it stopped at —
   never a silent `complete`.

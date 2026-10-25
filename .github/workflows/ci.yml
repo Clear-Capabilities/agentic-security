@@ -640,6 +640,207 @@ jobs:
           path: ${{ runner.temp }}/sandbox-linux-test-report.json
           if-no-files-found: warn
 
+  # GA PROMOTION, WAVE 2: EXPLOIT PROOF ON LINUX, AND IN A REAL CONTAINER
+  # ----------------------------------------------------------------------
+  # `bench/proof-fabric/measure.mjs` ran on macOS only, and the container path had been exercised against a fake engine that records its
+  # arguments. These two jobs run the same corpus on a Linux runner, once under the local confinement backend and once in a real Docker
+  # container, and each one FAILS on: a reproduction rate under the 90% target, any false confirmation on a mitigated fixture, a hanging
+  # reproducer that was not represented as degraded, or a run that executed in a different environment than the job is named for (a
+  # container leg that fell back to local confinement is a failure, not a pass). Neither skips. The measurement is uploaded so it can be
+  # committed with its host recorded.
+  proof-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        working-directory: scanner
+        timeout-minutes: 10
+      # same relaxation `sandbox-linux` makes, for the same reason: a hosted Ubuntu runner restricts unprivileged user namespaces
+      - name: Relax the unprivileged user-namespace restriction for this job
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
+      - name: Measure exploit proof under local confinement (fails on a missed target, a false confirmation or an undegraded timeout)
+        run: node bench/proof-fabric/measure.mjs --expect-mode local-confined --out "$RUNNER_TEMP/proof-linux.json"
+      - name: Proof gate on applying a fix (no unsafe fix applied, refusals fail closed)
+        run: node bench/fix-verification/proof-gate.mjs --check
+      - name: Upload the measurement
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: proof-linux-measurement
+          path: ${{ runner.temp }}/proof-linux.json
+          if-no-files-found: warn
+
+  proof-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        working-directory: scanner
+        timeout-minutes: 10
+      # the proof runner never pulls an image (nothing is fetched during a proof), so the job pulls them first
+      - name: Pull the proof images
+        run: |
+          for image in node:24-slim python:3-slim eclipse-temurin:21 gcc:latest; do
+            for attempt in 1 2 3; do
+              if timeout 300 docker pull "$image"; then break; fi
+              if [ "$attempt" = 3 ]; then echo "could not pull $image"; exit 1; fi
+              sleep 10
+            done
+          done
+        timeout-minutes: 20
+      - name: Container engine
+        run: docker version
+        timeout-minutes: 2
+      - name: Measure exploit proof in a real container (fails if any run was not in a container)
+        run: node bench/proof-fabric/measure.mjs --require-container --out "$RUNNER_TEMP/proof-container.json"
+      # the proof gate bench also confines the fix's own tests, which needs the same relaxation `sandbox-linux` makes
+      - name: Relax the unprivileged user-namespace restriction for this job
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
+      - name: Proof gate on applying a fix, with the container as the environment
+        run: node bench/fix-verification/proof-gate.mjs --check
+      - name: Upload the measurement
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: proof-container-measurement
+          path: ${{ runner.temp }}/proof-container.json
+          if-no-files-found: warn
+
+  # GA PROMOTION, WAVE 2: RUNTIME CORROBORATION AGAINST REAL TELEMETRY EXPORTS
+  # --------------------------------------------------------------------------
+  # Runs the real tools (the OpenTelemetry SDK and its OTLP exporter, Envoy, nginx, and a kind cluster with the kube-apiserver audit log
+  # on) and records the files they write, untouched. `scripts/telemetry/record-packs.mjs` fails, with the reason, when a tool cannot run:
+  # a pack that was not recorded is not evidence. The recorded files are uploaded; the committed packs under
+  # `scanner/test/fixtures/telemetry-packs/` were produced by this job, and the adapters are tested against them.
+  telemetry-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Container engine
+        run: docker version
+        timeout-minutes: 2
+      - name: Record the packs from the real tools
+        run: node scripts/telemetry/record-packs.mjs --out "$RUNNER_TEMP/telemetry-packs"
+        timeout-minutes: 30
+      - name: Upload the packs
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: telemetry-packs
+          path: ${{ runner.temp }}/telemetry-packs
+          if-no-files-found: warn
+
+  # GA PROMOTION, WAVE 2: SOURCE-TO-ARTIFACT PROVENANCE AGAINST THE REAL TOOLS
+  # --------------------------------------------------------------------------
+  # Builds two images with the real container engine, runs a registry on localhost, pushes both, signs one with cosign, and runs
+  # `image scan` three ways (archive, engine, registry reference), `image verify` with the right key, the wrong key and no signature, and
+  # the source-versus-artifact mismatch detector in both directions. `scripts/artifact-real-check.mjs` fails, with the reason, if a tool is
+  # missing: a leg that could not run its tools proves nothing.
+  artifact-real:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        working-directory: scanner
+        timeout-minutes: 10
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        timeout-minutes: 5
+        with:
+          cosign-release: 'v2.4.1'
+      - name: Pull the registry image
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 300 docker pull registry:2; then break; fi
+            if [ "$attempt" = 3 ]; then echo "could not pull registry:2"; exit 1; fi
+            sleep 10
+          done
+        timeout-minutes: 10
+      - name: Real engine, real registry, real signing tool (fails if any tool is missing or any check fails)
+        run: node scripts/artifact-real-check.mjs --out "$RUNNER_TEMP/artifact-real.json"
+      - name: Upload the evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: artifact-real-evidence
+          path: ${{ runner.temp }}/artifact-real.json
+          if-no-files-found: warn
+
+  # GA PROMOTION, WAVE 2: LOCAL MODEL SUPPORT AGAINST A REAL MODEL SERVER
+  # ---------------------------------------------------------------------
+  # Runs a real Ollama server on loopback with the smallest supported model, then validation, fix proposal, hunt and one Eval Lab comparison
+  # against it (`scripts/local-model-check.mjs`). It asserts the contract, not the model's quality: a verdict never changes severity, an
+  # unusable answer is a named state, a candidate is a proposal the engine gates, and a non-loopback endpoint is refused. A model that
+  # cannot be pulled fails the job rather than skipping it.
+  local-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        working-directory: scanner
+        timeout-minutes: 10
+      - name: Start the model server on loopback
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 600 docker pull ollama/ollama:latest; then break; fi
+            if [ "$attempt" = 3 ]; then echo "could not pull the model server image"; exit 1; fi
+            sleep 10
+          done
+          docker run -d --name ollama -p 127.0.0.1:11434:11434 -v ollama:/root/.ollama ollama/ollama:latest
+          for i in $(seq 1 60); do
+            if curl -fsS --max-time 3 --retry 2 http://127.0.0.1:11434/api/version; then break; fi
+            sleep 2
+          done
+        timeout-minutes: 20
+      - name: Pull the smallest supported model
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 1200 docker exec ollama ollama pull qwen3.5:2b; then break; fi
+            if [ "$attempt" = 3 ]; then echo "could not pull qwen3.5:2b"; exit 1; fi
+            sleep 15
+          done
+        timeout-minutes: 45
+      - name: Validation, fix proposal, hunt and Eval Lab against the real model (fails if the server or model is missing or any check fails)
+        run: node scripts/local-model-check.mjs --model qwen3.5:2b --out "$RUNNER_TEMP/local-model.json"
+      - name: Upload the evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: local-model-evidence
+          path: ${{ runner.temp }}/local-model.json
+          if-no-files-found: warn
+
   corpus:
     runs-on: ubuntu-latest
     timeout-minutes: 45

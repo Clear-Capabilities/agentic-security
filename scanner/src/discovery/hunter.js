@@ -124,6 +124,10 @@ export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
   }
 
   const candidates = candidatesFromParsed(parsed, focusArea, lens);
-  appendEntry(transcript, { phase: 'result', candidateCount: candidates.length });
-  return { ...base, candidates, degraded: false, reason: null };
+  // A proposed candidate with no file and line has nowhere to point and is dropped; say how many, so a reply full of them
+  // does not read as a reply that found nothing.
+  const proposed = Array.isArray(parsed?.candidates) ? parsed.candidates.length : 0;
+  const discarded = proposed - candidates.length;
+  appendEntry(transcript, { phase: 'result', candidateCount: candidates.length, discarded });
+  return { ...base, candidates, degraded: false, reason: null, discarded };
 }

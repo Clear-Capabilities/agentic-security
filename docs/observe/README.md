@@ -24,7 +24,7 @@ Metadata only: no payloads are captured. Beyond matching, the twin derives six e
 <!-- generated:capabilities:observe:start -->
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
-| [Runtime corroboration of the scanned graph](../guides/runtime-twin.md) | Observe | **Preview** | Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live. |
+| [Runtime corroboration of the scanned graph](../reference/runtime-corroboration-contract.md) | Observe | **GA** | Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live. |
 | [Continuous production runtime observation](../roadmap/README.md) | Observe | **Roadmap** | Live collection of production behavior and exercised vulnerable functions. Not shipped; today's runtime support is offline telemetry import. |
 <!-- generated:capabilities:observe:end -->
 

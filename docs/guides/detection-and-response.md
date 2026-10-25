@@ -1,6 +1,6 @@
 # Detection and response: from a proven vulnerability to a production defense
 
-**Maturity:** Labs. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
 
 **Status: new. Everything here runs locally.** The loop reads files and runs a bounded search. It makes no network call and no
 model call, so production logs never leave the machine.
