@@ -1,0 +1,371 @@
+@@@ html-injection | vulnerable | src/Greeting.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Greeting (greet) where
+
+import Web.Scotty
+import qualified Data.Text.Lazy as TL
+
+greet :: ActionM ()
+greet = do
+  name <- param "name"
+  html ("<h1>Welcome back, " <> name <> "</h1>") --@@
+
+@@@ html-injection | vulnerable | src/Comments.hs
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings #-}
+module Comments (getCommentR) where
+
+import Yesod
+import Text.Blaze.Html (preEscapedToHtml)
+import qualified Data.Text as T
+
+data Site = Site
+mkYesod "Site" [parseRoutes| /comment/#T.Text CommentR GET |]
+instance Yesod Site
+
+getCommentR :: T.Text -> Handler Html
+getCommentR body = defaultLayout $ do
+  setTitle "Comment"
+  [whamlet|<div .comment>#{preEscapedToHtml body}|] --@@
+
+@@@ html-injection | vulnerable | src/ErrorPage.hs
+module ErrorPage (notFoundPage) where
+
+import Network.Wai
+import Network.HTTP.Types
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as BL
+
+notFoundPage :: Request -> Response
+notFoundPage req =
+  responseLBS status404 [(hContentType, B.pack "text/html")] page
+  where
+    path = B.unpack (rawPathInfo req)
+    page = BL.pack ("<html><body><p>No such page: " ++ path ++ "</p></body></html>") --@@
+
+@@@ html-injection | safe | src/Greeting.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Greeting (greet) where
+
+import Web.Scotty
+import Text.Blaze.Html.Renderer.Text (renderHtml)
+import qualified Text.Blaze.Html5 as H
+
+greet :: ActionM ()
+greet = do
+  name <- param "name"
+  html (renderHtml (H.h1 ("Welcome back, " <> H.toHtml (name :: String)))) --@@
+
+@@@ html-injection | safe | src/Comments.hs
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings #-}
+module Comments (getCommentR) where
+
+import Yesod
+import qualified Data.Text as T
+
+data Site = Site
+mkYesod "Site" [parseRoutes| /comment/#T.Text CommentR GET |]
+instance Yesod Site
+
+getCommentR :: T.Text -> Handler Html
+getCommentR body = defaultLayout $ do
+  setTitle "Comment"
+  [whamlet|<div .comment>#{body}|] --@@
+
+@@@ html-injection | safe | src/ErrorPage.hs
+module ErrorPage (notFoundPage) where
+
+import Network.Wai
+import Network.HTTP.Types
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as BL
+
+escape :: String -> String
+escape = concatMap f
+  where
+    f '<' = "&lt;"
+    f '>' = "&gt;"
+    f '&' = "&amp;"
+    f '"' = "&quot;"
+    f '\'' = "&#39;"
+    f c = [c]
+
+notFoundPage :: Request -> Response
+notFoundPage req =
+  responseLBS status404 [(hContentType, B.pack "text/html")] page
+  where
+    path = escape (B.unpack (rawPathInfo req))
+    page = BL.pack ("<html><body><p>No such page: " ++ path ++ "</p></body></html>") --@@
+
+@@@ weak-password-hash | vulnerable | src/Credentials.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Credentials (hashPassword) where
+
+import Crypto.Hash (hash, MD5, Digest)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
+
+hashPassword :: T.Text -> String
+hashPassword pw = show (hash (encodeUtf8 pw) :: Digest MD5) --@@
+
+@@@ weak-password-hash | vulnerable | src/Login.hs
+module Login (storeUser, checkUser) where
+
+import Data.Digest.Pure.SHA (sha1, showDigest)
+import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.Map.Strict as M
+import Data.IORef
+
+type Users = IORef (M.Map String String)
+
+storeUser :: Users -> String -> String -> IO ()
+storeUser ref name password =
+  modifyIORef' ref (M.insert name (showDigest (sha1 (BL.pack password)))) --@@
+
+checkUser :: Users -> String -> String -> IO Bool
+checkUser ref name password = do
+  m <- readIORef ref
+  pure (M.lookup name m == Just (showDigest (sha1 (BL.pack password))))
+
+@@@ weak-password-hash | vulnerable | src/Accounts.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Accounts (newAccount) where
+
+import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
+import Database.SQLite.Simple
+
+newAccount :: Connection -> BS.ByteString -> BS.ByteString -> IO ()
+newAccount conn user pass =
+  execute conn "INSERT INTO accounts (user, pw) VALUES (?, ?)" (user, B16.encode (SHA256.hash pass)) --@@
+
+@@@ weak-password-hash | safe | src/Credentials.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Credentials (hashPassword, verifyPassword) where
+
+import Crypto.BCrypt (hashPasswordUsingPolicy, slowerBcryptHashingPolicy, validatePassword)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
+
+hashPassword :: T.Text -> IO (Maybe B.ByteString)
+hashPassword pw = hashPasswordUsingPolicy slowerBcryptHashingPolicy (encodeUtf8 pw) --@@
+
+verifyPassword :: B.ByteString -> T.Text -> Bool
+verifyPassword stored pw = validatePassword stored (encodeUtf8 pw)
+
+@@@ weak-password-hash | safe | src/Login.hs
+module Login (storeUser) where
+
+import Crypto.KDF.PBKDF2 (fastPBKDF2_SHA256, Parameters(..))
+import qualified Data.ByteString as BS
+import qualified Data.Map.Strict as M
+import Data.IORef
+
+type Users = IORef (M.Map BS.ByteString BS.ByteString)
+
+storeUser :: Users -> BS.ByteString -> BS.ByteString -> BS.ByteString -> IO ()
+storeUser ref name salt password =
+  modifyIORef' ref (M.insert name derived)
+  where
+    derived = fastPBKDF2_SHA256 (Parameters 310000 32) password salt --@@
+
+@@@ weak-password-hash | safe | src/Accounts.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Accounts (newAccount) where
+
+import Crypto.Argon2 (hashEncoded, defaultHashOptions)
+import qualified Data.ByteString as BS
+import qualified Data.Text as T
+import Database.SQLite.Simple
+
+newAccount :: Connection -> BS.ByteString -> BS.ByteString -> BS.ByteString -> IO ()
+newAccount conn user salt pass =
+  case hashEncoded defaultHashOptions pass salt of
+    Left _    -> fail "hashing failed"
+    Right enc -> execute conn "INSERT INTO accounts (user, pw) VALUES (?, ?)" (user, T.unpack enc) --@@
+
+@@@ weak-randomness | vulnerable | src/SessionToken.hs
+module SessionToken (newToken) where
+
+import System.Random (randomRIO)
+import Control.Monad (replicateM)
+
+alphabet :: String
+alphabet = ['a'..'z'] ++ ['0'..'9']
+
+newToken :: IO String
+newToken = replicateM 24 (pick <$> randomRIO (0, length alphabet - 1)) --@@
+  where pick i = alphabet !! i
+
+@@@ weak-randomness | vulnerable | src/ResetCode.hs
+module ResetCode (issueResetCode) where
+
+import System.Random
+import Data.Time.Clock.POSIX (getPOSIXTime)
+
+-- Emailed to the user as a password reset code.
+issueResetCode :: IO Int
+issueResetCode = do
+  t <- getPOSIXTime
+  let gen = mkStdGen (floor (t * 1000)) --@@
+      (code, _) = randomR (100000, 999999) gen
+  pure code
+
+@@@ weak-randomness | vulnerable | src/ApiKeys.hs
+module ApiKeys (generateApiKey) where
+
+import System.Random (newStdGen, randoms)
+import Numeric (showHex)
+import Data.Word (Word8)
+
+generateApiKey :: IO String
+generateApiKey = do
+  g <- newStdGen
+  let bytes = take 16 (randoms g) :: [Word8] --@@
+  pure (concatMap (`showHex` "") bytes)
+
+@@@ weak-randomness | safe | src/SessionToken.hs
+module SessionToken (newToken) where
+
+import Crypto.Random (getRandomBytes)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64.URL as B64
+
+newToken :: IO BS.ByteString
+newToken = do
+  raw <- getRandomBytes 24 :: IO BS.ByteString --@@
+  pure (B64.encode raw)
+
+@@@ weak-randomness | safe | src/ResetCode.hs
+module ResetCode (issueResetCode) where
+
+import System.Entropy (getEntropy)
+import qualified Data.ByteString as BS
+
+-- Emailed to the user as a password reset code.
+issueResetCode :: IO Int
+issueResetCode = do
+  bytes <- getEntropy 4 --@@
+  let n = BS.foldl' (\acc b -> acc * 256 + fromIntegral b) 0 bytes :: Int
+  pure (100000 + n `mod` 900000)
+
+@@@ weak-randomness | safe | src/ApiKeys.hs
+module ApiKeys (generateApiKey, shuffleBanner) where
+
+import Crypto.Random (getRandomBytes)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as B
+import System.Random (randomRIO)
+
+generateApiKey :: IO String
+generateApiKey = do
+  bytes <- getRandomBytes 16 :: IO BS.ByteString --@@
+  pure (B.unpack (B16.encode bytes))
+
+-- Cosmetic only: picks which banner the landing page shows.
+shuffleBanner :: [String] -> IO String
+shuffleBanner banners = (banners !!) <$> randomRIO (0, length banners - 1)
+
+@@@ resource-limits | vulnerable | src/BodyReader.hs
+module BodyReader (readBody) where
+
+import Network.Wai
+import qualified Data.ByteString.Lazy as BL
+
+readBody :: Request -> IO BL.ByteString
+readBody req = strictRequestBody req --@@
+
+@@@ resource-limits | vulnerable | src/BulkCreate.hs
+{-# LANGUAGE OverloadedStrings #-}
+module BulkCreate (bulkCreate) where
+
+import Web.Scotty
+import Control.Monad (replicateM_, forM_)
+import Control.Monad.IO.Class (liftIO)
+import Data.IORef
+
+bulkCreate :: IORef Int -> ActionM ()
+bulkCreate counter = do
+  n <- param "count" :: ActionM Int
+  replicateM_ n (liftIO (modifyIORef' counter (+1))) --@@
+  text "ok"
+
+@@@ resource-limits | vulnerable | src/Echo.hs
+module Echo (serve) where
+
+import Network.Socket
+import Network.Socket.ByteString (recv, sendAll)
+import qualified Data.ByteString as BS
+import Control.Monad (forever)
+
+serve :: Socket -> IO ()
+serve sock = forever $ do
+  (conn, _) <- accept sock
+  msg <- recvAll conn BS.empty --@@
+  sendAll conn msg
+  close conn
+  where
+    recvAll c acc = do
+      chunk <- recv c 4096
+      if BS.null chunk then pure acc else recvAll c (acc <> chunk)
+
+@@@ resource-limits | safe | src/BodyReader.hs
+module BodyReader (readBody) where
+
+import Network.Wai
+import Network.Wai.Request (requestSizeCheck)
+import qualified Data.ByteString.Lazy as BL
+
+readBody :: Request -> IO BL.ByteString
+readBody req = do
+  checked <- requestSizeCheck (Just 65536) req
+  strictRequestBody checked --@@
+
+@@@ resource-limits | safe | src/BulkCreate.hs
+{-# LANGUAGE OverloadedStrings #-}
+module BulkCreate (bulkCreate) where
+
+import Web.Scotty
+import Network.HTTP.Types.Status (status400)
+import Control.Monad (replicateM_)
+import Control.Monad.IO.Class (liftIO)
+import Data.IORef
+
+maxBatch :: Int
+maxBatch = 100
+
+bulkCreate :: IORef Int -> ActionM ()
+bulkCreate counter = do
+  n <- param "count" :: ActionM Int
+  if n < 0 || n > maxBatch
+    then status status400 >> text "count out of range"
+    else do
+      replicateM_ n (liftIO (modifyIORef' counter (+1))) --@@
+      text "ok"
+
+@@@ resource-limits | safe | src/Echo.hs
+module Echo (serve) where
+
+import Network.Socket
+import Network.Socket.ByteString (recv, sendAll)
+import qualified Data.ByteString as BS
+import Control.Monad (forever)
+
+maxMessage :: Int
+maxMessage = 1048576
+
+serve :: Socket -> IO ()
+serve sock = forever $ do
+  (conn, _) <- accept sock
+  msg <- recvUpTo conn BS.empty --@@
+  sendAll conn msg
+  close conn
+  where
+    recvUpTo c acc
+      | BS.length acc >= maxMessage = pure (BS.take maxMessage acc)
+      | otherwise = do
+          chunk <- recv c 4096
+          if BS.null chunk then pure acc else recvUpTo c (acc <> chunk)
