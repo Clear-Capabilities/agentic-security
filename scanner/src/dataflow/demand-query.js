@@ -14,9 +14,12 @@
 //   1. The frontier only SELECTS functions. A backward/forward intersection is a
 //      candidate filter and is reported as one; the only witness is a finding the
 //      forward engine produced over the selected region.
-//   2. A construct the selector cannot follow (instance fields, an exhausted
-//      depth or work budget, an unresolved higher-order shape) never silently
-//      drops a function. Default policy expands to the full function set
+//   2. A construct the selector cannot follow (an instance field of a class it
+//      cannot name, such as a constructor function or a non-JavaScript receiver;
+//      an exhausted depth or work budget; an unresolved higher-order shape) never
+//      silently drops a function. An instance field of a named JavaScript or
+//      TypeScript class IS followed: the class's methods and the receiver at
+//      their call sites are selected. Default policy expands to the full function set
 //      (`onLimit` / `onUnsupported` = 'full'); the 'partial' policy instead
 //      reports partial scope with negativeClaimAllowed false.
 //   3. A limited reverse walk never authorizes a negative verdict. The verdict
@@ -40,6 +43,11 @@ const DEMAND_CONTEXTS = Object.freeze(['whole-program']);
 const DEFAULT_MAX_CALLER_DEPTH = 64;
 const DEFAULT_MAX_WORK = 50000;
 const MAX_PATH_SEGMENTS = 6;
+// Bounds on the class-scoped expansion; past them the construct is reported
+// unsupported and the query takes the conservative full path.
+const MAX_CLASS_MEMBERS = 2000;
+const MAX_ENCLOSING_CANDIDATES = 32;
+const MAX_CLOSURE_HOPS = 6;
 
 /** Demand mode is opt-in: this env flag AND an explicit API/query list. */
 export function demandEnabled(env = process.env) {
@@ -122,6 +130,15 @@ export function sinkQueryKey(query, digests = {}) {
 // ---------------------------------------------------------------------------
 
 const SELF_ROOTS = new Set(['this', '_this_', 'self', 'cls']);
+const JS_FILE = /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i;
+// In JavaScript and TypeScript the receiver is `this` (lowered to `_this_`);
+// `self` and `cls` are ordinary names there (a local, a parameter, the global
+// `self`, or an alias made by `const self = this`, which the assignment rule
+// follows back to `_this_`). In the other languages they are the receiver.
+function isSelfRoot(root, file) {
+  if (root === 'this' || root === '_this_') return true;
+  return SELF_ROOTS.has(root) && !JS_FILE.test(file || '');
+}
 const REQ_PARAM = /^(?:req|request|ctx)$/;
 // Roots that are language builtins or ambient globals, so a call on them is
 // modeled by the engine's own summaries rather than being an unresolved callee.
@@ -213,6 +230,83 @@ function fnInfo(fn) {
   return info;
 }
 
+// Access paths a call can write through (its receiver and its arguments).
+const _touchCache = new WeakMap();
+function touchedPaths(call) {
+  let paths = _touchCache.get(call);
+  if (paths) return paths;
+  paths = [];
+  _touchCache.set(call, paths);
+  const collect = (e) => {
+    if (!e || typeof e !== 'object') return;
+    if (e.kind === 'function-value') return;
+    const ap = accessPathOf(e);
+    if (ap) { paths.push(ap); return; }
+    if (isExpr(e)) forEachChild(e, collect);
+  };
+  const callee = call.callee;
+  if (callee && typeof callee === 'object' && callee.kind === 'member') collect(callee.object);
+  else if (typeof callee === 'string' && callee.includes('.')) paths.push(callee.slice(0, callee.lastIndexOf('.')));
+  for (const a of (call.args || [])) collect(a);
+  return paths;
+}
+
+// Per-function views by root segment. Two access paths can overlap only when
+// their first segments agree or one of them is the `*` wildcard, so a lookup
+// for a path rooted at `r` need only visit the assignments and calls rooted at
+// `r` (plus wildcard roots and, for assignments, the opaque ones). The views
+// keep the function's own order, so the walk visits them exactly as a full scan
+// would and only skips what cannot overlap.
+function mergeSorted(lists) {
+  const out = [];
+  for (const l of lists) for (const i of l) out.push(i);
+  return out.sort((a, b) => a - b);
+}
+
+function assignsFor(info, root) {
+  let b = info.assignBuckets;
+  if (!b) {
+    b = { byRoot: new Map(), wild: [], opaque: [], views: new Map() };
+    info.assigns.forEach((a, i) => {
+      if (a.opaque) { b.opaque.push(i); return; }
+      const r = rootOf(a.target);
+      if (r === '*') { b.wild.push(i); return; }
+      if (!b.byRoot.has(r)) b.byRoot.set(r, []);
+      b.byRoot.get(r).push(i);
+    });
+    info.assignBuckets = b;
+  }
+  if (root === '*') return info.assigns;
+  let v = b.views.get(root);
+  if (!v) {
+    v = mergeSorted([b.opaque, b.wild, b.byRoot.get(root) || []]).map((i) => info.assigns[i]);
+    b.views.set(root, v);
+  }
+  return v;
+}
+
+function callsFor(info, root) {
+  let b = info.callBuckets;
+  if (!b) {
+    b = { byRoot: new Map(), wild: [], any: [], views: new Map() };
+    info.calls.forEach((occ, i) => {
+      const paths = touchedPaths(occ.expr);
+      if (!paths.length) return;
+      b.any.push(i);
+      const roots = new Set(paths.map(rootOf));
+      if (roots.has('*')) { b.wild.push(i); return; }
+      for (const r of roots) { if (!b.byRoot.has(r)) b.byRoot.set(r, []); b.byRoot.get(r).push(i); }
+    });
+    info.callBuckets = b;
+  }
+  let v = b.views.get(root);
+  if (!v) {
+    v = (root === '*' ? b.any : mergeSorted([b.wild, b.byRoot.get(root) || []])).map((i) => info.calls[i]);
+    b.views.set(root, v);
+  }
+  return v;
+}
+
 const _indexCache = new WeakMap();
 
 /**
@@ -227,15 +321,34 @@ export function buildIncomingIndex(callGraph) {
   const incoming = new Map();
   const byTail = new Map();
   const modules = new Map(); const byFile = new Map();
+  const byScope = new Map(); // enclosing-scope segment of the qid -> member qids (class methods share their class name)
+  const namesInFile = new Map(); // file -> Map(function name -> [fn])
   const add = (qid, site) => { if (!incoming.has(qid)) incoming.set(qid, []); incoming.get(qid).push(site); };
-  const resolveName = (name, file) => (name && callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(name, file) : null);
+  // Name resolution over a fixed graph is a pure function of (name, file), and
+  // most call sites repeat a handful of names per file (`push`, `has`, `get`),
+  // each of which would otherwise scan every file's name table on a miss.
+  const memo = new Map();
+  const rk = callGraph.resolveKnownCallee;
+  const resolveName = (name, file) => {
+    if (!name || !rk) return null;
+    let m = memo.get(file);
+    if (!m) { m = new Map(); memo.set(file, m); }
+    let v = m.get(name);
+    if (v === undefined) { v = rk(name, file) || null; m.set(name, v); }
+    return v;
+  };
   for (const fn of callGraph.functions.values()) {
     const tail = String(fn.name || '').split('.').pop();
     if (tail) { if (!byTail.has(tail)) byTail.set(tail, []); byTail.get(tail).push(fn.qid); }
     if (!byFile.has(fn.file)) byFile.set(fn.file, []); byFile.get(fn.file).push(fn);
     if (fn.name === '<module>' && String(fn.qid).includes('::top::')) { if (!modules.has(fn.file)) modules.set(fn.file, []); modules.get(fn.file).push(fn.qid); }
+    const parts = qidParts(fn.qid);
+    if (parts) { if (!byScope.has(parts.scope)) byScope.set(parts.scope, []); byScope.get(parts.scope).push(fn.qid); }
+    let nf = namesInFile.get(fn.file);
+    if (!nf) { nf = new Map(); namesInFile.set(fn.file, nf); }
+    if (!nf.has(fn.name)) nf.set(fn.name, []);
+    nf.get(fn.name).push(fn);
   }
-  const base = buildCallerQidIndex(callGraph); // canonical statement-level edges, retained for parity checks
   for (const fn of callGraph.functions.values()) {
     const info = fnInfo(fn);
     for (const occ of info.calls) {
@@ -251,9 +364,23 @@ export function buildIncomingIndex(callGraph) {
       }
     }
   }
-  const idx = { incoming, byTail, modules, byFile, base };
+  const idx = { incoming, byTail, modules, byFile, byScope, namesInFile, definers: new Map(), resolve: resolveName };
+  // The canonical statement-level edges, kept for parity checks. Built on first
+  // use: nothing on the query path reads them, and building them costs a second
+  // full pass of name resolution.
+  let base = null;
+  Object.defineProperty(idx, 'base', { enumerable: true, get() { if (!base) base = buildCallerQidIndex(callGraph); return base; } });
   _indexCache.set(callGraph, idx);
   return idx;
+}
+
+/** `file::scope::name@line` -> { scope, name }; null for a qid of another shape. */
+function qidParts(qid) {
+  const j = qid.lastIndexOf('::');
+  if (j < 0) return null;
+  const i = qid.lastIndexOf('::', j - 1);
+  if (i < 0) return null;
+  return { scope: qid.slice(i + 2, j), name: qid.slice(j + 2) };
 }
 
 // ---------------------------------------------------------------------------
@@ -330,12 +457,14 @@ class Frontier {
     this.unsupported = []; // {kind, qid, detail}
     this.unresolved = new Map(); // name@qid -> record
     this.terminals = new Set(); // 'source' | 'param' | 'call' | 'free' | 'callback'
-    this.followed = { callers: 0, producers: 0, callbacks: 0, mutators: 0 };
+    this.followed = { callers: 0, producers: 0, callbacks: 0, mutators: 0, siblings: 0 };
     this.depthCut = 0;
     this.workLeft = 0;
     this.sinkCalls = new Set();
-    this.touchCache = new WeakMap();
     this.expanded = new Set();
+    this.mateCache = new Map();
+    this.holdersDone = new Set();
+    this.classDone = new Set();
   }
 
   addRegion(qid, reason) {
@@ -412,7 +541,7 @@ class Frontier {
     }
     for (const a of (e.args || [])) this.reads(fn, a, item);
     const name = calleeName(callee);
-    const g = name && this.cg.resolveKnownCallee ? this.cg.resolveKnownCallee(name, fn.file) : null;
+    const g = this.idx.resolve(name, fn.file);
     if (g) {
       this.followed.producers += 1;
       this.addRegion(g, 'producer');
@@ -478,10 +607,14 @@ class Frontier {
     if (p === '$params') { for (const prm of info.params) this.push(fn.qid, prm, false, item.depth, item.reason); this.push(fn.qid, '$ret', false, item.depth, item.reason); return; }
 
     const root = rootOf(p);
-    if (SELF_ROOTS.has(root)) { this.markUnsupported('instance-field', fn.qid, p); return; }
+    const selfRooted = isSelfRoot(root, fn.file);
+    // An instance field can be written by any method of its class and by whoever
+    // holds the receiver; select those (class-scoped expansion), or report the
+    // construct unsupported when the class cannot be determined.
+    if (selfRooted && !this.expandClass(fn, p, item)) return;
     this.checkSource(fn, p);
 
-    for (const a of info.assigns) {
+    for (const a of assignsFor(info, root)) {
       if (a.opaque) { this.reads(fn, a.source, item); continue; }
       if (!segOverlap(a.target, p)) continue;
       // target covers the needed path (equal or a prefix): the value of the
@@ -493,15 +626,15 @@ class Frontier {
       else this.reads(fn, a.source, item);
     }
 
-    for (const occ of info.calls) {
+    for (const occ of callsFor(info, root)) {
+      if (!this.callTouches(occ.expr, p)) continue;
       // the queried sink call itself runs after its argument is formed, so it
       // cannot change what the argument holds
-      if (this.sinkCalls.has(`${fn.qid}|${occ.line}|${calleeName(occ.expr.callee)}`)) continue;
-      if (!this.callTouches(occ.expr, p)) continue;
+      if (this.sinkCalls.size && this.sinkCalls.has(`${fn.qid}|${occ.line}|${calleeName(occ.expr.callee)}`)) continue;
       this.followed.mutators += 1;
       this.reads(fn, occ.expr, item);
       const name = calleeName(occ.expr.callee);
-      const g = name && this.cg.resolveKnownCallee ? this.cg.resolveKnownCallee(name, fn.file) : null;
+      const g = this.idx.resolve(name, fn.file);
       if (g && g !== fn.qid) { this.addRegion(g, 'mutator'); this.push(g, '$params', false, item.depth, 'mutator'); }
     }
 
@@ -509,8 +642,104 @@ class Frontier {
     if (pi >= 0) {
       this.terminals.add('param');
       if (item.ep) this.expandCallers(fn, pi, item);
+    } else if (selfRooted) {
+      this.terminals.add('field');
     } else if (!info.assignedRoots.has(root) && !info.hasOpaqueAssign && !info.params.includes(root)) {
       this.freeVariable(fn, root, p, item);
+    }
+  }
+
+  /**
+   * The qids sharing the receiver that `fn`'s `this` names, or null when that
+   * cannot be decided from the qid structure. A method's qid scope is its class
+   * name, so a class is the set of functions with that scope. A closure's scope
+   * is the enclosing function's name, and its `this` may be that function's, so
+   * the enclosing function(s) are followed outward. Module-level functions and
+   * constructor functions (scope `top`) have no class to name.
+   */
+  classMates(fn) {
+    if (this.mateCache.has(fn.qid)) return this.mateCache.get(fn.qid);
+    const out = new Set([fn.qid]);
+    const seen = new Set();
+    const visit = (f, depth) => {
+      if (seen.has(f.qid)) return true;
+      seen.add(f.qid);
+      const parts = qidParts(f.qid);
+      if (!parts || !parts.scope || parts.scope === 'top' || parts.scope === '<module>') return false;
+      const named = (this.idx.namesInFile.get(f.file) || new Map()).get(parts.scope);
+      if (named && named.length) {
+        if (depth >= MAX_CLOSURE_HOPS || named.length > MAX_ENCLOSING_CANDIDATES) return false;
+        for (const g of named) { out.add(g.qid); if (!visit(g, depth + 1)) return false; }
+        return true;
+      }
+      const mates = this.idx.byScope.get(parts.scope) || [];
+      if (mates.length > MAX_CLASS_MEMBERS) return false;
+      for (const q of mates) out.add(q);
+      return true;
+    };
+    const ok = JS_FILE.test(fn.file || '') && visit(fn, 0);
+    // A class is named by its scope; a closure's receiver set is its own union.
+    const direct = ok && seen.size === 1 ? qidParts(fn.qid).scope : null;
+    out.key = direct != null ? `class:${direct}` : `fn:${fn.qid}`;
+    const res = ok ? out : null;
+    this.mateCache.set(fn.qid, res);
+    return res;
+  }
+
+  /**
+   * Select what can supply the value of a `this`-rooted path read in `fn`: every
+   * method of the class (each may write the field; they share one receiver, as the
+   * engine's class-field passes assume), and the receiver expression at every call
+   * site of those methods (the caller may have set the field before the call).
+   * Parameters written into fields are followed by the ordinary caller expansion.
+   */
+  expandClass(fn, p, item) {
+    const mates = this.classMates(fn);
+    if (!mates) { this.markUnsupported('instance-field', fn.qid, p); return false; }
+    // one expansion per (class, path): a sibling reaching here for the same path
+    // would only repeat what the function that selected it already did
+    const done = `${mates.key}|${p}`;
+    if (this.classDone.has(done)) return true;
+    this.classDone.add(done);
+    const dot = p.indexOf('.');
+    const suffix = dot < 0 ? '' : p.slice(dot + 1);
+    for (const q of mates) {
+      // A sibling's parameters reach the field through its call sites, which
+      // the receiver tracking below selects (the call that stores the value is
+      // a mutator of the receiver path), so no separate caller expansion.
+      if (q !== fn.qid) { this.addRegion(q, 'class-sibling'); this.push(q, p, false, item.depth, 'class-sibling'); }
+      this.receiverHolders(q, suffix, item);
+    }
+    this.followed.siblings += mates.size - 1;
+    return true;
+  }
+
+  /**
+   * At every call site of `qid`, the receiver's `suffix` field is what the callee
+   * sees as `this.<suffix>`. Following that one path (not the whole receiver)
+   * keeps the walk to the values that can actually reach the field.
+   */
+  receiverHolders(qid, suffix, item) {
+    const hk = `${qid}|${suffix}`;
+    if (this.holdersDone.has(hk)) return;
+    this.holdersDone.add(hk);
+    const sites = this.idx.incoming.get(qid) || [];
+    if (!sites.length) return;
+    if (item.depth + 1 > this.maxDepth) { this.depthCut += sites.length; this.limits.push({ kind: 'depth-limit', count: sites.length }); return; }
+    const withSuffix = (base) => (suffix ? `${base}.${suffix}` : base);
+    for (const s of sites) {
+      const caller = this.cg.functions.get(s.caller);
+      if (!caller) continue;
+      this.followed.callers += 1;
+      this.addRegion(s.caller, s.kind === 'call' ? 'caller' : 'callback-registrar');
+      const ni = { ...item, qid: s.caller, depth: item.depth + 1, ep: true, reason: 'caller' };
+      const callee = s.call.callee;
+      let recvPath = null;
+      if (callee && typeof callee === 'object' && callee.kind === 'member') {
+        recvPath = accessPathOf(callee.object);
+        if (!recvPath) this.reads(caller, callee.object, ni);
+      } else if (typeof callee === 'string' && callee.includes('.')) recvPath = callee.slice(0, callee.lastIndexOf('.'));
+      if (recvPath) this.push(s.caller, withSuffix(recvPath), true, ni.depth, 'caller');
     }
   }
 
@@ -541,22 +770,7 @@ class Frontier {
   }
 
   callTouches(call, p) {
-    let paths = this.touchCache.get(call);
-    if (paths) return paths.some((q) => segOverlap(q, p));
-    paths = [];
-    this.touchCache.set(call, paths);
-    const collect = (e) => {
-      if (!e || typeof e !== 'object') return;
-      if (e.kind === 'function-value') return;
-      const ap = accessPathOf(e);
-      if (ap) { paths.push(ap); return; }
-      if (isExpr(e)) forEachChild(e, collect);
-    };
-    const callee = call.callee;
-    if (callee && typeof callee === 'object' && callee.kind === 'member') collect(callee.object);
-    else if (typeof callee === 'string' && callee.includes('.')) paths.push(callee.slice(0, callee.lastIndexOf('.')));
-    for (const a of (call.args || [])) collect(a);
-    return paths.some((q) => segOverlap(q, p));
+    return touchedPaths(call).some((q) => segOverlap(q, p));
   }
 
   expandCallers(fn, paramIdx, item) {
@@ -607,12 +821,19 @@ class Frontier {
   }
 
   freeVariable(fn, root, p, item) {
-    const definers = [];
-    for (const other of (this.idx.byFile.get(fn.file) || [])) {
-      if (other.file !== fn.file || other.qid === fn.qid) continue;
-      const oi = fnInfo(other);
-      if (oi.assignedRoots.has(root) || oi.params.includes(root)) definers.push(other);
+    // every function of the file that binds the name, memoized per (file, name)
+    const dk = `${fn.file}\0${root}`;
+    let all = this.idx.definers.get(dk);
+    if (!all) {
+      all = [];
+      for (const other of (this.idx.byFile.get(fn.file) || [])) {
+        if (other.file !== fn.file) continue;
+        const oi = fnInfo(other);
+        if (oi.assignedRoots.has(root) || oi.params.includes(root)) all.push(other);
+      }
+      this.idx.definers.set(dk, all);
     }
+    const definers = all.filter((d) => d.qid !== fn.qid);
     // import bindings (`const x = require(...)`) carry no data of their own
     const importOnly = definers.length > 0 && definers.every((d) => fnInfo(d).assigns.filter((a) => a.target && rootOf(a.target) === root).every((a) => a.source && a.source.kind === 'call' && calleeName(a.source.callee) === 'require'));
     if (!definers.length) return; // ambient global; the engine models it by name only
@@ -695,7 +916,15 @@ function pickFindings(raw, sites, q) {
   return [...byKey.values()].sort((a, b) => (findingKey(a) < findingKey(b) ? -1 : 1));
 }
 
+const _sbCache = new WeakMap();
 function sourceBearing(fn) {
+  if (_sbCache.has(fn)) return _sbCache.get(fn);
+  const v = sourceBearingUncached(fn);
+  _sbCache.set(fn, v);
+  return v;
+}
+
+function sourceBearingUncached(fn) {
   const info = fnInfo(fn);
   let found = Array.isArray(fn.paramAnnotations) && fn.paramAnnotations.length > 0;
   const rd = (e) => { if (found || !e || typeof e !== 'object') return; if (e.kind === 'function-value') return; if (matchSource(e, fn.file)) { found = true; return; } if (isExpr(e)) forEachChild(e, rd); };
@@ -773,10 +1002,19 @@ export function runDemandSinkQuery(perFileIR, callGraph, query, opts = {}) {
 
   let regionIds = [...frontier.region.keys()].sort();
   if (fallback) regionIds = [...callGraph.functions.keys()].sort();
-  const regionGraph = { ...callGraph, functions: new Map(regionIds.map((id) => [id, callGraph.functions.get(id)])) };
+  // A fallback analyzes every function: hand the engine the graph itself (the
+  // same input, in the same order, as the full-analysis reference), not a copy.
+  const regionGraph = fallback ? callGraph : { ...callGraph, functions: new Map(regionIds.map((id) => [id, callGraph.functions.get(id)])) };
 
   const run = opts.engine || runTaintEngine;
-  const raw = run(perFileIR, regionGraph, engineOptsOf(opts));
+  // Within one batch every fallback asks the engine the same question (the whole
+  // graph, same options), so the first answer is shared by the rest. The memo
+  // belongs to one runDemandQueries call and is dropped with it.
+  let raw;
+  if (fallback && opts._fullMemo) {
+    if (!opts._fullMemo.has('raw')) opts._fullMemo.set('raw', run(perFileIR, regionGraph, engineOptsOf(opts)));
+    raw = opts._fullMemo.get('raw');
+  } else raw = run(perFileIR, regionGraph, engineOptsOf(opts));
   for (const r of engineIncomplete(raw)) reasons.push(`engine:${r}`);
 
   let findings = pickFindings(raw, sites, q);
@@ -788,7 +1026,7 @@ export function runDemandSinkQuery(perFileIR, callGraph, query, opts = {}) {
   res.findings = findings;
   res.siblingFieldSuppressed = siblingSuppressed;
   res.witness = findings.length ? 'forward-engine-corroborated' : 'none';
-  res.candidateFilter = { role: 'candidate-filter-only', sourceBearingFunctionsInRegion: sbIn.length, candidate: sbIn.length > 0 || frontier.terminals.has('param') || frontier.terminals.has('free') };
+  res.candidateFilter = { role: 'candidate-filter-only', sourceBearingFunctionsInRegion: sbIn.length, candidate: sbIn.length > 0 || frontier.terminals.has('param') || frontier.terminals.has('free') || frontier.terminals.has('field') };
   res.selectorCoverage = {
     totalFunctions: total,
     selectedFunctions: frontier.region.size,
@@ -884,7 +1122,8 @@ export function compareToFull(demand, full) {
 
 /** Run a batch of queries (the shape the optional dataflow/index.js hook uses). */
 export function runDemandQueries(perFileIR, callGraph, queries, opts = {}) {
-  return (queries || []).map((q) => runDemandSinkQuery(perFileIR, callGraph, q, opts));
+  const batchOpts = opts.engine ? opts : { ...opts, _fullMemo: new Map() };
+  return (queries || []).map((q) => runDemandSinkQuery(perFileIR, callGraph, q, batchOpts));
 }
 
 /** Enumerate every sink site in the graph as a query (used by parity checks and the benchmark). */

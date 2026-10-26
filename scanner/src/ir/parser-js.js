@@ -46,6 +46,16 @@ import presetTypescript from '@babel/preset-typescript';
 
 let _nodeIdSeq = 0;
 function nextNodeId() { return 'n' + (++_nodeIdSeq); }
+/**
+ * Reserve `count` consecutive node ids and return the sequence value before them
+ * (the first reserved id is `n<base + 1>`). A cached IR is given fresh ids from
+ * here, so an id is as unique across the whole process as one the parser made.
+ */
+export function reserveNodeIds(count) {
+  const base = _nodeIdSeq;
+  _nodeIdSeq += count;
+  return base;
+}
 
 // Round-5 lineage-engine finding, generalized in round 6: resolve a Babel
 // object-property-shaped node's key (`ObjectProperty` from either an

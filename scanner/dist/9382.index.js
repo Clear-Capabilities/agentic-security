@@ -11,8 +11,8 @@ __webpack_require__.d(__webpack_exports__, {
   g: () => (/* binding */ buildContext)
 });
 
-// EXTERNAL MODULE: ./src/ir/index.js + 12 modules
-var ir = __webpack_require__(28149);
+// EXTERNAL MODULE: ./src/ir/index.js + 11 modules
+var ir = __webpack_require__(98297);
 // EXTERNAL MODULE: ./src/context-intelligence/graph-schema.js + 1 modules
 var graph_schema = __webpack_require__(44287);
 ;// CONCATENATED MODULE: ./src/context-intelligence/adapters/existing-ir.js

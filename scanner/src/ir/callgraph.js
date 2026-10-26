@@ -272,6 +272,32 @@ export function buildCallGraph(perFileIR, fileContents) {
   // `File::read` in C++): a fabricated cross-language edge, reached through
   // these older, coarser lookups BEFORE the qname-specific gate further down
   // is ever consulted.
+  // Name -> candidate qids across all files, in the order the file tables were
+  // built. The permissive lookups below used to walk EVERY file's table for each
+  // name that was not found locally, which is every call to a library method
+  // (`push`, `get`, `map`): thousands of names times hundreds of files. Visiting
+  // only the tables that hold the name, in the same order, returns the same
+  // first usable candidate.
+  const qidsByName = new Map();
+  for (const m of byNameInFile.values()) {
+    for (const [nm, q] of m) {
+      let l = qidsByName.get(nm);
+      if (!l) { l = []; qidsByName.set(nm, l); }
+      l.push(q);
+    }
+  }
+  // Re-export entries that can match a name (the key ends with `::<name>`, or the
+  // source name equals it), by index into the insertion order.
+  const reexportEntries = [...reexportMap];
+  const reexportCandidates = new Map();
+  if (reexportEntries.length) {
+    const addCand = (nm, i) => { let l = reexportCandidates.get(nm); if (!l) { l = new Set(); reexportCandidates.set(nm, l); } l.add(i); };
+    reexportEntries.forEach(([key, v], i) => {
+      let at = key.indexOf('::');
+      while (at >= 0) { addCand(key.slice(at + 2), i); at = key.indexOf('::', at + 1); }
+      addCand(v.sourceName, i);
+    });
+  }
   function isCrossLanguageUnsafe(qid, callerFile) {
     const cand = qid && functions.get(qid);
     if (!cand || !cand.qname) return false;
@@ -339,23 +365,25 @@ export function buildCallGraph(perFileIR, fileContents) {
         if (viaThis) return viaThis;
       }
     }
-    for (const m of byNameInFile.values()) {
-      if (m.has(name) && !isCrossLanguageUnsafe(m.get(name), callerFile)) return m.get(name);
+    for (const q of qidsByName.get(name) || []) {
+      if (!isCrossLanguageUnsafe(q, callerFile)) return q;
     }
     if (classMethods.has(name) && !isCrossLanguageUnsafe(classMethods.get(name), callerFile)) {
       return classMethods.get(name);
     }
     if (allowTailGuess && name.includes('.')) {
       const tail = name.split('.').slice(-1)[0];
-      for (const m of byNameInFile.values()) {
-        if (m.has(tail) && !isCrossLanguageUnsafe(m.get(tail), callerFile)) return m.get(tail);
+      for (const q of qidsByName.get(tail) || []) {
+        if (!isCrossLanguageUnsafe(q, callerFile)) return q;
       }
     }
     // Follow re-exports: if name was re-exported from another file, resolve there
-    for (const [key, { sourceName }] of reexportMap) {
-      if (key.endsWith(`::${name}`) || (sourceName === name)) {
-        for (const m of byNameInFile.values()) {
-          if (m.has(sourceName) && !isCrossLanguageUnsafe(m.get(sourceName), callerFile)) return m.get(sourceName);
+    const reCands = reexportCandidates.get(name);
+    if (reCands) {
+      for (const i of [...reCands].sort((a, b) => a - b)) {
+        const { sourceName } = reexportEntries[i][1];
+        for (const q of qidsByName.get(sourceName) || []) {
+          if (!isCrossLanguageUnsafe(q, callerFile)) return q;
         }
       }
     }

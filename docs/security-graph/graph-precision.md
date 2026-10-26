@@ -32,8 +32,8 @@ This page describes the graph and reachability work specified in `AGENTIC_SECURI
 
 Measurements live in `bench/dag/` (labels, pinned projects, synthetic graphs), `bench/dag-demand/` and `bench/dag-incremental/`. Targets are targets, not results:
 
-- Demand queries reached 277x per query with a warm index on this repository's own source, but only 1.8x when the index is built per query. The 2x target was missed on that cold figure, and 10 of 30 queries fell back to full analysis.
-- Incremental analysis met 3x in the deep stage on every project measured. End to end the median was between 1.8x and 2.9x, below the target. At the default summary budget, projects of about 5,000 functions or more run cold.
+- Demand queries reach 820x per query with a warm index on this repository's own source and 23x when the index is built per query (the 2x target is met). Averaged over a 30-query sample that includes the queries that take the full path, the speedup is 3.7x. Across all 982 sink sites of the repository's own source, 75 (8 percent) still take the full path, every one at the caller-depth limit.
+- Incremental analysis meets 3x in the deep stage on every project measured at the raised summary budget (3.2x to 9.3x). End to end the median is 2.5x and 2.4x on the two synthetic projects, below the target, and 4.3x on this repository's own source, above it. At the default summary budget, projects of about 5,000 functions or more run cold, and the warm run is slower than the cold one.
 - Labeled precision on the pinned JS and Nix samples is low (5 of 25 and 6 of 17 flagged sites were true), and the multi-service fixture finds 3 of 8 labeled positives. The numbers and their limits are in `bench/dag/results/`.
 
 See `docs/implementation-status/dag-improvements.md` for the per-requirement status.

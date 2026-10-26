@@ -1,0 +1,11 @@
+{
+  "name": "22-class-field-flow",
+  "construct": "an instance field stored by a setter and returned by a getter: the sink reads it through the receiver (class-scoped expansion, no full fallback); the flow is real only where the setter received request data or the field was written directly",
+  "cha": true,
+  "expect": [
+    { "file": "app.js", "line": 10, "flow": true },
+    { "file": "app.js", "line": 15, "flow": true },
+    { "file": "app.js", "line": 20, "flow": false },
+    { "file": "app.js", "line": 24, "flow": false }
+  ]
+}

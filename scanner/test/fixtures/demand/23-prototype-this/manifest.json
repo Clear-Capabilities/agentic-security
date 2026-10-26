@@ -1,0 +1,8 @@
+{
+  "name": "23-prototype-this",
+  "construct": "a receiver on a constructor function and prototype methods: the class cannot be named from the function structure, so the selector expands to full",
+  "expect": [
+    { "file": "app.js", "line": 4, "flow": false }
+  ],
+  "expectFallback": "unsupported:instance-field"
+}

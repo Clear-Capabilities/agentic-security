@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-25T16:52:11.235Z",
-  "commit": "f42dab4f2f65242d3186f3a32323447be92ff943",
+  "generatedAt": "2026-10-26T06:58:22.468Z",
+  "commit": "d41cccb2442d5a443e2f3f88a75f52cb68fe0ccb",
   "targets": {
     "hooks": {
       "total": 21,
@@ -62,7 +62,7 @@
       }
     },
     "scanner/src": {
-      "total": 756,
+      "total": 757,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -98,6 +98,7 @@
         "dataflow/ifds-precise.js": 3,
         "dataflow/incremental-session.js": 1,
         "dataflow/incremental.js": 7,
+        "dataflow/ir-cache.js": 1,
         "dataflow/polyglot.js": 1,
         "dataflow/privacy-deep-walker.js": 2,
         "dataflow/privacy-governance.js": 1,
