@@ -9,6 +9,14 @@
 > make the history less accurate, not more.
 
 
+## 0.186.1 - Git history annotation blames once per file, which restores scan speed (fix)
+
+0.186.0 was tagged but never published: its release workflow stopped at the time-to-first-finding gate (15 to 18 s against a 13 s limit), so the first npm release carrying that work is 0.186.1. Nothing in 0.186.0's content changed apart from the fix below.
+
+- **Why it got slower.** Findings that used to carry no line number now carry one, so the git history step, which asks git who introduced each finding, ran for about twice as many findings. It ran one `git blame` per finding and one `git show` per commit, about 14 ms each. Measured on this repository's own source: 7.9 s on 0.185.0, 10.9 s on 0.186.0.
+- **The fix.** One `git blame` per file for all of its lines and one `git log --no-walk` for all commit messages. A file whose batch fails is blamed line by line, so a bad line number cannot lose the others. The annotations are the same; `test/git-history-batch.test.js` checks the batched answers against per-line `git blame`. Measured after the change: 8.3 s locally.
+- **Also in this release.** Two test fixes found by hosted CI: the artifact CLI tests now warm the OSV cache once, because a cold runner has none, and `owned-build/6` accepts a watchdog stop on a slow runner.
+
 ## 0.186.0 - The graph-precision capabilities are reachable from the CLI, a z3 backend checks path feasibility, and demand queries and incremental analysis got faster (Preview)
 
 Everything new is Preview, opt-in and off by default. A default scan's output is unchanged by the new commands and by the solver. No GA capability changed its contract.
