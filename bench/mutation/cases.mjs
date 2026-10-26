@@ -1138,8 +1138,152 @@ export function deriveLabelCases(cases) {
   return out;
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// DAG precision cases (docs/implementation-status/dag-improvements.md): each rule is a statement about what a construct CAN do,
+// so every case pairs a semantics-preserving rewrite (verdict must hold) with a semantics-changing near-miss (verdict must flip).
+//   open redirect  a literal that fixes the ORIGIN ('/user/' + id) cannot be steered off-origin; '/' + x, '//' + x, a host
+//                  without a closing slash and a bare value can
+//   reflection     only the properties of `req` that carry the client's input are request input; session/user/app state and
+//                  a value wrapped in an HTML escaper are not reflected raw
+//   blocking I/O   a synchronous call at module level delays startup once; the same call in a handler stalls every request
+//   file serving   sendFile/download with an inline `root` option confines the path; without `root` the caller owns containment
+//   logging        the `address` a listen callback receives is the bound socket address; the same name bound from a request is not
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+const STRUCT = /^STRUCTURAL$/;
+export const DAG_PRECISION_CASES = [
+  // ── open redirect ───────────────────────────────────────────────────────────────────────────────────────────────────────
+  det('dag-redirect-baseline', 'baseline', true, 'a redirect whose whole target is request input is an open redirect', `app.get('/go', (req, res) => {
+  res.redirect(req.query.next);
+});`, { cwe: /CWE-601/ }),
+  det('dag-redirect-pinned-path', 'metamorphic', false, 'a target that begins with a path-absolute literal stays on this origin whatever follows it', `app.get('/go', (req, res) => {
+  res.redirect('/user/' + req.query.id);
+});`, { cwe: /CWE-601/ }),
+  det('dag-redirect-pinned-path-template', 'metamorphic', false, 'a template literal with the same fixed prefix is the same program', `app.get('/go', (req, res) => {
+  res.redirect(\`/user/\${req.query.id}\`);
+});`, { cwe: /CWE-601/ }),
+  det('dag-redirect-pinned-path-via-variable', 'metamorphic', false, 'binding the request value to a name first does not change where the redirect can land', `app.get('/go', (req, res) => {
+  const id = req.query.id;
+  res.redirect('/user/' + id);
+});`, { cwe: /CWE-601/ }),
+  det('dag-redirect-pinned-with-status', 'metamorphic', false, 'a status code before the target does not change the target', `app.get('/go', (req, res) => {
+  res.redirect(302, '/user/' + req.query.id);
+});`, { cwe: /CWE-601/ }),
+  det('dag-redirect-pinned-absolute', 'metamorphic', false, 'a complete authority followed by a slash fixes the host', `app.get('/go', (req, res) => {
+  res.redirect('https://app.example.com/' + req.query.p);
+});`, { cwe: /CWE-601/ }),
+  det('dag-redirect-bare-slash', 'adversarial', true, "'/' + x is '//host' when x starts with a slash: a protocol-relative redirect", `app.get('/go', (req, res) => {
+  res.redirect('/' + req.query.next);
+});`, { cwe: /CWE-601/ }),
+  det('dag-redirect-double-slash', 'adversarial', true, "'//' + x names the host outright", `app.get('/go', (req, res) => {
+  res.redirect('//' + req.query.next);
+});`, { cwe: /CWE-601/ }),
+  det('dag-redirect-host-without-slash', 'adversarial', true, "'https://app.example.com' + x lets x extend the host ('.evil.test') or add userinfo ('@evil.test')", `app.get('/go', (req, res) => {
+  res.redirect('https://app.example.com' + req.query.next);
+});`, { cwe: /CWE-601/ }),
+
+  // ── reflected input ─────────────────────────────────────────────────────────────────────────────────────────────────────
+  det('dag-reflect-baseline', 'baseline', true, 'raw query input written to the response', `app.get('/h', (req, res) => {
+  res.send('hi ' + req.query.name);
+});`, { cwe: /CWE-79/, parser: STRUCT }),
+  det('dag-reflect-renamed-property', 'metamorphic', true, 'another request-input property is the same program', `app.post('/h', (req, res) => {
+  res.send('hi ' + req.body.who);
+});`, { cwe: /CWE-79/, parser: STRUCT }),
+  det('dag-reflect-escaped', 'adversarial', false, 'the same value inside an HTML escaper is encoded before it is written', `app.get('/h', (req, res) => {
+  res.send('hi ' + escapeHtml(req.query.name));
+});`, { cwe: /CWE-79/, parser: STRUCT }),
+  det('dag-reflect-session-state', 'adversarial', false, 'req.session holds server-side state, not what this request sent', `app.get('/h', (req, res) => {
+  res.send('visits ' + req.session.count);
+});`, { cwe: /CWE-79/, parser: STRUCT }),
+  det('dag-reflect-user-object', 'adversarial', false, 'req.user is loaded by authentication middleware, not typed by this request', `app.get('/h', (req, res) => {
+  res.send('hi ' + req.user.name);
+});`, { cwe: /CWE-79/, parser: STRUCT }),
+  det('dag-reflect-escaped-plus-raw', 'metamorphic', true, 'one escaped value does not protect a second, raw one in the same call', `app.get('/h', (req, res) => {
+  res.send('hi ' + escapeHtml(req.query.a) + req.query.b);
+});`, { cwe: /CWE-79/, parser: STRUCT }),
+
+  // ── blocking I/O ────────────────────────────────────────────────────────────────────────────────────────────────────────
+  det('dag-sync-io-in-handler', 'baseline', true, 'a blocking read inside a request handler stalls every connection', `const express = require('express');
+const fs = require('fs');
+const app = express();
+app.get('/f', (req, res) => {
+  const body = fs.readFileSync('page.html', 'utf8');
+  res.send(body);
+});
+app.listen(3000);`, { cwe: /CWE-400/, parser: STRUCT }),
+  det('dag-sync-io-in-handler-function-form', 'metamorphic', true, 'a function expression instead of an arrow is the same handler', `const express = require('express');
+const fs = require('fs');
+const app = express();
+app.get('/f', function (req, res) {
+  const body = fs.readFileSync('page.html', 'utf8');
+  res.send(body);
+});
+app.listen(3000);`, { cwe: /CWE-400/, parser: STRUCT }),
+  det('dag-sync-io-in-expression-arrow', 'metamorphic', true, 'an expression-bodied arrow handler is a handler: the read runs per request', `const express = require('express');
+const fs = require('fs');
+const app = express();
+app.get('/f', (req, res) => res.send(fs.readFileSync('page.html', 'utf8')));
+app.listen(3000);`, { cwe: /CWE-400/, parser: STRUCT }),
+  det('dag-sync-io-in-module-helper', 'metamorphic', true, 'a read inside a helper function runs whenever the helper is called, not at load', `const express = require('express');
+const fs = require('fs');
+const app = express();
+const load = (p) => fs.readFileSync(p, 'utf8');
+app.get('/f', (req, res) => res.send(load('page.html')));
+app.listen(3000);`, { cwe: /CWE-400/, parser: STRUCT }),
+  det('dag-sync-io-at-startup', 'adversarial', false, 'the same read once at module load delays startup once and blocks nobody', `const express = require('express');
+const fs = require('fs');
+const app = express();
+const page = fs.readFileSync('page.html', 'utf8');
+app.get('/f', (req, res) => {
+  res.send(page);
+});
+app.listen(3000);`, { cwe: /CWE-400/, parser: STRUCT }),
+  det('dag-sync-io-in-options-object-at-startup', 'adversarial', false, 'a read inside an options object evaluated at module load is still startup', `const express = require('express');
+const fs = require('fs');
+const server = require('https').createServer({ key: fs.readFileSync('k.pem'), cert: fs.readFileSync('c.pem') }, express());
+server.listen(3000);`, { cwe: /CWE-400/, parser: STRUCT }),
+
+  // ── file serving ────────────────────────────────────────────────────────────────────────────────────────────────────────
+  det('dag-sendfile-unrooted', 'baseline', true, 'a client-chosen path handed to sendFile with no root is path traversal', `const path = require('path');
+app.get('/d', (req, res) => {
+  res.sendFile(req.query.f);
+});`, { cwe: /CWE-22/ }),
+  det('dag-sendfile-rooted', 'adversarial', false, 'with an inline root the sender resolves inside it and refuses a path that climbs out', `app.get('/d', (req, res) => {
+  res.sendFile(req.query.f, { root: '/srv/files' });
+});`, { cwe: /CWE-22/ }),
+  det('dag-sendfile-rooted-download', 'metamorphic', false, 'download takes the same options', `app.get('/d', (req, res) => {
+  res.download(req.query.f, 'out.bin', { root: '/srv/files' });
+});`, { cwe: /CWE-22/ }),
+  det('dag-sendfile-options-without-root', 'adversarial', true, 'an options object that does not set root confines nothing', `app.get('/d', (req, res) => {
+  res.sendFile(req.query.f, { dotfiles: 'deny' });
+});`, { cwe: /CWE-22/ }),
+
+  // ── logging a value because of its name ─────────────────────────────────────────────────────────────────────────────────
+  det('dag-log-listen-address', 'baseline', false, 'the address a listen callback receives is the bound socket address', `const app = require('express')();
+app.listen(3000, (err, address) => {
+  console.log(\`listening on \${address}\`);
+});`, { cwe: /CWE-(359|532)/ }),
+  det('dag-log-listen-address-function-form', 'metamorphic', false, 'a function expression callback is the same program', `const app = require('express')();
+app.listen(3000, function (err, address) {
+  console.log(\`listening on \${address}\`);
+});`, { cwe: /CWE-(359|532)/ }),
+  det('dag-log-request-address', 'adversarial', true, 'the same name taken from the request body is a postal address', `app.post('/ship', (req, res) => {
+  const address = req.body.address;
+  console.log(\`shipping to \${address}\`);
+  res.end();
+});`, { cwe: /CWE-(359|532)/ }),
+  det('dag-log-prose-only', 'adversarial', false, 'a PII word that appears only in the text of a message is not a logged value', `app.post('/s', (req, res) => {
+  console.log('please enter your email to continue');
+  res.end();
+});`, { cwe: /CWE-(359|532)/ }),
+  det('dag-log-variable', 'adversarial', true, 'logging the variable itself is the finding', `app.post('/s', (req, res) => {
+  const email = req.body.email;
+  console.log(email);
+  res.end();
+});`, { cwe: /CWE-(359|532)/ }),
+];
+
 export function allCases() {
-  const hand = [...CASES, ...E1_CASES];
+  const hand = [...CASES, ...E1_CASES, ...DAG_PRECISION_CASES];
   return [...hand, ...deriveLabelCases(hand)];
 }
 

@@ -96,6 +96,19 @@ Related, outside this directory: `dataflow/catalog-haskell.js`, `lineage/haskell
 - **Bounded**: `maxEvaluations`, `maxExprDepth`, `maxValueSize` are caps that surface as `truncated`, not as a guess.
 - Assumption stated, not proven: `lib` is nixpkgs' `lib` whenever the module declares a `lib` parameter and the file does not rebind it.
 
+## Declared option types (`nix-option-types.js`)
+
+`buildOptionTypeIndex` reads `mkOption { type = ...; }`, `mkEnableOption` and `mkPackageOption` declarations from the files in scope and
+records, per dotted option path, whether the declared type BOUNDS the value (bool, int and `ints.*`, port, float, number, package, a
+literal-word `enum`, and `nullOr`/`either`/`uniq` of bounded types). `nix-script-taint.js` `Evaluator.refine` turns a reference to a
+bounded option into a constant, so a shell interpolation of an `int` option is not an injection and a `bool` option called `forwardPass`
+is not a credential. Rules to keep: only options DECLARED in scope are known (an upstream option keeps its origin, except that the
+module-system convention for a package option, `package`/`finalPackage`/`fooPackage`, is a store path and a declared option of that name
+with an unbounded type is NOT); two declarations of one option are bounded only if both are; `str`, `path`, `lines`, `listOf`,
+`submodule` and anything computed are unbounded. `nix-secrets.js` skips documentation attributes of `mkOption` (`example`,
+`description`, `defaultText`; `default` is configuration and is not skipped) and does not treat a set-valued binding as a credential.
+Pinned both ways in `test/nix/nix-option-types.test.js`.
+
 ## Tests and benches
 
 | Scope | Command | Notes |

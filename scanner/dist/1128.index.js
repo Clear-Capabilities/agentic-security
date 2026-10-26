@@ -31,10 +31,14 @@ function makeIdentityTokenizer() {
 // EXPORTS
 __webpack_require__.d(__webpack_exports__, {
   WITNESS_SCHEMA: () => (/* binding */ WITNESS_SCHEMA),
+  buildWitnessBundle: () => (/* binding */ buildWitnessBundle),
+  exportProvenanceArtifact: () => (/* binding */ exportProvenanceArtifact),
+  parseWitnessBundle: () => (/* binding */ parseWitnessBundle),
+  signWitnessBundle: () => (/* binding */ signWitnessBundle),
   verifyWitness: () => (/* binding */ verifyWitness)
 });
 
-// UNUSED EXPORTS: buildWitnessBundle, exportProvenanceArtifact, parseWitnessBundle, replayWitness, signWitnessBundle, transferModelFingerprints, verifyWitnessSignature
+// UNUSED EXPORTS: replayWitness, transferModelFingerprints, verifyWitnessSignature
 
 // EXTERNAL MODULE: external "node:crypto"
 var external_node_crypto_ = __webpack_require__(77598);
@@ -118,7 +122,7 @@ function iso(v) {
  * dropped and only COUNTED (their names could themselves carry a value). Identities are tokenized with the
  * existing keyed-hash convention; a raw identity with no tokenizer is dropped, never kept.
  */
-function witness_runtime_sanitizeCausalGroups(groups, { tokenize = (0,identity_token.makeIdentityTokenizer)() } = {}) {
+function sanitizeCausalGroups(groups, { tokenize = (0,identity_token.makeIdentityTokenizer)() } = {}) {
   const out = []; const rejected = []; let droppedFields = 0;
   const GROUP_KEYS = new Set(['id', 'sessionRef', 'sessionId', 'traceId', 'environment', 'deploymentRef', 'deploymentConfigDigest',
     'identity', 'identityToken', 'firstObservedAt', 'lastObservedAt', 'edgeObservations']);
@@ -218,7 +222,7 @@ function assessRuntimeSupport({ pathEdgeIds, edgeStates, causalGroups = [], expe
   if (!ids.length || !isObj(edgeStates) || !edgeStates.evaluated) {
     return { ...base, status: 'not_consulted', statements: ['No telemetry was consulted for this path. That is not an observation of absence.'] };
   }
-  const sanitized = witness_runtime_sanitizeCausalGroups(causalGroups, { tokenize });
+  const sanitized = sanitizeCausalGroups(causalGroups, { tokenize });
   base.groupsConsidered = sanitized.groups.length; base.rejectedGroups = sanitized.rejected.length; base.droppedFields = sanitized.droppedFields;
 
   for (const id of ids) {
@@ -278,7 +282,7 @@ function assessRuntimeSupport({ pathEdgeIds, edgeStates, causalGroups = [], expe
  * R10.6: external proof references are bound to the sink, the value and the configuration. A reference that is
  * stale or mismatched is REJECTED with its reasons; it is never re-attached to the changed graph.
  */
-function witness_runtime_bindExploitProofs(proofs, expected) {
+function bindExploitProofs(proofs, expected) {
   const bound = []; const rejected = [];
   for (const [i, p] of arr(proofs).entries()) {
     const id = isObj(p) && typeof p.id === 'string' && REF_RE.test(p.id) ? p.id : `proof-${i}`;
@@ -302,7 +306,7 @@ function witness_runtime_bindExploitProofs(proofs, expected) {
 }
 
 /** Validate the nullable DAG-04 slot. Returns { ok, errors }. */
-function witness_runtime_validateControlEvidence(ce, pathEdgeIds) {
+function validateControlEvidence(ce, pathEdgeIds) {
   if (ce === null) return { ok: true, errors: [] };
   const errors = [];
   if (!isObj(ce)) return { ok: false, errors: ['control evidence must be an object or null'] };
@@ -321,7 +325,7 @@ function witness_runtime_validateControlEvidence(ce, pathEdgeIds) {
  * The four statuses, side by side. Returns exactly the four keys in EVIDENCE_STATUS_KEYS and nothing that
  * ranks, scores or combines them.
  */
-function witness_runtime_buildEvidenceStatuses({ pathComplete, controlEvidence, runtime, exploit }) {
+function buildEvidenceStatuses({ pathComplete, controlEvidence, runtime, exploit }) {
   return {
     modeledPath: { status: pathComplete ? 'connected_complete' : 'connected_partial' },
     feasibility: { status: controlEvidence ? controlEvidence.status : 'not_assessed' },
@@ -420,14 +424,14 @@ const fileOfScope = (scope) => (typeof scope === 'string' ? scope.split('::')[0]
 function exportProvenanceArtifact({ hops, incomplete = [] }) {
   const seen = new Map();
   for (const h of witness_bundle_arr(hops)) {
-    const norm = Object.fromEntries(HOP_FIELDS.map((f) => [f, h?.[f] ?? null]));
-    seen.set(canonicalJson(norm), norm);
+    const norm = Object.fromEntries(path_store/* HOP_FIELDS */.KO.map((f) => [f, h?.[f] ?? null]));
+    seen.set((0,evidence_bundle/* canonicalJson */.dj)(norm), norm);
   }
   const hopList = [...seen.keys()].sort().map((k) => seen.get(k));
   const truncations = witness_bundle_arr(incomplete)
     .map((u) => ({ scope: u.qid ?? u.scope ?? null, context: u.context ?? null, reason: u.reasons?.[0] ?? u.reason ?? 'analysis-incomplete' }))
-    .sort((a, b) => (canonicalJson(a) < canonicalJson(b) ? -1 : 1));
-  return { schema: PROVENANCE_ARTIFACT_SCHEMA, hops: hopList, truncations, digest: witness_bundle_sha(canonicalJson({ hops: hopList, truncations })) };
+    .sort((a, b) => ((0,evidence_bundle/* canonicalJson */.dj)(a) < (0,evidence_bundle/* canonicalJson */.dj)(b) ? -1 : 1));
+  return { schema: PROVENANCE_ARTIFACT_SCHEMA, hops: hopList, truncations, digest: witness_bundle_sha((0,evidence_bundle/* canonicalJson */.dj)({ hops: hopList, truncations })) };
 }
 
 function artifactDigest(a) {
@@ -568,8 +572,8 @@ function buildWitnessBundle(o = {}) {
   }
   const budget = { ...result.budget }; delete budget.expansionsUsed;
   const config = { pathQuery: budget, storeLimits: storeLimits.limits, ...(witness_bundle_isObj(o.analysisConfig) ? { extra: o.analysisConfig } : {}) };
-  const analysisConfigDigest = witness_bundle_sha(canonicalJson(config));
-  const graphDigest = computeGraphDigest(graph);
+  const analysisConfigDigest = witness_bundle_sha((0,evidence_bundle/* canonicalJson */.dj)(config));
+  const graphDigest = (0,export_json.computeGraphDigest)(graph);
 
   const files = [...new Set([srcNode, sinkNode, ...edges.flatMap((e) => [store.getNode(e.fromNodeId), store.getNode(e.toNodeId)])].map((n) => fileOfScope(n?.scope)).filter(Boolean))].sort();
   const sources = []; const unboundSourceFiles = [];
@@ -608,7 +612,7 @@ function buildWitnessBundle(o = {}) {
   const ceCheck = validateControlEvidence(ce, edges.map((e) => e.edgeId));
   if (!ceCheck.ok) return { ok: false, reason: `control evidence: ${ceCheck.errors.join('; ')}` };
 
-  const tokenize = o.tokenize ?? makeIdentityTokenizer();
+  const tokenize = o.tokenize ?? (0,identity_token.makeIdentityTokenizer)();
   let runtime;
   if (o.runtime) {
     const groups = sanitizeCausalGroups(o.runtime.causalGroups, { tokenize });
@@ -622,7 +626,7 @@ function buildWitnessBundle(o = {}) {
   const exploitInputs = witness_bundle_arr(o.exploitProofs).map((p) => sanitizeProof(p));
   const exploit = { inputs: exploitInputs, ...bindExploitProofs(exploitInputs, { sinkRef, dataElementId: edges[0].dataElementId, graphDigest, analysisConfigDigest }) };
 
-  const sourcePath = redactString(srcNode.path ?? ''); const sinkPath = redactString(sinkNode.path ?? '');
+  const sourcePath = (0,redact/* redactString */.rd)(srcNode.path ?? ''); const sinkPath = (0,redact/* redactString */.rd)(sinkNode.path ?? '');
   const redactions = (srcNode.path && sourcePath !== srcNode.path ? 1 : 0) + (sinkNode.path && sinkPath !== sinkNode.path ? 1 : 0);
 
   const bundle = jsonSafe({
@@ -669,7 +673,7 @@ function sanitizeProof(p) {
   const ref = (v) => (typeof v === 'string' && /^[A-Za-z0-9._:@/-]{1,160}$/.test(v) ? v : null);
   return {
     id: ref(p.id), kind: ['proof', 'dnr-hunt', 'incident'].includes(p.kind) ? p.kind : null, sinkRef: ref(p.sinkRef), dataElementId: ref(p.dataElementId),
-    graphDigest: ref(p.graphDigest), analysisConfigDigest: ref(p.analysisConfigDigest), note: typeof p.note === 'string' ? redactString(p.note).slice(0, 200) : null,
+    graphDigest: ref(p.graphDigest), analysisConfigDigest: ref(p.analysisConfigDigest), note: typeof p.note === 'string' ? (0,redact/* redactString */.rd)(p.note).slice(0, 200) : null,
   };
 }
 
@@ -693,9 +697,9 @@ function signedBytes(bundle) {
 
 /** Sign with the same Ed25519 key and self-issued trust basis as finding evidence bundles. */
 function signWitnessBundle(bundle, privateKeyPem) {
-  const publicKeyPem = crypto.createPublicKey(privateKeyPem).export({ type: 'spki', format: 'pem' });
-  const withIssuance = { ...bundle, issuance: buildLocalIssuance(publicKeyPem) };
-  const sig = crypto.sign(null, signedBytes(withIssuance), privateKeyPem);
+  const publicKeyPem = external_node_crypto_.createPublicKey(privateKeyPem).export({ type: 'spki', format: 'pem' });
+  const withIssuance = { ...bundle, issuance: (0,evidence_bundle/* buildLocalIssuance */.hc)(publicKeyPem) };
+  const sig = external_node_crypto_.sign(null, signedBytes(withIssuance), privateKeyPem);
   return { ...withIssuance, signature: { algorithm: 'ed25519', canonicalisation: WITNESS_SCHEMA, value: sig.toString('base64') } };
 }
 
@@ -874,16 +878,16 @@ function replayWitness(bundle, artifacts, opts = {}) {
     const gEdges = new Set(witness_bundle_arr(artifacts.graph.edges).map((e) => e.id));
     if (gb.edgeIds.some((id) => !gEdges.has(id))) fail('graph-binding', 'a bound graph edge is not in the graph artifact');
   }
-  const ceCheck = witness_runtime_validateControlEvidence(bundle.controlEvidence, edges.map((e) => e.edgeId));
+  const ceCheck = validateControlEvidence(bundle.controlEvidence, edges.map((e) => e.edgeId));
   if (!ceCheck.ok) fail('control-evidence', ceCheck.errors.join('; '));
   const rt = bundle.runtime;
   const reAssessed = witness_bundle_isObj(rt) ? runtimeAssessment(rt, gb ? gb.edgeIds : []) : null;
   if (!reAssessed || !same(reAssessed, rt.assessment)) fail('runtime-inconsistent', 'the recorded runtime assessment does not follow from its recorded inputs');
   if (rt?.inputs && !gb) fail('runtime-inconsistent', 'runtime inputs without a graph binding');
-  const reBound = witness_runtime_bindExploitProofs(witness_bundle_arr(bundle.exploit?.inputs), { sinkRef: last, dataElementId: edges[0]?.dataElementId, graphDigest: bundle.graphRef.digest, analysisConfigDigest: bundle.graphRef.analysisConfigDigest });
+  const reBound = bindExploitProofs(witness_bundle_arr(bundle.exploit?.inputs), { sinkRef: last, dataElementId: edges[0]?.dataElementId, graphDigest: bundle.graphRef.digest, analysisConfigDigest: bundle.graphRef.analysisConfigDigest });
   if (!same({ status: reBound.status, bound: reBound.bound, rejected: reBound.rejected }, { status: bundle.exploit?.status, bound: bundle.exploit?.bound, rejected: bundle.exploit?.rejected })) fail('proof-binding', 'the recorded proof binding does not follow from the sink, value and configuration it is bound to');
   if (reAssessed && bundle.completion) {
-    const ev = witness_runtime_buildEvidenceStatuses({ pathComplete: bundle.completion.path.complete && derived.overall === 'complete', controlEvidence: bundle.controlEvidence, runtime: reAssessed, exploit: reBound });
+    const ev = buildEvidenceStatuses({ pathComplete: bundle.completion.path.complete && derived.overall === 'complete', controlEvidence: bundle.controlEvidence, runtime: reAssessed, exploit: reBound });
     if (!same(ev, bundle.evidence)) fail('evidence-statuses', 'the four evidence statuses do not follow from their inputs');
   }
   return { ok: failures.length === 0, failures, warnings, derived };

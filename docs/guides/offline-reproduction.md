@@ -40,7 +40,7 @@ SYNTHETIC suite: 3 authored files. These figures exercise the tooling; they are 
 protocol sha256:6e8477f6e0486819431fa342d584f22867174cdf6dcf25ed8b65dfa468ffae1d
 
 layer               completed  e2e recall  e2e precision  e2e F1   conditional F1  real-code gates
-deterministic-only   5/5             0.0%           0.0%     0.0%            0.0%   insufficient-population
+deterministic-only   5/5           100.0%          66.7%    80.0%           80.0%   insufficient-population
 deep-taint           5/5           100.0%          66.7%    80.0%           80.0%   insufficient-population
 model-assisted       0/5             0.0%            n/a     0.0%             n/a   insufficient-population
 ```

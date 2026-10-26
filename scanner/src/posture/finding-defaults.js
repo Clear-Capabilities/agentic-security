@@ -120,10 +120,29 @@ function _inferParser(f) {
   return 'REGEX';
 }
 
+// Flow-pair and structural detectors record WHERE they fired on `sink.line`
+// (and `source.line`) but never on the finding itself, so the schema's `line`
+// was absent. A finding with no integer `line` cannot be matched to a site,
+// cannot be suppressed by a line pragma (see `_applyIgnorePragmas`), and is
+// credited to every same-class site in its file by any file-level matcher.
+// The sink line is the place the finding is anchored: backfill it, never
+// overwrite a detector-set line, and never invent one (no positive integer
+// on the sink or source means the line stays absent).
+function _inferLine(f) {
+  const ok = (n) => Number.isInteger(n) && n > 0;
+  if (ok(f.sink && f.sink.line)) return f.sink.line;
+  if (ok(f.source && f.source.line)) return f.source.line;
+  return null;
+}
+
 export function backfillFindingDefaults(findings) {
   if (!Array.isArray(findings)) return;
   for (const f of findings) {
     if (!f || typeof f !== 'object') continue;
+    if (!Number.isInteger(f.line)) {
+      const ln = _inferLine(f);
+      if (ln !== null) f.line = ln;
+    }
     if (!f.parser) f.parser = _inferParser(f);
     if (!f.family) {
       const fam = _inferFamily(f);

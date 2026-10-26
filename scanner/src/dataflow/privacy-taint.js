@@ -37,6 +37,7 @@ import {
   loadPrivacyTaxonomy, classifyFieldAgainst, severityForClasses,
 } from './privacy-taxonomy.js';
 import { loadPrivacySinkPolicy, isSinkPermitted, permittingRules } from './privacy-sink-policy.js';
+import { isListenCallbackParam } from '../sast/listen-bind-address.js';
 import { GOVERNANCE_FIELDS, governanceRecordFor } from './privacy-governance.js';
 
 const _BUILTIN_COMPILED = compileTaxonomy(DEFAULT_TAXONOMY);
@@ -119,8 +120,14 @@ export function annotatePrivacyTaint(perFileIR, opts = {}) {
     // (evidence locations must cover both ends of a flow, not just the
     // sink) without re-deriving it from piiFields by proximity guessing.
     const declLineByName = new Map();
+    const lineStart = [];
+    { let off = 0; for (const l of lines) { lineStart.push(off); off += l.length + 1; } }
     for (const d of ir.decls || []) {
       const classes = classifyFieldAgainst(d.name, compiled);
+      // The name alone does not make a binding personal data: the `address` a `listen` callback
+      // receives is the bound socket address (see sast/listen-bind-address.js).
+      if (classes.length && Number.isInteger(d.line) && lineStart[d.line - 1] !== undefined
+        && isListenCallbackParam(ir._content, lineStart[d.line - 1] + Math.max(0, (lines[d.line - 1] || '').indexOf(d.name)), d.name)) continue;
       if (classes.length) {
         taintedVars.set(d.name, classes);
         declLineByName.set(d.name, d.line);

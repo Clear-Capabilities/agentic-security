@@ -58,6 +58,6 @@ Measurements live in `bench/dag/` (labels, pinned projects, synthetic graphs), `
 
 - Demand queries reached 277x per query with a warm index on this repository's own source, but only 1.8x when the index is built per query. The 2x target was missed on that cold figure, and 10 of 30 queries fell back to full analysis.
 - Incremental analysis met 3x in the deep stage on every project measured. End to end the median was between 1.8x and 2.9x, below the target. At the default summary budget, projects of about 5,000 functions or more run cold.
-- Labeled precision on the pinned JS and Nix samples is low (5 of 25 and 6 of 17 flagged sites were true), and the multi-service fixture finds 3 of 8 labeled positives. The numbers and their limits are in `bench/dag/results/`.
+- Labeled precision on the pinned JS and Nix samples was low (5 of 25 and 6 of 17 flagged sites were true) and is now 5 of 8 and 6 of 8 after general precision rules (see `docs/implementation-status/dag-improvements.md`; the held-out split was read while diagnosing, so it is not independent). The multi-service fixture still finds 3 of 8 labeled positives: the missing ones need the cross-service boundary join that is not wired into a normal scan. The numbers and their limits are in `bench/dag/results/`.
 
 See `docs/implementation-status/dag-improvements.md` for the per-requirement status.
