@@ -167,6 +167,16 @@ const FAMILY_ALIAS = {
   'license':                 'license-graph',
   'cloud-iam-overpermissive': 'iam-overpermissive',
   'http-no-tls':             'crypto-tls-version',
+  // Haskell producers (language/haskell-*.js) name the same defects more finely; each maps to the canonical family of
+  // the same kind of defect, and a family with no canonical counterpart stays unmapped and is listed as such.
+  'missing-authentication':  'auth-missing',
+  'weak-randomness':         'crypto-weak-rng',
+  'weak-hash':               'crypto-weak-hash',
+  'password-hashing':        'crypto-kdf-weak',
+  'tls-validation':          'crypto-tls-no-verify',
+  'hardcoded-credentials':   'hardcoded-secret',
+  'broken-object-authorization': 'idor',
+  'broken-function-authorization': 'authz',
 };
 
 function _canonical(family) {

@@ -42,8 +42,14 @@ const INTERPRETER_NAMES = new Set([
   'time', 'timeout', 'sudo', 'doas', 'su', 'ssh', 'osascript', 'launchctl', 'script', 'expect', 'tclsh', 'wish',
   'awk', 'gawk', 'mawk', 'nawk', 'java', 'jshell', 'deno', 'bun', 'nodejs', 'swift', 'make', 'gmake',
   'npm', 'npx', 'yarn', 'pnpm', 'pip', 'pip3', 'pipx', 'gem', 'bundle', 'cargo', 'go', 'gradle', 'mvn', 'watch',
+  // Haskell and Nix toolchains run code supplied by the project: GHC and cabal execute Template Haskell splices and a
+  // custom Setup.hs at build time, runghc/ghci interpret a source file, and the Nix evaluators run the expressions they
+  // are given (builders run the derivation's build script).
+  'ghc', 'ghci', 'runghc', 'runhaskell', 'cabal', 'stack',
+  'nix', 'nix-build', 'nix-shell', 'nix-instantiate', 'nix-env', 'nix-store',
 ]);
-const INTERPRETER_FAMILY = /^(?:python|pypy|ruby|perl|php|lua|luajit|node|tclsh)[0-9.]*$/;
+// Versioned toolchain binaries (`ghc-9.14.1`, `runghc-9.14.1`, `cabal-3.14`) are the same executables under another name.
+const INTERPRETER_FAMILY = /^(?:python|pypy|ruby|perl|php|lua|luajit|node|tclsh)[0-9.]*$|^(?:ghc|ghci|runghc|runhaskell|cabal|stack)-[0-9][0-9.]*$/;
 
 /**
  * What kind of executable this is. `interpreter` is true for a known shell or
