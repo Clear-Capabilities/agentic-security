@@ -1,3 +1,5 @@
+import { HASKELL_CASES } from './cases-haskell.mjs';
+
 // Cases for the metamorphic + adversarial mutation gate (bench/mutation/runner.mjs).
 // Moved out of the runner so the cases can be inspected and tested without running a scan.
 
@@ -1102,7 +1104,7 @@ app.get('/f', (req, res) => { res.send(fs.readFileSync('/srv/data/' + req.query.
 ];
 
 // ── Derived: the same verdict with answer-key words around the code ───────────────────────────────────────────────────────
-const COMMENT_PREFIX = { js: '//', jsx: '//', mjs: '//', cjs: '//', ts: '//', tsx: '//', java: '//', go: '//', cs: '//', kt: '//', rs: '//', php: '//', c: '//', cpp: '//', py: '#', rb: '#', sh: '#' };
+const COMMENT_PREFIX = { js: '//', jsx: '//', mjs: '//', cjs: '//', ts: '//', tsx: '//', java: '//', go: '//', cs: '//', kt: '//', rs: '//', php: '//', c: '//', cpp: '//', py: '#', rb: '#', sh: '#', hs: '--' };
 const VULN_LABEL = 'VULNERABLE: this is the FLAW. CWE-89 CWE-79 CWE-78 CWE-22 true positive, finding expected. bad() badSource() badSink()';
 const SAFE_LABEL = 'SAFE: input is sanitized, validated and parameterized. good() goodSink(). Reviewed and fixed: CWE closed, no finding expected.';
 
@@ -1283,7 +1285,7 @@ app.listen(3000, function (err, address) {
 ];
 
 export function allCases() {
-  const hand = [...CASES, ...E1_CASES, ...DAG_PRECISION_CASES];
+  const hand = [...CASES, ...E1_CASES, ...DAG_PRECISION_CASES, ...HASKELL_CASES];
   return [...hand, ...deriveLabelCases(hand)];
 }
 

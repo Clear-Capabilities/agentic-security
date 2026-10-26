@@ -142,3 +142,14 @@ the capture reads `dist/`.
    record the revision in `provenance.json`. Do not hand-edit labels.
 4. Run `test:haskell` / `test:nix` / `test:language`, `bench:mutation:check`, `bench:layer-recall:check` and
    `bench:language-support:check`; re-promote deliberately if a measured number legitimately changes.
+
+## Point-free aliases (`haskell-ir.js` `aliasBodyOf` / `applyAlias`)
+
+`tidy = takeFileName` and `run = callCommand` (and `.` compositions of such names) are the functions they name, so applying one
+lowers to the application of those functions, for a top-level, `let` and `where` binding alike. Found by `bench/mutation`
+(`hs-san-path-where-helper`): without it a sanitizer or sink reached through the alias was an unresolved call and lost its identity.
+Rules: only an alias of LIBRARY functions is expanded (a project function keeps its own summary and call-graph node); a local binding
+at the use site that shares one of the names disables the expansion (it stays the unresolved call, which fails toward unsanitized);
+the alias's call-graph edge is kept via `inlinedCalls`; arguments are lowered in the CALLER's module. Pinned both ways in
+`test/haskell/haskell-alias-taint.test.js`. Haskell verdict-flip cases live in `bench/mutation/cases-haskell.mjs`; the 8
+`bench/cve-replay/deep/hs-*-shape` entries are synthetic (self-authored, not from advisories).

@@ -61,7 +61,7 @@ const EXT_LANG = {
   '.js': 'js/ts', '.jsx': 'js/ts', '.ts': 'js/ts', '.tsx': 'js/ts', '.mjs': 'js/ts', '.cjs': 'js/ts',
   '.py': 'python', '.php': 'php', '.rb': 'ruby', '.java': 'java', '.go': 'go',
   '.cs': 'c#', '.kt': 'kotlin', '.c': 'c/c++', '.cc': 'c/c++', '.cpp': 'c/c++', '.h': 'c/c++',
-  '.rs': 'rust',
+  '.rs': 'rust', '.hs': 'haskell', '.lhs': 'haskell',
 };
 
 const MANIFEST_ALIASES = {

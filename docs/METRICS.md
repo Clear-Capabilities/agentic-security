@@ -72,13 +72,14 @@ open-redirect, sql-injection, ssti, prototype-pollution, and 4 C/C++
 command-injection shapes) are documented as candidate future work, not a
 blocker.
 
-### Result — 220 entries, engine v0.162.0 plus the QA-005/QA-006 engine work (re-measured 2026-10-09)
+### Result — 228 entries, Haskell added (re-measured 2026-10-26; the 220-entry rows are the 2026-10-09 measurement)
 
 | language | entries | detected (any layer) | **detected by IR-TAINT** |
 |---|---:|---:|---:|
 | c# | 21 | 21 (100%) | 13 (62%) |
 | c/c++ | 11 | 11 (100%) | 2 (18%) |
 | go | 22 | 22 (100%) | 14 (64%) |
+| haskell | 8 | 8 (100%) | 8 (100%) |
 | java | 25 | 25 (100%) | 13 (52%) |
 | js/ts | 38 | 38 (100%) | 22 (58%) |
 | kotlin | 21 | 21 (100%) | 10 (48%) |
@@ -88,7 +89,7 @@ blocker.
 | rust | 5 | 5 (100%) | 5 (100%) |
 | json | 1 | 1 (100%) | 0 (0%) |
 | terraform | 1 | 1 (100%) | 0 (0%) |
-| **total** | **220** | **220 (100%)** | **126 (57%)** |
+| **total** | **228** | **228 (100%)** | **134 (59%)** |
 
 **2026-10-09 re-measurement: 122 → 126 (55% → 57%).** Measured by `npm run bench:layer-recall` before and after the
 differentiation programme's QA-005/QA-006 engine work (same corpus, same 220 entries, deep mode forced on). Three languages moved and no
@@ -99,6 +100,13 @@ target in an argument position no sink named), php 13 → 15 (`CVE-2022-31626-la
 open-redirect sink). Each is a development-evidence repair, not a corpus-shaped one; the mechanisms, adversarial variants, benign controls and
 ablations are in `docs/guides/engine-mechanism-evidence.md`. Re-baselined deliberately with `npm run bench:layer-recall:update-baseline`.
 This gate compares for equality, so a rise had to be recorded here.
+
+**haskell is new** (0 entries → 8, 2026-10-26; 126 → 134 taint-attributed, 57% → 59%, no other language moved). The 8 entries are
+`deep/hs-*-shape`: command injection, argument injection, SQL injection, path traversal, SSRF, open redirect, XSS and code injection. They are
+**synthetic and self-authored**, not derived from a published advisory (each manifest says so), so 8/8 is a regression net for the Haskell taint
+engine, not a recall measurement over real Haskell code. Each was checked to be invisible with deep mode off and detected only by `IR-TAINT` with
+it on, which is why they sit in the `deep/` tier; there is no structural fallback layer for Haskell in this corpus. 100% on eight entries is the
+number the corpus supports and nothing more. The verdict-flip side of the same work is in `bench/mutation/cases-haskell.mjs`.
 
 **rust is new** (0 → 5, this session): Rust joined the first-class language
 set with a hand-rolled IR frontend (`scanner/src/ir/parser-rust.js`, the
