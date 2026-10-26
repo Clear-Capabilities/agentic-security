@@ -1,22 +1,22 @@
 {
- "scannerVersion": "0.186.1",
+ "scannerVersion": "0.186.2",
  "labelsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
  "definition": "precision = tp / (tp + fp); ambiguous and unlabeled excluded from the denominator; 95% Wilson interval",
  "all": {
   "all haskell projects": {
-   "flagged": 77,
+   "flagged": 84,
    "tp": 1,
-   "fp": 48,
+   "fp": 42,
    "ambiguous": 11,
-   "unlabeled": 17,
-   "labeledDenominator": 49,
-   "precision": 0.0204,
+   "unlabeled": 30,
+   "labeledDenominator": 43,
+   "precision": 0.0233,
    "wilson95": [
-    0.0036,
-    0.1069
+    0.0041,
+    0.1206
    ],
-   "ifAmbiguousAllFp": 0.0167,
-   "ifAmbiguousAllTp": 0.2
+   "ifAmbiguousAllFp": 0.0185,
+   "ifAmbiguousAllTp": 0.2222
   }
  },
  "perProject": {
@@ -36,41 +36,41 @@
    "ifAmbiguousAllTp": 0
   },
   "hledger": {
-   "flagged": 41,
+   "flagged": 46,
    "tp": 1,
-   "fp": 32,
+   "fp": 27,
    "ambiguous": 1,
-   "unlabeled": 7,
-   "labeledDenominator": 33,
-   "precision": 0.0303,
+   "unlabeled": 17,
+   "labeledDenominator": 28,
+   "precision": 0.0357,
    "wilson95": [
-    0.0054,
-    0.1532
+    0.0063,
+    0.1771
    ],
-   "ifAmbiguousAllFp": 0.0294,
-   "ifAmbiguousAllTp": 0.0588
+   "ifAmbiguousAllFp": 0.0345,
+   "ifAmbiguousAllTp": 0.069
   },
   "postgrest": {
-   "flagged": 11,
+   "flagged": 12,
    "tp": 0,
-   "fp": 6,
+   "fp": 5,
    "ambiguous": 0,
-   "unlabeled": 5,
-   "labeledDenominator": 6,
+   "unlabeled": 7,
+   "labeledDenominator": 5,
    "precision": 0,
    "wilson95": [
     0,
-    0.3903
+    0.4345
    ],
    "ifAmbiguousAllFp": 0,
    "ifAmbiguousAllTp": 0
   },
   "shellcheck": {
-   "flagged": 17,
+   "flagged": 18,
    "tp": 0,
    "fp": 2,
    "ambiguous": 10,
-   "unlabeled": 5,
+   "unlabeled": 6,
    "labeledDenominator": 2,
    "precision": 0,
    "wilson95": [
@@ -83,19 +83,19 @@
  },
  "perSourceKind": {
   "haskell source (.hs)": {
-   "flagged": 59,
+   "flagged": 66,
    "tp": 1,
-   "fp": 46,
+   "fp": 40,
    "ambiguous": 1,
-   "unlabeled": 11,
-   "labeledDenominator": 47,
-   "precision": 0.0213,
+   "unlabeled": 24,
+   "labeledDenominator": 41,
+   "precision": 0.0244,
    "wilson95": [
-    0.0038,
-    0.1111
+    0.0043,
+    0.126
    ],
-   "ifAmbiguousAllFp": 0.0208,
-   "ifAmbiguousAllTp": 0.0417
+   "ifAmbiguousAllFp": 0.0238,
+   "ifAmbiguousAllTp": 0.0476
   },
   "non-Haskell file in a Haskell project": {
    "flagged": 18,
@@ -196,11 +196,11 @@
    "ifAmbiguousAllTp": 0
   },
   "OS Command Injection (shell string)": {
-   "flagged": 1,
+   "flagged": 3,
    "tp": 1,
    "fp": 0,
    "ambiguous": 0,
-   "unlabeled": 0,
+   "unlabeled": 2,
    "labeledDenominator": 1,
    "precision": 1,
    "wilson95": [
@@ -226,19 +226,19 @@
    "ifAmbiguousAllTp": 0
   },
   "Partial function applied to caller-supplied text": {
-   "flagged": 10,
+   "flagged": 4,
    "tp": 0,
-   "fp": 6,
+   "fp": 1,
    "ambiguous": 1,
-   "unlabeled": 3,
-   "labeledDenominator": 6,
+   "unlabeled": 2,
+   "labeledDenominator": 1,
    "precision": 0,
    "wilson95": [
     0,
-    0.3903
+    0.7935
    ],
    "ifAmbiguousAllFp": 0,
-   "ifAmbiguousAllTp": 0.1429
+   "ifAmbiguousAllTp": 0.5
   },
   "Path Traversal (copy/rename)": {
    "flagged": 1,
@@ -271,11 +271,11 @@
    "ifAmbiguousAllTp": 0
   },
   "Path Traversal": {
-   "flagged": 6,
+   "flagged": 9,
    "tp": 0,
    "fp": 4,
    "ambiguous": 0,
-   "unlabeled": 2,
+   "unlabeled": 5,
    "labeledDenominator": 4,
    "precision": 0,
    "wilson95": [
@@ -324,17 +324,125 @@
    "ifAmbiguousAllFp": null,
    "ifAmbiguousAllTp": null
   },
-  "Server-Side Request Forgery": {
-   "flagged": 2,
+  "Route GET /add is implemented but not declared in the API contract": {
+   "flagged": 1,
    "tp": 0,
-   "fp": 2,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /balance is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /balancesheet is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /balancesheetequity is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /cashflow is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /holdings is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /incomestatement is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route POST /add is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route PUT /add is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Server-Side Request Forgery": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
    "ambiguous": 0,
    "unlabeled": 0,
-   "labeledDenominator": 2,
+   "labeledDenominator": 1,
    "precision": 0,
    "wilson95": [
     0,
-    0.6576
+    0.7935
    ],
    "ifAmbiguousAllFp": 0,
    "ifAmbiguousAllTp": 0
@@ -397,5 +505,5 @@
    "ifAmbiguousAllTp": 0
   }
  },
- "staleLabels": 0
+ "staleLabels": 6
 }

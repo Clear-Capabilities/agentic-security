@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "engineVersion": "0.186.2",
-  "bundleSha256": "38adcd8324aa7552b7bf61f5ac662fe383ed41f0bcf7f6eb2cad89de080a88c5",
+  "bundleSha256": "f98cee0b4df908a8659a1b92de4dcdad2e944da9975a042b3769ee579d281477",
   "examples": {
     "haskell-app/vulnerable": {
       "exitCode": 3,
@@ -655,7 +655,7 @@
             "callStatementSites": 5,
             "connected": 2,
             "disconnected": 3,
-            "nonStatementSitesNotEnumerable": 4,
+            "nonStatementSitesNotEnumerable": 1,
             "unsupportedSites": 0,
             "byCategory": {
               "external-api": {
