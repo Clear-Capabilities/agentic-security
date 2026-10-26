@@ -1,0 +1,8 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-path-traversal-read-haskell",
+  "lang": "haskell", "sources": { "Main.hs": "Main.hs" },
+  "files": { "agentic-proof-secret.txt": "{{SECRET:file}}", "public/.keep": "" },
+  "run": ["{{GHC}}", "-ignore-dot-ghci", "-e", ":main \"../agentic-proof-secret.txt\"", "Main.hs"],
+  "oracle": { "type": "file_disclosure", "params": { "secret": "file" } },
+  "network": "none"
+}

@@ -41,7 +41,7 @@ if (!hostRoot) process.exit(125);
 const interp = { node: process.execPath, python3: process.env.AS_FAKE_PYTHON || 'python3' };
 const mapped = command.map((x) => (interp[x] ?? x).split('/work').join(hostRoot));
 if (process.env.AS_FAKE_DOCKER_HANG) { setTimeout(() => {}, 600000); } else {
-  const r = spawnSync(mapped[0], mapped.slice(1), { cwd: hostRoot, env: { ...envs, PATH: process.env.PATH }, encoding: 'utf8', timeout: 20000 });
+  const r = spawnSync(mapped[0], mapped.slice(1), { cwd: hostRoot, env: { ...envs, PATH: [envs.PATH?.split('/work').join(hostRoot), process.env.PATH].filter(Boolean).join(':') }, encoding: 'utf8', timeout: 20000 });
   void image;
   process.stdout.write(r.stdout ?? ''); process.stderr.write(r.stderr ?? '');
   process.exit(r.status ?? 1);

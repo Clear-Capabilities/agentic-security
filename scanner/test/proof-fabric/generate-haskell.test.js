@@ -71,9 +71,10 @@ test('the container side: the image is a local-only name, the tools are the imag
 test('class and file refusals need no GHC: SSRF is refused for Haskell with its reason, other classes by name, reads and hazards by reason', () => {
   const refuse = (files, finding, re) => { const r = generateReproducer({ finding: F(finding), root: repo(files) }); assert.equal(r.ok, false, JSON.stringify(r)); assert.match(r.reason, re); };
   refuse({ 'Main.hs': fixture('command-injection-haskell', 'vulnerable') }, { cwe: 'CWE-918' }, /no HTTP client ships with GHC/);
-  refuse({ 'Main.hs': fixture('command-injection-haskell', 'vulnerable') }, { cwe: 'CWE-89' }, /no payload and oracle exist for CWE-89/);
-  refuse({ 'Main.hs': fixture('command-injection-haskell', 'vulnerable') }, { cwe: 'CWE-88' }, /no payload and oracle exist for CWE-88/);
-  refuse({ 'Main.hs': 'module Main (main) where\nmain :: IO ()\nmain = readFile "x" >>= putStrLn\n' }, { cwe: 'CWE-22', line: 3 }, /not a write/);
+  refuse({ 'Main.hs': fixture('command-injection-haskell', 'vulnerable') }, { cwe: 'CWE-89' }, /sql-injection: the flagged line `callCommand \("echo hello " \+\+ name\)`.*GHC ships no database binding/);
+  refuse({ 'Main.hs': fixture('command-injection-haskell', 'vulnerable') }, { cwe: 'CWE-88' }, /argument-injection: the flagged line is not a call to callProcess/);
+  refuse({ 'Main.hs': 'module Main (main) where\nmain :: IO ()\nmain = readFile "x" >>= putStrLn\n' }, { cwe: 'CWE-22', line: 3 }, /base directory is not a relative literal/);
+  refuse({ 'Main.hs': 'module Main (main) where\nimport System.Directory (removeFile)\nmain :: IO ()\nmain = removeFile "x"\n' }, { cwe: 'CWE-22', line: 4 }, /is not a write \(writeFile.*or a read \(readFile.*removeFile, createDirectory/);
   refuse({ 'Main.hs': '{-# LANGUAGE TemplateHaskell #-}\nmodule Main (main) where\nimport System.Process (callCommand)\nmain :: IO ()\nmain = callCommand "ls"\n' }, { line: 5 }, /Template Haskell, quasi-quotes, CPP or the foreign function interface/);
   refuse({ 'Main.hs': '{-# OPTIONS_GHC -fplugin=Evil #-}\nmodule Main (main) where\nmain :: IO ()\nmain = pure ()\n' }, { line: 4 }, /OPTIONS_GHC pragma names a plugin/);
   refuse({ 'Main.hs': 'module Main (main) where\nforeign import ccall "sin" c_sin :: Double -> Double\nmain :: IO ()\nmain = pure ()\n' }, { line: 3 }, /foreign function interface/);

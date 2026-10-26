@@ -17,6 +17,8 @@
 //             loads it and calls it, filling the tainted parameter with the payload. A parameter that is a request-like object
 //             (`req`) gets a stand-in whose `body`/`query`/`params` answer every property with the payload.
 //
+// Haskell additionally proves path-traversal READS (a planted secret appears in the output) and argument injection into the first argument
+// of a process call (a stand-in for the called program); see `generate-haskell.js` for what each shows and does not show.
 // Weakness classes with a payload and an oracle that can SEE the effect: CWE-78 (a canary file created by the injected command),
 // CWE-22 (a write that lands outside the working directory, only for write sinks), CWE-918 (a request reaching the runner's loopback
 // listener). Others (injection into a database, deserialization, memory safety) need an environment or a native harness this does not
@@ -27,12 +29,16 @@ import { builtinModules } from 'node:module';
 import { parse } from '@babel/parser';
 import { validateReproducer } from './reproducer.js';
 import { generatePythonReproducer } from './generate-python.js';
-import { generateHaskellReproducer } from './generate-haskell.js';
+import { generateHaskellReproducer, haskellRefusal } from './generate-haskell.js';
 
 const CLASSES = {
   'CWE-78': { name: 'command-injection', payload: 'x; touch {{CANARY:command}}', oracle: { type: 'command_execution', params: { canary: 'command' } } },
   'CWE-22': { needsPy: /\bopen\s*\([^)]*['"][wax]b?\+?['"]|\.write_(?:text|bytes)\s*\(|\bshutil\.(?:copy|move)/, name: 'path-traversal', payload: '../escaped.txt', oracle: { type: 'filesystem_mutation', params: { canary: 'fs' } }, watch: { fs: 'escaped.txt' }, needsHs: /\b(?:writeFile|appendFile|copyFile|copyFileWithMetadata|renameFile|openBinaryFile)\b|\b(?:openFile|withFile|withBinaryFile)\b[^\n]*\b(?:WriteMode|AppendMode|ReadWriteMode)\b/, needs: /\b(?:writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream)\b/ },
   'CWE-918': { name: 'ssrf', payload: '{{CALLBACK_URL}}', oracle: { type: 'outbound_callback' }, network: 'callback' },
+};
+// classes only the Haskell generator builds (the other languages refuse them): argument injection needs a stand-in for the called program
+const HASKELL_ONLY = {
+  'CWE-88': { name: 'argument-injection', payload: '--agentic-proof-write={{CANARY:arg}}', oracle: { type: 'argument_injection', params: { canary: 'arg' } } },
 };
 const MAX_SOURCE = 256 * 1024;
 const MAX_FILES = 8;
@@ -135,11 +141,12 @@ clearTimeout(timer);
 
 export function generateReproducer({ finding, root }) {
   const cwe = normCwe(finding?.cwe);
-  const cls = CLASSES[cwe];
-  if (!cls) return fail(`no payload and oracle exist for ${cwe ?? 'this finding'}; supported: ${Object.keys(CLASSES).join(', ')} (others need a database, a deserializer or a native harness)`);
   const rel = String(finding?.file ?? '');
   const isPy = /\.py$/i.test(rel);
   const isHs = /\.hs$/i.test(rel);
+  const cls = CLASSES[cwe] ?? (isHs ? HASKELL_ONLY[cwe] : undefined);
+  if (isHs && !cls && Number.isInteger(finding?.line)) return haskellRefusal({ finding, root, cwe });
+  if (!cls) return fail(`no payload and oracle exist for ${cwe ?? 'this finding'}; supported: ${Object.keys(CLASSES).join(', ')} (others need a database, a deserializer or a native harness)`);
   if (!isPy && !isHs && !/\.(?:js|mjs|cjs)$/i.test(rel)) return fail(`no harness builder for ${path.extname(rel) || 'this file type'}; JavaScript, Python and Haskell only`);
   if (!Number.isInteger(finding?.line)) return fail('the finding has no line number');
   if (isPy) return generatePythonReproducer({ finding, root, cls });

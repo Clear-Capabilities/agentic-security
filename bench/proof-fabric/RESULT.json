@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/proof-fabric-measurement",
-  "measuredAt": "2026-10-26T14:32:25.110Z",
+  "measuredAt": "2026-10-26T15:51:03.714Z",
   "rounds": 3,
   "host": {
     "platform": "darwin",
@@ -10,10 +10,11 @@
   },
   "environment": {
     "modes": {
-      "local-confined": 90
+      "local-confined": 102
     }
   },
   "classesMeasured": [
+    "argument-injection-haskell",
     "auth-bypass",
     "buffer-overflow",
     "command-injection",
@@ -25,6 +26,7 @@
     "path-traversal",
     "path-traversal-haskell",
     "path-traversal-java",
+    "path-traversal-read-haskell",
     "sql-injection",
     "sql-injection-python",
     "ssrf",
@@ -32,13 +34,13 @@
   ],
   "classesSkipped": [],
   "reproduction": {
-    "runs": 45,
-    "confirmed": 45,
+    "runs": 51,
+    "confirmed": 51,
     "ratePercent": 100,
     "targetPercent": 90
   },
   "falseConfirmations": {
-    "runs": 45,
+    "runs": 51,
     "confirmed": 0,
     "target": 0
   },
@@ -49,11 +51,15 @@
     "targetPercent": 100
   },
   "proofTiming": {
-    "medianMs": 670,
-    "maxMs": 3613,
+    "medianMs": 1051,
+    "maxMs": 7875,
     "note": "reported by the proof result itself (timing.proofMs), independent of scan time"
   },
   "perClass": {
+    "argument-injection-haskell": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
     "auth-bypass": {
       "vulnerableConfirmed": "3/3",
       "mitigatedConfirmed": "0/3"
@@ -98,6 +104,10 @@
       "vulnerableConfirmed": "3/3",
       "mitigatedConfirmed": "0/3"
     },
+    "path-traversal-read-haskell": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
     "sql-injection": {
       "vulnerableConfirmed": "3/3",
       "mitigatedConfirmed": "0/3"
@@ -119,7 +129,6 @@
     "reproduction": "met",
     "falseConfirmations": "met",
     "timeouts": "met",
-    "environment": "not asserted",
-    "comparison": "met"
+    "environment": "not asserted"
   }
 }
