@@ -7,7 +7,7 @@
 //
 // See test/fixtures/artifact-provenance/README.md for the full
 // property-by-property mapping.
-import { test } from 'node:test';
+import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -42,6 +42,21 @@ function dockerArchiveWithLodash(version, labels = {}) {
     layers: [{ files: [{ name: 'app/package.json', content: JSON.stringify({ dependencies: { lodash: version } }) }] }],
   });
 }
+
+// The tests below run offline (cache only). A cold runner has no OSV cache, so warm it once,
+// online, for the two lodash versions the file relies on. If the network is down this does
+// nothing and the OSV-dependent assertions fail loudly, which is the honest outcome.
+before(() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-artifact-warm-'));
+  try {
+    for (const v of [VULNERABLE_VERSION, CLEAN_VERSION]) {
+      fs.writeFileSync(path.join(dir, `warm-${v}.tar`), dockerArchiveWithLodash(v));
+      run(dir, ['image', 'scan', `warm-${v}.tar`], { AGENTIC_SECURITY_OFFLINE: '0' });
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('PRD 5 killer scenario: vulnerable base package vs. clean equivalent (real OSV correlation)', { timeout: 60000 }, (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-artifact-'));

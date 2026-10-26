@@ -88,8 +88,12 @@ test('owned-build/6: runScan honours AGENTIC_SECURITY_LINEAGE_DEADLINE_MS and re
   try {
     const { scan } = await runScan(dir, { deterministic: true });
     // Cooperative cancel yields a cancelled graph; a watchdog kill (slow runner) yields none.
-    if (scan.lineageGraph) assert.equal(scan.lineageGraph.scanHealth.status, 'cancelled');
-    assert.equal(scan.lineageStatus.completion.status, 'cancelled');
+    if (scan.lineageGraph) {
+      assert.equal(scan.lineageGraph.scanHealth.status, 'cancelled');
+      assert.equal(scan.lineageStatus.completion.status, 'cancelled');
+    } else {
+      assert.ok(scan.lineageStatus.failure, 'a watchdog stop must say why there is no graph');
+    }
   } finally {
     for (const [k, v] of [['AGENTIC_SECURITY_LINEAGE_DEEP', saved.d], ['AGENTIC_SECURITY_LINEAGE_DEADLINE_MS', saved.m]]) {
       if (v === undefined) delete process.env[k]; else process.env[k] = v;
