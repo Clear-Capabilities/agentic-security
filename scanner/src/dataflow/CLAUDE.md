@@ -182,3 +182,5 @@ member-based: `hs-src-caller-controlled-param` (a text parameter of an exported 
 `hs-lin-src-record-parameter` (the lineage form of a record parameter). `engine.js` skips the literal-skeleton filter for Haskell
 catalog entries and requires a markup literal for `htmlSkeleton` sinks. Pinned counts in the lineage registry tests change
 deliberately when the model registry grows. Details: `scanner/src/language/CLAUDE.md`.
+
+Three Haskell-scoped behaviours live in `engine.js` (all guarded by `_currentFile` being a `.hs`/`.lhs` file, so no other language changes): a `union` (the branches of an `if`, a `case`, guards) handed to another call as an argument (`get "/p" $ do .. case m of A -> sink x`) or bound as a statement is a sink site in EACH branch (`_nestedSinkFindings`; the `assign` case); `exprTaint` of a `member` whose object is a call result (the elements of `words s`) is the object's taint; and the catalog gains four annotation sources, `hs-src-handler-param-<framework>` (a text parameter of an exported function that returns a Scotty/Yesod/Servant/WAI handler value: request input, provenance `url-param`), beside the weaker `hs-src-caller-controlled-param`.

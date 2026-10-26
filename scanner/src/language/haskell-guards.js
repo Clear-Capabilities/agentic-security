@@ -44,6 +44,8 @@ const mentions = (e, vars) => { for (const n of identNames(e)) if (vars.has(n)) 
 /** Classify a condition over the value `vars`. -> {safeWhen, kind, families, needsCanon?, subject} | null */
 export function classifyCondition(c, vars, derived = new Set()) {
   if (!c || typeof c !== 'object') return null;
+  // The IR lowers `&&` / `||` to a `logical` node (`and` / `or`); a `binary` node is kept for the same operators from other lowerings.
+  if (c.kind === 'logical' && (c.op === 'and' || c.op === 'or')) return classifyCondition({ kind: 'binary', op: c.op === 'and' ? '&&' : '||', left: c.left, right: c.right }, vars, derived);
   if (c.kind === 'binary') {
     if (c.op === '&&') { const a = classifyCondition(c.left, vars, derived); const b = classifyCondition(c.right, vars, derived); return [a, b].find((x) => x && x.safeWhen === true) || null; }
     if (c.op === '||') { const a = classifyCondition(c.left, vars, derived); const b = classifyCondition(c.right, vars, derived); return [a, b].find((x) => x && x.safeWhen === false) || null; }
@@ -72,8 +74,12 @@ export function classifyCondition(c, vars, derived = new Set()) {
   }
   // `uriRegName a `elem` ["api.example.com"]` where `a` was parsed from the checked URL: the host is on an allow-list, which is the
   // URL family's control. Only a HOST accessor over a value derived from the checked one counts (a path or query allow-list does not).
-  if ((IS_ELEM.has(name) || NOT_ELEM.has(name)) && a[0] && a[0].kind === 'call' && /(?:^|\.)(?:uriRegName|uriAuthority|getHost)$/.test(a[0].callee || '') && a[0].args && a[0].args[0] && a[0].args[0].kind === 'ident'
-      && (vars.has(a[0].args[0].name) || derived.has(a[0].args[0].name)) && a[1] && a[1].kind === 'array' && a[1].elements.length && a[1].elements.every(isStr)) {
+  // The list may be written inline (a literal list of strings) or be a named constant (`allowedHosts`): either way it must not be built from the
+  // checked value, or the check would compare the value with itself.
+  const fixedList = (l) => l && ((l.kind === 'array' && l.elements.length && l.elements.every((x) => isStr(x) || (x && x.kind === 'call' && /(?:^|\.)(?:pack|fromString)$/.test(x.callee || '') && x.args && x.args.length === 1 && isStr(x.args[0]))))
+    || (l.kind === 'ident' && !mentions(l, vars) && !mentions(l, derived)));
+  if ((IS_ELEM.has(name) || NOT_ELEM.has(name)) && a[0] && a[0].kind === 'call' && /(?:^|\.)(?:uriRegName|uriAuthority|getHost|host|hostName)$/.test(a[0].callee || '') && a[0].args && a[0].args[0] && a[0].args[0].kind === 'ident'
+      && (vars.has(a[0].args[0].name) || derived.has(a[0].args[0].name)) && fixedList(a[1])) {
     return { safeWhen: IS_ELEM.has(name), kind: 'host-allow-list', families: ['url'], subject: a[0].args[0].name };
   }
   if ((IS_ELEM.has(name) || NOT_ELEM.has(name)) && a[0] && a[0].kind === 'ident' && vars.has(a[0].name) && !mentions(a[1], vars)) {
@@ -264,6 +270,62 @@ function isCanonical(fn, name) {
   return false;
 }
 
+// A hand-written HTML escaper: a project function (or one of its local helpers) that spells out the entities for `<`, `>` and `&`. Recognised by
+// what the code does (it produces those entity strings), never by its name. Kept per IR build.
+const ESCAPERS = new WeakMap();
+const ENTITY = { lt: /&lt;|&#0*60;|&#x0*3c;/i, gt: /&gt;|&#0*62;|&#x0*3e;/i, amp: /&amp;|&#0*38;|&#x0*26;/i };
+function stringLiteralsOf(fn) {
+  const out = [];
+  const visit = (e, depth) => {
+    if (!e || typeof e !== 'object' || depth > 60) return;
+    if (e.kind === 'literal' && typeof e.value === 'string') out.push(e.value);
+    for (const [, c] of exprChildren(e)) visit(c, depth + 1);
+    if (Array.isArray(e.branches)) for (const b of e.branches) visit(b, depth + 1);   // the arms of a conditional or a multi-clause function
+  };
+  for (const n of nodeList(fn)) { for (const k of ['source', 'value', 'cond']) visit(n[k], 0); if (Array.isArray(n.args)) for (const a of n.args) visit(a, 0); }
+  return out;
+}
+export function htmlEscapers(perFile) {
+  if (!perFile || typeof perFile !== 'object') return new Set();
+  let hit = ESCAPERS.get(perFile);
+  if (hit) return hit;
+  hit = new Set();
+  for (const ir of Object.values(perFile)) {
+    const fns = ir.functions || [];
+    // local helpers and lambdas record their parent's qid: one pass groups them, so the whole file costs one visit per function
+    const children = new Map();
+    for (const fn of fns) { const par = fn.hs && fn.hs.parent; if (par) { if (!children.has(par)) children.set(par, []); children.get(par).push(fn); } }
+    const lits = new Map();
+    const litsOf = (fn, depth = 0) => {
+      if (lits.has(fn.qid)) return lits.get(fn.qid);
+      let out = stringLiteralsOf(fn);
+      if (depth < 8) for (const c of children.get(fn.qid) || []) out = out.concat(litsOf(c, depth + 1));
+      lits.set(fn.qid, out);
+      return out;
+    };
+    for (const fn of fns) {
+      if (!fn.name || fn.name.endsWith('.<module>') || (fn.hs && (fn.hs.kind === 'closure' || fn.hs.kind === 'local-function'))) continue;
+      const all = litsOf(fn);
+      if (all.some((l) => ENTITY.lt.test(l)) && all.some((l) => ENTITY.gt.test(l)) && all.some((l) => ENTITY.amp.test(l))) hit.add(fn.name);
+    }
+  }
+  ESCAPERS.set(perFile, hit);
+  return hit;
+}
+
+/** Every occurrence of a variable inside `e` is an argument of an escaper (or a value an escaper call produced): nothing raw reaches the sink. */
+function allUsesEscaped(fn, e, escapers, depth = 0) {
+  if (!e || typeof e !== 'object' || depth > 40) return true;
+  if (e.kind === 'call' && escapers.has(e.callee)) return true;     // whatever it receives is escaped
+  if (e.kind === 'ident') {
+    if (e.hs && e.hs.functionRef) return true;
+    const defs = nodeList(fn).filter((n) => n.kind === 'assign' && n.target === e.name && n.source);
+    return defs.length > 0 && defs.every((n) => n.source.kind === 'call' && escapers.has(n.source.callee));
+  }
+  for (const [, c] of exprChildren(e)) if (!allUsesEscaped(fn, c, escapers, depth + 1)) return false;
+  return true;
+}
+
 /**
  * Judge one finding. Mutates it when a dominating, family-appropriate guard refutes the flow.
  * @returns {{status:'refuted'|'weak-guard'|'none', guard?:object}}
@@ -289,7 +351,16 @@ export function judgeFinding(f, perFile) {
     const derived = derivedFrom(fn, vars);   // values built FROM the checked one (`a` in `Just a <- parseURI url`)
     const facts = [...site.facts, ...cfgBranchFacts(fn, site.nodeId), ...exitGuardFacts(fn, site.nodeId)];
     let refuted = null;
+    if (fam === 'xss') {
+      const escapers = htmlEscapers(perFile);
+      const calls = [];
+      const find = (e, d) => { if (!e || typeof e !== 'object' || d > 40) return; if (e.kind === 'call' && escapers.has(e.callee)) calls.push(e); for (const [, c] of exprChildren(e)) find(c, d + 1); };
+      find(argExpr, 0);
+      for (const n of nodeList(fn)) if (n.kind === 'assign' && n.source && identNames(argExpr).has(n.target)) find(n.source, 0);
+      if (calls.length && allUsesEscaped(fn, argExpr, escapers)) refuted = { kind: 'html-escaper', line: calls[0].line || fn.line, subject: calls[0].callee };
+    }
     for (const fact of facts) {
+      if (refuted) break;
       const cls = classifyCondition(fact.cond, vars, derived);
       if (!cls || cls.safeWhen !== fact.when) continue;
       if (!(cls.families.includes('*') || cls.families.includes(fam))) continue;          // wrong-context control
@@ -346,7 +417,10 @@ export function promoteShellInterpreter(f, perFile) {
     if (!isStr(prog) || !SHELLS.test(prog.value) || !list || list.kind !== 'array') continue;
     const flag = list.elements.findIndex((e) => isStr(e) && SHELL_C.test(e.value));
     if (flag < 0) continue;
-    if (list.elements.slice(flag + 1).some((e) => e && e.kind !== 'literal')) {
+    // `sh -c SCRIPT arg0 arg1 ..`: only the SCRIPT is parsed by the shell. The elements after it are the positional parameters ($0, $1, ...), plain
+    // data to a script that does not interpolate them into code; a tainted script is injection, tainted positionals are judged by `quotedPositionals`.
+    const script = list.elements[flag + 1];
+    if (script && script.kind !== 'literal') {
       f.cwe = 'CWE-78'; f.severity = 'critical'; f.vuln = 'OS Command Injection (shell interpreter -c)';
       f.id = String(f.id).replace('cwe-88', 'cwe-78'); f.shellInterpreter = prog.value;
       return true;
@@ -355,12 +429,65 @@ export function promoteShellInterpreter(f, perFile) {
   return false;
 }
 
+/**
+ * `callProcess "sh" ["-c", "gzip -9 -- \"$1\"", "sh", target]`: the script is a constant and the tainted value is a positional parameter the
+ * script expands INSIDE DOUBLE QUOTES after `--`. The shell does not re-parse a quoted expansion, and `--` ends the program's option parsing, so
+ * neither shell nor option injection is possible through it. A reference that is unquoted, quoted with single quotes, or not preceded by `--` is not
+ * covered: the finding stays. Returns the control or null.
+ */
+export function quotedPositionals(f, perFile) {
+  if (!f || f.cwe !== 'CWE-88' || !PROCESS_FNS.has(f.callee)) return null;
+  const ir = perFile && perFile[f.file];
+  const fn = ir && f._funcQid && ir.functions.find((x) => x.qid === f._funcQid);
+  if (!fn) return null;
+  const sites = findSites(fn, f.callee, f.line);
+  if (!sites.length) return null;
+  for (const site of sites) {
+    const [prog, list] = site.call.args || [];
+    if (!isStr(prog) || !SHELLS.test(prog.value) || !list || list.kind !== 'array') return null;
+    const flag = list.elements.findIndex((e) => isStr(e) && SHELL_C.test(e.value));
+    const script = flag >= 0 ? list.elements[flag + 1] : null;
+    if (!isStr(script)) return null;
+    // a tainted element BEFORE the script (or the script itself) is not a positional parameter
+    if (list.elements.slice(0, flag + 2).some((e) => e && e.kind !== 'literal')) return null;
+    // the literal keeps the Haskell string's own escapes (`\"`, `\\`, `\n`): decode them to get the text the shell receives
+    const text = script.value.replace(/\\(["'\\ntr])/g, (m, c) => ({ n: '\n', t: '\t', r: '\r' }[c] || c));
+    let dq = false; let sq = false; let seenDashes = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '\\' && !sq) { i++; continue; }
+      if (ch === "'" && !dq) { sq = !sq; continue; }
+      if (ch === '"' && !sq) { dq = !dq; continue; }
+      if (!dq && !sq && ch === '-' && text[i + 1] === '-' && /\s/.test(text[i + 2] || ' ') && (i === 0 || /\s/.test(text[i - 1]))) { seenDashes = true; continue; }
+      if (ch === '$' && !sq) {
+        const rest = text.slice(i + 1);
+        if (/^(?:[0-9]|\{[0-9]+\}|[@*]|\{[@*]\})/.test(rest)) {
+          if (!dq || !seenDashes) return null;
+        } else if (/^[A-Za-z_(`{]/.test(rest)) { return null; }   // another expansion or a command substitution: not judged here
+      }
+      if (ch === '`' && !sq) return null;
+    }
+    return { kind: 'quoted-positional-parameters' };
+  }
+  return null;
+}
+
 /** Applies judgeFinding to every Haskell taint finding. Returns counts. */
 export function applyHaskellGuards(findings, perFile) {
   const stats = { refuted: 0, weak: 0 };
   for (const f of findings || []) {
     if (!f || f.parser !== 'IR-TAINT') continue;
     try { promoteShellInterpreter(f, perFile); } catch { /* judged as an argument-injection below */ }
+    try {
+      const qp = quotedPositionals(f, perFile);
+      if (qp && !f._quotedPositionals) {
+        f._quotedPositionals = true; f.severity = 'info';
+        f.controls = [...(f.controls || []), { kind: 'quoted-positional-parameters', evidenceKind: 'source' }];
+        f.guardNote = { kind: 'quoted-positional-parameters', reason: 'the script is a constant and expands the tainted value only inside double quotes after "--"; the shell does not re-parse it and the program stops reading options' };
+        stats.weak++;
+        continue;
+      }
+    } catch { /* judged below */ }
     try {
       const ot = optionTerminator(f, perFile);
       if (ot && !f._optionTerminated) {

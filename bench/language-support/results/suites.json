@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/language-support-suites@1",
-  "ranAt": "2026-10-05",
+  "ranAt": "2026-10-26",
   "node": "v24.20.0",
   "tools": {
     "ghc": true,
@@ -107,7 +107,11 @@
       "fail": 0,
       "skipped": 0,
       "cancelled": 0,
-      "failing": []
+      "failing": [],
+      "carriedForward": {
+        "from": "2026-10-05",
+        "reason": "on the host that re-ran the other suites on 2026-10-26 the Haskell packages the route fixtures import (scotty, wai, servant, yesod) are not installed, so the one compile criterion (HS-006.AC01, route fixtures compile) could not run there; the other 18 tests of this file passed on that run. The fixtures under test/fixtures/haskell-web/ did not change, and compiling them does not depend on the scanner. Re-run `npm run test:language-tools` on a host with the packages and re-promote."
+      }
     },
     "language-aibom.test.js": {
       "name": "language-aibom.test.js",
@@ -162,8 +166,8 @@
     "nix-eval-isolation.test.js": {
       "name": "nix-eval-isolation.test.js",
       "file": "test/nix/nix-eval-isolation.test.js",
-      "tests": 7,
-      "pass": 7,
+      "tests": 8,
+      "pass": 8,
       "fail": 0,
       "skipped": 0,
       "cancelled": 0,
@@ -202,8 +206,8 @@
     "nix-sca-patches.test.js": {
       "name": "nix-sca-patches.test.js",
       "file": "test/nix/nix-sca-patches.test.js",
-      "tests": 11,
-      "pass": 11,
+      "tests": 12,
+      "pass": 12,
       "fail": 0,
       "skipped": 0,
       "cancelled": 0,

@@ -19,7 +19,8 @@ export const HASKELL_PRIVACY_SINKS = Object.freeze([
   // log: derived from the same table the sensitive-logging rule reads
   ...HS_LOG_SINKS.map((e) => ({
     kind: 'sink', id: `privacy-hs-log-${e.module}.${e.name}`.toLowerCase(), language: 'hs', framework: 'haskell', category: 'log',
-    match: { type: 'call', callee: `${e.module}.${e.name}` }, argIndex: e.argIndex,
+    // a variadic log call (printf) carries its data in every argument after the format
+    match: { type: 'call', callee: `${e.module}.${e.name}` }, argIndex: e.argFrom !== undefined ? 'all' : e.argIndex,
     vuln: { name: `Privacy Leak (${e.channel} log)`, severity: 'medium', cwe: 'CWE-359', remediation: 'Do not log regulated data (PII/PHI/PCI). Redact or hash the field before logging.' },
   })),
   // response

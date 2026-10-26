@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.186.1",
     "bundleSha256": "24e3e457c295e1d145cef330ac730645315f1d83fe83f7cb7a4865ad3ba910d1",
-    "commit": "1938288a7b96a18b4f8bba9fdbe0f4043ffc94d5",
+    "commit": "a988ab710db9ad1e23ddfb7f50583452d712c01e",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-26T12:39:32.031Z",
+    "generatedAt": "2026-10-26T17:09:27.257Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -973,7 +973,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 433,
+    "n": 427,
     "d": 570
   },
   "taintRecall": {
@@ -1124,7 +1124,7 @@
     },
     "languageSupport": {
       "source": "docs/language-support.json",
-      "generatedAt": "2026-10-05",
+      "generatedAt": "2026-10-26",
       "node": "v24.20.0",
       "tools": {
         "ghc": true,
@@ -1149,8 +1149,8 @@
         "No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.",
         "Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.",
         "Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.",
-        "Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.",
-        "The \"supported\" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 and unseen-v2 sets were used to change the engine and are development sets (shape-dev, shape-dev-2), not generalisation measures."
+        "A text parameter of an exported Haskell function is a source, and the finding says which kind. When the function returns a web-framework handler value (a Scotty action, a Yesod handler or widget, a Servant handler, a WAI application) the source is labelled request input, because the framework supplies the value from the request. For any other export it stays the weaker \"caller-controlled\" label (the callers of a library function are not known to be clients). A project record handed to an exported function is not a taint source at all (its fields are used by the data-flow lineage view only).",
+        "The \"supported\" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules) are reported beside it, with intervals over shapes (two near-identical cases per shape). From 2026-10-26 this split is a DEVELOPMENT set: its failures were read and the engine was changed to fix their causes, so the column is a regression result and says nothing about code shapes the engine was not fitted to. A generalisation claim needs a new unseen set that no engine change has been motivated by. The earlier unseen-v1 and unseen-v2 sets became the development sets shape-dev and shape-dev-2 the same way."
       ],
       "languages": {
         "haskell": {
@@ -1162,16 +1162,17 @@
           },
           "measuredOn": {
             "split": "holdout",
-            "measuredAt": "2026-10-05",
+            "measuredAt": "2026-10-26",
             "corpusVersion": "qa001-v2",
             "hashes": {
-              "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+              "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
               "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+              "shapeDev2Rollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
               "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
               "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
               "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
               "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-              "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
+              "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
             },
             "corpusTotals": {
               "security": {
@@ -1378,16 +1379,17 @@
           },
           "measuredOn": {
             "split": "holdout",
-            "measuredAt": "2026-10-05",
+            "measuredAt": "2026-10-26",
             "corpusVersion": "qa001-v2",
             "hashes": {
-              "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+              "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
               "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+              "shapeDev2Rollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
               "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
               "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
               "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
               "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-              "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
+              "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
             },
             "corpusTotals": {
               "security": {
@@ -2189,7 +2191,7 @@
   },
   "measurement": {
     "engineVersion": "0.186.1",
-    "commit": "1938288a7b96a18b4f8bba9fdbe0f4043ffc94d5",
+    "commit": "a988ab710db9ad1e23ddfb7f50583452d712c01e",
     "bundleSha256": "24e3e457c295e1d145cef330ac730645315f1d83fe83f7cb7a4865ad3ba910d1",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",

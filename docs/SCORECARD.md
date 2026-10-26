@@ -11,7 +11,7 @@ that produced them.
 | --- | --- |
 | Engine version | 0.186.1 |
 | Bundle SHA-256 | `24e3e457c295e1d145cef330ac730645315f1d83fe83f7cb7a4865ad3ba910d1` |
-| Commit | `1938288a7b96a18b4f8bba9fdbe0f4043ffc94d5` |
+| Commit | `a988ab710db9ad1e23ddfb7f50583452d712c01e` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -19,7 +19,7 @@ that produced them.
 | Corpus entries | 220 (220 scored) |
 | Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-10-26T12:39:32.031Z |
+| Generated (UTC) | 2026-10-26T17:09:27.257Z |
 
 ## What these numbers are, and what they are not
 
@@ -232,7 +232,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 433/570 (76.0%) |
+| 427/570 (74.9%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -283,7 +283,7 @@ this run.
 
 ## Haskell and Nix/NixOS support
 
-*Committed artifact:* `docs/language-support.json`, measured 2026-10-05 on node v24.20.0. It is read here, not re-measured by this command.
+*Committed artifact:* `docs/language-support.json`, measured 2026-10-26 on node v24.20.0. It is read here, not re-measured by this command.
 
 Every row is **supported** only from passing evidence of its own metric kind. Layers are scored independently (the taint layer
 is the injection families, the SAST layer is every other family) and a finding of a different family inside a case is counted
@@ -333,8 +333,8 @@ Tools present where this was measured: ghc=true, cabal=true, stack=absent, nix=a
 - No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.
 - Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.
 - Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.
-- Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.
-- The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 and unseen-v2 sets were used to change the engine and are development sets (shape-dev, shape-dev-2), not generalisation measures.
+- A text parameter of an exported Haskell function is a source, and the finding says which kind. When the function returns a web-framework handler value (a Scotty action, a Yesod handler or widget, a Servant handler, a WAI application) the source is labelled request input, because the framework supplies the value from the request. For any other export it stays the weaker "caller-controlled" label (the callers of a library function are not known to be clients). A project record handed to an exported function is not a taint source at all (its fields are used by the data-flow lineage view only).
+- The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules) are reported beside it, with intervals over shapes (two near-identical cases per shape). From 2026-10-26 this split is a DEVELOPMENT set: its failures were read and the engine was changed to fix their causes, so the column is a regression result and says nothing about code shapes the engine was not fitted to. A generalisation claim needs a new unseen set that no engine change has been motivated by. The earlier unseen-v1 and unseen-v2 sets became the development sets shape-dev and shape-dev-2 the same way.
 
 ## Independent run a72968195aa1: historical record (engine 0.172.0)
 

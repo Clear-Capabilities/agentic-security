@@ -4,7 +4,7 @@
 //
 //   node bench/language-support/measure.mjs --split holdout|validation|train|unseen|shape-dev|shape-dev-2 [--eco haskell|nix] [--suites detection,privacy,pairs,fixes,supply,parser] [--out file]
 //
-// Output carries confusion matrices per layer and per family, denominators, the unknown-case outcomes reported separately, and the
+// Output carries `splitRole` (frozen-holdout | development | generalisation), confusion matrices per layer and per family, denominators, the unknown-case outcomes reported separately, and the
 // hashes of the label files and the frozen holdout, so a result can show it was measured on unchanged data.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,6 +23,15 @@ const limit = Number(arg('limit', 0)) || 0;
 const suites = new Set(String(arg('suites', 'detection,privacy,pairs,fixes,supply,parser')).split(','));
 const out = { schema: 'agentic-security/language-support-measurement@2', split, measuredAt: new Date().toISOString().slice(0, 10), corpusVersion: readJson('manifest.json').version, ecosystems: {} };
 
+// What this split is FOR, recorded with its result so a reader of the stored measurement cannot take a development number for a generalisation one:
+// `frozen-holdout` (measured once per promotion), `development` (train, validation, shape-dev, shape-dev-2, and unseen-v3 since 2026-10-26, which was
+// read and used to change the engine), or `generalisation` (an unseen set no engine change has been motivated by). Read from the corpus manifest.
+{
+  const m = readJson('manifest.json');
+  const role = split === 'holdout' ? 'frozen-holdout' : split === 'unseen' ? ((m.unseen || {}).role || 'generalisation') : 'development';
+  out.splitRole = role;
+  if (split === 'unseen' && role === 'development') out.developmentSince = m.unseen.developmentSince || null;
+}
 for (const eco of ['haskell', 'nix']) {
   if (ecoArg && ecoArg !== eco) continue;
   const e = (out.ecosystems[eco] = {});

@@ -259,12 +259,16 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // accessors). None declares a `provenance`, so each resolves through NO_PROVENANCE_OVERRIDES and, like every such entry, is `candidate`.
   // 460 -> 570 and 284 -> 394 modeled: 55 Haskell sources added after 0.173 (Snap, Spock, Happstack, Yesod getRequest and friends, Scotty request, socket
   // reads, more file readers), each as a call form and a lineage twin; every one declares a request, file or network provenance. Re-measured against the live catalog.
-  assert.equal(SOURCES.length, 570);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 394);
+  // 570 -> 652 and 394 -> 476 modeled: the Haskell request-accessor additions made for the unseen-v3 development set (the Maybe/Either forms of the Scotty
+  // parameter reads, the raw body readers, Scotty cookies, the Yesod JSON-body and cookie readers, WAI's body parsers and conduit body stream), each as a call
+  // form and a lineage twin, plus four annotation sources: a text parameter of an exported function that returns a Scotty, Yesod, Servant or WAI handler value
+  // (`hs-src-handler-param-<framework>`, provenance url-param). Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 652);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 476);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 59);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 117);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(394 + 59 + 117, SOURCES.length);
+  assert.equal(476 + 59 + 117, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

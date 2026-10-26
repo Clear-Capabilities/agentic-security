@@ -10,6 +10,11 @@
 // libraries and call shapes, request-body reading with and without a limit, inline route authentication (including a check that comes too
 // late), nested process calls, firewall port ranges and option-expression forms (let, with, optionals, mkMerge), secrets in Nix.
 //
+// STATUS, 2026-10-26: THIS SET IS NOW A DEVELOPMENT SET. Its failures were read case by case and the engine was changed to fix their causes (see the
+// `unseen-v3-development` entry in provenance.json). It is still measured and reported by measure.mjs / promote.mjs, labelled development, and it is
+// a regression set from here on; it no longer measures generalisation, and any such claim needs a new unseen set (unseen-v4). The rules below are
+// the rules it was written and first measured under, kept as they were.
+//
 // RULES OF USE (what makes this set worth anything):
 //   * Nothing in scanner/src may be tuned against these shapes. They are measured ONCE per promotion (bench/language-support/measure.mjs
 //     --split unseen), the result is stored, and a miss is a finding about the engine, not an invitation to fit it. If a shape is used to

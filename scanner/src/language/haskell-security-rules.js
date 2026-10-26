@@ -52,8 +52,12 @@ const ANY_HASH_CALLS = new Set([...WEAK_HASH_CALLS, 'Crypto.Hash.hash', 'Crypto.
 const WEAK_CIPHER_MODULES = new Set(['Crypto.Cipher.DES', 'Crypto.Cipher.RC4', 'Crypto.Cipher.RC2', 'Crypto.Cipher.Blowfish']);
 const ECB_CALLS = new Set(['Crypto.Cipher.Types.ecbEncrypt', 'Crypto.Cipher.Types.ecbDecrypt']);
 const IV_CALLS = new Set(['Crypto.Cipher.Types.makeIV', 'Crypto.Cipher.ChaChaPoly1305.nonce12', 'Crypto.Cipher.ChaChaPoly1305.nonce8']);
-const RANDOM_CALLS = new Set(['System.Random.randomRIO', 'System.Random.randomIO', 'System.Random.newStdGen', 'System.Random.getStdGen', 'System.Random.mkStdGen', 'System.Random.randomR', 'System.Random.random', 'System.Random.randoms', 'System.Random.randomRs']);
-const BODY_CALLS = new Set(['Network.Wai.strictRequestBody', 'Network.Wai.lazyRequestBody', 'Web.Scotty.body', 'Web.Scotty.Trans.body']);
+const RANDOM_CALLS = new Set(['System.Random.randomRIO', 'System.Random.randomIO', 'System.Random.newStdGen', 'System.Random.getStdGen', 'System.Random.mkStdGen', 'System.Random.randomR', 'System.Random.random', 'System.Random.randoms', 'System.Random.randomRs', 'System.Random.getStdRandom', 'System.Random.uniformR', 'System.Random.uniform', 'System.Random.initStdGen']);
+const BODY_CALLS = new Set(['Network.Wai.strictRequestBody', 'Network.Wai.lazyRequestBody', 'Web.Scotty.body', 'Web.Scotty.Trans.body', 'Network.Wai.Conduit.sourceRequestBody']);
+const SOCKET_READS = new Set(['Network.Socket.ByteString.recv', 'Network.Socket.ByteString.recvFrom', 'Network.Socket.ByteString.Lazy.recv']);
+const SET_COOKIE_HEADER = new Set(['Network.HTTP.Types.Header.hSetCookie', 'Network.HTTP.Types.hSetCookie']);
+const REQUEST_LENGTH = new Set(['Network.Wai.requestBodyLength']);
+const RELATIONAL = new Set(['<', '<=', '>', '>=']);
 const PBKDF2_CALLS = new Set(['Crypto.KDF.PBKDF2.generate', 'Crypto.KDF.PBKDF2.fastPBKDF2_SHA1', 'Crypto.KDF.PBKDF2.fastPBKDF2_SHA256', 'Crypto.KDF.PBKDF2.fastPBKDF2_SHA512']);
 const STRONG_KDF = /^(?:Crypto\.KDF\.BCrypt\.|Crypto\.Argon2\.|Crypto\.Scrypt\.|Crypto\.KDF\.Scrypt\.|Crypto\.PasswordStore\.|Crypto\.BCrypt\.)/;
 const UNSAFE_CALLS = { 'System.IO.Unsafe.unsafePerformIO': 'unsafePerformIO', 'System.IO.Unsafe.unsafeInterleaveIO': 'unsafeInterleaveIO', 'System.IO.Unsafe.unsafeDupablePerformIO': 'unsafeDupablePerformIO', 'Unsafe.Coerce.unsafeCoerce': 'unsafeCoerce' };
@@ -69,11 +73,19 @@ const SECURITY_FN_SUBSTR = /(?:token|nonce|secret|otp|csrf|session|salt|apikey|r
 const SECURITY_WORDS = new Set(['pin', 'password', 'passwd', 'credential', 'credentials']);
 const SECURITY_FN = { test: (name) => SECURITY_FN_SUBSTR.test(name) || String(name).replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some((w) => SECURITY_WORDS.has(w)) };
 const INPUT_READS = new Set(['Prelude.getContents', 'System.IO.getContents', 'System.IO.hGetContents', 'Data.ByteString.getContents', 'Data.ByteString.hGetContents', 'Data.ByteString.Char8.getContents', 'Data.ByteString.Char8.hGetContents', 'Data.ByteString.Lazy.getContents', 'Data.ByteString.Lazy.hGetContents', 'Data.ByteString.Lazy.Char8.getContents', 'Data.ByteString.Lazy.Char8.hGetContents', 'Data.Text.IO.getContents', 'Data.Text.IO.hGetContents', 'Data.Text.Lazy.IO.getContents', 'Data.Text.Lazy.IO.hGetContents']);
-const BOUNDING = /(?:^|\.)(?:take|hGetSome|hGet|splitAt|limit|limitedRead)$/;
+const BOUNDING = /(?:^|\.)(?:take|takeE|isolate|hGetSome|hGet|splitAt|limit|limitedRead)$/;
 // `replicateM n getLine` reads n lines: the count is an allocation (and an input loop) sized by whoever supplied n.
 const ALLOCATORS = new Set(['replicate', 'Prelude.replicate', 'Data.List.replicate', 'Data.ByteString.replicate', 'Data.ByteString.Char8.replicate', 'Data.ByteString.Lazy.replicate', 'Data.Text.replicate', 'Data.Vector.replicate', 'Control.Monad.replicateM', 'Control.Monad.replicateM_', 'Data.Vector.replicateM', 'Data.List.genericReplicate']);
 const CLAMPS = /^(?:(?:Prelude|Data\.Ord)\.)?(?:min|clamp)$/;
-const PARTIALS = new Set(['read', 'Prelude.read', 'head', 'Prelude.head', 'Data.List.head', 'tail', 'Prelude.tail', 'Data.List.tail', 'last', 'Prelude.last', 'Data.List.last', 'init', 'Prelude.init', 'Data.List.init', 'Data.Maybe.fromJust', 'fromJust']);
+const PARTIAL_NAMES = ['read', 'head', 'tail', 'last', 'init', 'maximum', 'minimum', 'foldr1', 'foldl1', 'maximumBy', 'minimumBy', 'toEnum', 'succ', 'pred', 'fromJust', 'cycle'];
+const PARTIAL_MODULES = ['Prelude', 'Data.List', 'Data.Foldable', 'Data.Maybe'];
+const PARTIALS = new Set([...PARTIAL_NAMES, ...PARTIAL_NAMES.flatMap((n) => PARTIAL_MODULES.map((m) => `${m}.${n}`)),
+  ...['head', 'last', 'tail', 'init', 'maximum', 'minimum', 'index'].map((n) => `Data.Text.${n}`),
+  // the Map/Set lookups and extremum selectors that raise on a missing key or an empty container
+  ...['Data.Map', 'Data.Map.Strict', 'Data.HashMap.Strict', 'Data.IntMap', 'Data.IntMap.Strict'].map((m) => `${m}.!`),
+  ...['Data.Map', 'Data.Map.Strict'].flatMap((m) => ['findMin', 'findMax', 'deleteFindMin', 'elemAt'].map((n) => `${m}.${n}`)), 'Data.Set.findMin', 'Data.Set.findMax', 'Data.Set.elemAt']);
+// A call that tests whether a container is empty, a key is present or a value is available: the partial call beside it is conditional on that test.
+const EMPTINESS_CHECK = /(?:^|\.)(?:null|notNull|isEmpty|length|size|isJust|isNothing|member|notMember|lookup|elem|notElem|nonEmpty|<match>)$/;
 const SESSION_COOKIE = /(?:sess|sid|token|tok|auth|jwt|csrf|login|remember|secret)/i;
 
 // What makes a bound variable security-shaped, and what makes a value sensitive for logging.
@@ -89,6 +101,7 @@ const kids = (e) => {
   for (const k of ['args', 'elements', 'branches', 'parts']) if (Array.isArray(e[k])) out.push(...e[k]);
   if (Array.isArray(e.props)) for (const p of e.props) if (p && p.value) out.push(p.value);
   if (e.hs && e.hs.selector && typeof e.hs.selector === 'object') out.push(e.hs.selector);   // `lookup key t`: the key decides the outcome
+  if (e.hs && e.hs.inner && typeof e.hs.inner === 'object') out.push(e.hs.inner);              // `read s :: Int`: a number to the taint engine, still an expression here
   return out;
 };
 
@@ -116,6 +129,15 @@ const isLiteralLike = (e, depth = 0) => {
 };
 
 function fnNodes(fn) { return Object.values(fn.cfg.nodes); }
+
+// The text a concatenation spells out, in order, skipping the parts that are not literals (`"session_id=" <> sid <> "; Path=/"` -> `session_id=; Path=/`).
+function literalTextOf(e, depth = 0) {
+  if (!e || depth > 12) return '';
+  if (e.kind === 'literal' && typeof e.value === 'string') return e.value;
+  if (e.kind === 'binary' && e.hs && e.hs.concat) return literalTextOf(e.left, depth + 1) + literalTextOf(e.right, depth + 1);
+  if (e.kind === 'call' && /(?:^|\.)(?:pack|fromString|encodeUtf8|fromStrict|toStrict)$/.test(e.callee || '') && e.args && e.args.length === 1) return literalTextOf(e.args[0], depth + 1);
+  return '';
+}
 
 function snippetOf(text, line) {
   if (!text || !Number.isInteger(line) || line < 1) return '';
@@ -177,7 +199,7 @@ export function analyzeHaskellRules(files, opts = {}) {
 
       const fnBase = fn.name.replace(/^.*\./, '');
       // text-typed parameters of an exported function, and every local value derived from them
-      const derivedText = new Set((fn.hs && fn.hs.textParams) || []);
+      const derivedText = new Set([...((fn.hs && fn.hs.textParams) || []), ...((fn.hs && fn.hs.inputParams) || [])]);
       if (derivedText.size) {
         for (let round = 0; round < 8; round++) {
           let grew = false;
@@ -189,6 +211,31 @@ export function analyzeHaskellRules(files, opts = {}) {
       const callsIn = (e) => { const out = []; for (const x of walk(e)) if (x.kind === 'call' && typeof x.callee === 'string') out.push(x); return out; };
       const fnReturns = fnNodes(fn).filter((n) => n.kind === 'return' && n.value);
       const bounded = fnNodes(fn).some((n) => [n.value, n.source, ...(n.args || [])].some((e) => e && callsIn(e).some((c) => BOUNDING.test(c.callee))));
+
+      // Values a condition in this function tests for emptiness or presence (`null ws`, `M.member k t`, `xs /= []`, a pattern match on it) and,
+      // transitively, the values they were built from: a partial call on one of them is the other branch of that test.
+      const assignSources = new Map();
+      for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source) assignSources.set(n.target, [...(assignSources.get(n.target) || []), ...names(n.source)]);
+      const withOrigins = (seed) => { const out = new Set(seed); const queue = [...seed]; while (queue.length) { const v = queue.pop(); for (const o of assignSources.get(v) || []) if (!out.has(o)) { out.add(o); queue.push(o); } } return out; };
+      const testedVars = new Set();
+      for (const n of fnNodes(fn)) {
+        if (n.kind !== 'if' || !n.cond) continue;
+        for (const x of walk(n.cond)) {
+          if (x.kind === 'call' && typeof x.callee === 'string' && EMPTINESS_CHECK.test(x.callee)) for (const nm of names(x)) testedVars.add(nm);
+          if (x.kind === 'binary' && ['==', '/=', '!='].includes(x.op) && [x.left, x.right].some((side) => side && side.kind === 'array' && side.elements.length === 0)) for (const nm of names(x)) testedVars.add(nm);
+        }
+      }
+      const testedAll = withOrigins(testedVars);
+      const isTested = (args) => { const mine = withOrigins([...args.flatMap((a) => [...names(a)])]); for (const v of mine) if (testedAll.has(v) && derivedText.has(v)) return true; return false; };
+
+      // A relational test against a number or a length (`total >= limit`, `size <= 65536`) in this function: the evidence that a read or a body is capped.
+      const hasSizeTest = fnNodes(fn).some((n) => n.kind === 'if' && n.cond && [...walk(n.cond)].some((x) => x.kind === 'binary' && RELATIONAL.has(x.op)));
+      const readsRequestLength = fnNodes(fn).some((n) => [n.value, n.source, n.cond, ...(n.args || [])].some((ex) => ex && [...walk(ex)].some((x) => (x.kind === 'ident' && REQUEST_LENGTH.has(x.name)) || (x.kind === 'call' && REQUEST_LENGTH.has(x.callee)))));
+      const sizeChecked = hasSizeTest && readsRequestLength;
+      // One predictable-random finding per function: a clock reading that seeds a generator in a token-shaped function is a single flaw,
+      // however many of its steps (the clock, the seed, the generator) the rule can see.
+      let randomEmitted = false;
+      const emitRandom = (line, extra) => { if (randomEmitted) return; randomEmitted = true; emit('hs-predictable-random', file, line, extra); };
 
       const seeds = (e) => { for (const n of names(e)) if (SENSITIVE.test(n.replace(/^\./, ''))) return n.replace(/^\./, ''); return null; };
 
@@ -205,12 +252,32 @@ export function analyzeHaskellRules(files, opts = {}) {
             if (e.kind === 'ident') {
               if (e.name === 'Crypto.Cipher.Types.nullIV') emit('hs-static-iv', file, node.line, { vuln: 'Static IV (nullIV)', detail: 'nullIV is a constant all-zero IV' });
               // a clock reading used as the value of a security-shaped function (a "nonce" that is the time)
-              if (TIME_SOURCES.has(e.name) && SECURITY_FN.test(fnBase)) emit('hs-predictable-random', file, node.line, { vuln: 'Clock value used as a security value', detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
+              if (TIME_SOURCES.has(e.name) && SECURITY_FN.test(fnBase)) emitRandom(node.line, { vuln: 'Clock value used as a security value', detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
+              // a generator named as the whole value of a security-shaped action (`newCsrfToken = randomIO`): no call is written, the name is the call
+              if (RANDOM_CALLS.has(e.name) && SECURITY_FN.test(fnBase) && !(e.hs && e.hs.functionRef)) emitRandom(node.line, { detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
               if (INPUT_READS.has(e.name) && !bounded) emit('hs-unbounded-input-read', file, node.line, { detail: `${e.name} reads everything`, confidence: 0.6 });
               continue;
             }
+            // a Set-Cookie header written by hand: `(hSetCookie, "session_id=" <> sid <> "; Path=/")`
+            if (e.kind === 'array' && e.hs && e.hs.tuple && e.elements.length === 2) {
+              const [k, v] = e.elements;
+              const isSetCookie = k && ((k.kind === 'ident' && SET_COOKIE_HEADER.has(k.name)) || (k.kind === 'literal' && /^set-cookie$/i.test(String(k.value))) || (k.kind === 'call' && /(?:^|\.)(?:pack|fromString)$/.test(k.callee || '') && k.args && k.args[0] && k.args[0].kind === 'literal' && /^set-cookie$/i.test(String(k.args[0].value))));
+              if (isSetCookie && v) {
+                const text = literalTextOf(v);
+                const nm = /^\s*([^=;\s]+)\s*=/.exec(text);
+                const sessionLike = !nm || SESSION_COOKIE.test(nm[1]);
+                const secure = /;\s*Secure\b/i.test(text); const httpOnly = /;\s*HttpOnly\b/i.test(text);
+                // an attribute string that is not written here (a rendered cookie value) cannot be judged: only a cookie whose text is visible is
+                if (text && sessionLike && (!secure || !httpOnly)) emit('hs-insecure-cookie', file, e.line || node.line, { detail: `${!httpOnly ? 'HttpOnly missing' : ''}${!httpOnly && !secure ? ', ' : ''}${!secure ? 'Secure missing' : ''}`, evidence: { httpOnly, secure, cookie: nm ? nm[1] : null } });
+              }
+            }
             if (e.kind === 'object' && e.hs && e.hs.update && Array.isArray(e.props)) {
               const prop = (k) => e.props.find((p) => p && p.key === k);
+              // servant-auth: `cookieIsSecure = NotSecure` sends the session cookie over plain HTTP too
+              const secureSetting = prop('cookieIsSecure');
+              if (secureSetting && secureSetting.value && /(?:^|\.)NotSecure$/.test(String(secureSetting.value.value || secureSetting.value.name || '')) && (fir.imports || []).some((im) => im.module === 'Servant.Auth.Server')) {
+                emit('hs-insecure-cookie', file, e.line || node.line, { vuln: 'Session cookie sent without the Secure attribute', detail: 'cookieIsSecure = NotSecure', evidence: { setting: 'cookieIsSecure', value: 'NotSecure' } });
+              }
               if (prop('setCookieName')) {
                 const nm = prop('setCookieName').value;
                 const sessionLike = !nm || nm.kind !== 'literal' || SESSION_COOKIE.test(String(nm.value));
@@ -233,7 +300,7 @@ export function analyzeHaskellRules(files, opts = {}) {
               if (e.hs.con === 'VerifyNone' && e.kind === 'literal' && importsFrom(['OpenSSL.Session'])) emit('hs-tls-validation-disabled', file, e.line || node.line, { detail: 'OpenSSL verification mode VerifyNone', evidence: { mode: 'VerifyNone' } });
             }
             // `xs !! n` raises on a short list: a partial function, written as an operator, applied to caller-supplied text
-            if (e.kind === 'binary' && e.op === '!!' && e.left && mentionsText(e.left)) {
+            if (e.kind === 'binary' && e.op === '!!' && e.left && mentionsText(e.left) && !isTested([e.left])) {
               emit('hs-partial-function-on-input', file, e.line || node.line, { detail: '!! on a caller-supplied list', evidence: { partial: '!!' } });
               continue;
             }
@@ -242,6 +309,15 @@ export function analyzeHaskellRules(files, opts = {}) {
             const line = e.line || node.line;
             const args = e.args || [];
 
+            // scotty-cookie's helpers build a cookie that carries neither Secure nor HttpOnly
+            if ((c === 'Web.Scotty.Cookie.setSimpleCookie' || c === 'Web.Scotty.Cookie.makeSimpleCookie') && args[0]) {
+              const nm = args[0];
+              if (nm.kind !== 'literal' || SESSION_COOKIE.test(String(nm.value))) emit('hs-insecure-cookie', file, line, { detail: 'HttpOnly missing, Secure missing', evidence: { httpOnly: false, secure: false, helper: c } });
+            }
+            // a socket read repeated by a recursive loop, with no size test anywhere in it
+            if (SOCKET_READS.has(c) && !hasSizeTest && !bounded && fn.calls.some((x) => x.callee === fn.name && x.hs && x.hs.target === fn.qid)) {
+              emit('hs-unbounded-input-read', file, line, { detail: `${c} is repeated by a loop that never compares the amount read with a limit`, confidence: 0.6, evidence: { read: c, loop: fnBase } });
+            }
             // TLS certificate validation switched off
             // a signing/encryption secret that is a constant in the source
             if (SECRET_KEY_CALLS.has(c) && args[0] && isLiteralLike(args[0]) && !(args[0].kind === 'literal' && String(args[0].value).length < 8)) emit('hs-hardcoded-secret', file, line, { detail: `${c} given a constant`, confidence: 0.85, evidence: { call: c } });
@@ -264,23 +340,23 @@ export function analyzeHaskellRules(files, opts = {}) {
             if (IV_CALLS.has(c) && args[0] && isLiteralLike(args[0])) emit('hs-static-iv', file, line, { detail: `${c} of a constant value` });
             // randomness bound to a security-shaped name
             if (RANDOM_CALLS.has(c) && node.kind === 'assign' && SECURITY_VAR.test(node.target || '')) {
-              emit('hs-predictable-random', file, line, { detail: `${c} result bound to \`${node.target}\``, evidence: { binding: node.target } });
+              emitRandom(line, { detail: `${c} result bound to \`${node.target}\``, evidence: { binding: node.target } });
             }
             if (RANDOM_CALLS.has(c) && SECURITY_FN.test(fnBase) && node.kind !== 'assign') {
-              emit('hs-predictable-random', file, line, { detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
+              emitRandom(line, { detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
             }
-            if (TIME_SOURCES.has(c) && SECURITY_FN.test(fnBase)) emit('hs-predictable-random', file, line, { vuln: 'Clock value used as a security value', detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
+            if (TIME_SOURCES.has(c) && SECURITY_FN.test(fnBase)) emitRandom(line, { vuln: 'Clock value used as a security value', detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
             if (INPUT_READS.has(c) && !bounded) emit('hs-unbounded-input-read', file, line, { detail: `${c} reads everything`, confidence: 0.6 });
             // an allocation whose size is parsed caller text and is not clamped
             if (ALLOCATORS.has(c) && args[0] && mentionsText(args[0]) && callsIn(args[0]).some((x) => /(?:^|\.)(?:read|readMaybe|readEither)$/.test(x.callee)) && !callsIn(args[0]).some((x) => CLAMPS.test(x.callee))) {
               emit('hs-unbounded-allocation', file, line, { detail: `${c} sized by parsed caller text`, evidence: { allocator: c } });
             }
             // a partial function applied to caller text: one malformed value raises an uncaught exception
-            if (PARTIALS.has(c) && args.some((a) => mentionsText(a))) emit('hs-partial-function-on-input', file, line, { detail: `${c} on caller-supplied text`, evidence: { partial: c } });
+            if (PARTIALS.has(c) && args.some((a) => mentionsText(a)) && !isTested(args)) emit('hs-partial-function-on-input', file, line, { detail: `${c} on caller-supplied input`, evidence: { partial: c } });
             // a session/token cookie assembled without HttpOnly or Secure
             if (c === 'Web.Cookie.defaultSetCookie') { /* handled on the record update below */ }
             // unbounded body
-            if (BODY_CALLS.has(c)) {
+            if (BODY_CALLS.has(c) && !sizeChecked && !(c === 'Network.Wai.Conduit.sourceRequestBody' && bounded)) {
               if (requestLimit) {
                 controls.push({ kind: 'request-size-limit', file: requestLimit.file, line: requestLimit.line, appliesTo: `${file}:${line}`, verified: false });
                 emit('hs-unbounded-request-body', file, line, { severity: 'low', confidence: 0.4, detail: c, uncertainty: [{ kind: 'unresolved-import', detail: `a request-size-limit middleware exists (${requestLimit.file}:${requestLimit.line}); that it wraps this handler is not verified` }] });
@@ -326,13 +402,17 @@ export function analyzeHaskellRules(files, opts = {}) {
             if (e.kind !== 'call' || typeof e.callee !== 'string') continue;
             const sink = HS_LOG_SINKS.find((s) => `${s.module}.${s.name}` === e.callee);
             if (!sink) continue;
-            const arg = (e.args || [])[sink.argIndex];
-            if (!arg) continue;
+            // a variadic log call (printf) interpolates every argument after the format into the message: each is judged on its own, so one
+            // redacted value never clears a credential passed beside it
+            const argList = sink.argFrom !== undefined ? (e.args || []).slice(sink.argFrom) : [(e.args || [])[sink.argIndex]];
+            if (!argList.length || argList.every((a) => !a)) continue;
             // a file append is a log only when its path says so (a log, audit or trace file)
             if (sink.channel === 'file') { const p = (e.args || [])[0]; if (!(p && p.kind === 'literal' && /(?:log|audit|trace|journal)/i.test(String(p.value)))) continue; }
-            let hit = null;
-            // a labelled value: a literal that names a credential ("token=", "password: ") followed by a non-literal operand
-            if (!hit) {
+            const isRedacted = (a) => { for (const x of walk(a)) if (x.kind === 'call' && typeof x.callee === 'string' && (REDACTOR.test(x.callee) || STRONG_KDF.test(x.callee) || x.callee === 'const')) return true; return false; };
+            for (const arg of argList) {
+              if (!arg) continue;
+              let hit = null;
+              // a labelled value: a literal that names a credential ("token=", "password: ") followed by a non-literal operand
               for (const x of walk(arg)) {
                 if (x.kind === 'binary' && x.hs && x.hs.concat && x.left && x.left.kind === 'literal' && typeof x.left.value === 'string' && /^\s*[\w .-]*(?:pass(?:word|wd|phrase)?|pwd|secret|token|api_?key|authorization|bearer|private_?key|session_?id)[\w .-]*\s*[=:]\s*$/i.test(x.left.value) && x.right && x.right.kind !== 'literal') {
                   const lab = x.left.value.replace(/[=:\s]+$/, '').trim();
@@ -340,23 +420,21 @@ export function analyzeHaskellRules(files, opts = {}) {
                   break;
                 }
               }
-            }
-            for (const n of names(arg)) {
-              if (hit) break;
-              const bare = n.replace(/^\./, '');
-              if (sensitive.has(n)) hit = { ...sensitive.get(n), var: n };
-              else if (SENSITIVE.test(bare) && !/^[A-Z][A-Za-z0-9_.]*\./.test(n)) hit = { name: bare, low: LOW_ENTROPY.test(bare), hashed: false, var: n };
-              if (hit) break;
-            }
-            // redaction applied inline at the call site
-            let inlineCleared = false;
-            for (const x of walk(arg)) if (x.kind === 'call' && typeof x.callee === 'string' && (REDACTOR.test(x.callee) || STRONG_KDF.test(x.callee) || x.callee === 'const')) inlineCleared = true;
-            if (hit && !inlineCleared) {
-              emit('hs-sensitive-logging', file, e.line || node.line, {
-                severity: hit.hashed ? 'low' : 'high',
-                detail: hit.hashed ? `a fast hash of low-entropy \`${hit.name}\` reaches ${e.callee}` : `\`${hit.name}\` reaches ${e.callee}`,
-                evidence: { value: hit.name, via: hit.var, channel: sink.channel, hashed: hit.hashed },
-              });
+              for (const n of names(arg)) {
+                if (hit) break;
+                const bare = n.replace(/^\./, '');
+                if (sensitive.has(n)) hit = { ...sensitive.get(n), var: n };
+                else if (SENSITIVE.test(bare) && !/^[A-Z][A-Za-z0-9_.]*\./.test(n)) hit = { name: bare, low: LOW_ENTROPY.test(bare), hashed: false, var: n };
+                if (hit) break;
+              }
+              if (hit && !isRedacted(arg)) {
+                emit('hs-sensitive-logging', file, e.line || node.line, {
+                  severity: hit.hashed ? 'low' : 'high',
+                  detail: hit.hashed ? `a fast hash of low-entropy \`${hit.name}\` reaches ${e.callee}` : `\`${hit.name}\` reaches ${e.callee}`,
+                  evidence: { value: hit.name, via: hit.var, channel: sink.channel, hashed: hit.hashed },
+                });
+                break;
+              }
             }
           }
         }

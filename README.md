@@ -377,7 +377,7 @@ All 57 requirements of the Haskell and Nix/NixOS programme are verified by the l
 | nix-eval | blocked | nix is not available on the measuring host: a successful controlled evaluation needs a real nix binary (NIX-01 |
 | nixos-host | blocked | nixos is not available on the measuring host: the complete scanner must run on a NixOS host (NIX-012) |
 
-Measured 2026-10-05 on the synthetic, template-generated corpus described in [Haskell and Nix support](docs/language-support.md); the corpus is synthetic and template-generated (qa-001).
+Measured 2026-10-26 on the synthetic, template-generated corpus described in [Haskell and Nix support](docs/language-support.md); the corpus is synthetic and template-generated (qa-001).
 <!-- generated:support-summary:end -->
 
 Honest limits: the corpus behind these numbers is synthetic and template-generated, so a score of 100% describes robustness

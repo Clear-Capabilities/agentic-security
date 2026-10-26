@@ -14,6 +14,8 @@
 export class SyntaxBudgetError extends Error {}
 
 const KW = new Set(['case', 'class', 'data', 'default', 'deriving', 'do', 'else', 'foreign', 'if', 'import', 'in', 'infix', 'infixl', 'infixr', 'instance', 'let', 'module', 'newtype', 'of', 'then', 'type', 'where']);
+// An annotation naming a plain number or a boolean, alone or inside Maybe / IO / an action monad: a value of that type cannot carry caller text.
+const NUMERIC_TYPE = /^\(?\s*(?:(?:Maybe|IO|ActionM|Handler|Either\s+String)\s+)?\(?\s*(?:Int|Integer|Int(?:8|16|32|64)|Word|Word(?:8|16|32|64)|Double|Float|Natural|Bool|Scientific)\s*\)?\s*\)?$/;
 const RESERVED_OPS = new Set(['=', '|', '->', '<-', '::', '=>', '\\', '@', '~', '..']);
 const SYM = new Set('!#$%&*+./<=>?@\\^|-~:'.split(''));
 const OPEN = { '(': ')', '[': ']', '{': '}' };
@@ -401,7 +403,14 @@ export function parseSyntax(src, opts = {}) {
     if (++depth > maxDepth) { depth--; throw new SyntaxBudgetError('maxDepth'); }
     try {
       let e = expr(0);
-      while (isRop(peek(), '::')) skipType();
+      while (isRop(peek(), '::')) {
+        const from = pos + 1;
+        skipType();
+        // `read s :: Int`, `readMaybe s :: Maybe Int`: the annotation is kept as a `typed` node when it names a plain number or boolean, which the IR
+        // lowers to a constant (no caller text survives such a type). Every other annotation is dropped as before.
+        const typeText = T.slice(from, pos).map((x) => x.v).join(' ');
+        if (NUMERIC_TYPE.test(typeText)) e = { t: 'typed', e, type: typeText, line: e && e.line };
+      }
       return e;
     } finally { depth--; }
   }
