@@ -7,7 +7,7 @@
 | Population | Role | Entries | May support an accuracy claim |
 |---|---|---|---|
 | bench/independent | independent (third-party advisory labels over upstream code) | 1004 in 424 repositories | yes, once a clean-commit run and a sealed split exist |
-| bench/cve-replay | regression net (written here) | 220 | **no** |
+| bench/cve-replay | regression net (written here) | 228 | **no** |
 | bench/sard | regenerated public suites | 1 pinned sources | only a held-out test split |
 
 ## Independent population: the nine required facts
@@ -37,7 +37,7 @@ Reconstructable means the manifest names a repository, both commits and an advis
 
 ## Regression net
 
-220 entries; by declared source: synthetic-shape-of-disclosed-cve 212, family-shape-known-clean-win 2, synthetic-example 1, synthetic-shape-of-owasp-api5-bfla 1, synthetic-shape-of-owasp-llm01-system-prompt-injection 1, synthetic-shape-of-mcp-supply-chain-bootstrap 1, execution-proven 1, synthetic-shape-of-common-open-ssh-misconfig 1. Fixtures written in this repository and admitted once they score. A regression net: its detection rate is at the ceiling by construction, so it can never support a precision or recall claim.
+228 entries; by declared source: synthetic-shape-of-disclosed-cve 212, family-shape-known-clean-win 2, synthetic-example 1, synthetic-shape-of-owasp-api5-bfla 1, synthetic-shape-of-owasp-llm01-system-prompt-injection 1, synthetic-shape-of-mcp-supply-chain-bootstrap 1, execution-proven 1, synthetic-shape-of-common-open-ssh-misconfig 1, synthetic-shape (self-authored; not derived from a published advisory) 8. Fixtures written in this repository and admitted once they score. A regression net: its detection rate is at the ceiling by construction, so it can never support a precision or recall claim.
 
 ## Regenerated suites
 

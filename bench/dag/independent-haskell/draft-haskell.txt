@@ -1,0 +1,60 @@
+0|fp|Temp path is the configured tmp dir plus a hash of a random number and a fixed suffix; no external input reaches it.
+1|fp|Lazy read of the program's own cache file, forced and closed immediately; the file is written by the same program, not attacker input.
+2|fp|Reads the output of a subprocess the site author configured, forced by deepseq; unbounded by design in a build tool and not attacker-fed.
+3|fp|Reads the output of a developer-configured filter subprocess in a static site generator; no untrusted size source.
+4|fp|Reads stderr of a developer-configured filter subprocess for error reporting; no untrusted input.
+5|fp|Idiomatic NOINLINE read-once of the program name; constant for the process, no attacker influence.
+6|fp|A TODO about backslash escapes in a CSS minifier that processes the site author's own stylesheets; not security-sensitive logic.
+7|fp|Deprecated helper that reads a template path passed by the site author's own build code; the path is not request-controlled.
+8|fp|Looks up a sidecar file derived from the journal path the CLI user named; the user already controls which files the tool reads.
+9|fp|NOINLINE top-level getProgName; constant for the process, idiomatic and harmless.
+10|fp|Debug-only logging helper that appends to a log file named after the program; the unsafePerformIO is intentional and takes no outside input.
+11|fp|NOINLINE global IORef initialisation, the standard idiom; not a safety boundary violation.
+12|fp|Debug timing helper gated on the debug level; unsafePerformIO is documented and takes no outside input.
+13|fp|The index is bounds-checked (i >= 0 and i < length forms) in the same expression before the (!!), so the partial call cannot fail.
+14|fp|NOINLINE global IORef holding the warning handler, the standard idiom.
+15|fp|Path is whatever file the CLI user asked the tool to read; there is no privilege boundary.
+16|fp|NOINLINE read-once of the program arguments; constant for the process.
+17|fp|Reads terminal colour support once via unsafePerformIO for low-level debug code; no attacker influence.
+18|fp|Same terminal colour detection for stderr; no attacker influence.
+19|fp|Reads the COLORTERM environment variable once; value only picks a colour mode.
+20|fp|last and init are guarded by "not $ null cs" in the same guard, so they cannot fail.
+21|fp|last and init are guarded by "not $ null cs" in the same guard, so they cannot fail.
+22|ambiguous|last on a possibly empty string would crash; it is an exported helper with no caller in the repository, so reachability and impact are unclear.
+23|fp|The preceding isSingleQuoted/isDoubleQuoted checks require at least two characters, so tailErr and init cannot fail (the line says so).
+24|fp|The pattern s@(_:_:_) guarantees at least two characters, so headErr and last cannot fail.
+25|fp|The pattern s@(_:_:_) guarantees at least two characters, so headErr and last cannot fail.
+26|fp|The redirect target is a typed Yesod route of the same application with a rebuilt query list, not a user-supplied URL.
+27|fp|This is test code that sets a UI preference cookie (showcontrols); it is not a session cookie and not production behaviour.
+28|fp|Test code that sets a UI preference cookie for another port; not a session cookie.
+29|fp|Stores a scroll offset in sessionStorage, which is not sensitive data.
+30|fp|A same-origin liveness ping to /_ping every 30 seconds in the page's own script; a missing timeout here is not a denial-of-service vector.
+31|fp|The XXX is about catching a narrower exception type when reading an environment variable; not security-sensitive.
+32|fp|NOINLINE global MVar cache, the standard idiom.
+33|fp|NOINLINE global MVar cache, the standard idiom.
+34|fp|Config file path comes from the CLI invocation or the user's own search directories; there is no privilege boundary.
+35|fp|Same: the CLI user chooses the config file to read.
+36|tp|The topic, from the user's command-line argument, is spliced unquoted inside single quotes in a shell string passed to callCommand while the file path is quoted; a quote in the topic breaks out. Practical impact is limited because the invoker is the local user.
+37|fp|Writes back to the journal file the CLI user named, after making a backup; no privilege boundary.
+38|fp|Copies the user-named file to a numbered backup name in the same directory; no privilege boundary.
+39|fp|A TODO in a comment about building the version string; not security logic.
+40|fp|A TODO in a comment about building the version string; not security logic.
+41|fp|An XXX comment about git dirty-state in the version string; not security logic.
+42|fp|A TODO about where to store the raw query string for an observability message; not security logic.
+43|fp|A TODO about duplicated query observation calls; not security logic.
+44|fp|The URL is built from the server's own admin host and port configuration for a health-check subcommand; no request input.
+45|fp|The request is the health check built from the server's own admin host and port configuration; no request input.
+46|fp|A doc-test example with a fake connection string and placeholder credentials inside a comment, not a real secret.
+47|fp|A TODO about RFC conformance of the media type parser used for content negotiation; the marker is accurate but this is not security logic.
+48|ambiguous|USER root in a build-only image for cross-compiling release binaries; the claim is literally true but the image is not a deployed service.
+49|ambiguous|USER root in a build-only image for cross-compiling release binaries; the claim is literally true but not a deployed service.
+50|ambiguous|Reported line is blank; the same build-only image sets USER root two lines later, so the claim is true but of doubtful security meaning.
+51|ambiguous|USER root in a build-only image; true as stated, not a deployed service.
+52|ambiguous|Reported line is blank; the build-only image sets USER root on line 9, so the claim is true but of doubtful security meaning.
+53|ambiguous|USER root in a build-only QEMU image; true as stated, not a deployed service.
+54|ambiguous|USER root in a build-only image; true as stated, not a deployed service.
+55|ambiguous|Reported line is blank; the build-only image sets USER root on line 13, so the claim is true but of doubtful security meaning.
+56|ambiguous|Reported line is blank; the build-only image sets USER root on line 6, so the claim is true but of doubtful security meaning.
+57|ambiguous|USER root in a build-only image; true as stated, not a deployed service.
+58|fp|Reads a file list from stdin in a CLI whose user supplies their own input; memory use is not a security boundary here.
+59|fp|Reads the script file the CLI user asked to check, as the tool's purpose requires; no untrusted size source.

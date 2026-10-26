@@ -3,7 +3,7 @@
 // callee the Haskell IR produces (`System.Process.callCommand`), never a bare name, so a user's own
 // function with the same name resolves to its own module and cannot match.
 
-import { HS_SOURCES, HS_SINKS, HS_SANITIZERS } from '../language/haskell-models.js';
+import { HS_SOURCES, HS_SINKS, HS_SANITIZERS, HS_HANDLER_PARAM_SOURCES } from '../language/haskell-models.js';
 
 const idOf = (kind, e, extra = '') => `hs-${kind}-${e.module}.${e.name}${extra}`.replace(/[^A-Za-z0-9.\-_]/g, '-').toLowerCase();
 
@@ -30,6 +30,12 @@ export const HASKELL_CATALOG = Object.freeze([
   // LINEAGE form of a record parameter of an exported function (see lineage/haskell-view.js)
   { kind: 'source', id: 'hs-lin-src-record-parameter', language: 'hs', framework: 'haskell', match: { type: 'member', object: '$hs', prop: 'hs:record-parameter' }, label: 'record parameter of an exported function (caller-supplied customer data)' },
   { kind: 'source', id: 'hs-src-caller-controlled-param', language: 'hs', framework: 'haskell', match: { type: 'annotation', name: 'hs:caller-controlled' }, label: 'text parameter of an exported function (caller-controlled)' },
+  // A text parameter of an exported function that returns a framework handler value: request input the framework passed in (see
+  // language/haskell-models.js `HS_HANDLER_PARAM_SOURCES`). A plain library export keeps the weaker caller-controlled source above.
+  ...Object.values(HS_HANDLER_PARAM_SOURCES).map((d) => ({
+    kind: 'source', id: `hs-src-handler-param-${d.framework}`, language: 'hs', framework: d.framework,
+    match: { type: 'annotation', name: d.decorator }, label: d.label, provenance: d.provenance,
+  })),
   ...HS_SANITIZERS.map((e) => ({
     kind: 'sanitizer', id: idOf('san', e), language: 'hs',
     match: { type: 'call', callee: `${e.module}.${e.name}` }, effect: 'strip', appliesTo: e.appliesTo, note: e.note,

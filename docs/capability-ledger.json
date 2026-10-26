@@ -362,7 +362,8 @@
         "docs/guides/nix-nixos.md",
         "docs/guides/nixos-install.md",
         "docs/quickstart/5-minute-demo.md",
-        "docs/quickstart/15-minute-quickstart.md"
+        "docs/quickstart/15-minute-quickstart.md",
+        "docs/language-parity-haskell.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -416,7 +417,8 @@
         "docs/guides/nix-nixos.md",
         "docs/guides/nixos-install.md",
         "docs/quickstart/5-minute-demo.md",
-        "docs/quickstart/15-minute-quickstart.md"
+        "docs/quickstart/15-minute-quickstart.md",
+        "docs/language-parity-haskell.md"
       ],
       "baselineRefs": [
         "BASE-001",

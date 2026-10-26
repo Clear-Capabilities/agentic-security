@@ -1,0 +1,388 @@
+@@@ sql-injection | vulnerable | src/UserSearch.hs
+{-# LANGUAGE OverloadedStrings #-}
+module UserSearch (searchUsers) where
+
+import Database.SQLite.Simple
+import Data.String (fromString)
+import qualified Data.Text as T
+import Web.Scotty
+
+data User = User Int T.Text
+
+instance FromRow User where
+  fromRow = User <$> field <*> field
+
+searchUsers :: Connection -> ActionM ()
+searchUsers conn = do
+  name <- param "name"
+  let sql = "SELECT id, name FROM users WHERE name = '" ++ name ++ "'"
+  rows <- liftAndCatchIO (query_ conn (fromString sql) :: IO [User]) --@@
+  json (length rows)
+
+@@@ sql-injection | vulnerable | src/OrderRepo.hs
+module OrderRepo where
+
+import Database.PostgreSQL.Simple
+import Data.ByteString.Char8 (pack)
+import Servant
+
+type OrderAPI = "orders" :> QueryParam "status" String :> Get '[JSON] [Only Int]
+
+ordersByStatus :: Connection -> Maybe String -> Handler [Only Int]
+ordersByStatus conn Nothing = liftIO (query_ conn "SELECT id FROM orders")
+ordersByStatus conn (Just st) = liftIO (query_ conn q)
+  where
+    q = Query (pack ("SELECT id FROM orders WHERE status = '" <> st <> "'")) --@@
+
+@@@ sql-injection | vulnerable | src/Reports.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Reports (deleteByTag) where
+
+import Database.SQLite.Simple (Connection, execute_, Query(..))
+import qualified Data.Text as T
+import Network.Wai (Request, queryString)
+import Data.Maybe (fromMaybe)
+import Data.Text.Encoding (decodeUtf8)
+
+deleteByTag :: Connection -> Request -> IO ()
+deleteByTag conn req = do
+  let tag = maybe "" decodeUtf8 . fromMaybe Nothing . lookup "tag" $ queryString req
+      stmt = Query $ T.concat ["DELETE FROM notes WHERE tag = '", tag, "'"]
+  execute_ conn stmt --@@
+
+@@@ sql-injection | safe | src/UserSearch.hs
+{-# LANGUAGE OverloadedStrings #-}
+module UserSearch (searchUsers) where
+
+import Database.SQLite.Simple
+import qualified Data.Text as T
+import Web.Scotty
+
+data User = User Int T.Text
+
+instance FromRow User where
+  fromRow = User <$> field <*> field
+
+searchUsers :: Connection -> ActionM ()
+searchUsers conn = do
+  name <- param "name" :: ActionM T.Text
+  rows <- liftAndCatchIO (query conn "SELECT id, name FROM users WHERE name = ?" (Only name) :: IO [User]) --@@
+  json (length rows)
+
+@@@ sql-injection | safe | src/OrderRepo.hs
+module OrderRepo where
+
+import Database.PostgreSQL.Simple
+import Servant
+
+type OrderAPI = "orders" :> QueryParam "status" String :> Get '[JSON] [Only Int]
+
+ordersByStatus :: Connection -> Maybe String -> Handler [Only Int]
+ordersByStatus conn Nothing = liftIO (query_ conn "SELECT id FROM orders")
+ordersByStatus conn (Just st) = liftIO (query conn q (Only st)) --@@
+  where
+    q = "SELECT id FROM orders WHERE status = ?"
+
+@@@ sql-injection | safe | src/Reports.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Reports (deleteByTag) where
+
+import Database.SQLite.Simple (Connection, execute)
+import Network.Wai (Request, queryString)
+import Data.Text.Encoding (decodeUtf8)
+
+-- The only dynamic part of the statement is bound, never spliced.
+deleteByTag :: Connection -> Request -> IO ()
+deleteByTag conn req =
+  case lookup "tag" (queryString req) of
+    Just (Just raw) -> execute conn "DELETE FROM notes WHERE tag = ?" [decodeUtf8 raw] --@@
+    _               -> pure ()
+
+@@@ command-injection | vulnerable | src/Thumbnail.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Thumbnail (makeThumb) where
+
+import System.Process (callCommand)
+import Web.Scotty
+import Data.Text.Lazy (unpack)
+
+makeThumb :: ActionM ()
+makeThumb = do
+  file <- param "file"
+  let cmd = "convert uploads/" ++ unpack file ++ " -resize 64x64 thumbs/out.png"
+  liftAndCatchIO (callCommand cmd) --@@
+  text "done"
+
+@@@ command-injection | vulnerable | src/Ping.hs
+module Ping (pingHost) where
+
+import System.Process (readProcess)
+import System.Environment (getArgs)
+
+pingHost :: IO String
+pingHost = do
+  args <- getArgs
+  let host = case args of
+        (h:_) -> h
+        []    -> "localhost"
+  readProcess "sh" ["-c", "ping -c 1 " ++ host] "" --@@
+
+@@@ command-injection | vulnerable | src/Archive.hs
+{-# LANGUAGE ScopedTypeVariables #-}
+module Archive (backup) where
+
+import System.Process
+import System.Exit
+import Network.Wai
+import qualified Data.ByteString.Char8 as B
+
+backup :: Request -> IO ExitCode
+backup req = do
+  let dir = maybe "." B.unpack (join' (lookup (B.pack "dir") (queryString req)))
+  (_, _, _, ph) <- createProcess (shell ("tar czf /tmp/backup.tgz " ++ dir)) --@@
+  waitForProcess ph
+  where
+    join' (Just (Just x)) = Just x
+    join' _               = Nothing
+
+@@@ command-injection | safe | src/Thumbnail.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Thumbnail (makeThumb) where
+
+import System.Process (callProcess)
+import System.FilePath (takeFileName, (</>))
+import Web.Scotty
+import Data.Text.Lazy (unpack)
+
+makeThumb :: ActionM ()
+makeThumb = do
+  file <- param "file"
+  let src = "uploads" </> takeFileName (unpack file)
+  liftAndCatchIO (callProcess "convert" [src, "-resize", "64x64", "thumbs/out.png"]) --@@
+  text "done"
+
+@@@ command-injection | safe | src/Ping.hs
+module Ping (pingHost) where
+
+import System.Process (readProcess)
+import System.Environment (getArgs)
+import Data.Char (isAlphaNum)
+
+pingHost :: IO String
+pingHost = do
+  args <- getArgs
+  let host = case args of
+        (h:_) | all ok h -> h
+        _                -> "localhost"
+      ok c = isAlphaNum c || c `elem` ".-"
+  readProcess "ping" ["-c", "1", host] "" --@@
+
+@@@ command-injection | safe | src/Archive.hs
+module Archive (backup) where
+
+import System.Process
+import System.Exit
+
+-- The directory to archive is fixed by the program, not by the caller.
+backup :: IO ExitCode
+backup = do
+  (_, _, _, ph) <- createProcess (proc "tar" ["czf", "/tmp/backup.tgz", "/var/lib/app/data"]) --@@
+  waitForProcess ph
+
+@@@ path-traversal | vulnerable | src/StaticFiles.hs
+{-# LANGUAGE OverloadedStrings #-}
+module StaticFiles (serveFile) where
+
+import Web.Scotty
+import System.FilePath ((</>))
+import qualified Data.Text.Lazy as TL
+
+serveFile :: ActionM ()
+serveFile = do
+  name <- param "name"
+  let path = "public" </> TL.unpack name
+  body <- liftAndCatchIO (readFile path) --@@
+  text (TL.pack body)
+
+@@@ path-traversal | vulnerable | src/Download.hs
+module Download (download) where
+
+import Servant
+import qualified Data.ByteString.Lazy as BL
+import System.FilePath (combine)
+
+type DownloadAPI = "files" :> Capture "fname" FilePath :> Get '[OctetStream] BL.ByteString
+
+download :: FilePath -> Server DownloadAPI
+download root fname = liftIO (BL.readFile (root `combine` fname)) --@@
+
+@@@ path-traversal | vulnerable | src/Uploads.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Uploads (saveUpload) where
+
+import Network.Wai.Parse (FileInfo(..))
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as BL
+
+saveUpload :: FileInfo BL.ByteString -> IO ()
+saveUpload fi = do
+  let target = "/srv/uploads/" ++ B.unpack (fileName fi)
+  BL.writeFile target (fileContent fi) --@@
+
+@@@ path-traversal | safe | src/StaticFiles.hs
+{-# LANGUAGE OverloadedStrings #-}
+module StaticFiles (serveFile) where
+
+import Web.Scotty
+import System.FilePath ((</>), takeFileName)
+import qualified Data.Text.Lazy as TL
+
+serveFile :: ActionM ()
+serveFile = do
+  name <- param "name"
+  let path = "public" </> takeFileName (TL.unpack name)
+  body <- liftAndCatchIO (readFile path) --@@
+  text (TL.pack body)
+
+@@@ path-traversal | safe | src/Download.hs
+module Download (download) where
+
+import Servant
+import qualified Data.ByteString.Lazy as BL
+import System.FilePath (combine, splitDirectories, isAbsolute)
+
+type DownloadAPI = "files" :> Capture "fname" FilePath :> Get '[OctetStream] BL.ByteString
+
+download :: FilePath -> Server DownloadAPI
+download root fname
+  | isAbsolute fname || ".." `elem` splitDirectories fname = throwError err400
+  | otherwise = liftIO (BL.readFile (root `combine` fname)) --@@
+
+@@@ path-traversal | safe | src/Uploads.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Uploads (saveUpload) where
+
+import Network.Wai.Parse (FileInfo(..))
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as BL
+import System.FilePath (takeFileName)
+import System.Directory (createDirectoryIfMissing)
+
+saveUpload :: FileInfo BL.ByteString -> IO ()
+saveUpload fi = do
+  createDirectoryIfMissing True "/srv/uploads"
+  let target = "/srv/uploads/" ++ takeFileName (B.unpack (fileName fi))
+  BL.writeFile target (fileContent fi) --@@
+
+@@@ ssrf | vulnerable | src/Preview.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Preview (fetchPreview) where
+
+import Network.HTTP.Simple
+import Web.Scotty
+import qualified Data.Text.Lazy as TL
+
+fetchPreview :: ActionM ()
+fetchPreview = do
+  url <- param "url"
+  req <- liftAndCatchIO (parseRequest (TL.unpack url))
+  resp <- liftAndCatchIO (httpLBS req) --@@
+  text (TL.pack (show (getResponseStatusCode resp)))
+
+@@@ ssrf | vulnerable | src/Webhook.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Webhook (deliver) where
+
+import Network.HTTP.Client
+import Network.HTTP.Client.TLS (getGlobalManager)
+import Data.Aeson (Value, encode)
+import Data.Aeson.Types (parseMaybe, (.:))
+import qualified Data.Text as T
+
+-- The subscriber chose the callback URL when registering.
+deliver :: Value -> Value -> IO ()
+deliver subscription payload = do
+  mgr <- getGlobalManager
+  let Just target = parseMaybe (.: "callback") subscription :: Maybe String
+  req0 <- parseRequest target
+  _ <- httpNoBody req0 { method = "POST", requestBody = RequestBodyLBS (encode payload) } mgr --@@
+  pure ()
+
+@@@ ssrf | vulnerable | src/ImageProxy.hs
+module ImageProxy (proxyImage) where
+
+import Network.Wreq (get, responseBody)
+import Control.Lens ((^.))
+import Network.Wai
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as BL
+
+proxyImage :: Request -> IO BL.ByteString
+proxyImage req = do
+  let target = case lookup (B.pack "src") (queryString req) of
+        Just (Just u) -> B.unpack u
+        _             -> "http://localhost/placeholder.png"
+  r <- get target --@@
+  pure (r ^. responseBody)
+
+@@@ ssrf | safe | src/Preview.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Preview (fetchPreview) where
+
+import Network.HTTP.Simple
+import Network.URI (parseURI, uriAuthority, uriRegName)
+import Web.Scotty
+import qualified Data.Text.Lazy as TL
+
+allowedHosts :: [String]
+allowedHosts = ["example.org", "images.example.org"]
+
+fetchPreview :: ActionM ()
+fetchPreview = do
+  url <- param "url"
+  case parseURI (TL.unpack url) >>= uriAuthority of
+    Just auth | uriRegName auth `elem` allowedHosts -> do
+      req <- liftAndCatchIO (parseRequest (TL.unpack url))
+      resp <- liftAndCatchIO (httpLBS req) --@@
+      text (TL.pack (show (getResponseStatusCode resp)))
+    _ -> status badRequest400 >> text "host not allowed"
+
+@@@ ssrf | safe | src/Webhook.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Webhook (deliver) where
+
+import Network.HTTP.Client
+import Network.HTTP.Client.TLS (getGlobalManager)
+import Data.Aeson (Value, encode)
+
+-- The endpoint is taken from the operator's configuration, never from the payload.
+deliver :: String -> Value -> IO ()
+deliver configuredUrl payload = do
+  mgr <- getGlobalManager
+  req0 <- parseRequest configuredUrl
+  _ <- httpNoBody req0 { method = "POST", requestBody = RequestBodyLBS (encode payload) } mgr --@@
+  pure ()
+
+@@@ ssrf | safe | src/ImageProxy.hs
+module ImageProxy (proxyImage) where
+
+import Network.Wreq (get, responseBody)
+import Control.Lens ((^.))
+import Network.Wai
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Map as M
+
+images :: M.Map B.ByteString String
+images = M.fromList
+  [ (B.pack "logo", "https://cdn.example.org/logo.png")
+  , (B.pack "banner", "https://cdn.example.org/banner.png") ]
+
+-- The query parameter only selects an entry from a fixed table of URLs.
+proxyImage :: Request -> IO BL.ByteString
+proxyImage req = do
+  let target = case lookup (B.pack "src") (queryString req) of
+        Just (Just k) | Just u <- M.lookup k images -> u
+        _ -> "https://cdn.example.org/placeholder.png"
+  r <- get target --@@
+  pure (r ^. responseBody)

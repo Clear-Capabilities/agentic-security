@@ -9,17 +9,17 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.186.2 |
-| Bundle SHA-256 | `38adcd8324aa7552b7bf61f5ac662fe383ed41f0bcf7f6eb2cad89de080a88c5` |
-| Commit | `a988ab710db9ad1e23ddfb7f50583452d712c01e` |
+| Engine version | 0.187.0 |
+| Bundle SHA-256 | `347fbe455e8a916364d4ff2776ca5407f97e776d925bb5f2e3590d13f565a96b` |
+| Commit | `dc0a0049571729827ab254c405d38c51dc4e11e4` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
 | Node | v24.20.0 |
-| Corpus entries | 220 (220 scored) |
-| Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
+| Corpus entries | 228 (228 scored) |
+| Corpus version | `5481d819acf1dd3481359a19e49e5a5b798fae1507b55173b53c8015b08214f6` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-10-26T14:53:25.274Z |
+| Generated (UTC) | 2026-10-26T19:29:42.410Z |
 
 ## What these numbers are, and what they are not
 
@@ -58,8 +58,8 @@ cannot defend would cost more credibility than the number is worth.
 
 | Population | Detected / correctly silent |
 | --- | --- |
-| Vulnerable fixtures (`pre/`) — detection | 220/220 (100.0%) |
-| Fixed counterparts (`post/`) — correct silence | 220/220 (100.0%) |
+| Vulnerable fixtures (`pre/`) — detection | 228/228 (100.0%) |
+| Fixed counterparts (`post/`) — correct silence | 228/228 (100.0%) |
 
 All corpus entries scored; no entry was excluded.
 
@@ -71,6 +71,7 @@ All corpus entries scored; no entry was excluded.
 | cpp | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | csharp | 21 | 21/21 (100.0%) | 21/21 (100.0%) |
 | go | 22 | 22/22 (100.0%) | 22/22 (100.0%) |
+| haskell | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | java | 25 | 25/25 (100.0%) | 25/25 (100.0%) |
 | javascript | 38 | 38/38 (100.0%) | 38/38 (100.0%) |
 | json | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
@@ -92,7 +93,7 @@ All corpus entries scored; no entry was excluded.
 | CWE-1333 | 7 | 7/7 (100.0%) | 7/7 (100.0%) |
 | CWE-1427 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-208 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| CWE-22 | 16 | 16/16 (100.0%) | 16/16 (100.0%) |
+| CWE-22 | 17 | 17/17 (100.0%) | 17/17 (100.0%) |
 | CWE-284 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-316 | 2 | 2/2 (100.0%) | 2/2 (100.0%) |
 | CWE-327 | 6 | 6/6 (100.0%) | 6/6 (100.0%) |
@@ -102,25 +103,26 @@ All corpus entries scored; no entry was excluded.
 | CWE-352 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-494 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-502 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
-| CWE-601 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
+| CWE-601 | 9 | 9/9 (100.0%) | 9/9 (100.0%) |
 | CWE-611 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | CWE-643 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| CWE-78 | 24 | 24/24 (100.0%) | 24/24 (100.0%) |
+| CWE-78 | 25 | 25/25 (100.0%) | 25/25 (100.0%) |
 | CWE-787 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
-| CWE-79 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
+| CWE-79 | 12 | 12/12 (100.0%) | 12/12 (100.0%) |
 | CWE-798 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
-| CWE-89 | 15 | 15/15 (100.0%) | 15/15 (100.0%) |
+| CWE-88 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
+| CWE-89 | 16 | 16/16 (100.0%) | 16/16 (100.0%) |
 | CWE-90 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | CWE-916 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| CWE-918 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
-| CWE-94 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
+| CWE-918 | 12 | 12/12 (100.0%) | 12/12 (100.0%) |
+| CWE-94 | 9 | 9/9 (100.0%) | 9/9 (100.0%) |
 
 ### By corpus tier
 
 | Tier | Entries | Detection (`pre/`) | Correct silence (`post/`) |
 | --- | --- | --- | --- |
 | capability | 207 | 207/207 (100.0%) | 207/207 (100.0%) |
-| deep | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
+| deep | 18 | 18/18 (100.0%) | 18/18 (100.0%) |
 | regression | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 
 ## Taint-layer recall by language
@@ -155,13 +157,14 @@ below for current counts.
 
 ### Whole corpus (diagnostic)
 
-Entries scored: 220
+Entries scored: 228
 
 | Language | IR-TAINT recall |
 | --- | --- |
 | c# | 13/21 (61.9%) |
 | c/c++ | 2/11 (18.2%) |
 | go | 14/22 (63.6%) |
+| haskell | 8/8 (100.0%) |
 | java | 13/25 (52.0%) |
 | js/ts | 22/38 (57.9%) |
 | json | 0/1 (0.0%) |
@@ -174,11 +177,12 @@ Entries scored: 220
 
 ### Deep-tier only — taint-shaped subset (headline)
 
-Entries scored: 10
+Entries scored: 18
 
 | Language | IR-TAINT recall |
 | --- | --- |
 | c/c++ | 1/1 (100.0%) |
+| haskell | 8/8 (100.0%) |
 | js/ts | 3/3 (100.0%) |
 | kotlin | 1/1 (100.0%) |
 | php | 1/1 (100.0%) |
@@ -232,7 +236,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 386/572 (67.5%) |
+| 421/572 (73.6%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -283,7 +287,7 @@ this run.
 
 ## Haskell and Nix/NixOS support
 
-*Committed artifact:* `docs/language-support.json`, measured 2026-10-05 on node v24.20.0. It is read here, not re-measured by this command.
+*Committed artifact:* `docs/language-support.json`, measured 2026-10-26 on node v24.20.0. It is read here, not re-measured by this command.
 
 Every row is **supported** only from passing evidence of its own metric kind. Layers are scored independently (the taint layer
 is the injection families, the SAST layer is every other family) and a finding of a different family inside a case is counted
@@ -333,8 +337,8 @@ Tools present where this was measured: ghc=true, cabal=true, stack=absent, nix=a
 - No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.
 - Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.
 - Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.
-- Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.
-- The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 and unseen-v2 sets were used to change the engine and are development sets (shape-dev, shape-dev-2), not generalisation measures.
+- A text parameter of an exported Haskell function is a source, and the finding says which kind. When the function returns a web-framework handler value (a Scotty action, a Yesod handler or widget, a Servant handler, a WAI application) the source is labelled request input, because the framework supplies the value from the request. For any other export it stays the weaker "caller-controlled" label (the callers of a library function are not known to be clients). A project record handed to an exported function is not a taint source at all (its fields are used by the data-flow lineage view only).
+- The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules) are reported beside it, with intervals over shapes (two near-identical cases per shape). From 2026-10-26 this split is a DEVELOPMENT set: its failures were read and the engine was changed to fix their causes, so the column is a regression result and says nothing about code shapes the engine was not fitted to. A generalisation claim needs a new unseen set that no engine change has been motivated by. The earlier unseen-v1 and unseen-v2 sets became the development sets shape-dev and shape-dev-2 the same way.
 
 ## Independent run a72968195aa1: historical record (engine 0.172.0)
 
@@ -374,7 +378,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.186.2), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.187.0), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both
@@ -457,8 +461,8 @@ adjudicated sealed population that meets the registered minimums. `insufficient-
 
 ## Committed artifacts referenced (not re-run by this command)
 
-- **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-09-14):
-  220/220 entries recorded as passing. The gate
+- **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-10-26):
+  228/228 entries recorded as passing. The gate
   `npm run bench:cve-replay:check` fails the build on any drift from it.
   The rates above are computed from this run, not from this file.
 - **Third-party repository run** (*committed artifact*, `bench/proof-corpus/results/summary.json`,

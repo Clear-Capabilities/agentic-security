@@ -1,0 +1,10 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-argument-injection-haskell",
+  "lang": "haskell", "sources": { "Main.hs": "Main.hs" },
+  "files": { "bin/archive-tool": "#!/bin/sh\n# Stand-in for the program the code under test calls. It is planted by the proof runner, never by the target.\n# It acts on exactly one option, and only when that option is its FIRST argument, by creating the file the option names.\ncase \"$1\" in\n  --agentic-proof-write=*) : > \"${1#--agentic-proof-write=}\" ;;\nesac\nexit 0\n" },
+  "build": ["/bin/chmod", "755", "bin/archive-tool"],
+  "env": { "PATH": "{{ROOT}}/bin:/opt/ghc/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin" },
+  "run": ["{{GHC}}", "-ignore-dot-ghci", "-e", ":main \"--agentic-proof-write={{CANARY:arg}}\"", "Main.hs"],
+  "oracle": { "type": "argument_injection", "params": { "canary": "arg" } },
+  "network": "none"
+}

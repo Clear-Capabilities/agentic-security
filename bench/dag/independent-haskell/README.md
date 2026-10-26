@@ -1,0 +1,13 @@
+# Independent Haskell precision set: MEASUREMENT ONLY
+
+Purpose: report default-scan precision on real Haskell projects with honest denominators and intervals, using projects and labels that were not used while rules were written. Same protocol as the sibling independent precision set for JavaScript and Nix (this set is a separate directory so that set's frozen digest is not disturbed; `lib.mjs`, `flag.mjs`, `sample.mjs` and `show.mjs` are copies of its files with no logic change).
+
+1. Projects (`manifest.json`): postgrest (web service), shellcheck (command-line tool), hakyll (library), hledger (CLI plus library plus web UI). None appears in `bench/dag/manifest.json`. Each is pinned to an exact commit under `.cache/` (git-ignored; re-acquire with the recorded url and commit).
+2. `flag.mjs` runs the default scan (deterministic, no state writes, no provenance) over each declared scan root and lists flagged sites. Test directories and line-0 findings are excluded. Only this list was read when sampling and labeling.
+3. `sample.mjs` draws a seeded random sample (seed 20261026, fixed before labeling) of 60 flagged sites.
+4. Each sampled site was labeled tp, fp or ambiguous from the target project's own source only, with a one-sentence evidence note (`draft-haskell.txt`, joined by `build-labels.mjs` into `labels.json` with a sha256 digest; `run.mjs` refuses to run on a digest mismatch).
+5. What counts: tp = the named weakness is present at the site and security-meaningful for someone other than the operator invoking the tool (a CLI user's own paths and arguments are not a privilege boundary); fp = the condition is absent, guarded, idiomatic or benign; ambiguous = the claim is literally true but its security meaning is doubtful. The results show the range if every ambiguous site were fp or tp.
+6. `node run.mjs --check` re-scans, joins by project/file/line/vuln, and writes `results.json` and `results.md`. precision = tp / (tp + fp) with a 95% Wilson interval; ambiguous and unlabeled sites are never counted.
+7. Recall cannot be measured here: there is no ground-truth list of real vulnerabilities in these projects.
+8. Limits: one LLM labeler, no second opinion; projects and roots chosen by the labeler; sites cluster by file and rule so true uncertainty exceeds the Wilson interval; the flagged set also includes non-Haskell files in the projects (Dockerfiles, one JavaScript file), reported as a separate source kind.
+9. MEASUREMENT ONLY. Reading labels while changing rules makes this a development set; record any such use in `USE-LOG.md` before numbers are quoted. Do not edit labels to match the scanner; extending the set means new projects and a new draw.

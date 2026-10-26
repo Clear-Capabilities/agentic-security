@@ -87,7 +87,7 @@ after the session). When one flaw reaches two nested sinks on a line (`readCreat
 (`strictRequestBody`) is CWE-770, the same class as the other unbounded-read rules.
 
 <!-- generated:hs-models:start -->
-The model registry (`scanner/src/language/haskell-models.js`) holds 146 sources, 258 sinks and 27 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
+The model registry (`scanner/src/language/haskell-models.js`) holds 185 sources, 283 sinks and 27 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
 | Sink family | CWE | APIs modelled | Examples |
 | --- | --- | --- | --- |
@@ -95,20 +95,32 @@ The model registry (`scanner/src/language/haskell-models.js`) holds 146 sources,
 | `cmd` | CWE-88 | 16 | `Shelly.Lifted.run`, `Shelly.Lifted.runFoldLines`, `Shelly.Lifted.run_`, ... |
 | `code` | CWE-94 | 3 | `Language.Haskell.Interpreter.eval`, `Language.Haskell.Interpreter.interpret`, `Language.Haskell.Interpreter.runStmt` |
 | `llm-prompt` | CWE-1427 | 5 | `Network.HTTP.Conduit.setRequestBodyJSON`, `Network.HTTP.Conduit.setRequestBodyLBS`, `Network.HTTP.Simple.setRequestBodyJSON`, ... |
-| `path` | CWE-22 | 54 | `Data.ByteString.Char8.appendFile`, `Data.ByteString.Char8.readFile`, `Data.ByteString.Char8.writeFile`, ... |
+| `path` | CWE-22 | 64 | `Data.ByteString.Char8.appendFile`, `Data.ByteString.Char8.readFile`, `Data.ByteString.Char8.writeFile`, ... |
 | `redirect` | CWE-601 | 13 | `Happstack.Server.movedPermanently`, `Happstack.Server.seeOther`, `Happstack.Server.tempRedirect`, ... |
 | `sql` | CWE-89 | 47 | `Database.HDBC.prepare`, `Database.HDBC.quickQuery`, `Database.HDBC.quickQuery'`, ... |
-| `url` | CWE-918 | 58 | `Network.HTTP.Client.httpLbs`, `Network.HTTP.Client.httpNoBody`, `Network.HTTP.Client.parseRequest`, ... |
-| `xss` | CWE-79 | 23 | `Data.Text.IO.putStr`, `Data.Text.IO.putStrLn`, `Lucid.Base.toHtmlRaw`, ... |
+| `url` | CWE-918 | 59 | `Network.HTTP.Client.Conduit.http`, `Network.HTTP.Client.Conduit.httpLbs`, `Network.HTTP.Client.Conduit.httpNoBody`, ... |
+| `xss` | CWE-79 | 35 | `Data.Text.IO.putStr`, `Data.Text.IO.putStrLn`, `Lucid.Base.toHtmlRaw`, ... |
 
-Source provenances: cli (1), env (3), file-read (8), header (11), http-body (28), network (7), stdin (22), url-param (66).
+Source provenances: cli (1), cookie (2), env (3), file-read (8), header (13), http-body (51), network (7), stdin (22), url-param (78).
 
 Sanitizer effects: * (10), other (1), path (4), xss (12).
 <!-- generated:hs-models:end -->
 
-A text-typed parameter of an **exported** function that nothing in the module calls is treated as caller-controlled text,
-and a record-typed one as a customer record. A flow from such a parameter is reported with that label, which is a weaker
-claim than a request or standard-input read: the scanner cannot see who calls your library.
+A text-typed parameter of an **exported** function that nothing in the module calls is a source, and the finding says which
+kind:
+
+- When the module imports Scotty, Yesod, Servant or WAI **and** the function returns that framework's handler value (a
+  Scotty `ActionM`/`ActionT`, a Yesod `Handler` or `Widget`, a Servant `Handler`, a WAI `Application`), the parameter is
+  labelled **request input** ("route, query or body value handed to a Scotty action", and so on, provenance `url-param`):
+  the framework supplies it from the request. A single-endpoint Servant `server` written as a function takes its values
+  from the API type in order of appearance (`Capture`, `QueryParam`, `Header`, `ReqBody`; only the text ones, never the
+  principal an `AuthProtect` hands over).
+- Every other exported function keeps the weaker label ("text parameter of an exported function (caller-controlled)"),
+  because the scanner cannot see who calls your library. A record of your own handed to an exported function is not a taint
+  source (the Data Flow Explorer reads it as a customer record, field by field).
+
+The request accessors a handler really uses are sources: the `Maybe`/`Either` forms of the Scotty parameter reads, the
+body readers, Scotty cookies, Yesod's JSON-body and cookie readers, and WAI's body parsers and conduit body stream.
 
 ## Web frameworks: authentication, authorization and entry points
 
@@ -270,22 +282,14 @@ changes, and runs the same gates: path inside the project, syntax, the rescan (t
 medium-or-higher finding appears), and an optional compile check that runs only when asked and only when a `ghc` exists.
 A fix outside those shapes, or one a gate refuses, is reported as such; nothing is invented.
 
+The SQL shape is offered only where it does not have to guess the database library. Its rewrite is written for
+`postgresql-simple`; when it would add an import of a database library the file does not already use, as in this
+`sqlite-simple` example, the fix is refused and the reason is stated, because a rescan cannot see a wrong library.
+
 <!-- generated:fix-hs-sql:start -->
 ```text
-$ agentic-security fix --finding <id> --preview     # exit 0
-FULL: Moved 1 interpolated value(s) out of the SQL text into query parameters.
---- a/src/Main.hs
-+++ b/src/Main.hs
-@@ -10,4 +10,5 @@
--
---- | Look an order up by reference. The reference comes straight from the URL.
--lookupOrder :: Connection -> String -> IO [Only String]
--lookupOrder conn ref = query_ conn (fromString ("SELECT status FROM orders WHERE ref = '" ++ ref ++ "'"))
-+import Database.PostgreSQL.Simple (execute, query, Only)
-+
-+-- | Look an order up by reference. The reference comes straight from the URL.
-+lookupOrder :: Connection -> String -> IO [Only String]
-+lookupOrder conn ref = query conn "SELECT status FROM orders WHERE ref = ?" (Only ref)
+$ agentic-security fix --finding <id> --preview     # exit 4
+No verified fix for this finding (blocked): the patch adds an import of a database library the file did not use (Database.PostgreSQL.Simple); which driver the project uses is not provable from this file, so the edit is refused rather than guessed. Apply the parameterised query by hand with the project's own driver
 ```
 <!-- generated:fix-hs-sql:end -->
 

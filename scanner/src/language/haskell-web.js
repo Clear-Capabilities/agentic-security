@@ -267,6 +267,7 @@ function kidsIr(e) {
   for (const k of ['left', 'right', 'object', 'value']) if (e[k] && typeof e[k] === 'object') out.push(e[k]);
   for (const k of ['args', 'elements', 'branches', 'parts']) if (Array.isArray(e[k])) out.push(...e[k]);
   if (Array.isArray(e.props)) for (const p of e.props) if (p && p.value) out.push(p.value);
+  if (e.hs && e.hs.inner && typeof e.hs.inner === 'object') out.push(e.hs.inner);   // `oid :: Int`: a number to the taint engine, still the id it names here
   return out;
 }
 function* walkIr(e, depth = 0) { if (!e || typeof e !== 'object' || depth > 80) return; yield e; for (const c of kidsIr(e)) yield* walkIr(c, depth + 1); }
@@ -295,6 +296,8 @@ function handlerFacts(ctx, fn, opts = {}) {
     if (n.kind === 'if' && n.cond) conds.push(n.cond);
     for (const root of exprsOfNode(n)) for (const e of walkIr(root)) {
       if (e.kind === 'call' && typeof e.callee === 'string') ordered.push({ call: e, line: e.line || n.line, node: n });
+      // `when (owner /= principal) notFound`, `unless (owner == principal) (permissionDenied ..)`: the condition is the first argument of the call
+      if (e.kind === 'call' && /(?:^|\.)(?:when|unless)$/.test(e.callee || '') && e.args && e.args[0]) conds.push(e.args[0]);
       if (e.kind === 'union' && e.hs && e.hs.branchConds) for (const bc of e.hs.branchConds) conds.push(bc.cond);
     }
   }
@@ -349,6 +352,9 @@ function handlerFacts(ctx, fn, opts = {}) {
     const hard = allCalls.findIndex((r) => r !== rd.call && isRejection(r) && !SCOTTY_STATUS.test(r.callee) && stopsHandler(r, allCalls));
     if (hard >= 0) { inlineIdx = hard; inlineKind = rd.kind; inlineLine = allCalls[hard].line; inlineCallee = rd.callee; inlineRejectCallee = allCalls[hard].callee; break; }
   }
+  // A credential read and a rejection that ends the handler exist, but the rejection is not before the first sensitive operation BY LINE (a `case`
+  // lists the success branch first and the rejecting branch last). Their order is then a question about control flow, answered from the syntax tree.
+  const inlineCandidate = reads.length > 0 && allCalls.some((r) => isRejection(r) && stopsHandler(r, allCalls));
   const principals = new Set();
   for (const a of assigns) if (a.source.kind === 'call' && isGuardCall(a.source)) principals.add(a.target);
   // ids read from the request
@@ -360,7 +366,7 @@ function handlerFacts(ctx, fn, opts = {}) {
       if (nm && /id$/i.test(nm)) idVars.add(a.target);
     }
   }
-  return { ordered, guardIdx, inlineIdx, inlineKind, inlineLine, inlineCallee, inlineRejectCallee, sensIdx, principals, idVars, conds, assigns, isGuardCall, isSensitive, fn };
+  return { ordered, guardIdx, inlineIdx, inlineCandidate, inlineKind, inlineLine, inlineCallee, inlineRejectCallee, sensIdx, principals, idVars, conds, assigns, isGuardCall, isSensitive, fn };
 }
 
 function hasOwnership(ctx, facts) {
@@ -368,7 +374,7 @@ function hasOwnership(ctx, facts) {
   const mentionsPrincipal = (e) => { for (const n of identsIr(e)) if (principals.has(n)) return true; return false; };
   // 1. a comparison involving the principal
   for (const c of facts.conds) for (const x of walkIr(c)) {
-    if (x.kind === 'binary' && ['==', '===', '!='].includes(x.op) && (mentionsPrincipal(x.left) || mentionsPrincipal(x.right))) return { kind: 'principal-comparison' };
+    if (x.kind === 'binary' && ['==', '===', '!=', '/='].includes(x.op) && (mentionsPrincipal(x.left) || mentionsPrincipal(x.right))) return { kind: 'principal-comparison' };
     if (x.kind === 'call' && /(?:^|\.)(?:elem|notElem)$/.test(x.callee || '') && (x.args || []).some(mentionsPrincipal)) return { kind: 'principal-membership' };
   }
   for (const o of facts.ordered) {
@@ -396,7 +402,7 @@ function hasOwnership(ctx, facts) {
 //     source, a sensitive call the walk did not find) makes the order UNKNOWN, and unknown is reported as late, never as authenticated.
 // Leaf expressions are classified by lowering them alone and reusing the classifiers above (credentialReadsOf, isRejection, stopsHandler,
 // isSensitiveCall), so this adds ordering and no second definition of what a credential, a rejection or a sensitive call is.
-const HARD_REJECT_HEAD = /^(?:throwError|permissionDenied|notAuthenticated)$/;
+const HARD_REJECT_HEAD = /^(?:throwError|permissionDenied|notAuthenticated|raiseStatus)$/;
 const SOFT_REJECT_HEAD = /^(?:respond|return|pure)$/;
 
 function rhsBranches(rhs) {
@@ -425,7 +431,7 @@ function inlineOrder(ctx, fn, facts, opts) {
   const mentions = (e, names) => { for (const x of walkAst(e)) if (x.t === 'var' && !x.qual && names.has(x.name)) return x.name; return null; };
   const classify = (e) => {
     if (memo.has(e)) return memo.get(e);
-    let out = { reads: false, rej: false, sensN: 0 };
+    let out = { reads: false, rej: false, sensN: 0, stat: false, halt: false };
     try {
       const f2 = lowerHandlerExpr(ctx.project, src.mod, e, `order${seq++}`, Number.isFinite(e.line) ? e.line : 1);
       const calls = [...callsOf(f2), ...nullaryRejectionsOf(f2)].filter((c) => typeof c.callee === 'string');
@@ -434,6 +440,10 @@ function inlineOrder(ctx, fn, facts, opts) {
         reads: credentialReadsOf(f2).size > 0 || Object.values(f2.cfg.nodes).some((n) => exprsOfNode(n).some((r) => [...walkIr(r)].some((x) => x.kind === 'ident' && typeof x.name === 'string' && !!credentialKind({ callee: x.name, args: [] })))),
         rej: calls.some((c) => isRejection(c) && !SCOTTY_STATUS.test(c.callee) && stopsHandler(c, calls)),
         sensN: callsOf(f2).filter((c) => typeof c.callee === 'string' && isSensitiveCall(ctx, c)).length,
+        // Scotty: `status 40x` only sets the code; a halting call (`finish`, `raise`, `redirect`) ends the handler. Both are tracked so the PAIR counts
+        // as a rejection wherever the two sit in sequence (`status status401 >> finish`), in either order of statements within one branch.
+        stat: calls.some((c) => SCOTTY_STATUS.test(c.callee) && isRejection(c)),
+        halt: haltLinesOf(f2).length > 0,
       };
     } catch { T.failed = true; }
     // A lambda inside the expression is lifted out by the lowering, so the calls in its body are not among the expression's own: classify
@@ -441,7 +451,7 @@ function inlineOrder(ctx, fn, facts, opts) {
     memo.set(e, out);
     for (const x of walkAst(e)) {
       const bodies = x.t === 'lam' ? [x.body] : x.t === 'lamcase' ? (x.alts || []).flatMap((a) => rhsBranches(a.rhs).map((b) => b.body)) : [];
-      for (const b of bodies) { const sub = classify(b); out = { reads: out.reads || sub.reads, rej: out.rej || sub.rej, sensN: out.sensN + sub.sensN }; }
+      for (const b of bodies) { const sub = classify(b); out = { reads: out.reads || sub.reads, rej: out.rej || sub.rej, sensN: out.sensN + sub.sensN, stat: out.stat || sub.stat, halt: out.halt || sub.halt }; }
     }
     T.astSens += out.sensN;
     memo.set(e, out);
@@ -459,6 +469,9 @@ function inlineOrder(ctx, fn, facts, opts) {
     for (let i = 0; i < n; i++) acc.sens.push({ guarded: s.guarded, readMay: s.readMay });
     const sp = spine(e);
     const hn = sp && sp.head ? sp.head.name : null;
+    if (c.stat) s = { ...s, statusRej: true };
+    // a Scotty halting call after a rejecting status on this path, once a credential has been read
+    if (c.halt && n === 0 && s.statusRej && s.read) { acc.guards++; return { st: s, term: true }; }
     if (c.rej && n === 0 && hn && (HARD_REJECT_HEAD.test(hn) || (tail && SOFT_REJECT_HEAD.test(hn))) && s.read) { acc.guards++; return { st: s, term: true }; }
     if (c.rej && n > 0) T.unordered = true;
     return { st: s, term: false };
@@ -586,6 +599,9 @@ function analyzeRoute(ctx, route, handlerFn, opts) {
     const ord = R.framework === 'scotty' ? { verdict: 'before' } : inlineOrder(ctx, handlerFn, facts, opts);
     if (ord.verdict === 'before') R.auth = { status: 'authenticated', kind: facts.inlineKind, evidence: [{ kind: 'inline-guard', callee: facts.inlineCallee, line: facts.inlineLine }] };
     else R.auth = { status: 'late', kind: null, evidence: [{ kind: 'late-guard', callee: facts.inlineRejectCallee || facts.inlineCallee, line: facts.inlineLine, order: ord.verdict, reason: ord.reason }] };
+  } else if (facts.inlineCandidate && inlineOrder(ctx, handlerFn, facts, opts).verdict === 'before') {
+    // by line the rejection looked late or absent; the handler's structure proves every sensitive operation sits on the non-rejecting side of it
+    R.auth = { status: 'authenticated', kind: facts.inlineKind || 'token', evidence: [{ kind: 'inline-guard', callee: 'structure', line: R.line }] };
   } else R.auth = { status: 'none', kind: null, evidence: [] };
   // role
   const roleCall = facts.ordered.find((o) => ROLE_CALL.test(o.call.callee || ''));
@@ -765,7 +781,10 @@ function servantHandlers(ctx, mod, apiName) {
     const flat = [];
     const go = (e) => { e = unparen(e); if (e && e.t === 'op' && e.op === ':<|>') { go(e.l); go(e.r); } else flat.push(e); };
     if (body) go(body);
-    if (flat.length > 0) return { fnName: fun.name, handlers: flat, fun };
+    // `server _account rowId = do ...`: a single endpoint written as a function, whose parameters ARE the endpoint's auth, capture and query values
+    const clause = fun.clauses[0];
+    const params = flat.length === 1 && clause && (clause.pats || []).length ? clause.pats.map((x) => (x && x.t === 'pvar' ? x.name : null)) : null;
+    if (flat.length > 0) return { fnName: fun.name, handlers: flat, fun, params };
   }
   return null;
 }
@@ -874,7 +893,7 @@ export function analyzeHaskellWeb(files, opts = {}) {
     list.forEach((e, i) => {
       const hAst = h && h.handlers.length === list.length ? h.handlers[i] : null;
       if (h && h.handlers.length !== list.length) ctx.gaps.push({ kind: 'servant-handler-arity', detail: `${apiName} has ${list.length} endpoints but ${h.fnName} lists ${h.handlers.length} handlers; handlers are not paired`, file: mod.file, line: e.line });
-      add({ framework: 'servant', method: e.method, path: e.path, file: mod.file, line: e.line, mod, handlerAst: hAst, servant: e, owner: apiName, whereDecls: h && h.fun && h.fun.clauses[0] && h.fun.clauses[0].rhs.where });
+      add({ framework: 'servant', method: e.method, path: e.path, file: mod.file, line: e.line, mod, handlerAst: hAst, handlerParams: h && h.handlers.length === list.length ? h.params : null, servant: e, owner: apiName, whereDecls: h && h.fun && h.fun.clauses[0] && h.fun.clauses[0].rhs.where });
     });
   }
 
@@ -887,6 +906,23 @@ export function analyzeHaskellWeb(files, opts = {}) {
     for (const method of methods) {
       const hname = method === 'ANY' ? `handle${yr.resource}` : `${method.toLowerCase()}${yr.resource}`;
       add({ framework: 'yesod', method, path: yr.path, file: yr.mod.file, line: yr.line, mod: yr.mod, handlerName: hname, resource: yr.resource, owner: yr.resource });
+    }
+  }
+
+  // Yesod handlers named by the framework's convention (`getInvoiceR`, `postPurgeR`, `handleHomeR`) whose route table is not in an analysed
+  // file (it usually lives in `config/routes`, read by a Template Haskell splice): the name and the `Handler` result type identify the entry point.
+  // A handler a route table already names is not added twice.
+  if (fw.has('yesod')) {
+    const named = new Set(pending.filter((p) => p.framework === 'yesod').map((p) => p.handlerName));
+    for (const mod of ctx.modules) {
+      if (!mod.imports.some((i) => /^Yesod(?:\.|$)/.test(i.module))) continue;
+      for (const fun of mod.groups.funs) {
+        const m = /^(get|post|put|delete|patch|options|head|handle)([A-Z][A-Za-z0-9_']*R)$/.exec(fun.name);
+        const sig = mod.sigs.get(fun.name);
+        if (!m || named.has(fun.name) || !sig || !/\bHandler(?:For|T)?\b/.test(sig.text)) continue;
+        const method = m[1] === 'handle' ? 'ANY' : m[1].toUpperCase();
+        add({ framework: 'yesod', method, path: `/${m[2].replace(/R$/, '').replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}`, file: mod.file, line: fun.line, mod, handlerName: fun.name, resource: m[2], owner: m[2], conventional: true });
+      }
     }
   }
 
@@ -919,7 +955,7 @@ export function analyzeHaskellWeb(files, opts = {}) {
           else if (q) handlerName = q.name;
         }
       } else {
-        try { handlerFn = lowerHandlerExpr(ctx.project, p.mod, p.handlerAst, `${p.framework}-${p.line}`, p.line); ctx.handlerAst.set(handlerFn, { mod: p.mod, rhss: [{ guards: null, body: p.handlerAst, where: [] }] }); handlerName = '<inline>'; } catch { handlerFn = null; }
+        try { handlerFn = lowerHandlerExpr(ctx.project, p.mod, p.handlerAst, `${p.framework}-${p.line}`, p.line); ctx.handlerAst.set(handlerFn, { mod: p.mod, rhss: [{ guards: null, body: p.handlerAst, where: [] }] }); handlerName = '<inline>'; if (p.handlerParams) paramNames = p.handlerParams; } catch { handlerFn = null; }
       }
     }
     R.handler = handlerFn ? { kind: handlerName === '<inline>' ? 'inline' : 'named', name: handlerName } : { kind: 'unknown', name: handlerName };

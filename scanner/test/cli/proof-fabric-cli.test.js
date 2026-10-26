@@ -160,6 +160,7 @@ test('fix --require-proof applies to a Haskell finding too: with no reproducer t
   assert.ok(finding, `the engine must find the injection first: ${scan.stdout.slice(0, 300)}`);
   const r = runIn(dir, ['fix', '--finding', finding.id, '--apply', '--require-proof'], { timeout: 90000 });
   assert.equal(r.status, 4, r.stdout + r.stderr);
-  assert.match(r.stderr, /--require-proof: no reproducer for .* none could be generated: the flagged code needs scotty/);
+  // with GHC installed the refusal names the missing framework; on a host without GHC (hosted CI) it says no GHC was found
+  assert.match(r.stderr, /--require-proof: no reproducer for .* none could be generated: (?:the flagged code needs scotty|no working GHC was found)/);
   assert.equal(fs.readFileSync(path.join(dir, 'Web.hs'), 'utf8'), src, 'nothing may be written when the proof cannot be made');
 });

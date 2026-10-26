@@ -628,6 +628,9 @@ function exprTaint(expr, state, callContext) {
       return argsTainted || nestedTainted || receiverTainted;
     }
     case 'unknown':           return false;
+    // Haskell: the element of a collection that is itself a call result (`words s`'s elements, `lines body`'s) is a `member` whose object is a call,
+    // which is not an access path. An element of a tainted collection is tainted; reading a field of a tainted value is the same fact.
+    case 'member':            return /\.(?:hs|lhs)$/i.test(_currentFile || '') ? exprTaint(expr.object, state, callContext) : false;
     default:                  return false;
   }
 }
@@ -1430,6 +1433,15 @@ const _sinkLine = (call, fallback) => (/\.(?:hs|lhs)$/i.test(_currentFile || '')
 function _nestedSinkFindings(argExprs, state, callContext, line) {
   const findings = [];
   for (const arg of (argExprs || [])) {
+    // Haskell: a conditional or `case` handed to a combinator (`get "/p" $ do ... case m of A -> sink x; B -> next`) is a union of the branch
+    // ACTIONS, each of which runs when its branch is taken: every branch call is a sink site, as at the top of a return (see the `return` case).
+    if (arg && arg.kind === 'union' && /\.(?:hs|lhs)$/i.test(_currentFile || '')) {
+      const leaves = [];
+      const walk = (v, d) => { if (!v || d > 40) return; if (v.kind === 'union') (v.branches || []).forEach((b) => walk(b, d + 1)); else if (v.kind === 'call') leaves.push(v); };
+      walk(arg, 0);
+      findings.push(..._nestedSinkFindings(leaves, state, callContext, line));
+      continue;
+    }
     if (!arg || arg.kind !== 'call') continue;
     const { cat, argTaints } = _matchCallCatalog(arg.callee, arg.args, state, callContext);
     const at = _sinkLine(arg, line);
@@ -1541,6 +1553,10 @@ function step(node, stateIn, callContext) {
           node.source.callee, node.source.args, _sinkCat, _sinkArgTaints,
           state, callContext, node.line, node.source.kwargs).findings);
         findings.push(..._nestedSinkFindings(node.source.args, state, callContext, node.line));
+      } else if (node.source && node.source.kind === 'union' && /\.(?:hs|lhs)$/i.test(_currentFile || '')) {
+        // Haskell: a conditional or `case` used as a STATEMENT (not the last one) is bound to a scratch name; every branch action in it runs when its
+        // branch is taken, so each is a sink site (the last statement of a block is handled by the `return` case).
+        findings.push(..._nestedSinkFindings([node.source], state, callContext, node.line));
       }
       // PRD R13(a): the assignment TARGET can itself be a sink shape
       // (el.innerHTML = tainted) — additive to the RHS-call-sink check

@@ -40,6 +40,8 @@ const ALLOWLIST = new Set([
   // deliberate act (extending the corpus), not part of any ongoing pipeline.
   // Documented at bench/cve-replay/CONTRIBUTING.md. Grouped by glob rather than
   // named individually because the count grows with each corpus expansion.
+  { glob: /^bench\/dag\/independent-haskell\/(?:build-labels|show)\.mjs$/, reason: 'one-off labeling aids kept for the provenance of the committed labels, run by hand' },
+  { glob: /^bench\/language-support\/corpora\/unseen-v4\/summarize\.mjs$/, reason: 'operator-run summary of the unseen-v4 labels, run by hand' },
   { glob: /^bench\/dag\/independent\/(?:build-labels|show)\.mjs$/, reason: 'one-off labeling aids kept for the provenance of the committed labels, run by hand' },
   { glob: /^bench\/cve-replay\/generate-corpus.*\.mjs$/, reason: 'one-shot corpus-authoring tool, operator-invoked' },
   { glob: /^bench\/cve-replay\/verify-tier5\.mjs$/, reason: 'one-shot corpus-authoring tool, operator-invoked' },

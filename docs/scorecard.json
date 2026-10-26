@@ -1,13 +1,13 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.186.2",
-    "bundleSha256": "38adcd8324aa7552b7bf61f5ac662fe383ed41f0bcf7f6eb2cad89de080a88c5",
-    "commit": "a988ab710db9ad1e23ddfb7f50583452d712c01e",
+    "engineVersion": "0.187.0",
+    "bundleSha256": "347fbe455e8a916364d4ff2776ca5407f97e776d925bb5f2e3590d13f565a96b",
+    "commit": "dc0a0049571729827ab254c405d38c51dc4e11e4",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-26T14:53:25.274Z",
-    "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
+    "generatedAt": "2026-10-26T19:29:42.410Z",
+    "corpusVersion": "5481d819acf1dd3481359a19e49e5a5b798fae1507b55173b53c8015b08214f6",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
   "methodology": {
@@ -21,17 +21,17 @@
   },
   "corpus": {
     "measuredThisRun": true,
-    "totalEntries": 220,
-    "scoredEntries": 220,
+    "totalEntries": 228,
+    "scoredEntries": 228,
     "notScored": [],
     "overall": {
       "detection": {
-        "n": 220,
-        "d": 220
+        "n": 228,
+        "d": 228
       },
       "silence": {
-        "n": 220,
-        "d": 220
+        "n": 228,
+        "d": 228
       }
     },
     "byLanguage": [
@@ -81,6 +81,18 @@
         "silence": {
           "n": 22,
           "d": 22
+        }
+      },
+      {
+        "key": "haskell",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
         }
       },
       {
@@ -279,14 +291,14 @@
       },
       {
         "key": "CWE-22",
-        "entries": 16,
+        "entries": 17,
         "detection": {
-          "n": 16,
-          "d": 16
+          "n": 17,
+          "d": 17
         },
         "silence": {
-          "n": 16,
-          "d": 16
+          "n": 17,
+          "d": 17
         }
       },
       {
@@ -399,14 +411,14 @@
       },
       {
         "key": "CWE-601",
-        "entries": 8,
+        "entries": 9,
         "detection": {
-          "n": 8,
-          "d": 8
+          "n": 9,
+          "d": 9
         },
         "silence": {
-          "n": 8,
-          "d": 8
+          "n": 9,
+          "d": 9
         }
       },
       {
@@ -435,14 +447,14 @@
       },
       {
         "key": "CWE-78",
-        "entries": 24,
+        "entries": 25,
         "detection": {
-          "n": 24,
-          "d": 24
+          "n": 25,
+          "d": 25
         },
         "silence": {
-          "n": 24,
-          "d": 24
+          "n": 25,
+          "d": 25
         }
       },
       {
@@ -459,14 +471,14 @@
       },
       {
         "key": "CWE-79",
-        "entries": 11,
+        "entries": 12,
         "detection": {
-          "n": 11,
-          "d": 11
+          "n": 12,
+          "d": 12
         },
         "silence": {
-          "n": 11,
-          "d": 11
+          "n": 12,
+          "d": 12
         }
       },
       {
@@ -482,15 +494,27 @@
         }
       },
       {
-        "key": "CWE-89",
-        "entries": 15,
+        "key": "CWE-88",
+        "entries": 1,
         "detection": {
-          "n": 15,
-          "d": 15
+          "n": 1,
+          "d": 1
         },
         "silence": {
-          "n": 15,
-          "d": 15
+          "n": 1,
+          "d": 1
+        }
+      },
+      {
+        "key": "CWE-89",
+        "entries": 16,
+        "detection": {
+          "n": 16,
+          "d": 16
+        },
+        "silence": {
+          "n": 16,
+          "d": 16
         }
       },
       {
@@ -519,26 +543,26 @@
       },
       {
         "key": "CWE-918",
-        "entries": 11,
+        "entries": 12,
         "detection": {
-          "n": 11,
-          "d": 11
+          "n": 12,
+          "d": 12
         },
         "silence": {
-          "n": 11,
-          "d": 11
+          "n": 12,
+          "d": 12
         }
       },
       {
         "key": "CWE-94",
-        "entries": 8,
+        "entries": 9,
         "detection": {
-          "n": 8,
-          "d": 8
+          "n": 9,
+          "d": 9
         },
         "silence": {
-          "n": 8,
-          "d": 8
+          "n": 9,
+          "d": 9
         }
       }
     ],
@@ -557,14 +581,14 @@
       },
       {
         "key": "deep",
-        "entries": 10,
+        "entries": 18,
         "detection": {
-          "n": 10,
-          "d": 10
+          "n": 18,
+          "d": 18
         },
         "silence": {
-          "n": 10,
-          "d": 10
+          "n": 18,
+          "d": 18
         }
       },
       {
@@ -974,13 +998,13 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 386,
+    "n": 421,
     "d": 572
   },
   "taintRecall": {
     "measuredThisRun": true,
     "wholeCorpus": {
-      "entriesScored": 220,
+      "entriesScored": 228,
       "byLanguage": [
         {
           "language": "c#",
@@ -1001,6 +1025,13 @@
           "taint": {
             "n": 14,
             "d": 22
+          }
+        },
+        {
+          "language": "haskell",
+          "taint": {
+            "n": 8,
+            "d": 8
           }
         },
         {
@@ -1069,13 +1100,20 @@
       ]
     },
     "deepTierOnly": {
-      "entriesScored": 10,
+      "entriesScored": 18,
       "byLanguage": [
         {
           "language": "c/c++",
           "taint": {
             "n": 1,
             "d": 1
+          }
+        },
+        {
+          "language": "haskell",
+          "taint": {
+            "n": 8,
+            "d": 8
           }
         },
         {
@@ -1119,13 +1157,13 @@
   "committedInputs": {
     "corpusBaseline": {
       "source": "bench/cve-replay/corpus-baseline.json",
-      "generatedAt": "2026-09-14",
-      "total": 220,
-      "passing": 220
+      "generatedAt": "2026-10-26",
+      "total": 228,
+      "passing": 228
     },
     "languageSupport": {
       "source": "docs/language-support.json",
-      "generatedAt": "2026-10-05",
+      "generatedAt": "2026-10-26",
       "node": "v24.20.0",
       "tools": {
         "ghc": true,
@@ -1150,8 +1188,8 @@
         "No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.",
         "Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.",
         "Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.",
-        "Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.",
-        "The \"supported\" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 and unseen-v2 sets were used to change the engine and are development sets (shape-dev, shape-dev-2), not generalisation measures."
+        "A text parameter of an exported Haskell function is a source, and the finding says which kind. When the function returns a web-framework handler value (a Scotty action, a Yesod handler or widget, a Servant handler, a WAI application) the source is labelled request input, because the framework supplies the value from the request. For any other export it stays the weaker \"caller-controlled\" label (the callers of a library function are not known to be clients). A project record handed to an exported function is not a taint source at all (its fields are used by the data-flow lineage view only).",
+        "The \"supported\" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules) are reported beside it, with intervals over shapes (two near-identical cases per shape). From 2026-10-26 this split is a DEVELOPMENT set: its failures were read and the engine was changed to fix their causes, so the column is a regression result and says nothing about code shapes the engine was not fitted to. A generalisation claim needs a new unseen set that no engine change has been motivated by. The earlier unseen-v1 and unseen-v2 sets became the development sets shape-dev and shape-dev-2 the same way."
       ],
       "languages": {
         "haskell": {
@@ -1163,16 +1201,17 @@
           },
           "measuredOn": {
             "split": "holdout",
-            "measuredAt": "2026-10-05",
+            "measuredAt": "2026-10-26",
             "corpusVersion": "qa001-v2",
             "hashes": {
-              "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+              "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
               "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+              "shapeDev2Rollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
               "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
               "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
               "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
               "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-              "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
+              "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
             },
             "corpusTotals": {
               "security": {
@@ -1379,16 +1418,17 @@
           },
           "measuredOn": {
             "split": "holdout",
-            "measuredAt": "2026-10-05",
+            "measuredAt": "2026-10-26",
             "corpusVersion": "qa001-v2",
             "hashes": {
-              "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+              "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
               "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+              "shapeDev2Rollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
               "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
               "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
               "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
               "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-              "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
+              "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
             },
             "corpusTotals": {
               "security": {
@@ -2189,9 +2229,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.186.2",
-    "commit": "a988ab710db9ad1e23ddfb7f50583452d712c01e",
-    "bundleSha256": "38adcd8324aa7552b7bf61f5ac662fe383ed41f0bcf7f6eb2cad89de080a88c5",
+    "engineVersion": "0.187.0",
+    "commit": "dc0a0049571729827ab254c405d38c51dc4e11e4",
+    "bundleSha256": "347fbe455e8a916364d4ff2776ca5407f97e776d925bb5f2e3590d13f565a96b",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",

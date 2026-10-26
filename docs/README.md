@@ -146,6 +146,7 @@ Real captured output, field by field or run by run:
 - **[Metrics](METRICS.md)**: per-layer, per-language recall, measured with repro commands; the Haskell and Nix section carries denominators and the corpus revision
 - **[Scorecard](SCORECARD.md)**: the published accuracy scorecard
 - **[Haskell and Nix support](language-support.md)**: the measured per-capability support table, generated from the frozen holdout, with its limits
+- **[Haskell parity outside the engine](language-parity-haskell.md)**: what works for Haskell on the MCP tools, suppression, reports, dependency upgrades, discovery and capability enforcement, with the evidence for each cell and what is still open
 - **Tool versions**, [`language-toolchain.json`](language-toolchain.json) records the Node, GHC, Nix and parser versions the support is built and tested against
 - **[Compliance coverage](compliance/)**: what each framework's controls map to
 - **[Agent threat model](AGENT_THREAT_MODEL.md)**: how the tool hardens itself against the code it scans

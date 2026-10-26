@@ -1,7 +1,7 @@
 {
   "schema": "agentic-security/language-support-measurement@2",
   "split": "holdout",
-  "measuredAt": "2026-10-05",
+  "measuredAt": "2026-10-26",
   "corpusVersion": "qa001-v2",
   "ecosystems": {
     "haskell": {
@@ -440,11 +440,11 @@
             },
             "misses": [],
             "strays": [],
-            "crossFamilyFindingsNotScored": 0,
+            "crossFamilyFindingsNotScored": 6,
             "strict": {
-              "fp": 0,
-              "precision": 1,
-              "f1": 1
+              "fp": 6,
+              "precision": 0.9166666666666666,
+              "f1": 0.9565217391304348
             }
           },
           "taint": {
@@ -626,6 +626,7 @@
       }
     }
   },
+  "splitRole": "frozen-holdout",
   "supply": {
     "manifests": {
       "total": 48,
@@ -675,12 +676,13 @@
     }
   },
   "hashes": {
-    "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+    "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
     "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+    "shapeDev2Rollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
     "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
     "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
     "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
     "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-    "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
+    "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
   }
 }

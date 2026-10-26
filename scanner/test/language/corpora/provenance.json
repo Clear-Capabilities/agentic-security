@@ -175,6 +175,18 @@
       "measurement": "measured exactly once, with the engine as it stood on the base commit, before any registry change; never tuned against. Any engine change motivated by a miss on this set moves it to shape-dev-3 and requires unseen-v4.",
       "holdoutUse": "the frozen holdout was not measured or touched for this revision.",
       "labelledBy": "the author of the shapes"
+    },
+    {
+      "version": "unseen-v3-development",
+      "date": "2026-10-26",
+      "changed": [
+        "no case, label or source changed: labels/unseen.json, sources-unseen/ and templates-unseen.mjs are byte-identical; the split keeps its name `unseen` (manifest.json records `role: development`, `developmentSince: 2026-10-26`)"
+      ],
+      "unchangedHoldoutCases": "all (cases.json, privacy.json, holdoutRollup and contentRollup are byte-identical to qa001-v2)",
+      "reason": "The unseen-v3 failures were read case by case and the engine was changed to fix their causes (Haskell: the sources, sinks and guards of the idioms they used, Yesod handlers named by convention, function-form Servant endpoints, a rejection in the last case alternative, a hand-written HTML escaper, quoted shell positional parameters, one finding per clock-seeded generator, printf logging, the framework file and request-input accessors). A set that was used to change the engine no longer measures generalisation, so it is a development set from this date, as unseen-v1 (shape-dev) and unseen-v2 (shape-dev-2) were before it.",
+      "measurement": "Before the change (the base commit): Haskell SAST 24 TP / 8 FP / 24 FN, taint 22 TP / 4 FP / 8 FN (the figures stored in bench/language-support/results/unseen.json at that commit). The figures measured after the change are in the same file; they are development numbers and docs/language-support.md labels the column accordingly.",
+      "rule": "As for shape-dev and shape-dev-2, the split keeps being measured and reported (measure.mjs --split unseen; promote.mjs), labelled development. Any claim about generalisation to unseen shapes needs a NEW unseen set (unseen-v4) that no engine change has been motivated by.",
+      "labelledBy": "the author of the shapes"
     }
   ]
 }

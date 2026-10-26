@@ -8,7 +8,7 @@
 // with the reason, and marks the finding's resolution as partial. It adds evidence; it never removes a
 // finding or changes its severity.
 
-import { sourceInfo } from './haskell-models.js';
+import { sourceInfo, paramSourceInfo } from './haskell-models.js';
 
 const OPAQUE = {
   unknown: (c) => ({ kind: 'unresolved-target', detail: `${c.callee}: ${(c.hs && c.hs.reason) || 'unresolved'}` }),
@@ -111,6 +111,10 @@ export function buildChain(fn, finding) {
   const steps = [];
   const seen = new Set();
   let source = null;
+  // A parameter the IR annotated as a source (a request value handed to a framework handler, or caller-supplied text of an exported function) has no
+  // read call to point at: the flow starts at the function head, and the label says which kind of source it is.
+  const annotated = new Map((fn.paramAnnotations || []).map((a) => [a.name, a.decorator]));
+  let paramSource = null;
   const queue = [{ expr: arg, before: sinkNodeIdx }];
   let guard = 0;
   while (queue.length && !source && guard++ < 300) {
@@ -121,6 +125,10 @@ export function buildChain(fn, finding) {
     if (source) break;
     for (const name of identsOf(expr)) {
       const root = name.replace(/\.[^.]*$/, '');
+      if (!paramSource && (annotated.has(name) || annotated.has(root))) {
+        const info = paramSourceInfo(annotated.get(name) || annotated.get(root));
+        if (info) paramSource = { line: fn.line, label: info.label, provenance: info.provenance || undefined, viaParameter: true };
+      }
       for (let i = Math.min(before, nodes.length) - 1; i >= 0; i--) {
         const n = nodes[i];
         if (n.kind !== 'assign' || typeof n.target !== 'string' || !n.source) continue;
@@ -133,9 +141,10 @@ export function buildChain(fn, finding) {
       }
     }
   }
+  if (!source && paramSource) source = paramSource;
   if (!source) return null;
   const ordered = steps.filter((s) => s.line !== source.line || s.label).sort((a, b) => a.line - b.line);
-  return [{ line: source.line, label: source.label, provenance: source.provenance }, ...ordered.filter((s) => s.line > source.line)];
+  return [{ line: source.line, label: source.label, provenance: source.provenance, ...(source.viaParameter ? { viaParameter: true } : {}) }, ...ordered.filter((s) => s.line > source.line)];
 }
 
 /** A callee as text. A Haskell finding carries a string; an IR finding carries `{kind:'ident', name}` or `{kind:'member', object, prop}`. */
@@ -157,7 +166,8 @@ function appendSinkStep(f) {
   const sinkLine = (f.sink && f.sink.line) || f.line;
   const last = f.chain[f.chain.length - 1];
   if (!Number.isInteger(sinkLine) || (last && last.kind === 'sink')) return;
-  if (last && last.line === sinkLine && (last.file || f.file) === sinkFile && !/^source|standard input|stdin|argument|environment/i.test(String(last.label || ''))) { last.kind = 'sink'; return; }
+  // the first element of a chain is always the source: when the source and the sink share a line it stays the source and the sink is added after it
+  if (f.chain.length > 1 && last && last.line === sinkLine && (last.file || f.file) === sinkFile && !/^source|standard input|stdin|argument|environment/i.test(String(last.label || ''))) { last.kind = 'sink'; return; }
   f.chain.push({ file: sinkFile, line: sinkLine, label: `sink: ${calleeText(f.callee).replace(/^.*\./, '') || 'call'}`, kind: 'sink' });
 }
 
@@ -174,7 +184,9 @@ export function attachEvidenceChains(findings, perFile) {
     if (!chain || !chain.length) continue;
     f.chain = chain.map((c) => ({ file: f.file, line: c.line, label: c.label, ...(c.provenance ? { provenance: c.provenance } : {}) }));
     appendSinkStep(f);
-    f.source = { file: f.file, line: chain[0].line, label: chain[0].label };
+    // a parameter source is marked `kind: 'parameter'`: it is not part of the finding's stable identity (`posture/stable-id.js`), so findings that
+    // already existed keep their ids when the source is first named
+    f.source = { file: f.file, line: chain[0].line, label: chain[0].label, ...(chain[0].viaParameter ? { kind: 'parameter' } : {}) };
     if (chain[0].provenance) f.sourceProvenance = chain[0].provenance;
     n++;
   }

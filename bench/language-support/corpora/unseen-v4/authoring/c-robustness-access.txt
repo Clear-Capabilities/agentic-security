@@ -1,0 +1,507 @@
+@@@ parser-safety | vulnerable | src/PageParam.hs
+{-# LANGUAGE OverloadedStrings #-}
+module PageParam (listPage) where
+
+import Web.Scotty
+import qualified Data.Text.Lazy as TL
+
+listPage :: ActionM ()
+listPage = do
+  raw <- param "page"
+  let page = read (TL.unpack raw) :: Int --@@
+  json [page * 20 .. page * 20 + 19]
+
+@@@ parser-safety | vulnerable | src/JsonBody.hs
+{-# LANGUAGE OverloadedStrings #-}
+module JsonBody (createItem) where
+
+import Data.Aeson
+import Data.Maybe (fromJust)
+import Network.Wai
+import qualified Data.ByteString.Lazy as BL
+
+data Item = Item { name :: String, qty :: Int }
+
+instance FromJSON Item where
+  parseJSON = withObject "Item" $ \o -> Item <$> o .: "name" <*> o .: "qty"
+
+createItem :: Request -> IO Item
+createItem req = do
+  body <- strictRequestBody req
+  pure (fromJust (decode body)) --@@
+
+@@@ parser-safety | vulnerable | src/Headers.hs
+module Headers (bearerToken) where
+
+import Network.Wai
+import Network.HTTP.Types.Header (hAuthorization)
+import qualified Data.ByteString.Char8 as B
+
+bearerToken :: Request -> B.ByteString
+bearerToken req = B.words auth !! 1 --@@
+  where
+    auth = maybe B.empty id (lookup hAuthorization (requestHeaders req))
+
+@@@ parser-safety | safe | src/PageParam.hs
+{-# LANGUAGE OverloadedStrings #-}
+module PageParam (listPage) where
+
+import Web.Scotty
+import Text.Read (readMaybe)
+import qualified Data.Text.Lazy as TL
+
+listPage :: ActionM ()
+listPage = do
+  raw <- param "page"
+  case readMaybe (TL.unpack raw) :: Maybe Int of --@@
+    Just page -> json [page * 20 .. page * 20 + 19]
+    Nothing   -> text "bad page"
+
+@@@ parser-safety | safe | src/JsonBody.hs
+{-# LANGUAGE OverloadedStrings #-}
+module JsonBody (createItem) where
+
+import Data.Aeson
+import Network.Wai
+import qualified Data.ByteString.Lazy as BL
+
+data Item = Item { name :: String, qty :: Int }
+
+instance FromJSON Item where
+  parseJSON = withObject "Item" $ \o -> Item <$> o .: "name" <*> o .: "qty"
+
+createItem :: Request -> IO (Either String Item)
+createItem req = do
+  body <- strictRequestBody req
+  pure (eitherDecode body) --@@
+
+@@@ parser-safety | safe | src/Headers.hs
+module Headers (bearerToken) where
+
+import Network.Wai
+import Network.HTTP.Types.Header (hAuthorization)
+import qualified Data.ByteString.Char8 as B
+
+bearerToken :: Request -> Maybe B.ByteString
+bearerToken req =
+  case B.words =<< maybe [] pure (lookup hAuthorization (requestHeaders req)) of --@@
+    ["Bearer", tok] -> Just tok
+    _               -> Nothing
+
+@@@ sensitive-logging | vulnerable | src/LoginHandler.hs
+{-# LANGUAGE OverloadedStrings #-}
+module LoginHandler (login) where
+
+import Web.Scotty
+import System.IO (hPutStrLn, stderr)
+import qualified Data.Text.Lazy as TL
+
+login :: ActionM ()
+login = do
+  user <- param "user" :: ActionM String
+  password <- param "password" :: ActionM String
+  liftAndCatchIO (hPutStrLn stderr ("login attempt: user=" ++ user ++ " password=" ++ password)) --@@
+  text "checking"
+
+@@@ sensitive-logging | vulnerable | src/TokenRefresh.hs
+{-# LANGUAGE OverloadedStrings #-}
+module TokenRefresh (refresh) where
+
+import Control.Monad.Logger
+import qualified Data.Text as T
+
+data Session = Session { sessUser :: T.Text, sessAccessToken :: T.Text, sessRefreshToken :: T.Text }
+
+refresh :: Session -> LoggingT IO ()
+refresh s = do
+  logInfoN ("refreshing session " <> T.pack (show (sessRefreshToken s))) --@@
+  logInfoN ("user " <> sessUser s)
+
+@@@ sensitive-logging | vulnerable | src/Payments.hs
+module Payments (charge) where
+
+import System.IO
+
+data Card = Card { cardNumber :: String, cardCvv :: String, cardHolder :: String } deriving Show
+
+charge :: Card -> Int -> IO ()
+charge card cents = do
+  hPutStrLn stderr ("charging " ++ show cents ++ " cents to " ++ show card) --@@
+  pure ()
+
+@@@ sensitive-logging | safe | src/LoginHandler.hs
+{-# LANGUAGE OverloadedStrings #-}
+module LoginHandler (login) where
+
+import Web.Scotty
+import System.IO (hPutStrLn, stderr)
+
+login :: ActionM ()
+login = do
+  user <- param "user" :: ActionM String
+  _password <- param "password" :: ActionM String
+  liftAndCatchIO (hPutStrLn stderr ("login attempt: user=" ++ user)) --@@
+  text "checking"
+
+@@@ sensitive-logging | safe | src/TokenRefresh.hs
+{-# LANGUAGE OverloadedStrings #-}
+module TokenRefresh (refresh) where
+
+import Control.Monad.Logger
+import qualified Data.Text as T
+
+data Session = Session { sessUser :: T.Text, sessAccessToken :: T.Text, sessRefreshToken :: T.Text }
+
+refresh :: Session -> LoggingT IO ()
+refresh s = do
+  logInfoN ("refreshing session for " <> sessUser s) --@@
+  logInfoN ("token length " <> T.pack (show (T.length (sessRefreshToken s))))
+
+@@@ sensitive-logging | safe | src/Payments.hs
+module Payments (charge) where
+
+import System.IO
+
+data Card = Card { cardNumber :: String, cardCvv :: String, cardHolder :: String }
+
+-- Only the last four digits are ever written to the log.
+masked :: Card -> String
+masked c = replicate 12 '*' ++ drop 12 (cardNumber c)
+
+charge :: Card -> Int -> IO ()
+charge card cents = do
+  hPutStrLn stderr ("charging " ++ show cents ++ " cents to card " ++ masked card) --@@
+  pure ()
+
+@@@ route-authentication | vulnerable | src/AdminRoutes.hs
+{-# LANGUAGE OverloadedStrings #-}
+module AdminRoutes (adminApp) where
+
+import Web.Scotty
+import Database.SQLite.Simple
+
+adminApp :: Connection -> ScottyM ()
+adminApp conn = do
+  get "/health" (text "ok")
+  post "/admin/users/:id/delete" $ do --@@
+    uid <- param "id" :: ActionM Int
+    liftAndCatchIO (execute conn "DELETE FROM users WHERE id = ?" (Only uid))
+    text "deleted"
+
+@@@ route-authentication | vulnerable | src/ExportApi.hs
+module ExportApi (exportApi) where
+
+import Servant
+import Control.Monad.IO.Class (liftIO)
+
+type ExportAPI = "internal" :> "export" :> "customers" :> Get '[PlainText] String --@@
+
+exportApi :: IO [String] -> Server ExportAPI
+exportApi loadAll = liftIO (unlines <$> loadAll)
+
+@@@ route-authentication | vulnerable | src/Settings.hs
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings #-}
+module Settings (postResetR) where
+
+import Yesod
+import qualified Data.Text as T
+
+data App = App
+mkYesod "App" [parseRoutes|
+/settings/reset-all ResetR POST
+|]
+
+instance Yesod App
+
+postResetR :: Handler Html
+postResetR = do --@@
+  liftIO (putStrLn "resetting every tenant's settings")
+  redirect ResetR
+
+@@@ route-authentication | safe | src/AdminRoutes.hs
+{-# LANGUAGE OverloadedStrings #-}
+module AdminRoutes (adminApp) where
+
+import Web.Scotty
+import Network.HTTP.Types.Status (status401)
+import Database.SQLite.Simple
+import qualified Data.Text.Lazy as TL
+
+requireAdmin :: String -> ActionM ()
+requireAdmin adminToken = do
+  hdr <- header "Authorization"
+  case hdr of
+    Just v | TL.unpack v == "Bearer " ++ adminToken -> pure ()
+    _ -> status status401 >> text "unauthorized" >> finish
+
+adminApp :: String -> Connection -> ScottyM ()
+adminApp adminToken conn = do
+  get "/health" (text "ok")
+  post "/admin/users/:id/delete" $ do --@@
+    requireAdmin adminToken
+    uid <- param "id" :: ActionM Int
+    liftAndCatchIO (execute conn "DELETE FROM users WHERE id = ?" (Only uid))
+    text "deleted"
+
+@@@ route-authentication | safe | src/ExportApi.hs
+module ExportApi (exportApi) where
+
+import Servant
+import Servant.Auth.Server
+import Control.Monad.IO.Class (liftIO)
+
+data Admin = Admin
+
+type ExportAPI = Auth '[JWT] Admin :> "internal" :> "export" :> "customers" :> Get '[PlainText] String --@@
+
+exportApi :: IO [String] -> Server ExportAPI
+exportApi loadAll (Authenticated _) = liftIO (unlines <$> loadAll)
+exportApi _ _ = throwAll err401
+
+@@@ route-authentication | safe | src/Settings.hs
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings #-}
+module Settings (postResetR) where
+
+import Yesod
+import qualified Data.Text as T
+
+data App = App
+mkYesod "App" [parseRoutes|
+/settings/reset-all ResetR POST
+|]
+
+instance Yesod App where
+  isAuthorized ResetR _ = do
+    mu <- lookupSession "user"
+    pure (maybe AuthenticationRequired (const Authorized) mu)
+
+postResetR :: Handler Html
+postResetR = do --@@
+  liftIO (putStrLn "resetting every tenant's settings")
+  redirect ResetR
+
+@@@ object-authorization | vulnerable | src/Documents.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Documents (getDocument) where
+
+import Web.Scotty
+import Network.HTTP.Types.Status (status404)
+import Database.SQLite.Simple
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+
+data Doc = Doc Int Int T.Text
+instance FromRow Doc where
+  fromRow = Doc <$> field <*> field <*> field
+
+getDocument :: Connection -> ActionM ()
+getDocument conn = do
+  docId <- param "id" :: ActionM Int
+  docs <- liftAndCatchIO (query conn "SELECT id, owner_id, body FROM documents WHERE id = ?" (Only docId) :: IO [Doc]) --@@
+  case docs of
+    (Doc _ _ body : _) -> text (TL.fromStrict body)
+    []                 -> status status404 >> text "not found"
+
+@@@ object-authorization | vulnerable | src/Invoices.hs
+module Invoices (invoiceById) where
+
+import Servant
+import qualified Data.Map.Strict as M
+import Control.Monad.IO.Class (liftIO)
+import Data.IORef
+
+data Invoice = Invoice { invOwner :: Int, invTotal :: Int }
+
+type InvoiceAPI = Capture "invoiceId" Int :> Get '[JSON] Int
+
+invoiceById :: IORef (M.Map Int Invoice) -> Int -> Server InvoiceAPI
+invoiceById store currentUser invoiceId = do
+  m <- liftIO (readIORef store)
+  case M.lookup invoiceId m of --@@
+    Just inv -> pure (invTotal inv)
+    Nothing  -> throwError err404
+
+@@@ object-authorization | vulnerable | src/Profiles.hs
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings #-}
+module Profiles (putProfileR) where
+
+import Yesod
+import Database.Persist.Sql
+import qualified Data.Text as T
+
+data App = App
+mkYesod "App" [parseRoutes| /profile/#Int64 ProfileR PUT |]
+instance Yesod App
+
+putProfileR :: Int64 -> Handler Value
+putProfileR pid = do
+  newBio <- requireJsonBody :: Handler T.Text
+  runDB (update (toSqlKey pid) [ProfileBio =. newBio]) --@@
+  returnJson ("updated" :: T.Text)
+
+@@@ object-authorization | safe | src/Documents.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Documents (getDocument) where
+
+import Web.Scotty
+import Network.HTTP.Types.Status (status404)
+import Database.SQLite.Simple
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+
+data Doc = Doc Int Int T.Text
+instance FromRow Doc where
+  fromRow = Doc <$> field <*> field <*> field
+
+getDocument :: Connection -> Int -> ActionM ()
+getDocument conn currentUser = do
+  docId <- param "id" :: ActionM Int
+  docs <- liftAndCatchIO (query conn "SELECT id, owner_id, body FROM documents WHERE id = ? AND owner_id = ?" (docId, currentUser) :: IO [Doc]) --@@
+  case docs of
+    (Doc _ _ body : _) -> text (TL.fromStrict body)
+    []                 -> status status404 >> text "not found"
+
+@@@ object-authorization | safe | src/Invoices.hs
+module Invoices (invoiceById) where
+
+import Servant
+import qualified Data.Map.Strict as M
+import Control.Monad.IO.Class (liftIO)
+import Data.IORef
+
+data Invoice = Invoice { invOwner :: Int, invTotal :: Int }
+
+type InvoiceAPI = Capture "invoiceId" Int :> Get '[JSON] Int
+
+invoiceById :: IORef (M.Map Int Invoice) -> Int -> Server InvoiceAPI
+invoiceById store currentUser invoiceId = do
+  m <- liftIO (readIORef store)
+  case M.lookup invoiceId m of --@@
+    Just inv | invOwner inv == currentUser -> pure (invTotal inv)
+    _                                      -> throwError err404
+
+@@@ object-authorization | safe | src/Profiles.hs
+{-# LANGUAGE QuasiQuotes, TemplateHaskell, TypeFamilies, OverloadedStrings #-}
+module Profiles (putProfileR) where
+
+import Yesod
+import Database.Persist.Sql
+import qualified Data.Text as T
+
+data App = App
+mkYesod "App" [parseRoutes| /profile/#Int64 ProfileR PUT |]
+instance Yesod App
+
+putProfileR :: Int64 -> Handler Value
+putProfileR pid = do
+  uid <- requireAuthId
+  mProfile <- runDB (get (toSqlKey pid))
+  case mProfile of
+    Just p | profileUser p == uid -> do
+      newBio <- requireJsonBody :: Handler T.Text
+      runDB (update (toSqlKey pid) [ProfileBio =. newBio]) --@@
+      returnJson ("updated" :: T.Text)
+    _ -> permissionDenied "not your profile"
+
+@@@ session-cookie | vulnerable | src/SetSession.hs
+{-# LANGUAGE OverloadedStrings #-}
+module SetSession (startSession) where
+
+import Web.Scotty
+import Web.Cookie
+import Data.ByteString.Builder (toLazyByteString)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.Text.Lazy.Encoding as TLE
+import qualified Data.Text.Lazy as TL
+
+startSession :: B.ByteString -> ActionM ()
+startSession sid = do
+  let cookie = defaultSetCookie { setCookieName = "sid", setCookieValue = sid, setCookiePath = Just "/" } --@@
+  setHeader "Set-Cookie" (TLE.decodeUtf8 (toLazyByteString (renderSetCookie cookie)))
+  text "welcome"
+
+@@@ session-cookie | vulnerable | src/Auth.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Auth (loginResponse) where
+
+import Network.Wai
+import Network.HTTP.Types
+import Web.Cookie
+import Data.ByteString.Builder (toByteString')
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as BL
+
+loginResponse :: B.ByteString -> Response
+loginResponse token = responseLBS status200 [(hSetCookie, rendered)] "ok"
+  where
+    cookie = defaultSetCookie
+      { setCookieName = "session"
+      , setCookieValue = token
+      , setCookieHttpOnly = False --@@
+      , setCookieSecure = False
+      }
+    rendered = toByteString' (renderSetCookie cookie)
+
+@@@ session-cookie | vulnerable | src/RawCookie.hs
+{-# LANGUAGE OverloadedStrings #-}
+module RawCookie (loginApp) where
+
+import Network.Wai
+import Network.HTTP.Types
+import qualified Data.ByteString.Char8 as B
+
+loginApp :: B.ByteString -> Application
+loginApp token _req respond =
+  respond (responseLBS status200 [("Set-Cookie", "session=" <> token <> "; Path=/")] "logged in") --@@
+
+@@@ session-cookie | safe | src/SetSession.hs
+{-# LANGUAGE OverloadedStrings #-}
+module SetSession (startSession) where
+
+import Web.Scotty
+import Web.Cookie
+import Data.ByteString.Builder (toLazyByteString)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.Text.Lazy.Encoding as TLE
+
+startSession :: B.ByteString -> ActionM ()
+startSession sid = do
+  let cookie = defaultSetCookie
+        { setCookieName = "sid", setCookieValue = sid, setCookiePath = Just "/"
+        , setCookieHttpOnly = True, setCookieSecure = True, setCookieSameSite = Just sameSiteStrict } --@@
+  setHeader "Set-Cookie" (TLE.decodeUtf8 (toLazyByteString (renderSetCookie cookie)))
+  text "welcome"
+
+@@@ session-cookie | safe | src/Auth.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Auth (loginResponse) where
+
+import Network.Wai
+import Network.HTTP.Types
+import Web.Cookie
+import Data.ByteString.Builder (toByteString')
+import qualified Data.ByteString.Char8 as B
+
+loginResponse :: B.ByteString -> Response
+loginResponse token = responseLBS status200 [(hSetCookie, rendered)] "ok"
+  where
+    cookie = defaultSetCookie
+      { setCookieName = "session"
+      , setCookieValue = token
+      , setCookieHttpOnly = True --@@
+      , setCookieSecure = True
+      , setCookieMaxAge = Just 3600
+      }
+    rendered = toByteString' (renderSetCookie cookie)
+
+@@@ session-cookie | safe | src/RawCookie.hs
+{-# LANGUAGE OverloadedStrings #-}
+module RawCookie (loginApp) where
+
+import Network.Wai
+import Network.HTTP.Types
+import qualified Data.ByteString.Char8 as B
+
+loginApp :: B.ByteString -> Application
+loginApp token _req respond =
+  respond (responseLBS status200 [("Set-Cookie", "session=" <> token <> "; Path=/; HttpOnly; Secure; SameSite=Lax")] "logged in") --@@

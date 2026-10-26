@@ -1,0 +1,57 @@
+# Haskell parity outside the core engine
+
+This page lists, capability by capability, what works for Haskell on the surfaces around the scan engine: the MCP tools, suppression, identity, reports, the dependency path, discovery, capability enforcement and the posture annotators. It was built by reading the code and then running each surface on a small Haskell project, not by reading other documentation. It is hand-written. It is not generated and not a measured accuracy figure; the measured per-capability support table is [`language-support.md`](language-support.md).
+
+How to read the evidence column:
+
+- **run** means the call was executed against a scratch Haskell project during the audit (2026-10-26, version 0.186.1 plus the changes listed here). Nothing in a run column is a quotation from another page.
+- **test** names a test file that pins the behaviour. `language-parity-haskell.test.js` is the test written for this audit and pins both directions (the Haskell case works, the near miss does not).
+
+States: **works** (behaves as for JavaScript and Python), **partial** (works with a named limit), **fixed** (was a silent no-op or a wrong answer, now pinned by a test), **loud** (not supported, and the output says so by name), **open** (a gap that remains, with the reason).
+
+## Matrix
+
+| Capability | State | Evidence | Notes |
+|---|---|---|---|
+| Scan: SQL, command, path and other taint; weak randomness; sensitive logging; route authentication | works | run (7 findings on a Scotty and SQLite project); test `test/haskell/*` | Findings carry `language`, `capability`, `evidenceKind`, `originalLocation`, `modelVersion`. |
+| Suppression pragma `-- agentic-security-ignore: <id>` and `{- agentic-security-ignore -}` | works | run (a line comment with a CWE id and a block comment with no id each suppressed their line; the same words inside a string literal suppressed nothing); test `language-scan-modes.test.js`, `language-end-to-end.test.js` | Line scoped, exact id match, logged like every other suppression. |
+| Finding identity (`stableId`) | partial | run | Identical after lines are inserted above (all 7 findings). Renaming a local identifier that appears on the sink line mints a new identity for that taint finding (1 of 7 changed); the other 6 were unchanged. The identity is derived from the rule and the snippet text. This was not compared with JavaScript in the audit. |
+| JSON and SARIF output | works | run (SARIF: 7 results, code flows, `stableId` in `partialFingerprints`); test `language-report-formats.test.js` | The multi-sink chain finding has no `language` field, so the report drops the Haskell-only keys (`source`, `sink`, `rule`) for that one finding. Cosmetic; see Open. |
+| MCP `scan_diff` | works | run; test `language-integrations.test.js` | Scans the named files with the import closure and manifests as context. |
+| MCP `explain_finding` | fixed | run; test `language-parity-haskell.test.js` | Returned `trace: null` for a Haskell taint finding. It now returns the source-to-sink steps from the finding's `chain`. |
+| MCP `query_taint` | fixed | run; test `language-parity-haskell.test.js` | A correct source and sink pair returned `totalMatches: 0` (silent no-op) because only free text was searched and an IR taint finding has none. The structured `source`, `sink`, `rule` and `chain` are now searched. A pair the flow does not contain still matches nothing. JavaScript IR taint findings record an empty chain and no source or sink object, so the same query on JavaScript can still return nothing (open, outside this audit's scope). |
+| MCP `synthesize_fix` | fixed, partial | run; test `language-parity-haskell.test.js`, `language-integrations.test.js` | Tiers FULL, MITIGATION, WORKAROUND from the language fixer; an unsupported shape is named `unsupported`. The SQL fix used to add `import Database.PostgreSQL.Simple` to a file that uses `sqlite-simple`, and report it as verified (a static rescan cannot see a wrong library). A patch that adds an import of a database library the file did not already use is now `blocked` with the reason. The wrong-library behaviour is in `haskell-fix.js`, which this change did not edit (see Open). A dependency finding now answers `languageFix.status: use-sca-upgrade` instead of `null`. |
+| MCP `verify_fix` | works | test `language-integrations.test.js` | An unchanged sink is still reported; the argv form verifies. |
+| MCP `apply_fix` | works | run (applied with a caller patch, `verified: true` with the note that tests were not run; `undo` restored the file byte for byte) | The multi-file plan path (`plan_digest`) is for Nix option fixes. |
+| MCP `prove_finding`, `prove_fix` | loud | run | Answer `no harness builder for .hs; JavaScript and Python only`. No proof is claimed. The proof fabric is owned elsewhere. |
+| Proof-of-concept leg inside `apply_fix` verification | loud, partial | run | Reported `inconclusive` and not counted either way. The wording `unsupported poc language: node` names the wrong language for a `.hs` file (open). |
+| Dependency findings (Hackage), advisory feed | works | test `haskell-sca.test.js`, `language-end-to-end.test.js` | Offline, with no snapshot, the scan states that dependencies were not checked; it never reports clean. |
+| MCP `synthesize_sca_upgrade`, `apply_sca_upgrade` for a Hackage constraint or flake input | fixed | run; test `language-parity-haskell.test.js` | Answered `ecosystem 'hackage' has no automated upgrade in v1` while the CLI (`fix --finding`) could edit the bound. Both tools now use the same language planner. The preview writes nothing; the apply writes the one manifest inside the session root with a backup and a history entry (`undo` reverts it), and always answers `verified: false` and `testsRun: false` because a constraint edit is not re-resolved. Without `confirm: true` nothing is applied. A flake input retarget needs a target ref that these two tools do not take, so it answers `blocked` with the reason. |
+| SCA reachability for Hackage packages | partial | run; test `haskell-sca.test.js` | Import-level reachability and an affected-function check exist, but the package-to-module table covers 9 packages. Any other package is `unknown` with the reason "no module mapping ... NOT unreachable". The advisory records carry no module data, so this cannot be derived. Before this change the scan output dropped the reason and the tier and showed only `functionReachable: unknown`; both now appear (`reachability`, `reachabilityTier`). |
+| SCA reachability, route-level `reachable` on a SAST finding | partial | run | `reachable` stays `null` for Haskell. The call-graph pass only has data for JavaScript, and the code states that absence is not evidence of unreachability. Route facts are reported separately (`routes`, `entrypointInventory`). |
+| Route and entry-point inventory | fixed | run; test `language-parity-haskell.test.js` | Haskell routes carry a handler object, and the inventory printed `[object Object]` as the entry point name and tested the webhook pattern against that text. An inline handler is now named by its route. |
+| ATT&CK and CAPEC annotation | fixed | run; test `language-parity-haskell.test.js` | `missing-authentication`, `weak-randomness`, `weak-hash`, `password-hashing`, `tls-validation`, `hardcoded-credentials` and the two object and function authorization families had no mapping and were listed as unmapped. They now map to the canonical family of the same defect. `sensitive-logging` and `unsafe-boundary` have no counterpart and stay listed as unmapped. `weak-crypto` is shared with other languages and covers hashes, so it was deliberately not aliased to a cipher technique. |
+| Compliance mapping | fixed, works | run (an ASVS authentication control cites the two Haskell route findings); test `language-compliance.test.js`, `language-parity-haskell.test.js` | `hardcoded-credentials`, `tls-validation` and `cookie-attributes` named no framework family. They are now evidence for the secret, certificate-verification and session-cookie controls. `argument-injection`, `resource-exhaustion`, `unhandled-exception` and `unsafe-boundary` map to no framework control, as their JavaScript equivalents do not. |
+| Threat-model grounding | works | code (file-glob and section based, no language branch) | Crown jewels and out-of-scope globs apply to `.hs` paths like any other. Not exercised on a Haskell project in the audit. |
+| LSP, editor plugins | works | test `language-integrations.test.js` | Diagnostics and verified quick fixes over a real stdio session. |
+| Baseline and CI gate | works | test `language-integrations.test.js` | `ci` fails on a vulnerable fixture and passes on a clean one. |
+| LLM candidate discovery (`hunt`) | works | run (one area, hunter prompt carried the Haskell source, a candidate passed confirm, refute and judge and landed in `fresh` with a stable id and a `sink-adjacent` confirmation) | The candidate has no `language` field (open, cosmetic). Run with an injected stand-in for the model; no real model was called. |
+| Capability manifests and enforcement | fixed | run; test `language-parity-haskell.test.js` | The enforcement itself is language neutral. The list of executables that run project-supplied code did not include `ghc`, `ghci`, `runghc`, `cabal`, `stack` or the Nix evaluators and builders, although `cargo`, `go`, `make` and `npm` were listed. Template Haskell splices and a custom `Setup.hs` run at build time, so a manifest that allowed one of them by path was treated as a plain tool. They are now interpreters, which a manifest must declare as scoped. A linter such as `hlint` is not. |
+| SBOM, AI-BOM | works | test `language-bom.test.js`, `language-aibom.test.js` | |
+
+## Open
+
+- `haskell-fix.js` chooses `Database.PostgreSQL.Simple` for every SQL parameterisation. The guard added here (in `language/context.js`) refuses the edit when it would add a database import the file did not use, so a wrong library no longer reaches a user as verified. The correct fix is to pick the driver from the file's own imports and the cabal `build-depends`; until then a file that uses `sqlite-simple` or `mysql-simple` gets no automatic SQL fix. That file and the package-to-module table in `haskell-sca.js` were out of scope for this change.
+- The package-to-module table in `haskell-sca.js` covers 9 packages, so function-level reachability for any other Hackage package is `unknown`. Advisory records do not name modules.
+- Findings that no Haskell producer stamps (the multi-sink chain, discovery candidates) have no `language` field. Stamping it generally was not done: the language contract discards results from an unregistered producer, and the effect of setting `language` on those findings was not measured.
+- `query_taint` on a JavaScript IR taint finding returns nothing for a real source and sink pair, because those findings record neither a chain nor source and sink objects.
+- The proof-of-concept leg inside fix verification names `node` as the unsupported language for a Haskell file.
+- `stableId` for a taint finding changes when an identifier on the sink line is renamed. Not compared against JavaScript.
+
+## Reproducing
+
+```
+cd scanner
+node --test test/language/language-parity-haskell.test.js   # the pinned cells
+npm run test:language                                       # the existing Haskell and Nix cells cited above
+```

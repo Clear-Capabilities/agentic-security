@@ -1,0 +1,509 @@
+{
+ "scannerVersion": "0.186.2",
+ "labelsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
+ "definition": "precision = tp / (tp + fp); ambiguous and unlabeled excluded from the denominator; 95% Wilson interval",
+ "all": {
+  "all haskell projects": {
+   "flagged": 84,
+   "tp": 1,
+   "fp": 42,
+   "ambiguous": 11,
+   "unlabeled": 30,
+   "labeledDenominator": 43,
+   "precision": 0.0233,
+   "wilson95": [
+    0.0041,
+    0.1206
+   ],
+   "ifAmbiguousAllFp": 0.0185,
+   "ifAmbiguousAllTp": 0.2222
+  }
+ },
+ "perProject": {
+  "hakyll": {
+   "flagged": 8,
+   "tp": 0,
+   "fp": 8,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 8,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.3244
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "hledger": {
+   "flagged": 46,
+   "tp": 1,
+   "fp": 27,
+   "ambiguous": 1,
+   "unlabeled": 17,
+   "labeledDenominator": 28,
+   "precision": 0.0357,
+   "wilson95": [
+    0.0063,
+    0.1771
+   ],
+   "ifAmbiguousAllFp": 0.0345,
+   "ifAmbiguousAllTp": 0.069
+  },
+  "postgrest": {
+   "flagged": 12,
+   "tp": 0,
+   "fp": 5,
+   "ambiguous": 0,
+   "unlabeled": 7,
+   "labeledDenominator": 5,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.4345
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "shellcheck": {
+   "flagged": 18,
+   "tp": 0,
+   "fp": 2,
+   "ambiguous": 10,
+   "unlabeled": 6,
+   "labeledDenominator": 2,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.6576
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0.8333
+  }
+ },
+ "perSourceKind": {
+  "haskell source (.hs)": {
+   "flagged": 66,
+   "tp": 1,
+   "fp": 40,
+   "ambiguous": 1,
+   "unlabeled": 24,
+   "labeledDenominator": 41,
+   "precision": 0.0244,
+   "wilson95": [
+    0.0043,
+    0.126
+   ],
+   "ifAmbiguousAllFp": 0.0238,
+   "ifAmbiguousAllTp": 0.0476
+  },
+  "non-Haskell file in a Haskell project": {
+   "flagged": 18,
+   "tp": 0,
+   "fp": 2,
+   "ambiguous": 10,
+   "unlabeled": 6,
+   "labeledDenominator": 2,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.6576
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0.8333
+  }
+ },
+ "perClass": {
+  "Concurrency: fire-and-forget async call in browsePingInit() — result not awaited": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Data Exposure": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "Dockerfile USER root (container runs with root privileges)": {
+   "flagged": 7,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 6,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 1
+  },
+  "Dockerfile: USER root — container runs as root": {
+   "flagged": 7,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 4,
+   "unlabeled": 3,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 1
+  },
+  "Known-Broken Code Marker Near Security-Sensitive Logic": {
+   "flagged": 8,
+   "tp": 0,
+   "fp": 8,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 8,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.3244
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "Missing Timeout on Outbound HTTP Request (DoS)": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "OS Command Injection (shell string)": {
+   "flagged": 3,
+   "tp": 1,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 2,
+   "labeledDenominator": 1,
+   "precision": 1,
+   "wilson95": [
+    0.2065,
+    1
+   ],
+   "ifAmbiguousAllFp": 1,
+   "ifAmbiguousAllTp": 1
+  },
+  "Open Redirect": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "Partial function applied to caller-supplied text": {
+   "flagged": 4,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 1,
+   "unlabeled": 2,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0.5
+  },
+  "Path Traversal (copy/rename)": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "Path Traversal (filesystem operation)": {
+   "flagged": 5,
+   "tp": 0,
+   "fp": 3,
+   "ambiguous": 0,
+   "unlabeled": 2,
+   "labeledDenominator": 3,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.5615
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "Path Traversal": {
+   "flagged": 9,
+   "tp": 0,
+   "fp": 4,
+   "ambiguous": 0,
+   "unlabeled": 5,
+   "labeledDenominator": 4,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.4899
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "Pipeline: Third-party action pinned to major-version tag (mutable)": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "PostgreSQL Connection URI": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "Request body read without a size limit": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /add is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /balance is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /balancesheet is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /balancesheetequity is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /cashflow is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /holdings is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route GET /incomestatement is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route POST /add is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Route PUT /add is implemented but not declared in the API contract": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Server-Side Request Forgery": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "Session cookie without HttpOnly or Secure": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 2,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 2,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.6576
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "Unsafe boundary: function Object() { [native code] }": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Unsafe boundary: unsafePerformIO": {
+   "flagged": 13,
+   "tp": 0,
+   "fp": 12,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 12,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.2425
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  },
+  "Whole input read into memory without a size limit": {
+   "flagged": 6,
+   "tp": 0,
+   "fp": 6,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 6,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.3903
+   ],
+   "ifAmbiguousAllFp": 0,
+   "ifAmbiguousAllTp": 0
+  }
+ },
+ "staleLabels": 6
+}

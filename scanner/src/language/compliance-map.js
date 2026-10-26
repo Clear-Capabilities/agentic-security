@@ -18,6 +18,12 @@ export const LANGUAGE_FAMILY_ALIASES = Object.freeze({
   // credential handling: a secret that lands in the Nix store, a derivation or a log is exposed sensitive data
   'data-exposure': ['secret-in-store', 'secret-in-build', 'secret-in-log', 'sensitive-logging', 'dependency-url-credential'],
   'key-hygiene': ['secret-in-store', 'secret-in-build'],
+  // credentials written in source and certificate validation switched off (Haskell names them more specifically)
+  'hardcoded-secret': ['hardcoded-credentials'],
+  'crypto-tls-no-verify': ['tls-validation'],
+  // a session cookie built without HttpOnly or Secure is evidence for both cookie controls
+  'session-cookie-missing-secure-flag': ['cookie-attributes'],
+  'session-cookie-without-httponly-flag': ['cookie-attributes'],
   // cryptography
   'crypto-weak-hash': ['weak-hash'],
   'crypto-kdf-weak': ['password-hashing'],

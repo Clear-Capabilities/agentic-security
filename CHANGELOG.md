@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.187.0 - Haskell parity work: wider exploit proof, broader SAST and taint, new unseen measurement sets
+
+- **Haskell SAST and taint, generalised beyond the shapes they were written against.** New sources and sinks (Scotty, Yesod, WAI, Servant, Req, conduit, http-client), guards recognised by what they do rather than by name (host allow-lists, hand-written HTML escapers, `sh -c` scripts), SSRF reported at the send instead of the parse, and Haskell-scoped engine fixes for branches handed to combinators, `words`, `>>=` and common lowering forms. On unseen-v3, now a development set, SAST and taint reach 100%; that is a regression result, not a generalisation claim.
+- **Honest unseen measurement.** A new set, unseen-v4 (78 forms, 13 families, measured once before this release's engine work), gives SAST recall 45.8% to 54.2% and taint precision 73.3% to 84.6%; taint recall is unchanged at 73.3%. Several families remain at 0 to 33% recall.
+- **Real-code precision did not move.** On four pinned real Haskell projects (`bench/dag/independent-haskell/`, one LLM labeler, 60 of the flagged sites), default-scan precision is 2.3% (95% interval 0.4% to 12.1%), against 2.0% before. The new engine flags additional sites that are unlabeled and are not counted.
+- **Alias fix.** A point-free alias of a library function (`tidy = takeFileName`, `run = callCommand`) was treated as an unresolved call, so a sanitizer alias left a flow unsanitized and a sink alias went undetected. Aliases of library functions are now expanded; a local binding with the same name disables the expansion.
+- **Exploit proof.** Widened Haskell reproducer coverage and oracles.
+- **Gates.** 56 Haskell mutation cases and 8 synthetic corpus entries (verdict-flip 460 of 460, corpus 228 of 228); layer-recall maps `.hs` and `.lhs`, taint attribution 126 to 134.
+- **Parity outside the engine.** Haskell on the MCP `query_taint`, context, compliance mapping, capability decisions, attack taxonomy, entrypoint inventory and reports, with `docs/language-parity-haskell.md` listing what remains open.
+- **Not done.** The container proof path is untested, `prove_finding` and `prove_fix` have no `.hs` harness builder, and `haskell-web-auth` route fixtures need a host with scotty, wai, servant and yesod to compile.
+
 ## 0.186.2 - Haskell exploit proof, a default-scan drift gate, and the measurements behind earlier claims
 
 - **Haskell in the exploit proof fabric (GA capability, new language).** `proof doctor` now lists `haskell` and `proof generate` builds reproducers for Haskell findings. Reproducers run in GHC's interpreter (`ghc -e`), so there is no build step. Command injection and path-traversal writes are proven; server-side request forgery is refused because no HTTP client ships with GHC; SQL, argument injection and deserialization are refused by name. Only `base` and the packages that ship with GHC are allowed (read from the installed GHC); a handler that needs a web framework is refused with the package named. Template Haskell, quasi-quotes, CPP, the foreign function interface and plugin options are refused as load-time code execution. 45 of 45 fixture reproductions across 15 classes, 0 false confirmations. Limits: exercised under local confinement on macOS with GHC 9.14.1 only; the container image is wired but was not run against a real engine, and Linux was not exercised.

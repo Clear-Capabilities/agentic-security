@@ -82,6 +82,19 @@ export function languageOfFinding(f) {
   return null;
 }
 
+const _importedModules = (text) => new Set([...String(text || '').matchAll(/^import\s+(?:safe\s+)?(?:qualified\s+)?([A-Z][\w.']*)/gm)].map((m) => m[1]));
+/** Database-library modules a Haskell fix plan imports that the file did not import before the edit (sorted, deduplicated). */
+export function addedDatabaseImports(plan) {
+  const edits = Array.isArray(plan && plan.edits) && plan.edits.length ? plan.edits : [plan];
+  const out = new Set();
+  for (const e of edits) {
+    if (!e || typeof e.before !== 'string' || typeof e.after !== 'string') continue;
+    const had = _importedModules(e.before);
+    for (const m of _importedModules(e.after)) if (!had.has(m) && /^Database\./.test(m)) out.add(m);
+  }
+  return [...out].sort();
+}
+
 /**
  * A READ-ONLY fix preview for a Haskell/Nix finding: the planned patch, its tier, and what the verification gates say.
  * Never writes. `files` is the project's language sources (see loadLanguageProject).
@@ -91,6 +104,13 @@ export async function languageFixPreview(finding, files, { apply = false, root =
   if (!lang) return { ok: false, status: 'unsupported', reason: 'not a Haskell or Nix finding' };
   const plan = lang === 'haskell' ? planHaskellFix(finding, files) : planNixFix(finding, files);
   if (!plan || plan.ok === false) return { ok: false, status: (plan && plan.status) || 'unsupported', tier: (plan && plan.tier) || null, reason: (plan && plan.reason) || 'no deterministic fix', proposal: (plan && plan.proposal) || null };
+  if (lang === 'haskell') {
+    // A static rescan cannot see a wrong library, so this is decided here, before any gate can call the patch verified.
+    const added = addedDatabaseImports(plan);
+    if (added.length) {
+      return { ok: false, status: 'blocked', tier: null, label: plan.label || null, reason: `the patch adds an import of a database library the file did not use (${added.join(', ')}); which driver the project uses is not provable from this file, so the edit is refused rather than guessed. Apply the parameterised query by hand with the project's own driver`, proposal: null };
+    }
+  }
   let res;
   try { res = lang === 'haskell' ? await validateHaskellFix(finding, { files, apply, root }) : await validateNixFix(finding, { files, apply, root }); } catch (e) { res = { status: 'blocked', reason: `verification failed: ${String((e && e.message) || e)}` }; }
   return {

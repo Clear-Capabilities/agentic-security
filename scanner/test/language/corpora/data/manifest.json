@@ -531,7 +531,9 @@
   "version": "unseen-v3",
   "cases": 300,
   "rollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
-  "note": "author-labelled single-flaw shapes written AFTER the fixes they would otherwise have motivated; measured once per promotion; never tuned against"
+  "note": "unseen-v3: author-labelled single-flaw shapes, a DEVELOPMENT set since 2026-10-26 (its failures were read and used to change the engine); no longer a generalisation measure, kept as a regression set; a new unseen set is required for any generalisation claim",
+  "role": "development",
+  "developmentSince": "2026-10-26"
  },
  "shapeDev": {
   "version": "shapedev-v1",

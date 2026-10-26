@@ -71,6 +71,12 @@ export const HS_PACKAGES = Object.freeze({
   'clientsession': { modules: ['Web.ClientSession'], tested: [] },
   connection: { modules: ['Network.Connection'], tested: [] },
   HsOpenSSL: { modules: ['OpenSSL.Session'], tested: [] },
+  'wai-extra': { modules: ['Network.Wai.Parse', 'Network.Wai.Conduit'], tested: [] },
+  'scotty-cookie': { modules: ['Web.Scotty.Cookie'], tested: [] },
+  'http-types': { modules: ['Network.HTTP.Types', 'Network.HTTP.Types.Header'], tested: [] },
+  'conduit-extra': { modules: ['Data.Conduit.Binary', 'Data.Conduit.Combinators'], tested: [] },
+  'uri-parsing': { modules: ['Text.URI'], tested: [] },
+  'snap-fileserve': { modules: ['Snap.Util.FileServe'], tested: [] },
 });
 
 // ── sources ─────────────────────────────────────────────────────────────────
@@ -131,6 +137,48 @@ src('Yesod', ['getRequest', 'rawRequestBody', 'runRequestBody', 'lookupFile', 'l
 // Scotty: the underlying WAI request
 src('Web.Scotty', ['request'], 'http-body', 'scotty WAI request', { package: 'scotty', framework: 'scotty' });
 src('Web.Scotty.Trans', ['request'], 'http-body', 'scotty WAI request', { package: 'scotty', framework: 'scotty' });
+// The request accessors a handler really uses, beyond the first few: the Maybe/Either forms of the same parameter reads (scotty 0.20+),
+// the raw body reader, cookies, and the JSON body helpers of yesod. Each reads a value the client controls.
+for (const mod of ['Web.Scotty', 'Web.Scotty.Trans']) {
+  src(mod, ['queryParamMaybe', 'pathParamMaybe', 'formParamMaybe', 'queryParamEither', 'formParamEither', 'paramsEither'], 'url-param', 'scotty request parameter', { package: 'scotty', framework: 'scotty' });
+  src(mod, ['bodyReader', 'bodyRaw'], 'http-body', 'scotty request body', { package: 'scotty', framework: 'scotty' });
+}
+src('Web.Scotty.Cookie', ['getCookie', 'getCookies'], 'cookie', 'scotty request cookie', { package: 'scotty-cookie', framework: 'scotty' });
+for (const mod of ['Yesod.Core', 'Yesod']) {
+  src(mod, ['parseJsonBody', 'requireJsonBody', 'parseCheckJsonBody', 'requireCheckJsonBody', 'lookupCookies', 'lookupHeaders'], 'http-body', 'yesod request body', { package: 'yesod', framework: 'yesod' });
+  src(mod, ['lookupBasicAuth'], 'header', 'yesod request header', { package: 'yesod', framework: 'yesod' });
+}
+src('Yesod.Core.Json', ['parseJsonBody', 'requireJsonBody', 'parseCheckJsonBody', 'requireCheckJsonBody'], 'http-body', 'yesod request body', { package: 'yesod', framework: 'yesod' });
+// WAI: the multipart/form body parsers and the conduit request body, and the request's host and cookie headers
+src('Network.Wai.Parse', ['parseRequestBody', 'parseRequestBodyEx'], 'http-body', 'WAI parsed request body', { package: 'wai-extra', framework: 'wai' });
+src('Network.Wai.Conduit', ['sourceRequestBody'], 'http-body', 'WAI request body stream', { package: 'wai-extra', framework: 'wai' });
+
+// A text parameter of an exported function that returns a web-framework HANDLER value (a Scotty action, a Yesod handler or widget, a Servant handler,
+// a WAI application) receives what the framework took from the request: a route piece, a query value, a body field. That is a request source, so it
+// is labelled as one. Every other exported function's text parameter stays the weaker `hs:caller-controlled` source (the caller of a library
+// function is not known to be a client). The module must import the framework AND the function's declared result must be its handler type; a
+// helper in a framework module that returns plain text is not a handler.
+export const HS_HANDLER_PARAM_SOURCES = Object.freeze({
+  scotty: { decorator: 'hs:handler-param:scotty', framework: 'scotty', modules: ['Web.Scotty', 'Web.Scotty.Trans'], result: /\b(?:ActionM|ActionT)\b/, provenance: 'url-param', label: 'route, query or body value handed to a Scotty action (request input)' },
+  yesod: { decorator: 'hs:handler-param:yesod', framework: 'yesod', modules: ['Yesod', 'Yesod.Core', 'Yesod.Auth'], result: /\b(?:Handler|HandlerFor|HandlerT|Widget|WidgetFor|WidgetT)\b/, provenance: 'url-param', label: 'route piece or request value handed to a Yesod handler (request input)' },
+  servant: { decorator: 'hs:handler-param:servant', framework: 'servant', modules: ['Servant', 'Servant.API', 'Servant.Server', 'Servant.Auth', 'Servant.Auth.Server'], result: /\b(?:Handler|ServerT|AppM)\b/, provenance: 'url-param', label: 'capture, query or body value handed to a Servant handler (request input)' },
+  wai: { decorator: 'hs:handler-param:wai', framework: 'wai', modules: ['Network.Wai', 'Network.Wai.Handler.Warp'], result: /\b(?:ResponseReceived|Application|Middleware)\b/, provenance: 'url-param', label: 'request value handed to a WAI application (request input)' },
+});
+/** What a parameter-annotation source says about itself: the label an evidence chain shows and, for a request value, its provenance. */
+export function paramSourceInfo(decorator) {
+  for (const d of Object.values(HS_HANDLER_PARAM_SOURCES)) if (d.decorator === decorator) return { label: d.label, provenance: d.provenance };
+  if (decorator === 'hs:caller-controlled') return { label: 'text parameter of an exported function (caller-controlled)', provenance: null };
+  return null;
+}
+/** The framework whose handler type a function with this signature returns, among the frameworks the module imports; null for a plain library function. */
+export function handlerFrameworkOf(importedModules, resultText) {
+  if (!resultText) return null;
+  const mods = new Set(importedModules || []);
+  for (const def of Object.values(HS_HANDLER_PARAM_SOURCES)) {
+    if (def.modules.some((m) => mods.has(m)) && def.result.test(resultText)) return def;
+  }
+  return null;
+}
 
 // ── sinks ───────────────────────────────────────────────────────────────────
 // family: the taint family the existing engine already uses (cmd | sql | path | url | xss)
@@ -169,9 +217,12 @@ sink('Database.Persist.Sql', ['rawSql', 'rawExecute', 'rawQuery'], { ...SQL, arg
 
 // CWE-918. The URL (or request spec built from it) is the sink.
 const SSRF = { family: 'url', cwe: 'CWE-918', severity: 'high', argIndex: 0, vuln: 'Server-Side Request Forgery', remediation: 'Parse the URL, require an allow-listed scheme and host, and reject private or link-local addresses after DNS resolution.' };
-sink('Network.HTTP.Simple', ['httpBS', 'httpLBS', 'httpJSON', 'httpNoBody', 'httpSink', 'parseRequest', 'parseRequest_'], { ...SSRF, package: 'http-conduit' });
-sink('Network.HTTP.Conduit', ['simpleHttp', 'parseRequest', 'parseUrlThrow', 'parseRequest_', 'httpLbs'], { ...SSRF, package: 'http-conduit' });
-sink('Network.HTTP.Client', ['parseRequest', 'parseUrlThrow', 'parseRequest_', 'requestFromURI'], { ...SSRF, package: 'http-client' });
+// The SEND is the sink, not the parse: `parseRequest url` only builds a Request value, and the host check a defence needs (`host req \`elem\` allowed`)
+// can only be written AFTER that parse. A sink on the parse would sit before every such check and report every guarded flow.
+sink('Network.HTTP.Simple', ['httpBS', 'httpLBS', 'httpJSON', 'httpNoBody', 'httpSink'], { ...SSRF, package: 'http-conduit' });
+sink('Network.HTTP.Conduit', ['simpleHttp'], { ...SSRF, package: 'http-conduit' });
+// http-conduit re-exports the http-client senders under its own module names, and conduit-flavoured modules add their own
+for (const mod of ['Network.HTTP.Conduit', 'Network.HTTP.Client.Conduit']) sink(mod, ['httpLbs', 'httpNoBody', 'http', 'withResponse', 'responseOpen'], { ...SSRF, argIndex: 0, package: 'http-conduit' });
 sink('Network.HTTP.Client', ['httpLbs', 'httpNoBody', 'withResponse', 'responseOpen'], { ...SSRF, argIndex: 0, package: 'http-client' });
 // wreq: where the URL sits depends on the function. `get url`, but `getWith opts url` (the first argument is the Options, not the target),
 // `customMethod method url`, `customMethodWith method opts url`; the Session forms take the session before the URL.
@@ -197,6 +248,10 @@ sink('Text.Blaze.Html5', ['preEscapedToHtml'], { ...XSS, package: 'blaze-html' }
 sink('Lucid', ['toHtmlRaw'], { ...XSS, package: 'lucid' });
 sink('Lucid.Base', ['toHtmlRaw'], { ...XSS, package: 'lucid' });
 sink('Text.Hamlet', ['preEscapedToMarkup'], { ...XSS, package: 'shakespeare' });
+// `Yesod` and `Yesod.Core` re-export the blaze pre-escaped constructors, so the same call resolves to those modules
+for (const mod of ['Yesod', 'Yesod.Core', 'Yesod.Core.Widget', 'Text.Blaze', 'Text.Blaze.Html', 'Text.Blaze.Html5', 'Text.Blaze.Internal']) {
+  sink(mod, ['preEscapedToMarkup', 'preEscapedToHtml'], { ...XSS, package: mod.startsWith('Yesod') ? 'yesod' : 'blaze-html', ...(mod.startsWith('Yesod') ? { framework: 'yesod' } : {}) });
+}
 sink('Web.Scotty', ['html'], { ...XSS, package: 'scotty', framework: 'scotty', vuln: 'Cross-Site Scripting (HTML response from text)' });
 sink('Web.Scotty.Trans', ['html'], { ...XSS, package: 'scotty', framework: 'scotty', vuln: 'Cross-Site Scripting (HTML response from text)' });
 
@@ -232,6 +287,10 @@ for (const mod of ['Database.Persist.Postgresql', 'Database.Persist.Sqlite', 'Da
 
 // CWE-918. Req builds a URL from typed pieces, so the HOST is the attacker-steered part; HTTP's request constructors take the URL text.
 sink('Network.HTTP.Req', ['https', 'http'], { ...SSRF, argIndex: 0, package: 'req', vuln: 'Server-Side Request Forgery (request host)' });
+// `useURI` turns a parsed URI (often one the caller supplied) into the host-and-path pair `req` sends to. The tainted value is the whole URI, which
+// names the host: that is the point the request target is chosen. (`req` itself is not a sink: its URL argument is usually built from a fixed host
+// and tainted path segments, which `https "host" /: segment` keeps on that host.)
+sink('Network.HTTP.Req', ['useURI'], { ...SSRF, argIndex: 0, package: 'req', vuln: 'Server-Side Request Forgery (request target from a parsed URI)' });
 sink('Network.HTTP', ['getRequest', 'postRequest', 'headRequest', 'simpleHTTP'], { ...SSRF, argIndex: 0, package: 'HTTP' });
 
 // CWE-601. Redirecting to a location taken from the request sends the user to a site the attacker names.
@@ -252,6 +311,17 @@ sink('Data.ByteString.Lazy.Char8', ['readFile', 'writeFile', 'appendFile'], { fa
 sink('Data.Text.Lazy.IO', ['readFile', 'writeFile', 'appendFile'], { family: 'path', cwe: 'CWE-22', severity: 'high', argIndex: 0, package: 'text', vuln: 'Path Traversal', remediation: 'Confirm the canonical path stays under an allowed directory before opening it.' });
 sink('System.Posix.Files', ['removeLink', 'createSymbolicLink', 'setFileMode', 'setOwnerAndGroup', 'readSymbolicLink'], { family: 'path', cwe: 'CWE-22', severity: 'high', argIndex: 0, package: 'unix', vuln: 'Path Traversal (file operation)', remediation: 'Confirm the canonical path stays under an allowed directory before the operation.' });
 sink('System.Posix.Files', ['rename'], { family: 'path', cwe: 'CWE-22', severity: 'high', argIndex: 'all', package: 'unix', vuln: 'Path Traversal (rename)', remediation: 'Confirm both canonical paths stay under an allowed directory.' });
+// Serving a file named by the request: the web frameworks' own file responses take a FilePath. (WAI `responseFile status headers path part`
+// has the path third; Yesod's `sendFile contentType path` second.)
+const PATH_RESPONSE = { family: 'path', cwe: 'CWE-22', severity: 'high', argIndex: 0, vuln: 'Path Traversal (file served from a request-chosen path)', remediation: 'Serve files only from a fixed directory: reject any name containing a path separator or `..` (`takeFileName p == p`), or look the file up in an allow-list.' };
+sink('Web.Scotty', ['file'], { ...PATH_RESPONSE, package: 'scotty', framework: 'scotty' });
+sink('Web.Scotty.Trans', ['file'], { ...PATH_RESPONSE, package: 'scotty', framework: 'scotty' });
+sink('Yesod.Core', ['sendFile', 'sendFilePart'], { ...PATH_RESPONSE, argIndex: 1, package: 'yesod', framework: 'yesod' });
+sink('Yesod', ['sendFile', 'sendFilePart'], { ...PATH_RESPONSE, argIndex: 1, package: 'yesod', framework: 'yesod' });
+sink('Network.Wai', ['responseFile'], { ...PATH_RESPONSE, argIndex: 2, package: 'wai', framework: 'wai' });
+sink('Snap.Core', ['sendFile'], { ...PATH_RESPONSE, package: 'snap', framework: 'snap' });
+sink('Snap.Util.FileServe', ['serveFile'], { ...PATH_RESPONSE, package: 'snap-fileserve', framework: 'snap' });
+sink('Snap.Util.FileServe', ['serveFileAs'], { ...PATH_RESPONSE, argIndex: 1, package: 'snap-fileserve', framework: 'snap' });
 
 // ── sanitizers (context-specific; `appliesTo` is the family each one actually neutralises) ──
 const SAN = [];
@@ -287,6 +357,9 @@ export const HS_LOG_SINKS = Object.freeze([
   ...E('System.IO', ['appendFile']).map((e) => ({ ...e, argIndex: 1, channel: 'file' })),
   ...E('Debug.Trace', ['trace', 'traceShow', 'traceM', 'traceShowM', 'traceShowId', 'traceId']).map((e) => ({ ...e, argIndex: 0, channel: 'trace' })),
   ...E('Control.Monad.Logger', ['logDebugN', 'logInfoN', 'logWarnN', 'logErrorN', 'logOtherN']).map((e) => ({ ...e, argIndex: 0, channel: 'logger' })),
+  // printf is variadic: the format string is argument 0 and every later argument is a value interpolated into the message
+  ...E('Text.Printf', ['printf']).map((e) => ({ ...e, argIndex: 0, argFrom: 0, channel: 'stdout' })),
+  ...E('Text.Printf', ['hPrintf']).map((e) => ({ ...e, argIndex: 1, argFrom: 1, channel: 'handle' })),
   ...E('Katip', ['logFM', 'logTM', 'logItem']).map((e) => ({ ...e, argIndex: 1, channel: 'logger' })),
   ...E('System.Log.Logger', ['debugM', 'infoM', 'noticeM', 'warningM', 'errorM', 'criticalM']).map((e) => ({ ...e, argIndex: 1, channel: 'logger' })),
 ]);
@@ -301,7 +374,7 @@ export const HS_RULE_APIS = Object.freeze([
   ...E('Crypto.Cipher.Types', ['makeIV', 'ecbEncrypt', 'ecbDecrypt', 'nullIV', 'cbcEncrypt', 'cbcDecrypt']),
   ...E('Crypto.Cipher.ChaChaPoly1305', ['nonce12', 'nonce8']),
   ...E('Crypto.KDF.PBKDF2', ['generate', 'fastPBKDF2_SHA1', 'fastPBKDF2_SHA256', 'fastPBKDF2_SHA512']),
-  ...E('System.Random', ['randomRIO', 'randomIO', 'newStdGen', 'getStdGen', 'mkStdGen', 'randomR', 'random', 'randoms', 'randomRs']),
+  ...E('System.Random', ['randomRIO', 'randomIO', 'newStdGen', 'getStdGen', 'mkStdGen', 'randomR', 'random', 'randoms', 'randomRs', 'getStdRandom', 'uniformR', 'uniform', 'initStdGen']),
   ...E('Crypto.Random', ['getRandomBytes']), ...E('System.Entropy', ['getEntropy']),
   ...E('Network.Wai', ['strictRequestBody', 'lazyRequestBody']),
   ...E('Data.Time.Clock.POSIX', ['getPOSIXTime']), ...E('Data.Time.Clock', ['getCurrentTime']), ...E('System.CPUTime', ['getCPUTime']),
@@ -311,6 +384,22 @@ export const HS_RULE_APIS = Object.freeze([
   ...E('Data.Text.IO', ['getContents', 'hGetContents']), ...E('Data.Text.Lazy.IO', ['getContents', 'hGetContents']),
   ...E('Data.Text', ['replicate', 'take']), ...E('Data.Vector', ['replicate']),
   ...E('Web.Cookie', ['defaultSetCookie']),
+  // session cookies set without the flags: scotty-cookie's helper builds a cookie with no Secure and no HttpOnly; a Set-Cookie header written by hand
+  ...E('Web.Scotty.Cookie', ['setSimpleCookie', 'makeSimpleCookie']),
+  ...E('Network.HTTP.Types.Header', ['hSetCookie']), ...E('Network.HTTP.Types', ['hSetCookie']),
+  ...E('Servant.Auth.Server', ['defaultCookieSettings']),
+  // unbounded reads: a request body drained into memory, a socket read in a loop
+  ...E('Network.Wai.Conduit', ['sourceRequestBody']), ...E('Network.Wai', ['getRequestBodyChunk', 'requestBody', 'requestBodyLength']),
+  ...E('Data.Conduit.Binary', ['sinkLbs', 'take', 'isolate']), ...E('Data.Conduit.Combinators', ['sinkLazy', 'sinkLazyBuilder', 'take', 'takeE']),
+  ...E('Network.Socket.ByteString', ['recv', 'recvFrom']), ...E('Network.Socket.ByteString.Lazy', ['recv', 'getContents']), ...E('System.IO', ['hGetSome', 'hGetLine']),
+  // partial functions that raise on an empty or short input, and the Map lookup that raises on a missing key
+  ...E('Prelude', ['head', 'tail', 'last', 'init', 'maximum', 'minimum', 'foldr1', 'foldl1', 'read', 'toEnum', 'succ', 'pred', 'cycle']),
+  ...E('Data.List', ['head', 'tail', 'last', 'init', 'maximum', 'minimum', 'foldr1', 'foldl1', 'maximumBy', 'minimumBy', '!!', 'genericIndex']),
+  ...E('Data.Foldable', ['maximum', 'minimum', 'foldr1', 'foldl1', 'maximumBy', 'minimumBy']),
+  ...E('Data.Map', ['!', 'findMin', 'findMax', 'deleteFindMin', 'elemAt']), ...E('Data.Map.Strict', ['!', 'findMin', 'findMax', 'deleteFindMin', 'elemAt']),
+  ...E('Data.HashMap.Strict', ['!']), ...E('Data.IntMap', ['!']), ...E('Data.IntMap.Strict', ['!']), ...E('Data.Set', ['findMin', 'findMax', 'elemAt']),
+  ...E('Data.Text', ['head', 'last', 'tail', 'init', 'maximum', 'minimum', 'index']),
+  ...E('Data.Maybe', ['fromJust']),
   ...E('Web.JWT', ['hmacSecret', 'secret']), ...E('Servant.Auth.Server', ['fromSecret']), ...E('Web.ClientSession', ['initKey']),
   ...E('Network.HTTP.Client.TLS', ['mkManagerSettings']), ...E('OpenSSL.Session', ['contextSetVerificationMode']),
   ...E('Text.XML.HXT.Core', ['withSubstDTDEntities']),

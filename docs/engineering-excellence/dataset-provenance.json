@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-16T12:54:13.028Z",
+  "generatedAt": "2026-10-26T19:51:07.434Z",
   "requiredFacts": [
     "sourceProject",
     "commitBefore",
@@ -120,7 +120,7 @@
     "cveReplay": {
       "role": "regression",
       "status": "audited",
-      "entries": 220,
+      "entries": 228,
       "bySourceTier": {
         "synthetic-shape-of-disclosed-cve": 212,
         "family-shape-known-clean-win": 2,
@@ -129,7 +129,8 @@
         "synthetic-shape-of-owasp-llm01-system-prompt-injection": 1,
         "synthetic-shape-of-mcp-supply-chain-bootstrap": 1,
         "execution-proven": 1,
-        "synthetic-shape-of-common-open-ssh-misconfig": 1
+        "synthetic-shape-of-common-open-ssh-misconfig": 1,
+        "synthetic-shape (self-authored; not derived from a published advisory)": 8
       },
       "usableForAccuracyClaims": false,
       "note": "Fixtures written in this repository and admitted once they score. A regression net: its detection rate is at the ceiling by construction, so it can never support a precision or recall claim."
