@@ -85,7 +85,9 @@
       "summary": "Keep demand mode opt-in until corpus parity; emit selector coverage and analyzed-function counts. Add a user-facing sink",
       "status": "verified",
       "notes": "Opt-in demand mode with coverage counts; parity holds. The 2x speedup target is MISSED on the repo own tree when the index is built per query (1.8x); 277x with a warm index; 10 of 30 own-tree queries fell back to full analysis.",
-      "evidence": []
+      "evidence": [
+        "scanner/test/cli/dag-commands.test.js"
+      ]
     },
     {
       "id": "R03.1",
@@ -225,7 +227,9 @@
       "summary": "Introduce read-only adapters with `node(ref)`, `incoming(ref, relationFilter)`, `outgoing(ref, relationFilter)`, metadat",
       "status": "verified",
       "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
-      "evidence": []
+      "evidence": [
+        "scanner/test/cli/dag-commands.test.js"
+      ]
     },
     {
       "id": "R06.2",
@@ -364,7 +368,9 @@
       "summary": "Bind contracts to parser-resolved local sites. Unbound declarations produce explicit coverage gaps, not synthetic findin",
       "status": "verified",
       "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
-      "evidence": []
+      "evidence": [
+        "scanner/test/cli/dag-commands.test.js"
+      ]
     },
     {
       "id": "R08.4",
@@ -427,7 +433,9 @@
       "summary": "Reuse the scenario engine to test candidate intervention sets, search for remaining bypasses, and return residual paths,",
       "status": "verified",
       "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
-      "evidence": []
+      "evidence": [
+        "scanner/test/cli/dag-commands.test.js"
+      ]
     },
     {
       "id": "R09.6",
@@ -455,7 +463,9 @@
       "summary": "Provide a bounded offline replay verifier that checks every derivation and call/return binding against the referenced ar",
       "status": "verified",
       "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
-      "evidence": []
+      "evidence": [
+        "scanner/test/cli/dag-commands.test.js"
+      ]
     },
     {
       "id": "R10.3",
@@ -492,5 +502,45 @@
       "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
       "evidence": []
     }
-  ]
+  ],
+  "wiring": {
+    "note": "Opt-in command-line entry points. None runs in a default scan, so default scan output is unchanged. Every report carries a completion status (complete, partial, cancelled, unavailable, invalid) and a negativeClaimAllowed that is false unless the engine envelope earned it. Maturity stays Preview.",
+    "module": "scanner/src/posture/dag-commands.js",
+    "test": "scanner/test/cli/dag-commands.test.js",
+    "docs": "docs/security-graph/graph-precision.md#commands",
+    "commands": [
+      {
+        "capability": "typed graph views (DAG-06) and SCC condensation (DAG-01)",
+        "command": "agentic-security dataflow view [path] [--node <id>]",
+        "status": "wired"
+      },
+      {
+        "capability": "boundary contracts (DAG-08)",
+        "command": "agentic-security dataflow contracts [path] [--contracts <file>]",
+        "status": "wired"
+      },
+      {
+        "capability": "demand-driven reverse taint (DAG-02)",
+        "command": "agentic-security dataflow sink-query [path] --file <rel> --line <n>",
+        "status": "wired"
+      },
+      {
+        "capability": "min-cut control planner (DAG-09)",
+        "command": "agentic-security dataflow plan-cuts (already registered; completion contract and end-to-end test added)",
+        "status": "wired"
+      },
+      {
+        "capability": "signed witness bundles (DAG-10)",
+        "command": "agentic-security witness build|verify",
+        "status": "wired"
+      }
+    ],
+    "notWired": [
+      "No MCP tool was added: the tool count is pinned across tests and docs and none of these fits a read-only tool over the last scan.",
+      "No flag on scan: each capability is a separate command, so a default scan stays identical.",
+      "witness build re-runs the field analysis because a scan still does not persist the hop stream.",
+      "Witness runtime support and exploit proof inputs are not exposed on the command line; the bundle records them as not consulted.",
+      "Only the dataflow graph view is exposed; provenance, semantic, artifact and cross-repo views remain library API."
+    ]
+  }
 }

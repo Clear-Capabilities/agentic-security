@@ -362,7 +362,7 @@ capabilities:
     lifecycleStages: [trace]
     maturity: Preview
     contractNote: Each part is off by default or additive; fields and options may still tighten before they are frozen; reviewed 2026-10-25.
-    establishes: Whether a graph analysis finished, and how far its answer reaches. Adds completion status, recursion handling, call-site correlation, demand queries, path conditions, incremental invalidation, boundary contracts, control-placement planning and replayable witness bundles, each with its limits stated.
+    establishes: Whether a graph analysis finished, and how far its answer reaches. Adds completion status, recursion handling, call-site correlation, demand queries, path conditions, incremental invalidation, boundary contracts, control-placement planning and replayable witness bundles, each with its limits stated. The typed graph view, boundary contracts, demand sink queries, control-placement planning and witness bundles are reachable from the CLI (`dataflow view|contracts|sink-query|plan-cuts`, `witness build|verify`), each opt-in and each reporting a completion status.
     docs:
       - docs/security-graph/graph-precision.md
     evidence:
@@ -376,6 +376,8 @@ capabilities:
       - scanner/src/dataflow/demand-query.js
       - scanner/src/dataflow/dep-fingerprint.js
       - scanner/src/posture/witness-bundle.js
+      - scanner/src/posture/dag-commands.js
+      - scanner/test/cli/dag-commands.test.js
 
   - id: artifact-provenance
     name: Source-to-artifact provenance

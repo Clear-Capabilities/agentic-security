@@ -33,6 +33,7 @@ All are prefixed `AGENTIC_SECURITY_`. The ones you're most likely to touch:
 | `AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS` | Soft budget (ms) for the lineage graph build; measured, not enforced by interruption — an over-budget build still completes and emits an info finding. Default `300000`. |
 | `AGENTIC_SECURITY_LINEAGE_DEADLINE_MS` | Hard deadline (ms) for the lineage graph build. When set, the build runs in an owned worker thread: the field analysis stops at the next function boundary and the graph reports `scanHealth.status: cancelled`, and a worker that does not stop within 500 ms of the deadline is terminated. Run from the single-file bundle, the worker file is not shipped, so the build runs in-process with the same deadline and the graph still reports `cancelled`; only the watchdog for a worker that never stops is absent there. Unset (default): the in-process build, unchanged. |
 | `AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS` | Per-function distinct-context cap for the lineage engine's interprocedural summary cache. Default `16`. |
+| `AGENTIC_SECURITY_DEMAND` | Library-level opt-in for demand-driven sink queries during a deep run that is handed an explicit query list. The `dataflow sink-query` command does not need it: typing the command is the opt-in. Default off. See [graph precision](../security-graph/graph-precision.md#commands). |
 
 ### Finding provenance
 
@@ -177,6 +178,7 @@ Policy files you provide (preserved by `reset`): `hackage-advisories.json`, `nix
 | `remediation/` (`items.jsonl` + `items.lock`) | Append-only remediation work-item ledger — owner assignment, approvals, manual attestations, accepted-risk exceptions. Written by the CLI (`remediation open\|update\|verify\|accept-risk\|reopen-check --yes`), but classified `operator-config` deliberately: a plain `reset` must never delete the audit trail an AC-31 verification depends on, and nothing regenerates a human decision from a rescan |
 | `recipient-profiles.json` | FR-506 recipient/subprocessor governance profiles — written via `governance propose-edit --yes`, never scanner-regenerable |
 | `cross-repo-links.json` | Declared local↔remote node links between two independently-scanned repos — written via `federate declare --yes`, never scanner-regenerable |
+| `boundary-contracts.json` | Declared HTTP, queue and storage contracts between services (a JSON array, or `{ "contracts": [...] }`). Read only by `dataflow contracts`; a default scan never reads it. A contract is a modeled input, never an observation. See [graph precision](../security-graph/graph-precision.md#commands) |
 
 ### The `rules.yml` gate
 

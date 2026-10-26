@@ -206,6 +206,22 @@ Commands:
   dataflow plan-cuts [path] --candidates <file.json> --output <file> [--query <file.json>] [--format json|markdown]
                                Plan a minimum-cost, hypothetical control placement (graph cut) over the
                                already-scanned lineage graph. Never verifies a remediation.
+                               The plan carries a completion contract (never a negative claim).
+  dataflow view [path] [--node <id> [--direction in|out|both] [--relations a,b] [--origins a,b]] [--output <file>]
+                               Opt-in typed graph view over the already-scanned lineage graph: identity,
+                               completion, SCC condensation of the data-flow relation, or one node's neighbours.
+  dataflow contracts [path] [--contracts <file>] [--output <file>]
+                               Opt-in boundary contracts: bind declared HTTP/queue/storage edges to parsed
+                               consumer sites and seed taint there. A declaration is a modeled input only.
+  dataflow sink-query [path] (--list | --file <rel> --line <n>) [--mode demand|full|compare] [--arg-index <n>]
+                               [--sink-id <id>] [--access-path <p>] [--rule-family <f>] [--max-work <n>]
+                               [--max-caller-depth <n>] [--on-limit full|partial] [--output <file>]
+                               Opt-in demand-driven reverse taint for one sink site. Verdicts: flow-found,
+                               no-flow-in-modeled-scope, unknown. There is no "safe".
+  witness build [path] --out <dir> [--sink <id>] | --list-sinks
+  witness verify <bundle.json> [--public-key <path>] [--artifacts <dir> --root <project>] [--json]
+                               Opt-in signed, replayable path witness bundles (Ed25519, same key as attest).
+                               A valid signature proves integrity only, never that the finding is real.
   dataflow scenario apply [path] --operations <file.json> --output <file> [--format json|markdown]
                                Simulate a hypothetical architecture change against the
                                already-scanned lineage graph — never mutates the real scan.
@@ -5162,6 +5178,8 @@ async function cmdDataflowPlanCuts(args) {
   if (!loaded.ok) { process.stderr.write(`agentic-security dataflow plan-cuts: ${loaded.message}\n`); return 1; }
   const { planCuts } = await import('../src/lineage/cut-planner.js');
   const plan = planCuts(loaded.graph, query, candidates);
+  // Completion contract: a plan is `complete` only for a finite cut over a graph known complete; never a negative claim.
+  plan.contract = (await import('../src/posture/dag-commands.js')).planContract(plan);
   let data;
   if (format === 'json') data = JSON.stringify(plan, null, 2);
   else {
@@ -5171,6 +5189,7 @@ async function cmdDataflowPlanCuts(args) {
     for (const r of plan.validation?.residualPaths ?? []) lines.push(`- to \`${r.sink}\` via ${r.nodes.map((n) => `\`${n}\``).join(' -> ')}`);
     lines.push('', '## Limitations', '');
     for (const l of plan.limitations) lines.push(`- ${l}`);
+    lines.push('', `Completion: ${plan.contract.status}. A negative claim is never allowed for a hypothetical plan.`);
     data = lines.join('\n') + '\n';
   }
   try {
@@ -8012,6 +8031,7 @@ async function main() {
       }
       case 'boundaries': process.exit(await cmdBoundaries(args));
       case 'explore':  process.exit(await cmdExplore(args));
+      case 'witness':  process.exit(await (await import('../src/posture/dag-commands.js')).cmdWitness(args));
       case 'dataflow': {
         const sub = args._[1];
         if (sub === 'export') { process.exit(await cmdDataflowExport(args)); }
@@ -8053,6 +8073,9 @@ async function main() {
           break;
         }
         else if (sub === 'plan-cuts') { process.exit(await cmdDataflowPlanCuts(args)); }
+        else if (sub === 'view') { process.exit(await (await import('../src/posture/dag-commands.js')).cmdDataflowView(args)); }
+        else if (sub === 'contracts') { process.exit(await (await import('../src/posture/dag-commands.js')).cmdDataflowContracts(args)); }
+        else if (sub === 'sink-query') { process.exit(await (await import('../src/posture/dag-commands.js')).cmdDataflowSinkQuery(args)); }
         else if (sub === 'impact') {
           const impactSub = args._[2];
           if (impactSub === 'assess') { process.exit(await cmdDataflowImpactAssess(args)); }
@@ -8073,7 +8096,7 @@ async function main() {
           break;
         }
         else if (sub === 'twin') { process.exit(await cmdDataflowTwin(args)); }
-        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export", "diff", "watch", "scenario", "impact", "observations", and "twin" are supported.\n`);
+        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export", "diff", "watch", "scenario", "plan-cuts", "view", "contracts", "sink-query", "impact", "observations", and "twin" are supported.\n`);
         process.exit(2);
       }
       case 'governance': {
