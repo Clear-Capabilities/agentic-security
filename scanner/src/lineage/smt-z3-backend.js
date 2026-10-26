@@ -26,6 +26,9 @@
 // path-predicates.js. It is not a proof about the running program, and `sat` never implies exploitability.
 
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
 
 export const Z3_BACKEND_VERSION = 'smt-z3/1';
 export const Z3_DEFAULT_TIMEOUT_MS = 1000;
@@ -159,10 +162,13 @@ export function encodeProblem(problem) {
 
 // ---- the backend ---------------------------------------------------------------------------------------
 
-/** The default loader. The specifier is a variable so a bundler leaves the optional package alone. */
+/**
+ * The default loader. Loaded through a createRequire call at first use, the way the optional tree-sitter
+ * runtime is: a bundler keeps it external, and a build without the package fails here (reported as
+ * unsupported by the caller), never at start-up.
+ */
 async function defaultLoader() {
-  const spec = 'z3-solver';
-  return import(spec);
+  return require('z3-solver');
 }
 
 /**
