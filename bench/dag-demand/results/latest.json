@@ -1,7 +1,7 @@
 {
   "schema": "dag-demand-bench/1",
   "node": "v24.20.0",
-  "startedAt": "2026-10-25T15:51:36.253Z",
+  "startedAt": "2026-10-26T06:40:03.620Z",
   "params": {
     "MODULES": 120,
     "QUERIES": 30,
@@ -16,25 +16,36 @@
         "functions": 2164,
         "sinkSites": 480,
         "sampledQueries": 30,
-        "parseAndCallGraphMs": 194.14866709709167,
-        "graphDigestMs": 7.210541009902954,
-        "incomingIndexMs": 26.36162495613098,
-        "fullMs": 123.68220806121826,
+        "parseAndCallGraphMs": 200.09050011634827,
+        "graphDigestMs": 7.147000074386597,
+        "incomingIndexMs": 17.5211660861969,
+        "fullMs": 125.85495901107788,
         "fullRunsMs": [
-          156.03116703033447,
-          123.68220806121826,
-          120.11333417892456
+          157.17524981498718,
+          125.85495901107788,
+          109.7189998626709
         ],
-        "demandMedianMs": 0.3812915086746216,
-        "demandMeanMs": 0.3296513636906942,
-        "demandMinMs": 0.12720799446105957,
-        "demandMaxMs": 0.8233330249786377,
-        "speedupSingleQuery": 324.377032394822,
-        "speedupSingleQueryMean": 375.19094923953355,
-        "speedupSingleQueryColdIndex": 4.624858632153579,
-        "breakEvenQueries": 375.19094923953355,
-        "batchSpeedup": 12.50636497465112,
-        "batchSpeedupIncludingIndex": 3.411813250792955,
+        "demandMedianMs": 0.36549997329711914,
+        "demandMeanMs": 0.33245278199513756,
+        "demandMinMs": 0.12270784378051758,
+        "demandMaxMs": 0.8202919960021973,
+        "speedupSingleQuery": 344.33643831970664,
+        "speedupSingleQueryMean": 378.5649145595618,
+        "speedupSingleQueryColdIndex": 7.0362446859835925,
+        "speedupSingleQueryColdAll": 5.027428197612076,
+        "speedupMeanColdAll": 5.034073728340137,
+        "batchMeasuredMs": 6.65404200553894,
+        "batchRunsMs": [
+          7.484833002090454,
+          6.65404200553894,
+          6.351083993911743
+        ],
+        "batchParity": true,
+        "batchVsIndependent": 1.4988759390986623,
+        "batchVsFullOnce": 18.91406139400894,
+        "breakEvenQueries": 378.5649145595618,
+        "batchSpeedup": 12.618830485318728,
+        "batchSpeedupIncludingIndex": 4.577417910291675,
         "meanSelectedFraction": 0.0013555144793592111,
         "parityAll": true,
         "parityFailures": 0,
@@ -52,11 +63,11 @@
           "file": "mod_0.js",
           "line": 5,
           "sinkId": "js-exec",
-          "demandMs": 0.8233330249786377,
+          "demandMs": 0.8202919960021973,
           "demandRunsMs": [
-            2.3688747882843018,
-            0.8233330249786377,
-            0.7184171676635742
+            2.474292039871216,
+            0.8202919960021973,
+            0.738332986831665
           ],
           "selected": 6,
           "total": 2164,
@@ -73,11 +84,11 @@
           "file": "mod_100.js",
           "line": 9,
           "sinkId": "js-express-res-send",
-          "demandMs": 0.5047080516815186,
+          "demandMs": 0.4719579219818115,
           "demandRunsMs": [
-            0.530458927154541,
-            0.5000839233398438,
-            0.5047080516815186
+            0.5632500648498535,
+            0.4719579219818115,
+            0.469959020614624
           ],
           "selected": 2,
           "total": 2164,
@@ -94,11 +105,11 @@
           "file": "mod_101.js",
           "line": 5,
           "sinkId": "js-exec",
-          "demandMs": 0.4743330478668213,
+          "demandMs": 0.43929100036621094,
           "demandRunsMs": [
-            0.5469579696655273,
-            0.4743330478668213,
-            0.4565410614013672
+            0.5437500476837158,
+            0.43929100036621094,
+            0.4297499656677246
           ],
           "selected": 6,
           "total": 2164,
@@ -115,11 +126,11 @@
           "file": "mod_102.js",
           "line": 5,
           "sinkId": "js-exec",
-          "demandMs": 0.424375057220459,
+          "demandMs": 0.3954589366912842,
           "demandRunsMs": [
-            0.4569578170776367,
-            0.42208385467529297,
-            0.424375057220459
+            0.4710419178009033,
+            0.39099979400634766,
+            0.3954589366912842
           ],
           "selected": 6,
           "total": 2164,
@@ -136,11 +147,11 @@
           "file": "mod_104.js",
           "line": 9,
           "sinkId": "js-express-res-send",
-          "demandMs": 0.40045809745788574,
+          "demandMs": 0.43712496757507324,
           "demandRunsMs": [
-            0.4458339214324951,
-            0.40045809745788574,
-            0.39458394050598145
+            0.46608400344848633,
+            0.4051249027252197,
+            0.43712496757507324
           ],
           "selected": 2,
           "total": 2164,
@@ -157,11 +168,11 @@
           "file": "mod_110.js",
           "line": 5,
           "sinkId": "js-exec",
-          "demandMs": 0.6009171009063721,
+          "demandMs": 0.5897080898284912,
           "demandRunsMs": [
-            0.6655418872833252,
-            0.5796661376953125,
-            0.6009171009063721
+            0.6975831985473633,
+            0.5897080898284912,
+            0.5869998931884766
           ],
           "selected": 6,
           "total": 2164,
@@ -178,11 +189,11 @@
           "file": "mod_112.js",
           "line": 9,
           "sinkId": "js-express-res-send",
-          "demandMs": 0.403292179107666,
+          "demandMs": 0.39537501335144043,
           "demandRunsMs": [
-            0.4130840301513672,
-            0.403292179107666,
-            0.3890421390533447
+            0.4317910671234131,
+            0.39537501335144043,
+            0.39516711235046387
           ],
           "selected": 2,
           "total": 2164,
@@ -199,11 +210,11 @@
           "file": "mod_112.js",
           "line": 9,
           "sinkId": "js-koa-send",
-          "demandMs": 0.3595001697540283,
+          "demandMs": 0.3670830726623535,
           "demandRunsMs": [
-            0.40616607666015625,
-            0.3540000915527344,
-            0.3595001697540283
+            0.42229199409484863,
+            0.35679101943969727,
+            0.3670830726623535
           ],
           "selected": 1,
           "total": 2164,
@@ -220,11 +231,11 @@
           "file": "mod_116.js",
           "line": 9,
           "sinkId": "js-express-res-send",
-          "demandMs": 0.4296250343322754,
+          "demandMs": 0.4263339042663574,
           "demandRunsMs": [
-            0.4497089385986328,
-            0.42145800590515137,
-            0.4296250343322754
+            0.47891712188720703,
+            0.4263339042663574,
+            0.40774989128112793
           ],
           "selected": 2,
           "total": 2164,
@@ -241,11 +252,11 @@
           "file": "mod_118.js",
           "line": 9,
           "sinkId": "js-express-res-send",
-          "demandMs": 0.4204580783843994,
+          "demandMs": 0.4068748950958252,
           "demandRunsMs": [
-            0.4204580783843994,
-            0.40166592597961426,
-            0.4228329658508301
+            0.4407498836517334,
+            0.4068748950958252,
+            0.4052910804748535
           ],
           "selected": 2,
           "total": 2164,
@@ -262,11 +273,11 @@
           "file": "mod_12.js",
           "line": 9,
           "sinkId": "js-koa-send",
-          "demandMs": 0.3501250743865967,
+          "demandMs": 0.3447909355163574,
           "demandRunsMs": [
-            0.33329200744628906,
-            1.19016695022583,
-            0.3501250743865967
+            0.3447909355163574,
+            0.33300018310546875,
+            0.3554999828338623
           ],
           "selected": 1,
           "total": 2164,
@@ -283,11 +294,11 @@
           "file": "mod_14.js",
           "line": 9,
           "sinkId": "js-express-res-send",
-          "demandMs": 0.41733288764953613,
+          "demandMs": 0.42287492752075195,
           "demandRunsMs": [
-            0.4417080879211426,
-            0.4170830249786377,
-            0.41733288764953613
+            0.45641589164733887,
+            0.42287492752075195,
+            0.4194169044494629
           ],
           "selected": 2,
           "total": 2164,
@@ -304,11 +315,11 @@
           "file": "mod_20.js",
           "line": 5,
           "sinkId": "js-exec",
-          "demandMs": 0.4538748264312744,
+          "demandMs": 0.7030000686645508,
           "demandRunsMs": [
-            0.7304580211639404,
-            0.4538748264312744,
-            0.4316251277923584
+            0.7095420360565186,
+            0.7030000686645508,
+            0.43525004386901855
           ],
           "selected": 6,
           "total": 2164,
@@ -325,11 +336,11 @@
           "file": "mod_23.js",
           "line": 9,
           "sinkId": "js-express-res-send",
-          "demandMs": 0.22775006294250488,
+          "demandMs": 0.22950005531311035,
           "demandRunsMs": [
-            0.24895811080932617,
-            0.22775006294250488,
-            0.22345805168151855
+            0.2773749828338623,
+            0.22950005531311035,
+            0.22133302688598633
           ],
           "selected": 2,
           "total": 2164,
@@ -346,11 +357,11 @@
           "file": "mod_26.js",
           "line": 9,
           "sinkId": "js-express-res-send",
-          "demandMs": 0.2193751335144043,
+          "demandMs": 0.24545812606811523,
           "demandRunsMs": [
-            0.22933411598205566,
-            0.2193751335144043,
-            0.21883320808410645
+            0.24545812606811523,
+            0.21716594696044922,
+            0.26849985122680664
           ],
           "selected": 2,
           "total": 2164,
@@ -367,11 +378,11 @@
           "file": "mod_29.js",
           "line": 9,
           "sinkId": "js-koa-send",
-          "demandMs": 0.14566612243652344,
+          "demandMs": 0.1508331298828125,
           "demandRunsMs": [
-            0.18149995803833008,
-            0.14566612243652344,
-            0.14237499237060547
+            0.1508331298828125,
+            0.14058303833007812,
+            0.15291690826416016
           ],
           "selected": 1,
           "total": 2164,
@@ -388,11 +399,11 @@
           "file": "mod_3.js",
           "line": 7,
           "sinkId": "js-exec",
-          "demandMs": 0.13266587257385254,
+          "demandMs": 0.13254117965698242,
           "demandRunsMs": [
-            0.13866591453552246,
-            0.13187503814697266,
-            0.13266587257385254
+            0.13995814323425293,
+            0.13254117965698242,
+            0.1316671371459961
           ],
           "selected": 1,
           "total": 2164,
@@ -409,11 +420,11 @@
           "file": "mod_4.js",
           "line": 5,
           "sinkId": "js-exec",
-          "demandMs": 0.44112491607666016,
+          "demandMs": 0.4247090816497803,
           "demandRunsMs": [
-            0.44112491607666016,
-            0.4503331184387207,
-            0.4300839900970459
+            0.49512505531311035,
+            0.4247090816497803,
+            0.4000840187072754
           ],
           "selected": 6,
           "total": 2164,
@@ -430,11 +441,11 @@
           "file": "mod_49.js",
           "line": 5,
           "sinkId": "js-exec",
-          "demandMs": 0.4249579906463623,
+          "demandMs": 0.4189581871032715,
           "demandRunsMs": [
-            0.4347498416900635,
-            0.39629197120666504,
-            0.4249579906463623
+            0.4599170684814453,
+            0.4189581871032715,
+            0.4035000801086426
           ],
           "selected": 6,
           "total": 2164,
@@ -451,11 +462,11 @@
           "file": "mod_52.js",
           "line": 7,
           "sinkId": "js-exec",
-          "demandMs": 0.1352090835571289,
+          "demandMs": 0.14037489891052246,
           "demandRunsMs": [
-            0.1352090835571289,
-            0.12975001335144043,
-            0.1386251449584961
+            0.14041686058044434,
+            0.13245892524719238,
+            0.14037489891052246
           ],
           "selected": 1,
           "total": 2164,
@@ -472,11 +483,11 @@
           "file": "mod_57.js",
           "line": 7,
           "sinkId": "js-exec",
-          "demandMs": 0.12720799446105957,
+          "demandMs": 0.13416695594787598,
           "demandRunsMs": [
-            0.13295793533325195,
-            0.12720799446105957,
-            0.12645792961120605
+            0.13416695594787598,
+            0.1364579200744629,
+            0.12674999237060547
           ],
           "selected": 1,
           "total": 2164,
@@ -493,11 +504,11 @@
           "file": "mod_67.js",
           "line": 5,
           "sinkId": "js-exec",
-          "demandMs": 0.37337493896484375,
+          "demandMs": 0.3867499828338623,
           "demandRunsMs": [
-            0.4110829830169678,
-            0.36133289337158203,
-            0.37337493896484375
+            0.4358329772949219,
+            0.35712504386901855,
+            0.3867499828338623
           ],
           "selected": 6,
           "total": 2164,
@@ -514,11 +525,11 @@
           "file": "mod_68.js",
           "line": 9,
           "sinkId": "js-koa-send",
-          "demandMs": 0.14104199409484863,
+          "demandMs": 0.14287519454956055,
           "demandRunsMs": [
-            0.14829182624816895,
-            0.14104199409484863,
-            0.1395409107208252
+            0.16162514686584473,
+            0.14287519454956055,
+            0.1369161605834961
           ],
           "selected": 1,
           "total": 2164,
@@ -535,11 +546,11 @@
           "file": "mod_71.js",
           "line": 5,
           "sinkId": "js-exec",
-          "demandMs": 0.399583101272583,
+          "demandMs": 0.36391687393188477,
           "demandRunsMs": [
-            0.4093749523162842,
-            0.39145898818969727,
-            0.399583101272583
+            0.41175007820129395,
+            0.3587498664855957,
+            0.36391687393188477
           ],
           "selected": 6,
           "total": 2164,
@@ -556,11 +567,11 @@
           "file": "mod_79.js",
           "line": 9,
           "sinkId": "js-koa-send",
-          "demandMs": 0.14158391952514648,
+          "demandMs": 0.13741707801818848,
           "demandRunsMs": [
-            0.14674997329711914,
-            0.14158391952514648,
-            0.13983416557312012
+            0.14870882034301758,
+            0.13741707801818848,
+            0.13525009155273438
           ],
           "selected": 1,
           "total": 2164,
@@ -577,11 +588,11 @@
           "file": "mod_83.js",
           "line": 7,
           "sinkId": "js-exec",
-          "demandMs": 0.13095808029174805,
+          "demandMs": 0.13979101181030273,
           "demandRunsMs": [
-            0.13270902633666992,
-            0.13095808029174805,
-            0.1301250457763672
+            0.13979101181030273,
+            0.14337515830993652,
+            0.1311659812927246
           ],
           "selected": 1,
           "total": 2164,
@@ -598,11 +609,11 @@
           "file": "mod_84.js",
           "line": 7,
           "sinkId": "js-exec",
-          "demandMs": 0.12987494468688965,
+          "demandMs": 0.12270784378051758,
           "demandRunsMs": [
-            0.12987494468688965,
-            0.12975001335144043,
-            0.13479089736938477
+            0.13904094696044922,
+            0.12270784378051758,
+            0.12162494659423828
           ],
           "selected": 1,
           "total": 2164,
@@ -619,11 +630,11 @@
           "file": "mod_86.js",
           "line": 9,
           "sinkId": "js-koa-send",
-          "demandMs": 0.13791704177856445,
+          "demandMs": 0.1310420036315918,
           "demandRunsMs": [
-            0.15675020217895508,
-            0.13791704177856445,
-            0.13779187202453613
+            0.1466670036315918,
+            0.1310420036315918,
+            0.1307079792022705
           ],
           "selected": 1,
           "total": 2164,
@@ -640,11 +651,11 @@
           "file": "mod_93.js",
           "line": 7,
           "sinkId": "js-exec",
-          "demandMs": 0.12970900535583496,
+          "demandMs": 0.12295913696289062,
           "demandRunsMs": [
-            0.13249993324279785,
-            0.12970900535583496,
-            0.12854218482971191
+            0.1338341236114502,
+            0.12225008010864258,
+            0.12295913696289062
           ],
           "selected": 1,
           "total": 2164,
@@ -661,11 +672,11 @@
           "file": "mod_95.js",
           "line": 5,
           "sinkId": "js-exec",
-          "demandMs": 0.3892080783843994,
+          "demandMs": 0.32941699028015137,
           "demandRunsMs": [
-            0.3892080783843994,
-            0.3920419216156006,
-            0.3499171733856201
+            0.38866615295410156,
+            0.32941699028015137,
+            0.3190000057220459
           ],
           "selected": 6,
           "total": 2164,
@@ -683,143 +694,160 @@
     {
       "summary": {
         "workload": "own-scanner-src",
-        "files": 902,
-        "functions": 14470,
-        "sinkSites": 981,
+        "files": 916,
+        "functions": 14936,
+        "sinkSites": 982,
         "sampledQueries": 30,
-        "parseAndCallGraphMs": 3297.2887909412384,
-        "graphDigestMs": 226.74304103851318,
-        "incomingIndexMs": 3248.786416053772,
-        "fullMs": 5965.720416069031,
+        "parseAndCallGraphMs": 3605.869250059128,
+        "graphDigestMs": 234.91008400917053,
+        "incomingIndexMs": 180.08608317375183,
+        "fullMs": 4346.803999900818,
         "fullRunsMs": [
-          6098.788749933243,
-          5945.3882920742035,
-          5965.720416069031
+          4491.898167133331,
+          4346.803999900818,
+          4344.444000005722
         ],
-        "demandMedianMs": 21.49833309650421,
-        "demandMeanMs": 2484.415104198456,
-        "demandMinMs": 1.5714998245239258,
-        "demandMaxMs": 10446.020792007446,
-        "speedupSingleQuery": 277.49688263222146,
-        "speedupSingleQueryMean": 2.4012575056348098,
-        "speedupSingleQueryColdIndex": 1.8242204803783872,
-        "breakEvenQueries": 2.4012575056348098,
-        "batchSpeedup": 0.08004191685449367,
-        "batchSpeedupIncludingIndex": 0.07669870589870342,
-        "meanSelectedFraction": 0.028000460723335636,
+        "demandMedianMs": 5.299083352088928,
+        "demandMeanMs": 744.2125736474991,
+        "demandMinMs": 1.1591670513153076,
+        "demandMaxMs": 5037.295625209808,
+        "speedupSingleQuery": 820.2935698656794,
+        "speedupSingleQueryMean": 5.840809674306455,
+        "speedupSingleQueryColdIndex": 23.447420747629874,
+        "speedupSingleQueryColdAll": 10.342262955309607,
+        "speedupMeanColdAll": 3.749802642781059,
+        "batchMeasuredMs": 13714.72079205513,
+        "batchRunsMs": [
+          13676.59141588211,
+          13758.529417037964,
+          13714.72079205513
+        ],
+        "batchParity": true,
+        "batchVsIndependent": 1.6279133602456226,
+        "batchVsFullOnce": 0.31694440344851205,
+        "breakEvenQueries": 5.840809674306455,
+        "batchSpeedup": 0.19469365581021517,
+        "batchSpeedupIncludingIndex": 0.19313580918465628,
+        "meanSelectedFraction": 0.019079182288876985,
         "parityAll": true,
         "parityFailures": 0,
         "lostCoverage": {
-          "fellBackToFull": 10,
+          "fellBackToFull": 3,
           "partial": 24,
-          "withUnresolvedCallees": 23,
+          "withUnresolvedCallees": 24,
           "negativeClaimWithheld": 24
         },
-        "queriesWithFlow": 1,
-        "meetsTarget": false
+        "queriesWithFlow": 0,
+        "meetsTarget": true
       },
       "rows": [
         {
-          "file": "src/context-intelligence/controls.js",
-          "line": 53,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 3.637458086013794,
+          "file": "src/context-intelligence/cross-route.js",
+          "line": 32,
+          "sinkId": "js-exec",
+          "demandMs": 2731.3324160575867,
           "demandRunsMs": [
-            4.5113749504089355,
-            3.637458086013794,
-            2.7269580364227295
+            2770.979542016983,
+            2731.3324160575867,
+            2716.8962500095367
           ],
-          "selected": 1,
-          "total": 14470,
-          "selectedFraction": 0.00006910850034554251,
+          "selected": 1124,
+          "total": 14936,
+          "selectedFraction": 0.07525441885377611,
           "fallback": null,
-          "verdict": "no-flow-in-modeled-scope",
-          "status": "complete",
-          "reasons": [],
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "unresolved-callee"
+          ],
           "findings": 0,
           "parity": true,
-          "unresolvedCallees": 0
-        },
-        {
-          "file": "src/context-intelligence/controls.js",
-          "line": 58,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 2.443999767303467,
-          "demandRunsMs": [
-            2.3527920246124268,
-            2.449333906173706,
-            2.443999767303467
-          ],
-          "selected": 1,
-          "total": 14470,
-          "selectedFraction": 0.00006910850034554251,
-          "fallback": null,
-          "verdict": "no-flow-in-modeled-scope",
-          "status": "complete",
-          "reasons": [],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 0
+          "unresolvedCallees": 2110
         },
         {
           "file": "src/context-intelligence/entrypoints.js",
-          "line": 91,
+          "line": 187,
           "sinkId": "js-exec",
-          "demandMs": 1.848249912261963,
+          "demandMs": 1569.3585419654846,
           "demandRunsMs": [
-            1.848249912261963,
-            1.734375,
-            1.870542049407959
+            1567.5115838050842,
+            1570.6265420913696,
+            1569.3585419654846
           ],
-          "selected": 1,
-          "total": 14470,
-          "selectedFraction": 0.00006910850034554251,
+          "selected": 597,
+          "total": 14936,
+          "selectedFraction": 0.03997054097482593,
           "fallback": null,
           "verdict": "unknown",
           "status": "partial",
           "reasons": [
+            "engine:context-cap-fallback",
             "unresolved-callee"
           ],
           "findings": 0,
           "parity": true,
-          "unresolvedCallees": 1
+          "unresolvedCallees": 1005
         },
         {
-          "file": "src/context-intelligence/evaluation/scripted-reader.js",
-          "line": 56,
-          "sinkId": "js-exec",
-          "demandMs": 63.24233293533325,
-          "demandRunsMs": [
-            64.33695912361145,
-            63.24233293533325,
-            62.191916942596436
-          ],
-          "selected": 64,
-          "total": 14470,
-          "selectedFraction": 0.0044229440221147205,
-          "fallback": null,
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 78
-        },
-        {
-          "file": "src/context-intelligence/files.js",
-          "line": 66,
+          "file": "src/dataflow/catalog.js",
+          "line": 2346,
           "sinkId": "js-RegExp-new",
-          "demandMs": 1.86537504196167,
+          "demandMs": 5010.875749826431,
           "demandRunsMs": [
-            1.977874994277954,
-            1.86537504196167,
-            1.6918749809265137
+            5275.762291908264,
+            5010.875749826431,
+            5007.384874820709
+          ],
+          "selected": 14936,
+          "total": 14936,
+          "selectedFraction": 0.15820835565077665,
+          "fallback": "depth-limit",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 4171
+        },
+        {
+          "file": "src/ir/parser-cs.js",
+          "line": 64,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 1.2272918224334717,
+          "demandRunsMs": [
+            1.2272918224334717,
+            1.2537078857421875,
+            1.1327919960021973
           ],
           "selected": 1,
-          "total": 14470,
-          "selectedFraction": 0.00006910850034554251,
+          "total": 14936,
+          "selectedFraction": 0.00006695232994108195,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "src/ir/parser-php.js",
+          "line": 825,
+          "sinkId": "js-exec",
+          "demandMs": 3.422917127609253,
+          "demandRunsMs": [
+            3.422917127609253,
+            3.4986250400543213,
+            1.9287500381469727
+          ],
+          "selected": 3,
+          "total": 14936,
+          "selectedFraction": 0.00020085698982324584,
           "fallback": null,
           "verdict": "unknown",
           "status": "partial",
@@ -831,19 +859,42 @@
           "unresolvedCallees": 2
         },
         {
-          "file": "src/dataflow/catalog.js",
-          "line": 2390,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 7085.152791976929,
+          "file": "src/ir/parser-rb.js",
+          "line": 750,
+          "sinkId": "js-exec",
+          "demandMs": 1013.9454591274261,
           "demandRunsMs": [
-            7085.152791976929,
-            7117.647083044052,
-            7055.673249959946
+            1019.486750125885,
+            1013.9454591274261,
+            1013.2489581108093
           ],
-          "selected": 14470,
-          "total": 14470,
-          "selectedFraction": 0.056738078783690395,
-          "fallback": "unsupported:instance-field",
+          "selected": 267,
+          "total": 14936,
+          "selectedFraction": 0.01787627209426888,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 662
+        },
+        {
+          "file": "src/language/haskell-manifests.js",
+          "line": 483,
+          "sinkId": "js-exec",
+          "demandMs": 5037.295625209808,
+          "demandRunsMs": [
+            5087.057291984558,
+            5037.295625209808,
+            5035.038125038147
+          ],
+          "selected": 14936,
+          "total": 14936,
+          "selectedFraction": 0.125,
+          "fallback": "depth-limit",
           "verdict": "unknown",
           "status": "partial",
           "reasons": [
@@ -853,68 +904,115 @@
           ],
           "findings": 0,
           "parity": true,
-          "unresolvedCallees": 1350
+          "unresolvedCallees": 3264
         },
         {
-          "file": "src/dataflow/guard-dominance.js",
-          "line": 38,
-          "sinkId": "js-exec",
-          "demandMs": 25.579708099365234,
+          "file": "src/language/nix-script-taint.js",
+          "line": 872,
+          "sinkId": "js-eval",
+          "demandMs": 5030.221708059311,
           "demandRunsMs": [
-            25.686832904815674,
-            25.03712487220764,
-            25.579708099365234
+            5096.0490000247955,
+            5030.221708059311,
+            5020.152333974838
           ],
-          "selected": 22,
-          "total": 14470,
-          "selectedFraction": 0.0015203870076019351,
-          "fallback": null,
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 39
-        },
-        {
-          "file": "src/fix/batch-journal.js",
-          "line": 62,
-          "sinkId": "js-fs-readFile",
-          "demandMs": 185.17925000190735,
-          "demandRunsMs": [
-            184.3477499485016,
-            185.8248748779297,
-            185.17925000190735
-          ],
-          "selected": 190,
-          "total": 14470,
-          "selectedFraction": 0.013130615065653075,
-          "fallback": null,
+          "selected": 14936,
+          "total": 14936,
+          "selectedFraction": 0.12131762185324049,
+          "fallback": "depth-limit",
           "verdict": "unknown",
           "status": "partial",
           "reasons": [
             "engine:context-cap-fallback",
+            "engine:summary-budget",
             "unresolved-callee"
           ],
           "findings": 0,
           "parity": true,
-          "unresolvedCallees": 228
+          "unresolvedCallees": 3189
         },
         {
-          "file": "src/ir/parser-cs.js",
-          "line": 102,
+          "file": "src/llm-validator/redact.js",
+          "line": 117,
           "sinkId": "js-RegExp-new",
-          "demandMs": 1.5714998245239258,
+          "demandMs": 1.3752081394195557,
           "demandRunsMs": [
-            1.6555418968200684,
-            1.5714998245239258,
-            1.398792028427124
+            1.3752081394195557,
+            1.4461250305175781,
+            1.3141250610351562
+          ],
+          "selected": 2,
+          "total": 14936,
+          "selectedFraction": 0.0001339046598821639,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 1
+        },
+        {
+          "file": "src/llm-validator/redact.js",
+          "line": 156,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 1.1591670513153076,
+          "demandRunsMs": [
+            1.1127910614013672,
+            1.1591670513153076,
+            1.165708065032959
+          ],
+          "selected": 2,
+          "total": 14936,
+          "selectedFraction": 0.0001339046598821639,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 1
+        },
+        {
+          "file": "src/posture/concurrency-checker.js",
+          "line": 159,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 5.275416851043701,
+          "demandRunsMs": [
+            5.275416851043701,
+            5.065417051315308,
+            5.568708896636963
+          ],
+          "selected": 12,
+          "total": 14936,
+          "selectedFraction": 0.0008034279592929834,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 21
+        },
+        {
+          "file": "src/posture/cross-lang-openapi.js",
+          "line": 80,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 1.1949999332427979,
+          "demandRunsMs": [
+            1.1949999332427979,
+            1.2027919292449951,
+            1.1736252307891846
           ],
           "selected": 1,
-          "total": 14470,
-          "selectedFraction": 0.00006910850034554251,
+          "total": 14936,
+          "selectedFraction": 0.00006695232994108195,
           "fallback": null,
           "verdict": "no-flow-in-modeled-scope",
           "status": "complete",
@@ -924,256 +1022,62 @@
           "unresolvedCallees": 0
         },
         {
-          "file": "src/language/aibom.js",
-          "line": 253,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 6927.385915994644,
-          "demandRunsMs": [
-            6906.341500043869,
-            6927.385915994644,
-            7039.550791978836
-          ],
-          "selected": 14470,
-          "total": 14470,
-          "selectedFraction": 0.04913614374568072,
-          "fallback": "unsupported:instance-field",
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "engine:context-cap-fallback",
-            "engine:summary-budget",
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 1141
-        },
-        {
-          "file": "src/language/haskell-manifests.js",
-          "line": 654,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 10446.020792007446,
-          "demandRunsMs": [
-            10447.35862493515,
-            10446.020792007446,
-            10402.499459028244
-          ],
-          "selected": 14470,
-          "total": 14470,
-          "selectedFraction": 0.25991706979958534,
-          "fallback": "unsupported:instance-field",
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "engine:context-cap-fallback",
-            "engine:summary-budget",
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 5708
-        },
-        {
-          "file": "src/language/haskell-manifests.js",
-          "line": 687,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 10334.51512503624,
-          "demandRunsMs": [
-            10257.713040828705,
-            10334.51512503624,
-            10442.068624973297
-          ],
-          "selected": 14470,
-          "total": 14470,
-          "selectedFraction": 0.25991706979958534,
-          "fallback": "unsupported:instance-field",
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "engine:context-cap-fallback",
-            "engine:summary-budget",
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 5708
-        },
-        {
-          "file": "src/language/haskell-parser.js",
-          "line": 414,
+          "file": "src/posture/cross-lang-queues.js",
+          "line": 95,
           "sinkId": "js-exec",
-          "demandMs": 8517.751582860947,
+          "demandMs": 1.5012919902801514,
           "demandRunsMs": [
-            8515.09200000763,
-            8517.751582860947,
-            8661.44979095459
+            1.515582799911499,
+            1.5012919902801514,
+            1.4999589920043945
           ],
-          "selected": 14470,
-          "total": 14470,
-          "selectedFraction": 0.16053904630269522,
-          "fallback": "unsupported:instance-field",
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "engine:context-cap-fallback",
-            "engine:summary-budget",
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 3700
-        },
-        {
-          "file": "src/language/nix-script-taint.js",
-          "line": 244,
-          "sinkId": "js-eval",
-          "demandMs": 6148.911166906357,
-          "demandRunsMs": [
-            6184.254208803177,
-            6148.911166906357,
-            6117.048374891281
-          ],
-          "selected": 14470,
-          "total": 14470,
-          "selectedFraction": 0.007118175535590878,
-          "fallback": "unsupported:instance-field",
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "engine:context-cap-fallback",
-            "engine:summary-budget",
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 164
-        },
-        {
-          "file": "src/posture/adversary-agent.js",
-          "line": 118,
-          "sinkId": "js-fetch",
-          "demandMs": 2.322957992553711,
-          "demandRunsMs": [
-            2.7019171714782715,
-            2.322957992553711,
-            2.112833023071289
-          ],
-          "selected": 1,
-          "total": 14470,
-          "selectedFraction": 0.00006910850034554251,
+          "selected": 2,
+          "total": 14936,
+          "selectedFraction": 0.0001339046598821639,
           "fallback": null,
-          "verdict": "flow-found",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 2
+        },
+        {
+          "file": "src/sast/authz.js",
+          "line": 345,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 7.754624843597412,
+          "demandRunsMs": [
+            7.754624843597412,
+            8.365709066390991,
+            7.464334011077881
+          ],
+          "selected": 2,
+          "total": 14936,
+          "selectedFraction": 0.0001339046598821639,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
           "status": "complete",
           "reasons": [],
-          "findings": 1,
+          "findings": 0,
           "parity": true,
           "unresolvedCallees": 0
         },
         {
-          "file": "src/posture/cross-lang-graphql.js",
-          "line": 108,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 17.37041711807251,
-          "demandRunsMs": [
-            17.37041711807251,
-            17.673499822616577,
-            16.68116593360901
-          ],
-          "selected": 4,
-          "total": 14470,
-          "selectedFraction": 0.00027643400138217003,
-          "fallback": null,
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 22
-        },
-        {
-          "file": "src/posture/fix-history.js",
-          "line": 615,
-          "sinkId": "js-fs-readFile",
-          "demandMs": 8.710041999816895,
-          "demandRunsMs": [
-            8.609165906906128,
-            9.015291929244995,
-            8.710041999816895
-          ],
-          "selected": 12,
-          "total": 14470,
-          "selectedFraction": 0.00082930200414651,
-          "fallback": null,
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 22
-        },
-        {
-          "file": "src/posture/fleet.js",
-          "line": 85,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 93.68462491035461,
-          "demandRunsMs": [
-            93.68462491035461,
-            93.39350008964539,
-            94.12737488746643
-          ],
-          "selected": 101,
-          "total": 14470,
-          "selectedFraction": 0.0069799585348997925,
-          "fallback": null,
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 168
-        },
-        {
-          "file": "src/sast/cpp-dataflow.js",
-          "line": 203,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 21.061958074569702,
-          "demandRunsMs": [
-            21.431833028793335,
-            20.10291600227356,
-            21.061958074569702
-          ],
-          "selected": 11,
-          "total": 14470,
-          "selectedFraction": 0.0007601935038009676,
-          "fallback": null,
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 25
-        },
-        {
-          "file": "src/sast/crypto-protocol.js",
-          "line": 346,
+          "file": "src/sast/client-side.js",
+          "line": 60,
           "sinkId": "js-exec",
-          "demandMs": 21.93470811843872,
+          "demandMs": 2.3617091178894043,
           "demandRunsMs": [
-            21.93470811843872,
-            22.217291116714478,
-            21.635208129882812
+            2.441499948501587,
+            2.3532919883728027,
+            2.3617091178894043
           ],
-          "selected": 18,
-          "total": 14470,
-          "selectedFraction": 0.001243953006219765,
+          "selected": 3,
+          "total": 14936,
+          "selectedFraction": 0.00020085698982324584,
           "fallback": null,
           "verdict": "unknown",
           "status": "partial",
@@ -1182,46 +1086,67 @@
           ],
           "findings": 0,
           "parity": true,
-          "unresolvedCallees": 46
+          "unresolvedCallees": 11
         },
         {
-          "file": "src/sast/csharp-structural.js",
-          "line": 66,
+          "file": "src/sast/cloud-iam.js",
+          "line": 279,
           "sinkId": "js-exec",
-          "demandMs": 6095.825709104538,
+          "demandMs": 11.05299997329712,
           "demandRunsMs": [
-            6051.389833211899,
-            6168.541832923889,
-            6095.825709104538
+            11.173624992370605,
+            11.05299997329712,
+            10.190290927886963
           ],
-          "selected": 14470,
-          "total": 14470,
-          "selectedFraction": 0.0022805805114029026,
-          "fallback": "unsupported:instance-field",
+          "selected": 16,
+          "total": 14936,
+          "selectedFraction": 0.0010712372790573112,
+          "fallback": null,
           "verdict": "unknown",
           "status": "partial",
           "reasons": [
-            "engine:context-cap-fallback",
-            "engine:summary-budget",
             "unresolved-callee"
           ],
           "findings": 0,
           "parity": true,
-          "unresolvedCallees": 108
+          "unresolvedCallees": 28
         },
         {
-          "file": "src/sast/go-structural.js",
-          "line": 41,
+          "file": "src/sast/code-injection-multilang.js",
+          "line": 153,
           "sinkId": "js-exec",
-          "demandMs": 13.660667181015015,
+          "demandMs": 5.666874885559082,
           "demandRunsMs": [
-            13.660667181015015,
-            12.840375185012817,
-            13.939416885375977
+            5.424959182739258,
+            6.0017499923706055,
+            5.666874885559082
           ],
-          "selected": 5,
-          "total": 14470,
-          "selectedFraction": 0.0003455425017277125,
+          "selected": 8,
+          "total": 14936,
+          "selectedFraction": 0.0005356186395286556,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 19
+        },
+        {
+          "file": "src/sast/crypto-specialist.js",
+          "line": 219,
+          "sinkId": "js-exec",
+          "demandMs": 5.322749853134155,
+          "demandRunsMs": [
+            5.427041053771973,
+            5.322749853134155,
+            5.259042024612427
+          ],
+          "selected": 8,
+          "total": 14936,
+          "selectedFraction": 0.0005356186395286556,
           "fallback": null,
           "verdict": "unknown",
           "status": "partial",
@@ -1233,18 +1158,220 @@
           "unresolvedCallees": 15
         },
         {
-          "file": "src/sast/java-bench-extras.js",
-          "line": 1229,
-          "sinkId": "js-exec",
-          "demandMs": 9.250584125518799,
+          "file": "src/sast/host-header.js",
+          "line": 48,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 2.0965828895568848,
           "demandRunsMs": [
-            9.526457786560059,
-            9.250584125518799,
-            9.115500211715698
+            2.0965828895568848,
+            2.0737500190734863,
+            2.693834066390991
           ],
-          "selected": 3,
-          "total": 14470,
-          "selectedFraction": 0.0002073255010366275,
+          "selected": 2,
+          "total": 14936,
+          "selectedFraction": 0.0001339046598821639,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "src/sast/java-bench-extras.js",
+          "line": 410,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 965.1391670703888,
+          "demandRunsMs": [
+            968.5547912120819,
+            965.1391670703888,
+            964.7147920131683
+          ],
+          "selected": 226,
+          "total": 14936,
+          "selectedFraction": 0.01513122656668452,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 507
+        },
+        {
+          "file": "src/sast/java-collection-passthrough.js",
+          "line": 142,
+          "sinkId": "js-exec",
+          "demandMs": 2.933666944503784,
+          "demandRunsMs": [
+            2.933666944503784,
+            3.0412919521331787,
+            2.881624937057495
+          ],
+          "selected": 2,
+          "total": 14936,
+          "selectedFraction": 0.0001339046598821639,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "src/sast/llm-trading-agent.js",
+          "line": 109,
+          "sinkId": "js-exec",
+          "demandMs": 3.813333034515381,
+          "demandRunsMs": [
+            3.76829195022583,
+            4.355792045593262,
+            3.813333034515381
+          ],
+          "selected": 4,
+          "total": 14936,
+          "selectedFraction": 0.0002678093197643278,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 14
+        },
+        {
+          "file": "src/sast/mass-assignment.js",
+          "line": 75,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 5.450707912445068,
+          "demandRunsMs": [
+            5.472833156585693,
+            5.450707912445068,
+            4.706708908081055
+          ],
+          "selected": 6,
+          "total": 14936,
+          "selectedFraction": 0.0004017139796464917,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 18
+        },
+        {
+          "file": "src/sast/mobile.js",
+          "line": 105,
+          "sinkId": "js-exec",
+          "demandMs": 8.330542087554932,
+          "demandRunsMs": [
+            8.309333086013794,
+            9.034916877746582,
+            8.330542087554932
+          ],
+          "selected": 10,
+          "total": 14936,
+          "selectedFraction": 0.0006695232994108195,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 26
+        },
+        {
+          "file": "src/sast/open-redirect.js",
+          "line": 129,
+          "sinkId": "js-exec",
+          "demandMs": 5.0874998569488525,
+          "demandRunsMs": [
+            5.029416084289551,
+            5.0874998569488525,
+            5.747125148773193
+          ],
+          "selected": 8,
+          "total": 14936,
+          "selectedFraction": 0.0005356186395286556,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 24
+        },
+        {
+          "file": "src/sast/php.js",
+          "line": 60,
+          "sinkId": "js-exec",
+          "demandMs": 4.12216591835022,
+          "demandRunsMs": [
+            4.12216591835022,
+            4.148167133331299,
+            4.105457782745361
+          ],
+          "selected": 5,
+          "total": 14936,
+          "selectedFraction": 0.00033476164970540974,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 14
+        },
+        {
+          "file": "src/sast/sibling-guard.js",
+          "line": 109,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 3.3747079372406006,
+          "demandRunsMs": [
+            3.358959197998047,
+            3.3747079372406006,
+            3.830749988555908
+          ],
+          "selected": 2,
+          "total": 14936,
+          "selectedFraction": 0.0001339046598821639,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "src/sast/stored-taint.js",
+          "line": 59,
+          "sinkId": "js-exec",
+          "demandMs": 4.366542100906372,
+          "demandRunsMs": [
+            4.381834030151367,
+            4.366542100906372,
+            4.356084108352661
+          ],
+          "selected": 5,
+          "total": 14936,
+          "selectedFraction": 0.00033476164970540974,
           "fallback": null,
           "verdict": "unknown",
           "status": "partial",
@@ -1256,92 +1383,42 @@
           "unresolvedCallees": 10
         },
         {
-          "file": "src/sast/java-bench-extras.js",
-          "line": 1079,
+          "file": "src/sast/xss-reflected-multilang.js",
+          "line": 268,
           "sinkId": "js-exec",
-          "demandMs": 6177.167083978653,
+          "demandMs": 871.7886250019073,
           "demandRunsMs": [
-            6177.167083978653,
-            6190.712791919708,
-            6148.355166912079
+            874.2697908878326,
+            871.7886250019073,
+            871.2997498512268
           ],
-          "selected": 14470,
-          "total": 14470,
-          "selectedFraction": 0.005114029025570145,
-          "fallback": "unsupported:instance-field",
+          "selected": 181,
+          "total": 14936,
+          "selectedFraction": 0.012118371719335833,
+          "fallback": null,
           "verdict": "unknown",
           "status": "partial",
           "reasons": [
             "engine:context-cap-fallback",
-            "engine:summary-budget",
             "unresolved-callee"
           ],
           "findings": 0,
           "parity": true,
-          "unresolvedCallees": 115
+          "unresolvedCallees": 404
         },
         {
-          "file": "src/sast/java-structural-cross-file.js",
-          "line": 112,
+          "file": "src/sast/zip-slip.js",
+          "line": 133,
           "sinkId": "js-exec",
-          "demandMs": 6082.576375007629,
+          "demandMs": 9.528916835784912,
           "demandRunsMs": [
-            6085.870416879654,
-            6082.576375007629,
-            6045.206666946411
+            10.260040998458862,
+            9.528916835784912,
+            9.277124881744385
           ],
-          "selected": 14470,
-          "total": 14470,
-          "selectedFraction": 0.00006910850034554251,
-          "fallback": "unsupported:instance-field",
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "engine:context-cap-fallback",
-            "engine:summary-budget"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 0
-        },
-        {
-          "file": "src/sast/java-structural.js",
-          "line": 431,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 6193.14133310318,
-          "demandRunsMs": [
-            6193.746999979019,
-            6160.734000205994,
-            6193.14133310318
-          ],
-          "selected": 14470,
-          "total": 14470,
-          "selectedFraction": 0.006772633033863165,
-          "fallback": "unsupported:instance-field",
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "engine:context-cap-fallback",
-            "engine:summary-budget",
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 179
-        },
-        {
-          "file": "src/sast/llm-app.js",
-          "line": 120,
-          "sinkId": "js-exec",
-          "demandMs": 19.85304093360901,
-          "demandRunsMs": [
-            19.85304093360901,
-            19.53679084777832,
-            20.101583003997803
-          ],
-          "selected": 16,
-          "total": 14470,
-          "selectedFraction": 0.0011057360055286801,
+          "selected": 8,
+          "total": 14936,
+          "selectedFraction": 0.0005356186395286556,
           "fallback": null,
           "verdict": "unknown",
           "status": "partial",
@@ -1350,77 +1427,12 @@
           ],
           "findings": 0,
           "parity": true,
-          "unresolvedCallees": 39
-        },
-        {
-          "file": "src/sast/ownership-authz.js",
-          "line": 71,
-          "sinkId": "js-exec",
-          "demandMs": 20.899875164031982,
-          "demandRunsMs": [
-            20.677165985107422,
-            21.399166107177734,
-            20.899875164031982
-          ],
-          "selected": 13,
-          "total": 14470,
-          "selectedFraction": 0.0008984105044920525,
-          "fallback": null,
-          "verdict": "unknown",
-          "status": "partial",
-          "reasons": [
-            "unresolved-callee"
-          ],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 29
-        },
-        {
-          "file": "src/sast/prompt-template.js",
-          "line": 124,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 4.203291893005371,
-          "demandRunsMs": [
-            4.6138341426849365,
-            4.203291893005371,
-            4.080708980560303
-          ],
-          "selected": 2,
-          "total": 14470,
-          "selectedFraction": 0.00013821700069108501,
-          "fallback": null,
-          "verdict": "no-flow-in-modeled-scope",
-          "status": "complete",
-          "reasons": [],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 0
-        },
-        {
-          "file": "src/sast/sibling-guard.js",
-          "line": 127,
-          "sinkId": "js-RegExp-new",
-          "demandMs": 5.685208797454834,
-          "demandRunsMs": [
-            5.663249969482422,
-            5.685208797454834,
-            5.703250169754028
-          ],
-          "selected": 2,
-          "total": 14470,
-          "selectedFraction": 0.00013821700069108501,
-          "fallback": null,
-          "verdict": "no-flow-in-modeled-scope",
-          "status": "complete",
-          "reasons": [],
-          "findings": 0,
-          "parity": true,
-          "unresolvedCallees": 0
+          "unresolvedCallees": 19
         }
       ]
     }
   ],
-  "finishedAt": "2026-10-25T15:55:45.576Z",
+  "finishedAt": "2026-10-26T06:42:10.264Z",
   "target": {
     "speedup": 2,
     "note": "PRD DAG-02 target: at least 2x faster sink-query analysis than the full-analysis baseline. A miss is reported, not hidden."

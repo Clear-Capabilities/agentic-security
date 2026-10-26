@@ -87,7 +87,7 @@ function planContract(plan) {
 
 async function loadProgram(root) {
   const { readTree } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 45950));
-  const { buildProjectIR } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 28149));
+  const { buildProjectIR } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 98297));
   const tree = await readTree(root);
   const ir = buildProjectIR(tree.fileContents);
   return { fileContents: tree.fileContents, oversize: tree.oversize || [], perFile: ir.perFile, callGraph: ir.callGraph, cha: ir.cha };

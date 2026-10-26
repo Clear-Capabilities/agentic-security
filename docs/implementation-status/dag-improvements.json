@@ -70,7 +70,7 @@
       "id": "R02.4",
       "summary": "Unsupported constructs, unresolved callees, unmodeled callbacks, and depth/work limits must expand to conservative full ",
       "status": "verified",
-      "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
+      "notes": "Acceptance tests pass. Instance fields of a named JavaScript or TypeScript class are followed (class-scoped expansion); a class that cannot be named, the caller-depth limit and the work limit still expand to full analysis or report partial scope. Over all 982 sink sites of scanner/src: 75 take the full path (all depth-limit), down from 238 (all instance-field); demand equals full analysis on every site.",
       "evidence": []
     },
     {
@@ -84,7 +84,7 @@
       "id": "R02.6",
       "summary": "Keep demand mode opt-in until corpus parity; emit selector coverage and analyzed-function counts. Add a user-facing sink",
       "status": "verified",
-      "notes": "Opt-in demand mode with coverage counts; parity holds. The 2x speedup target is MISSED on the repo own tree when the index is built per query (1.8x); 277x with a warm index; 10 of 30 own-tree queries fell back to full analysis.",
+      "notes": "Opt-in demand mode with coverage counts; parity holds. The 2x target is now MET on this repository's own tree: 23.4x per query with the index built per query (was 1.9x), 3.7x averaged over the 30-query sample with fallbacks included (was 1.2x). 3 of the 30 sampled queries (75 of 982 sink sites) still take the full path at the caller-depth limit; see docs/implementation-status/dag-improvements.md, Performance follow-up.",
       "evidence": [
         "scanner/test/cli/dag-commands.test.js"
       ]
@@ -219,7 +219,7 @@
       "id": "R05.7",
       "summary": "Include cache provenance in completion/evidence output so reused facts are distinguishable from newly analyzed facts.",
       "status": "verified",
-      "notes": "cacheProvenance on findings and scanHealth.deepAnalysis.incremental. Speed: deep stage meets 3x; end to end median 1.8x to 2.9x, below the 3x target; no benefit at the default summary budget for projects of about 5000 functions or more.",
+      "notes": "cacheProvenance on findings and scanHealth.deepAnalysis.incremental. Speed with the raised summary budget: deep stage 3.4x, 3.2x and 9.3x on the 300-file, 1000-file and scanner/src workloads; end to end 2.5x, 2.4x (below the 3x target) and 4.3x (met). Unchanged JavaScript and TypeScript files are read from the IR cache (dataflow/ir-cache.js). At the default summary budget projects of about 5000 functions or more still run cold and the warm run is slower than the cold one (0.8x deep stage).",
       "evidence": []
     },
     {

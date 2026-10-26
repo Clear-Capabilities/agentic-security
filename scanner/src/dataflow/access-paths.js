@@ -153,9 +153,13 @@ export function canonicalize(set) {
   const sorted = [...set].sort((a, b) => a.length - b.length || (a < b ? -1 : 1));
   const out = new Set();
   for (const path of sorted) {
+    // A kept path covers `path` exactly when it is one of the dot-delimited prefixes of it, so look those up
+    // (a handful per path) instead of testing every kept path (the set can hold hundreds in a large function).
     let covered = false;
-    for (const existing of out) {
-      if (pathIsCoveredByPrefix(path, existing)) { covered = true; break; }
+    if (typeof path === 'string') {
+      for (let i = path.indexOf('.'); i >= 0; i = path.indexOf('.', i + 1)) {
+        if (out.has(path.slice(0, i))) { covered = true; break; }
+      }
     }
     if (!covered) out.add(path);
   }
@@ -176,6 +180,12 @@ export function hashSet(set) {
 export function setsEqual(a, b) {
   if (a === b) return true;
   if (!a || !b) return false;
+  // Identical members are equal under any canonicalization; only a difference needs the canonical forms.
+  if (a.size === b.size) {
+    let same = true;
+    for (const x of a) if (!b.has(x)) { same = false; break; }
+    if (same) return true;
+  }
   const ca = canonicalize(a), cb = canonicalize(b);
   if (ca.size !== cb.size) return false;
   for (const x of ca) if (!cb.has(x)) return false;

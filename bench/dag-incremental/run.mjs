@@ -1,16 +1,17 @@
 // DAG-05: warm versus cold deep analysis on localized edits.
 //
-// What it measures. The cross-scan cache (scanner/src/dataflow/incremental*.js) accelerates ONE stage
-// of a scan: the interprocedural taint engine. Parsing to IR and the dependency fingerprints are
-// rebuilt on every scan (the fingerprints are what the cache is validated against), and every other
-// detector in a full scan is outside it. So this bench reports, with raw timings:
+// What it measures. The cross-scan cache (scanner/src/dataflow/incremental*.js, ir-cache.js) accelerates TWO
+// stages of a scan: the interprocedural taint engine, and (JavaScript and TypeScript only) the parse to IR,
+// where an unchanged file is read back from a per-file record. The dependency fingerprints are rebuilt on every
+// scan (they are what the cache is validated against), and every other detector in a full scan is outside it.
+// So this bench reports, with raw timings:
 //
 //   cold            deep analysis with the cache off
 //   cold+commit     deep analysis, cache on, first run (pays fingerprinting and persistence)
 //   warm-same       deep analysis after an unchanged re-scan
 //   warm-edit       deep analysis after ONE localized edit, repeated for EDITS different random
 //                   edits (a distribution, not a hand-picked best case)
-//   ir              parse to IR + call graph (not cached; runs every scan)
+//   ir              parse to IR + call graph (cold: every file parsed; warm: unchanged JS/TS files from the IR cache)
 //
 // and, for each warm run checked, that the findings equal a fresh cold run on the same edited tree
 // (a fast wrong answer is not a result).
@@ -54,6 +55,7 @@ if (!DEFAULT_BUDGET) process.env.AGENTIC_SECURITY_SUMMARY_BUDGET = process.env.A
 
 const { buildProjectIR } = await import(path.join(SRC, 'ir', 'index.js'));
 const { runDeepAnalysis } = await import(path.join(SRC, 'dataflow', 'index.js'));
+const { openIrCache } = await import(path.join(SRC, 'dataflow', 'ir-cache.js'));
 
 const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
 const round = (n) => Math.round(n * 10) / 10;
@@ -126,15 +128,19 @@ function randomEdits(files, count) {
 
 const normalize = (list) => list.map((f) => JSON.stringify({ ...f, cacheProvenance: undefined })).sort();
 
+const ROOTS = [];
 function freshRoot(label) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), `dag05-${label}-`));
+  ROOTS.push(root);
   fs.writeFileSync(path.join(root, 'package.json'), '{"name":"bench","version":"1.0.0"}');
   return root;
 }
 
 function stage(files, root, incremental) {
   const t0 = performance.now();
-  const { perFile, callGraph } = buildProjectIR(files);
+  // Mirrors engine.js: with the cross-scan cache on, unchanged JavaScript/TypeScript files come from the IR cache.
+  const irCache = incremental ? openIrCache(root) : null;
+  const { perFile, callGraph } = buildProjectIR(files, irCache ? { irCache } : {});
   const t1 = performance.now();
   if (incremental) process.env.AGENTIC_SECURITY_INCREMENTAL = '1'; else delete process.env.AGENTIC_SECURITY_INCREMENTAL;
   const findings = runDeepAnalysis(perFile, callGraph, { scanRoot: root, fileContents: files, fnLimit: FN_LIMIT });
@@ -226,4 +232,6 @@ for (const r of results) {
   console.log(`  parity with a cold run: ${s.parity.holds ? 'holds' : 'FAILS'} (${s.parity.editsChecked} edits + unchanged re-scan)`);
   console.log(`  wrote ${path.relative(REPO, file)}`);
 }
+// the scratch projects hold a copy of the cache state (tens of megabytes each): do not leave them behind
+for (const r of ROOTS) fs.rmSync(r, { recursive: true, force: true });
 process.exit(results.every((r) => r.summary.parity.holds) ? 0 : 1);

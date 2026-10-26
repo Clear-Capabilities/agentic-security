@@ -205,9 +205,27 @@ test('a request for one object field does not attribute an unrelated sibling fie
   assert.equal(c.findings.length, 1);
 });
 
+test('an instance field is answered over its class, not by falling back to the whole program', () => {
+  const p = loadFixtureProgram('22-class-field-flow');
+  const q = { file: 'app.js', line: 10 };
+  const r = runDemandSinkQuery(p.perFileIR, p.callGraph, q, { cache: false, engineOpts: p.engineOpts });
+  assert.equal(r.fallback, null, 'no full fallback');
+  assert.equal(r.verdict, 'flow-found');
+  assert.ok(r.selectorCoverage.byReason['class-sibling'] >= 1, 'the class methods are selected');
+  assert.ok(r.analyzedFunctions < p.callGraph.functions.size, 'and nothing else is');
+  // same-named JavaScript locals are variables, not receivers
+  const l = loadFixtureProgram('24-js-self-cls-locals');
+  for (const line of [4, 8]) {
+    const lr = runDemandSinkQuery(l.perFileIR, l.callGraph, { file: 'app.js', line }, { cache: false });
+    assert.equal(lr.fallback, null);
+    assert.equal(lr.analyzedFunctions, 1);
+  }
+});
+
 test('unsupported constructs expand to full analysis by default and report partial scope on request', () => {
-  const p = loadFixtureProgram('13-instance-field');
-  const q = { file: 'app.js', line: 5 };
+  // a receiver on a constructor function: no class can be named from the qid structure
+  const p = loadFixtureProgram('23-prototype-this');
+  const q = { file: 'app.js', line: 4 };
   const full = runDemandSinkQuery(p.perFileIR, p.callGraph, q, { cache: false });
   assert.equal(full.fallback.reason, 'unsupported:instance-field');
   assert.equal(full.analyzedFunctions, p.callGraph.functions.size);

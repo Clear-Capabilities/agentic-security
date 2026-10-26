@@ -1,0 +1,8 @@
+{
+  "name": "24-js-self-cls-locals",
+  "construct": "ordinary JavaScript locals named self and cls are not receivers: they are followed as variables, not reported as instance fields",
+  "expect": [
+    { "file": "app.js", "line": 4, "flow": true },
+    { "file": "app.js", "line": 8, "flow": false }
+  ]
+}

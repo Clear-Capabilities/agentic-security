@@ -215,6 +215,7 @@ import { annotateNarration } from './posture/flow-narration.js';
 import { applyPathConstraints } from './posture/path-predicates.js';
 // Phase 3 (Sentinel-parity Layer 1 + 2) — IR + interprocedural taint engine.
 import { buildProjectIR, buildProjectIRAsync } from './ir/index.js';
+import { openIrCache } from './dataflow/ir-cache.js';
 import _v8 from 'node:v8';
 import _vm from 'node:vm';
 import { createStringMemo } from './util/string-memo.js';
@@ -9514,7 +9515,15 @@ function _deterministicFileTimings(timings) {
   // import) for projects that contain no Java. `runFullScan` is already async,
   // so the await costs nothing structurally.
   const _hasJava = Object.keys(fc || {}).some(f => /\.java$/i.test(f));
-  const _buildIR = async () => (_hasJava ? await buildProjectIRAsync(fc) : buildProjectIR(fc));
+  // DAG-05: with the cross-scan cache on, an unchanged JavaScript/TypeScript file is read back from the IR cache
+  // instead of parsed again (dataflow/ir-cache.js; the content is the same, only the cost differs).
+  const _buildIR = async () => {
+    let irCache = null;
+    if (process.env.AGENTIC_SECURITY_INCREMENTAL === '1' && scanRoot) {
+      try { irCache = openIrCache(scanRoot); } catch { irCache = null; }
+    }
+    return _hasJava ? await buildProjectIRAsync(fc, { irCache }) : buildProjectIR(fc, { irCache });
+  };
   const _irStatsTarget = irStatsTarget();
   if (_irStatsTarget) {
     try {

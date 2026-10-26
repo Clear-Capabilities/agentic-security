@@ -9,22 +9,22 @@
   "runs": {
     "cold": {
       "irMs": [
-        461.1,
-        365.4,
-        343.5
+        437.8,
+        350.6,
+        326.1
       ],
       "deepMs": [
-        548.1,
-        510.6,
-        500.7
+        386.1,
+        336,
+        343.9
       ]
     },
     "coldCommit": {
       "irMs": [
-        352
+        477.9
       ],
       "deepMs": [
-        684.5
+        461.7
       ],
       "stats": {
         "mode": "cold",
@@ -39,8 +39,8 @@
         },
         "invalidation": null,
         "timing": {
-          "fingerprintMs": 164,
-          "readMs": 1,
+          "fingerprintMs": 138,
+          "readMs": 0,
           "planMs": 0,
           "restoreMs": 0
         },
@@ -48,21 +48,21 @@
           "functions": 3300,
           "edges": 4498,
           "coupled": 0,
-          "fingerprintMs": 164
+          "fingerprintMs": 138
         },
-        "persistedMs": 20
+        "persistedMs": 19
       }
     },
     "warmSame": {
       "irMs": [
-        360.3,
-        413.7,
-        346.4
+        169,
+        187.9,
+        171.1
       ],
       "deepMs": [
-        179.8,
-        157.3,
-        139.6
+        142.6,
+        119,
+        117.5
       ],
       "stats": {
         "mode": "warm",
@@ -81,28 +81,28 @@
           "byReason": {}
         },
         "timing": {
-          "fingerprintMs": 81,
-          "readMs": 17,
-          "planMs": 7,
-          "restoreMs": 15
+          "fingerprintMs": 84,
+          "readMs": 32,
+          "planMs": 10,
+          "restoreMs": 8
         },
         "model": {
           "functions": 3300,
           "edges": 4498,
           "coupled": 0,
-          "fingerprintMs": 81
+          "fingerprintMs": 84
         },
-        "persistedMs": 17
+        "persistedMs": 16
       }
     }
   },
   "perEdit": [
     {
       "file": "src/m26.js",
-      "deepMs": 172.1,
-      "irMs": 372.9,
+      "deepMs": 114.8,
+      "irMs": 175.2,
       "deepSpeedup": 3,
-      "endToEndSpeedup": 1.6,
+      "endToEndSpeedup": 2.4,
       "stats": {
         "mode": "warm",
         "reason": null,
@@ -123,27 +123,27 @@
           }
         },
         "timing": {
-          "fingerprintMs": 76,
-          "readMs": 17,
-          "planMs": 11,
-          "restoreMs": 10
+          "fingerprintMs": 62,
+          "readMs": 16,
+          "planMs": 6,
+          "restoreMs": 9
         },
         "model": {
           "functions": 3300,
           "edges": 4498,
           "coupled": 0,
-          "fingerprintMs": 76
+          "fingerprintMs": 62
         },
-        "persistedMs": 17
+        "persistedMs": 13
       },
       "parityWithCold": true
     },
     {
       "file": "src/m217.js",
-      "deepMs": 141.7,
-      "irMs": 343.9,
-      "deepSpeedup": 3.6,
-      "endToEndSpeedup": 1.8,
+      "deepMs": 109.2,
+      "irMs": 176.4,
+      "deepSpeedup": 3.2,
+      "endToEndSpeedup": 2.4,
       "stats": {
         "mode": "warm",
         "reason": null,
@@ -164,16 +164,16 @@
           }
         },
         "timing": {
-          "fingerprintMs": 76,
-          "readMs": 17,
-          "planMs": 7,
-          "restoreMs": 10
+          "fingerprintMs": 60,
+          "readMs": 11,
+          "planMs": 5,
+          "restoreMs": 11
         },
         "model": {
           "functions": 3300,
           "edges": 4498,
           "coupled": 0,
-          "fingerprintMs": 76
+          "fingerprintMs": 60
         },
         "persistedMs": 14
       },
@@ -181,10 +181,10 @@
     },
     {
       "file": "src/m172.js",
-      "deepMs": 151.2,
-      "irMs": 343.9,
-      "deepSpeedup": 3.4,
-      "endToEndSpeedup": 1.8,
+      "deepMs": 102.9,
+      "irMs": 174.3,
+      "deepSpeedup": 3.3,
+      "endToEndSpeedup": 2.5,
       "stats": {
         "mode": "warm",
         "reason": null,
@@ -205,27 +205,27 @@
           }
         },
         "timing": {
-          "fingerprintMs": 83,
-          "readMs": 21,
-          "planMs": 8,
-          "restoreMs": 9
+          "fingerprintMs": 59,
+          "readMs": 12,
+          "planMs": 5,
+          "restoreMs": 6
         },
         "model": {
           "functions": 3300,
           "edges": 4498,
           "coupled": 0,
-          "fingerprintMs": 83
+          "fingerprintMs": 59
         },
-        "persistedMs": 16
+        "persistedMs": 14
       },
       "parityWithCold": true
     },
     {
       "file": "src/m294.js",
-      "deepMs": 120.8,
-      "irMs": 340.6,
-      "deepSpeedup": 4.2,
-      "endToEndSpeedup": 1.9,
+      "deepMs": 101.6,
+      "irMs": 171.9,
+      "deepSpeedup": 3.4,
+      "endToEndSpeedup": 2.5,
       "stats": {
         "mode": "warm",
         "reason": null,
@@ -246,26 +246,26 @@
           }
         },
         "timing": {
-          "fingerprintMs": 65,
-          "readMs": 13,
-          "planMs": 7,
-          "restoreMs": 8
+          "fingerprintMs": 54,
+          "readMs": 12,
+          "planMs": 6,
+          "restoreMs": 6
         },
         "model": {
           "functions": 3300,
           "edges": 4498,
           "coupled": 0,
-          "fingerprintMs": 65
+          "fingerprintMs": 54
         },
-        "persistedMs": 20
+        "persistedMs": 13
       }
     },
     {
       "file": "src/m24.js",
-      "deepMs": 157.1,
-      "irMs": 350.7,
-      "deepSpeedup": 3.3,
-      "endToEndSpeedup": 1.7,
+      "deepMs": 95.3,
+      "irMs": 156.9,
+      "deepSpeedup": 3.6,
+      "endToEndSpeedup": 2.8,
       "stats": {
         "mode": "warm",
         "reason": null,
@@ -286,26 +286,26 @@
           }
         },
         "timing": {
-          "fingerprintMs": 78,
-          "readMs": 17,
-          "planMs": 7,
-          "restoreMs": 10
+          "fingerprintMs": 49,
+          "readMs": 12,
+          "planMs": 5,
+          "restoreMs": 6
         },
         "model": {
           "functions": 3300,
           "edges": 4498,
           "coupled": 0,
-          "fingerprintMs": 78
+          "fingerprintMs": 49
         },
-        "persistedMs": 15
+        "persistedMs": 19
       }
     },
     {
       "file": "src/m92.js",
-      "deepMs": 137.1,
-      "irMs": 339,
-      "deepSpeedup": 3.7,
-      "endToEndSpeedup": 1.8,
+      "deepMs": 104.9,
+      "irMs": 173.3,
+      "deepSpeedup": 3.3,
+      "endToEndSpeedup": 2.5,
       "stats": {
         "mode": "warm",
         "reason": null,
@@ -326,26 +326,26 @@
           }
         },
         "timing": {
-          "fingerprintMs": 67,
-          "readMs": 18,
+          "fingerprintMs": 63,
+          "readMs": 15,
           "planMs": 5,
-          "restoreMs": 13
+          "restoreMs": 6
         },
         "model": {
           "functions": 3300,
           "edges": 4498,
           "coupled": 0,
-          "fingerprintMs": 67
+          "fingerprintMs": 63
         },
         "persistedMs": 14
       }
     },
     {
       "file": "src/m46.js",
-      "deepMs": 137.2,
-      "irMs": 350.5,
-      "deepSpeedup": 3.7,
-      "endToEndSpeedup": 1.8,
+      "deepMs": 102.1,
+      "irMs": 158,
+      "deepSpeedup": 3.4,
+      "endToEndSpeedup": 2.7,
       "stats": {
         "mode": "warm",
         "reason": null,
@@ -366,26 +366,26 @@
           }
         },
         "timing": {
-          "fingerprintMs": 66,
+          "fingerprintMs": 51,
           "readMs": 12,
-          "planMs": 11,
-          "restoreMs": 7
+          "planMs": 4,
+          "restoreMs": 6
         },
         "model": {
           "functions": 3300,
           "edges": 4498,
           "coupled": 0,
-          "fingerprintMs": 66
+          "fingerprintMs": 51
         },
-        "persistedMs": 15
+        "persistedMs": 18
       }
     },
     {
       "file": "src/m53.js",
-      "deepMs": 123.8,
-      "irMs": 346.3,
-      "deepSpeedup": 4.1,
-      "endToEndSpeedup": 1.9,
+      "deepMs": 96,
+      "irMs": 160.8,
+      "deepSpeedup": 3.6,
+      "endToEndSpeedup": 2.7,
       "stats": {
         "mode": "warm",
         "reason": null,
@@ -406,36 +406,36 @@
           }
         },
         "timing": {
-          "fingerprintMs": 55,
+          "fingerprintMs": 52,
           "readMs": 12,
           "planMs": 5,
-          "restoreMs": 7
+          "restoreMs": 6
         },
         "model": {
           "functions": 3300,
           "edges": 4498,
           "coupled": 0,
-          "fingerprintMs": 55
+          "fingerprintMs": 52
         },
         "persistedMs": 19
       }
     }
   ],
   "summary": {
-    "coldDeepMsMedian": 510.6,
-    "coldIrMsMedian": 365.4,
-    "warmSameDeepMsMedian": 157.3,
-    "warmSameDeepSpeedup": 3.2,
-    "warmEditDeepMsMedian": 141.7,
+    "coldDeepMsMedian": 343.9,
+    "coldIrMsMedian": 350.6,
+    "warmSameDeepMsMedian": 119,
+    "warmSameDeepSpeedup": 2.9,
+    "warmEditDeepMsMedian": 102.9,
     "deepSpeedup": {
-      "median": 3.7,
+      "median": 3.4,
       "min": 3,
-      "max": 4.2
+      "max": 3.6
     },
     "endToEndSpeedup": {
-      "median": 1.8,
-      "min": 1.6,
-      "max": 1.9
+      "median": 2.5,
+      "min": 2.4,
+      "max": 2.8
     },
     "targetSpeedup": 3,
     "editsMeetingTarget": {

@@ -526,7 +526,7 @@ function analyzerRoots() {
 
 let _analyzerMemo = null;
 /** Digest of the analyzer and parser sources (or the bundle when running from one). */
-function analyzerDigest() {
+export function analyzerDigest() {
   if (_analyzerMemo) return _analyzerMemo;
   const { here, src, isSource } = analyzerRoots();
   const h = crypto.createHash('sha256');
