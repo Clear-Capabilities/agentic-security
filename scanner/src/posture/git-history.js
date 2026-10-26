@@ -53,6 +53,57 @@ function _blame(scanRoot, file, line) {
   } catch { return null; }
 }
 
+// One `git blame` per file for every wanted line, instead of one per line.
+// Porcelain output repeats the full metadata only the first time a commit
+// appears, so metadata is kept per sha and each line's block is resolved
+// against it. Returns Map(line -> meta), or null on any failure so the caller
+// falls back to the per-line path (a line past the end of the file fails the
+// whole call, and that must not lose the other lines).
+function _blameFile(scanRoot, file, lines) {
+  const rel = path.isAbsolute(file) ? path.relative(scanRoot, file) : file;
+  if (rel.startsWith('..')) return null;
+  const wanted = [...new Set(lines)].filter((n) => Number.isInteger(n) && n >= 1).sort((a, b) => a - b);
+  if (!wanted.length) return null;
+  const args = ['blame', '--porcelain', '--no-textconv'];
+  for (const n of wanted) args.push('-L', `${n},${n}`);
+  args.push('--', rel);
+  try {
+    const out = cp.execFileSync('git', hardenGitArgs(args), {
+      cwd: scanRoot, encoding: 'utf8', timeout: SUBPROC_TIMEOUT_MS * 4, maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv(),
+    });
+    const bySha = new Map();
+    const result = new Map();
+    let cur = null;
+    let curLine = null;
+    const flush = () => {
+      if (cur && curLine != null) result.set(curLine, cur);
+      cur = null; curLine = null;
+    };
+    for (const ln of out.split('\n')) {
+      const head = /^([0-9a-f]{40}) (\d+) (\d+)(?: (\d+))?$/.exec(ln);
+      if (head) {
+        flush();
+        if (!bySha.has(head[1])) bySha.set(head[1], { raw: [], sha40: head[1] });
+        cur = bySha.get(head[1]);
+        curLine = parseInt(head[3], 10);
+        continue;
+      }
+      if (!cur) continue;
+      if (ln.charCodeAt(0) === 9) cur.rawDone = true;
+      else if (!cur.rawDone) cur.raw.push(ln);
+    }
+    flush();
+    const parsed = new Map();
+    const resolved = new Map();
+    for (const [n, c] of result) {
+      if (!parsed.has(c.sha40)) parsed.set(c.sha40, _parsePorcelain(`${c.sha40} 1 1 1\n${c.raw.join('\n')}`));
+      resolved.set(n, parsed.get(c.sha40));
+    }
+    return resolved;
+  } catch { return null; }
+}
+
 function _parsePorcelain(out) {
   if (!out) return null;
   const lines = out.split('\n');
@@ -80,6 +131,29 @@ function _fullMessage(scanRoot, sha) {
   } catch { return ''; }
 }
 
+// Every distinct commit message in one `git log --no-walk` call instead of one
+// `git show` per commit. Returns Map(sha prefix as given -> body); a sha missing
+// from the result is looked up individually by the caller.
+function _fullMessages(scanRoot, shas) {
+  const out = new Map();
+  const list = [...new Set(shas)].filter((x) => /^[0-9a-f]{7,40}$/.test(x));
+  if (!list.length) return out;
+  try {
+    const raw = cp.execFileSync(
+      'git', hardenGitArgs(['log', '--no-walk=unsorted', '--no-textconv', '--format=%H%x1f%B%x1e', ...list, '--']),
+      { cwd: scanRoot, encoding: 'utf8', timeout: SUBPROC_TIMEOUT_MS * 4, maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv() },
+    );
+    for (const rec of raw.split('\x1e')) {
+      const i = rec.indexOf('\x1f');
+      if (i < 0) continue;
+      const full = rec.slice(0, i).replace(/^\s+/, '');
+      const body = rec.slice(i + 1).replace(/^\n+/, '');
+      for (const sha of list) if (full.startsWith(sha)) out.set(sha, body);
+    }
+  } catch { /* the caller falls back per commit */ }
+  return out;
+}
+
 function _extractPrompt(body) {
   if (!body || !PROMPT_MARKER_RE.test(body)) return null;
   // Take the line(s) that follow a "Prompt:" or "User asked:" marker, up to
@@ -101,10 +175,26 @@ export function annotateGitHistory(scanRoot, findings) {
   const messageCache = new Map();  // sha → body
   let annotated = 0, skipped = 0;
 
+  // Batch the blame per file; a file whose batch fails is blamed line by line.
+  const wantedByFile = new Map();
+  for (let i = 0; i < findings.length && i < MAX_BLAME_PER_SCAN; i++) {
+    const f = findings[i];
+    if (!f || !f.file || !f.line) continue;
+    if (!wantedByFile.has(f.file)) wantedByFile.set(f.file, []);
+    wantedByFile.get(f.file).push(f.line);
+  }
+  const blameByFile = new Map();
+  for (const [file, lines] of wantedByFile) blameByFile.set(file, _blameFile(scanRoot, file, lines));
+
+  const wantedShas = [];
+  for (const m of blameByFile.values()) if (m) for (const meta of m.values()) if (meta && meta.sha) wantedShas.push(meta.sha);
+  for (const [sha, body] of _fullMessages(scanRoot, wantedShas)) messageCache.set(sha, body);
+
   for (let i = 0; i < findings.length && i < MAX_BLAME_PER_SCAN; i++) {
     const f = findings[i];
     if (!f || !f.file || !f.line) { skipped++; continue; }
-    const blame = _blame(scanRoot, f.file, f.line);
+    const batch = blameByFile.get(f.file);
+    const blame = batch && batch.has(f.line) ? batch.get(f.line) : _blame(scanRoot, f.file, f.line);
     if (!blame) { skipped++; continue; }
 
     f.introducedBy = blame.author || null;
