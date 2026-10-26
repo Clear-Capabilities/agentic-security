@@ -27,7 +27,7 @@ for (const cls of CLASSES) {
   const skip = !sandboxAvailable() ? 'no confinement backend on this host'
     : !lang.supported ? `${reproducer.lang} cannot run on this host (${lang.reason}); the runner reports it as unsupported, never as a pass`
     : (needsCallback && detectBackend() !== 'userspace') ? `mediated network (network: 'callback') is unsupported on the ${detectBackend()} backend`
-    : (['python', 'java'].includes(reproducer.lang) ? skipUnlessRuns(reproducer.lang) : false);
+    : (['python', 'java', 'haskell'].includes(reproducer.lang) ? skipUnlessRuns(reproducer.lang) : false);
 
   test(`fixture ${cls}: vulnerable implementation reaches EXPLOIT_CONFIRMED`, { skip }, async () => {
     const r = await proveFinding({

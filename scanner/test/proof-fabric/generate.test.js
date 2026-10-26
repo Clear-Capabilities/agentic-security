@@ -77,7 +77,7 @@ test('a finding it cannot build a harness for is refused with the reason, and no
   const dir = repo({ 'lib.js': CJS_FN_VULN, 'private.js': "function inner(c) {\n  require('child_process').execSync(c);\n}\n", 'noargs.js': "function r() {\n  require('child_process').execSync('ls');\n}\nmodule.exports = r;\n", 'top.js': "require('child_process').execSync('ls ' + process.env.X);\n", 'broken.js': 'function (', 'readonly.js': "const fs = require('fs');\nfunction r(name) {\n  return fs.readFileSync('/srv/' + name);\n}\nmodule.exports = r;\n", 'x.py': 'import os\n' });
   const cases = [
     [F({ cwe: 'CWE-89', file: 'lib.js', line: 3 }), /no payload and oracle exist for CWE-89/], [F({ cwe: undefined, file: 'lib.js', line: 3 }), /no payload and oracle/],
-    [F({ file: 'x.rb', line: 1 }), /JavaScript and Python only/], [F({ file: 'lib.js', line: undefined }), /no line number/], [F({ file: 'gone.js', line: 1 }), /missing, outside/],
+    [F({ file: 'x.rb', line: 1 }), /JavaScript, Python and Haskell only/], [F({ file: 'lib.js', line: undefined }), /no line number/], [F({ file: 'gone.js', line: 1 }), /missing, outside/],
     [F({ file: '../escape.js', line: 1 }), /missing, outside/], [F({ file: 'broken.js', line: 1 }), /could not be parsed/], [F({ file: 'private.js', line: 2 }), /not exported/],
     [F({ file: 'noargs.js', line: 2 }), /takes no parameters/], [F({ file: 'top.js', line: 1 }), /not inside a function/], [F({ cwe: 'CWE-22', file: 'readonly.js', line: 3 }), /only observe a write/],
   ];

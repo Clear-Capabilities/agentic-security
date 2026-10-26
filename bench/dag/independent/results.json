@@ -1,0 +1,936 @@
+{
+ "scannerVersion": "0.186.1",
+ "labelsDigest": "4fd5cb4e8703105c82662f68e3edea808ec9f39c5bf3af3215c8b30d2afd4163",
+ "definition": "precision = tp / (tp + fp); ambiguous and unlabeled excluded from the denominator; 95% Wilson interval",
+ "perLanguage": {
+  "javascript": {
+   "flagged": 252,
+   "tp": 7,
+   "fp": 53,
+   "ambiguous": 0,
+   "unlabeled": 192,
+   "labeledDenominator": 60,
+   "precision": 0.1167,
+   "wilson95": [
+    0.0577,
+    0.2218
+   ]
+  },
+  "nix": {
+   "flagged": 282,
+   "tp": 4,
+   "fp": 55,
+   "ambiguous": 1,
+   "unlabeled": 222,
+   "labeledDenominator": 59,
+   "precision": 0.0678,
+   "wilson95": [
+    0.0267,
+    0.1618
+   ]
+  }
+ },
+ "perClass": {
+  "javascript | <fn>() acts on a resource without checking its lifecycle state": {
+   "flagged": 11,
+   "tp": 0,
+   "fp": 3,
+   "ambiguous": 0,
+   "unlabeled": 8,
+   "labeledDenominator": 3,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.5615
+   ]
+  },
+  "javascript | <fn>() looks up or mutates by request-supplied 'id' with no ownership check": {
+   "flagged": 31,
+   "tp": 0,
+   "fp": 4,
+   "ambiguous": 0,
+   "unlabeled": 27,
+   "labeledDenominator": 4,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.4899
+   ]
+  },
+  "javascript | <fn>() looks up or mutates by request-supplied 'uid' with no ownership check": {
+   "flagged": 4,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 3,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | AuthZ: OAuthN authorization_code without PKCE": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | AuthZ: jwt.verify called without algorithms allow-list": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | Code Injection — dynamic code/expression evaluation of a non-literal argument": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Concurrency: fire-and-forget async call in afterCreate() — result not awaited": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Docker Service Publishes Sensitive Port N to Host": {
+   "flagged": 8,
+   "tp": 3,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 5,
+   "labeledDenominator": 3,
+   "precision": 1,
+   "wilson95": [
+    0.4385,
+    1
+   ]
+  },
+  "javascript | Eternal Token: JWT issued without expiresIn / exp claim": {
+   "flagged": 4,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 3,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | GraphQL Mutation Block (Verify Field-Level Auth)": {
+   "flagged": 4,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 3,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | GraphQL Sensitive Query Field (Verify Auth)": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Hardcoded Secret": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | JWT Decoded Without Signature Verification": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | JWT Sign (Verify Algorithm Pinned)": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | Known-Broken Code Marker Near Security-Sensitive Logic": {
+   "flagged": 36,
+   "tp": 1,
+   "fp": 8,
+   "ambiguous": 0,
+   "unlabeled": 27,
+   "labeledDenominator": 9,
+   "precision": 0.1111,
+   "wilson95": [
+    0.0199,
+    0.435
+   ]
+  },
+  "javascript | Mass Assignment (req.body Direct to Model)": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | Missing Timeout on Outbound HTTP Request (DoS)": {
+   "flagged": 17,
+   "tp": 3,
+   "fp": 3,
+   "ambiguous": 0,
+   "unlabeled": 11,
+   "labeledDenominator": 6,
+   "precision": 0.5,
+   "wilson95": [
+    0.1876,
+    0.8124
+   ]
+  },
+  "javascript | NoSQL Injection": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | ORM Collection Query Without Pagination Limit (DoS)": {
+   "flagged": 57,
+   "tp": 0,
+   "fp": 12,
+   "ambiguous": 0,
+   "unlabeled": 45,
+   "labeledDenominator": 12,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.2425
+   ]
+  },
+  "javascript | Path Normalization Gap — extension extraction without null-byte/traversal sanitization": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | Pipeline: OIDC id-token: write without explicit aud restriction": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | Pipeline: Third-party action pinned to major-version tag (mutable)": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Potential Indirect IDOR — findAll Without Ownership Scope": {
+   "flagged": 12,
+   "tp": 0,
+   "fp": 3,
+   "ambiguous": 0,
+   "unlabeled": 9,
+   "labeledDenominator": 3,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.5615
+   ]
+  },
+  "javascript | Pre-quantum RSA (rsa-sign) — replace with ML-DSA-N before CRQC arrives": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Prompt Template: user input interpolated without isolation markers": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 2,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Prototype Pollution": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Regex ReDoS — Catastrophic Backtracking": {
+   "flagged": 5,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 4,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | SQL Injection (Template Literal)": {
+   "flagged": 5,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 4,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | SQL Injection — query built with template literal / concat (JS/TS)": {
+   "flagged": 6,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 5,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | SQL Injection": {
+   "flagged": 4,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 3,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | SSRF": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | Spec drift — normalizeRequestPathForRateLimit() claims rate-limit-impl but body lacks expected evidence": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Spec drift — sanitizeInput() claims output-sanitizer but body lacks expected evidence": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Spec drift — sanitizeOutput() claims output-sanitizer but body lacks expected evidence": {
+   "flagged": 4,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 4,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Spec drift — sanitizeUser() claims output-sanitizer but body lacks expected evidence": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Stack Trace in Code (Risk of Exposure)": {
+   "flagged": 3,
+   "tp": 0,
+   "fp": 2,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 2,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.6576
+   ]
+  },
+  "javascript | Synchronous Blocking I/O (DoS Risk in Server Context)": {
+   "flagged": 6,
+   "tp": 0,
+   "fp": 2,
+   "ambiguous": 0,
+   "unlabeled": 4,
+   "labeledDenominator": 2,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.6576
+   ]
+  },
+  "javascript | Timing-Unsafe Comparison — secret/HMAC compared with === instead of timingSafeEqual": {
+   "flagged": 4,
+   "tp": 0,
+   "fp": 2,
+   "ambiguous": 0,
+   "unlabeled": 2,
+   "labeledDenominator": 2,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.6576
+   ]
+  },
+  "javascript | Unrestricted file upload — client-supplied mimetype trusted as the stored Content-Type": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 2,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Weak Randomness": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | Weak hash algorithm (MDN / SHA-N / MDN / MDN) used": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "javascript | bcrypt Rounds Below N (Weak Work Factor)": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | bcrypt cost factor too low (N); N is the modern floor": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "javascript | jwt.verify called without algorithms allowlist — algorithm-confusion attack": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | A user is a member of a group that is equivalent to root": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 2,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Command Injection (os.popen / os.execlp)": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "nix | Command Injection": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Credential written as a literal in Nix source": {
+   "flagged": 31,
+   "tp": 0,
+   "fp": 9,
+   "ambiguous": 0,
+   "unlabeled": 22,
+   "labeledDenominator": 9,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.2991
+   ]
+  },
+  "nix | Hardcoded Secret": {
+   "flagged": 26,
+   "tp": 0,
+   "fp": 4,
+   "ambiguous": 0,
+   "unlabeled": 22,
+   "labeledDenominator": 4,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.4899
+   ]
+  },
+  "nix | High-Entropy Credential Candidate": {
+   "flagged": 21,
+   "tp": 0,
+   "fp": 6,
+   "ambiguous": 0,
+   "unlabeled": 15,
+   "labeledDenominator": 6,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.3903
+   ]
+  },
+  "nix | Host firewall is disabled": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Instruction file contains an override / role-rewriting directive (chat-template-spoof)": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Known-Broken Code Marker Near Security-Sensitive Logic": {
+   "flagged": 5,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 4,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "nix | Members of wheel get passwordless root through sudo": {
+   "flagged": 3,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 3,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Missing Subresource Integrity on cross-origin <script>": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | NFS export keeps remote root as root": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Nix interpolation reaches a shell command unescaped": {
+   "flagged": 122,
+   "tp": 0,
+   "fp": 23,
+   "ambiguous": 0,
+   "unlabeled": 99,
+   "labeledDenominator": 23,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.1431
+   ]
+  },
+  "nix | Password in URL": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Pipeline: GitHub Action pinned to floating tag": {
+   "flagged": 3,
+   "tp": 2,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 2,
+   "precision": 1,
+   "wilson95": [
+    0.3424,
+    1
+   ]
+  },
+  "nix | Pipeline: OIDC id-token: write without explicit aud restriction": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Pipeline: Third-party action pinned to major-version tag (mutable)": {
+   "flagged": 3,
+   "tp": 1,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 2,
+   "labeledDenominator": 1,
+   "precision": 1,
+   "wilson95": [
+    0.2065,
+    1
+   ]
+  },
+  "nix | Pre-quantum EDN (edN) — replace with ML-DSA-N before CRQC arrives": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 0,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "nix | Regex ReDoS — Catastrophic Backtracking": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Reverse tabnabbing (target=\"_blank\" without rel=\"noopener\")": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | SQL Injection (f-string SQL assigned to variable)": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "nix | SSH accepts password authentication": {
+   "flagged": 5,
+   "tp": 0,
+   "fp": 2,
+   "ambiguous": 0,
+   "unlabeled": 3,
+   "labeledDenominator": 2,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.6576
+   ]
+  },
+  "nix | Secret value reaches the world-readable Nix store": {
+   "flagged": 4,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 3,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "nix | Service is configured to listen on every interface": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Shell evaluates a variable as code in a generated script": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  },
+  "nix | TLS certificate verification disabled — MITM-vulnerable": {
+   "flagged": 2,
+   "tp": 1,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 1,
+   "precision": 1,
+   "wilson95": [
+    0.2065,
+    1
+   ]
+  },
+  "nix | The console logs a user in without a password": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 2,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Unquoted shell expansion in a destructive command": {
+   "flagged": 15,
+   "tp": 0,
+   "fp": 4,
+   "ambiguous": 0,
+   "unlabeled": 11,
+   "labeledDenominator": 4,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.4899
+   ]
+  },
+  "nix | Unrestricted file upload — client-supplied filename used as the write destination": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Unsafe raw-memory operation (transmute/from_raw_parts/get_unchecked)": {
+   "flagged": 2,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 2,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Use-After-Free heuristic — free(p) followed by p->/p[ access in same function window": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | Weak hash algorithm (MDN / SHA-N / MDN / MDN) used": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | systemd service runs as root": {
+   "flagged": 8,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 8,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null
+  },
+  "nix | unsafe block — review for memory-safety invariants": {
+   "flagged": 8,
+   "tp": 0,
+   "fp": 1,
+   "ambiguous": 1,
+   "unlabeled": 6,
+   "labeledDenominator": 1,
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.7935
+   ]
+  }
+ },
+ "staleLabels": 0
+}

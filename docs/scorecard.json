@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.186.1",
-    "bundleSha256": "24e3e457c295e1d145cef330ac730645315f1d83fe83f7cb7a4865ad3ba910d1",
-    "commit": "1938288a7b96a18b4f8bba9fdbe0f4043ffc94d5",
+    "engineVersion": "0.186.2",
+    "bundleSha256": "38adcd8324aa7552b7bf61f5ac662fe383ed41f0bcf7f6eb2cad89de080a88c5",
+    "commit": "a988ab710db9ad1e23ddfb7f50583452d712c01e",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-26T12:39:32.031Z",
+    "generatedAt": "2026-10-26T14:53:25.274Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -600,7 +600,7 @@
         }
       },
       "scanner/src": {
-        "total": 688,
+        "total": 690,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -825,6 +825,7 @@
           "posture/production-feedback.js": 1,
           "posture/profile.js": 4,
           "posture/proof-fabric/cli.js": 3,
+          "posture/proof-fabric/generate-haskell.js": 2,
           "posture/proof-fabric/generate-python.js": 2,
           "posture/proof-fabric/generate.js": 4,
           "posture/proof-fabric/runner.js": 3,
@@ -973,8 +974,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 433,
-    "d": 570
+    "n": 386,
+    "d": 572
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2188,9 +2189,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.186.1",
-    "commit": "1938288a7b96a18b4f8bba9fdbe0f4043ffc94d5",
-    "bundleSha256": "24e3e457c295e1d145cef330ac730645315f1d83fe83f7cb7a4865ad3ba910d1",
+    "engineVersion": "0.186.2",
+    "commit": "a988ab710db9ad1e23ddfb7f50583452d712c01e",
+    "bundleSha256": "38adcd8324aa7552b7bf61f5ac662fe383ed41f0bcf7f6eb2cad89de080a88c5",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",

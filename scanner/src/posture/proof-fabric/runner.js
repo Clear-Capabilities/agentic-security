@@ -24,13 +24,13 @@ export const DEFAULT_LIMITS = Object.freeze({
 
 const CONTAINER_IMAGES = Object.freeze({
   javascript: 'node:24-slim', typescript: 'node:24-slim', python: 'python:3-slim', java: 'eclipse-temurin:21',
-  c: 'gcc:latest', cpp: 'gcc:latest', csharp: 'mcr.microsoft.com/dotnet/sdk:8.0',
+  c: 'gcc:latest', cpp: 'gcc:latest', csharp: 'mcr.microsoft.com/dotnet/sdk:8.0', haskell: 'haskell:9',
 });
 
 const SIGNALS = { 134: 'SIGABRT', 135: 'SIGBUS', 136: 'SIGFPE', 132: 'SIGILL', 139: 'SIGSEGV' };
 
 // only language toolchains are probed; the container engine has its own, richer health check (`container.js`)
-const PROBED_TOOLS = new Set(['java', 'javac', 'python3', 'cc', 'gcc', 'dotnet']);
+const PROBED_TOOLS = new Set(['java', 'javac', 'python3', 'cc', 'gcc', 'dotnet', 'ghc', 'runghc']);
 const probeCache = new Map();
 /** A launcher that exists is not a toolchain that works: macOS ships /usr/bin/java and /usr/bin/python3 as stubs that only prompt for an
  * install. A tool counts only if it answers its version flag, within a short timeout, with exit 0. */
@@ -61,12 +61,12 @@ function findTool(name, pathEnv = process.env.PATH || '') {
 }
 
 export function hostTools() {
-  return { node: process.execPath, python: findTool('python3'), java: findTool('java'), javac: findTool('javac'), cc: findTool('cc') || findTool('gcc'), dotnet: findTool('dotnet') };
+  return { node: process.execPath, python: findTool('python3'), java: findTool('java'), javac: findTool('javac'), cc: findTool('cc') || findTool('gcc'), dotnet: findTool('dotnet'), ghc: findTool('ghc'), runghc: findTool('runghc') };
 }
 
 /** Language -> tools it needs. Missing tools make the language `unsupported` with a typed reason, never a pass. */
 export function languageSupport(lang, tools = hostTools()) {
-  const need = { javascript: ['node'], typescript: ['node'], python: ['python'], java: ['java', 'javac'], c: ['cc'], cpp: ['cc'], csharp: ['dotnet'] }[lang];
+  const need = { javascript: ['node'], typescript: ['node'], python: ['python'], java: ['java', 'javac'], c: ['cc'], cpp: ['cc'], csharp: ['dotnet'], haskell: ['ghc', 'runghc'] }[lang];
   if (!need) return { supported: false, reason: `unsupported language: ${lang}` };
   const missing = need.filter((t) => !tools[t]);
   return missing.length ? { supported: false, reason: `missing toolchain: ${missing.join(', ')}` } : { supported: true, reason: null };

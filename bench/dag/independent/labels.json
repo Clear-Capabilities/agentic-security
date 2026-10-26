@@ -1,0 +1,1207 @@
+{
+ "labelsVersion": 1,
+ "labeledBy": "an LLM agent reading source; not a human audit, not the scanner authors",
+ "labelsDigest": "4fd5cb4e8703105c82662f68e3edea808ec9f39c5bf3af3215c8b30d2afd4163",
+ "labels": [
+  {
+   "id": "03397489dd68",
+   "project": "misterio77-nix-config",
+   "language": "nix",
+   "file": "home/gabriel/features/desktop/common/gtk.nix",
+   "line": 29,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Interpolates theme colour constants; no untrusted input."
+  },
+  {
+   "id": "03649a7eed51",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/controllers/api-token.ts",
+   "line": 89,
+   "vuln": "get() looks up or mutates by request-supplied 'id' with no ownership check",
+   "verdict": "fp",
+   "evidence": "Admin token fetch by id; route is guarded by admin permission policies and tokens have no per-user owner."
+  },
+  {
+   "id": "038345e198c6",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/content-manager/server/src/history/services/history.ts",
+   "line": 66,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Query is limited to the ids of an already paginated page of rows."
+  },
+  {
+   "id": "0759469c13b9",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eva/modules/nginx.nix",
+   "line": 61,
+   "vuln": "Credential written as a literal in Nix source",
+   "verdict": "fp",
+   "evidence": "nginx proxyPass upstream name, not a credential."
+  },
+  {
+   "id": "09631b479889",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/controllers/api-token.ts",
+   "line": 101,
+   "vuln": "update() acts on a resource without checking its lifecycle state",
+   "verdict": "fp",
+   "evidence": "Token update; no lifecycle state exists to check, route is permission-guarded."
+  },
+  {
+   "id": "1305b8c62f8c",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": ".github/workflows/claude.yaml",
+   "line": 86,
+   "vuln": "Pipeline: Third-party action pinned to major-version tag (mutable)",
+   "verdict": "tp",
+   "evidence": "Third-party action is referenced by the mutable major tag @v1."
+  },
+  {
+   "id": "13752c0b2baf",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/vaultwarden.nix",
+   "line": 152,
+   "vuln": "Credential written as a literal in Nix source",
+   "verdict": "fp",
+   "evidence": "nginx proxyPass to localhost, not a credential."
+  },
+  {
+   "id": "1386c052e609",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "home-manager/modules/supervisor/supervisor.nix",
+   "line": 35,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "preStart and command are operator-supplied module options, not untrusted input."
+  },
+  {
+   "id": "147395f146bf",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/core/src/services/mcp/handlers/handlePost.ts",
+   "line": 80,
+   "vuln": "Stack Trace in Code (Risk of Exposure)",
+   "verdict": "fp",
+   "evidence": "Stack goes to the server log only and the client receives a generic error."
+  },
+  {
+   "id": "167e70053926",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "nixosModules/lldap/default.nix",
+   "line": 47,
+   "vuln": "Credential written as a literal in Nix source",
+   "verdict": "fp",
+   "evidence": "Setting name force_ldap_user_pass_reset is a policy flag, not a credential."
+  },
+  {
+   "id": "16cd28b9dd45",
+   "project": "nixos-hardware",
+   "language": "nix",
+   "file": "mnt/reform/kernelPatches.nix",
+   "line": 28,
+   "vuln": "High-Entropy Credential Candidate",
+   "verdict": "fp",
+   "evidence": "Matched string is a kernel patch file name, not a credential."
+  },
+  {
+   "id": "1797b2826f04",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/ai/services/ai.ts",
+   "line": 102,
+   "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+   "verdict": "fp",
+   "evidence": "Reads a small license file only when the env var is unset; negligible blocking cost, not attacker amplifiable."
+  },
+  {
+   "id": "181f46937df1",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/upload/server/src/controllers/admin-folder.ts",
+   "line": 84,
+   "vuln": "Mass Assignment (req.body Direct to Model)",
+   "verdict": "fp",
+   "evidence": "Body is validated by validateCreateFolder before use and the folder service whitelists fields."
+  },
+  {
+   "id": "189954810e30",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/authelia.nix",
+   "line": 105,
+   "vuln": "Secret value reaches the world-readable Nix store",
+   "verdict": "fp",
+   "evidence": "Value is a hash of the OIDC client secret, which the identity provider config expects, not the plaintext secret."
+  },
+  {
+   "id": "18fb7b43312b",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "pkgs/updater/default.nix",
+   "line": 29,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "makeBinPath store paths; no untrusted input."
+  },
+  {
+   "id": "22326bbf9f98",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/ai/services/ai.ts",
+   "line": 326,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "TODO is about removing a feature flag, not a known security defect."
+  },
+  {
+   "id": "24c6c6ffdfa2",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/core/src/utils/detect-customizations.ts",
+   "line": 122,
+   "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+   "verdict": "fp",
+   "evidence": "Sync fs calls run once at startup customization detection, not in a request path."
+  },
+  {
+   "id": "28ef9ddbdf9f",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/services/user.ts",
+   "line": 520,
+   "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+   "verdict": "fp",
+   "evidence": "Admin user language list; no per-user ownership concept applies and only one column is returned."
+  },
+  {
+   "id": "2b33c3177627",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "nixosModules/lldap/sync-replica.nix",
+   "line": 37,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Interpolates a path to a generated key file, not untrusted input."
+  },
+  {
+   "id": "327152852f4b",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/postgresql.nix",
+   "line": 35,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Interpolates the module's own dataDir option into a upgrade script; no untrusted input."
+  },
+  {
+   "id": "3313bf47808e",
+   "project": "hapi",
+   "language": "javascript",
+   "file": "lib/request.js",
+   "line": 415,
+   "vuln": "for() acts on a resource without checking its lifecycle state",
+   "verdict": "fp",
+   "evidence": "Loop over extension nodes inside an internal method; not a resource mutation."
+  },
+  {
+   "id": "3347739c1ae0",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/utils/provider-http.js",
+   "line": 4,
+   "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+   "verdict": "tp",
+   "evidence": "Generic fetchJson helper issues fetch with no timeout or abort signal."
+  },
+  {
+   "id": "33c6f78a14d8",
+   "project": "nixos-hardware",
+   "language": "nix",
+   "file": "spacemit/k3-pico-itx/firmware.nix",
+   "line": 97,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Interpolates derivation store paths; no untrusted input."
+  },
+  {
+   "id": "37e51eb85293",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/controllers/user.js",
+   "line": 168,
+   "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+   "verdict": "fp",
+   "evidence": "user.fetch is a local database call, not an outbound HTTP request."
+  },
+  {
+   "id": "3979c70ee941",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "pkgs/maiao/default.nix",
+   "line": 45,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "finalAttrs.version is a derivation attribute; no untrusted input."
+  },
+  {
+   "id": "39953738802f",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+   "line": 753,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Query bounded by the request's explicit id list after permission check."
+  },
+  {
+   "id": "3af4bf66b270",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/services/providers.js",
+   "line": 64,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Lookup by email, bounded by unique-email semantics."
+  },
+  {
+   "id": "3e639cd1be53",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/services/user.js",
+   "line": 109,
+   "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+   "verdict": "fp",
+   "evidence": "fetch() here is a local database call, not an outbound HTTP request."
+  },
+  {
+   "id": "3f2582baac75",
+   "project": "hapi",
+   "language": "javascript",
+   "file": "lib/request.js",
+   "line": 413,
+   "vuln": "_invoke() acts on a resource without checking its lifecycle state",
+   "verdict": "fp",
+   "evidence": "Internal request pipeline method; no resource whose lifecycle state could be bypassed."
+  },
+  {
+   "id": "4a14d297af84",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "nixosModules/kde/choosers.nix",
+   "line": 21,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "makeBinPath produces store paths at evaluation time; no untrusted input."
+  },
+  {
+   "id": "4bf31181e434",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/blob64/configuration.nix",
+   "line": 1,
+   "vuln": "SSH accepts password authentication",
+   "verdict": "fp",
+   "evidence": "openssh is enabled but the machine imports srvos nixosModules.server, which sets PasswordAuthentication = false."
+  },
+  {
+   "id": "4dda330ed568",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": ".github/workflows/auto-merge.yaml",
+   "line": 14,
+   "vuln": "Pipeline: GitHub Action pinned to floating tag",
+   "verdict": "tp",
+   "evidence": "Action Mic92/auto-merge is referenced by the mutable branch @main."
+  },
+  {
+   "id": "4eef5b4e464c",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/bernie/configuration.nix",
+   "line": 1,
+   "vuln": "SSH accepts password authentication",
+   "verdict": "fp",
+   "evidence": "openssh is enabled but the machine imports srvos nixosModules.server, which sets PasswordAuthentication = false."
+  },
+  {
+   "id": "577f14067b5c",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/services/user.ts",
+   "line": 520,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Selects one column from the small admin user table; admin only."
+  },
+  {
+   "id": "581203db5f1e",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/services/role.ts",
+   "line": 115,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Roles table is small and admin-only; params come from callers, not unbounded attacker input."
+  },
+  {
+   "id": "5bb7959bbeb4",
+   "project": "misterio77-nix-config",
+   "language": "nix",
+   "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+   "line": 18,
+   "vuln": "Credential written as a literal in Nix source",
+   "verdict": "fp",
+   "evidence": "\"@sabnzbd-key@\" is a substitution placeholder replaced at runtime from a secret file."
+  },
+  {
+   "id": "6173810bf5bc",
+   "project": "misterio77-nix-config",
+   "language": "nix",
+   "file": "home/gabriel/features/productivity/accounts/usp.nix",
+   "line": 73,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "TODO asks whether a mail channel setting is needed, not a security defect."
+  },
+  {
+   "id": "618ef2f4ab4b",
+   "project": "nixos-hardware",
+   "language": "nix",
+   "file": "mnt/reform/kernelPatches.nix",
+   "line": 24,
+   "vuln": "High-Entropy Credential Candidate",
+   "verdict": "fp",
+   "evidence": "Matched string is a kernel patch file name, not a credential."
+  },
+  {
+   "id": "619925cf3dd3",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/stalwart/default.nix",
+   "line": 156,
+   "vuln": "Hardcoded Secret",
+   "verdict": "fp",
+   "evidence": "Secret is a file reference to a runtime credentials path, not a literal."
+  },
+  {
+   "id": "629a85b2d335",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/database/src/entity-manager/regular-relations.ts",
+   "line": 301,
+   "vuln": "SQL Injection — query built with template literal / concat (JS/TS)",
+   "verdict": "fp",
+   "evidence": "Identifiers and values are passed through ?? and ? bindings; template only interpolates a parameterized subquery."
+  },
+  {
+   "id": "6337fa25b842",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/services/role.js",
+   "line": 167,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "TODO about using a bulk delete, performance."
+  },
+  {
+   "id": "6593d68ef9d2",
+   "project": "koa",
+   "language": "javascript",
+   "file": ".github/workflows/npm-publish.yml",
+   "line": 31,
+   "vuln": "Pipeline: OIDC id-token: write without explicit aud restriction",
+   "verdict": "fp",
+   "evidence": "Publish job in a trusted-publishing workflow; id-token write is required and the OIDC audience is not configurable here."
+  },
+  {
+   "id": "673ccd7eef52",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/controllers/admin.ts",
+   "line": 56,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "TODO about an edition switch, not a security defect."
+  },
+  {
+   "id": "697447a7cf8e",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/services/jwt.js",
+   "line": 91,
+   "vuln": "AuthZ: jwt.verify called without algorithms allow-list",
+   "verdict": "fp",
+   "evidence": "verify is called with an explicit algorithms allow-list on line 94."
+  },
+  {
+   "id": "6bbc7e26fe6b",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/database/src/pool-diagnostics/stack.ts",
+   "line": 15,
+   "vuln": "Stack Trace in Code (Risk of Exposure)",
+   "verdict": "fp",
+   "evidence": "Reads error.stack type to deepen traces; no stack is exposed to clients."
+  },
+  {
+   "id": "6ca52273623e",
+   "project": "misterio77-nix-config",
+   "language": "nix",
+   "file": "pkgs/runescape/default.nix",
+   "line": 57,
+   "vuln": "Unquoted shell expansion in a destructive command",
+   "verdict": "fp",
+   "evidence": "Copies into $out, which is a Nix store path without spaces; no destructive risk."
+  },
+  {
+   "id": "6dedfb946d01",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/utils/oauth-connect/oauth1.js",
+   "line": 25,
+   "vuln": "Weak hash algorithm (MD5 / SHA-1 / MD2 / MD4) used",
+   "verdict": "fp",
+   "evidence": "HMAC-SHA1 is mandated by the OAuth 1.0 protocol and is not a collision-dependent use."
+  },
+  {
+   "id": "6f11546d8d85",
+   "project": "nixos-hardware",
+   "language": "nix",
+   "file": "mnt/reform/kernelPatches.nix",
+   "line": 22,
+   "vuln": "High-Entropy Credential Candidate",
+   "verdict": "fp",
+   "evidence": "Matched string is a kernel patch file name, not a credential."
+  },
+  {
+   "id": "7157eb4701ed",
+   "project": "misterio77-nix-config",
+   "language": "nix",
+   "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+   "line": 65,
+   "vuln": "Hardcoded Secret",
+   "verdict": "fp",
+   "evidence": "\"@frugalusenet-key@\" is a substitution placeholder replaced at runtime from a secret file."
+  },
+  {
+   "id": "721ce1125e45",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/vaultwarden.nix",
+   "line": 88,
+   "vuln": "Hardcoded Secret",
+   "verdict": "fp",
+   "evidence": "Match is inside a comment about the hash output format; the token is generated at build time."
+  },
+  {
+   "id": "7b655bf7dbfe",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/core/src/utils/load-config-file.ts",
+   "line": 37,
+   "vuln": "Path Normalization Gap — extension extraction without null-byte/traversal sanitization",
+   "verdict": "fp",
+   "evidence": "path.extname used to pick a loader for server-supplied config paths, not request input."
+  },
+  {
+   "id": "7e9031ca055c",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/content-manager/server/src/services/utils/store.ts",
+   "line": 89,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Prefix lookup of core-store keys, small internal table."
+  },
+  {
+   "id": "7eca721a74b3",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/nextcloud.nix",
+   "line": 47,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Constant LDAP configuration argument; nothing untrusted is interpolated."
+  },
+  {
+   "id": "813d798a3790",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/database/src/dialects/postgresql/index.ts",
+   "line": 46,
+   "vuln": "SQL Injection (Template Literal)",
+   "verdict": "fp",
+   "evidence": "schemaName comes from operator database configuration, not request input."
+  },
+  {
+   "id": "81cfe9adcc03",
+   "project": "misterio77-nix-config",
+   "language": "nix",
+   "file": "home/gabriel/features/desktop/common/gtk.nix",
+   "line": 27,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Interpolates theme colour constants; no untrusted input."
+  },
+  {
+   "id": "82eb2f115ccf",
+   "project": "nixos-hardware",
+   "language": "nix",
+   "file": "mnt/reform/rk3588/installer.nix",
+   "line": 215,
+   "vuln": "Shell evaluates a variable as code in a generated script",
+   "verdict": "fp",
+   "evidence": "eval runs partx output for an image file the same script just created; not attacker-controlled input."
+  },
+  {
+   "id": "83586bd367e1",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/utils/debug-dump/redact.ts",
+   "line": 36,
+   "vuln": "Regex ReDoS — Catastrophic Backtracking",
+   "verdict": "fp",
+   "evidence": "Pattern uses space-delimited repeated groups with no ambiguous overlap; linear, applied to config values."
+  },
+  {
+   "id": "83d0e9c6e12a",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/services/user.ts",
+   "line": 277,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Looks up the oldest super-admin; bounded admin table, internal."
+  },
+  {
+   "id": "8403a382b213",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/turingmachine/modules/localbackup.nix",
+   "line": 19,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Redirects a sops secret path into bcachefs stdin; store path of the secret file, no untrusted input."
+  },
+  {
+   "id": "84f1e6477f07",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/content-manager/server/src/mcp/handlers/single-type-handlers.ts",
+   "line": 144,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "TODO about a type assignability issue, not security."
+  },
+  {
+   "id": "85490a0cb794",
+   "project": "nixos-hardware",
+   "language": "nix",
+   "file": "milkv/pioneer/firmware.nix",
+   "line": 41,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Interpolates derivation store paths; no untrusted input."
+  },
+  {
+   "id": "8f9f1585c26b",
+   "project": "nixos-hardware",
+   "language": "nix",
+   "file": "mnt/reform/kernelPatches.nix",
+   "line": 23,
+   "vuln": "High-Entropy Credential Candidate",
+   "verdict": "fp",
+   "evidence": "Matched string is a kernel patch file name, not a credential."
+  },
+  {
+   "id": "90847bc8b66b",
+   "project": "nest",
+   "language": "javascript",
+   "file": "sample/05-sql-typeorm/docker-compose.yml",
+   "line": 11,
+   "vuln": "Docker Service Publishes Sensitive Port 3306 to Host",
+   "verdict": "tp",
+   "evidence": "Database port 3306 published to all host interfaces with root password \"root\" in the compose file (dev sample)."
+  },
+  {
+   "id": "943b2c0b6099",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "pkgs/updater/__main__.py",
+   "line": 364,
+   "vuln": "SQL Injection (f-string SQL assigned to variable)",
+   "verdict": "fp",
+   "evidence": "f-string builds a pull request body for gh, not an SQL statement."
+  },
+  {
+   "id": "957f013d1061",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/controllers/role.js",
+   "line": 75,
+   "vuln": "SQL Injection",
+   "verdict": "fp",
+   "evidence": "Where clause is the constant type: 'public'; no user input reaches the query."
+  },
+  {
+   "id": "97abf05f6720",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "nixosModules/ip-update.nix",
+   "line": 36,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "hostName is operator configuration echoed into an nsupdate script."
+  },
+  {
+   "id": "9a430e12e528",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/services/permission/queries.ts",
+   "line": 15,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Internal helper deleting permissions for given roles; ids come from server logic, bounded."
+  },
+  {
+   "id": "9bd411aac11b",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "pkgs/minihydra/default.nix",
+   "line": 43,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "makeBinPath store paths; no untrusted input."
+  },
+  {
+   "id": "9c3eca03108a",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/utils/oauth-connect/oauth2.js",
+   "line": 77,
+   "vuln": "SSRF",
+   "verdict": "fp",
+   "evidence": "accessUrl comes from provider configuration with a configured subdomain, not request input."
+  },
+  {
+   "id": "a062b067c136",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "pkgs/voice-assistant/src/wakeword.rs",
+   "line": 72,
+   "vuln": "unsafe block — review for memory-safety invariants",
+   "verdict": "fp",
+   "evidence": "Drop impl with a SAFETY comment documenting the single-delete and ordering invariants; flagged by a review prompt only."
+  },
+  {
+   "id": "aa667f39fe9d",
+   "project": "misterio77-nix-config",
+   "language": "nix",
+   "file": "hosts/nixos/alcyone/services/radicale.nix",
+   "line": 18,
+   "vuln": "Credential written as a literal in Nix source",
+   "verdict": "fp",
+   "evidence": "Setting is the htpasswd encryption mode; the credential file comes from a sops secret."
+  },
+  {
+   "id": "ad327dfd24e6",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/controllers/user.js",
+   "line": 121,
+   "vuln": "update() looks up or mutates by request-supplied 'id' with no ownership check",
+   "verdict": "fp",
+   "evidence": "Update is gated by role-based route permissions; the flagged line is a uniqueness comparison."
+  },
+  {
+   "id": "b07813843729",
+   "project": "nest",
+   "language": "javascript",
+   "file": "sample/38-webhooks/docker-compose.yml",
+   "line": 10,
+   "vuln": "Docker Service Publishes Sensitive Port 5432 to Host",
+   "verdict": "tp",
+   "evidence": "Postgres port 5432 published to all host interfaces with postgres/postgres credentials (dev sample)."
+  },
+  {
+   "id": "b1064d72344f",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/blob64/modules/phantun.nix",
+   "line": 40,
+   "vuln": "High-Entropy Credential Candidate",
+   "verdict": "fp",
+   "evidence": "String is a WireGuard public key, not a secret."
+  },
+  {
+   "id": "b1565a2184d5",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": ".github/workflows/claude.yaml",
+   "line": 34,
+   "vuln": "Pipeline: GitHub Action pinned to floating tag",
+   "verdict": "tp",
+   "evidence": "NixOS/nix-installer-action is referenced by the mutable branch @main."
+  },
+  {
+   "id": "b2da23e7031e",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+   "line": 877,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "TODO about multi-locale support, functional."
+  },
+  {
+   "id": "b37a6f091564",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "nixosModules/flakelet-relay/default.nix",
+   "line": 181,
+   "vuln": "Credential written as a literal in Nix source",
+   "verdict": "fp",
+   "evidence": "nginx proxyPass to loopback, not a credential."
+  },
+  {
+   "id": "b3e11f92a8cc",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "pkgs/firefox-extensions/default.nix",
+   "line": 64,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "pname is a derivation attribute; no untrusted input."
+  },
+  {
+   "id": "b4005108d61e",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+   "line": 928,
+   "vuln": "discard() looks up or mutates by request-supplied 'id' with no ownership check",
+   "verdict": "fp",
+   "evidence": "Lookup is built with the permission query populate and a permission check follows; not unscoped."
+  },
+  {
+   "id": "b4bc1e316d3e",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/nginx/photoprism.nix",
+   "line": 8,
+   "vuln": "Credential written as a literal in Nix source",
+   "verdict": "fp",
+   "evidence": "nginx proxyPass upstream, not a credential."
+  },
+  {
+   "id": "b6cbfe3f942d",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/core/src/services/webhook-runner.ts",
+   "line": 145,
+   "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+   "verdict": "fp",
+   "evidence": "Request sets signal: AbortSignal.timeout(10000) a few lines below."
+  },
+  {
+   "id": "bc2288556179",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/strategies/content-api-token.ts",
+   "line": 21,
+   "vuln": "Timing-Unsafe Comparison — secret/HMAC compared with === instead of timingSafeEqual",
+   "verdict": "fp",
+   "evidence": "Comparison is a null check on the extracted token; the secret is compared via hash lookup in the DB."
+  },
+  {
+   "id": "bcfd60407b83",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/controllers/role.ts",
+   "line": 153,
+   "vuln": "updatePermissions() looks up or mutates by request-supplied 'id' with no ownership check",
+   "verdict": "fp",
+   "evidence": "Admin role permission update guarded by admin permission policy; roles are not user-owned."
+  },
+  {
+   "id": "bea6bda75b11",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/upload/server/src/services/ai-metadata.ts",
+   "line": 195,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Query bounded by the deduplicated explicit id list from the request."
+  },
+  {
+   "id": "bf85766ad00d",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/bootstrap.ts",
+   "line": 63,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Admin-only lifecycle hook selecting user ids for one role; bounded by admin user count, not attacker-driven."
+  },
+  {
+   "id": "c652c9f7ff5e",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/services/role.js",
+   "line": 74,
+   "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+   "verdict": "fp",
+   "evidence": "Lists roles for an admin settings screen; roles are not owned data."
+  },
+  {
+   "id": "c742c84d528f",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/upload/server/src/controllers/admin-folder-file.ts",
+   "line": 60,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Bounded by explicitly selected ids, used to validate permissions before delete."
+  },
+  {
+   "id": "c7aa5861a9e1",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/services/user.ts",
+   "line": 490,
+   "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+   "verdict": "fp",
+   "evidence": "Internal migration style helper over admin users with no role; not request driven."
+  },
+  {
+   "id": "c8787f1116cc",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/flakelet-relay.nix",
+   "line": 19,
+   "vuln": "Credential written as a literal in Nix source",
+   "verdict": "fp",
+   "evidence": "Token lifespan durations, not credentials."
+  },
+  {
+   "id": "c8d89c9c165b",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/plugins/users-permissions/server/src/services/jwt.js",
+   "line": 59,
+   "vuln": "JWT Sign (Verify Algorithm Pinned)",
+   "verdict": "fp",
+   "evidence": "Algorithm comes from config with HS256 default; signing does not accept an attacker-chosen algorithm."
+  },
+  {
+   "id": "ca7fe7ed38e4",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/upload/server/src/utils/images.ts",
+   "line": 14,
+   "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+   "verdict": "tp",
+   "evidence": "fetch(fullUrl) with no options, so no timeout or abort signal on the outbound image fetch."
+  },
+  {
+   "id": "cc41f9af2e1e",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/strategies/admin-token.ts",
+   "line": 16,
+   "vuln": "Timing-Unsafe Comparison — secret/HMAC compared with === instead of timingSafeEqual",
+   "verdict": "fp",
+   "evidence": "Comparison is a null check on the extracted token, not a secret comparison."
+  },
+  {
+   "id": "ce220ad5de01",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/content-manager/server/src/controllers/content-types.ts",
+   "line": 90,
+   "vuln": "updateContentTypeConfiguration() looks up or mutates by request-supplied 'uid' with no ownership check",
+   "verdict": "fp",
+   "evidence": "Admin content-type configuration route guarded by admin permission policy; uid is a schema identifier, not an owned resource."
+  },
+  {
+   "id": "d337809216c7",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/upload/server/src/controllers/admin-folder-file.ts",
+   "line": 48,
+   "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+   "verdict": "fp",
+   "evidence": "Query is scoped through the permission manager (addPermissionsQueryTo) and only checks permission counts."
+  },
+  {
+   "id": "d4e2815449db",
+   "project": "srvos",
+   "language": "nix",
+   "file": "darwin/common/update-diff.nix",
+   "line": 10,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Interpolates a module option that holds the operator's own script text."
+  },
+  {
+   "id": "d51f56612932",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/upload/server/src/services/ai-metadata-strapi-managed.ts",
+   "line": 10,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "TODO about a helper for the AI server URL, not security."
+  },
+  {
+   "id": "d624732b3ed0",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "nixosModules/ip-update.nix",
+   "line": 38,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "hostName is operator configuration echoed into an nsupdate script."
+  },
+  {
+   "id": "d8a8d75b6c9f",
+   "project": "misterio77-nix-config",
+   "language": "nix",
+   "file": "home/gabriel/features/desktop/common/wayland-wm/waybar.nix",
+   "line": 43,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Values are Nix-evaluated constants passed to jq as --arg; no untrusted input."
+  },
+  {
+   "id": "da74291aa644",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "nixosModules/iroh-ssh.nix",
+   "line": 86,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Interpolated values are store paths of generated key files."
+  },
+  {
+   "id": "dd780c61d103",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "nixosModules/niri/kwallet-tpm/kwallet-tpm-unlock.py",
+   "line": 72,
+   "vuln": "Command Injection (os.popen / os.execlp)",
+   "verdict": "fp",
+   "evidence": "os.execv with a fixed binary path and an argument list, no shell, no untrusted string."
+  },
+  {
+   "id": "df37dd0ef15b",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/ai/services/ai.ts",
+   "line": 254,
+   "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+   "verdict": "tp",
+   "evidence": "fetch() to the AI server has no timeout or abort signal, so a stalled upstream hangs the request."
+  },
+  {
+   "id": "dfb41e85047b",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/database/src/schema/schema.ts",
+   "line": 8,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "TODO about name shortening refactor, not security."
+  },
+  {
+   "id": "e287f07ea7d8",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/nextcloud.nix",
+   "line": 44,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Constant LDAP configuration argument; nothing untrusted is interpolated."
+  },
+  {
+   "id": "e3137b3bcf3f",
+   "project": "srvos",
+   "language": "nix",
+   "file": "nixos/mixins/terminfo.nix",
+   "line": 18,
+   "vuln": "Unquoted shell expansion in a destructive command",
+   "verdict": "fp",
+   "evidence": "cp into $out, a store path without spaces; not destructive."
+  },
+  {
+   "id": "e496f7f325aa",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eva/modules/monitoring/irc-alerts.py",
+   "line": 37,
+   "vuln": "TLS certificate verification disabled — MITM-vulnerable",
+   "verdict": "tp",
+   "evidence": "check_hostname = False and verify_mode = CERT_NONE disables TLS verification on the IRC connection."
+  },
+  {
+   "id": "e5067de30fd4",
+   "project": "nixos-hardware",
+   "language": "nix",
+   "file": "mnt/reform/kernelPatches.nix",
+   "line": 21,
+   "vuln": "High-Entropy Credential Candidate",
+   "verdict": "fp",
+   "evidence": "Matched string is a kernel patch file name, not a credential."
+  },
+  {
+   "id": "e93c9f176e61",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "nixosModules/fluent-bit-filter-wasm/src/lib.rs",
+   "line": 77,
+   "vuln": "unsafe block — review for memory-safety invariants",
+   "verdict": "ambiguous",
+   "evidence": "from_raw_parts on host-supplied pointer and length with no null check; whether the plugin host contract guarantees validity is not visible in this repository."
+  },
+  {
+   "id": "eec47a7f7953",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/nextcloud.nix",
+   "line": 42,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Constant LDAP configuration argument; nothing untrusted is interpolated."
+  },
+  {
+   "id": "eef0ab0ee886",
+   "project": "misterio77-nix-config",
+   "language": "nix",
+   "file": "home/gabriel/features/desktop/common/gtk.nix",
+   "line": 41,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Interpolates theme colour constants; no untrusted input."
+  },
+  {
+   "id": "f07029ccf5ad",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/admin/server/src/services/api-token.ts",
+   "line": 786,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "TODO about inefficient relation creation, functional not security."
+  },
+  {
+   "id": "f17821c526a3",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "home-manager/modules/supervisor/etc.nix",
+   "line": 71,
+   "vuln": "Nix interpolation reaches a shell command unescaped",
+   "verdict": "fp",
+   "evidence": "Interpolates evaluation-time NixOS option values into a script; no untrusted input."
+  },
+  {
+   "id": "f25cf552129c",
+   "project": "nest",
+   "language": "javascript",
+   "file": "sample/12-graphql-schema-first/src/cats/cats.graphql",
+   "line": 6,
+   "vuln": "GraphQL Mutation Block (Verify Field-Level Auth)",
+   "verdict": "fp",
+   "evidence": "Resolver in this sample applies a guard class (UseGuards(CatsGuard)); schema line is only a review prompt."
+  },
+  {
+   "id": "f27f04eabe18",
+   "project": "nixos-hardware",
+   "language": "nix",
+   "file": "milkv/pioneer/linuxboot-initrd.nix",
+   "line": 32,
+   "vuln": "Unquoted shell expansion in a destructive command",
+   "verdict": "fp",
+   "evidence": "cp into $out, a store path without spaces; not destructive."
+  },
+  {
+   "id": "f3835c91a36b",
+   "project": "mitchellh-nixos-config",
+   "language": "nix",
+   "file": "users/mitchellh/home-manager.nix",
+   "line": 119,
+   "vuln": "Hardcoded Secret",
+   "verdict": "fp",
+   "evidence": "Values are 1Password op:// secret references, not secret values."
+  },
+  {
+   "id": "f52f26f4320a",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/core/src/services/session-manager.ts",
+   "line": 631,
+   "vuln": "Eternal Token: JWT issued without expiresIn / exp claim",
+   "verdict": "fp",
+   "evidence": "Payload explicitly carries exp (childExp), so the token is not eternal."
+  },
+  {
+   "id": "f57a66e6bc6b",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "machines/eve/modules/atuin.nix",
+   "line": 7,
+   "vuln": "Credential written as a literal in Nix source",
+   "verdict": "fp",
+   "evidence": "nginx proxyPass to localhost, not a credential."
+  },
+  {
+   "id": "f6be8d439975",
+   "project": "mic92-dotfiles",
+   "language": "nix",
+   "file": "nixosModules/iroh-ssh.nix",
+   "line": 50,
+   "vuln": "Pre-quantum ED25519 (ed25519) — replace with ML-DSA-65 before CRQC arrives",
+   "verdict": "fp",
+   "evidence": "Generating an Ed25519 key for SSH is the required key type for this tool; not a defect in this code."
+  },
+  {
+   "id": "f87eac462efa",
+   "project": "strapi",
+   "language": "javascript",
+   "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+   "line": 237,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "tp",
+   "evidence": "TODO records a known authorization gap: the created document is not reverted when create permission conditions fail."
+  },
+  {
+   "id": "f9f8ac489d3f",
+   "project": "misterio77-nix-config",
+   "language": "nix",
+   "file": "pkgs/plymouth-spinner-monochrome/default.nix",
+   "line": 17,
+   "vuln": "Unquoted shell expansion in a destructive command",
+   "verdict": "fp",
+   "evidence": "Copies into $out, which is a Nix store path without spaces; no destructive risk."
+  },
+  {
+   "id": "fe9d5ebc284d",
+   "project": "nest",
+   "language": "javascript",
+   "file": "sample/06-mongoose/docker-compose.yml",
+   "line": 9,
+   "vuln": "Docker Service Publishes Sensitive Port 27017 to Host",
+   "verdict": "tp",
+   "evidence": "MongoDB port 27017 published to all host interfaces with no authentication configured (dev sample)."
+  }
+ ]
+}

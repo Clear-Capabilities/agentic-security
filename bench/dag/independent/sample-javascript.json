@@ -1,0 +1,602 @@
+[
+ {
+  "project": "hapi",
+  "language": "javascript",
+  "file": "lib/request.js",
+  "line": 413,
+  "vuln": "_invoke() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "async _invoke(event, options = {}) {"
+ },
+ {
+  "project": "hapi",
+  "language": "javascript",
+  "file": "lib/request.js",
+  "line": 415,
+  "vuln": "for() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "for (const ext of event.nodes) {"
+ },
+ {
+  "project": "koa",
+  "language": "javascript",
+  "file": ".github/workflows/npm-publish.yml",
+  "line": 31,
+  "vuln": "Pipeline: OIDC id-token: write without explicit aud restriction",
+  "family": "pipeline-oidc-id-token-write-without-exp",
+  "severity": "medium",
+  "text": "id-token: write"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/05-sql-typeorm/docker-compose.yml",
+  "line": 11,
+  "vuln": "Docker Service Publishes Sensitive Port 3306 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- \"3306:3306\""
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/06-mongoose/docker-compose.yml",
+  "line": 9,
+  "vuln": "Docker Service Publishes Sensitive Port 27017 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- 27017:27017"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/12-graphql-schema-first/src/cats/cats.graphql",
+  "line": 6,
+  "vuln": "GraphQL Mutation Block (Verify Field-Level Auth)",
+  "family": "graphql-mutation-block-verify-field-leve",
+  "severity": "medium",
+  "text": "type Mutation {"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/38-webhooks/docker-compose.yml",
+  "line": 10,
+  "vuln": "Docker Service Publishes Sensitive Port 5432 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- '5432:5432'"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/ai/services/ai.ts",
+  "line": 102,
+  "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+  "family": "dos-sync-io",
+  "severity": "medium",
+  "text": "eeLicense = fs.readFileSync(licensePath).toString();"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/ai/services/ai.ts",
+  "line": 254,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const response = await fetch(`${aiServerUrl}/cms/ai-data`, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/ai/services/ai.ts",
+  "line": 326,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "TODO: once all AI features are migrated to the providers architecture, consider removing this flag */"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/bootstrap.ts",
+  "line": 63,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const users = await strapi.db.query('admin::user').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/admin.ts",
+  "line": 56,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO very temporary to check the switch ee/ce"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/api-token.ts",
+  "line": 89,
+  "vuln": "get() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const token = await apiTokenService.getById(id, { includeDecryptedKey: true });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/api-token.ts",
+  "line": 101,
+  "vuln": "update() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "async update(ctx: Context) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/role.ts",
+  "line": 153,
+  "vuln": "updatePermissions() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const role = await roleService.findOne({ id });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 786,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: createMany doesn't seem to create relation properly, implement a better way rather than a ton of queries"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/permission/queries.ts",
+  "line": 15,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const permissionsToDelete = await strapi.db.query('admin::permission').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/role.ts",
+  "line": 115,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "return strapi.db.query('admin::role').findMany({ where: params, populate });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/user.ts",
+  "line": 277,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const [oldestUser] = await strapi.db.query('admin::user').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/user.ts",
+  "line": 490,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const users = await strapi.db.query('admin::user').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/user.ts",
+  "line": 520,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const users = await strapi.db.query('admin::user').findMany({ select: ['preferedLanguage'] });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/user.ts",
+  "line": 520,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "const users = await strapi.db.query('admin::user').findMany({ select: ['preferedLanguage'] });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/strategies/admin-token.ts",
+  "line": 16,
+  "vuln": "Timing-Unsafe Comparison — secret/HMAC compared with === instead of timingSafeEqual",
+  "family": "timing-attack",
+  "severity": "medium",
+  "text": "if (token === null) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/strategies/content-api-token.ts",
+  "line": 21,
+  "vuln": "Timing-Unsafe Comparison — secret/HMAC compared with === instead of timingSafeEqual",
+  "family": "timing-attack",
+  "severity": "medium",
+  "text": "if (token === null) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/utils/debug-dump/redact.ts",
+  "line": 36,
+  "vuln": "Regex ReDoS — Catastrophic Backtracking",
+  "family": "",
+  "severity": "medium",
+  "text": "const PEM_PRIVATE_KEY_PATTERN = /-----BEGIN(?: [A-Z0-9]+)* PRIVATE KEY-----/;"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 237,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: Revert the creation if create permission conditions are not met"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 753,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const documents = await strapi.documents(model as UID.CollectionType).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 877,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO allow multiple locales for bulk locale unpublish"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 928,
+  "vuln": "discard() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const document = await documentManager.findOne(id, model, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/content-types.ts",
+  "line": 90,
+  "vuln": "updateContentTypeConfiguration() looks up or mutates by request-supplied 'uid' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const contentType = await contentTypeService.findContentType(uid);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/history/services/history.ts",
+  "line": 66,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "? await query.findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/mcp/handlers/single-type-handlers.ts",
+  "line": 144,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: fix UID.SingleType assignability in @strapi/types"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/utils/store.ts",
+  "line": 89,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const results = await strapi.db.query('strapi::core-store').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/mcp/handlers/handlePost.ts",
+  "line": 80,
+  "vuln": "Stack Trace in Code (Risk of Exposure)",
+  "family": "stack-trace-in-code-risk-of-exposure",
+  "severity": "low",
+  "text": "stack: error instanceof Error ? error.stack : undefined,"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/session-manager.ts",
+  "line": 631,
+  "vuln": "Eternal Token: JWT issued without expiresIn / exp claim",
+  "family": "jwt-no-exp",
+  "severity": "low",
+  "text": "const childToken = jwt.sign(childPayload, signKey, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/webhook-runner.ts",
+  "line": 145,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "return this.fetch(url, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/utils/detect-customizations.ts",
+  "line": 122,
+  "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+  "family": "dos-sync-io",
+  "severity": "low",
+  "text": "if (!fs.existsSync(contentTypesDir)) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/utils/load-config-file.ts",
+  "line": 37,
+  "vuln": "Path Normalization Gap — extension extraction without null-byte/traversal sanitization",
+  "family": "path-normalization",
+  "severity": "low",
+  "text": "const ext = path.extname(file);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/dialects/postgresql/index.ts",
+  "line": 46,
+  "vuln": "SQL Injection (Template Literal)",
+  "family": "sql-injection",
+  "severity": "critical",
+  "text": "await this.db.connection"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/entity-manager/regular-relations.ts",
+  "line": 301,
+  "vuln": "SQL Injection — query built with template literal / concat (JS/TS)",
+  "family": "sql-injection",
+  "severity": "critical",
+  "text": ".raw("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/pool-diagnostics/stack.ts",
+  "line": 15,
+  "vuln": "Stack Trace in Code (Risk of Exposure)",
+  "family": "stack-trace-in-code-risk-of-exposure",
+  "severity": "medium",
+  "text": "if (typeof error.stack !== 'string' || !(Error.stackTraceLimit > 0)) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/schema/schema.ts",
+  "line": 8,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "* TODO: This needs to be refactored to support incoming names such as"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-folder-file.ts",
+  "line": 48,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "const permittedFiles = await strapi.db.query(FILE_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-folder-file.ts",
+  "line": 60,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const selectedFiles = await strapi.db.query(FILE_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-folder.ts",
+  "line": 84,
+  "vuln": "Mass Assignment (req.body Direct to Model)",
+  "family": "mass-assignment",
+  "severity": "high",
+  "text": "const folder = await folderService.create(body, { user });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/services/ai-metadata-strapi-managed.ts",
+  "line": 10,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO(ai): add a helper function to get the AI server URL"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/services/ai-metadata.ts",
+  "line": 195,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const files: File[] = await strapi.db.query('plugin::upload.file').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/utils/images.ts",
+  "line": 14,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const resp = await fetch(fullUrl);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/role.js",
+  "line": 75,
+  "vuln": "SQL Injection",
+  "family": "sql-injection",
+  "severity": "high",
+  "text": "const publicRole = await strapi.db"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/user.js",
+  "line": 121,
+  "vuln": "update() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "if (userWithSameUsername && _.toString(userWithSameUsername.id) !== _.toString(id)) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/user.js",
+  "line": 168,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "let data = await getService('user').fetch(id, sanitizedQuery);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/jwt.js",
+  "line": 59,
+  "vuln": "JWT Sign (Verify Algorithm Pinned)",
+  "family": "jwt-no-verify",
+  "severity": "high",
+  "text": "return jwt.sign("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/jwt.js",
+  "line": 91,
+  "vuln": "AuthZ: jwt.verify called without algorithms allow-list",
+  "family": "idor",
+  "severity": "high",
+  "text": "jwt.verify("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/providers.js",
+  "line": 64,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const users = await strapi.db.query('plugin::users-permissions.user').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/role.js",
+  "line": 74,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": ".findMany({ sort: ['name'] });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/role.js",
+  "line": 167,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: use delete many"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/user.js",
+  "line": 109,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "fetch(id, params) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/oauth-connect/oauth1.js",
+  "line": 25,
+  "vuln": "Weak hash algorithm (MD5 / SHA-1 / MD2 / MD4) used",
+  "family": "crypto-weak-hash",
+  "severity": "medium",
+  "text": "return crypto.createHmac('sha1', signingMaterial).update(signatureBaseString).digest('base64');"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/oauth-connect/oauth2.js",
+  "line": 77,
+  "vuln": "SSRF",
+  "family": "ssrf",
+  "severity": "high",
+  "text": "const response = await fetch(accessUrl, { method: 'POST', headers, body });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/provider-http.js",
+  "line": 4,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const response = await fetch(url, options);"
+ }
+]

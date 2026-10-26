@@ -120,7 +120,7 @@ agentic-security proof replay <finding-id>
 agentic-security proof doctor
 ```
 
-A reproducer is a small JSON document naming the files, build/run argv and oracle (`command_execution`, `unauthorized_db_read`, `crash_sanitizer`, `outbound_callback`, …). `triage exploit <id> --prove` builds a reproducer from the finding itself when it can (JavaScript and Python; command injection, path-traversal writes, SSRF) and says so, or you supply one with `--reproducer`; `proof generate <id>` writes one without running it. See [the exploit proof guide](../docs/guides/exploit-proof-fabric.md) for the schema, the limits and worked fixtures. Nothing runs against a production host. Full detail, including what `--require-proof` does for `/fix`, is in that guide.
+A reproducer is a small JSON document naming the files, build/run argv and oracle (`command_execution`, `unauthorized_db_read`, `crash_sanitizer`, `outbound_callback`, …). `triage exploit <id> --prove` builds a reproducer from the finding itself when it can (JavaScript, Python and Haskell; command injection and path-traversal writes in all three, SSRF in JavaScript and Python) and says so, or you supply one with `--reproducer`; `proof generate <id>` writes one without running it. See [the exploit proof guide](../docs/guides/exploit-proof-fabric.md) for the schema, the limits and worked fixtures. Nothing runs against a production host. Full detail, including what `--require-proof` does for `/fix`, is in that guide.
 
 ## After a proof: detection and response (`dnr`)
 

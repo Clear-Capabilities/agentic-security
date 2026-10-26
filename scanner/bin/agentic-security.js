@@ -3587,6 +3587,32 @@ async function cmdDigest(args) {
   console.error('digest --slack <url> OR digest --discord <url>'); return 4;
 }
 
+/**
+ * --require-proof gate shared by the generic fix path and the Haskell/Nix language fixer: the patch (`files`: path -> patched text) is
+ * allowed only if the original exploit is confirmed beforehand and demonstrably blocked afterwards. Returns { ok, code }; nothing is written here.
+ */
+async function requireProofGate(args, scanRoot, f, last, files) {
+  // --require-proof: the patch is applied ONLY if the original exploit is confirmed beforehand and demonstrably blocked
+  // afterwards (posture/proof-fabric/fix-proof.js). Missing reproducer, unavailable environment or an incomplete replay all refuse.
+  const { resolveReproducer } = await import('../src/posture/proof-fabric/cli.js');
+  const { findSiblings } = await import('../src/posture/proof-fabric/siblings.js');
+  const { verifyFixWithProof, formatFixProof } = await import('../src/posture/proof-fabric/fix-proof.js');
+  const { verifyFix } = await import('../src/posture/fix-verify.js');
+  const loaded = resolveReproducer(scanRoot, f, args.flags.reproducer);
+  if (!loaded.reproducer) { console.error(`--require-proof: no reproducer for ${f.id}, and none could be generated: ${loaded.reason}. Refusing to apply; nothing was executed. Supply --reproducer <file>.`); return { ok: false, code: 4 }; }
+  if (loaded.generated) console.error(`--require-proof: using a reproducer generated from the finding (${loaded.generated.shape}, ${loaded.generated.class}); it counts only if executing it confirms the exploit.`);
+  const staticVerification = await verifyFix({ scanRoot, originalFindingStableId: f.stableId || null, files, recordMetrics: false });
+  // equivalent sibling exposures: the engine's own other findings of this kind, plus other places with the same code shape
+  const sib = findSiblings({ root: scanRoot, finding: f, scanFindings: last.findings || [] });
+  const siblings = sib.siblings.map((x) => ({ id: x.id ?? null, file: x.file, line: x.line, source: x.source }));
+  if (sib.truncated.length) console.error(`--require-proof: the sibling search stopped early (${sib.truncated.join(', ')}); absence of siblings is not shown.`);
+  const fp = await verifyFixWithProof({ finding: f, reproducer: loaded.reproducer, files, scanRoot, staticVerification, siblings, siblingSearchTruncated: sib.truncated });
+  console.log(formatFixProof(fp));
+  try { (await import('../src/posture/dnr/store.js')).saveRecord(scanRoot, f.stableId || f.id, 'fix', fp); } catch { /* recording is best effort; the refusal below does not depend on it */ }
+  if (!fp.verified) { console.error('\nRefusing to apply: the fix is not proof-verified (--require-proof).'); return { ok: false, code: 4 }; }
+  return { ok: true, code: 0 };
+}
+
 async function cmdFix(args) {
   const id = args.flags.finding;
   const isPreview = !!args.flags.preview;
@@ -3636,7 +3662,21 @@ async function cmdFix(args) {
         return 4;
       }
       const proj = loadLanguageProject(scanRoot);
+      // --require-proof applies to a Haskell fix exactly as to any other: the verified patch is previewed first, the exploit is
+      // confirmed against the original and blocked against the patch, and only then is the same patch written.
+      let provenFiles = null;
+      if (isApply && args.flags['require-proof']) {
+        const prev = await languageFixPreview(f, proj.files, { apply: false, root: scanRoot });
+        if (!prev.ok) { console.error(`No verified fix for this finding (${prev.status}${prev.tier ? `, ${prev.tier}` : ''}): ${prev.reason || 'unsupported'}`); return 4; }
+        provenFiles = prev.edits ? Object.fromEntries(prev.edits.map((e) => [e.file, e.after])) : { [prev.file]: prev.after };
+        const gate = await requireProofGate(args, scanRoot, f, last, provenFiles);
+        if (!gate.ok) return gate.code;
+      }
       const res = await languageFixPreview(f, proj.files, { apply: isApply, root: scanRoot });
+      if (provenFiles && res.ok) {
+        const applied = res.edits ? Object.fromEntries(res.edits.map((e) => [e.file, e.after])) : { [res.file]: res.after };
+        if (JSON.stringify(Object.entries(applied).sort()) !== JSON.stringify(Object.entries(provenFiles).sort())) { console.error('The patch written differs from the patch that was proof-verified. Run `agentic-security undo` and report this.'); return 1; }
+      }
       if (!res.ok) { console.error(`No verified fix for this finding (${res.status}${res.tier ? `, ${res.tier}` : ''}): ${res.reason || 'unsupported'}`); return 4; }
       console.log(`${res.label || 'FIX'}${res.tier ? ` (${res.tier})` : ''}: ${res.explanation || ''}`.trim());
       console.log(res.diff);
@@ -3740,23 +3780,8 @@ async function cmdFix(args) {
   // --require-proof: the patch is applied ONLY if the original exploit is confirmed beforehand and demonstrably blocked
   // afterwards (posture/proof-fabric/fix-proof.js). Missing reproducer, unavailable environment or an incomplete replay all refuse.
   if (args.flags['require-proof']) {
-    const { resolveReproducer } = await import('../src/posture/proof-fabric/cli.js');
-    const { findSiblings } = await import('../src/posture/proof-fabric/siblings.js');
-    const { verifyFixWithProof, formatFixProof } = await import('../src/posture/proof-fabric/fix-proof.js');
-    const { verifyFix } = await import('../src/posture/fix-verify.js');
-    const loaded = resolveReproducer(scanRoot, f, args.flags.reproducer);
-    if (!loaded.reproducer) { console.error(`--require-proof: no reproducer for ${f.id}, and none could be generated: ${loaded.reason}. Refusing to apply; nothing was executed. Supply --reproducer <file>.`); return 4; }
-    if (loaded.generated) console.error(`--require-proof: using a reproducer generated from the finding (${loaded.generated.shape}, ${loaded.generated.class}); it counts only if executing it confirms the exploit.`);
-    const files = { [f.file]: newContent };
-    const staticVerification = await verifyFix({ scanRoot, originalFindingStableId: f.stableId || null, files, recordMetrics: false });
-    // equivalent sibling exposures: the engine's own other findings of this kind, plus other places with the same code shape
-    const sib = findSiblings({ root: scanRoot, finding: f, scanFindings: last.findings || [] });
-    const siblings = sib.siblings.map((x) => ({ id: x.id ?? null, file: x.file, line: x.line, source: x.source }));
-    if (sib.truncated.length) console.error(`--require-proof: the sibling search stopped early (${sib.truncated.join(', ')}); absence of siblings is not shown.`);
-    const fp = await verifyFixWithProof({ finding: f, reproducer: loaded.reproducer, files, scanRoot, staticVerification, siblings, siblingSearchTruncated: sib.truncated });
-    console.log(formatFixProof(fp));
-    try { (await import('../src/posture/dnr/store.js')).saveRecord(scanRoot, f.stableId || f.id, 'fix', fp); } catch { /* recording is best effort; the refusal below does not depend on it */ }
-    if (!fp.verified) { console.error('\nRefusing to apply: the fix is not proof-verified (--require-proof).'); return 4; }
+    const gate = await requireProofGate(args, scanRoot, f, last, { [f.file]: newContent });
+    if (!gate.ok) return gate.code;
   }
   let result = await applyVerifiedFix({
     scanRoot,

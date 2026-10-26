@@ -20,9 +20,9 @@ import { scrubEnv } from '../../sandbox/trust-domains.js';
 export const CONTAINER_ROOT = '/work';
 // the image's own toolchain directories matter: the Temurin image puts the JDK at /opt/java/openjdk/bin and sets it through ENV, which a
 // bare PATH override throws away (found by the first run against a real engine: `javac: not found`)
-const CONTAINER_PATH = '/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+const CONTAINER_PATH = '/opt/java/openjdk/bin:/opt/ghc/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 // the interpreter names inside the image; the host paths the runner uses locally mean nothing in there
-export const CONTAINER_TOOLS = Object.freeze({ node: 'node', python: 'python3', java: 'java', javac: 'javac', cc: 'gcc', dotnet: 'dotnet' });
+export const CONTAINER_TOOLS = Object.freeze({ node: 'node', python: 'python3', java: 'java', javac: 'javac', cc: 'gcc', dotnet: 'dotnet', ghc: 'ghc', runghc: 'runghc' });
 
 export function containerArgs({ image, name, hostRoot, argv, env = {}, limits, user = null }) {
   if (!image || !name || !hostRoot || !Array.isArray(argv) || !argv.length) throw new Error('container run needs image, name, root and argv');

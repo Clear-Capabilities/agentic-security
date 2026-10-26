@@ -10,6 +10,7 @@ import path from 'node:path';
 const RUNNER = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../src/posture/proof-fabric/runner.js');
 const REPRODUCERS = {
   python: { lang: 'python', files: { 'a.py': "import os, sys\nos.system('echo ' + sys.argv[1])\n" }, run: ['{{PYTHON}}', 'a.py', 'x; touch {{CANARY:command}}'] },
+  haskell: { lang: 'haskell', files: { 'Main.hs': 'import System.Environment (getArgs)\nimport System.Process (callCommand)\nmain :: IO ()\nmain = getArgs >>= \\a -> callCommand ("echo " ++ head a)\n' }, run: ['{{GHC}}', '-ignore-dot-ghci', '-e', ':main "x; touch {{CANARY:command}}"', 'Main.hs'] },
   java: { lang: 'java', files: { 'A.java': 'public class A { public static void main(String[] a) throws Exception { new ProcessBuilder("sh", "-c", "echo " + a[0]).inheritIO().start().waitFor(); } }' }, build: ['{{JAVAC}}', '-d', '.', 'A.java'], run: ['{{JAVA}}', '-cp', '.', 'A', 'x; touch {{CANARY:command}}'] },
 };
 const cache = new Map();

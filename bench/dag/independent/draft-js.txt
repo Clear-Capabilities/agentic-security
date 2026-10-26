@@ -1,0 +1,60 @@
+0|fp|Internal request pipeline method; no resource whose lifecycle state could be bypassed.
+1|fp|Loop over extension nodes inside an internal method; not a resource mutation.
+2|fp|Publish job in a trusted-publishing workflow; id-token write is required and the OIDC audience is not configurable here.
+3|tp|Database port 3306 published to all host interfaces with root password "root" in the compose file (dev sample).
+4|tp|MongoDB port 27017 published to all host interfaces with no authentication configured (dev sample).
+5|fp|Resolver in this sample applies a guard class (UseGuards(CatsGuard)); schema line is only a review prompt.
+6|tp|Postgres port 5432 published to all host interfaces with postgres/postgres credentials (dev sample).
+7|fp|Reads a small license file only when the env var is unset; negligible blocking cost, not attacker amplifiable.
+8|tp|fetch() to the AI server has no timeout or abort signal, so a stalled upstream hangs the request.
+9|fp|TODO is about removing a feature flag, not a known security defect.
+10|fp|Admin-only lifecycle hook selecting user ids for one role; bounded by admin user count, not attacker-driven.
+11|fp|TODO about an edition switch, not a security defect.
+12|fp|Admin token fetch by id; route is guarded by admin permission policies and tokens have no per-user owner.
+13|fp|Token update; no lifecycle state exists to check, route is permission-guarded.
+14|fp|Admin role permission update guarded by admin permission policy; roles are not user-owned.
+15|fp|TODO about inefficient relation creation, functional not security.
+16|fp|Internal helper deleting permissions for given roles; ids come from server logic, bounded.
+17|fp|Roles table is small and admin-only; params come from callers, not unbounded attacker input.
+18|fp|Looks up the oldest super-admin; bounded admin table, internal.
+19|fp|Internal migration style helper over admin users with no role; not request driven.
+20|fp|Selects one column from the small admin user table; admin only.
+21|fp|Admin user language list; no per-user ownership concept applies and only one column is returned.
+22|fp|Comparison is a null check on the extracted token, not a secret comparison.
+23|fp|Comparison is a null check on the extracted token; the secret is compared via hash lookup in the DB.
+24|fp|Pattern uses space-delimited repeated groups with no ambiguous overlap; linear, applied to config values.
+25|tp|TODO records a known authorization gap: the created document is not reverted when create permission conditions fail.
+26|fp|Query bounded by the request's explicit id list after permission check.
+27|fp|TODO about multi-locale support, functional.
+28|fp|Lookup is built with the permission query populate and a permission check follows; not unscoped.
+29|fp|Admin content-type configuration route guarded by admin permission policy; uid is a schema identifier, not an owned resource.
+30|fp|Query is limited to the ids of an already paginated page of rows.
+31|fp|TODO about a type assignability issue, not security.
+32|fp|Prefix lookup of core-store keys, small internal table.
+33|fp|Stack goes to the server log only and the client receives a generic error.
+34|fp|Payload explicitly carries exp (childExp), so the token is not eternal.
+35|fp|Request sets signal: AbortSignal.timeout(10000) a few lines below.
+36|fp|Sync fs calls run once at startup customization detection, not in a request path.
+37|fp|path.extname used to pick a loader for server-supplied config paths, not request input.
+38|fp|schemaName comes from operator database configuration, not request input.
+39|fp|Identifiers and values are passed through ?? and ? bindings; template only interpolates a parameterized subquery.
+40|fp|Reads error.stack type to deepen traces; no stack is exposed to clients.
+41|fp|TODO about name shortening refactor, not security.
+42|fp|Query is scoped through the permission manager (addPermissionsQueryTo) and only checks permission counts.
+43|fp|Bounded by explicitly selected ids, used to validate permissions before delete.
+44|fp|Body is validated by validateCreateFolder before use and the folder service whitelists fields.
+45|fp|TODO about a helper for the AI server URL, not security.
+46|fp|Query bounded by the deduplicated explicit id list from the request.
+47|tp|fetch(fullUrl) with no options, so no timeout or abort signal on the outbound image fetch.
+48|fp|Where clause is the constant type: 'public'; no user input reaches the query.
+49|fp|Update is gated by role-based route permissions; the flagged line is a uniqueness comparison.
+50|fp|user.fetch is a local database call, not an outbound HTTP request.
+51|fp|Algorithm comes from config with HS256 default; signing does not accept an attacker-chosen algorithm.
+52|fp|verify is called with an explicit algorithms allow-list on line 94.
+53|fp|Lookup by email, bounded by unique-email semantics.
+54|fp|Lists roles for an admin settings screen; roles are not owned data.
+55|fp|TODO about using a bulk delete, performance.
+56|fp|fetch() here is a local database call, not an outbound HTTP request.
+57|fp|HMAC-SHA1 is mandated by the OAuth 1.0 protocol and is not a collision-dependent use.
+58|fp|accessUrl comes from provider configuration with a configured subdomain, not request input.
+59|tp|Generic fetchJson helper issues fetch with no timeout or abort signal.

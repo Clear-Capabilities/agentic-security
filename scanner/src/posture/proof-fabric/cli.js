@@ -132,7 +132,7 @@ export async function cmdProof(args, root) {
 function doctor(args) {
   const tools = hostTools();
   const rows = LANGUAGES.map((l) => ({ lang: l, ...languageSupport(l, tools) }));
-  const envs = ['javascript', 'python'].map((l) => ({ lang: l, ...selectEnvironment({ lang: l }) }));
+  const envs = ['javascript', 'python', 'haskell'].map((l) => ({ lang: l, ...selectEnvironment({ lang: l }) }));
   if (args.flags.json) { console.log(JSON.stringify({ tools, languages: rows, environments: envs }, null, 2)); return 0; }
   console.log('Proof fabric doctor');
   for (const r of rows) console.log(`  ${r.lang.padEnd(11)} ${r.supported ? 'supported' : `unsupported (${r.reason})`}`);

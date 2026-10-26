@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-26T07:18:27.562Z",
-  "commit": "b5af84d4cec1cd14bf0d7bbf3d89a34ec62abd2f",
+  "generatedAt": "2026-10-26T14:43:14.894Z",
+  "commit": "a988ab710db9ad1e23ddfb7f50583452d712c01e",
   "targets": {
     "hooks": {
       "total": 21,
@@ -62,7 +62,7 @@
       }
     },
     "scanner/src": {
-      "total": 688,
+      "total": 690,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -287,6 +287,7 @@
         "posture/production-feedback.js": 1,
         "posture/profile.js": 4,
         "posture/proof-fabric/cli.js": 3,
+        "posture/proof-fabric/generate-haskell.js": 2,
         "posture/proof-fabric/generate-python.js": 2,
         "posture/proof-fabric/generate.js": 4,
         "posture/proof-fabric/runner.js": 3,
