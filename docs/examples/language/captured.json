@@ -126,8 +126,8 @@
         {
           "family": "sql-injection",
           "line": 32,
-          "exitCode": 0,
-          "text": "FULL: Moved 1 interpolated value(s) out of the SQL text into query parameters.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -10,4 +10,5 @@\n-\n--- | Look an order up by reference. The reference comes straight from the URL.\n-lookupOrder :: Connection -> String -> IO [Only String]\n-lookupOrder conn ref = query_ conn (fromString (\"SELECT status FROM orders WHERE ref = '\" ++ ref ++ \"'\"))\n+import Database.PostgreSQL.Simple (execute, query, Only)\n+\n+-- | Look an order up by reference. The reference comes straight from the URL.\n+lookupOrder :: Connection -> String -> IO [Only String]\n+lookupOrder conn ref = query conn \"SELECT status FROM orders WHERE ref = ?\" (Only ref)"
+          "exitCode": 4,
+          "text": "No verified fix for this finding (blocked): the patch adds an import of a database library the file did not use (Database.PostgreSQL.Simple); which driver the project uses is not provable from this file, so the edit is refused rather than guessed. Apply the parameterised query by hand with the project's own driver"
         },
         {
           "family": "missing-authentication",

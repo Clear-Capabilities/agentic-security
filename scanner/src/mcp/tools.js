@@ -475,6 +475,22 @@ export const scan_diff = {
   },
 };
 
+// The ordered source-to-sink steps of a finding: its `trace` when the detector wrote one, else the `chain` the IR taint
+// engine records (file, line, label, kind, provenance). Null when the finding carries neither.
+function _flowSteps(f) {
+  if (Array.isArray(f.trace) && f.trace.length) return f.trace;
+  if (f.trace && !Array.isArray(f.trace)) return f.trace;
+  if (Array.isArray(f.chain) && f.chain.length) {
+    return f.chain.map((s) => ({ file: s.file ?? null, line: s.line ?? null, label: s.label ?? null, kind: s.kind || (s.provenance ? 'source' : 'step'), provenance: s.provenance ?? null }));
+  }
+  return null;
+}
+// Labels of the structured source, sink and rule, for matching only.
+function _flowEnds(f) {
+  const lab = (x) => (x && typeof x === 'object' ? [x.label, x.family, x.kind].filter((v) => typeof v === 'string').join(' ') : '');
+  return [lab(f.source), lab(f.sink), typeof f.rule === 'string' ? f.rule : ''].join(' ');
+}
+
 // ─── query_taint ─────────────────────────────────────────────────────────────
 export const query_taint = {
   name: 'query_taint',
@@ -505,13 +521,16 @@ export const query_taint = {
     // dilutes its reasoning; the agent receives a bounded slice plus the
     // cursor to fetch the rest if it wants.
     const all = (scan.findings || []).filter(f => {
-      const hay = [f.description, f.title, f.vuln, f.snippet, JSON.stringify(f.trace || '')].join(' ').toLowerCase();
+      // The structured flow counts too: an IR taint finding (Haskell included) records its path as `source`, `sink`, `rule`
+      // and `chain`, and carries no free-text description or `trace`, so matching only the text fields would answer
+      // "no path" for a path the scan did find.
+      const hay = [f.description, f.title, f.vuln, f.snippet, JSON.stringify(_flowSteps(f) || ''), _flowEnds(f)].join(' ').toLowerCase();
       return hay.includes(srcL) && hay.includes(sinkL);
     });
     const page = all.slice(off, off + lim).map(f => redactFinding({
       id: f.id, severity: f.severity, file: f.file, line: f.line,
       title: f.title || f.vuln, description: f.description,
-      trace: f.trace || null,
+      trace: _flowSteps(f),
     }));
     return {
       _meta: META,
@@ -551,7 +570,7 @@ export const explain_finding = {
       title: f.title || f.vuln, cwe: f.cwe,
       description: f.description, remediation: f.remediation,
       snippet: f.snippet || null,
-      trace: f.trace || null,
+      trace: _flowSteps(f),
     });
     // Harness-anatomy #1: explain_finding's trace is the most-likely-large
     // field on a single finding. Offload when it crosses the threshold so
@@ -1211,6 +1230,9 @@ export const synthesize_fix = {
               languageFix.applyWith = { finding_id: f.id, confirm: true, plan_digest: languageFix.planDigest };
             }
             else if (prev.ok) autofix = { deterministic: true, ruleId: f.rule || f.family || null, patch: prev.after, file: prev.file, label: prev.label || null, verified: true };
+          } else if (lc.isLanguageDependencyFinding(f)) {
+            // Named, not silent: a Hackage or flake dependency is fixed by raising a constraint, which has its own tool.
+            languageFix = { status: 'use-sca-upgrade', ok: false, label: null, tier: null, reason: 'this is a dependency finding: use synthesize_sca_upgrade for the constraint edit (apply_sca_upgrade writes it)', diff: null, explanation: null, consequences: [] };
           }
         } catch { /* best-effort: the preview is advisory */ }
       }
@@ -1625,6 +1647,22 @@ export const query_cache_telemetry = {
   },
 };
 
+async function _languageUpgrade(lc, f, ctx, apply) {
+  const proj = lc.loadLanguageProject(ctx.sessionRoot);
+  return lc.languageUpgradePreview(f, { ...proj.files, ...proj.manifests }, { apply, root: ctx.sessionRoot });
+}
+// The result shape both SCA upgrade tools return for a Hackage or flake dependency. `verified` is never true: the edit
+// changes a declared constraint or a ref, not the resolved version.
+function _languageUpgradeResult(f, r) {
+  return {
+    ok: true, mode: r.ok ? 'source-edit' : 'blocked', ecosystem: f.ecosystem, package: f.package || null,
+    currentVersion: f.version || null, targetVersion: null, command: null,
+    reason: r.ok ? null : (r.reason || 'no upgrade could be planned'),
+    languageUpgrade: { status: r.status || null, tier: r.tier || null, label: r.label || null, file: r.file || null, diff: r.diff || null, explanation: r.explanation || null, consequences: r.consequences || [], backup: r.backup ? r.backup.id || null : null },
+    verified: false,
+  };
+}
+
 // ─── synthesize_sca_upgrade ───────────────────────────────────────────────
 // Phase 3 / Item 5 of the SCA improvement plan. Read-only counterpart to
 // apply_sca_upgrade — produces a structured upgrade plan via the
@@ -1653,6 +1691,10 @@ export const synthesize_sca_upgrade = {
     if (f.type !== 'vulnerable_dep') {
       return { _meta: META, ok: false, reason: 'finding is not an SCA vulnerable_dep — use synthesize_fix for SAST findings' };
     }
+    // Hackage constraints and flake inputs are source edits the language planner owns; without this the generic planner
+    // answers "no automated upgrade" for a dependency the CLI can fix. Read-only: nothing is written or run.
+    const lc = await import('../language/context.js');
+    if (lc.isLanguageDependencyFinding(f)) return { _meta: META, ..._languageUpgradeResult(f, await _languageUpgrade(lc, f, ctx, false)) };
     const { planScaUpgrade } = await _getScaUpgrade();
     const plan = await planScaUpgrade({ scanRoot: ctx.sessionRoot, finding: f });
     return { _meta: META, ...plan };
@@ -1692,6 +1734,15 @@ export const apply_sca_upgrade = {
     if (!f) return { _meta: META, applied: false, reason: `Finding not found: ${finding_id}` };
     if (f.type !== 'vulnerable_dep') {
       return { _meta: META, applied: false, reason: 'finding is not an SCA vulnerable_dep — use apply_fix for SAST findings' };
+    }
+    const lc = await import('../language/context.js');
+    if (lc.isLanguageDependencyFinding(f)) {
+      // Plan first, confine the one file it names, then write it with a backup and a history entry (`undo` reverts it).
+      const plan = await _languageUpgrade(lc, f, ctx, false);
+      if (!plan.ok) return { _meta: META, applied: false, ..._languageUpgradeResult(f, plan) };
+      try { _confine(ctx.sessionRoot, plan.file, 'upgrade.file'); } catch (e) { return { _meta: META, applied: false, reason: String((e && e.message) || e) }; }
+      const done = await _languageUpgrade(lc, f, ctx, true);
+      return { _meta: META, applied: done.applied === true, ..._languageUpgradeResult(f, done), testsRun: false, testsNote: 'a constraint edit is not re-resolved or re-tested by this tool; resolve (for example `cabal build --dry-run`), rescan and run the project tests before relying on it' };
     }
     const { applyScaUpgrade } = await _getScaUpgrade();
     const result = await applyScaUpgrade({ scanRoot: ctx.sessionRoot, finding: f, runTests: run_tests });

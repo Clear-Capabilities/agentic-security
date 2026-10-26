@@ -140,9 +140,13 @@ export function buildEntrypointInventory(fileContents, opts = {}) {
       const line = Number.isInteger(route.line) ? route.line : 0;
       const method = typeof route.method === 'string' ? route.method : 'GET';
       const path = typeof route.path === 'string' ? route.path : '';
-      const isWebhook = /webhook/i.test(path) || /webhook/i.test(String(route.handler || ''));
+      // A handler is a name for most frameworks and an object ({kind, name}) for Haskell routes; String() of the object
+      // is "[object Object]". An inline handler has no name of its own, so the route stands in for it.
+      const h = route.handler;
+      const handlerName = typeof h === 'string' ? h : (h && typeof h === 'object' && typeof h.name === 'string' && h.name && !/^<.*>$/.test(h.name) ? h.name : '');
+      const isWebhook = /webhook/i.test(path) || /webhook/i.test(handlerName);
       const type = isWebhook ? 'webhook' : 'http';
-      const name = _clip(route.handler || `${method} ${path}`.trim() || type);
+      const name = _clip(handlerName || `${method} ${path}`.trim() || type);
 
       // Trust: an authenticated route (hasAuth) or a nearby auth token wins.
       let trust = route.hasAuth === true ? 'authenticated' : 'unauthenticated';

@@ -583,6 +583,9 @@ export function normalizeFindings(scan){
       blastRadius: sc.blastRadius || null,
       cvssVector: sc.cvssVector || null,
       functionReachable: sc.functionReachable || null,
+      // Hackage: the reason behind an `unknown` (no module mapping for the package is NOT "unreachable"), the modules that
+      // matched, and the tier. Dropping them left a bare `unknown` that read like a verdict.
+      ...(sc.reachability && typeof sc.reachability === 'object' ? { reachability: sc.reachability, reachabilityTier: sc.reachabilityTier || null } : {}),
       // 0.10.0: CISA KEV — actively abused in the wild
       kev: sc.kev === true,
       kevDateAdded: sc.kevDateAdded || null,

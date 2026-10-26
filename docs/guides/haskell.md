@@ -270,22 +270,14 @@ changes, and runs the same gates: path inside the project, syntax, the rescan (t
 medium-or-higher finding appears), and an optional compile check that runs only when asked and only when a `ghc` exists.
 A fix outside those shapes, or one a gate refuses, is reported as such; nothing is invented.
 
+The SQL shape is offered only where it does not have to guess the database library. Its rewrite is written for
+`postgresql-simple`; when it would add an import of a database library the file does not already use, as in this
+`sqlite-simple` example, the fix is refused and the reason is stated, because a rescan cannot see a wrong library.
+
 <!-- generated:fix-hs-sql:start -->
 ```text
-$ agentic-security fix --finding <id> --preview     # exit 0
-FULL: Moved 1 interpolated value(s) out of the SQL text into query parameters.
---- a/src/Main.hs
-+++ b/src/Main.hs
-@@ -10,4 +10,5 @@
--
---- | Look an order up by reference. The reference comes straight from the URL.
--lookupOrder :: Connection -> String -> IO [Only String]
--lookupOrder conn ref = query_ conn (fromString ("SELECT status FROM orders WHERE ref = '" ++ ref ++ "'"))
-+import Database.PostgreSQL.Simple (execute, query, Only)
-+
-+-- | Look an order up by reference. The reference comes straight from the URL.
-+lookupOrder :: Connection -> String -> IO [Only String]
-+lookupOrder conn ref = query conn "SELECT status FROM orders WHERE ref = ?" (Only ref)
+$ agentic-security fix --finding <id> --preview     # exit 4
+No verified fix for this finding (blocked): the patch adds an import of a database library the file did not use (Database.PostgreSQL.Simple); which driver the project uses is not provable from this file, so the edit is refused rather than guessed. Apply the parameterised query by hand with the project's own driver
 ```
 <!-- generated:fix-hs-sql:end -->
 
