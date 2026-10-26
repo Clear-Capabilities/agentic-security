@@ -22,6 +22,7 @@
 import { parseNix, makeLocator } from './nix-parser.js';
 import { resolveImportPath } from './nix-ir.js';
 import { isLanguageExcludedPath } from './discovery.js';
+import { buildOptionTypeIndex } from './nix-option-types.js';
 
 export const NIX_SCRIPT_VERSION = 'nix-script-taint/1';
 const PH = '￼';
@@ -44,7 +45,7 @@ const TRUSTED_PARAMS = new Set(['pkgs', 'lib', 'stdenv', 'self', 'inputs', 'syst
 const CONFIG_PARAMS = new Set(['config', 'options', 'osConfig']);
 const RUNTIME_SECRET_DIRS = /^\/(?:run\/(?:secrets|agenix|credentials|keys)|var\/lib\/(?:secrets|credentials)|etc\/secrets)\b/;
 const SECRET_NAME = /(?:pass(?:word|wd|phrase)?|psk|secret|token|api_?key|private_?key|credential|auth_?key|client_?secret|bearer|cookie|session_?key)/i;
-const PATHISH_TAIL = /(?:file|path|dir|directory|package|pkg|enable|port|user|group|name)$/i;
+const PATHISH_TAIL = /(?:file|path|dir|directory|package|pkg|enable|port|user|group|name|scripts?|commands?|cmds?)$/i;
 const FETCHERS = new Set(['fetchurl', 'fetchTarball', 'fetchGit', 'fetchzip', 'fetchFromGitHub', 'fetchgit', 'fetchTree', 'fetchClosure', 'fetchMercurial', 'fetchpatch']);
 const FS_CMDS = new Set(['rm', 'rmdir', 'mv', 'cp', 'chmod', 'chown', 'chgrp', 'mkdir', 'ln', 'touch', 'tee', 'dd', 'install', 'truncate', 'shred', 'unlink', 'rsync', 'tar', 'unzip', 'cat', 'sed', 'find', 'mount', 'umount']);
 const NET_CMDS = new Set(['curl', 'wget', 'nc', 'ncat', 'netcat', 'ssh', 'scp', 'sftp', 'rsync', 'ftp', 'telnet', 'socat', 'git', 'psql', 'mysql', 'redis-cli', 'mongo', 'aws', 'gsutil']);
@@ -58,7 +59,16 @@ const spanOf = (n) => (n && n.span ? n.span : null);
 // ── files ────────────────────────────────────────────────────────────────────
 class Workspace {
   constructor(files) {
-    this.files = files; this.parsed = new Map();
+    this.files = files; this.parsed = new Map(); this._optionTypes = null;
+  }
+  /** Declared option types across every file in scope (see nix-option-types.js). Built once. */
+  optionTypes() {
+    if (!this._optionTypes) {
+      const asts = [];
+      for (const f of Object.keys(this.files)) { const r = this.parse(f); if (r && r.ast) asts.push(r.ast); }
+      this._optionTypes = buildOptionTypeIndex(asts);
+    }
+    return this._optionTypes;
   }
   parse(file) {
     if (this.parsed.has(file)) return this.parsed.get(file);
@@ -227,7 +237,38 @@ class Evaluator {
     return { origins: [mkOrigin('argument', `function argument "${name}"`, hops)], protection: null };
   }
 
-  eval(expr, env, depth = 0) {
+  /**
+   * An option reference whose DECLARED type bounds its value (bool, int, port, package, a listed enum) cannot carry
+   * a shell metacharacter or a credential, whatever its name suggests, so it is a constant. An option declared out of
+   * scope keeps its origin, except that the module-system convention for a package option (`package`, `finalPackage`,
+   * `fooPackage`) is a store path.
+   */
+  refine(r) {
+    if (!r || !r.origins.some((o) => o.kind === 'configuration' || o.kind === 'secret')) return r;
+    const idx = this.res.ws.optionTypes();
+    let changed = false;
+    const origins = r.origins.map((o) => {
+      if (o.kind !== 'configuration' && o.kind !== 'secret') return o;
+      const m = /^(?:option|module parameter) (?:config|osConfig)\.(.+)$/.exec(o.detail);
+      if (!m) return o;
+      const decl = idx.get(m[1]);
+      if (decl) {
+        if (!decl.bounded) return o;
+        changed = true;
+        return mkOrigin('constant', `${o.detail} (declared ${decl.kind})`, o.chain);
+      }
+      if (/^(?:package|finalPackage|[a-z][A-Za-z0-9]*Package)$/.test(m[1].split('.').pop())) {
+        changed = true;
+        return mkOrigin('store', `${o.detail} (a package option)`, o.chain);
+      }
+      return o;
+    });
+    return changed ? { ...r, origins: dedupe(origins) } : r;
+  }
+
+  eval(expr, env, depth = 0) { return this.refine(this.evalRaw(expr, env, depth)); }
+
+  evalRaw(expr, env, depth = 0) {
     const n = unparen(expr);
     if (!n || depth > MAX_DEPTH) return this.unknown('depth limit');
     switch (n.type) {
@@ -364,6 +405,8 @@ class Evaluator {
       const r = rest.length ? this.combine(rest) : this.constant('empty');
       return { ...r, origins: dedupe([...(sep ? sep.origins : []), ...r.origins]) };
     }
+    // a hex digest, whatever it was computed from
+    if (name === 'hashString' || name === 'hashFile') return this.constant(`${name} (hex digest)`);
     if (name === 'optionalString' || name === 'optional' || name === 'optionals') return args[1] ? this.eval(args[1], env, depth + 1) : this.constant('empty');
     if (name === 'getExe' || name === 'getBin' || name === 'getLib' || name === 'getDev' || name === 'getExe\'') return { origins: [mkOrigin('store', `${name} (store path)`)], protection: null };
     if (name === 'writeText' || name === 'writeTextFile' || name === 'writeShellScript' || name === 'writeShellScriptBin' || name === 'writeScript' || name === 'writeScriptBin' || name === 'runCommand' || name === 'mkDerivation') return { origins: [mkOrigin('store', `${name} output (store path)`)], protection: null };

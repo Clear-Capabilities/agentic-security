@@ -262,12 +262,14 @@ describe('[QA-003.AC03] failures on known positives are end-to-end misses; condi
     assert.equal(s.completion.rate, 0);
   });
 
-  test('the real-engine ablation exposes a layer difference that the matching policy (not the layer) explains', async () => {
+  test('the real-engine ablation localises both layers: pattern findings carry the line of the code they flagged', async () => {
     const ab = await runAblations({ protocol: P(), config: {}, resolveTarget: resolver(), split: 'dev' });
     const [det, deep] = ab.runs.map(score);
     assert.equal(ab.runs[0].totals.completed, 4);
-    assert.equal(det.endToEnd.micro.tp, 0, 'pattern findings carry no line, and a finding with no line cannot be localised');
+    // Before the finding line was backfilled from the sink, pattern findings had no line, a finding with no line cannot be
+    // localised (labels.test.js pins that), and this layer scored zero here: a matching-policy effect, not a detection one.
+    assert.equal(det.endToEnd.micro.tp, 2, 'pattern findings carry the sink line, so they are localised');
     assert.equal(deep.endToEnd.micro.tp, 2, 'deep taint reports the line');
-    assert.ok(deep.endToEnd.micro.f1 > det.endToEnd.micro.f1);
+    assert.equal(det.endToEnd.micro.tp, deep.endToEnd.micro.tp);
   });
 });

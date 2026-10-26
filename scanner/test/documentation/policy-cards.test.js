@@ -225,7 +225,7 @@ describe('[DOC-002.AC03] historical baselines, new measurements and aspirational
   test('[DOC-002.AC03] each new-measurement row names a command that exists, and its printed figures are the ones the command prints now', () => {
     const syn = script('scripts/evaluation.mjs', ['synthetic']).stdout;
     for (const f of ['deep-taint           5/5           100.0%          66.7%    80.0%', 'model-assisted       0/5']) assert.ok(syn.replace(/\s+/g, ' ').includes(f.replace(/\s+/g, ' ')), `the synthetic suite no longer prints ${f}`);
-    for (const f of ['deterministic-only 5/5 completed, recall 0.0%', 'deep-taint 5/5, recall 100.0%, precision 66.7%, F1 80.0%', 'model-assisted 0/5 completed']) assert.ok(S2.includes(f), f);
+    for (const f of ['deterministic-only 5/5 completed, recall 100.0%', 'deep-taint 5/5, recall 100.0%, precision 66.7%, F1 80.0%', 'model-assisted 0/5 completed']) assert.ok(S2.includes(f), f);
     const dep = script('scripts/evaluation.mjs', ['deployment-ablation']).stdout.replace(/\s+/g, ' ');
     for (const f of ['source-only 4 4 3 50.0% 57.1%', 'graph-enabled 7 2 0 77.8% 100.0%', 'FPs reduced 3, confirmed defects added 3, baseline confirmed defects LOST 0, FPs added 1']) assert.ok(dep.includes(f), `the ablation no longer prints ${f}`);
     for (const f of ['source-only TP 4, FP 4, FN 3', 'graph-enabled TP 7, FP 2, FN 0', 'false positives reduced 3, confirmed defects added 3, baseline defects lost 0, false positives added 1']) assert.ok(S2.includes(f), f);

@@ -217,7 +217,8 @@ class Walker {
       }
       case 'app': {
         if (!asFn) this.inspectApp(file, node, env, path);
-        this.visit(file, node.fn, env, path, depth + 1, true); this.visit(file, node.arg, env, path, depth + 1, false); return;
+        this.visit(file, node.fn, env, path, depth + 1, true);
+        this.visit(file, this.withoutOptionDocs(node), env, path, depth + 1, false); return;
       }
       case 'string': {
         if (!node.interpolated) { for (const [label, re, sev] of TOKEN_FORMATS) if (re.test(node.literal || '')) { /* reported through its binding when it has one; bare strings: */ if (!this.stringSeen(file, node)) this.emit('nix-secret-plaintext', { ...this.at(file, node.span), file, severity: sev, exposure: 'plaintext-source', description: `A ${label} is written as a literal (value redacted).`, source: { kind: 'literal', file, line: node.span.startLine }, destination: { kind: 'source', label: 'Nix source' }, evidence: { ...redact(node.literal), format: label }, originalLocation: node.span, chain: [hop(file, node.span, `literal ${label}`)].filter(Boolean), origins: [mkOrigin('secret', `literal ${label}`)] }); } }
@@ -229,10 +230,27 @@ class Walker {
         if (node.items) for (const it of node.items) this.visit(file, it, env, path, depth + 1, false);
     }
   }
+  /**
+   * The argument of `mkOption { ... }` without its documentation attributes. `example`, `description` and
+   * `defaultText` are rendered into the manual, never into the configuration, so a credential-shaped literal
+   * there is an illustration. `default` is NOT documentation: it is the value the option takes.
+   */
+  withoutOptionDocs(appNode) {
+    const arg = appNode.arg;
+    const { fn } = this.ev.flatten(appNode);
+    const name = this.ev.calleeOf(fn).name;
+    const a = unparen(arg);
+    if (name !== 'mkOption' || !a || a.type !== 'attrset') return arg;
+    const DOC = new Set(['example', 'description', 'defaultText', 'longDescription', 'relatedPackages']);
+    return { ...a, bindings: a.bindings.filter((b) => !(b.kind === 'attr' && DOC.has(attrKey(b.path)[0]))) };
+  }
   stringSeen(file, node) { const k = `${file}:${node.start}`; if (this.scriptKeys.has(k)) return true; this.scriptKeys.add(k); return false; }
 
   inspectBinding(file, full, value, bspan, env) {
-    const v = unparen(value);
+    let v = unparen(value);
+    // `x = let ... in { ... }` / `with ...; { ... }` is an attribute SET, not a scalar: a credential name on the
+    // binding (a service called pass-secret-service) says nothing about a set's members, which are visited on their own
+    for (let guard = 0; v && (v.type === 'let' || v.type === 'with' || v.type === 'assert') && guard < 20; guard++) v = unparen(v.body);
     const last = full[full.length - 1];
     const dest = destOf(full);
     const sname = secretName(last);

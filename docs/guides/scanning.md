@@ -130,8 +130,9 @@ line. Every suppression is recorded — `scan . --include-suppressed` shows what
 was hidden, so a suppression is never invisible.
 
 Prefer fixing at the source over suppressing. A finding with no line number
-(some structural detectors emit these) cannot be suppressed by pragma — fix it
-instead.
+(a dependency or whole-file finding) cannot be suppressed by pragma, so fix it
+instead. Pattern and structural findings carry the line of the code they
+flagged, so a pragma on that line reaches them.
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAtVersion": "0.172.0",
+  "capturedAtVersion": "0.185.0",
   "surfaces": {
     "scanJson": {
       "shape": {
@@ -45,6 +45,7 @@
                 }
               },
               "filesDenseSkipped": "number",
+              "filesOversizeSkipped": "number",
               "filesScanned": "number",
               "filesSkipped": "number",
               "filesTimedOut": "number",
@@ -132,6 +133,7 @@
                         "array": {
                           "object": {
                             "file": "string",
+                            "line": "number",
                             "severity": "string",
                             "vuln": "string"
                           }
@@ -173,9 +175,7 @@
                     "array": {
                       "object": {
                         "file": "string",
-                        "line": {
-                          "optional": "number|{\"optional\":{\"optional\":{\"optional\":\"number|{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":\\\"number|{\\\\\\\"optional\\\\\\\":\\\\\\\"number|{\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\":{\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\":{\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"number|{\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\":{\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\":{\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\":{\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\":{\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"number|{\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\":{\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\":{\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\":{\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"optional\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"number\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"}}}}\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"}}}}}\\\\\\\\\\\\\\\"}}}\\\\\\\"}\\\"}}}}\"}}}"
-                        },
+                        "line": "number",
                         "nodeId": "string",
                         "severity": "string",
                         "vuln": "string"
@@ -1179,7 +1179,7 @@
                       "optional": {
                         "optional": {
                           "optional": {
-                            "optional": "null|{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":\"string|{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":\\\"null|string|string\\\\\\\"}|{\\\\\\\"optional\\\\\\\":\\\\\\\"null\\\"}}}}\"}}}}}}}}}}}}}}}}"
+                            "optional": "string|{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":\"string|{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":\\\"string|{\\\\\\\"optional\\\\\\\":\\\\\\\"string\\\\\\\"}\\\"}}}}\"}}}}}}}}}}}}}}}}"
                           }
                         }
                       }
@@ -1192,7 +1192,7 @@
                       "optional": {
                         "optional": {
                           "optional": {
-                            "optional": "null|{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":\"string|{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":\\\"null|string|string\\\\\\\"}|{\\\\\\\"optional\\\\\\\":\\\\\\\"null\\\"}}}}\"}}}}}}}}}}}}}}}}"
+                            "optional": "string|{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":\"string|{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":\\\"string|{\\\\\\\"optional\\\\\\\":\\\\\\\"string\\\\\\\"}\\\"}}}}\"}}}}}}}}}}}}}}}}"
                           }
                         }
                       }
@@ -1205,7 +1205,7 @@
                       "optional": {
                         "optional": {
                           "optional": {
-                            "optional": "null|{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":\"string|{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":\\\"null|string|string\\\\\\\"}|{\\\\\\\"optional\\\\\\\":\\\\\\\"null\\\"}}}}\"}}}}}}}}}}}}}}}}"
+                            "optional": "string|{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":\"string|{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":\\\"string|{\\\\\\\"optional\\\\\\\":\\\\\\\"string\\\\\\\"}\\\"}}}}\"}}}}}}}}}}}}}}}}"
                           }
                         }
                       }
@@ -1218,7 +1218,7 @@
                       "optional": {
                         "optional": {
                           "optional": {
-                            "optional": "null|{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":\"string|{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":\\\"null|string|string\\\\\\\"}|{\\\\\\\"optional\\\\\\\":\\\\\\\"null\\\"}}}}\"}}}}}}}}}}}}}}}}"
+                            "optional": "string|{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":{\"optional\":\"string|{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":{\\\"optional\\\":\\\"string|{\\\\\\\"optional\\\\\\\":\\\\\\\"string\\\\\\\"}\\\"}}}}\"}}}}}}}}}}}}}}}}"
                           }
                         }
                       }
@@ -2122,7 +2122,7 @@
                     "found": "number",
                     "fromFindingId": "string",
                     "instances": {
-                      "array": "empty|{\"object\":{\"file\":\"string\",\"line\":\"number\",\"snippet\":\"string\",\"status\":\"string\"}}"
+                      "array": "empty"
                     },
                     "instancesTruncated": "boolean",
                     "mitigated": "number",
@@ -2218,11 +2218,20 @@
                   "expected": "number",
                   "scanned": "number",
                   "skipped": "number",
-                  "timedOut": "number"
+                  "timedOut": "number",
+                  "unanalysed": "number"
                 }
               },
               "freshness": {
                 "object": {
+                  "advisories": {
+                    "object": {
+                      "answered": "number",
+                      "componentsChecked": "number",
+                      "source": "string",
+                      "unanswered": "number"
+                    }
+                  },
                   "calibration": {
                     "object": {
                       "ageDays": "number",
@@ -2317,7 +2326,8 @@
               "expected": "number",
               "scanned": "number",
               "skipped": "number",
-              "timedOut": "number"
+              "timedOut": "number",
+              "unanalysed": "number"
             }
           },
           "freshness": "null",
@@ -2510,6 +2520,35 @@
           "findings_file": "string",
           "now": "integer",
           "store_file": "string"
+        }
+      },
+      {
+        "name": "prove_finding",
+        "required": [
+          "confirm",
+          "finding_id"
+        ],
+        "properties": {
+          "attempts": "integer",
+          "confirm": "boolean",
+          "finding_id": "string",
+          "reproducer": "object",
+          "require_container": "boolean",
+          "required": "integer"
+        }
+      },
+      {
+        "name": "prove_fix",
+        "required": [
+          "confirm",
+          "finding_id",
+          "patch"
+        ],
+        "properties": {
+          "confirm": "boolean",
+          "finding_id": "string",
+          "patch": "object",
+          "reproducer": "object"
         }
       },
       {
@@ -3056,6 +3095,11 @@
       "at": "2026-10-16T13:02:26.943Z",
       "version": "0.172.0",
       "acceptedBreakingChange": "fixtures are scanned as one-commit repositories (strict assurance needs history) and a no-history case was added"
+    },
+    {
+      "at": "2026-10-26T05:47:10.649Z",
+      "version": "0.185.0",
+      "acceptedBreakingChange": "finding.line is now populated from sink.line (or source.line) for flow-pair and structural findings that carried none, so line-keyed consumers (decorations, git provenance) see a value where the shape used to be optional"
     }
   ]
 }
