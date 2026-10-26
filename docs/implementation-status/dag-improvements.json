@@ -70,7 +70,7 @@
       "id": "R02.4",
       "summary": "Unsupported constructs, unresolved callees, unmodeled callbacks, and depth/work limits must expand to conservative full ",
       "status": "verified",
-      "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
+      "notes": "Acceptance tests pass. Instance fields of a named JavaScript or TypeScript class are followed (class-scoped expansion); a class that cannot be named, the caller-depth limit and the work limit still expand to full analysis or report partial scope. Over all 982 sink sites of scanner/src: 75 take the full path (all depth-limit), down from 238 (all instance-field); demand equals full analysis on every site.",
       "evidence": []
     },
     {
@@ -84,8 +84,10 @@
       "id": "R02.6",
       "summary": "Keep demand mode opt-in until corpus parity; emit selector coverage and analyzed-function counts. Add a user-facing sink",
       "status": "verified",
-      "notes": "Opt-in demand mode with coverage counts; parity holds. The 2x speedup target is MISSED on the repo own tree when the index is built per query (1.8x); 277x with a warm index; 10 of 30 own-tree queries fell back to full analysis.",
-      "evidence": []
+      "notes": "Opt-in demand mode with coverage counts; parity holds. The 2x target is now MET on this repository's own tree: 23.4x per query with the index built per query (was 1.9x), 3.7x averaged over the 30-query sample with fallbacks included (was 1.2x). 3 of the 30 sampled queries (75 of 982 sink sites) still take the full path at the caller-depth limit; see docs/implementation-status/dag-improvements.md, Performance follow-up.",
+      "evidence": [
+        "scanner/test/cli/dag-commands.test.js"
+      ]
     },
     {
       "id": "R03.1",
@@ -147,8 +149,8 @@
       "id": "R04.3",
       "summary": "Use the existing bounded abstract domains first. Optional SMT checks must run in an awaited, cancellable, time-bounded o",
       "status": "verified",
-      "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
-      "evidence": []
+      "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections. A real z3 backend (optional, lazy, env-gated) now implements the injectable solver interface.",
+      "evidence": ["scanner/src/lineage/smt-z3-backend.js", "scanner/test/lineage/smt-z3-backend.test.js"]
     },
     {
       "id": "R04.4",
@@ -217,7 +219,7 @@
       "id": "R05.7",
       "summary": "Include cache provenance in completion/evidence output so reused facts are distinguishable from newly analyzed facts.",
       "status": "verified",
-      "notes": "cacheProvenance on findings and scanHealth.deepAnalysis.incremental. Speed: deep stage meets 3x; end to end median 1.8x to 2.9x, below the 3x target; no benefit at the default summary budget for projects of about 5000 functions or more.",
+      "notes": "cacheProvenance on findings and scanHealth.deepAnalysis.incremental. Speed with the raised summary budget: deep stage 3.4x, 3.2x and 9.3x on the 300-file, 1000-file and scanner/src workloads; end to end 2.5x, 2.4x (below the 3x target) and 4.3x (met). Unchanged JavaScript and TypeScript files are read from the IR cache (dataflow/ir-cache.js). At the default summary budget projects of about 5000 functions or more still run cold and the warm run is slower than the cold one (0.8x deep stage).",
       "evidence": []
     },
     {
@@ -225,7 +227,9 @@
       "summary": "Introduce read-only adapters with `node(ref)`, `incoming(ref, relationFilter)`, `outgoing(ref, relationFilter)`, metadat",
       "status": "verified",
       "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
-      "evidence": []
+      "evidence": [
+        "scanner/test/cli/dag-commands.test.js"
+      ]
     },
     {
       "id": "R06.2",
@@ -364,7 +368,9 @@
       "summary": "Bind contracts to parser-resolved local sites. Unbound declarations produce explicit coverage gaps, not synthetic findin",
       "status": "verified",
       "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
-      "evidence": []
+      "evidence": [
+        "scanner/test/cli/dag-commands.test.js"
+      ]
     },
     {
       "id": "R08.4",
@@ -427,7 +433,9 @@
       "summary": "Reuse the scenario engine to test candidate intervention sets, search for remaining bypasses, and return residual paths,",
       "status": "verified",
       "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
-      "evidence": []
+      "evidence": [
+        "scanner/test/cli/dag-commands.test.js"
+      ]
     },
     {
       "id": "R09.6",
@@ -455,7 +463,9 @@
       "summary": "Provide a bounded offline replay verifier that checks every derivation and call/return binding against the referenced ar",
       "status": "verified",
       "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
-      "evidence": []
+      "evidence": [
+        "scanner/test/cli/dag-commands.test.js"
+      ]
     },
     {
       "id": "R10.3",
@@ -492,5 +502,45 @@
       "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
       "evidence": []
     }
-  ]
+  ],
+  "wiring": {
+    "note": "Opt-in command-line entry points. None runs in a default scan, so default scan output is unchanged. Every report carries a completion status (complete, partial, cancelled, unavailable, invalid) and a negativeClaimAllowed that is false unless the engine envelope earned it. Maturity stays Preview.",
+    "module": "scanner/src/posture/dag-commands.js",
+    "test": "scanner/test/cli/dag-commands.test.js",
+    "docs": "docs/security-graph/graph-precision.md#commands",
+    "commands": [
+      {
+        "capability": "typed graph views (DAG-06) and SCC condensation (DAG-01)",
+        "command": "agentic-security dataflow view [path] [--node <id>]",
+        "status": "wired"
+      },
+      {
+        "capability": "boundary contracts (DAG-08)",
+        "command": "agentic-security dataflow contracts [path] [--contracts <file>]",
+        "status": "wired"
+      },
+      {
+        "capability": "demand-driven reverse taint (DAG-02)",
+        "command": "agentic-security dataflow sink-query [path] --file <rel> --line <n>",
+        "status": "wired"
+      },
+      {
+        "capability": "min-cut control planner (DAG-09)",
+        "command": "agentic-security dataflow plan-cuts (already registered; completion contract and end-to-end test added)",
+        "status": "wired"
+      },
+      {
+        "capability": "signed witness bundles (DAG-10)",
+        "command": "agentic-security witness build|verify",
+        "status": "wired"
+      }
+    ],
+    "notWired": [
+      "No MCP tool was added: the tool count is pinned across tests and docs and none of these fits a read-only tool over the last scan.",
+      "No flag on scan: each capability is a separate command, so a default scan stays identical.",
+      "witness build re-runs the field analysis because a scan still does not persist the hop stream.",
+      "Witness runtime support and exploit proof inputs are not exposed on the command line; the bundle records them as not consulted.",
+      "Only the dataflow graph view is exposed; provenance, semantic, artifact and cross-repo views remain library API."
+    ]
+  }
 }

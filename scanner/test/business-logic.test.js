@@ -53,6 +53,22 @@ function approve(order) { order.status = 'approved'; }
   assert.equal(findings.filter(f => f.family === 'state-machine-bypass').length, 0);
 });
 
+test('State-machine bypass is judged against the set in the SAME file, not a set from another module', () => {
+  const fc = {
+    'orders.js': `const STATUSES = ['pending', 'approved', 'rejected'];\nfunction ok(o) { o.status = 'approved'; }\n`,
+    'jobs.js': `function run(job) { job.status = 'running'; }\n`,
+  };
+  assert.equal(scanBusinessLogic(fc).filter(f => f.family === 'state-machine-bypass').length, 0);
+});
+
+test('State-machine bypass skips test files', () => {
+  const fc = {
+    'a.js': `const STATUSES = ['pending', 'approved'];\n`,
+    'test/a.test.js': `const STATUSES = ['pending', 'approved'];\nfunction t(o) { o.status = 'weird'; }\n`,
+  };
+  assert.equal(scanBusinessLogic(fc).filter(f => f.family === 'state-machine-bypass').length, 0);
+});
+
 test('Negative-test gap flagged when auth route has no 401/403 test', () => {
   const fc = {
     'app.js': `

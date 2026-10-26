@@ -9,20 +9,20 @@
   "runs": {
     "cold": {
       "irMs": [
-        1349.9,
-        1230.5
+        1249.6,
+        1120.5
       ],
       "deepMs": [
-        2579,
-        2628.2
+        1142.7,
+        1083.4
       ]
     },
     "coldCommit": {
       "irMs": [
-        1206.7
+        1568.6
       ],
       "deepMs": [
-        3323.1
+        1487.5
       ],
       "stats": {
         "mode": "cold",
@@ -37,8 +37,8 @@
         },
         "invalidation": null,
         "timing": {
-          "fingerprintMs": 495,
-          "readMs": 1,
+          "fingerprintMs": 427,
+          "readMs": 0,
           "planMs": 0,
           "restoreMs": 0
         },
@@ -46,19 +46,19 @@
           "functions": 11000,
           "edges": 14998,
           "coupled": 0,
-          "fingerprintMs": 495
+          "fingerprintMs": 427
         },
-        "persistedMs": 68
+        "persistedMs": 61
       }
     },
     "warmSame": {
       "irMs": [
-        1255.7,
-        1208.9
+        571.7,
+        614.5
       ],
       "deepMs": [
-        3010.2,
-        3026.2
+        1422.5,
+        1372.8
       ],
       "stats": {
         "mode": "cold",
@@ -73,8 +73,8 @@
         },
         "invalidation": null,
         "timing": {
-          "fingerprintMs": 248,
-          "readMs": 64,
+          "fingerprintMs": 258,
+          "readMs": 60,
           "planMs": 0,
           "restoreMs": 0
         },
@@ -82,19 +82,19 @@
           "functions": 11000,
           "edges": 14998,
           "coupled": 0,
-          "fingerprintMs": 248
+          "fingerprintMs": 258
         },
-        "persistedMs": 56
+        "persistedMs": 54
       }
     }
   },
   "perEdit": [
     {
       "file": "src/m87.js",
-      "deepMs": 3137.6,
-      "irMs": 1273,
+      "deepMs": 1399,
+      "irMs": 590.9,
       "deepSpeedup": 0.8,
-      "endToEndSpeedup": 0.9,
+      "endToEndSpeedup": 1.2,
       "stats": {
         "mode": "cold",
         "reason": "prior analysis was incomplete (summary-budget)",
@@ -108,8 +108,8 @@
         },
         "invalidation": null,
         "timing": {
-          "fingerprintMs": 311,
-          "readMs": 61,
+          "fingerprintMs": 237,
+          "readMs": 74,
           "planMs": 0,
           "restoreMs": 0
         },
@@ -117,18 +117,18 @@
           "functions": 11000,
           "edges": 14998,
           "coupled": 0,
-          "fingerprintMs": 311
+          "fingerprintMs": 237
         },
-        "persistedMs": 60
+        "persistedMs": 58
       },
       "parityWithCold": true
     },
     {
       "file": "src/m722.js",
-      "deepMs": 3052.6,
-      "irMs": 1228.9,
-      "deepSpeedup": 0.9,
-      "endToEndSpeedup": 0.9,
+      "deepMs": 1413,
+      "irMs": 617.5,
+      "deepSpeedup": 0.8,
+      "endToEndSpeedup": 1.2,
       "stats": {
         "mode": "cold",
         "reason": "prior analysis was incomplete (summary-budget)",
@@ -142,8 +142,8 @@
         },
         "invalidation": null,
         "timing": {
-          "fingerprintMs": 252,
-          "readMs": 58,
+          "fingerprintMs": 224,
+          "readMs": 54,
           "planMs": 0,
           "restoreMs": 0
         },
@@ -151,7 +151,7 @@
           "functions": 11000,
           "edges": 14998,
           "coupled": 0,
-          "fingerprintMs": 252
+          "fingerprintMs": 224
         },
         "persistedMs": 51
       },
@@ -159,10 +159,10 @@
     },
     {
       "file": "src/m573.js",
-      "deepMs": 3194.1,
-      "irMs": 1303.3,
+      "deepMs": 1360.6,
+      "irMs": 574.2,
       "deepSpeedup": 0.8,
-      "endToEndSpeedup": 0.9,
+      "endToEndSpeedup": 1.2,
       "stats": {
         "mode": "cold",
         "reason": "prior analysis was incomplete (summary-budget)",
@@ -176,8 +176,8 @@
         },
         "invalidation": null,
         "timing": {
-          "fingerprintMs": 248,
-          "readMs": 65,
+          "fingerprintMs": 208,
+          "readMs": 57,
           "planMs": 0,
           "restoreMs": 0
         },
@@ -185,28 +185,28 @@
           "functions": 11000,
           "edges": 14998,
           "coupled": 0,
-          "fingerprintMs": 248
+          "fingerprintMs": 208
         },
-        "persistedMs": 60
+        "persistedMs": 53
       },
       "parityWithCold": true
     }
   ],
   "summary": {
-    "coldDeepMsMedian": 2628.2,
-    "coldIrMsMedian": 1349.9,
-    "warmSameDeepMsMedian": 3026.2,
-    "warmSameDeepSpeedup": 0.9,
-    "warmEditDeepMsMedian": 3137.6,
+    "coldDeepMsMedian": 1142.7,
+    "coldIrMsMedian": 1249.6,
+    "warmSameDeepMsMedian": 1422.5,
+    "warmSameDeepSpeedup": 0.8,
+    "warmEditDeepMsMedian": 1399,
     "deepSpeedup": {
       "median": 0.8,
       "min": 0.8,
-      "max": 0.9
+      "max": 0.8
     },
     "endToEndSpeedup": {
-      "median": 0.9,
-      "min": 0.9,
-      "max": 0.9
+      "median": 1.2,
+      "min": 1.2,
+      "max": 1.2
     },
     "targetSpeedup": 3,
     "editsMeetingTarget": {

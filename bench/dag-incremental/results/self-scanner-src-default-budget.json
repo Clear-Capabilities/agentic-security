@@ -2,32 +2,32 @@
   "label": "self-scanner-src",
   "kind": "this repository's scanner/src",
   "summaryBudget": "engine default (5000)",
-  "files": 904,
-  "functions": 14459,
+  "files": 916,
+  "functions": 14936,
   "reps": 1,
   "edits": 2,
   "runs": {
     "cold": {
       "irMs": [
-        5237.7
+        3618
       ],
       "deepMs": [
-        10976.5
+        5102.8
       ]
     },
     "coldCommit": {
       "irMs": [
-        4778
+        4383.3
       ],
       "deepMs": [
-        13322.2
+        6245.9
       ],
       "stats": {
         "mode": "cold",
         "reason": "no prior state",
         "provenance": {
           "reusedFunctions": 0,
-          "recomputedFunctions": 14459,
+          "recomputedFunctions": 14936,
           "reusedFindings": 0,
           "recomputedFindings": 12,
           "restoredContexts": 0,
@@ -35,33 +35,33 @@
         },
         "invalidation": null,
         "timing": {
-          "fingerprintMs": 1544,
+          "fingerprintMs": 1043,
           "readMs": 0,
           "planMs": 0,
           "restoreMs": 0
         },
         "model": {
-          "functions": 14459,
-          "edges": 26732,
-          "coupled": 93,
-          "fingerprintMs": 1544
+          "functions": 14936,
+          "edges": 28316,
+          "coupled": 96,
+          "fingerprintMs": 1043
         },
-        "persistedMs": 192
+        "persistedMs": 141
       }
     },
     "warmSame": {
       "irMs": [
-        4871.9
+        1790.5
       ],
       "deepMs": [
-        12610.6
+        6045.7
       ],
       "stats": {
         "mode": "cold",
         "reason": "prior analysis was incomplete (summary-budget)",
         "provenance": {
           "reusedFunctions": 0,
-          "recomputedFunctions": 14459,
+          "recomputedFunctions": 14936,
           "reusedFindings": 0,
           "recomputedFindings": 12,
           "restoredContexts": 0,
@@ -69,34 +69,34 @@
         },
         "invalidation": null,
         "timing": {
-          "fingerprintMs": 795,
-          "readMs": 109,
+          "fingerprintMs": 388,
+          "readMs": 85,
           "planMs": 0,
           "restoreMs": 0
         },
         "model": {
-          "functions": 14459,
-          "edges": 26732,
-          "coupled": 93,
-          "fingerprintMs": 795
+          "functions": 14936,
+          "edges": 28316,
+          "coupled": 96,
+          "fingerprintMs": 388
         },
-        "persistedMs": 190
+        "persistedMs": 134
       }
     }
   },
   "perEdit": [
     {
       "file": "scanner/src/dataflow/exception-flow.js",
-      "deepMs": 13269.7,
-      "irMs": 7351.6,
+      "deepMs": 6056.2,
+      "irMs": 1870.5,
       "deepSpeedup": 0.8,
-      "endToEndSpeedup": 0.8,
+      "endToEndSpeedup": 1.1,
       "stats": {
         "mode": "cold",
         "reason": "prior analysis was incomplete (summary-budget)",
         "provenance": {
           "reusedFunctions": 0,
-          "recomputedFunctions": 14459,
+          "recomputedFunctions": 14936,
           "reusedFindings": 0,
           "recomputedFindings": 12,
           "restoredContexts": 0,
@@ -104,33 +104,33 @@
         },
         "invalidation": null,
         "timing": {
-          "fingerprintMs": 689,
-          "readMs": 123,
+          "fingerprintMs": 403,
+          "readMs": 89,
           "planMs": 0,
           "restoreMs": 0
         },
         "model": {
-          "functions": 14459,
-          "edges": 26732,
-          "coupled": 93,
-          "fingerprintMs": 689
+          "functions": 14936,
+          "edges": 28316,
+          "coupled": 96,
+          "fingerprintMs": 403
         },
-        "persistedMs": 187
+        "persistedMs": 136
       },
       "parityWithCold": true
     },
     {
-      "file": "scanner/src/posture/root-cause-sweep.js",
-      "deepMs": 12758.8,
-      "irMs": 4934,
-      "deepSpeedup": 0.9,
-      "endToEndSpeedup": 0.9,
+      "file": "scanner/src/posture/risk-dollars.js",
+      "deepMs": 6019.3,
+      "irMs": 1873.4,
+      "deepSpeedup": 0.8,
+      "endToEndSpeedup": 1.1,
       "stats": {
         "mode": "cold",
         "reason": "prior analysis was incomplete (summary-budget)",
         "provenance": {
           "reusedFunctions": 0,
-          "recomputedFunctions": 14459,
+          "recomputedFunctions": 14936,
           "reusedFindings": 0,
           "recomputedFindings": 12,
           "restoredContexts": 0,
@@ -138,36 +138,37 @@
         },
         "invalidation": null,
         "timing": {
-          "fingerprintMs": 613,
-          "readMs": 113,
+          "fingerprintMs": 378,
+          "readMs": 88,
           "planMs": 0,
           "restoreMs": 0
         },
         "model": {
-          "functions": 14459,
-          "edges": 26732,
-          "coupled": 93,
-          "fingerprintMs": 613
+          "functions": 14936,
+          "edges": 28316,
+          "coupled": 96,
+          "fingerprintMs": 378
         },
-        "persistedMs": 172
-      }
+        "persistedMs": 134
+      },
+      "parityWithCold": true
     }
   ],
   "summary": {
-    "coldDeepMsMedian": 10976.5,
-    "coldIrMsMedian": 5237.7,
-    "warmSameDeepMsMedian": 12610.6,
-    "warmSameDeepSpeedup": 0.9,
-    "warmEditDeepMsMedian": 13269.7,
+    "coldDeepMsMedian": 5102.8,
+    "coldIrMsMedian": 3618,
+    "warmSameDeepMsMedian": 6045.7,
+    "warmSameDeepSpeedup": 0.8,
+    "warmEditDeepMsMedian": 6056.2,
     "deepSpeedup": {
-      "median": 0.9,
+      "median": 0.8,
       "min": 0.8,
-      "max": 0.9
+      "max": 0.8
     },
     "endToEndSpeedup": {
-      "median": 0.9,
-      "min": 0.8,
-      "max": 0.9
+      "median": 1.1,
+      "min": 1.1,
+      "max": 1.1
     },
     "targetSpeedup": 3,
     "editsMeetingTarget": {
@@ -179,7 +180,7 @@
       "endToEnd": false
     },
     "parity": {
-      "editsChecked": 1,
+      "editsChecked": 2,
       "unchangedRescanEqualsCold": true,
       "holds": true
     }

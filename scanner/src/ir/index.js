@@ -132,10 +132,23 @@ function _parsePythonFiles(pyEntries) {
   return pyEntries.map(({ file, content }) => parsePythonFileRegex(file, content)).filter(Boolean);
 }
 
+// JavaScript / TypeScript parse through the optional cross-scan IR cache (dataflow/ir-cache.js): an unchanged
+// file is read back with fresh node ids instead of parsed again, and a new parse is stored. `irCache` is an
+// injected object ({load, store}); with none, this is exactly parseJsFile.
+function parseJsCached(file, code, irCache) {
+  if (!irCache) return parseJsFile(file, code);
+  const hit = irCache.load(file, code);
+  if (hit) return hit;
+  const ir = parseJsFile(file, code);
+  if (ir) irCache.store(file, code, ir);
+  return ir;
+}
+
 // Synchronous default — JS/TS + Python only. Engine.js calls this directly.
 // Java IR requires async import of java-parser; callers who want it can use
 // buildProjectIRAsync instead.
-export function buildProjectIR(fileContents) {
+export function buildProjectIR(fileContents, opts = {}) {
+  const irCache = opts && opts.irCache ? opts.irCache : null;
   const perFile = {};
   const pyBatch = [];
   const hsFiles = {};
@@ -148,7 +161,7 @@ export function buildProjectIR(fileContents) {
     // null — it does not zero out every other language's coverage.
     try {
       if (/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(file)) {
-        const ir = parseJsFile(file, code);
+        const ir = parseJsCached(file, code, irCache);
         if (ir) perFile[file] = ir;
       } else if (/\.hs$/i.test(file)) {
         hsFiles[file] = code;   // lowered together: Haskell resolution is whole-program (imports, re-exports)
@@ -238,7 +251,8 @@ function withHaskellCallGraph(cg, hsCg) {
 }
 
 // Async variant — includes Java IR via java-parser.
-export async function buildProjectIRAsync(fileContents) {
+export async function buildProjectIRAsync(fileContents, opts = {}) {
+  const irCache = opts && opts.irCache ? opts.irCache : null;
   const perFile = {};
   const pyBatch = [];
   const hsFiles = {};
@@ -247,7 +261,7 @@ export async function buildProjectIRAsync(fileContents) {
     // file can't abort IR construction for the whole project.
     try {
       if (/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(file)) {
-        const ir = parseJsFile(file, code);
+        const ir = parseJsCached(file, code, irCache);
         if (ir) perFile[file] = ir;
       } else if (/\.hs$/i.test(file)) {
         hsFiles[file] = code;

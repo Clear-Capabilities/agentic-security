@@ -183,6 +183,10 @@ import { classifySecretCandidate as _entropyClassifySecret } from './sast/_secre
 // Phase 1 — precision-engineering posture modules.
 import { annotateConfidence, applyUnvalidatedPenalty } from './posture/confidence.js';
 import { backfillFindingDefaults } from './posture/finding-defaults.js';
+import { redirectTargetPinsOriginAt, redirectArgumentPinsOrigin } from './sast/redirect-target.js';
+import { responseReflectsRequestInputAt } from './sast/reflected-input.js';
+import { sendFileConfinedToRootAt } from './sast/send-file-root.js';
+import { insideFunctionBody } from './sast/init-scope.js';
 import { annotatePocs } from './posture/poc-generator.js';
 import { annotateExecutionProofs } from './posture/prove-findings.js';
 import { mineVulnHistory, annotateHistoricalRisk } from './posture/vuln-archaeology.js';
@@ -211,6 +215,7 @@ import { annotateNarration } from './posture/flow-narration.js';
 import { applyPathConstraints } from './posture/path-predicates.js';
 // Phase 3 (Sentinel-parity Layer 1 + 2) — IR + interprocedural taint engine.
 import { buildProjectIR, buildProjectIRAsync } from './ir/index.js';
+import { openIrCache } from './dataflow/ir-cache.js';
 import _v8 from 'node:v8';
 import _vm from 'node:vm';
 import { createStringMemo } from './util/string-memo.js';
@@ -1721,12 +1726,43 @@ export function dropGuardedFindings(findings, fileContents, onDrop = null) {
     const dropped = (kind) => { if (onDrop) onDrop(f, { kind, line, evidence: ctx._guardEvidence || null }); return false; };
     if (cwe === 'CWE-918' && _hasSsrfHostGuard(ctx)) return dropped('ssrf-host-guard');
     if (cwe === 'CWE-22' && _hasPathGuard(ctx)) return dropped('path-containment-guard');
+    if (cwe === 'CWE-22' && sendFileConfinedToRootAt(lines, line) === true) return dropped('send-file-root-confined');
     if (cwe === 'CWE-601' && _hasRedirectGuard(ctx)) return dropped('redirect-target-guard');
+    if (cwe === 'CWE-601' && redirectTargetPinsOriginAt(lines, line) === true) return dropped('redirect-origin-pinned');
     if (isXss && _hasXssOutputEncoding(ctx)) return dropped('xss-output-encoding');
     return true;
   });
 }
 
+// Identifiers a sink call's argument text actually READS as variables. Two things in the raw text are not
+// variable reads and used to be counted as such, which let an unrelated source variable of the same name
+// "reach" the sink: (1) words inside string literals ('Viewing user ' + ...), and (2) property names after
+// a dot (req.user.name reads `req`, not a local called `user` or `name`). Template substitutions
+// (`${x}`) stay, since they are code. Spread (`...x`) is a read of x and stays.
+function _usedIdentifiers(args){
+  const t=String(args);let code='';
+  for(let i=0;i<t.length;i++){
+    const c=t[i];
+    if(c==='"'||c==="'"){const q=c;i++;while(i<t.length&&t[i]!==q){if(t[i]==='\\')i++;i++;}code+=' ';}
+    else if(c==='`'){
+      i++;
+      while(i<t.length&&t[i]!=='`'){
+        if(t[i]==='\\'){i+=2;continue;}
+        if(t[i]==='$'&&t[i+1]==='{'){let d=1;i+=2;code+=' ';while(i<t.length&&d>0){if(t[i]==='{')d++;else if(t[i]==='}'){d--;if(d===0)break;}code+=t[i];i++;}i++;continue;}
+        i++;
+      }
+      code+=' ';
+    } else code+=c;
+  }
+  const out=new Set();
+  const re=/\b[a-zA-Z_]\w*\b/g;let m;
+  while((m=re.exec(code))){
+    let j=m.index-1;while(j>=0&&/\s/.test(code[j]))j--;
+    if(j>=0&&code[j]==='.'&&!(j>0&&code[j-1]==='.'))continue; // property name, not a variable read
+    out.add(m[0]);
+  }
+  return [...out];
+}
 function _detectSafeSinkShape(vuln, args, ctx){
   // 1.1: Reflected XSS / SSRF / Path Traversal / Open Redirect / Code Injection
   // sinks with empty or whitespace-only args cannot reflect user input — skip
@@ -1766,7 +1802,10 @@ function _detectSafeSinkShape(vuln, args, ctx){
   if(/Open Redirect/.test(vuln)) {
     // Static redirect targets (env var or string literal) are not user-controlled
     if (/^\s*process\.env\b/.test(args)) return 'static-redirect-target';
-    if (/^\s*['"`]/.test(args)) return 'static-redirect-target';
+    // A literal that fixes the origin ('/user/' + id) cannot be steered off-origin by the
+    // appended part; a literal that does not ('/' + x, '//' + x, '' + x) can, so the mere
+    // presence of a leading quote is not evidence of a static target.
+    if (/^\s*['"`]/.test(args) && redirectArgumentPinsOrigin(args)) return 'static-redirect-target';
   }
   if(/IDOR/.test(vuln)) {
     if (_IDOR_OWNERSHIP_RE.test(args)) return 'ownership-clause';
@@ -1919,11 +1958,11 @@ function performRegexAnalysis(fp,raw){if(_INTENTIONAL_VULN_PATH_RE.test(fp.repla
     const line=lineAt(cleaned,m.index);const lt=lines[line-1]||"";
     // FP-7: per-pattern surrounding-context gate — required call must appear in nearby lines
     if(sp.contextRe){const surround=lines.slice(Math.max(0,line-5),Math.min(lines.length,line+2)).join("\n");if(!sp.contextRe.test(surround))continue;}
-    const af=raw.substring(m.index,Math.min(raw.length,m.index+500));const am=af.match(/\(((?:[^()]|\([^()]*\)){0,400})\)/);const args=am?am[1]:"";const uv=[...new Set((args.match(/\b[a-zA-Z_]\w*\b/g)||[]).filter(v=>!["true","false","null","undefined","const","let","var","function","return","if","else","new","this","async","await","typeof","instanceof","void"].includes(v)&&v.length>1))];const safeShape=_detectSafeSinkShape(sp.vuln,args,{lines,line});sinks.push({type:sp.type,severity:sp.severity,vuln:sp.vuln,cwe:sp.cwe,stride:sp.stride,line,file:fp,snippet:lt.trim(),usedVars:uv,args:args.trim(),safeShape});}}
+    const af=raw.substring(m.index,Math.min(raw.length,m.index+500));const am=af.match(/\(((?:[^()]|\([^()]*\)){0,400})\)/);const args=am?am[1]:"";const uv=_usedIdentifiers(args).filter(v=>!["true","false","null","undefined","const","let","var","function","return","if","else","new","this","async","await","typeof","instanceof","void"].includes(v)&&v.length>1);const safeShape=_detectSafeSinkShape(sp.vuln,args,{lines,line});sinks.push({type:sp.type,severity:sp.severity,vuln:sp.vuln,cwe:sp.cwe,stride:sp.stride,line,file:fp,snippet:lt.trim(),usedVars:uv,args:args.trim(),safeShape});}}
   for(const sp of SANITIZER_PATTERNS){const re=new RegExp(sp.regex.source,sp.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const lt=lines[line-1]||"";const am=lt.match(/(?:const|let|var|)\s*(\w+)\s*=/)||lt.match(/(\w+)\s*=/);sanitizers.push({type:sp.type,line,file:fp,snippet:lt.trim(),outputVar:am?am[1]:null});}}
   const tv=new Map();for(const src of sources)if(src.variable)tv.set(src.variable,{source:src,path:[{type:"source",label:"Input: "+src.label,line:src.line,snippet:src.snippet}],sanitized:false,sanitizerType:null});
   for(let i=0;i<lines.length;i++){const lt=lines[i];const am=lt.match(/\b(?:const|let|var)\s+(\w+)(?:\s*:[^=]+?)?\s*=\s*(.+)/)||lt.match(/(?:const|let|var|)\s*(\w+)\s*=(?!=)\s*(.+)/);if(!am)continue;const[,dv,rhs]=am;if(tv.has(dv))continue;for(const[tn,ti]of tv){if(!new RegExp(`\\b${tn}\\b`).test(rhs))continue;let san=false,st=null;for(const s of sanitizers)if(s.line===i+1){san=true;st=s.type;break;}if(!san)for(const sp of SANITIZER_PATTERNS)if(new RegExp(sp.regex.source,sp.regex.flags).test(rhs)){san=true;st=sp.type;break;}tv.set(dv,{source:ti.source,path:[...ti.path,{type:san?"sanitizer":"propagation",label:san?`${st} on ${dv}`:`Assigned to "${dv}"`,line:i+1,snippet:lt.trim(),sanitized:san,sanitizerType:st}],sanitized:san,sanitizerType:st});break;}}
-  for(const sink of sinks){const safeShapeDowngrade=sink.safeShape?{isSan:true,sanType:sink.safeShape}:null;for(const src of sources){const sv=src.variable;let reached=false,pp=[],isSan=false,st=null;if(sv&&sink.usedVars.includes(sv)){const ti=tv.get(sv);if(ti){reached=true;pp=ti.path;isSan=!!ti.sanitized;st=ti.sanitizerType;}}if(!reached)for(const uv of sink.usedVars)if(tv.has(uv)){const ti=tv.get(uv);if(ti.source===src||ti.source.label.includes(src.label)){reached=true;pp=ti.path;isSan=!!ti.sanitized;st=ti.sanitizerType;break;}}if(!reached&&sv&&sink.line>=src.line&&sink.line-src.line<200&&((sink.args&&new RegExp(`\\b${sv}\\b`).test(sink.args))||lines.slice(Math.max(0,sink.line-10),sink.line+5).some(l=>{const re=new RegExp(`\\b${sv}\\b`);if(!re.test(l))return false;/* skip re-declarations: different binding, not a use */if(new RegExp(`\\b(?:const|let|var|function|def)\\s+${sv}\\b`).test(l))return false;return true;}))){reached=true;pp=[{type:"source",label:"Input: "+src.label,line:src.line,snippet:src.snippet}];
+  for(const sink of sinks){const safeShapeDowngrade=sink.safeShape?{isSan:true,sanType:sink.safeShape}:null;for(const src of sources){const sv=src.variable;let reached=false,pp=[],isSan=false,st=null;if(sv&&sink.usedVars.includes(sv)){const ti=tv.get(sv);if(ti){reached=true;pp=ti.path;isSan=!!ti.sanitized;st=ti.sanitizerType;}}if(!reached)for(const uv of sink.usedVars)if(tv.has(uv)){const ti=tv.get(uv);if(ti.source===src||ti.source.label.includes(src.label)){reached=true;pp=ti.path;isSan=!!ti.sanitized;st=ti.sanitizerType;break;}}if(!reached&&sv&&sink.line>=src.line&&sink.line-src.line<200&&((sink.args&&sink.usedVars.includes(sv))||lines.slice(Math.max(0,sink.line-10),sink.line+5).some(l=>{if(!_usedIdentifiers(l).includes(sv))return false;/* skip re-declarations: different binding, not a use */if(new RegExp(`\\b(?:const|let|var|function|def)\\s+${sv}\\b`).test(l))return false;return true;}))){reached=true;pp=[{type:"source",label:"Input: "+src.label,line:src.line,snippet:src.snippet}];
 // FP-3: only credit a sanitizer here if it has a captured outputVar AND that var
 // is what reaches the sink. A bare `escape(s);` (return discarded) does NOT count.
 for(const san of sanitizers){
@@ -2055,6 +2094,9 @@ const STRUCTURAL_VULN_PATTERNS=[
   // ── XSS / Output Encoding ─────────────────────────────────────────────────
   {regex:/res\s*\.\s*(?:send|write|end)\s*\([^;)]*(?:req\.|\.body\.|\.query\.|\.params\.)[^;)]{0,200}\)/g,
    type:"HTTP Response",vuln:"Reflected XSS (User Input in Response)",severity:"high",cwe:"CWE-79",stride:"Tampering",
+   // The call text mentions `req.`, which also carries session, user and app state. Fire only when the
+   // arguments reflect raw request INPUT (body/query/params/headers/...) that is not inside an HTML escaper.
+   predicate:(_m,ctx)=>{const r=responseReflectsRequestInputAt(ctx.lines,ctx.line);return r===false?{fire:false,reason:'no-raw-request-input'}:{fire:true};},
    fix:"Encode all user-supplied data with escapeHtml() before sending in responses"},
   {regex:/bypassSecurityTrust(?:Html|Script|Style|Url|ResourceUrl)\s*\(/g,
    type:"Angular Trust Bypass",vuln:"Angular DomSanitizer Bypass (XSS)",severity:"critical",cwe:"CWE-79",stride:"Tampering",
@@ -2292,6 +2334,9 @@ const STRUCTURAL_VULN_PATTERNS=[
   // ── #25: Synchronous blocking I/O in server context (DoS) ───────────────────
   {regex:/\b(?:fs\.readFileSync|fs\.writeFileSync|fs\.appendFileSync|fs\.readdirSync|fs\.statSync|fs\.existsSync|crypto\.pbkdf2Sync)\s*\(/g,
    type:"Blocking I/O",vuln:"Synchronous Blocking I/O (DoS Risk in Server Context)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",appliesTo:["server"],
+   // Only a blocking call made while serving stalls other work. At module/initialisation level (reading a TLS
+   // key or config once at startup) it delays startup once; nothing is waiting on the event loop yet.
+   predicate:(_m,ctx)=>ctx.haystack&&Number.isInteger(ctx.index)&&!insideFunctionBody(ctx.haystack,ctx.index)?{fire:false,reason:'module-init-scope'}:{fire:true},
    fix:"Replace with async equivalents: fs.promises.readFile(), fs.promises.stat(), util.promisify(crypto.pbkdf2)()"},
   // ── #26: Body parser without size limit (DoS — large payload / Billion Laughs) ─
   {regex:/(?:app|router)\s*\.\s*use\s*\(\s*express\s*\.\s*(?:json|urlencoded)\s*\(\s*\)\s*\)/g,
@@ -2524,7 +2569,7 @@ function scanStructuralVulns(fp, raw, _suppOut) {
       // FP-8: per-pattern predicate gate. If `predicate` returns {fire:false},
       // the finding is suppressed (and logged for --include-suppressed).
       if (typeof pat.predicate === 'function') {
-        const verdict = pat.predicate(m[0], { file: fp, line, snippet, lines, raw, cleanedNoise });
+        const verdict = pat.predicate(m[0], { file: fp, line, snippet, lines, raw, cleanedNoise, haystack, index: m.index });
         if (verdict && !verdict.fire) {
           _supp.push({vuln:pat.vuln, file:fp, line, snippet, reason:'predicate-pass:'+(verdict.reason||'ok')});
           continue;
@@ -2846,6 +2891,10 @@ function _pragmaSuppresses(pragma, f){
 // `line` property at all (the line survives only inside the id string, e.g.
 // `struct:app.js:22:Mass_Assignment`), so a false positive from one of those
 // cannot be silenced by a pragma and has to be fixed at the source instead.
+// UPDATE: `backfillFindingDefaults` now sets `line` from `sink.line` (then `source.line`) when a
+// detector left it off, so the line-less population is dependency and file-level findings. This
+// function already read `f.sink?.line`, so the backfill mostly makes the schema's `line` true rather
+// than newly enabling suppression.
 //
 // A file-scoped fallback was considered and REJECTED. Widening a line pragma to
 // a whole file would silently suppress findings the author never looked at, and
@@ -9466,7 +9515,15 @@ function _deterministicFileTimings(timings) {
   // import) for projects that contain no Java. `runFullScan` is already async,
   // so the await costs nothing structurally.
   const _hasJava = Object.keys(fc || {}).some(f => /\.java$/i.test(f));
-  const _buildIR = async () => (_hasJava ? await buildProjectIRAsync(fc) : buildProjectIR(fc));
+  // DAG-05: with the cross-scan cache on, an unchanged JavaScript/TypeScript file is read back from the IR cache
+  // instead of parsed again (dataflow/ir-cache.js; the content is the same, only the cost differs).
+  const _buildIR = async () => {
+    let irCache = null;
+    if (process.env.AGENTIC_SECURITY_INCREMENTAL === '1' && scanRoot) {
+      try { irCache = openIrCache(scanRoot); } catch { irCache = null; }
+    }
+    return _hasJava ? await buildProjectIRAsync(fc, { irCache }) : buildProjectIR(fc, { irCache });
+  };
   const _irStatsTarget = irStatsTarget();
   if (_irStatsTarget) {
     try {

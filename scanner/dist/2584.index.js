@@ -1430,7 +1430,7 @@ async function diagnosticsOf(scan) {
   try { wanted = JSON.parse(process.env.AGENTIC_SECURITY_DIAG_FILES || '[]'); } catch { wanted = []; }
   if (wanted.length) {
     try {
-      const irMod = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 28149));
+      const irMod = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 98297));
       irMod._resetIrParseFailures();
       const ir = await irMod.buildProjectIRAsync(Object.fromEntries(wanted.filter((f) => scan.fc && typeof scan.fc[f] === 'string').map((f) => [f, scan.fc[f]])));
       for (const f of wanted) {

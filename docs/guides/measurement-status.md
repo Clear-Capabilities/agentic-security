@@ -67,7 +67,7 @@ They are not accuracy, and none of them is a claim about real code.
 
 | Command | Population | Printed result |
 |---|---|---|
-| `npm run evaluation:synthetic` | 3 authored files | deterministic-only 5/5 completed, recall 0.0%; deep-taint 5/5, recall 100.0%, precision 66.7%, F1 80.0%; model-assisted 0/5 completed (no endpoint), recall 0.0%; real-code gates `insufficient-population` |
+| `npm run evaluation:synthetic` | 3 authored files | deterministic-only 5/5 completed, recall 100.0%, precision 66.7%, F1 80.0%; deep-taint 5/5, recall 100.0%, precision 66.7%, F1 80.0%; model-assisted 0/5 completed (no endpoint), recall 0.0%; real-code gates `insufficient-population` |
 | `npm run evaluation -- deployment-ablation` | 7 cases, 14 instances, synthetic | source-only TP 4, FP 4, FN 3; graph-enabled TP 7, FP 2, FN 0; paired: false positives reduced 3, confirmed defects added 3, baseline defects lost 0, false positives added 1; real-code gates `unmeasured` |
 | `npm run bench:invariant-ablation -- run` | 15 synthetic cases (8 defective, 7 valid) | source-only recall 0/8; inferred contract precision 4/4, recall 4/8; approved contract precision 8/8, recall 8/8; the figures exercise the comparison and are flagged synthetic |
 | `npm run reproduce:mini` | 3 authored files, 5 negative controls | every control behaved; 95% interval on F1 `unmeasured`; real-code gates `insufficient-population` |

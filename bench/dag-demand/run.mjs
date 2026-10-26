@@ -129,6 +129,18 @@ function runWorkload(name, files, opts = {}) {
       unresolvedCallees: res.selectorCoverage.unresolvedCallees.length,
     });
   }
+  // The same sample answered as ONE batch (runDemandQueries): fallbacks share a
+  // single full engine run. Measured, not derived; compared with answering every
+  // question independently (the sum of the single-query medians above) and with
+  // running the full analysis once.
+  const batchTimes = [];
+  let batchRes = null;
+  for (let r = 0; r < REPEAT; r++) {
+    const [ms, v] = timeIt(() => D.runDemandQueries(prog.perFileIR, prog.callGraph, sample, { cache: false, graphDigest: 'bench', configDigest: 'bench', engineOpts }));
+    batchTimes.push(ms); batchRes = v;
+  }
+  const batchMs = median(batchTimes);
+  const batchParity = batchRes.every((res, i) => D.compareToFull(res, D.runFullSinkQuery(prog.perFileIR, prog.callGraph, sample[i], { graphDigest: 'bench', configDigest: 'bench', engine: () => fullRaw })).equal);
   const dem = rows.map((r) => r.demandMs);
   const demMedian = median(dem);
   const demMean = dem.reduce((a, b) => a + b, 0) / (dem.length || 1);
@@ -142,6 +154,13 @@ function runWorkload(name, files, opts = {}) {
     speedupSingleQuery: fullMs / demMedian,
     speedupSingleQueryMean: fullMs / demMean,
     speedupSingleQueryColdIndex: fullMs / (demMedian + indexMs),
+    // the strictest single-query figure: also pays the graph digest a first query computes
+    speedupSingleQueryColdAll: fullMs / (demMedian + indexMs + digestMs),
+    // fallbacks included: the mean over the sample, one index and digest paid on top
+    speedupMeanColdAll: fullMs / (demMean + indexMs + digestMs),
+    batchMeasuredMs: batchMs, batchRunsMs: batchTimes, batchParity,
+    batchVsIndependent: dem.reduce((a, b) => a + b, 0) / batchMs,
+    batchVsFullOnce: fullMs / batchMs,
     breakEvenQueries: fullMs / demMean,
     batchSpeedup: fullMs / (demMean * rows.length),
     batchSpeedupIncludingIndex: fullMs / (indexMs + demMean * rows.length),
@@ -156,7 +175,7 @@ function runWorkload(name, files, opts = {}) {
     },
     queriesWithFlow: rows.filter((r) => r.findings > 0).length,
   };
-  log(`full=${fullMs.toFixed(0)}ms demand median=${demMedian.toFixed(1)}ms mean=${demMean.toFixed(1)}ms speedup(single warm index)=${summary.speedupSingleQuery.toFixed(2)}x cold-index=${summary.speedupSingleQueryColdIndex.toFixed(2)}x index=${indexMs.toFixed(0)}ms batch(${rows.length})=${summary.batchSpeedup.toFixed(2)}x parity=${summary.parityAll} fallbacks=${summary.lostCoverage.fellBackToFull} partial=${summary.lostCoverage.partial}`);
+  log(`full=${fullMs.toFixed(0)}ms demand median=${demMedian.toFixed(1)}ms mean=${demMean.toFixed(1)}ms speedup(single warm index)=${summary.speedupSingleQuery.toFixed(2)}x cold-index=${summary.speedupSingleQueryColdIndex.toFixed(2)}x index=${indexMs.toFixed(0)}ms cold-all=${summary.speedupSingleQueryColdAll.toFixed(2)}x mean+index=${summary.speedupMeanColdAll.toFixed(2)}x batch(${rows.length}) measured=${batchMs.toFixed(0)}ms (${summary.batchVsIndependent.toFixed(2)}x vs independent, ${summary.batchVsFullOnce.toFixed(2)}x vs one full run, parity=${batchParity}) parity=${summary.parityAll} fallbacks=${summary.lostCoverage.fellBackToFull} partial=${summary.lostCoverage.partial}`);
   return { summary, rows };
 }
 

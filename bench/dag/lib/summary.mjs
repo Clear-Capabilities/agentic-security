@@ -45,7 +45,7 @@ export function renderSummary(out, manifest, { realLabels, fixtureLabelsDoc }) {
 
   p('## Held-out subset');
   p();
-  p('A label is held out when the first byte of sha256(label id) is divisible by 3. The split depends on the id only. Nothing in this benchmark tunes the scanner, and the scanner was not edited by this workstream; the held-out subset exists so that anyone who does tune against the development labels has a subset they must leave alone. Disclosure: the same person wrote every label and chose negatives after looking at which sites the scanner reported on, so even the held-out subset is not independent of the labeller.');
+  p('A label is held out when the first byte of sha256(label id) is divisible by 3. The split depends on the id only. The benchmark itself never tunes the scanner. The scanner precision changes recorded in docs/implementation-status/dag-improvements.md were diagnosed from the labeled false-positive sites of BOTH columns (the baseline lists every site), so for those changes the held-out column is not held out; what guards against fitting is that each change is a general rule with a both-directions test in bench/mutation and the recall gates unchanged. Anyone who tunes further should leave the held-out subset alone. Disclosure: the same person wrote every label and chose negatives after looking at which sites the scanner reported on, so even the held-out subset is not independent of the labeller.');
   p();
   p(table(['Language', 'Development', 'Held-out'], langs.map((l) => {
     const x = out.languages[l];

@@ -1,0 +1,9 @@
+{
+  "name": "25-class-closure-and-alias",
+  "construct": "an instance field read inside a closure of a method, directly through this and through an alias of this (the closure resolves to its enclosing class; the engine reports no flow for JavaScript field writes, and demand agrees without falling back)",
+  "cha": true,
+  "expect": [
+    { "file": "app.js", "line": 6, "flow": false },
+    { "file": "app.js", "line": 9, "flow": false }
+  ]
+}

@@ -1,12 +1,11 @@
 {
   "name": "13-instance-field",
-  "construct": "instance field written in one method and read in another (selector cannot follow; expands to full)",
+  "construct": "instance field written in one method and read in another (class-scoped expansion selects the class methods; no CHA, so the engine itself couples nothing)",
   "expect": [
     {
       "file": "app.js",
       "line": 5,
       "flow": false
     }
-  ],
-  "expectFallback": "unsupported:instance-field"
+  ]
 }

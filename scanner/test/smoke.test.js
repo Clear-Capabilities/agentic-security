@@ -376,7 +376,8 @@ test('Feat-1: Python in-file helper flow — request.args → helper(param) → 
   const sqli = normalizeFindings(scan).filter(f => /SQL Injection/.test(f.vuln));
   assert.ok(sqli.length >= 1, `expected ≥1 SQL Injection finding, got ${sqli.length}`);
   // Finding should land on the helper body where cursor.execute lives, NOT just on the source line
-  const onHelper = sqli.some(f => /lookup_user|app\.py:1[01]/.test(`${f.file}:${f.line}`));
+  // (a flow-pair finding's line is its sink line, backfilled by finding-defaults: the cursor.execute on line 13)
+  const onHelper = sqli.some(f => /lookup_user|app\.py:1[1-3]$/.test(`${f.file}:${f.line}`));
   assert.ok(onHelper, `expected a finding inside the helper body; got: ${sqli.map(f=>f.file+':'+f.line).join(', ')}`);
 });
 

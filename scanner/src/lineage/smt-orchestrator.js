@@ -10,12 +10,14 @@
 //   * honest: no solver reports `unsupported`, a deadline reports `timeout`, a malformed or failing solver
 //     reports `unknown`. None of these ever drops or downgrades the finding. The abstract result is kept.
 //
-// No solver ships here and no dependency is added. `noSolver` is the default stub. A real solver is an
+// `noSolver` is the default stub. The real backend is smt-z3-backend.js (optional `z3-solver`, lazy, used only
+// when a solver is passed in or AGENTIC_SECURITY_LINEAGE_SMT=z3 is set). A solver is an
 // object with `{ name, version?, available?, check(problem, { signal }) -> Promise<{ result }> }` where
 // `result` is 'sat' | 'unsat' | 'unknown'. `problem` is the solver-neutral view from `toSolverProblem`.
 // Satisfiability never implies exploitability.
 
 import { evaluateWitnessConditions, toSolverProblem, PATH_PREDICATE_VERSION, SATISFIABILITY_NOTE } from './path-predicates.js';
+import { sharedZ3Solver, smtBackendEnabled } from './smt-z3-backend.js';
 
 export const SOLVER_DEFAULT_TIMEOUT_MS = 1000;
 export const SOLVER_TIMEOUT_MAX_MS = 60_000;
@@ -26,7 +28,17 @@ export const noSolver = Object.freeze({
   async check() { return { result: 'unsupported' }; },
 });
 
-const MAP = Object.freeze({ sat: 'feasible-model', unsat: 'infeasible-under-model', unknown: 'unknown' });
+const MAP = Object.freeze({ sat: 'feasible-model', unsat: 'infeasible-under-model', unknown: 'unknown', timeout: 'timeout' });
+
+/**
+ * The solver a call uses. An explicit `solver` always wins. Otherwise the real z3 backend is used only when
+ * AGENTIC_SECURITY_LINEAGE_SMT=z3 is set (it loads lazily and reports `unsupported` if the optional package
+ * is missing); with nothing set the default is `noSolver`, so a default run never loads a solver.
+ */
+export function resolveSolver(solver, env = process.env) {
+  if (solver !== undefined) return solver;
+  return smtBackendEnabled(env) ? sharedZ3Solver() : noSolver;
+}
 
 /** Render the problem as SMT-LIB 2 text for a solver adapter that wants text. Opaque predicates become comments. */
 export function toSmtLib(problem) {
@@ -65,7 +77,8 @@ function boundedTimeout(ms) {
  *
  * @returns {Promise<{status:string, reasons:string[], solver:object, elapsedMs:number, semanticsVersion:string, limitations:string[]}>}
  */
-export async function checkWithSolver(collected, { solver = noSolver, timeoutMs, signal, now = Date.now } = {}) {
+export async function checkWithSolver(collected, { solver: solverOpt, timeoutMs, signal, now = Date.now } = {}) {
+  const solver = resolveSolver(solverOpt);
   const started = now();
   const info = { name: solver?.name ?? 'unknown', version: solver?.version ?? null };
   const out = (status, reasons, extra = {}) => ({
@@ -101,9 +114,10 @@ export async function checkWithSolver(collected, { solver = noSolver, timeoutMs,
     if (r && r.__timeout) { ac.abort(); return out('timeout', ['solver-deadline']); }
     if (r && r.__cancelled) { ac.abort(); return out('unknown', ['cancelled']); }
     const status = isObjectWithResult(r) ? MAP[r.result] : undefined;
-    if (r?.result === 'unsupported') return out('unsupported', ['solver-declined']);
+    if (r?.result === 'unsupported') return out('unsupported', ['solver-declined', ...(typeof r.reason === 'string' ? [r.reason] : [])]);
     if (!status) return out('unknown', ['solver-malformed']);
-    return out(status, [`solver-${r.result}`], r.result === 'sat' && r.model && typeof r.model === 'object' ? { model: r.model } : {});
+    const why = typeof r.reason === 'string' ? [r.reason] : [];
+    return out(status, [`solver-${r.result}`, ...why], r.result === 'sat' && r.model && typeof r.model === 'object' ? { model: r.model } : {});
   } catch {
     return out('unknown', ['solver-error']);
   } finally {
@@ -121,18 +135,40 @@ function isObjectWithResult(r) { return typeof r === 'object' && r !== null && t
  */
 export async function evaluateWitnessConditionsAsync(collected, o = {}) {
   const abstract = evaluateWitnessConditions(collected, o);
-  if (abstract.status !== 'unknown') return { ...abstract, abstractStatus: abstract.status, solverConsulted: false };
+  const consultFeasible = o.consultOnFeasible ?? smtBackendEnabled();
+  const refine = abstract.status === 'feasible-model' && consultFeasible && abstract.clauseRefs.length > 0;
+  if (abstract.status !== 'unknown' && !refine) return { ...abstract, abstractStatus: abstract.status, solverConsulted: false };
   const s = await checkWithSolver(collected, o);
-  if (s.status === 'unsupported') return { ...abstract, abstractStatus: abstract.status, solverConsulted: false, solver: s.solver, solverStatus: 'unsupported' };
+  const kept = { ...abstract, abstractStatus: abstract.status };
+  // Branch arms of one branch inside a loop may belong to different iterations. The solver's problem carries no
+  // iteration structure, so its `unsat` there is not evidence of infeasibility: the answer stays `unknown`.
+  const loopArms = abstract.reasons.includes('branch-arms-in-loop');
+  if (refine) {
+    // On a feasible-model answer ONLY a solver unsat changes anything; every other outcome keeps the abstract result.
+    if (s.status === 'infeasible-under-model' && !loopArms) return unsatResult(abstract, s);
+    return { ...kept, solverConsulted: s.status !== 'unsupported', solver: s.solver, solverStatus: s.status, elapsedMs: s.elapsedMs };
+  }
+  if (s.status === 'unsupported') return { ...kept, solverConsulted: false, solver: s.solver, solverStatus: 'unsupported' };
   if (s.status === 'timeout') {
-    return { ...abstract, status: 'timeout', reasons: [...abstract.reasons, 'solver-deadline'], abstractStatus: abstract.status, solverConsulted: true, solver: s.solver, solverStatus: 'timeout', elapsedMs: s.elapsedMs };
+    return { ...kept, status: 'timeout', reasons: [...abstract.reasons, 'solver-deadline'], solverConsulted: true, solver: s.solver, solverStatus: 'timeout', elapsedMs: s.elapsedMs };
+  }
+  if (s.status === 'infeasible-under-model' && loopArms) {
+    return { ...kept, solverConsulted: true, solver: s.solver, solverStatus: 'unknown', reasons: [...abstract.reasons, 'solver-unsat-not-trusted-in-loop'], elapsedMs: s.elapsedMs };
   }
   if (s.status === 'unknown') {
-    return { ...abstract, abstractStatus: abstract.status, solverConsulted: true, solver: s.solver, solverStatus: 'unknown', reasons: [...abstract.reasons, ...s.reasons], elapsedMs: s.elapsedMs };
+    return { ...kept, solverConsulted: true, solver: s.solver, solverStatus: 'unknown', reasons: [...abstract.reasons, ...s.reasons], elapsedMs: s.elapsedMs };
   }
+  if (s.status === 'infeasible-under-model') return unsatResult(abstract, s);
   return {
-    ...abstract, status: s.status, reasons: s.reasons, abstractStatus: abstract.status, solverConsulted: true, solver: s.solver, solverStatus: s.status,
+    ...kept, status: s.status, reasons: s.reasons, solverConsulted: true, solver: s.solver, solverStatus: s.status,
+    limitations: [...abstract.limitations, ...s.limitations], elapsedMs: s.elapsedMs, contradiction: null,
+  };
+}
+
+function unsatResult(abstract, s) {
+  return {
+    ...abstract, status: 'infeasible-under-model', reasons: s.reasons, abstractStatus: abstract.status, solverConsulted: true, solver: s.solver, solverStatus: s.status,
     limitations: [...abstract.limitations, ...s.limitations], elapsedMs: s.elapsedMs,
-    contradiction: s.status === 'infeasible-under-model' ? { kind: 'solver-unsat', refs: abstract.clauseRefs } : null,
+    contradiction: { kind: 'solver-unsat', refs: abstract.clauseRefs },
   };
 }

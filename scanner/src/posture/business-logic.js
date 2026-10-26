@@ -154,19 +154,28 @@ function collectStateSets(fileContents) {
 }
 
 function extractStateMachine(fileContents) {
-  // Then look for direct writes like `.status = "<not in set>"` and flag.
+  // Then look for direct writes like `.status = "<not in set>"` and flag. A write is
+  // compared only against the status sets declared in the SAME file: a set in one
+  // module says nothing about what another module's `.status` may hold, and matching
+  // every `.status =` in the repository against the first set found anywhere flags
+  // unrelated objects. Test files are skipped (they assign arbitrary states on purpose).
   const stateSets = collectStateSets(fileContents);
   if (!stateSets.length) return [];
+  const byFile = new Map();
+  for (const s of stateSets) {
+    if (!byFile.has(s.file)) byFile.set(s.file, []);
+    byFile.get(s.file).push(s);
+  }
   const findings = [];
-  for (const [fp, c] of Object.entries(fileContents || {})) {
-    if (typeof c !== 'string' || !JS_TS_RE.test(fp)) continue;
+  for (const [fp, sets] of byFile) {
+    const c = fileContents[fp];
+    if (typeof c !== 'string' || /(^|\/)(test|tests|__tests__|fixtures?)\//i.test(fp) || /\.(test|spec)\.[cm]?[jt]sx?$/i.test(fp)) continue;
     const writeRe = /\.\s*(?:status|state|phase)\s*=\s*['"]([^'"]+)['"]/g;
     let m;
     while ((m = writeRe.exec(c))) {
       const value = m[1];
-      const validSet = stateSets.find(s => s.values.size > 0);
-      if (!validSet) continue;
-      if (validSet.values.has(value)) continue;
+      if (sets.some(s => s.values.has(value))) continue;
+      const validSet = sets[0];
       const line = _lineOf(c, m.index);
       findings.push({
         id: `state-machine:${fp}:${line}:${value}`,
@@ -179,7 +188,7 @@ function extractStateMachine(fileContents) {
         parser: 'STATE-MACHINE',
         confidence: 0.5,
         snippet: m[0].slice(0, 200),
-        remediation: `The statuses recognized by your system appear to be {${[...validSet.values].join(', ')}}. This write sets a different value ('${value}'). If the new value is legitimate, add it to the set; otherwise treat the write as a state-machine bypass and reject it.`,
+        remediation: `The statuses recognized by this file appear to be {${[...validSet.values].join(', ')}}. This write sets a different value ('${value}'). If the new value is legitimate, add it to the set; otherwise treat the write as a state-machine bypass and reject it.`,
       });
     }
   }
