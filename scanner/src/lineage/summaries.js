@@ -1,5 +1,8 @@
 import { hashState, emptyState, addIdentity } from './field-identity.js';
-import { resolveExprIdentities, residualFlat, analyzeFunctionFieldIdentity } from './engine.js';
+import {
+  resolveExprIdentities, residualFlat, analyzeFunctionFieldIdentity,
+  argumentContext, callInvocationId, calleeRecorder,
+} from './engine.js';
 import { accessPathOf } from '../dataflow/access-paths.js';
 import { functionRecord } from '../ir/callgraph.js';
 
@@ -51,6 +54,13 @@ export class FieldIdentitySummaryCache {
     this._stack = new Set();
     this._contextsByQid = new Map();
     this._maxContextsPerFn = maxContextsPerFn;
+    // DAG-07 R07.3: degradations and unfinished refinements, recorded so a
+    // caller can tell a precise result from one that fell back. Append-only.
+    this._notes = [];
+  }
+
+  completionNotes() {
+    return this._notes.slice();
   }
 
   _key(qid, entryState) {
@@ -74,6 +84,21 @@ export class FieldIdentitySummaryCache {
   }
 
   compute(qid, entryState, analyzeFn) {
+    // While `qid` is marked by `refreshing()` (SCC solver only, driver.js): re-run `analyzeFn` for an
+    // entry that is ALREADY seeded in the cache, without the recursion-stub
+    // stack and without the bounded refinement loop. A self-call or a call
+    // to another member of the same component inside `analyzeFn` therefore
+    // reads the previous round's cached summary instead of a bottom stub.
+    // Never marked => behavior is byte-identical to before. The mark lives on
+    // the cache (not an argument) so wrappers around compute() stay valid.
+    if (this._refreshing && this._refreshing.get(qid) === hashState(entryState)) {
+      // Consume the mark: a nested call to the same context (a self-call)
+      // must take the normal path and hit the cached previous-round summary.
+      this._refreshing.delete(qid);
+      const refreshed = analyzeFn(entryState);
+      this.set(qid, entryState, refreshed);
+      return refreshed;
+    }
     // Ordering matches dataflow/summaries.js's own compute() exactly:
     // cache-hit checked FIRST, before the `_stack`-based recursion guard.
     // This is load-bearing, not incidental — B5's whole point is that a
@@ -130,6 +155,7 @@ export class FieldIdentitySummaryCache {
       // every later reader of the empty-entry context too.
       const base = this._cache.get(this._key(qid, emptyState())) ?? emptyFieldSummary();
       const fallback = { ...base, degradedReason: 'context-cap' };
+      this._notes.push({ qid, reason: 'context-cap' });
       this.set(qid, entryState, fallback);
       return fallback;
     }
@@ -219,12 +245,16 @@ export class FieldIdentitySummaryCache {
       // round) mirrors dataflow/summaries.js's own compute() exactly.
       if (this._hitRecursion) {
         const FP_MAX = 3;
+        let converged = false;
         for (let fp = 0; fp < FP_MAX; fp++) {
           const prev = summary;
           summary = analyzeFn(entryState);
-          if (fieldSummaryEq(prev, summary)) break;
+          if (fieldSummaryEq(prev, summary)) { converged = true; break; }
           this.set(qid, entryState, summary);
         }
+        // R07.3/R01.5: still changing after the last round means the
+        // summary is an under-approximation, not a fixed point.
+        if (!converged) this._notes.push({ qid, reason: 'recursion-nonconverged', rounds: FP_MAX });
       }
       // Defensive strip, mirroring dataflow's own equivalent: analyzeFn's
       // real return shape here never actually carries `_recursive` under
@@ -235,6 +265,28 @@ export class FieldIdentitySummaryCache {
       return summary;
     } finally {
       this._stack.delete(qid);
+    }
+  }
+
+  // Marks `qid` as being refreshed by the SCC solver for the duration of `fn`.
+  // Only the exact `entryState` context is refreshed; any other context of
+  // `qid` reached meanwhile (e.g. a call-site argument state) takes the normal
+  // guarded path, so recursion through it still terminates.
+  refreshing(qid, entryState, fn) {
+    (this._refreshing ||= new Map()).set(qid, hashState(entryState));
+    try { return fn(); } finally { this._refreshing.delete(qid); }
+  }
+
+  // Forgets every cached context of `qid` except those whose state hash is in
+  // `keepHashes` (a Set). Used by the SCC solver between rounds so a context
+  // computed against an earlier round's summaries is never reused.
+  dropContexts(qid, keepHashes = new Set()) {
+    const seen = this._contextsByQid.get(qid);
+    if (!seen) return;
+    for (const h of [...seen]) {
+      if (keepHashes.has(h)) continue;
+      this._cache.delete(`${qid}::${h}`);
+      seen.delete(h);
     }
   }
 
@@ -326,11 +378,11 @@ export function entryStateFromCall(paramNames, callArgs, callerState, ctx) {
   // call site) is load-bearing, not stylistic — it means no future second
   // caller of entryStateFromCall can reintroduce the hazard by passing the
   // full ctx through a different path.
-  const argCtx = ctx?.recordHop ? { recordHop: ctx.recordHop } : undefined;
   let entryState = emptyState();
   const n = Math.min(paramNames.length, callArgs.length);
   for (let i = 0; i < n; i++) {
     const paramName = paramNames[i];
+    const argCtx = argumentContext(ctx, i);
     const resolved = resolveExprIdentities(callerState, callArgs[i], argCtx);
     const residual = residualFlat(resolved.flat, resolved.byPath);
     for (const id of residual) entryState = addIdentity(entryState, paramName, id);
@@ -409,6 +461,12 @@ export function createCallSummaryResolver(cache, lookupCallee) {
             fromPath: null, toPath: path, dataElementId: id,
             syntacticPath: null, widenReason: null, lossReason: null,
             peerScope: qid, peerContext: calleeContext,
+            ...(ctx.correlationVersion === 2 ? {
+              callRole: 'bind', invocationId: callInvocationId(ctx),
+              formalPosition: fn.params.indexOf(path.split('.')[0]),
+              relPath: path.includes('.') ? path.slice(path.indexOf('.') + 1) : '',
+              toVersion: 'entry',
+            } : null),
           });
         }
       }
@@ -444,7 +502,11 @@ export function createCallSummaryResolver(cache, lookupCallee) {
       // deepest call always wins). Passing a `context` field here would be
       // silently overwritten and is dead code.
       const calleeCtx = ctx?.recordHop
-        ? { resolveCallSummary, recordHop: ctx.recordHop }
+        ? {
+            resolveCallSummary,
+            recordHop: ctx.correlationVersion === 2 ? calleeRecorder(ctx) : ctx.recordHop,
+            ...(ctx.correlationVersion === 2 ? { correlationVersion: 2 } : null),
+          }
         : { resolveCallSummary };
       const result = analyzeFunctionFieldIdentity(fn, es, calleeCtx);
       return summaryFromAnalysisResult(result);

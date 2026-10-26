@@ -203,6 +203,9 @@ Commands:
                                --filter <path.json>   {nodeIds,edgeIds} to scope the export (no-op + warning for csv/coverage)
                                --audience board|ciso|privacy|compliance|regulator|technical
                                                       (default: technical; briefing only — wording/verbosity, never facts)
+  dataflow plan-cuts [path] --candidates <file.json> --output <file> [--query <file.json>] [--format json|markdown]
+                               Plan a minimum-cost, hypothetical control placement (graph cut) over the
+                               already-scanned lineage graph. Never verifies a remediation.
   dataflow scenario apply [path] --operations <file.json> --output <file> [--format json|markdown]
                                Simulate a hypothetical architecture change against the
                                already-scanned lineage graph — never mutates the real scan.
@@ -3385,6 +3388,34 @@ async function cmdVerifyAttestation(args) {
     return 0;
   }
 
+  // DAG-10: a replayable path witness (schema: agentic-security/path-witness@1). The signature alone proves
+  // integrity; `--witness-artifacts <file.json>` ({graph, provenance, sources?, config?}) additionally replays
+  // the recorded path offline against the artifacts it names. Building a witness is a module API
+  // (posture/witness-bundle.js buildWitnessBundle): the hop stream it needs is not persisted by a scan.
+  const { WITNESS_SCHEMA, verifyWitness } = await import('../src/posture/witness-bundle.js');
+  if (bundle.schema === WITNESS_SCHEMA) {
+    let artifacts = null;
+    if (args.flags['witness-artifacts']) {
+      try { artifacts = JSON.parse(fs.readFileSync(path.resolve(args.flags['witness-artifacts']), 'utf8')); }
+      catch (e) { console.error(`Could not read witness artifacts: ${e.message}`); return 2; }
+    }
+    const w = verifyWitness(bundle, publicKeyPem, artifacts);
+    if (!w.signature.ok) { console.error(`✗ INVALID — ${w.signature.reason}`); return 1; }
+    if (w.replay.performed && !w.replay.ok) {
+      console.error('✗ INVALID — the signature holds but replay against the supplied artifacts failed:');
+      for (const x of w.replay.failures) console.error(`  - ${x.code}: ${x.detail}`);
+      return 1;
+    }
+    console.log(w.replay.performed
+      ? '✓ VALID — signature holds and the recorded path replays against the supplied artifacts.'
+      : '✓ SIGNATURE VALID (integrity only) — replay was not attempted; pass --witness-artifacts <file.json> to replay.');
+    console.log(`  completion: ${bundle.completion?.overall}   evidence: ${Object.entries(bundle.evidence || {}).map(([k, v]) => `${k}=${v.status}`).join('  ')}`);
+    console.log(`  proves:        ${w.statement.proves}`);
+    console.log(`  does NOT prove: ${w.statement.doesNotProve}`);
+    console.log(`  trust basis:   ${w.signature.trustBasis}`);
+    return 0;
+  }
+
   const r = verifyEvidenceBundle(bundle, publicKeyPem);
   if (!r.ok) {
     console.error(`✗ INVALID — ${r.reason}`);
@@ -4083,6 +4114,16 @@ async function cmdBoundaries(args) {
 // itself closes (idle-timeout auto-stop, or an external kill) — matching
 // every other cmdX(args) function's "resolves to an exit code" contract
 // while keeping the process alive for as long as the server is listening.
+// DAG-07 R07.2: show the graph's completion state wherever a graph is
+// loaded for display or export. Silent for a complete graph; for anything
+// else it says so on stderr, including when zero flows were projected.
+async function _printGraphCompletion(graph, who) {
+  try {
+    const { completionOfGraph, describeCompletion } = await import('../src/lineage/completion.js');
+    for (const line of describeCompletion(completionOfGraph(graph))) process.stderr.write(`${who}: ${line}\n`);
+  } catch { /* disclosure must never break the command */ }
+}
+
 async function cmdExplore(args) {
   // `explore . --runtime`: the runtime views are one static, script-free page, not a route on the hardened local server.
   if (args.flags.runtime) return cmdRuntimeExplorer(args, args._[1] || '.');
@@ -4095,6 +4136,7 @@ async function cmdExplore(args) {
     process.stderr.write(`agentic-security explore: ${loaded.message}\n`);
     return 1;
   }
+  await _printGraphCompletion(loaded.graph, 'agentic-security explore');
 
   let port = 0;
   if (args.flags.port !== undefined) {
@@ -4355,6 +4397,7 @@ async function cmdDataflowExport(args) {
     return 1;
   }
   const graph = loaded.graph;
+  await _printGraphCompletion(graph, 'agentic-security dataflow export');
   // Task-3 review finding (non-blocking, fixed): emitGraphDpiaArtifact's
   // own opts.generatedAt fallback is `new Date()` — omitting it here made
   // dpia/ropa the only two formats whose content reflects EXPORT-time
@@ -5091,6 +5134,49 @@ async function cmdDataflowScenarioApply(args) {
     process.stderr.write(`agentic-security dataflow scenario apply: could not write --output "${outputPath}": ${e && e.message ? e.message : e}\n`);
     return 2;
   }
+  return 0;
+}
+
+// agentic-security dataflow plan-cuts [path] --candidates <file.json>
+// --output <file> [--query <file.json>] [--format json|markdown] — DAG-09.
+// Plans a minimum-cost control placement over the already-scanned,
+// already-signed graph. HYPOTHETICAL: never writes remediation state or
+// the scan artifact. Exit codes: 0 success, 1 graph-load failure, 2
+// argument problem.
+async function cmdDataflowPlanCuts(args) {
+  const targetAbs = path.resolve(args._[2] || '.');
+  const candFlag = args.flags.candidates;
+  const outputPath = args.flags.output;
+  const format = args.flags.format || 'json';
+  if (!candFlag || typeof candFlag !== 'string') { process.stderr.write('agentic-security dataflow plan-cuts: --candidates <file> is required.\n'); return 2; }
+  if (!outputPath || typeof outputPath !== 'string') { process.stderr.write('agentic-security dataflow plan-cuts: --output <file> is required.\n'); return 2; }
+  if (format !== 'json' && format !== 'markdown') { process.stderr.write('agentic-security dataflow plan-cuts: --format must be one of json|markdown.\n'); return 2; }
+  let candidates; let query = {};
+  try {
+    candidates = JSON.parse(await fsp.readFile(path.resolve(candFlag), 'utf8'));
+    if (typeof args.flags.query === 'string') query = JSON.parse(await fsp.readFile(path.resolve(args.flags.query), 'utf8'));
+  } catch (e) { process.stderr.write(`agentic-security dataflow plan-cuts: could not read/parse input: ${e.message}\n`); return 2; }
+  if (!Array.isArray(candidates)) { process.stderr.write('agentic-security dataflow plan-cuts: --candidates must be a JSON array.\n'); return 2; }
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const loaded = loadSignedGraph(targetAbs);
+  if (!loaded.ok) { process.stderr.write(`agentic-security dataflow plan-cuts: ${loaded.message}\n`); return 1; }
+  const { planCuts } = await import('../src/lineage/cut-planner.js');
+  const plan = planCuts(loaded.graph, query, candidates);
+  let data;
+  if (format === 'json') data = JSON.stringify(plan, null, 2);
+  else {
+    const lines = ['# Control placement plan (hypothetical)', '', `Status: ${plan.status}. Total coverage: ${plan.completeness.totalCoverage}. Not verified.`, '', '## Proposed controls', ''];
+    for (const c of plan.cut.controls) lines.push(`- ${c.location.type} \`${c.location.id}\` (${c.semantics}, owner ${c.owner}, cost ${c.cost})`);
+    lines.push('', '## Residual bypass paths', '');
+    for (const r of plan.validation?.residualPaths ?? []) lines.push(`- to \`${r.sink}\` via ${r.nodes.map((n) => `\`${n}\``).join(' -> ')}`);
+    lines.push('', '## Limitations', '');
+    for (const l of plan.limitations) lines.push(`- ${l}`);
+    data = lines.join('\n') + '\n';
+  }
+  try {
+    await fsp.mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
+    await fsp.writeFile(path.resolve(outputPath), data);
+  } catch (e) { process.stderr.write(`agentic-security dataflow plan-cuts: could not write --output: ${e.message}\n`); return 2; }
   return 0;
 }
 
@@ -7966,6 +8052,7 @@ async function main() {
           }
           break;
         }
+        else if (sub === 'plan-cuts') { process.exit(await cmdDataflowPlanCuts(args)); }
         else if (sub === 'impact') {
           const impactSub = args._[2];
           if (impactSub === 'assess') { process.exit(await cmdDataflowImpactAssess(args)); }

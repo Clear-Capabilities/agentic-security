@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-19T22:00:43.621Z",
-  "commit": "14933b229bfe6b3908c4efb7a1b9da4c4f9959b3",
+  "generatedAt": "2026-10-25T16:52:11.235Z",
+  "commit": "f42dab4f2f65242d3186f3a32323447be92ff943",
   "targets": {
     "hooks": {
       "total": 21,
@@ -62,7 +62,7 @@
       }
     },
     "scanner/src": {
-      "total": 738,
+      "total": 756,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -90,9 +90,13 @@
         "context-intelligence/files.js": 1,
         "context-intelligence/findings.js": 1,
         "context-intelligence/store.js": 1,
-        "dataflow/cross-service-taint.js": 5,
+        "dataflow/CLAUDE.md": 1,
+        "dataflow/backward.js": 4,
+        "dataflow/cross-service-taint.js": 7,
+        "dataflow/dep-fingerprint.js": 1,
         "dataflow/exploit-prover.js": 1,
         "dataflow/ifds-precise.js": 3,
+        "dataflow/incremental-session.js": 1,
         "dataflow/incremental.js": 7,
         "dataflow/polyglot.js": 1,
         "dataflow/privacy-deep-walker.js": 2,
@@ -100,6 +104,7 @@
         "dataflow/privacy-sink-policy.js": 1,
         "dataflow/privacy-taxonomy.js": 1,
         "dataflow/service-edges.js": 1,
+        "dataflow/tabulation.js": 2,
         "discovery/memory.js": 1,
         "egress/audit.js": 1,
         "egress/policy.js": 1,
@@ -155,11 +160,14 @@
         "lineage/deployment/projection.js": 1,
         "lineage/deployment/trace-correlation.js": 1,
         "lineage/drift-policy.js": 1,
+        "lineage/driver.js": 1,
         "lineage/federation-loader.js": 2,
         "lineage/fixtures/build-flagship-fixture.mjs": 1,
+        "lineage/graph-builder.js": 3,
         "lineage/graph-snapshot.js": 4,
         "lineage/index.js": 1,
         "lineage/observation-store.js": 2,
+        "lineage/path-query.js": 3,
         "lineage/recipient-registry.js": 1,
         "lineage/remediation.js": 6,
         "lineage/runtime-assurance.js": 3,

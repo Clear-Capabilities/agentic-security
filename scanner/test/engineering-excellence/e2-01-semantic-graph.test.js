@@ -126,7 +126,14 @@ test('additive by construction: nothing on the scan path imports the graph, so f
   const offenders = [];
   const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.(js|mjs)$/.test(e.name) && !p.endsWith('ir/semantic-graph.js') && /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"][^'"]*semantic-graph(?:\.js)?['"]/.test(fs.readFileSync(p, 'utf8'))) offenders.push(path.relative(REPO, p)); } };
   walk(path.join(REPO, 'scanner/src')); walk(path.join(REPO, 'scanner/bin'));
-  assert.deepEqual(offenders, []);
+  // The read-only graph view adapter (DAG-06) wraps this graph for joins. It is
+  // itself imported by no scan-path module (checked next), so the scan path
+  // still cannot reach the semantic graph.
+  assert.deepEqual(offenders, ['scanner/src/graph/adapters/semantic.js']);
+  const viaViews = [];
+  const walk2 = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) { if (e.name !== 'graph') walk2(p); } else if (/\.(js|mjs)$/.test(e.name) && /from\s+['"][^'"]*\/graph\/(?:index|adapters|view|registry|crosswalk)[^'"]*['"]/.test(fs.readFileSync(p, 'utf8'))) viaViews.push(path.relative(REPO, p)); } };
+  walk2(path.join(REPO, 'scanner/src')); walk2(path.join(REPO, 'scanner/bin'));
+  assert.deepEqual(viaViews, [], 'no scan-path module may import the graph view layer');
 });
 
 test('the measured construct matrix is current, covers ten languages and seven constructs, and the contract doc matches it', () => {

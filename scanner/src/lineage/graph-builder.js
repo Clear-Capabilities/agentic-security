@@ -133,6 +133,8 @@ import { emptyProtection, aggregateVerdicts } from './protection.js';
 import * as ids from './ids.js';
 import { planSeeds, seedEntryStateFactory, exprRoots, walkExpr } from './source-seeding.js';
 import { RECIPIENT_FACT_FIELDS } from './recipient-profile.js';
+import { pathEvidenceEnabled, evaluatePathEvidence, summarizeFlowEvidence } from './path-evidence.js';
+import { sinkFamilyOf } from './control-credit.js';
 
 // =========================================================================
 // §4.2 / §4.3 — registry-backed sink enumeration, multi-candidate resolution
@@ -438,16 +440,46 @@ const nodeLabel = (kind, category, reason) => (category
  */
 export function buildDataFlowGraph(callGraph, opts = {}) {
   const repository = opts.repository ?? 'repo';
-  const { seeds, unseedable } = planSeeds(callGraph, { repository });
+  const { seeds, unseedable, completion: seedingCompletion } = planSeeds(callGraph, {
+    repository,
+    ...(opts.seeding ?? {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.deadline === undefined ? {} : { deadline: opts.deadline }),
+  });
   const hops = [];
-  runFieldIdentityAnalysis(callGraph, {
+  const analysis = runFieldIdentityAnalysis(callGraph, {
     recordHop: (h) => hops.push(h),
     seedEntryState: seedEntryStateFactory(seeds),
     ...(opts.maxContextsPerFn === undefined ? {} : { maxContextsPerFn: opts.maxContextsPerFn }),
+    ...(opts.maxIterations === undefined ? {} : { maxIterations: opts.maxIterations }),
+    // DAG-03: provenance correlation version 2 (off unless requested).
+    ...(opts.correlationVersion === undefined ? {} : { correlationVersion: opts.correlationVersion }),
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.deadline === undefined ? {} : { deadline: opts.deadline }),
     ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
   });
-  const store = new PathStore();
+  const store = new PathStore({}, { correlationVersion: opts.correlationVersion });
   store.addHops(hops);
+  // DAG-07 R07.2: an analysis unit that hit its budget has no hop
+  // representation (DESIGN_PATH_PROVENANCE.md section 14.8), so it reaches
+  // the store through the out-of-band channel built for exactly this. Units
+  // that emitted nothing stay visible through `analysisCompletion` below.
+  const analysisCompletion = { ...analysis.completion };
+  const _storeLimits = store.limitStatus();
+  if (_storeLimits.hit) {
+    analysisCompletion.storeLimits = _storeLimits;
+    if (analysisCompletion.status === 'complete') analysisCompletion.status = 'partial';
+  }
+  // R07.1: the seeding step's own record. Seeds the planner never reached
+  // mean functions whose sources were never looked for.
+  if (seedingCompletion.status !== 'complete') {
+    analysisCompletion.seeding = seedingCompletion;
+    if (seedingCompletion.status === 'cancelled') analysisCompletion.status = 'cancelled';
+    else if (analysisCompletion.status === 'complete') analysisCompletion.status = 'partial';
+  }
+  for (const u of analysisCompletion.incomplete) {
+    store.markTruncated(u.qid, u.context, u.reasons[0] ?? 'analysis-incomplete');
+  }
 
   const cfgByQid = new Map();
   for (const fn of callGraph.functions.values()) cfgByQid.set(fn.qid, { fn, nodes: fn.cfg?.nodes ?? {} });
@@ -740,7 +772,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
         // key by design and therefore never splits a flow.
         const flowKey = [src.id, snk.id, de.id, p.shape, g.grade, sortedT.join(',')].join('|');
         if (!groupsByFlowKey.has(flowKey)) groupsByFlowKey.set(flowKey, []);
-        groupsByFlowKey.get(flowKey).push({ p, g, src, snk, de, edgeIdStr, sortedT, site, unattributed, truncated: r.truncated, truncationReasons: r.truncationReasons });
+        groupsByFlowKey.get(flowKey).push({ p, g, src, snk, de, edgeIdStr, sortedT, site, unattributed, truncated: r.truncated, truncationReasons: r.truncationReasons, result: r });
       }
     }
     site.connected = connected;
@@ -749,6 +781,22 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     // reached it. A disconnected sink is a node with no flow, never absent.
     sinkNodeFor(site);
   }
+
+  // DAG-04: opt-in path predicates and control credit (see path-evidence.js).
+  const pathEvidenceOn = pathEvidenceEnabled(opts);
+  const _fnOf = (q) => cfgByQid.get(q)?.fn ?? null;
+  const pathEvidenceFor = (group) => {
+    const paths = group.map((x) => x.p);
+    const family = sinkFamilyOf(group[0].site.entry);
+    const evidences = paths.map((p) => evaluatePathEvidence({ path: p, nodeOf: (id) => store.getNode(id), fnOf: _fnOf, sinkFamily: family }));
+    const results = [...new Set(group.map((x) => x.result))];
+    const merged = {
+      status: results.every((x) => x.status === 'complete') ? 'complete' : 'partial',
+      truncated: results.some((x) => x.truncated), droppedPathCount: results.reduce((n, x) => n + (x.droppedPathCount ?? 0), 0),
+      analysisTruncated: results.some((x) => x.analysisTruncated), resumed: results.some((x) => x.resumed),
+    };
+    return summarizeFlowEvidence({ result: merged, paths, evidences });
+  };
 
   for (const [, group] of [...groupsByFlowKey.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     const { p, g, src, snk, de, edgeIdStr, sortedT, site } = group[0];
@@ -927,7 +975,16 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       limitations,
       evidenceGrade: g.grade,
       handling: handlingResult,
+      // DAG-04 (default OFF; fields exist only when enabled, so default graphs and digests do not move):
+      // per-path branch conditions, feasibility under the bounded model, and control credit for the sink
+      // family. Alternatives stay distinct; infeasible-under-model paths are listed, not dropped.
+      ...(pathEvidenceOn ? { pathEvidence: pathEvidenceFor(group) } : {}),
     });
+    if (pathEvidenceOn) {
+      const fe = edgesById.get(edgeIdStr);
+      const refs = [...new Set(flowsById.get(fId).pathEvidence.alternatives.flatMap((a) => a.predicateRefs.map((x) => x.ref)))].sort();
+      if (fe && refs.length) fe.predicateRefs = [...new Set([...(fe.predicateRefs ?? []), ...refs])].sort();
+    }
   }
 
   // Milestone 2, Sub-project D, increment 2 (FR-307): appliesToAllPaths.
@@ -1105,15 +1162,35 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     },
     degradedTerminals: degraded.length,
     paths: { enumerated: stats.pathsEnumerated, projected: stats.pathsProjected, truncatedQueries: stats.truncatedQueries },
-    provenance: { hops: hops.length, pnodes: store.stats().nodes, pedges: store.stats().edges },
+    provenance: {
+      hops: hops.length, pnodes: store.stats().nodes, pedges: store.stats().edges,
+      ...(store.correlationVersion() === 2 ? { correlationVersion: 2 } : null),
+    },
+    ...(analysisCompletion.status === 'complete' ? {} : { analysisCompletion }),
   };
   graph.limitations = [
     'Protection verdicts are not assessed in Milestone 1: every edge carries not_assessed/none on all three dimensions.',
     'Policy verdicts are not evaluated in Milestone 1.',
     'External destinations are not resolved (FR-202 is Milestone 2); protocol.destinationResolution is "unknown" on every edge.',
   ];
-  graph.scanHealth = { status: 'complete', reason: 'lineage-graph-builder' };
+  graph.scanHealth = analysisCompletion.status === 'complete'
+    ? { status: 'complete', reason: 'lineage-graph-builder', analysisCompletion }
+    : {
+        status: analysisCompletion.status === 'cancelled' ? 'cancelled' : 'partial',
+        reason: analysisCompletion.status === 'cancelled' ? 'analysis-cancelled' : 'analysis-incomplete',
+        analysisCompletion,
+      };
+  if (analysisCompletion.status !== 'complete') {
+    const parts = [];
+    if (analysisCompletion.incomplete.length) parts.push(`field analysis stopped early in ${analysisCompletion.incomplete.length} of ${analysisCompletion.functionsAnalyzed} function(s) (iteration budget)`);
+    if (analysisCompletion.status === 'cancelled') parts.push(`analysis was cancelled; ${analysisCompletion.functionsNotAnalyzed} function(s) were never analyzed`);
+    if (analysisCompletion.storeLimits) parts.push('provenance construction limits were reached, so some flows were not materialized');
+    if (analysisCompletion.seeding) parts.push(`source seeding stopped early (${analysisCompletion.seeding.reasons.join(', ')}); ${analysisCompletion.seeding.functionsNotScanned} function(s) were not searched for sources`);
+    if (analysisCompletion.incremental) parts.push('a cached summary stood in for a tainted entry context');
+    if (analysisCompletion.degraded.length) parts.push(`${analysisCompletion.degraded.length} call context(s) fell back to a coarser summary (context cap or unconverged recursion)`);
+    graph.limitations.push(`${parts.join('; ')}; absence of a flow from those functions is not evidence that none exists.`);
+  }
   graph.taxonomy = { version: '1.0.0', source: 'built-in + CONFIDENTIAL extension' };
 
-  return { graph, store, hops, seeds, unseedable, sites, nonStatementSites, degraded, stats, decisionsByNodeId };
+  return { graph, store, hops, analysisCompletion, seeds, unseedable, sites, nonStatementSites, degraded, stats, decisionsByNodeId };
 }

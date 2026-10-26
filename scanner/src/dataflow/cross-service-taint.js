@@ -63,6 +63,8 @@ import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 
 import { statePath } from '../posture/state-dir.js';
+import { runTaintEngine } from './engine.js';
+import { bindBoundaryContracts, boundaryAttribution, BOUNDARY_CONTRACTS_FILENAME, validateBoundaryContract } from '../lineage/boundary-contract.js';
 const SERVICES_FILE_NAMES = ['services.yml', 'services.yaml'];
 
 export function loadServiceGraph(scanRoot) {
@@ -342,4 +344,84 @@ export function runCrossServiceTaint(scanRoot, findings) {
   return annotateCrossServiceFindings(findings, graph, current);
 }
 
-export const _internals = { _normalizeGraph, SERVICES_FILE_NAMES, _pathTemplateMatches, _escapeRegex };
+// ─── DAG-08: boundary-contract consumer seeding ──────────────────────────────
+//
+// The SCOPE NOTE above stays true of the `consumes` annotation pass: it never invents a source. This section is the separate,
+// explicit mechanism that does. A versioned boundary contract (lineage/boundary-contract.js) that BINDS to a parser-resolved
+// consumer function and parameter seeds the declared, mapped fields of that parameter as a MODELED untrusted input. The seed is
+// handed to the engine through `fn.boundarySeeds` (read by engine.js's `_unionAnnotationTaint`) for the duration of one run and
+// always removed afterwards, so the shared call graph is never left seeded.
+//
+// A finding produced this way carries `boundary: {..., modeledInput: true, observed: false, exploited: false}`. A declaration
+// establishes where taint is assumed to enter; it never establishes that a value was seen or that the sink is exploitable. A
+// contract that does not bind produces a coverage gap and NO finding.
+
+const DEFAULT_MAX_BOUNDARY_RUNS = 64;
+
+function loadBoundaryContracts(scanRoot) {
+  if (!scanRoot) return { contracts: [], errors: [] };
+  const fp = statePath(scanRoot, BOUNDARY_CONTRACTS_FILENAME);
+  if (!fs.existsSync(fp)) return { contracts: [], errors: [] };
+  try {
+    const doc = JSON.parse(fs.readFileSync(fp, 'utf8'));
+    const list = Array.isArray(doc) ? doc : Array.isArray(doc && doc.contracts) ? doc.contracts : [];
+    return { contracts: list, errors: [] };
+  } catch (e) {
+    return { contracts: [], errors: [`Failed to parse ${fp}: ${e.message}`] };
+  }
+}
+
+/**
+ * Run the taint engine with each bound contract's consumer fields seeded, one seed at a time so a finding is attributed to the
+ * exact consumer field that reached it (a sibling field the contract does not map is never seeded and so never attributed).
+ * When `contracts` is null/undefined they are read from `<scanRoot>/.agentic-security/boundary-contracts.json` (opts.scanRoot).
+ * @returns {{findings: object[], bindings: object[], gaps: object[], rejected: object[], coverage: object, loadErrors: string[]}}
+ */
+export function runBoundaryTaint(perFileIR, callGraph, contracts, opts = {}) {
+  let loadErrors = [];
+  if (contracts === null || contracts === undefined) { const l = loadBoundaryContracts(opts.scanRoot); contracts = l.contracts; loadErrors = l.errors; }
+  const maxRuns = Number.isFinite(opts.maxRuns) ? opts.maxRuns : DEFAULT_MAX_BOUNDARY_RUNS;
+  const { bindings, gaps, rejected } = bindBoundaryContracts(contracts, callGraph);
+  const fnByQid = new Map();
+  for (const f of callGraph.functions.values()) fnByQid.set(f.qid, f);
+  const baseline = new Set(runTaintEngine(perFileIR, callGraph, opts.engine || {}).map((f) => f.id));
+  const found = new Map();
+  let runs = 0; let truncated = false;
+  for (const b of bindings) {
+    const fn = fnByQid.get(b.qid);
+    for (const seed of b.seeds) {
+      if (runs >= maxRuns) { truncated = true; break; }
+      runs++;
+      const prior = fn.boundarySeeds;
+      fn.boundarySeeds = [seed];
+      let out = [];
+      try { out = runTaintEngine(perFileIR, callGraph, opts.engine || {}); } finally { if (prior === undefined) delete fn.boundarySeeds; else fn.boundarySeeds = prior; }
+      const mapping = b.mappedFields.find((m) => seed.endsWith(`.${m.to}`) || seed === m.to) || null;
+      for (const f of out) {
+        if (baseline.has(f.id)) continue;
+        let rec = found.get(f.id);
+        if (!rec) { rec = { finding: { ...f }, attributions: [] }; found.set(f.id, rec); }
+        rec.attributions.push({ binding: b, seed, mapping });
+      }
+    }
+    if (truncated) break;
+  }
+  const findings = [...found.values()].map(({ finding, attributions }) => {
+    const first = attributions[0];
+    finding.boundary = {
+      ...boundaryAttribution(first.binding),
+      fields: attributions.map((a) => ({ seed: a.seed, producerField: a.mapping && a.mapping.from, consumerField: a.mapping && a.mapping.to })),
+      discoveredBy: 'boundary-contract-seed',
+    };
+    finding.boundarySeeded = true;
+    return finding;
+  }).sort((a, b) => (a.id < b.id ? -1 : 1));
+  const allGaps = [...gaps];
+  if (truncated) allGaps.push({ kind: 'budget', reason: 'engine-run-budget', detail: `stopped after ${maxRuns} seeded runs; remaining seeds were not analyzed` });
+  return {
+    findings, bindings, gaps: allGaps, rejected, loadErrors,
+    coverage: { contracts: (contracts || []).length, bound: bindings.length, unbound: gaps.filter((g) => g.side === 'consumer').length, rejected: rejected.length, engineRuns: runs, truncated },
+  };
+}
+
+export const _internals = { _normalizeGraph, SERVICES_FILE_NAMES, _pathTemplateMatches, _escapeRegex, validateBoundaryContract };

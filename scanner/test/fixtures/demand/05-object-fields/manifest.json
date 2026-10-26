@@ -1,0 +1,21 @@
+{
+  "name": "05-object-fields",
+  "construct": "sibling fields of one object; only one field is tainted",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 4,
+      "flow": false
+    },
+    {
+      "file": "app.js",
+      "line": 5,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 6,
+      "flow": false
+    }
+  ]
+}

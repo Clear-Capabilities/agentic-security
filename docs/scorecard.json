@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.184.0",
-    "bundleSha256": "67680e1b40c9d8dc41e14c0f181e2a7b2191c5c48fae1b2790415ac4793ff542",
-    "commit": "d5d7994d8b5138d32c016e97107430afa1ba03fc",
+    "engineVersion": "0.185.0",
+    "bundleSha256": "700ba9aab74ef1e22c747c34e44632f7fba6a6013380b187718bc13e3577817b",
+    "commit": "c7970d31c24661dc9869a149c8b9b3b870bb1b1f",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-20T16:49:30.363Z",
+    "generatedAt": "2026-10-25T18:26:20.512Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -600,7 +600,7 @@
         }
       },
       "scanner/src": {
-        "total": 738,
+        "total": 756,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -628,9 +628,13 @@
           "context-intelligence/files.js": 1,
           "context-intelligence/findings.js": 1,
           "context-intelligence/store.js": 1,
-          "dataflow/cross-service-taint.js": 5,
+          "dataflow/CLAUDE.md": 1,
+          "dataflow/backward.js": 4,
+          "dataflow/cross-service-taint.js": 7,
+          "dataflow/dep-fingerprint.js": 1,
           "dataflow/exploit-prover.js": 1,
           "dataflow/ifds-precise.js": 3,
+          "dataflow/incremental-session.js": 1,
           "dataflow/incremental.js": 7,
           "dataflow/polyglot.js": 1,
           "dataflow/privacy-deep-walker.js": 2,
@@ -638,6 +642,7 @@
           "dataflow/privacy-sink-policy.js": 1,
           "dataflow/privacy-taxonomy.js": 1,
           "dataflow/service-edges.js": 1,
+          "dataflow/tabulation.js": 2,
           "discovery/memory.js": 1,
           "egress/audit.js": 1,
           "egress/policy.js": 1,
@@ -693,11 +698,14 @@
           "lineage/deployment/projection.js": 1,
           "lineage/deployment/trace-correlation.js": 1,
           "lineage/drift-policy.js": 1,
+          "lineage/driver.js": 1,
           "lineage/federation-loader.js": 2,
           "lineage/fixtures/build-flagship-fixture.mjs": 1,
+          "lineage/graph-builder.js": 3,
           "lineage/graph-snapshot.js": 4,
           "lineage/index.js": 1,
           "lineage/observation-store.js": 2,
+          "lineage/path-query.js": 3,
           "lineage/recipient-registry.js": 1,
           "lineage/remediation.js": 6,
           "lineage/runtime-assurance.js": 3,
@@ -977,8 +985,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 382,
-    "d": 623
+    "n": 386,
+    "d": 639
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2192,9 +2200,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.184.0",
-    "commit": "d5d7994d8b5138d32c016e97107430afa1ba03fc",
-    "bundleSha256": "67680e1b40c9d8dc41e14c0f181e2a7b2191c5c48fae1b2790415ac4793ff542",
+    "engineVersion": "0.185.0",
+    "commit": "c7970d31c24661dc9869a149c8b9b3b870bb1b1f",
+    "bundleSha256": "700ba9aab74ef1e22c747c34e44632f7fba6a6013380b187718bc13e3577817b",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",

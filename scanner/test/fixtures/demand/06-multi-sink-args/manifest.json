@@ -1,0 +1,21 @@
+{
+  "name": "06-multi-sink-args",
+  "construct": "sinks whose tainted argument index matters",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 2,
+      "flow": false
+    },
+    {
+      "file": "app.js",
+      "line": 3,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 6,
+      "flow": true
+    }
+  ]
+}

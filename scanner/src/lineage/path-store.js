@@ -21,7 +21,11 @@
 // C5's job and C5's alone.
 //
 
+import { createHash } from 'node:crypto';
 import { provenanceNodeId, provenanceEdgeId } from './ids.js';
+import {
+  CORRELATION_VERSION_2, V2_HOP_FIELDS, resolveCorrelationVersion, pairCompatibility, buildCrosswalk,
+} from './correlation.js';
 
 // §3 + §13.0's exact 14-field hop shape, in a FIXED order. Never derive a
 // dedupe/discriminator key via `Object.keys(h)` — that is order-dependent,
@@ -40,8 +44,11 @@ export const HOP_FIELDS = [
 
 const IN_KINDS = new Set(['production', 'selection']);
 
-function hopDedupeKey(h) {
-  return HOP_FIELDS.map((f) => JSON.stringify(h[f] ?? null)).join('|');
+function hopDedupeKey(h, v2 = false) {
+  const base = HOP_FIELDS.map((f) => JSON.stringify(h[f] ?? null)).join('|');
+  // Version 2 hops carry additive evidence fields; two hops that differ only
+  // in that evidence are different hops. Version 1 never reads them.
+  return v2 ? `${base}|${V2_HOP_FIELDS.map((f) => JSON.stringify(h[f] ?? null)).join('|')}` : base;
 }
 
 function joinKeyOf(h) {
@@ -149,8 +156,31 @@ export function classifyOut(h) {
   return { role: 'unclassified', crossScope: false, node: null };
 }
 
+// DAG-07 R07.5: construction bounds. Hitting one never throws and never
+// silently drops: it is recorded in diagnostics().limits and makes every
+// reconstruction over this store report `store-limit` truncation.
+export const STORE_LIMIT_DEFAULTS = {
+  maxHops: 2000000,
+  maxPairingsPerGroup: 10000,
+  maxEdges: 5000000,
+};
+
 export class PathStore {
-  constructor() {
+  /**
+   * `options.correlationVersion` (or AGENTIC_SECURITY_LINEAGE_CORRELATION=2)
+   * selects provenance correlation version 2 (DAG-03): value-versioned path
+   * nodes, evidence-gated pairing of the two hop halves and call-boundary
+   * edges that carry their invocation. The default is version 1, whose nodes,
+   * edges, ids and diagnostics are byte-identical to the pre-DAG-03 store.
+   */
+  constructor(limits = {}, options = {}) {
+    this._v2 = resolveCorrelationVersion(options?.correlationVersion) === CORRELATION_VERSION_2;
+    this._limits = { ...STORE_LIMIT_DEFAULTS };
+    for (const k of Object.keys(STORE_LIMIT_DEFAULTS)) {
+      const v = limits?.[k];
+      if (Number.isInteger(v) && v >= 0) this._limits[k] = v;
+    }
+    this._limitHits = { hopsRefused: 0, groupsSkipped: [], edgesRefused: 0, summarizedGroups: 0 };
     this._groups = new Map();
     this._seen = new Set();
     this._truncations = new Map();
@@ -178,8 +208,12 @@ export class PathStore {
     if (missing.length > 0) {
       this._malformed.push({ hop, missing });
     }
-    const k = hopDedupeKey(hop);
+    const k = hopDedupeKey(hop, this._v2);
     if (this._seen.has(k)) return false;
+    if (this._stats.hopsAccepted >= this._limits.maxHops) {
+      this._limitHits.hopsRefused += 1;
+      return false;
+    }
     this._seen.add(k);
     this._stats.hopsAccepted += 1;
 
@@ -196,14 +230,24 @@ export class PathStore {
     if (IN_KINDS.has(hop.kind)) {
       const c = classifyIn(hop);
       if (c.role === 'source') {
-        g.in.push({ hop, ...c });
+        if (this._v2 && !c.crossScope && c.node.kind === 'path') {
+          // One in-half node per reaching definition: a merge keeps every
+          // alternative, a killed definition is simply absent.
+          const vs = Array.isArray(hop.fromVersions) && hop.fromVersions.length > 0 ? hop.fromVersions : [null];
+          for (const v of vs) g.in.push({ hop, ...c, node: { ...c.node, version: v } });
+        } else {
+          g.in.push({ hop, ...c });
+        }
         if (c.crossScope) this._peerSourced.push({ hop, node: c.node });
       } else {
         g.annotations.push(hop);
       }
     } else if (hop.kind === 'write-out') {
       const c = classifyOut(hop);
-      if (c.role === 'target') g.out.push({ hop, ...c });
+      if (c.role === 'target') {
+        const node = this._v2 && c.node.kind === 'path' ? { ...c.node, version: hop.toVersion ?? null } : c.node;
+        g.out.push({ hop, ...c, node });
+      }
       else this._unclassified.push(hop);
     } else {
       this._unclassified.push(hop);
@@ -233,13 +277,15 @@ export class PathStore {
 
   _build() {
     if (this._built) return this._built;
+    this._limitHits = { hopsRefused: this._limitHits.hopsRefused, groupsSkipped: [], edgesRefused: 0, summarizedGroups: 0 };
     const nodes = new Map();
     const edges = new Map();
     const outIndex = new Map();
     const inIndex = new Map();
 
+    const nid = (desc) => this.nodeIdFor(desc);
     const intern = (desc) => {
-      const id = provenanceNodeId(desc);
+      const id = nid(desc);
       let n = nodes.get(id);
       if (!n) {
         n = {
@@ -251,8 +297,29 @@ export class PathStore {
       return n;
     };
 
+    // Version 2: a definition that never wrote this data element at this path
+    // cannot be where it came from, so a source node (path, version, id) with
+    // no producing out-half is a phantom alternative and is dropped. The entry
+    // version has no producer by nature (a seed, or a caller binding), so it
+    // is kept. Counted in diagnostics, never silent.
+    const produced = new Set();
+    if (this._v2) {
+      for (const g of this._groups.values()) {
+        for (const o of g.out) if (o.node.kind === 'path') produced.add(nid(o.node));
+      }
+    }
+    let versionPruned = 0;
     for (const g of this._groups.values()) {
       let sources = g.in;
+      if (this._v2) {
+        sources = g.in.filter((s) => {
+          const v = s.node.version;
+          if (s.node.kind !== 'path' || v == null || v === 'entry') return true;
+          if (produced.has(nid(s.node))) return true;
+          versionPruned += 1;
+          return false;
+        });
+      }
       let originated = false;
       // Populated only when `originated` below — the union of every
       // annotation's widen/loss reason at this key, so an edge originating
@@ -266,7 +333,7 @@ export class PathStore {
       // exact shape a Sub-project D source registry will produce first).
       let originWidenReasons = [];
       let originLossReasons = [];
-      if (sources.length === 0 && g.annotations.length > 0) {
+      if (g.in.length === 0 && g.annotations.length > 0) {
         // §2.2's annotation rule, in the ONE direction it is still right:
         // with no non-null in-half anywhere at this key, the annotation is
         // itself the origin of the value ("no prior aliasing source").
@@ -294,16 +361,65 @@ export class PathStore {
       // in-half and the return's in-half share one join key). Counting
       // only the pairings the store would ACTUALLY form (after the peer x
       // peer exclusion) recovers the distinction at zero cost.
-      const pairable = (s, o) => !(s.crossScope && o.crossScope);
-      const sourcesFor = (o) => new Set(sources.filter((s) => pairable(s, o)).map((s) => provenanceNodeId(s.node)));
-      const targetsFor = (s) => new Set(g.out.filter((o) => pairable(s, o)).map((o) => provenanceNodeId(o.node)));
+      const pairable = (s, o) => {
+        if (s.crossScope && o.crossScope) return false;
+        return !this._v2 || originated || pairCompatibility(s.hop, o.hop).compatible;
+      };
+      const sourcesFor = (o) => new Set(sources.filter((s) => pairable(s, o)).map((s) => nid(s.node)));
+      const targetsFor = (s) => new Set(g.out.filter((o) => pairable(s, o)).map((o) => nid(o.node)));
 
       const annotations = g.annotations.map((a) => ({
         kind: a.kind, subKind: a.subKind,
         widenReason: a.widenReason ?? null, lossReason: a.lossReason ?? null,
         peerScope: a.peerScope ?? null, peerContext: a.peerContext ?? null,
       }));
+      // Version 2: the graph content must not depend on hop delivery order,
+      // and an annotation list is built in delivery order. Sorted by content.
+      if (this._v2) annotations.sort((a, b) => { const x = JSON.stringify(a); const y = JSON.stringify(b); return x < y ? -1 : x > y ? 1 : 0; });
 
+      // R07.5: an explicit cross product above the cap is not materialized;
+      // the group is reported instead of being silently pruned.
+      if (sources.length * g.out.length > this._limits.maxPairingsPerGroup) {
+        this._limitHits.groupsSkipped.push({
+          scope: g.scope, nodeId: g.nodeId, dataElementId: g.dataElementId,
+          pairings: sources.length * g.out.length,
+        });
+        // R07.5: the explicit cross product (S x O edges) is replaced by a
+        // typed ambiguous-summary relation: every source reaches one summary
+        // node and that node reaches every target (S + O edges). Which
+        // source feeds which target is deliberately not claimed, so every
+        // such edge is marked ambiguous; reachability is kept, nothing is
+        // silently dropped, and the group stays reported above.
+        const hub = intern({ kind: 'summary', scope: g.scope, context: g.context, path: null, siteNodeId: g.nodeId, dataElementId: g.dataElementId });
+        this._limitHits.summarizedGroups += 1;
+        const addSummaryEdge = (fromN, toN, inHop, outHop, crossScope) => {
+          const widenReasons = [...new Set([inHop.widenReason, outHop.widenReason].filter((r) => r != null))].sort();
+          const lossReasons = [...new Set([inHop.lossReason, outHop.lossReason].filter((r) => r != null))].sort();
+          const desc = {
+            fromNodeId: fromN.id, toNodeId: toN.id, dataElementId: g.dataElementId,
+            scope: g.scope, context: g.context, siteNodeId: g.nodeId,
+            inKind: inHop.kind, inSubKind: inHop.subKind,
+            outKind: outHop.kind, outSubKind: outHop.subKind,
+            widenReasons, lossReasons,
+          };
+          const eid = provenanceEdgeId(desc);
+          if (edges.has(eid)) return;
+          if (edges.size >= this._limits.maxEdges) { this._limitHits.edgesRefused += 1; return; }
+          edges.set(eid, {
+            id: eid, ...desc, line: g.line, crossScope, originated,
+            ambiguousCorrelation: true, ambiguousSummary: true, annotations,
+            truncated: this._truncations.has(scopeKeyOf(g.scope, g.context)),
+          });
+          if (!outIndex.has(fromN.id)) outIndex.set(fromN.id, new Set());
+          if (!inIndex.has(toN.id)) inIndex.set(toN.id, new Set());
+          outIndex.get(fromN.id).add(eid);
+          inIndex.get(toN.id).add(eid);
+        };
+        const summaryHop = { kind: 'summary', subKind: 'ambiguous-summary', widenReason: null, lossReason: null };
+        for (const s of sources) addSummaryEdge(intern(s.node), hub, s.hop, summaryHop, s.crossScope);
+        for (const o of g.out) addSummaryEdge(hub, intern(o.node), summaryHop, o.hop, o.crossScope);
+        continue;
+      }
       for (const s of sources) {
         for (const o of g.out) {
           // §14.3: an edge with BOTH endpoints in the peer's namespace is
@@ -327,13 +443,34 @@ export class PathStore {
             outKind: o.hop.kind, outSubKind: o.hop.subKind,
             widenReasons, lossReasons,
           };
-          const id = provenanceEdgeId(desc);
-          if (!edges.has(id)) {
+          let v2Edge = null;
+          let idParts = [];
+          if (this._v2) {
+            const pc = originated ? { proven: false } : pairCompatibility(s.hop, o.hop);
+            const invocationId = s.hop.invocationId ?? o.hop.invocationId ?? null;
+            const callBoundary = o.hop.callRole === 'bind' ? 'call' : s.hop.callRole === 'return' ? 'return' : null;
+            v2Edge = {
+              correlationVersion: CORRELATION_VERSION_2,
+              correlation: pc.proven ? 'proven' : 'legacy-unknown',
+              invocationId, callBoundary,
+            };
+            idParts = ['cv2', invocationId, callBoundary];
+          }
+          const id = provenanceEdgeId(desc, idParts);
+          if (edges.has(id) && v2Edge && v2Edge.correlation !== 'proven') {
+            // Two pairings that dedupe to one edge: the edge is only as proven
+            // as its weakest pairing, whatever order they arrived in.
+            edges.get(id).correlation = 'legacy-unknown';
+          }
+          if (!edges.has(id) && edges.size >= this._limits.maxEdges) {
+            this._limitHits.edgesRefused += 1;
+          } else if (!edges.has(id)) {
             edges.set(id, {
               id, ...desc, line: g.line,
               crossScope: s.crossScope || o.crossScope,
               originated,
               ambiguousCorrelation: sourcesFor(o).size >= 2 && targetsFor(s).size >= 2,
+              ...v2Edge,
               annotations,
               truncated: this._truncations.has(scopeKeyOf(g.scope, g.context)),
             });
@@ -356,14 +493,14 @@ export class PathStore {
     // fabricated into an origin, never dropped.
     const orphanedPeerSources = [];
     for (const { hop, node } of this._peerSourced) {
-      const id = provenanceNodeId(node);
+      const id = nid(node);
       const inEdges = inIndex.get(id);
       if (!inEdges || inEdges.size === 0) {
         orphanedPeerSources.push({ hop, nodeId: id });
       }
     }
 
-    this._built = { nodes, edges, outIndex, inIndex, orphanedPeerSources };
+    this._built = { nodes, edges, outIndex, inIndex, orphanedPeerSources, versionPruned };
     return this._built;
   }
 
@@ -375,11 +512,46 @@ export class PathStore {
   edges() { return [...this._build().edges.values()]; }
   getNode(id) { return this._build().nodes.get(id) ?? null; }
   getEdge(id) { return this._build().edges.get(id) ?? null; }
-  nodeIdFor(desc) { return provenanceNodeId(desc); }
+  nodeIdFor(desc) {
+    return this._v2 ? provenanceNodeId(desc, ['cv2', desc.version ?? null]) : provenanceNodeId(desc);
+  }
+  /** 1 or 2: the correlation version this store was built with. */
+  correlationVersion() { return this._v2 ? 2 : 1; }
+  /** Version 1 to version 2 id crosswalk (version 2 stores only; `null` for version 1). */
+  crosswalk() { return this._v2 ? buildCrosswalk(this) : null; }
   edgesFrom(nodeId) { return [...(this._build().outIndex.get(nodeId) ?? [])].map((e) => this._build().edges.get(e)); }
   edgesTo(nodeId) { return [...(this._build().inIndex.get(nodeId) ?? [])].map((e) => this._build().edges.get(e)); }
   hasEdge(fromId, toId) { return this.edgesFrom(fromId).some((e) => e.toNodeId === toId); }
-  stats() { return { ...this._stats, groups: this._groups.size, nodes: this._build().nodes.size, edges: this._build().edges.size }; }
+  /**
+   * R07.9: content digest of the built graph (sorted node and edge ids plus
+   * the construction-limit outcome). Two stores with equal digests answer
+   * every query identically; a continuation is bound to it.
+   */
+  digest() {
+    const b = this._build();
+    const h = createHash('sha256');
+    h.update(JSON.stringify([[...b.nodes.keys()].sort(), [...b.edges.keys()].sort(), this.limitStatus().hit]));
+    return h.digest('hex');
+  }
+  /** R07.5: has any construction bound been hit? Forces the build so the join-time counters are current. */
+  limitStatus() {
+    this._build();
+    const h = this._limitHits;
+    return {
+      hit: h.hopsRefused > 0 || h.groupsSkipped.length > 0 || h.edgesRefused > 0,
+      hopsRefused: h.hopsRefused,
+      groupsSkipped: h.groupsSkipped.slice(),
+      edgesRefused: h.edgesRefused,
+      ambiguousSummaries: h.summarizedGroups,
+      limits: { ...this._limits },
+    };
+  }
+  stats() {
+    return {
+      ...this._stats, groups: this._groups.size, nodes: this._build().nodes.size, edges: this._build().edges.size,
+      ...(this._v2 ? { correlationVersion: 2 } : null),
+    };
+  }
 
   /**
    * Four buckets, all "recorded, never thrown, never silently dropped"
@@ -395,6 +567,8 @@ export class PathStore {
       unclassified: this._unclassified,
       truncations: [...this._truncations.entries()],
       orphanedPeerSources: this._build().orphanedPeerSources,
+      limits: this.limitStatus(),
+      ...(this._v2 ? { correlationVersion: 2, versionPruned: this._build().versionPruned } : null),
     };
   }
 }

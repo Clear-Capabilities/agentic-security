@@ -1,0 +1,17 @@
+{
+  "name": "02-param-chain",
+  "construct": "sink reached through a two-level parameter chain; a clean sibling caller",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 3,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 16,
+      "flow": false
+    }
+  ],
+  "maxRegion": 4
+}

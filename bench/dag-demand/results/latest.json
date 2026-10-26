@@ -1,0 +1,1428 @@
+{
+  "schema": "dag-demand-bench/1",
+  "node": "v24.20.0",
+  "startedAt": "2026-10-25T15:51:36.253Z",
+  "params": {
+    "MODULES": 120,
+    "QUERIES": 30,
+    "REPEAT": 3,
+    "SKIP_OWN": false
+  },
+  "workloads": [
+    {
+      "summary": {
+        "workload": "synthetic-120-modules",
+        "files": 121,
+        "functions": 2164,
+        "sinkSites": 480,
+        "sampledQueries": 30,
+        "parseAndCallGraphMs": 194.14866709709167,
+        "graphDigestMs": 7.210541009902954,
+        "incomingIndexMs": 26.36162495613098,
+        "fullMs": 123.68220806121826,
+        "fullRunsMs": [
+          156.03116703033447,
+          123.68220806121826,
+          120.11333417892456
+        ],
+        "demandMedianMs": 0.3812915086746216,
+        "demandMeanMs": 0.3296513636906942,
+        "demandMinMs": 0.12720799446105957,
+        "demandMaxMs": 0.8233330249786377,
+        "speedupSingleQuery": 324.377032394822,
+        "speedupSingleQueryMean": 375.19094923953355,
+        "speedupSingleQueryColdIndex": 4.624858632153579,
+        "breakEvenQueries": 375.19094923953355,
+        "batchSpeedup": 12.50636497465112,
+        "batchSpeedupIncludingIndex": 3.411813250792955,
+        "meanSelectedFraction": 0.0013555144793592111,
+        "parityAll": true,
+        "parityFailures": 0,
+        "lostCoverage": {
+          "fellBackToFull": 0,
+          "partial": 0,
+          "withUnresolvedCallees": 0,
+          "negativeClaimWithheld": 0
+        },
+        "queriesWithFlow": 18,
+        "meetsTarget": true
+      },
+      "rows": [
+        {
+          "file": "mod_0.js",
+          "line": 5,
+          "sinkId": "js-exec",
+          "demandMs": 0.8233330249786377,
+          "demandRunsMs": [
+            2.3688747882843018,
+            0.8233330249786377,
+            0.7184171676635742
+          ],
+          "selected": 6,
+          "total": 2164,
+          "selectedFraction": 0.0027726432532347504,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_100.js",
+          "line": 9,
+          "sinkId": "js-express-res-send",
+          "demandMs": 0.5047080516815186,
+          "demandRunsMs": [
+            0.530458927154541,
+            0.5000839233398438,
+            0.5047080516815186
+          ],
+          "selected": 2,
+          "total": 2164,
+          "selectedFraction": 0.0009242144177449168,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_101.js",
+          "line": 5,
+          "sinkId": "js-exec",
+          "demandMs": 0.4743330478668213,
+          "demandRunsMs": [
+            0.5469579696655273,
+            0.4743330478668213,
+            0.4565410614013672
+          ],
+          "selected": 6,
+          "total": 2164,
+          "selectedFraction": 0.0027726432532347504,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_102.js",
+          "line": 5,
+          "sinkId": "js-exec",
+          "demandMs": 0.424375057220459,
+          "demandRunsMs": [
+            0.4569578170776367,
+            0.42208385467529297,
+            0.424375057220459
+          ],
+          "selected": 6,
+          "total": 2164,
+          "selectedFraction": 0.0027726432532347504,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_104.js",
+          "line": 9,
+          "sinkId": "js-express-res-send",
+          "demandMs": 0.40045809745788574,
+          "demandRunsMs": [
+            0.4458339214324951,
+            0.40045809745788574,
+            0.39458394050598145
+          ],
+          "selected": 2,
+          "total": 2164,
+          "selectedFraction": 0.0009242144177449168,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_110.js",
+          "line": 5,
+          "sinkId": "js-exec",
+          "demandMs": 0.6009171009063721,
+          "demandRunsMs": [
+            0.6655418872833252,
+            0.5796661376953125,
+            0.6009171009063721
+          ],
+          "selected": 6,
+          "total": 2164,
+          "selectedFraction": 0.0027726432532347504,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_112.js",
+          "line": 9,
+          "sinkId": "js-express-res-send",
+          "demandMs": 0.403292179107666,
+          "demandRunsMs": [
+            0.4130840301513672,
+            0.403292179107666,
+            0.3890421390533447
+          ],
+          "selected": 2,
+          "total": 2164,
+          "selectedFraction": 0.0009242144177449168,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_112.js",
+          "line": 9,
+          "sinkId": "js-koa-send",
+          "demandMs": 0.3595001697540283,
+          "demandRunsMs": [
+            0.40616607666015625,
+            0.3540000915527344,
+            0.3595001697540283
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_116.js",
+          "line": 9,
+          "sinkId": "js-express-res-send",
+          "demandMs": 0.4296250343322754,
+          "demandRunsMs": [
+            0.4497089385986328,
+            0.42145800590515137,
+            0.4296250343322754
+          ],
+          "selected": 2,
+          "total": 2164,
+          "selectedFraction": 0.0009242144177449168,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_118.js",
+          "line": 9,
+          "sinkId": "js-express-res-send",
+          "demandMs": 0.4204580783843994,
+          "demandRunsMs": [
+            0.4204580783843994,
+            0.40166592597961426,
+            0.4228329658508301
+          ],
+          "selected": 2,
+          "total": 2164,
+          "selectedFraction": 0.0009242144177449168,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_12.js",
+          "line": 9,
+          "sinkId": "js-koa-send",
+          "demandMs": 0.3501250743865967,
+          "demandRunsMs": [
+            0.33329200744628906,
+            1.19016695022583,
+            0.3501250743865967
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_14.js",
+          "line": 9,
+          "sinkId": "js-express-res-send",
+          "demandMs": 0.41733288764953613,
+          "demandRunsMs": [
+            0.4417080879211426,
+            0.4170830249786377,
+            0.41733288764953613
+          ],
+          "selected": 2,
+          "total": 2164,
+          "selectedFraction": 0.0009242144177449168,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_20.js",
+          "line": 5,
+          "sinkId": "js-exec",
+          "demandMs": 0.4538748264312744,
+          "demandRunsMs": [
+            0.7304580211639404,
+            0.4538748264312744,
+            0.4316251277923584
+          ],
+          "selected": 6,
+          "total": 2164,
+          "selectedFraction": 0.0027726432532347504,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_23.js",
+          "line": 9,
+          "sinkId": "js-express-res-send",
+          "demandMs": 0.22775006294250488,
+          "demandRunsMs": [
+            0.24895811080932617,
+            0.22775006294250488,
+            0.22345805168151855
+          ],
+          "selected": 2,
+          "total": 2164,
+          "selectedFraction": 0.0009242144177449168,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_26.js",
+          "line": 9,
+          "sinkId": "js-express-res-send",
+          "demandMs": 0.2193751335144043,
+          "demandRunsMs": [
+            0.22933411598205566,
+            0.2193751335144043,
+            0.21883320808410645
+          ],
+          "selected": 2,
+          "total": 2164,
+          "selectedFraction": 0.0009242144177449168,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_29.js",
+          "line": 9,
+          "sinkId": "js-koa-send",
+          "demandMs": 0.14566612243652344,
+          "demandRunsMs": [
+            0.18149995803833008,
+            0.14566612243652344,
+            0.14237499237060547
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_3.js",
+          "line": 7,
+          "sinkId": "js-exec",
+          "demandMs": 0.13266587257385254,
+          "demandRunsMs": [
+            0.13866591453552246,
+            0.13187503814697266,
+            0.13266587257385254
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_4.js",
+          "line": 5,
+          "sinkId": "js-exec",
+          "demandMs": 0.44112491607666016,
+          "demandRunsMs": [
+            0.44112491607666016,
+            0.4503331184387207,
+            0.4300839900970459
+          ],
+          "selected": 6,
+          "total": 2164,
+          "selectedFraction": 0.0027726432532347504,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_49.js",
+          "line": 5,
+          "sinkId": "js-exec",
+          "demandMs": 0.4249579906463623,
+          "demandRunsMs": [
+            0.4347498416900635,
+            0.39629197120666504,
+            0.4249579906463623
+          ],
+          "selected": 6,
+          "total": 2164,
+          "selectedFraction": 0.0027726432532347504,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_52.js",
+          "line": 7,
+          "sinkId": "js-exec",
+          "demandMs": 0.1352090835571289,
+          "demandRunsMs": [
+            0.1352090835571289,
+            0.12975001335144043,
+            0.1386251449584961
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_57.js",
+          "line": 7,
+          "sinkId": "js-exec",
+          "demandMs": 0.12720799446105957,
+          "demandRunsMs": [
+            0.13295793533325195,
+            0.12720799446105957,
+            0.12645792961120605
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_67.js",
+          "line": 5,
+          "sinkId": "js-exec",
+          "demandMs": 0.37337493896484375,
+          "demandRunsMs": [
+            0.4110829830169678,
+            0.36133289337158203,
+            0.37337493896484375
+          ],
+          "selected": 6,
+          "total": 2164,
+          "selectedFraction": 0.0027726432532347504,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_68.js",
+          "line": 9,
+          "sinkId": "js-koa-send",
+          "demandMs": 0.14104199409484863,
+          "demandRunsMs": [
+            0.14829182624816895,
+            0.14104199409484863,
+            0.1395409107208252
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_71.js",
+          "line": 5,
+          "sinkId": "js-exec",
+          "demandMs": 0.399583101272583,
+          "demandRunsMs": [
+            0.4093749523162842,
+            0.39145898818969727,
+            0.399583101272583
+          ],
+          "selected": 6,
+          "total": 2164,
+          "selectedFraction": 0.0027726432532347504,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_79.js",
+          "line": 9,
+          "sinkId": "js-koa-send",
+          "demandMs": 0.14158391952514648,
+          "demandRunsMs": [
+            0.14674997329711914,
+            0.14158391952514648,
+            0.13983416557312012
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_83.js",
+          "line": 7,
+          "sinkId": "js-exec",
+          "demandMs": 0.13095808029174805,
+          "demandRunsMs": [
+            0.13270902633666992,
+            0.13095808029174805,
+            0.1301250457763672
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_84.js",
+          "line": 7,
+          "sinkId": "js-exec",
+          "demandMs": 0.12987494468688965,
+          "demandRunsMs": [
+            0.12987494468688965,
+            0.12975001335144043,
+            0.13479089736938477
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_86.js",
+          "line": 9,
+          "sinkId": "js-koa-send",
+          "demandMs": 0.13791704177856445,
+          "demandRunsMs": [
+            0.15675020217895508,
+            0.13791704177856445,
+            0.13779187202453613
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_93.js",
+          "line": 7,
+          "sinkId": "js-exec",
+          "demandMs": 0.12970900535583496,
+          "demandRunsMs": [
+            0.13249993324279785,
+            0.12970900535583496,
+            0.12854218482971191
+          ],
+          "selected": 1,
+          "total": 2164,
+          "selectedFraction": 0.0004621072088724584,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "mod_95.js",
+          "line": 5,
+          "sinkId": "js-exec",
+          "demandMs": 0.3892080783843994,
+          "demandRunsMs": [
+            0.3892080783843994,
+            0.3920419216156006,
+            0.3499171733856201
+          ],
+          "selected": 6,
+          "total": 2164,
+          "selectedFraction": 0.0027726432532347504,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        }
+      ]
+    },
+    {
+      "summary": {
+        "workload": "own-scanner-src",
+        "files": 902,
+        "functions": 14470,
+        "sinkSites": 981,
+        "sampledQueries": 30,
+        "parseAndCallGraphMs": 3297.2887909412384,
+        "graphDigestMs": 226.74304103851318,
+        "incomingIndexMs": 3248.786416053772,
+        "fullMs": 5965.720416069031,
+        "fullRunsMs": [
+          6098.788749933243,
+          5945.3882920742035,
+          5965.720416069031
+        ],
+        "demandMedianMs": 21.49833309650421,
+        "demandMeanMs": 2484.415104198456,
+        "demandMinMs": 1.5714998245239258,
+        "demandMaxMs": 10446.020792007446,
+        "speedupSingleQuery": 277.49688263222146,
+        "speedupSingleQueryMean": 2.4012575056348098,
+        "speedupSingleQueryColdIndex": 1.8242204803783872,
+        "breakEvenQueries": 2.4012575056348098,
+        "batchSpeedup": 0.08004191685449367,
+        "batchSpeedupIncludingIndex": 0.07669870589870342,
+        "meanSelectedFraction": 0.028000460723335636,
+        "parityAll": true,
+        "parityFailures": 0,
+        "lostCoverage": {
+          "fellBackToFull": 10,
+          "partial": 24,
+          "withUnresolvedCallees": 23,
+          "negativeClaimWithheld": 24
+        },
+        "queriesWithFlow": 1,
+        "meetsTarget": false
+      },
+      "rows": [
+        {
+          "file": "src/context-intelligence/controls.js",
+          "line": 53,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 3.637458086013794,
+          "demandRunsMs": [
+            4.5113749504089355,
+            3.637458086013794,
+            2.7269580364227295
+          ],
+          "selected": 1,
+          "total": 14470,
+          "selectedFraction": 0.00006910850034554251,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "src/context-intelligence/controls.js",
+          "line": 58,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 2.443999767303467,
+          "demandRunsMs": [
+            2.3527920246124268,
+            2.449333906173706,
+            2.443999767303467
+          ],
+          "selected": 1,
+          "total": 14470,
+          "selectedFraction": 0.00006910850034554251,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "src/context-intelligence/entrypoints.js",
+          "line": 91,
+          "sinkId": "js-exec",
+          "demandMs": 1.848249912261963,
+          "demandRunsMs": [
+            1.848249912261963,
+            1.734375,
+            1.870542049407959
+          ],
+          "selected": 1,
+          "total": 14470,
+          "selectedFraction": 0.00006910850034554251,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 1
+        },
+        {
+          "file": "src/context-intelligence/evaluation/scripted-reader.js",
+          "line": 56,
+          "sinkId": "js-exec",
+          "demandMs": 63.24233293533325,
+          "demandRunsMs": [
+            64.33695912361145,
+            63.24233293533325,
+            62.191916942596436
+          ],
+          "selected": 64,
+          "total": 14470,
+          "selectedFraction": 0.0044229440221147205,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 78
+        },
+        {
+          "file": "src/context-intelligence/files.js",
+          "line": 66,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 1.86537504196167,
+          "demandRunsMs": [
+            1.977874994277954,
+            1.86537504196167,
+            1.6918749809265137
+          ],
+          "selected": 1,
+          "total": 14470,
+          "selectedFraction": 0.00006910850034554251,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 2
+        },
+        {
+          "file": "src/dataflow/catalog.js",
+          "line": 2390,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 7085.152791976929,
+          "demandRunsMs": [
+            7085.152791976929,
+            7117.647083044052,
+            7055.673249959946
+          ],
+          "selected": 14470,
+          "total": 14470,
+          "selectedFraction": 0.056738078783690395,
+          "fallback": "unsupported:instance-field",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 1350
+        },
+        {
+          "file": "src/dataflow/guard-dominance.js",
+          "line": 38,
+          "sinkId": "js-exec",
+          "demandMs": 25.579708099365234,
+          "demandRunsMs": [
+            25.686832904815674,
+            25.03712487220764,
+            25.579708099365234
+          ],
+          "selected": 22,
+          "total": 14470,
+          "selectedFraction": 0.0015203870076019351,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 39
+        },
+        {
+          "file": "src/fix/batch-journal.js",
+          "line": 62,
+          "sinkId": "js-fs-readFile",
+          "demandMs": 185.17925000190735,
+          "demandRunsMs": [
+            184.3477499485016,
+            185.8248748779297,
+            185.17925000190735
+          ],
+          "selected": 190,
+          "total": 14470,
+          "selectedFraction": 0.013130615065653075,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 228
+        },
+        {
+          "file": "src/ir/parser-cs.js",
+          "line": 102,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 1.5714998245239258,
+          "demandRunsMs": [
+            1.6555418968200684,
+            1.5714998245239258,
+            1.398792028427124
+          ],
+          "selected": 1,
+          "total": 14470,
+          "selectedFraction": 0.00006910850034554251,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "src/language/aibom.js",
+          "line": 253,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 6927.385915994644,
+          "demandRunsMs": [
+            6906.341500043869,
+            6927.385915994644,
+            7039.550791978836
+          ],
+          "selected": 14470,
+          "total": 14470,
+          "selectedFraction": 0.04913614374568072,
+          "fallback": "unsupported:instance-field",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 1141
+        },
+        {
+          "file": "src/language/haskell-manifests.js",
+          "line": 654,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 10446.020792007446,
+          "demandRunsMs": [
+            10447.35862493515,
+            10446.020792007446,
+            10402.499459028244
+          ],
+          "selected": 14470,
+          "total": 14470,
+          "selectedFraction": 0.25991706979958534,
+          "fallback": "unsupported:instance-field",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 5708
+        },
+        {
+          "file": "src/language/haskell-manifests.js",
+          "line": 687,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 10334.51512503624,
+          "demandRunsMs": [
+            10257.713040828705,
+            10334.51512503624,
+            10442.068624973297
+          ],
+          "selected": 14470,
+          "total": 14470,
+          "selectedFraction": 0.25991706979958534,
+          "fallback": "unsupported:instance-field",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 5708
+        },
+        {
+          "file": "src/language/haskell-parser.js",
+          "line": 414,
+          "sinkId": "js-exec",
+          "demandMs": 8517.751582860947,
+          "demandRunsMs": [
+            8515.09200000763,
+            8517.751582860947,
+            8661.44979095459
+          ],
+          "selected": 14470,
+          "total": 14470,
+          "selectedFraction": 0.16053904630269522,
+          "fallback": "unsupported:instance-field",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 3700
+        },
+        {
+          "file": "src/language/nix-script-taint.js",
+          "line": 244,
+          "sinkId": "js-eval",
+          "demandMs": 6148.911166906357,
+          "demandRunsMs": [
+            6184.254208803177,
+            6148.911166906357,
+            6117.048374891281
+          ],
+          "selected": 14470,
+          "total": 14470,
+          "selectedFraction": 0.007118175535590878,
+          "fallback": "unsupported:instance-field",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 164
+        },
+        {
+          "file": "src/posture/adversary-agent.js",
+          "line": 118,
+          "sinkId": "js-fetch",
+          "demandMs": 2.322957992553711,
+          "demandRunsMs": [
+            2.7019171714782715,
+            2.322957992553711,
+            2.112833023071289
+          ],
+          "selected": 1,
+          "total": 14470,
+          "selectedFraction": 0.00006910850034554251,
+          "fallback": null,
+          "verdict": "flow-found",
+          "status": "complete",
+          "reasons": [],
+          "findings": 1,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "src/posture/cross-lang-graphql.js",
+          "line": 108,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 17.37041711807251,
+          "demandRunsMs": [
+            17.37041711807251,
+            17.673499822616577,
+            16.68116593360901
+          ],
+          "selected": 4,
+          "total": 14470,
+          "selectedFraction": 0.00027643400138217003,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 22
+        },
+        {
+          "file": "src/posture/fix-history.js",
+          "line": 615,
+          "sinkId": "js-fs-readFile",
+          "demandMs": 8.710041999816895,
+          "demandRunsMs": [
+            8.609165906906128,
+            9.015291929244995,
+            8.710041999816895
+          ],
+          "selected": 12,
+          "total": 14470,
+          "selectedFraction": 0.00082930200414651,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 22
+        },
+        {
+          "file": "src/posture/fleet.js",
+          "line": 85,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 93.68462491035461,
+          "demandRunsMs": [
+            93.68462491035461,
+            93.39350008964539,
+            94.12737488746643
+          ],
+          "selected": 101,
+          "total": 14470,
+          "selectedFraction": 0.0069799585348997925,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 168
+        },
+        {
+          "file": "src/sast/cpp-dataflow.js",
+          "line": 203,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 21.061958074569702,
+          "demandRunsMs": [
+            21.431833028793335,
+            20.10291600227356,
+            21.061958074569702
+          ],
+          "selected": 11,
+          "total": 14470,
+          "selectedFraction": 0.0007601935038009676,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 25
+        },
+        {
+          "file": "src/sast/crypto-protocol.js",
+          "line": 346,
+          "sinkId": "js-exec",
+          "demandMs": 21.93470811843872,
+          "demandRunsMs": [
+            21.93470811843872,
+            22.217291116714478,
+            21.635208129882812
+          ],
+          "selected": 18,
+          "total": 14470,
+          "selectedFraction": 0.001243953006219765,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 46
+        },
+        {
+          "file": "src/sast/csharp-structural.js",
+          "line": 66,
+          "sinkId": "js-exec",
+          "demandMs": 6095.825709104538,
+          "demandRunsMs": [
+            6051.389833211899,
+            6168.541832923889,
+            6095.825709104538
+          ],
+          "selected": 14470,
+          "total": 14470,
+          "selectedFraction": 0.0022805805114029026,
+          "fallback": "unsupported:instance-field",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 108
+        },
+        {
+          "file": "src/sast/go-structural.js",
+          "line": 41,
+          "sinkId": "js-exec",
+          "demandMs": 13.660667181015015,
+          "demandRunsMs": [
+            13.660667181015015,
+            12.840375185012817,
+            13.939416885375977
+          ],
+          "selected": 5,
+          "total": 14470,
+          "selectedFraction": 0.0003455425017277125,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 15
+        },
+        {
+          "file": "src/sast/java-bench-extras.js",
+          "line": 1229,
+          "sinkId": "js-exec",
+          "demandMs": 9.250584125518799,
+          "demandRunsMs": [
+            9.526457786560059,
+            9.250584125518799,
+            9.115500211715698
+          ],
+          "selected": 3,
+          "total": 14470,
+          "selectedFraction": 0.0002073255010366275,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 10
+        },
+        {
+          "file": "src/sast/java-bench-extras.js",
+          "line": 1079,
+          "sinkId": "js-exec",
+          "demandMs": 6177.167083978653,
+          "demandRunsMs": [
+            6177.167083978653,
+            6190.712791919708,
+            6148.355166912079
+          ],
+          "selected": 14470,
+          "total": 14470,
+          "selectedFraction": 0.005114029025570145,
+          "fallback": "unsupported:instance-field",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 115
+        },
+        {
+          "file": "src/sast/java-structural-cross-file.js",
+          "line": 112,
+          "sinkId": "js-exec",
+          "demandMs": 6082.576375007629,
+          "demandRunsMs": [
+            6085.870416879654,
+            6082.576375007629,
+            6045.206666946411
+          ],
+          "selected": 14470,
+          "total": 14470,
+          "selectedFraction": 0.00006910850034554251,
+          "fallback": "unsupported:instance-field",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "src/sast/java-structural.js",
+          "line": 431,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 6193.14133310318,
+          "demandRunsMs": [
+            6193.746999979019,
+            6160.734000205994,
+            6193.14133310318
+          ],
+          "selected": 14470,
+          "total": 14470,
+          "selectedFraction": 0.006772633033863165,
+          "fallback": "unsupported:instance-field",
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "engine:context-cap-fallback",
+            "engine:summary-budget",
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 179
+        },
+        {
+          "file": "src/sast/llm-app.js",
+          "line": 120,
+          "sinkId": "js-exec",
+          "demandMs": 19.85304093360901,
+          "demandRunsMs": [
+            19.85304093360901,
+            19.53679084777832,
+            20.101583003997803
+          ],
+          "selected": 16,
+          "total": 14470,
+          "selectedFraction": 0.0011057360055286801,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 39
+        },
+        {
+          "file": "src/sast/ownership-authz.js",
+          "line": 71,
+          "sinkId": "js-exec",
+          "demandMs": 20.899875164031982,
+          "demandRunsMs": [
+            20.677165985107422,
+            21.399166107177734,
+            20.899875164031982
+          ],
+          "selected": 13,
+          "total": 14470,
+          "selectedFraction": 0.0008984105044920525,
+          "fallback": null,
+          "verdict": "unknown",
+          "status": "partial",
+          "reasons": [
+            "unresolved-callee"
+          ],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 29
+        },
+        {
+          "file": "src/sast/prompt-template.js",
+          "line": 124,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 4.203291893005371,
+          "demandRunsMs": [
+            4.6138341426849365,
+            4.203291893005371,
+            4.080708980560303
+          ],
+          "selected": 2,
+          "total": 14470,
+          "selectedFraction": 0.00013821700069108501,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        },
+        {
+          "file": "src/sast/sibling-guard.js",
+          "line": 127,
+          "sinkId": "js-RegExp-new",
+          "demandMs": 5.685208797454834,
+          "demandRunsMs": [
+            5.663249969482422,
+            5.685208797454834,
+            5.703250169754028
+          ],
+          "selected": 2,
+          "total": 14470,
+          "selectedFraction": 0.00013821700069108501,
+          "fallback": null,
+          "verdict": "no-flow-in-modeled-scope",
+          "status": "complete",
+          "reasons": [],
+          "findings": 0,
+          "parity": true,
+          "unresolvedCallees": 0
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-10-25T15:55:45.576Z",
+  "target": {
+    "speedup": 2,
+    "note": "PRD DAG-02 target: at least 2x faster sink-query analysis than the full-analysis baseline. A miss is reported, not hidden."
+  }
+}

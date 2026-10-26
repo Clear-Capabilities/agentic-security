@@ -1,0 +1,192 @@
+{
+  "label": "self-scanner-src",
+  "kind": "this repository's scanner/src",
+  "summaryBudget": "engine default (5000)",
+  "files": 904,
+  "functions": 14459,
+  "reps": 1,
+  "edits": 2,
+  "runs": {
+    "cold": {
+      "irMs": [
+        5237.7
+      ],
+      "deepMs": [
+        10976.5
+      ]
+    },
+    "coldCommit": {
+      "irMs": [
+        4778
+      ],
+      "deepMs": [
+        13322.2
+      ],
+      "stats": {
+        "mode": "cold",
+        "reason": "no prior state",
+        "provenance": {
+          "reusedFunctions": 0,
+          "recomputedFunctions": 14459,
+          "reusedFindings": 0,
+          "recomputedFindings": 12,
+          "restoredContexts": 0,
+          "contextsRejected": 0
+        },
+        "invalidation": null,
+        "timing": {
+          "fingerprintMs": 1544,
+          "readMs": 0,
+          "planMs": 0,
+          "restoreMs": 0
+        },
+        "model": {
+          "functions": 14459,
+          "edges": 26732,
+          "coupled": 93,
+          "fingerprintMs": 1544
+        },
+        "persistedMs": 192
+      }
+    },
+    "warmSame": {
+      "irMs": [
+        4871.9
+      ],
+      "deepMs": [
+        12610.6
+      ],
+      "stats": {
+        "mode": "cold",
+        "reason": "prior analysis was incomplete (summary-budget)",
+        "provenance": {
+          "reusedFunctions": 0,
+          "recomputedFunctions": 14459,
+          "reusedFindings": 0,
+          "recomputedFindings": 12,
+          "restoredContexts": 0,
+          "contextsRejected": 0
+        },
+        "invalidation": null,
+        "timing": {
+          "fingerprintMs": 795,
+          "readMs": 109,
+          "planMs": 0,
+          "restoreMs": 0
+        },
+        "model": {
+          "functions": 14459,
+          "edges": 26732,
+          "coupled": 93,
+          "fingerprintMs": 795
+        },
+        "persistedMs": 190
+      }
+    }
+  },
+  "perEdit": [
+    {
+      "file": "scanner/src/dataflow/exception-flow.js",
+      "deepMs": 13269.7,
+      "irMs": 7351.6,
+      "deepSpeedup": 0.8,
+      "endToEndSpeedup": 0.8,
+      "stats": {
+        "mode": "cold",
+        "reason": "prior analysis was incomplete (summary-budget)",
+        "provenance": {
+          "reusedFunctions": 0,
+          "recomputedFunctions": 14459,
+          "reusedFindings": 0,
+          "recomputedFindings": 12,
+          "restoredContexts": 0,
+          "contextsRejected": 0
+        },
+        "invalidation": null,
+        "timing": {
+          "fingerprintMs": 689,
+          "readMs": 123,
+          "planMs": 0,
+          "restoreMs": 0
+        },
+        "model": {
+          "functions": 14459,
+          "edges": 26732,
+          "coupled": 93,
+          "fingerprintMs": 689
+        },
+        "persistedMs": 187
+      },
+      "parityWithCold": true
+    },
+    {
+      "file": "scanner/src/posture/root-cause-sweep.js",
+      "deepMs": 12758.8,
+      "irMs": 4934,
+      "deepSpeedup": 0.9,
+      "endToEndSpeedup": 0.9,
+      "stats": {
+        "mode": "cold",
+        "reason": "prior analysis was incomplete (summary-budget)",
+        "provenance": {
+          "reusedFunctions": 0,
+          "recomputedFunctions": 14459,
+          "reusedFindings": 0,
+          "recomputedFindings": 12,
+          "restoredContexts": 0,
+          "contextsRejected": 0
+        },
+        "invalidation": null,
+        "timing": {
+          "fingerprintMs": 613,
+          "readMs": 113,
+          "planMs": 0,
+          "restoreMs": 0
+        },
+        "model": {
+          "functions": 14459,
+          "edges": 26732,
+          "coupled": 93,
+          "fingerprintMs": 613
+        },
+        "persistedMs": 172
+      }
+    }
+  ],
+  "summary": {
+    "coldDeepMsMedian": 10976.5,
+    "coldIrMsMedian": 5237.7,
+    "warmSameDeepMsMedian": 12610.6,
+    "warmSameDeepSpeedup": 0.9,
+    "warmEditDeepMsMedian": 13269.7,
+    "deepSpeedup": {
+      "median": 0.9,
+      "min": 0.8,
+      "max": 0.9
+    },
+    "endToEndSpeedup": {
+      "median": 0.9,
+      "min": 0.8,
+      "max": 0.9
+    },
+    "targetSpeedup": 3,
+    "editsMeetingTarget": {
+      "deepStage": "0/2",
+      "endToEnd": "0/2"
+    },
+    "metTargetAtMedian": {
+      "deepStage": false,
+      "endToEnd": false
+    },
+    "parity": {
+      "editsChecked": 1,
+      "unchangedRescanEqualsCold": true,
+      "holds": true
+    }
+  },
+  "node": "v24.20.0",
+  "platform": "darwin-arm64",
+  "cpus": 8,
+  "seed": 20260101,
+  "generatedBy": "bench/dag-incremental/run.mjs"
+}

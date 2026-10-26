@@ -24,7 +24,7 @@ The ten stages: [Discover](discover/README.md) · [Corroborate](corroborate/READ
 ## The security graph
 
 - **[Code Boundaries](security-graph/code-boundaries.md)**: the security graph underneath Agentic Security
-- **[Data flow](security-graph/data-flow.md)**, **[blast radius](security-graph/blast-radius.md)** and **[provenance](security-graph/provenance.md)**
+- **[Data flow](security-graph/data-flow.md)**, **[blast radius](security-graph/blast-radius.md)** and **[provenance](security-graph/provenance.md)** and **[graph precision and completeness](security-graph/graph-precision.md)**
 
 ## Trust
 
@@ -54,7 +54,7 @@ Each role page opens with its primary question and a **Core workflow** link, so 
 ## More areas
 
 - **[Integrations](integrations/README.md)** · **[Reference](reference/README.md)** (with the **[capability reference](reference/capability-reference.md)** moved from the README) · **[Labs](labs/README.md)** · **[Roadmap](roadmap/README.md)** · **[Website package](website/)**
-- **[Style and terminology](STYLE-AND-TERMINOLOGY.md)** · **[Documentation migration map](DOCS-MIGRATION.md)** · **[Implementation status](implementation-status/autonomous-assurance-docs-repositioning.md)** · **[GA promotion record](implementation-status/ga-promotion.md)**
+- **[Style and terminology](STYLE-AND-TERMINOLOGY.md)** · **[Documentation migration map](DOCS-MIGRATION.md)** · **[Implementation status](implementation-status/autonomous-assurance-docs-repositioning.md)** · **[GA promotion record](implementation-status/ga-promotion.md)** · **[Graph and DAG improvements status](implementation-status/dag-improvements.md)**
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "engineVersion": "0.184.0",
-  "bundleSha256": "7ae453d1e175f63c38fe6553e83521825bc32fcd09de9ed860b89884fdbd5e07",
+  "engineVersion": "0.185.0",
+  "bundleSha256": "700ba9aab74ef1e22c747c34e44632f7fba6a6013380b187718bc13e3577817b",
   "examples": {
     "haskell-app/vulnerable": {
       "exitCode": 3,
@@ -681,6 +681,7 @@
             "maxPaths": 32,
             "maxPathsPerTerminal": 8,
             "maxCandidatePaths": 256,
+            "maxMaterializedHops": 1000000,
             "maxExpansions": 10000,
             "maxDepth": 64
           },

@@ -18,6 +18,7 @@ import * as ids from './ids.js';
 import { classifyDataElementName } from './classification.js';
 import { analyzeNixSecrets } from '../language/nix-secrets.js';
 import { analyzeNixPersonalData, destinationOf } from '../language/nix-privacy.js';
+import { analyzeNixScripts } from '../language/nix-script-taint.js';
 
 export const NIX_VIEW_VERSION = 'nix-lineage/1';
 
@@ -195,4 +196,38 @@ export function contributeNixConfigLineage(graph, files, opts = {}) {
     graph.limitations = [...graph.limitations, 'Nix configuration lineage is static: a store path or declared service is not proof of runtime exposure.'];
   }
   return result;
+}
+
+// ── DAG-08: configuration and generated-script scope carried through links ─────────────────────────────────────────────────
+// A Nix value that reaches a generated script is STATIC CONFIGURATION evidence. It carries both the original Nix location and the
+// generated-script location, and it stays that way when a cross-repo link or a boundary contract refers to it. It does not become
+// an application-runtime value by name, by shared attribute or by being declared: only an explicit binding that a verifier has
+// checked (a named verifier and an application site) lets a record say the value enters application runtime.
+export const NIX_SCOPE = Object.freeze({ language: 'nix', kind: 'configuration', scope: 'static-configuration', runtime: false });
+
+/** Script-level Nix findings as scope records that keep the original and the generated location side by side. */
+export function nixGeneratedScriptScopes(files) {
+  const r = analyzeNixScripts({ files });
+  return (r.findings || []).filter((f) => f.originalLocation).map((f) => ({
+    rule: f.rule, attrPath: f.attrPath || null, file: f.file,
+    originalLocation: { file: f.file, line: f.originalLocation.startLine, column: f.originalLocation.startColumn },
+    generatedLocation: f.generatedLocation ? { generated: true, line: f.generatedLocation.line, column: f.generatedLocation.startColumn } : null,
+    origins: (f.origins || []).map((o) => ({ kind: o.kind, detail: o.detail })),
+    scope: NIX_SCOPE, application: { entersRuntime: false, binding: null, observed: false },
+  }));
+}
+
+/**
+ * Decide whether a Nix scope record may claim to enter application runtime. It may only with an explicit binding that names the
+ * application site (file, function) and a verifier (`verified: true` plus `verifiedBy`). Anything less keeps the static-configuration
+ * scope and says why. A matching name is never a binding, and even a verified binding is a declaration, never an observation.
+ */
+export function bindNixValueToApplication(record, binding) {
+  const base = { ...record, scope: NIX_SCOPE };
+  const ok = binding && binding.verified === true && typeof binding.verifiedBy === 'string' && binding.verifiedBy.length > 0
+    && binding.site && typeof binding.site.file === 'string' && typeof binding.site.function === 'string';
+  if (!ok) {
+    return { ...base, application: { entersRuntime: false, binding: null, observed: false, reason: binding ? 'binding is not explicit and verified (needs verified: true, verifiedBy and an application site)' : 'no binding declared; the value is static configuration only' } };
+  }
+  return { ...base, application: { entersRuntime: true, binding: { site: { file: binding.site.file, function: binding.site.function }, verifiedBy: binding.verifiedBy }, observed: false, reason: 'explicit verified binding; this is a declaration, not an observed runtime flow' } };
 }

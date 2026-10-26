@@ -1,5 +1,11 @@
 # Path Provenance Recording — Design Record
 
+> Terminology note (DAG-01): this record predates the SCC work and says "DAG"
+> for the recorded provenance structure. That structure is a **provenance
+> graph** and can be cyclic (see section 9.3). The acyclic "DAG" is the derived
+> component view built by `scanner/src/graph/scc.js`. Read every "DAG" below as
+> "provenance graph". Decisions here are unchanged.
+
 Scope: Sub-project C of Milestone 1, increment C1 (see
 `docs/superpowers/plans/2026-08-30-data-flow-explorer-m1-subproject-c-scoping.md`).
 This document decides **how provenance is recorded** as data flows through

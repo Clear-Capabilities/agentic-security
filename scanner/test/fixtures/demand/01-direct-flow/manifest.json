@@ -1,0 +1,22 @@
+{
+  "name": "01-direct-flow",
+  "construct": "sink in the same function as the source",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 4,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 5,
+      "flow": false
+    },
+    {
+      "file": "app.js",
+      "line": 8,
+      "flow": false
+    }
+  ],
+  "maxRegion": 1
+}

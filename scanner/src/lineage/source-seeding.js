@@ -125,6 +125,11 @@ function seedPathFor(expr, parentOf) {
 // from seed records, must not surface a literal `*` name to a user
 // without translating it into an honest "dynamic key" disclosure.
 
+// DAG-07 R07.5: generous defaults so an ordinary project never reaches them;
+// they exist so a pathological input cannot make the planner unbounded.
+export const DEFAULT_MAX_SEEDS = 1000000;
+export const DEFAULT_MAX_NODES = 20000000;
+
 // ── §3.3/§3.4: planSeeds ────────────────────────────────────────────────────
 
 /**
@@ -144,11 +149,29 @@ function seedPathFor(expr, parentOf) {
  * A matched expression with NO access path (`accessPathOf` → `null`) is
  * recorded in `unseedable[]` — never silently dropped (§3.3).
  */
-export function planSeeds(callGraph, { repository } = {}) {
+export function planSeeds(callGraph, { repository, maxSeeds, maxNodes, signal, deadline } = {}) {
   const seeds = [];
   const unseedable = [];
+  // DAG-07 R07.1: a completion record for the seeding step. A function the
+  // planner did not reach has no seeds, which looks identical to "this
+  // function reads no sources"; the record is what tells them apart.
+  const seedCap = Number.isInteger(maxSeeds) && maxSeeds >= 0 ? maxSeeds : DEFAULT_MAX_SEEDS;
+  const nodeCap = Number.isInteger(maxNodes) && maxNodes >= 0 ? maxNodes : DEFAULT_MAX_NODES;
+  let functionsTotal = 0;
+  let functionsScanned = 0;
+  let nodesVisited = 0;
+  let stopReason = null;
+  const shouldStop = () => !!(signal && signal.aborted) || (Number.isFinite(deadline) && Date.now() > deadline);
   for (const fn of callGraph.functions.values()) {
+    functionsTotal += 1;
+    if (stopReason) continue;
+    if (shouldStop()) { stopReason = 'cancelled'; continue; }
+    if (seeds.length >= seedCap) { stopReason = 'seeding-limit'; continue; }
+    if (nodesVisited >= nodeCap) { stopReason = 'seeding-limit'; continue; }
+    functionsScanned += 1;
     for (const [nid, node] of Object.entries(fn.cfg?.nodes ?? {})) {
+      nodesVisited += 1;
+      if (seeds.length >= seedCap) { stopReason = 'seeding-limit'; break; }
       const parentOf = new Map();
       for (const root of exprRoots(node)) walkExpr(root, (e, p) => { if (p) parentOf.set(e, p); });
       for (const root of exprRoots(node)) {
@@ -182,7 +205,18 @@ export function planSeeds(callGraph, { repository } = {}) {
       }
     }
   }
-  return { seeds, unseedable };
+  const notScanned = functionsTotal - functionsScanned;
+  const completion = {
+    status: stopReason === 'cancelled' ? 'cancelled' : stopReason ? 'partial' : 'complete',
+    reasons: stopReason ? [stopReason] : [],
+    functionsTotal,
+    functionsScanned,
+    functionsNotScanned: notScanned,
+    seeds: seeds.length,
+    unseedable: unseedable.length,
+    limits: { maxSeeds: seedCap, maxNodes: nodeCap, nodesVisited },
+  };
+  return { seeds, unseedable, completion };
 }
 
 // ── §3.5: seedEntryStateFactory — the driver.js opts.seedEntryState hook ──

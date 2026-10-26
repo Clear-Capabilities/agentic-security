@@ -1,0 +1,12 @@
+{
+  "mutantsVersion": 1,
+  "note": "SYNTHETIC injected mutants. Each is applied to a temporary copy of the multiservice fixture, never to the checked-in tree. They are scored as verdict flips against the unmutated fixture and are reported separately from every natural-code metric.",
+  "mutants": [
+    { "id": "mut:remove-sanitizer", "kind": "remove-sanitizer", "file": "reporting/server.js", "find": "'<li>' + escapeHtml(o.note) + '</li>'", "replace": "'<li>' + o.note + '</li>'", "site": { "class": "xss", "file": "reporting/server.js", "line": 24 }, "expectAfter": "reported" },
+    { "id": "mut:wrong-sanitizer-family", "kind": "wrong-sanitizer", "file": "reporting/server.js", "find": "'<li>' + escapeHtml(o.note) + '</li>'", "replace": "'<li>' + encodeURIComponent(o.note) + '</li>'", "site": { "class": "xss", "file": "reporting/server.js", "line": 24 }, "expectAfter": "reported" },
+    { "id": "mut:add-sanitizer", "kind": "add-sanitizer", "file": "reporting/server.js", "find": "html += '<li>' + o.note + '</li>';", "replace": "html += '<li>' + escapeHtml(o.note) + '</li>';", "site": { "class": "xss", "file": "reporting/server.js", "line": 15 }, "expectAfter": "silent" },
+    { "id": "mut:inject-site", "kind": "inject-flow", "file": "reporting/server.js", "find": "res.send('<pre>' + rows.map((r) => r.line).join('\\n') + '</pre>');", "replace": "res.send('<pre>' + req.query.q + '</pre>');", "site": { "class": "xss", "file": "reporting/server.js", "line": 29 }, "expectAfter": "reported" },
+    { "id": "mut:inject-flow", "kind": "inject-flow", "file": "api/server.js", "find": "{ at: Date.now(), kind: 'profile' }", "replace": "{ at: Date.now(), kind: req.body.kind }", "flow": { "field": "kind", "sourceKind": "http-body", "sourceFile": "api/server.js", "sinkKind": "database" }, "expectAfter": "reported" },
+    { "id": "mut:break-flow", "kind": "break-flow", "file": "api/server.js", "find": "{ bio: req.body.bio }", "replace": "{ bio: 'n/a' }", "flow": { "field": "bio", "sourceKind": "http-body", "sourceFile": "api/server.js", "sinkKind": "database" }, "expectAfter": "silent" }
+  ]
+}

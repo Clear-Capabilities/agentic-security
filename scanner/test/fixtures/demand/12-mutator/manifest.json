@@ -1,0 +1,21 @@
+{
+  "name": "12-mutator",
+  "construct": "a callee mutates an argument (push, Object.assign) and the caller sinks the argument",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 7,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 12,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 17,
+      "flow": false
+    }
+  ]
+}

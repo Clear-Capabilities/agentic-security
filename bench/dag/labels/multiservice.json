@@ -1,0 +1,21 @@
+{
+  "labelsVersion": 1,
+  "root": "bench/dag/fixtures/multiservice/src",
+  "method": "Labels are kept OUT of the scanned tree (this file lives beside it, never inside src/) and the sources carry no benchmark comments, so the scanner cannot read an answer key. Site labels are scored like the real-code labels with a +-2 line tolerance; flow labels match a lineage-graph flow by data element name, optional source kind and source file.",
+  "siteTolerance": 2,
+  "labels": [
+    { "id": "ms:F1", "type": "flow", "verdict": "positive", "field": "note", "sourceKind": "http-body", "sourceFile": "api/server.js", "sinkKind": "queue", "construct": "http -> queue", "ref": "api/server.js:16 req.body.note -> :20 MessageBody" },
+    { "id": "ms:F2", "type": "flow", "verdict": "positive", "field": "qty", "sourceKind": "http-body", "sourceFile": "api/server.js", "sinkKind": "queue", "construct": "http -> queue (numeric coercion keeps the data flow)", "ref": "api/server.js:17 Number(req.body.qty) -> :20 MessageBody" },
+    { "id": "ms:F3", "type": "flow", "verdict": "positive", "field": "bio", "sourceKind": "http-body", "sourceFile": "api/server.js", "sinkKind": "database", "construct": "http -> storage", "ref": "api/server.js:30 req.body.bio -> insertOne profiles" },
+    { "id": "ms:F4", "type": "flow", "verdict": "positive", "field": "note", "sourceFile": "worker/consumer.js", "sinkKind": "database", "construct": "queue -> storage (cross-service boundary)", "ref": "worker/consumer.js:15 body.note -> :16 insertOne orders" },
+    { "id": "ms:F5", "type": "flow", "verdict": "positive", "field": "note", "sourceFile": "reporting/server.js", "sinkKind": "http-response", "construct": "storage -> http response", "ref": "reporting/server.js:13 o.note -> :15 res.send" },
+    { "id": "ms:F6", "type": "flow", "verdict": "positive", "field": "bio", "sourceFile": "reporting/server.js", "sinkKind": "http-response", "construct": "storage -> http response", "ref": "reporting/server.js:34 doc.bio" },
+    { "id": "ms:N1", "type": "flow", "verdict": "negative", "field": "at", "construct": "no request data: Date.now() timestamp", "ref": "api/server.js:31 events.insertOne({ at: Date.now() })" },
+    { "id": "ms:N2", "type": "flow", "verdict": "negative", "field": "ORDERS_QUEUE_URL", "sourceKind": "http-body", "construct": "configuration value is not request data", "ref": "api/server.js:8 / :19 QueueUrl" },
+    { "id": "ms:N3", "type": "flow", "verdict": "negative", "field": "line", "sourceKind": "http-body", "construct": "wrong topic: the audit queue carries only a constant, so no request field reaches audit.line", "ref": "api/server.js:24 constant -> worker/consumer.js:23 audit insert" },
+    { "id": "ms:S1", "type": "site", "verdict": "positive", "class": "xss", "file": "reporting/server.js", "line": 15, "construct": "stored value into html via concat", "ref": "reporting/server.js:13 unescaped o.note" },
+    { "id": "ms:S2", "type": "site", "verdict": "negative", "class": "xss", "file": "reporting/server.js", "line": 24, "construct": "escapeHtml applied to the stored value", "ref": "reporting/server.js:22 escapeHtml(o.note)" },
+    { "id": "ms:S3", "type": "site", "verdict": "negative", "class": "xss", "file": "reporting/server.js", "line": 29, "construct": "audit lines are a constant string end to end", "ref": "reporting/server.js:29" },
+    { "id": "ms:S4", "type": "site", "verdict": "positive", "class": "xss", "file": "reporting/server.js", "line": 34, "construct": "stored profile bio into html", "ref": "reporting/server.js:34 doc.bio" }
+  ]
+}

@@ -1,0 +1,890 @@
+{
+ "note": "Deterministic facts only. Regenerate with: node bench/dag/run.mjs --update-baseline. Timing and memory are never stored here.",
+ "recordedAtCommit": "511b13012989bab59fe40755bda0e3f62d75d7da",
+ "deterministic": {
+  "schema": 1,
+  "units": {
+   "express/lib": {
+    "status": "ok",
+    "files": 6,
+    "findings": 1,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 5,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 9,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "express/examples": {
+    "status": "ok",
+    "files": 70,
+    "findings": 96,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 10,
+     "edges": 7,
+     "flows": 7,
+     "callStatementSites": 109,
+     "connectedSinkSites": 7,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 11
+    }
+   },
+   "fastify/lib": {
+    "status": "ok",
+    "files": 31,
+    "findings": 10,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 6,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 63,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "fastify/examples": {
+    "status": "ok",
+    "files": 18,
+    "findings": 10,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 5,
+     "edges": 4,
+     "flows": 4,
+     "callStatementSites": 41,
+     "connectedSinkSites": 4,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 4
+    }
+   },
+   "scotty/Web": {
+    "status": "ok",
+    "files": 11,
+    "findings": 2,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 4,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 0,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "scotty/examples": {
+    "status": "ok",
+    "files": 17,
+    "findings": 12,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 8,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 29,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "yesod/yesod-core": {
+    "status": "ok",
+    "files": 44,
+    "findings": 4,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 7,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 1,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "yesod/yesod-form": {
+    "status": "ok",
+    "files": 28,
+    "findings": 0,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 3,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 1,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "yesod/yesod-auth": {
+    "status": "ok",
+    "files": 15,
+    "findings": 4,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 6,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 2,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "home-manager/modules/services": {
+    "status": "ok",
+    "files": 218,
+    "findings": 47,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 2,
+     "edges": 2,
+     "flows": 2,
+     "callStatementSites": 0,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "nixpkgs-subset/nixos/modules/security": {
+    "status": "ok",
+    "files": 36,
+    "findings": 50,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 2,
+     "edges": 5,
+     "flows": 5,
+     "callStatementSites": 0,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "nixpkgs-subset/nixos/modules/services/web-servers": {
+    "status": "ok",
+    "files": 41,
+    "findings": 74,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 3,
+     "edges": 2,
+     "flows": 2,
+     "callStatementSites": 0,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "fixture/multiservice": {
+    "status": "ok",
+    "files": 3,
+    "findings": 3,
+    "graph": {
+     "status": "complete",
+     "nodes": 6,
+     "edges": 3,
+     "flows": 3,
+     "truncatedQueries": 0
+    }
+   }
+  },
+  "labels": {
+   "express:examples/vhost/index.js:30:xss": "TP",
+   "express:examples/cookies/index.js:36:open-redirect": "TP",
+   "express:examples/cookies/index.js:46:open-redirect": "TP",
+   "express:examples/route-separation/user.js:46:open-redirect": "TP",
+   "express:examples/auth/index.js:119:open-redirect": "TP",
+   "express:examples/mvc/controllers/user-pet/index.js:21:open-redirect": "FP",
+   "express:examples/mvc/controllers/user/index.js:40:open-redirect": "FP",
+   "express:examples/mvc/controllers/pet/index.js:30:open-redirect": "FP",
+   "express:examples/vhost/index.js:39:open-redirect": "FP",
+   "express:examples/route-map/index.js:37:xss": "FP",
+   "express:examples/route-map/index.js:47:xss": "FP",
+   "express:examples/route-map/index.js:51:xss": "FP",
+   "express:examples/search/index.js:55:xss": "FP",
+   "express:examples/params/index.js:56:xss": "FP",
+   "express:examples/route-middleware/index.js:75:xss": "FP",
+   "express:examples/session/index.js:30:xss": "FP",
+   "express:examples/cookie-sessions/index.js:18:xss": "FP",
+   "express:examples/web-service/index.js:76:xss": "FP",
+   "express:examples/resource/index.js:64:xss": "FP",
+   "express:examples/downloads/index.js:27:path-traversal": "FP",
+   "express:examples/hello-world/index.js:8:xss": "TN",
+   "fastify:examples/simple-stream.js:19:privacy-log": "FP",
+   "fastify:examples/typescript-server.ts:78:privacy-log": "FP",
+   "fastify:examples/benchmark/webstream.js:26:privacy-log": "FP",
+   "fastify:examples/http2.js:8:sync-io": "FP",
+   "fastify:examples/https.js:7:sync-io": "FP",
+   "fastify:examples/parser.js:46:xss": "TN",
+   "fastify:examples/hooks.js:83:csrf": "excluded",
+   "fastify:examples/parser.js:44:csrf": "excluded",
+   "scotty:examples/basic.hs:42:xss": "TP",
+   "scotty:examples/basic.hs:47:xss": "TP",
+   "scotty:examples/basic.hs:52:xss": "TP",
+   "scotty:examples/basic.hs:78:xss": "TP",
+   "scotty:examples/nested.hs:27:xss": "TP",
+   "scotty:examples/nested.hs:31:xss": "TP",
+   "scotty:examples/nested.hs:55:xss": "TP",
+   "scotty:examples/nested.hs:38:xss": "TP",
+   "scotty:examples/nested.hs:23:xss": "TN",
+   "scotty:examples/nested.hs:51:xss": "TN",
+   "scotty:examples/basic.hs:106:xss": "TN",
+   "scotty:examples/basic.hs:106:unbounded-body": "TP",
+   "scotty:examples/bodyecho.hs:19:unbounded-body": "TP",
+   "scotty:examples/middleware.hs:68:unbounded-body": "TP",
+   "scotty:Web/Scotty/Session.hs:187:weak-rng": "TP",
+   "scotty:Web/Scotty/Cookie.hs:132:cookie-flags": "TP",
+   "yesod:yesod-auth/Yesod/Auth/Email.hs:959:weak-hash": "TP",
+   "yesod:yesod-auth/Yesod/Auth/Email.hs:998:unsafe-boundary": "TP",
+   "yesod:yesod-auth/Yesod/Auth/GoogleEmail2.hs:615:unsafe-boundary": "TP",
+   "yesod:yesod-auth/Yesod/Auth/OpenId.hs:77:open-redirect": "excluded",
+   "yesod:yesod-core/src/Yesod/Core/Class/Yesod.hs:888:cookie-flags": "excluded",
+   "yesod:yesod-core/src/Yesod/Core/Handler.hs:1604:cookie-flags": "excluded",
+   "nixpkgs-subset:nixos/modules/security/ipa.nix:288:nix-secret": "FP",
+   "nixpkgs-subset:nixos/modules/security/ipa.nix:289:nix-secret": "FP",
+   "nixpkgs-subset:nixos/modules/security/pam.nix:1337:nix-secret": "FP",
+   "nixpkgs-subset:nixos/modules/security/please.nix:85:nix-secret": "FP",
+   "nixpkgs-subset:nixos/modules/security/doas.nix:267:pam-empty-password": "TP",
+   "nixpkgs-subset:nixos/modules/security/duosec.nix:215:nix-script": "FP",
+   "nixpkgs-subset:nixos/modules/security/lock-kernel-modules.nix:56:nix-script": "FP",
+   "nixpkgs-subset:nixos/modules/security/tpm2.nix:356:nix-script": "FP",
+   "nixpkgs-subset:nixos/modules/security/wrappers/default.nix:341:nix-script": "FP",
+   "nixpkgs-subset:nixos/modules/security/apparmor.nix:246:root-service": "TP",
+   "nixpkgs-subset:nixos/modules/security/audit.nix:124:root-service": "TP",
+   "nixpkgs-subset:nixos/modules/security/auditd.nix:271:root-service": "TP",
+   "nixpkgs-subset:nixos/modules/security/isolate.nix:134:root-service": "TP",
+   "nixpkgs-subset:nixos/modules/services/web-servers/keter/default.nix:150:nix-secret": "FP",
+   "nixpkgs-subset:nixos/modules/services/web-servers/keter/default.nix:152:nix-secret": "excluded",
+   "nixpkgs-subset:nixos/modules/services/web-servers/apache-httpd/default.nix:1075:root-service": "TP",
+   "home-manager:modules/services/rescrobbled.nix:28:nix-secret": "FP",
+   "home-manager:modules/services/pass-secret-service.nix:53:nix-secret": "FP"
+  },
+  "fixture": {
+   "ms:F1": "TP-sink",
+   "ms:F2": "TP-sink",
+   "ms:F3": "TP+sink",
+   "ms:F4": "FN",
+   "ms:F5": "FN",
+   "ms:F6": "FN",
+   "ms:N1": "TN",
+   "ms:N2": "TN",
+   "ms:N3": "TN",
+   "ms:S1": "FN",
+   "ms:S2": "TN",
+   "ms:S3": "TN",
+   "ms:S4": "FN"
+  },
+  "mutants": {
+   "mut:remove-sanitizer": {
+    "base": false,
+    "after": false,
+    "correct": false
+   },
+   "mut:wrong-sanitizer-family": {
+    "base": false,
+    "after": false,
+    "correct": false
+   },
+   "mut:add-sanitizer": {
+    "base": false,
+    "after": false,
+    "correct": true
+   },
+   "mut:inject-site": {
+    "base": false,
+    "after": true,
+    "correct": true
+   },
+   "mut:inject-flow": {
+    "base": false,
+    "after": true,
+    "correct": true
+   },
+   "mut:break-flow": {
+    "base": true,
+    "after": false,
+    "correct": true
+   }
+  },
+  "incremental": {
+   "fixture": {
+    "summaryUnits": 0,
+    "restorable": 0,
+    "changedFiles": 1,
+    "changedUnits": 0,
+    "reused": 0,
+    "invalidated": 0,
+    "parityEqual": true
+   },
+   "fastify/examples": {
+    "summaryUnits": 0,
+    "restorable": 0,
+    "changedFiles": 1,
+    "changedUnits": 0,
+    "reused": 0,
+    "invalidated": 0,
+    "parityEqual": true
+   }
+  },
+  "synthetic": {
+   "chain/1000": {
+    "digest": "37a6fb14a9f44b39a22d78d2af4e05b33e80d0e8b7db7950d16b2f5b999374d7",
+    "observed": {
+     "sccCount": 1000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "chain/10000": {
+    "digest": "eacfabb68ad5c5ee321ddd99ae973ca59193f2e4c81c8b0082fb086ff82603a0",
+    "observed": {
+     "sccCount": 10000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 9999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "chain/100000": {
+    "digest": "6d78c870ec21f28ae5c4d0a473f95e01485e2ee97117ffeef459c7eb88a1af3e",
+    "observed": {
+     "sccCount": 100000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 99999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "chain/1000000": {
+    "digest": "95d8a499a8c67108ab231a8e1d79729616bd3df083e24f0a32147e1bc7433355",
+    "observed": {
+     "sccCount": 1000000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "ring/1000": {
+    "digest": "93565c591b333ca86688cba1311e83a43c6f3fe550fc7d73dba4e8911c3745aa",
+    "observed": {
+     "sccCount": 1,
+     "largestScc": 1000,
+     "recursiveComponents": 1,
+     "edgeCount": 1000
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "ring/10000": {
+    "digest": "5a0bed3528cf8db410bab37cca7cf21f6d05a27de3c15b65981faa2857c2cda7",
+    "observed": {
+     "sccCount": 1,
+     "largestScc": 10000,
+     "recursiveComponents": 1,
+     "edgeCount": 10000
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "ring/100000": {
+    "digest": "b194b87a166e3b7f649aab919596e31e79055a4dfa626f2d930fb153f755dfd5",
+    "observed": {
+     "sccCount": 1,
+     "largestScc": 100000,
+     "recursiveComponents": 1,
+     "edgeCount": 100000
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "ring/1000000": {
+    "digest": "f7ea91296d18512300199584eb34d91e0ee07ab645b718b03ccb20729117230d",
+    "observed": {
+     "sccCount": 1,
+     "largestScc": 1000000,
+     "recursiveComponents": 1,
+     "edgeCount": 1000000
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanin/1000": {
+    "digest": "4be7172995e32d7589428d173d373d3f189fa8f94bae906f9f872755193ba83a",
+    "observed": {
+     "sccCount": 1000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanin/10000": {
+    "digest": "5120e973a37d2a8ebd4023e2a8a42605bd59ee8dd613cad78600386a532ddb31",
+    "observed": {
+     "sccCount": 10000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 9999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanin/100000": {
+    "digest": "0d67876db6adfa8abc8296c255ae68dcb65fbdc0e923c377962aa0ddd00b1f99",
+    "observed": {
+     "sccCount": 100000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 99999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanin/1000000": {
+    "digest": "b273ad5bee2b1d4d4fb5cb4b949e8ec02d8ce1e962661a5b1b1634b6db3416b1",
+    "observed": {
+     "sccCount": 1000000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanout/1000": {
+    "digest": "92ec746beced51c5f4df8f6c086ffbd663ea6014a2b9a88e1bec853691121063",
+    "observed": {
+     "sccCount": 1000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanout/10000": {
+    "digest": "d61baf14a882e4ac9be2b5da42c8cc83ffbc54726d347a2343e40ecfd7ed1132",
+    "observed": {
+     "sccCount": 10000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 9999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanout/100000": {
+    "digest": "591a8eb4dc7e981e9399dd435981d565b0a6bcc1907aaf16cafd4420bad435d3",
+    "observed": {
+     "sccCount": 100000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 99999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanout/1000000": {
+    "digest": "42892be0443b7ca514450d561443cf83b75467fb0371dc3fe0894721a452be14",
+    "observed": {
+     "sccCount": 1000000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "scc-rich/1000": {
+    "digest": "9da05c9f238941d895b3da02f1f8aaa6649ced7960a34e792366546b9f6a625d",
+    "observed": {
+     "sccCount": 125,
+     "largestScc": 8,
+     "recursiveComponents": 125,
+     "edgeCount": 1942
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "scc-rich/10000": {
+    "digest": "6792dc94b838e5730e21cb9ec0acafe8fb31473a6190db1649d18c29e8d5d16b",
+    "observed": {
+     "sccCount": 1250,
+     "largestScc": 8,
+     "recursiveComponents": 1250,
+     "edgeCount": 19496
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "scc-rich/100000": {
+    "digest": "f78db80b61030b9ab6d68c1fb335cad2f7e1d985cb76efaa0e29ff9f40b3be62",
+    "observed": {
+     "sccCount": 12500,
+     "largestScc": 8,
+     "recursiveComponents": 12500,
+     "edgeCount": 195562
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "scc-rich/1000000": {
+    "digest": "80b58414e03f77f91e688b71595d79751e802fe17fb74a78dc2af69d2a6e768a",
+    "observed": {
+     "sccCount": 125000,
+     "largestScc": 8,
+     "recursiveComponents": 125000,
+     "edgeCount": 1953580
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   }
+  },
+  "evidenceReplay": "measured",
+  "evidence": {
+   "fixture/multiservice": {
+    "witness": {
+     "sinksWithPaths": 5,
+     "attempted": 5,
+     "buildRefused": 0,
+     "built": 5,
+     "builtCrossScope": 0,
+     "replayed": 5,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 5,
+     "tamper": {
+      "edge-altered-resigned": "5/5",
+      "edge-altered-unsigned": "5/5",
+      "source-blob-altered": "5/5",
+      "graph-altered": "5/5"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 5,
+      "paths": 5,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 5,
+      "paths": 5,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "examined": 3,
+     "correct": 3,
+     "falseAttributions": 0,
+     "negativeLabelHits": 0,
+     "missingPositive": [
+      "ms:F4",
+      "ms:F5",
+      "ms:F6"
+     ]
+    }
+   },
+   "fixture/callreturn": {
+    "witness": {
+     "sinksWithPaths": 7,
+     "attempted": 7,
+     "buildRefused": 0,
+     "built": 7,
+     "builtCrossScope": 7,
+     "replayed": 7,
+     "replayedCrossScope": 7,
+     "replayFailed": 0,
+     "completeBundles": 7,
+     "tamper": {
+      "edge-altered-resigned": "7/7",
+      "edge-altered-unsigned": "7/7",
+      "source-blob-altered": "7/7",
+      "graph-altered": "7/7"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 7,
+      "paths": 24,
+      "pathsWithCallOrReturn": 17,
+      "impossible": 6,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 7,
+      "paths": 8,
+      "pathsWithCallOrReturn": 8,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 4,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": null
+   },
+   "express/lib": {
+    "witness": {
+     "sinksWithPaths": 2,
+     "attempted": 2,
+     "buildRefused": 0,
+     "built": 2,
+     "builtCrossScope": 0,
+     "replayed": 2,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 2,
+     "tamper": {
+      "edge-altered-resigned": "2/2",
+      "edge-altered-unsigned": "2/2",
+      "source-blob-altered": "2/2",
+      "graph-altered": "2/2"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 2,
+      "paths": 2,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 2,
+      "paths": 2,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "labeled": 0,
+     "unlabeled": 0,
+     "correct": 0,
+     "wrongField": 0,
+     "spurious": 0,
+     "sourceKindMismatch": 0
+    }
+   },
+   "express/examples": {
+    "witness": {
+     "sinksWithPaths": 31,
+     "attempted": 31,
+     "buildRefused": 0,
+     "built": 31,
+     "builtCrossScope": 0,
+     "replayed": 31,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 31,
+     "tamper": {
+      "edge-altered-resigned": "31/31",
+      "edge-altered-unsigned": "31/31",
+      "source-blob-altered": "31/31",
+      "graph-altered": "31/31"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 31,
+      "paths": 39,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 30,
+      "paths": 38,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "labeled": 7,
+     "unlabeled": 0,
+     "correct": 6,
+     "wrongField": 0,
+     "spurious": 1,
+     "sourceKindMismatch": 0
+    }
+   },
+   "fastify/lib": {
+    "witness": {
+     "sinksWithPaths": 15,
+     "attempted": 15,
+     "buildRefused": 0,
+     "built": 15,
+     "builtCrossScope": 14,
+     "replayed": 15,
+     "replayedCrossScope": 14,
+     "replayFailed": 0,
+     "completeBundles": 5,
+     "tamper": {
+      "edge-altered-resigned": "15/15",
+      "edge-altered-unsigned": "15/15",
+      "source-blob-altered": "15/15",
+      "graph-altered": "15/15"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 15,
+      "paths": 125,
+      "pathsWithCallOrReturn": 48,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 10
+     },
+     "v2": {
+      "sinks": 15,
+      "paths": 93,
+      "pathsWithCallOrReturn": 56,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 6
+     }
+    },
+    "attribution": {
+     "labeled": 0,
+     "unlabeled": 0,
+     "correct": 0,
+     "wrongField": 0,
+     "spurious": 0,
+     "sourceKindMismatch": 0
+    }
+   },
+   "fastify/examples": {
+    "witness": {
+     "sinksWithPaths": 4,
+     "attempted": 4,
+     "buildRefused": 0,
+     "built": 4,
+     "builtCrossScope": 0,
+     "replayed": 4,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 4,
+     "tamper": {
+      "edge-altered-resigned": "4/4",
+      "edge-altered-unsigned": "4/4",
+      "source-blob-altered": "4/4",
+      "graph-altered": "4/4"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 4,
+      "paths": 4,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 4,
+      "paths": 4,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "labeled": 4,
+     "unlabeled": 0,
+     "correct": 4,
+     "wrongField": 0,
+     "spurious": 0,
+     "sourceKindMismatch": 1
+    }
+   }
+  }
+ }
+}

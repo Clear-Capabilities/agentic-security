@@ -1,0 +1,26 @@
+{
+  "name": "07-callbacks",
+  "construct": "inline callbacks, an array combinator and a function passed by reference",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 6,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 9,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 10,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 12,
+      "flow": false
+    }
+  ]
+}

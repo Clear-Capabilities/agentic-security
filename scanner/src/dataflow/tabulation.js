@@ -67,6 +67,36 @@ export function enumerateSinks(perFileIR, callGraph) {
 }
 
 /**
+ * Canonical caller index: callee qid -> [caller qid]. Built from each
+ * function's recorded `calls` (statement-level call nodes) and resolved with
+ * resolveKnownCallee, never the guessing resolve(). The demand selector
+ * (demand-query.js) extends it with the embedded call sites that `fn.calls`
+ * does not record (assignment right-hand sides, return values, nested
+ * arguments, callback registrations).
+ */
+export function buildCallerQidIndex(callGraph) {
+  const callersOf = new Map();
+  if (!callGraph || !callGraph.functions) return callersOf;
+  for (const fn of callGraph.functions.values()) {
+    for (const callee of (fn.calls || [])) {
+      // callee.callee is a SOURCE-LEVEL name ("b.fill"); lookups are by qid,
+      // so keying by the name could never match. Resolve to a qid first.
+      // resolveKnownCallee (not resolve): callee.callee may be a flattened
+      // member-call string ("loader.read"); the plain resolve() would guess
+      // via its bare-tail fallback and invent an edge to an unrelated
+      // same-named function. See callgraph.js.
+      const name = callee && typeof callee === 'object' ? callee.callee : callee;
+      if (!name) continue;
+      const qid = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(name, fn.file) : null;
+      if (!qid) continue;
+      if (!callersOf.has(qid)) callersOf.set(qid, []);
+      callersOf.get(qid).push(fn.qid);
+    }
+  }
+  return callersOf;
+}
+
+/**
  * RHS-lite demand-driven slice. For each sink, walk backward through the
  * intra-procedural CFG via def-use, then ascend via the call graph for
  * each unresolved parameter binding. Returns the set of fn qids that are
@@ -77,43 +107,67 @@ export function enumerateSinks(perFileIR, callGraph) {
  *   maxCallerDepth: bounds reverse-call-graph walk
  */
 export function reachabilitySliceFromSinks(sinks, callGraph, maxCallerDepth = MAX_CALLER_DEPTH) {
+  return reachabilitySliceWithCompletion(sinks, callGraph, maxCallerDepth).reachable;
+}
+
+/**
+ * Same walk as reachabilitySliceFromSinks, plus a completion record
+ * (DAG-07 R07.1). A function the walk never reached is skipped by
+ * `shouldAnalyzeUnderRhs`, so a walk that stopped at its worklist cap or its
+ * caller-depth ceiling has silently narrowed what is analyzed; the record
+ * says so, with the number of callers left unexplored.
+ *
+ * Returns { reachable: Set<qid>, completion: { status, reasons,
+ * unexploredFrontierCount, visited, limits } }.
+ */
+export function reachabilitySliceWithCompletion(sinks, callGraph, maxCallerDepth = MAX_CALLER_DEPTH) {
   const reachableFns = new Set();
-  if (!Array.isArray(sinks) || !callGraph || !callGraph.functions) return reachableFns;
+  const completion = {
+    status: 'complete', reasons: [], unexploredFrontierCount: 0, visited: 0,
+    limits: { maxWorklist: MAX_WORKLIST, maxCallerDepth },
+  };
+  if (!Array.isArray(sinks) || !callGraph || !callGraph.functions) {
+    completion.status = 'unavailable';
+    completion.reasons = ['no-call-graph'];
+    return { reachable: reachableFns, completion };
+  }
 
   // Build a reverse callgraph: who calls fn-qid?
-  const callersOf = new Map();
-  for (const fn of callGraph.functions.values()) {
-    for (const callee of (fn.calls || [])) {
-      // callee.callee is a SOURCE-LEVEL name ("b.fill"); the worklist below
-      // looks this map up by qid, so keying by the name means the lookup can
-      // never match. Resolve to a qid first.
-      const name = callee && typeof callee === 'object' ? callee.callee : callee;
-      if (!name) continue;
-      // resolveKnownCallee (not resolve): callee.callee may be a flattened
-      // member-call string ("loader.read"); the plain resolve() would guess
-      // via its bare-tail fallback and invent an edge to an unrelated
-      // same-named function. See callgraph.js.
-      const qid = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(name, fn.file) : null;
-      if (!qid) continue;
-      if (!callersOf.has(qid)) callersOf.set(qid, []);
-      callersOf.get(qid).push(fn.qid);
-    }
-  }
+  // DAG-02: factored into the shared, exported buildCallerQidIndex so the
+  // demand selector (demand-query.js) reuses the same canonical incoming-edge
+  // index. Behaviour is unchanged.
+  const callersOf = buildCallerQidIndex(callGraph);
 
   const work = [];
   for (const s of sinks) work.push({ qid: s.fnQid, depth: 0 });
   let visitedCount = 0;
+  let depthCut = 0;
+  let capped = false;
   while (work.length) {
-    if (++visitedCount > MAX_WORKLIST) break;
+    if (++visitedCount > MAX_WORKLIST) { capped = true; break; }
     const { qid, depth } = work.shift();
     if (reachableFns.has(qid)) continue;
     reachableFns.add(qid);
-    if (depth >= maxCallerDepth) continue;
+    if (depth >= maxCallerDepth) {
+      // Callers of this function exist but are not explored.
+      for (const callerQid of (callersOf.get(qid) || [])) if (!reachableFns.has(callerQid)) depthCut += 1;
+      continue;
+    }
     for (const callerQid of (callersOf.get(qid) || [])) {
       if (!reachableFns.has(callerQid)) work.push({ qid: callerQid, depth: depth + 1 });
     }
   }
-  return reachableFns;
+  completion.visited = visitedCount;
+  if (capped) {
+    completion.reasons.push('worklist-limit');
+    completion.unexploredFrontierCount += work.length;
+  }
+  if (depthCut > 0) {
+    completion.reasons.push('caller-depth-limit');
+    completion.unexploredFrontierCount += depthCut;
+  }
+  if (completion.reasons.length) completion.status = 'partial';
+  return { reachable: reachableFns, completion };
 }
 
 /**
@@ -128,10 +182,12 @@ export function rhsReachableFunctions(perFileIR, callGraph) {
   const sinks = enumerateSinks(perFileIR, callGraph);
   if (!sinks.length) {
     // No sinks → no demand. Return null to signal "analyze all" to caller.
-    return { reachable: null, sinks: [] };
+    // `completion` is an additive property (DAG-07 R07.1); existing callers
+    // destructure only { reachable, sinks }.
+    return { reachable: null, sinks: [], completion: { status: 'complete', reasons: [], unexploredFrontierCount: 0, visited: 0, limits: {}, note: 'no-sinks-analyze-all' } };
   }
-  const reachable = reachabilitySliceFromSinks(sinks, callGraph);
-  return { reachable, sinks };
+  const { reachable, completion } = reachabilitySliceWithCompletion(sinks, callGraph);
+  return { reachable, sinks, completion };
 }
 
 /**

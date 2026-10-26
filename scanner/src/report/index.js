@@ -339,6 +339,8 @@ export function normalizeFindings(scan){
       // (posture/proof-tier.js) actually attached it. Never synthesised here;
       // a finding with no proof backing simply omits these fields.
       ...(f.proofTier !== undefined ? { proofTier: f.proofTier } : {}),
+      // DAG-05 R05.7: whether this finding was replayed from the cross-scan cache or analysed in this scan; present only when the cache was in use.
+      ...(f.cacheProvenance !== undefined ? { cacheProvenance: f.cacheProvenance } : {}),
       ...(f.proofEvidence !== undefined ? { proofEvidence: f.proofEvidence } : {}),
       // X-206: the version-1 verification record and its shared projection, ADDITIVE and present only when the finding carries
       // a record (a plain scan output is byte-identical). `verificationReplay` is the typed prerequisite list of a replay attempt.

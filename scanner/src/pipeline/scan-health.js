@@ -84,6 +84,19 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
   if (lineageStatus?.failure) {
     conditions.push(`lineage graph build threw and was skipped: ${lineageStatus.failure}`);
   }
+  if (Array.isArray(lineageStatus?.incomplete) && lineageStatus.incomplete.length) {
+    conditions.push(`lineage field analysis stopped early in ${lineageStatus.incomplete.length} function(s) (iteration budget); a missing flow from those functions is not evidence of safety`);
+  }
+  if (lineageStatus?.completion && lineageStatus.completion.status !== 'complete') {
+    // DAG-07 R07.2: construction limits, cancellation, seeding limits and a
+    // zero-flow result from incomplete analysis all land here, in terms of
+    // the shared envelope, so none of them can be silent.
+    const c = lineageStatus.completion;
+    conditions.push(`lineage analysis is ${c.status} (${(c.reasons || []).join(', ') || 'no reason recorded'}); absence of a flow is not evidence that none exists`);
+  }
+  if (Array.isArray(lineageStatus?.degraded) && lineageStatus.degraded.length) {
+    conditions.push(`lineage analysis used a coarser summary for ${lineageStatus.degraded.length} call context(s) (context cap or unconverged recursion)`);
+  }
   // FR-203: a detector that threw on at least one file (captured via
   // FR-201's runDetector isolation) is a real analysis gap distinct from
   // an ANNOTATOR error above — annotators run post-detection over the
@@ -136,6 +149,8 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
           reason: deepStatus.reason ?? null,
           failure: deepStatus.failure ?? null,
           ...(Array.isArray(deepStatus.incomplete) && deepStatus.incomplete.length ? { incomplete: deepStatus.incomplete } : {}),
+          // DAG-05 R05.7: present only when the cross-scan cache was requested; says what was reused, what was recomputed, and why a run was cold.
+          ...(deepStatus.incremental ? { incremental: deepStatus.incremental } : {}),
         }
       : null,
     lineageAnalysis: lineageStatus
@@ -144,6 +159,9 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
           enabled: !!lineageStatus.enabled,
           reason: lineageStatus.reason ?? null,
           failure: lineageStatus.failure ?? null,
+          ...(lineageStatus.completion ? { completion: lineageStatus.completion } : {}),
+          ...(Array.isArray(lineageStatus.incomplete) && lineageStatus.incomplete.length ? { incomplete: lineageStatus.incomplete } : {}),
+          ...(Array.isArray(lineageStatus.degraded) && lineageStatus.degraded.length ? { degraded: lineageStatus.degraded } : {}),
         }
       : null,
     annotatorErrorCount: safeAnnotatorErrors.length,

@@ -217,6 +217,8 @@ import { createStringMemo } from './util/string-memo.js';
 import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
 import { buildLineageGraph } from './lineage/index.js';
+import { buildLineageGraphOwned, resolveLineageDeadlineMs } from './lineage/owned-build.js';
+import { completionOfGraph, summarizeForHealth as summarizeCompletionForHealth } from './lineage/completion.js';
 // v3 next-gen — Pillars 1, 4, 5, 6, 8, 9.
 import { annotateCloneClusters, findCloneOutliers } from './posture/semantic-clone.js';
 import { annotateAiProvenance } from './posture/ai-code-fingerprint.js';
@@ -9503,6 +9505,7 @@ function _deterministicFileTimings(timings) {
   let _deepCallGraph = null;
   let _deepFailure = null;
   let _deepIncomplete = null;
+  let _deepIncremental = null; // DAG-05 R05.7: cache provenance of the deep pass, when AGENTIC_SECURITY_INCREMENTAL=1
   if (_deepEnabled) {
     const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
     const t0 = Date.now();
@@ -9547,6 +9550,10 @@ function _deterministicFileTimings(timings) {
         });
       }
       if (Array.isArray(irFindings.analysisIncomplete) && irFindings.analysisIncomplete.length) _deepIncomplete = irFindings.analysisIncomplete;
+      if (irFindings._incrementalStats) {
+        const st = irFindings._incrementalStats;
+        _deepIncremental = { mode: st.mode, reason: st.reason, priorGeneration: st.priorGeneration, provenance: st.provenance, invalidation: st.invalidation, files: st.files, persisted: st.persisted && { committed: st.persisted.committed, error: st.persisted.error }, completion: st.completion };
+      }
       for (const f of irFindings) {
         f.unvalidated = true;
         f.validator_verdict = 'unvalidated';
@@ -9577,6 +9584,21 @@ function _deterministicFileTimings(timings) {
   // the finding-based notice above does not: deep mode never explicitly
   // requested at all (the common default-unset-in-CI case), which previously
   // produced no signal of any kind that assurance had quietly narrowed.
+  // DAG-05: when the cache was asked for, say what it did for this scan. Languages whose analyzers keep
+  // no cross-scan state (Nix: there is no taint IR to key a cache on) are analysed in full every time and named.
+  if (process.env.AGENTIC_SECURITY_INCREMENTAL === '1') {
+    const noHook = Object.keys(fc).some((f) => /\.nix$/i.test(f)) ? ['nix'] : [];
+    if (!_deepIncremental) {
+      _deepIncremental = { mode: 'cold', reason: _deepEnabled ? 'the deep pass recorded no incremental state' : 'deep analysis did not run, so the cross-scan cache is not used' };
+    }
+    if (noHook.length) {
+      _deepIncremental = {
+        ..._deepIncremental, languagesWithoutIncrementalHook: noHook,
+        languages: Object.fromEntries(noHook.map((l) => [l, { incremental: false, mode: 'cold', reason: 'its analysers keep no cross-scan state and run in full on every scan' }])),
+        note: `${noHook.join(', ')} analysers keep no cross-scan state and run in full on every scan`,
+      };
+    }
+  }
   const _deepStatus = {
     requested: _deepRequested,
     enabled: _deepEnabled,
@@ -9590,6 +9612,8 @@ function _deterministicFileTimings(timings) {
     failure: _deepFailure,
     // E2-05: where the deep analysis stopped short (budget, deadline, function limit, a thrown analysis). Present only when something did.
     ...(_deepIncomplete ? { incomplete: _deepIncomplete } : {}),
+    // DAG-05 R05.7: which facts were reused from the cache and which were analysed afresh, and why a run was cold.
+    ...(_deepIncremental ? { incremental: _deepIncremental } : {}),
   };
   // Sub-project E, increment 5 — Data Flow Explorer lineage graph.
   // DELIBERATELY INDEPENDENT of AGENTIC_SECURITY_DEEP/_deepEnabled above
@@ -9621,10 +9645,11 @@ function _deterministicFileTimings(timings) {
       // Reuses the SAME _sharedIR memo _deepEnabled's own block above uses —
       // if deep mode already built it, this is free; if not, this is what
       // first triggers the build (the whole reason this gate is independent).
-      const { perFile, callGraph } = _sharedIR || (_sharedIR = await _buildIR());
+      const _lineageDeadlineMs = resolveLineageDeadlineMs();
+      const { perFile, callGraph } = _lineageDeadlineMs ? {} : (_sharedIR || (_sharedIR = await _buildIR()));
       const _lineageT0 = Date.now();
       setProgress({ phase: 'Lineage graph', current: 0, total: 0, file: `starting (budget ${Math.round(_lineageBudgetMs / 1000)}s)` });
-      const _lr = buildLineageGraph(callGraph, {
+      const _lineageOpts = {
         // Live per-function progress from the field-identity driver's own
         // single pass over every function (src/lineage/driver.js).
         onProgress: (p) => setProgress({
@@ -9650,9 +9675,32 @@ function _deterministicFileTimings(timings) {
         deterministic: isDeterministic(),
         perFile,
         fileContents,
-      });
+      };
+      // DAG-07 R07.7: with AGENTIC_SECURITY_LINEAGE_DEADLINE_MS set, the build runs in an
+      // owned worker with a watchdog. Unset: the in-process call, exactly as before.
+      let _lr = _lineageDeadlineMs
+        ? await buildLineageGraphOwned(fileContents, { ..._lineageOpts, onProgress: undefined, perFile: undefined, deadlineMs: _lineageDeadlineMs }).done
+        : buildLineageGraph(callGraph, _lineageOpts);
+      // The worker entry is a separate file that the single-file bundle does not ship.
+      // When the worker cannot start, fall back to the in-process build with the
+      // cooperative deadline (no watchdog for a non-polling worker, but the analysis
+      // still stops and reports `cancelled`); never fail the build over it.
+      if (_lineageDeadlineMs && _lr.status === 'failed' && /Cannot find module|ERR_MODULE_NOT_FOUND|owned-worker/i.test(String(_lr.failure || ''))) {
+        // The deadline branch skipped the shared IR (the worker rebuilds its own); build it now.
+        const _ir = _sharedIR || (_sharedIR = await _buildIR());
+        _lr = buildLineageGraph(_ir.callGraph, { ..._lineageOpts, perFile: _ir.perFile, deadline: Date.now() + _lineageDeadlineMs });
+      }
+      if (_lr.terminatedByWatchdog) _lineageStatus.failure = _lr.failure;
       if (_lr.status === 'complete') {
         _lineageGraph = _lr.graph;
+        // DAG-07 R07.2: a graph built from a field analysis that stopped
+        // early must reach scan health, not only the graph body.
+        const _ac = _lr.graph?.coverage?.analysisCompletion;
+        if (_ac && _ac.status !== 'complete') { _lineageStatus.incomplete = _ac.incomplete; _lineageStatus.degraded = _ac.degraded; }
+        // R07.2: the whole envelope (cancelled, construction limits, seeding
+        // limits and zero-flow results included), not only the iteration
+        // and degraded-context lists above.
+        { const _env = completionOfGraph(_lr.graph); if (_env.status !== 'complete') _lineageStatus.completion = summarizeCompletionForHealth(_env); }
         if (_lr.elapsedMs > _lineageBudgetMs) {
           // Same "measured, not truly interrupted" disclosure _deepEnabled's
           // own elapsed > budgetMs branch already makes for IR-taint — see

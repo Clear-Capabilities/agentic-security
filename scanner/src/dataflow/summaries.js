@@ -52,12 +52,22 @@ function _hashState(taintedParams) {
   return crypto.createHash('sha256').update(sorted).digest('hex').slice(0, 12);
 }
 
+// DAG-05 R05.3: the canonical entry list a key was derived from, so a persisted
+// context can carry its COMPLETE key (qid, entry state, receiver) and be checked
+// on reload rather than trusted by hash alone.
+function entryListOf(taintedParams) {
+  if (!taintedParams || taintedParams.size === 0) return [];
+  return [...canonicalizeAccessSet(taintedParams)].sort();
+}
+
 export class SummaryCache {
   constructor() {
     this._cache = new Map(); // qid::hash → summary
     this._stack = new Set(); // qids currently being analyzed (recursion guard)
     this._iter = 0;
-    this._maxIter = 5000;
+    // Computation budget for one scan. AGENTIC_SECURITY_SUMMARY_BUDGET raises (or lowers) it; the default is unchanged.
+    const envBudget = Number(process.env.AGENTIC_SECURITY_SUMMARY_BUDGET);
+    this._maxIter = Number.isFinite(envBudget) && envBudget > 0 ? Math.floor(envBudget) : 5000;
     // FR-SEM-2 (roadmap #2): the engine computes a distinct summary per
     // entry-taint-state (value-context sensitivity), computed lazily at call
     // sites. To stop that from blowing up when a hot helper is reached under
@@ -70,6 +80,13 @@ export class SummaryCache {
     const envCap = Number(process.env.AGENTIC_SECURITY_KCFA_MAX_CONTEXTS);
     this._maxContextsPerFn = Number.isFinite(envCap) && envCap >= 0 ? envCap : 16;
     this._contextCapHits = 0;
+    // DAG-07 R07.3: append-only record of every place a result is coarser
+    // than a fresh analysis would give: a tainted entry answered with the
+    // empty-entry summary (context cap), a recursion refinement that was still
+    // changing when its rounds ran out, and the subset of cap fallbacks whose
+    // empty-entry summary was restored from a previous scan rather than
+    // computed in this one.
+    this._notes = [];
     // R2 (PRD §5): bounded k=1 call-string sensitivity. OPT-IN (default OFF).
     // When on, the cache key is extended with the immediate caller's qid, so two
     // call paths reaching a helper with the SAME tainted-arg shape get DISTINCT
@@ -78,6 +95,9 @@ export class SummaryCache {
     // before, so no behavior change for the shipped engine.
     this._callString = process.env.AGENTIC_SECURITY_KCFA_CALLSTRING === '1';
     this._callerCtx = null;
+    // DAG-05 R05.3: key -> { qid, entry:[...], stateHash, recv } for every key this
+    // cache has produced, so cross-scan persistence can store typed contexts.
+    this._meta = new Map();
   }
 
   // Set the immediate-caller qid for call-string keying; returns the previous
@@ -111,8 +131,38 @@ export class SummaryCache {
     // caller dimension there only ever narrows an already-isolated lookup,
     // never disconnects a shared one.
     if (this._callString && this._callerCtx && stateHash !== 'empty') base = `${base}@${this._callerCtx}`;
-    if (!receiverType) return base;
-    return `${base}::${hashReceiverType(receiverType)}`;
+    const finalKey = receiverType ? `${base}::${hashReceiverType(receiverType)}` : base;
+    if (!this._meta.has(finalKey)) {
+      this._meta.set(finalKey, {
+        qid, entry: entryListOf(taintedParams), stateHash,
+        recv: receiverType ? hashReceiverType(receiverType) : null,
+      });
+    }
+    return finalKey;
+  }
+
+  /**
+   * DAG-05 R05.3: restore a persisted context under its REAL key. Never writes
+   * the empty-entry slot on behalf of a tainted context: the key is rebuilt from
+   * the persisted entry list and refused unless it reproduces the persisted hash.
+   * Returns false (nothing stored) on any mismatch.
+   */
+  restoreContext(qid, entryList, recv, stateHash, summary) {
+    if (!qid || !Array.isArray(entryList) || !summary) return false;
+    const entry = new Set(entryList);
+    const h = _hashState(entry);
+    if (h !== stateHash) return false;
+    if (this._callString && h !== 'empty') return false;
+    const base = `${qid}::${h}`;
+    const key = recv ? `${base}::${recv}` : base;
+    this._cache.set(key, summary);
+    this._meta.set(key, { qid, entry: entryListOf(entry), stateHash: h, recv: recv || null });
+    if (h !== 'empty') {
+      let ctxs = this._contextsByQid.get(qid);
+      if (!ctxs) { ctxs = new Set(); this._contextsByQid.set(qid, ctxs); }
+      ctxs.add(h);
+    }
+    return true;
   }
 
   get(qid, taintedParams, receiverType) {
@@ -156,7 +206,11 @@ export class SummaryCache {
       if (!ctxs.has(stateHash) && ctxs.size >= this._maxContextsPerFn) {
         this._contextCapHits++;
         const base = this._cache.get(this._key(qid, new Set()));
-        if (base && !base._recursive) return base;
+        if (base && !base._recursive) {
+          this._notes.push({ reason: 'context-cap-fallback', qid });
+          if (base._incrementalSeed) this._notes.push({ reason: 'incremental-empty-entry-reuse', qid });
+          return base;
+        }
         // No base summary yet → fall through and compute this one (we need a
         // result), but don't grow the context set.
       } else {
@@ -178,13 +232,15 @@ export class SummaryCache {
       this._cache.set(k, summary);
       if (this._hitRecursion) {
         const FP_MAX = 3;
+        let converged = false;
         for (let fp = 0; fp < FP_MAX; fp++) {
           if (++this._iter > this._maxIter) break;
           const prev = summary;
           summary = analyze(qid, taintedParams);
-          if (_summaryEq(prev, summary)) break;
+          if (_summaryEq(prev, summary)) { converged = true; break; }
           this._cache.set(k, summary);
         }
+        if (!converged) this._notes.push({ reason: 'recursion-nonconverged', qid });
       }
       if (summary._recursive) delete summary._recursive;
       return summary;
@@ -224,7 +280,17 @@ export class SummaryCache {
   }
 
   size() { return this._cache.size; }
-  clear() { this._cache.clear(); this._iter = 0; this._contextsByQid.clear(); this._contextCapHits = 0; }
+  clear() { this._cache.clear(); this._iter = 0; this._contextsByQid.clear(); this._contextCapHits = 0; this._notes = []; }
+
+  /** DAG-07 R07.3: [{reason, count, example}] over everything recorded in `_notes`, sorted by reason. */
+  completionNotes() {
+    const byReason = new Map();
+    for (const n of this._notes) {
+      const cur = byReason.get(n.reason);
+      if (cur) cur.count += 1; else byReason.set(n.reason, { reason: n.reason, count: 1, example: String(n.qid ?? '').slice(0, 160) });
+    }
+    return [...byReason.values()].sort((a, b) => (a.reason < b.reason ? -1 : 1));
+  }
 }
 
 // Stage 3 correctness audit (detection depth): this compared mutatedParams

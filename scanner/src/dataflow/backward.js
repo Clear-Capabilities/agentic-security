@@ -50,6 +50,15 @@ function _reverseEdges(cfg) {
 }
 
 /**
+ * CFG reverse-edge index (node id -> predecessor ids), exported so the demand
+ * selector (demand-query.js) and this slicer share one definition of the
+ * incoming-edge relation instead of each deriving its own.
+ */
+export function reverseEdgesOf(cfg) {
+  return _reverseEdges(cfg);
+}
+
+/**
  * Build a backward slice from a finding's sink site to its source(s).
  *
  *   fn:        the function the sink lives in
@@ -75,10 +84,28 @@ function _reverseEdges(cfg) {
  *   ]
  */
 export function sliceBackward(fn, sinkNode, sinkArgPath) {
+  return sliceBackwardWithCompletion(fn, sinkNode, sinkArgPath).slice;
+}
+
+/**
+ * Same slice, plus a completion record (DAG-07 R07.1): { slice, completion }.
+ * A slice that stopped at SLICE_BUDGET_NODES is a prefix of the real
+ * backward closure; the record carries how many queued steps were left, so a
+ * consumer (the SMT infeasibility check among them) can tell "no source
+ * found" from "stopped looking". `sliceBackward` itself still returns the
+ * bare array for existing callers, with the same record attached as a
+ * non-enumerable `completion` property.
+ */
+export function sliceBackwardWithCompletion(fn, sinkNode, sinkArgPath) {
   const out = [];
-  if (!fn || !sinkNode) return out;
+  const completion = { status: 'complete', reasons: [], unexploredFrontierCount: 0, visited: 0, limits: { maxNodes: SLICE_BUDGET_NODES } };
+  const finish = () => {
+    Object.defineProperty(out, 'completion', { value: completion, enumerable: false, configurable: true });
+    return { slice: out, completion };
+  };
+  if (!fn || !sinkNode) { completion.status = 'unavailable'; completion.reasons = ['no-function-or-sink']; return finish(); }
   const cfg = fn.cfg;
-  if (!cfg || !cfg.nodes) return out;
+  if (!cfg || !cfg.nodes) { completion.status = 'unavailable'; completion.reasons = ['no-cfg']; return finish(); }
   const rev = _reverseEdges(cfg);
 
   // Map node-id to itself lookup for nodes in this CFG.
@@ -90,7 +117,7 @@ export function sliceBackward(fn, sinkNode, sinkArgPath) {
   for (const id of Object.keys(nodes)) {
     if (nodes[id] === sinkNode) { sinkNid = id; break; }
   }
-  if (!sinkNid) return out;
+  if (!sinkNid) { completion.status = 'unavailable'; completion.reasons = ['sink-not-in-cfg']; return finish(); }
 
   out.push({
     line: sinkNode.line || 0,
@@ -104,7 +131,12 @@ export function sliceBackward(fn, sinkNode, sinkArgPath) {
   let visitedCount = 0;
 
   while (work.length) {
-    if (++visitedCount > SLICE_BUDGET_NODES) break;
+    if (++visitedCount > SLICE_BUDGET_NODES) {
+      completion.status = 'partial';
+      completion.reasons = ['slice-node-budget'];
+      completion.unexploredFrontierCount = work.length;
+      break;
+    }
     const { nid, queryPath } = work.shift();
     const key = `${nid}::${queryPath}`;
     if (visited.has(key)) continue;
@@ -206,8 +238,10 @@ export function sliceBackward(fn, sinkNode, sinkArgPath) {
     }
   }
 
+  completion.visited = Math.min(visitedCount, SLICE_BUDGET_NODES);
   // Reverse so the trace reads source-first.
-  return out.reverse();
+  out.reverse();
+  return finish();
 }
 
 /**
@@ -233,7 +267,7 @@ export function annotateBackwardSlices(findings, perFileIR, callGraph) {
   if (callGraph && callGraph.functions) {
     for (const fn of callGraph.functions.values()) fnByQid.set(fn.qid, fn);
   }
-  let annotated = 0, skipped = 0, exhausted = false;
+  let annotated = 0, skipped = 0, exhausted = false, partialSlices = 0;
   for (const f of findings) {
     if (Date.now() > deadline) { exhausted = true; skipped++; continue; }
     if (!f || !f._funcQid) { skipped++; continue; }
@@ -278,6 +312,7 @@ export function annotateBackwardSlices(findings, perFileIR, callGraph) {
         if (!slice) slice = candidateSlice;
       }
     }
+    if (slice && slice.completion && slice.completion.status !== 'complete') partialSlices++;
     if (slice && slice.length) {
       f.backwardSlice = slice;
       f.pathSteps = (f.pathSteps || []).concat(slice.map(s => ({
@@ -291,7 +326,7 @@ export function annotateBackwardSlices(findings, perFileIR, callGraph) {
     }
   }
   Object.defineProperty(findings, '_annotateBackwardSlicesStats', {
-    value: { annotated, skipped, exhausted, budgetMs },
+    value: { annotated, skipped, exhausted, budgetMs, partialSlices },
     enumerable: false,
   });
   return findings;

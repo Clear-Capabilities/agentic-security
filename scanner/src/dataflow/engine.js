@@ -2130,6 +2130,8 @@ function _unionAnnotationTaint(fn, entrySet) {
   if (seeds && seeds.size && Array.isArray(fn.params) && _REQ_PARAM.test(fn.params[0] || '')) {
     entrySet = new Set([...entrySet, ...[...seeds].map((f) => `${fn.params[0]}.${f}`)]);
   }
+  // DAG-08: access paths seeded by a bound boundary contract (lineage/boundary-contract.js). Absent unless a contract bound to this function.
+  if (Array.isArray(fn.boundarySeeds) && fn.boundarySeeds.length) entrySet = new Set([...entrySet, ...fn.boundarySeeds]);
   if (!fn.paramAnnotations || !fn.paramAnnotations.length) return entrySet;
   const extra = matchAnnotationParams(fn.paramAnnotations, fn.file);
   if (!extra.size) return entrySet;
@@ -2359,9 +2361,9 @@ function stateEq(a, b) {
 // that runs out used to leave a result that looked complete; now `runTaintEngine`'s return value carries `analysisIncomplete`, and the scan
 // reports it as `deepStatus.incomplete`.
 let _incomplete = new Map();
-function _noteIncomplete(reason, detail) {
+function _noteIncomplete(reason, detail, n = 1) {
   const cur = _incomplete.get(reason);
-  if (cur) cur.count += 1; else _incomplete.set(reason, { reason, count: 1, example: String(detail ?? '').slice(0, 160) });
+  if (cur) cur.count += n; else _incomplete.set(reason, { reason, count: n, example: String(detail ?? '').slice(0, 160) });
 }
 export const INCOMPLETE_REASONS = Object.freeze({
   'summary-budget': 'the interprocedural summary budget ran out; later callees were treated as having no effect',
@@ -2369,6 +2371,10 @@ export const INCOMPLETE_REASONS = Object.freeze({
   'function-limit': 'more functions than the per-scan function limit; the rest were not analysed',
   'higher-order-limit': 'more callback invocations than the per-function limit; the rest were not analysed',
   'analysis-error': 'the analysis of a function threw and its result was discarded',
+  // DAG-07 R07.3
+  'context-cap-fallback': 'a call under a tainted argument shape was answered with the empty-entry summary because the per-function context cap was reached',
+  'recursion-nonconverged': 'a recursive summary was still changing when its refinement rounds ran out',
+  'incremental-empty-entry-reuse': 'a summary restored from a previous scan stood in for a tainted call context',
 });
 
 export function runTaintEngine(perFileIR, callGraph, opts = {}) {
@@ -2401,6 +2407,9 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // v0.69 — opts.summaryCache lets the caller (runDeepAnalysis with
   // incremental mode) hand in a pre-seeded cache from persisted state.
   const summaryCache = opts.summaryCache || new SummaryCache();
+  // DAG-05: cross-scan reuse. `_replay` (incremental-replay.js) records what each function
+  // contributed and, for a function the dependency plan proved clean, replays it.
+  const _replay = opts._replay || null;
 
   // Deterministic ordering (Sentinel-parity §9.2): sort functions by qid so
   // cache-cold runs produce the same finding sequence run-over-run.
@@ -2408,6 +2417,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     a.qid < b.qid ? -1 : a.qid > b.qid ? 1 : 0
   );
   _buildRegexNames(fnList);
+  if (_replay) _replay.setMainLoop(new Set(fnList.slice(0, fnLimit).map((f) => f.qid))); // DAG-05
   _buildRequestFieldSeeds(fnList, callGraph, opts, deadlineMs);
   // PRD W0.1 (SARD_80_F1_EXECUTION_PRD.md) — the main per-function loop below
   // silently `break`s once `n > fnLimit` (default 5000), which for a single
@@ -2438,6 +2448,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // unbounded blowup). v0.66 — the inner ctx now records mutatedParams
   // via _mutatedParamsOut so cross-function param mutation propagates.
   const MAX_FP_ITERS = 3;
+  let _fpConverged = false; // DAG-05: did the pre-pass reach a fixed point within MAX_FP_ITERS
   // qid -> this function's own exit-state (every tainted access path at
   // return, from the LAST pre-pass iteration only — see the class-field
   // cross-taint pass below for why this must be a real, already-observed
@@ -2452,6 +2463,13 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     let changedThisIter = false;
     for (const fn of fnList) {
       if (Date.now() > deadlineMs) break;
+      // DAG-05 begin: a function proved clean is not re-walked; its recorded exit state and findings stand in.
+      if (_replay && _replay.canSkip(fn.qid)) {
+        exitStateByQid.set(fn.qid, _replay.exitState(fn.qid));
+        if (it === 0) _replayFindings(fn.qid);
+        continue;
+      }
+      // DAG-05 end
       const entry = new Set();
       const key = fn.qid + '::empty';
       const existing = summaryCache.get(fn.qid, entry);
@@ -2506,8 +2524,11 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     // write, silently delivering 2 rounds of fixed-point refinement instead
     // of the MAX_FP_ITERS=3 this code and dataflow/CLAUDE.md both promise.
     // `changedThisIter` tracks actual value changes instead.
-    if (!changedThisIter) break;
+    if (!changedThisIter) { _fpConverged = true; break; }
   }
+  // DAG-05 begin
+  if (_replay) { _replay.recordExitStates(exitStateByQid); _replay.noteConverged(_fpConverged); }
+  // DAG-05 end
   // Class-field cross-taint pass (SARD_80_F1_SCANNER_PRD.md — Juliet flow
   // variants 45/65-68: a method writes a tainted value to a static or
   // instance field and a SIBLING method of the same class reads it into a
@@ -2836,6 +2857,9 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     if (++n > fnLimit) { _noteIncomplete('function-limit', `limit ${fnLimit}`); break; }
     if (Date.now() > deadlineMs) { _noteIncomplete('deadline', 'main function loop'); break; }  // global timeout
     if (onProgress) onProgress({ current: n, total: _progressTotal });
+    // DAG-05 begin: replayed in the pre-pass; idempotent here for a pre-pass cut short.
+    if (_replay && _replay.canSkip(fn.qid)) { _replayFindings(fn.qid); continue; }
+    // DAG-05 end
     // Module-level functions: analyze with an empty entry state. The function
     // discovers its own sources from req.body/process.env/etc. as it walks.
     const callContext = {
@@ -2934,6 +2958,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   }
   Object.defineProperty(all, '_summaryCache', { value: summaryCache, enumerable: false });
   if (summaryCache._budgetHits) _noteIncomplete('summary-budget', `${summaryCache._budgetHits} summary requests after ${summaryCache._maxIter} computations`);
+  if (typeof summaryCache.completionNotes === 'function') for (const n of summaryCache.completionNotes()) _noteIncomplete(n.reason, n.example, n.count);
   Object.defineProperty(all, 'analysisIncomplete', { value: [..._incomplete.values()].sort((a, b) => (a.reason < b.reason ? -1 : 1)), enumerable: false });
   _collapseNestedHsSinks(all);
   return all;
@@ -2963,10 +2988,13 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       // this fix.
       const file = f.file || attributedFn.file;
       const key = `${f.sinkId}:${file}:${f.line}${f.siteKey ? ':' + f.siteKey : ''}`;
-      if (seen.has(key)) continue;
+      // DAG-05: a duplicate is still part of what THIS function contributed (the first
+      // collector may be a function that later changes), so it is recorded; it is not re-emitted.
+      const _dup = seen.has(key);
+      if (_dup && !_replay) continue;
       seen.add(key);
       const fn = attributedFn;
-      all.push({
+      const _mapped = {
         id: `ir-taint:${file}:${f.line}:${f.sinkId}${f.siteKey ? ':' + f.siteKey : ''}`,
         ...(f.siteKey ? { siteKey: f.siteKey } : {}),
         file,
@@ -3049,7 +3077,21 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         chain: (f.trace || []).map(t => ({
           file: fn.file, line: t.line, label: t.sourceLabel, provenance: t.provenance || null,
         })),
-      });
+      };
+      if (_replay) _replay.record(attributedFn.qid, key, _mapped);
+      if (!_dup) all.push(_mapped);
+    }
+  }
+
+  // DAG-05: emit a replayed function's recorded findings through the same
+  // de-duplication the collector applies, so a replayed finding and a recomputed
+  // one for the same sink are one finding.
+  function _replayFindings(qid) {
+    for (const { key, obj } of _replay.findingsFor(qid)) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push(obj);
+      _replay.noteReused(obj.id);
     }
   }
 
