@@ -147,8 +147,8 @@
       "id": "R04.3",
       "summary": "Use the existing bounded abstract domains first. Optional SMT checks must run in an awaited, cancellable, time-bounded o",
       "status": "verified",
-      "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections.",
-      "evidence": []
+      "notes": "Acceptance tests pass; see the workstream limits in the final report and scanner CLAUDE.md sections. A real z3 backend (optional, lazy, env-gated) now implements the injectable solver interface.",
+      "evidence": ["scanner/src/lineage/smt-z3-backend.js", "scanner/test/lineage/smt-z3-backend.test.js"]
     },
     {
       "id": "R04.4",
