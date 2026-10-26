@@ -25,7 +25,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 // Directories whose scripts are deliberately not run FROM this repo:
 //   - ci-templates: copied INTO a consumer repo; the consumer runs them, not us.
 //   - fixtures/results/corpus data dirs: not scripts, or test-only inputs.
-const SKIP_DIR = /(?:^|\/)(?:node_modules|\.bench-cache|dist|build|\.git|coverage|ci-templates|fixtures|results|corpus|\.agentic-security|bench\/independent\/cache|bench\/[\w-]+\/cache)(?:$|\/)/;
+const SKIP_DIR = /(?:^|\/)(?:node_modules|\.bench-cache|dist|build|\.git|coverage|ci-templates|fixtures|results|corpus|\.agentic-security|\.cache|bench\/independent\/cache|bench\/[\w-]+\/cache)(?:$|\/)/;
 // Any bench `cache/` holds FETCHED third-party source, not this project's
 // scripts. It was listed by exact path, so `bench/sca-replay/cache/` — added
 // when that bench started fetching source to score reachability — was walked,
@@ -40,6 +40,7 @@ const ALLOWLIST = new Set([
   // deliberate act (extending the corpus), not part of any ongoing pipeline.
   // Documented at bench/cve-replay/CONTRIBUTING.md. Grouped by glob rather than
   // named individually because the count grows with each corpus expansion.
+  { glob: /^bench\/dag\/independent\/(?:build-labels|show)\.mjs$/, reason: 'one-off labeling aids kept for the provenance of the committed labels, run by hand' },
   { glob: /^bench\/cve-replay\/generate-corpus.*\.mjs$/, reason: 'one-shot corpus-authoring tool, operator-invoked' },
   { glob: /^bench\/cve-replay\/verify-tier5\.mjs$/, reason: 'one-shot corpus-authoring tool, operator-invoked' },
   // Shared body of the ten protected suite wrappers beside it; each wrapper imports it as './relay.mjs' and pins its digest, and the
