@@ -42,7 +42,23 @@ test('every oracle type is deterministic over an observation and timeouts are in
   const t = evaluateOracle({ type: 'command_execution' }, { ...base, canaries: { command: { exists: false } }, timedOut: true });
   assert.equal(t.fired, false); assert.equal(t.inconclusive, true);
   assert.equal(evaluateOracle({ type: 'made_up' }, base).unsupported, true);
-  assert.equal(ORACLE_TYPES.length, 9);
+  assert.equal(ORACLE_TYPES.length, 11);
+});
+
+test('file_disclosure fires only on the planted secret in the output; argument_injection only on its own canary', () => {
+  const obs = { exitCode: 0, stdout: '', stderr: '', nonce: 'n', secrets: { file: 'SECRET-n-file' }, canaries: { arg: { exists: false, existedBefore: false } } };
+  assert.equal(evaluateOracle({ type: 'file_disclosure' }, obs).fired, false);
+  assert.equal(evaluateOracle({ type: 'file_disclosure' }, { ...obs, stdout: '"SECRET-n-file"' }).fired, true);
+  assert.equal(evaluateOracle({ type: 'file_disclosure' }, { ...obs, stderr: 'boom SECRET-n-file' }).fired, true);
+  assert.equal(evaluateOracle({ type: 'file_disclosure', params: { secret: 'other' } }, { ...obs, stdout: 'SECRET-n-file' }).inconclusive, true); // unarmed secret
+  const t = evaluateOracle({ type: 'file_disclosure' }, { ...obs, timedOut: true });
+  assert.equal(t.fired, false); assert.equal(t.inconclusive, true);
+  assert.equal(evaluateOracle({ type: 'argument_injection' }, obs).fired, false);
+  assert.equal(evaluateOracle({ type: 'argument_injection' }, { ...obs, canaries: { arg: { exists: true, existedBefore: false } } }).fired, true);
+  assert.equal(evaluateOracle({ type: 'argument_injection' }, { ...obs, canaries: { arg: { exists: true, existedBefore: true } } }).fired, false);
+  assert.equal(evaluateOracle({ type: 'argument_injection' }, { ...obs, canaries: {} }).inconclusive, true);
+  const t2 = evaluateOracle({ type: 'argument_injection' }, { ...obs, timedOut: true });
+  assert.equal(t2.fired, false); assert.equal(t2.inconclusive, true);
 });
 
 test('reproducer validation rejects traversal, shell strings, unknown placeholders, reserved names', () => {

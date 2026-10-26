@@ -13,6 +13,7 @@
 export const ORACLE_TYPES = Object.freeze([
   'crash_sanitizer', 'command_execution', 'unauthorized_http_access', 'unauthorized_db_read', 'database_mutation',
   'filesystem_mutation', 'outbound_callback', 'authentication_bypass', 'arbitrary_assertion',
+  'file_disclosure', 'argument_injection',
 ]);
 
 const SANITIZER_RE = /(AddressSanitizer|UndefinedBehaviorSanitizer|stack-buffer-overflow|heap-buffer-overflow|SEGV on unknown address|stack smashing detected|buffer overflow detected)/i;
@@ -67,6 +68,26 @@ const IMPL = {
     if ((c.exists && !c.existedBefore) || (c.digestBefore && c.digestAfter && c.digestBefore !== c.digestAfter)) return out(true, 'file outside the permitted area was created or modified');
     if (obs.timedOut) return inconclusive('run timed out');
     return out(false, 'protected path unchanged');
+  },
+  // A file the runner planted OUTSIDE the directory the program is meant to read from holds a per-run secret. Seeing that secret in the
+  // program's output means attacker data steered a read onto it. The target cannot know the secret in advance, so it can print it
+  // only by reading the file. A read that leaves nothing in stdout/stderr is invisible to this oracle (it stays unproven, not refuted).
+  file_disclosure(obs, p) {
+    const secret = obs.secrets?.[p.secret || 'file'];
+    if (!secret) return inconclusive('disclosure canary was not armed by the runner');
+    if (has(obs, secret)) return out(true, 'content of a planted file outside the permitted directory appeared in the output');
+    if (obs.timedOut) return inconclusive('run timed out');
+    return out(false, 'planted file content not observed');
+  },
+  // A stand-in for the called program (planted by the runner, never the target) acts on exactly one option, given as its FIRST argument,
+  // by creating a nonce-named file. The file exists only if attacker data reached the first argument of the call unseparated and
+  // unvalidated. It shows the option position is attacker-controlled; it does not show the real program has a dangerous option.
+  argument_injection(obs, p) {
+    const c = obs.canaries?.[p.canary || 'arg'];
+    if (!c) return inconclusive('argument canary was not armed by the runner');
+    if (c.exists && !c.existedBefore) return out(true, 'a harness-planted option supplied as attacker data reached the first argument of the called program');
+    if (obs.timedOut) return inconclusive('run timed out before the canary could be judged');
+    return out(false, 'canary file not created');
   },
   outbound_callback(obs) {
     if (obs.callbackUnavailable) return { fired: false, unsupported: true, reason: 'loopback callback listener is not available on this backend' };
