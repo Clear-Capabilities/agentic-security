@@ -1,0 +1,773 @@
+{
+ "schema": "default-scan-drift/v1",
+ "note": "Findings of a default scan over fixed committed fixtures. Change this file only with a changelog entry that names the rule that moved.",
+ "roots": [
+  "scanner/test/fixtures/vulnerable-js",
+  "scanner/test/fixtures/clean-js",
+  "scanner/test/fixtures/code-injection-coercion",
+  "scanner/test/fixtures/business-logic",
+  "scanner/test/fixtures/csrf-routes",
+  "scanner/test/fixtures/cookie-cors",
+  "bench/dag/fixtures/callreturn",
+  "bench/dag/fixtures/multiservice"
+ ],
+ "total": 84,
+ "records": [
+  {
+   "root": "bench/dag/fixtures/multiservice",
+   "file": "src/api/server.js",
+   "line": 15,
+   "vuln": "Missing CSRF protection on state-changing route (POST)",
+   "severity": "high",
+   "family": "missing-csrf-protection-on-state-changin",
+   "parser": "CSRF"
+  },
+  {
+   "root": "bench/dag/fixtures/multiservice",
+   "file": "src/api/server.js",
+   "line": 17,
+   "vuln": "Missing Positive-Integer Validation on Financial Field",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "bench/dag/fixtures/multiservice",
+   "file": "src/api/server.js",
+   "line": 29,
+   "vuln": "Sensitive Route Without Auth — POST /profile",
+   "severity": "high",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "bench/dag/fixtures/multiservice",
+   "file": "src/api/server.js",
+   "line": 5,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "low",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "bench/dag/fixtures/multiservice",
+   "file": "src/reporting/server.js",
+   "line": 5,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "low",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "safe-allowlist-update.js",
+   "line": 7,
+   "vuln": "NoSQL Injection (User-Controlled Query Filter)",
+   "severity": "high",
+   "family": "nosql-injection-user-controlled-query-fi",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "safe-allowlist-update.js",
+   "line": 7,
+   "vuln": "updateUser() looks up or mutates by request-supplied 'id' with no ownership check",
+   "severity": "high",
+   "family": "broken-access-control",
+   "parser": "OWNERSHIP-AUTHZ"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "safe-state-guarded.js",
+   "line": 3,
+   "vuln": "IDOR",
+   "severity": "high",
+   "family": "idor",
+   "parser": "REGEX"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "safe-state-guarded.js",
+   "line": 3,
+   "vuln": "markPaid() looks up or mutates by request-supplied 'id' with no ownership check",
+   "severity": "high",
+   "family": "broken-access-control",
+   "parser": "OWNERSHIP-AUTHZ"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-client-amount.js",
+   "line": 5,
+   "vuln": "Client-Controlled Monetary Field",
+   "severity": "high",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-client-amount.js",
+   "line": 5,
+   "vuln": "Missing Positive-Integer Validation on Financial Field",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-coupon.js",
+   "line": 3,
+   "vuln": "Client-Controlled Discount/Coupon",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-coupon.js",
+   "line": 3,
+   "vuln": "Client-Controlled Monetary Field",
+   "severity": "high",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-coupon.js",
+   "line": 4,
+   "vuln": "applyDiscount() looks up or mutates by request-supplied 'orderId' with no ownership check",
+   "severity": "high",
+   "family": "broken-access-control",
+   "parser": "OWNERSHIP-AUTHZ"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-coupon.js",
+   "line": 4,
+   "vuln": "NoSQL Injection (User-Controlled Query Filter)",
+   "severity": "high",
+   "family": "nosql-injection-user-controlled-query-fi",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-or-auth.js",
+   "line": 3,
+   "vuln": "Always-True Authorization Clause",
+   "severity": "high",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-priv-mass-assign.js",
+   "line": 3,
+   "vuln": "NoSQL Injection (User-Controlled Query Filter)",
+   "severity": "high",
+   "family": "nosql-injection-user-controlled-query-fi",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-priv-mass-assign.js",
+   "line": 3,
+   "vuln": "updateUser() looks up or mutates by request-supplied 'id' with no ownership check",
+   "severity": "high",
+   "family": "broken-access-control",
+   "parser": "OWNERSHIP-AUTHZ"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-priv-mass-assign.js",
+   "line": 5,
+   "vuln": "Privilege Field Set from Request Body",
+   "severity": "critical",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-state.js",
+   "line": 3,
+   "vuln": "IDOR",
+   "severity": "high",
+   "family": "idor",
+   "parser": "REGEX"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-state.js",
+   "line": 3,
+   "vuln": "markPaid() looks up or mutates by request-supplied 'id' with no ownership check",
+   "severity": "high",
+   "family": "broken-access-control",
+   "parser": "OWNERSHIP-AUTHZ"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-state.js",
+   "line": 4,
+   "vuln": "Terminal State Set Without Prior-State Guard",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-toctou.js",
+   "line": 5,
+   "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+   "severity": "medium",
+   "family": "dos-sync-io",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-toctou.js",
+   "line": 5,
+   "vuln": "TOCTOU: existsSync followed by file op",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/business-logic",
+   "file": "vuln-toctou.js",
+   "line": 5,
+   "vuln": "TOCTOU: file existence/permission check before open",
+   "severity": "medium",
+   "family": "toctou-file-existence-permission-check-b",
+   "parser": "TOCTOU"
+  },
+  {
+   "root": "scanner/test/fixtures/clean-js",
+   "file": "app.js",
+   "line": 12,
+   "vuln": "Sensitive Route Without Auth — GET /users/:id",
+   "severity": "high",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/code-injection-coercion",
+   "file": "safe-coerced.ts",
+   "line": 11,
+   "vuln": "async() looks up or mutates by request-supplied 'captchaId' with no ownership check",
+   "severity": "high",
+   "family": "broken-access-control",
+   "parser": "OWNERSHIP-AUTHZ"
+  },
+  {
+   "root": "scanner/test/fixtures/code-injection-coercion",
+   "file": "vulnerable.ts",
+   "line": 6,
+   "vuln": "Code Injection",
+   "severity": "critical",
+   "family": "code-injection",
+   "parser": "REGEX"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-no-options.js",
+   "line": 3,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "low",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-no-options.js",
+   "line": 5,
+   "vuln": "Auth endpoint missing rate limiting",
+   "severity": "high",
+   "family": "auth-endpoint-missing-rate-limiting",
+   "parser": "REGEX"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-no-options.js",
+   "line": 5,
+   "vuln": "Auth Event Without Source IP Logging (Repudiation Risk)",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-no-options.js",
+   "line": 5,
+   "vuln": "Missing CSRF protection on state-changing route (POST)",
+   "severity": "high",
+   "family": "missing-csrf-protection-on-state-changin",
+   "parser": "CSRF"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-no-options.js",
+   "line": 6,
+   "vuln": "Cookie Set Without Proper Security Flags",
+   "severity": "medium",
+   "family": "cookie-set-without-proper-security-flags",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-no-secure.js",
+   "line": 3,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "low",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-no-secure.js",
+   "line": 5,
+   "vuln": "Auth endpoint missing rate limiting",
+   "severity": "high",
+   "family": "auth-endpoint-missing-rate-limiting",
+   "parser": "REGEX"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-no-secure.js",
+   "line": 5,
+   "vuln": "Auth Event Without Source IP Logging (Repudiation Risk)",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-no-secure.js",
+   "line": 6,
+   "vuln": "Cookie Set Without Proper Security Flags",
+   "severity": "medium",
+   "family": "cookie-set-without-proper-security-flags",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-secure.js",
+   "line": 3,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "low",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-secure.js",
+   "line": 5,
+   "vuln": "Auth endpoint missing rate limiting",
+   "severity": "high",
+   "family": "auth-endpoint-missing-rate-limiting",
+   "parser": "REGEX"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cookie-secure.js",
+   "line": 5,
+   "vuln": "Auth Event Without Source IP Logging (Repudiation Risk)",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cors-allowlist.js",
+   "line": 4,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "info",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cors-no-opts.js",
+   "line": 4,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "info",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cors-no-opts.js",
+   "line": 6,
+   "vuln": "Permissive CORS (Allow-Origin: *)",
+   "severity": "low",
+   "family": "permissive-cors-allow-origin",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cors-star.js",
+   "line": 4,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "info",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/cookie-cors",
+   "file": "cors-star.js",
+   "line": 6,
+   "vuln": "Permissive CORS (Allow-Origin: *)",
+   "severity": "low",
+   "family": "permissive-cors-allow-origin",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "safe-bearer-auth.js",
+   "line": 3,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "low",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "safe-bearer-auth.js",
+   "line": 8,
+   "vuln": "Missing Positive-Integer Validation on Financial Field",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "safe-csurf.js",
+   "line": 5,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "low",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "safe-csurf.js",
+   "line": 6,
+   "vuln": "Rate Limiting After Auth Middleware — brute-force attacks bypass rate limits",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "safe-csurf.js",
+   "line": 9,
+   "vuln": "Missing Positive-Integer Validation on Financial Field",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "vuln-express-post.js",
+   "line": 13,
+   "vuln": "Missing CSRF protection on state-changing route (DELETE)",
+   "severity": "high",
+   "family": "missing-csrf-protection-on-state-changin",
+   "parser": "CSRF"
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "vuln-express-post.js",
+   "line": 13,
+   "vuln": "Sensitive Route Without Auth — DELETE /account",
+   "severity": "high",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "vuln-express-post.js",
+   "line": 4,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "low",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "vuln-express-post.js",
+   "line": 5,
+   "vuln": "Session Cookie Missing secure Flag",
+   "severity": "medium",
+   "family": "session-cookie-missing-secure-flag",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "vuln-express-post.js",
+   "line": 5,
+   "vuln": "Session Cookie Without httpOnly Flag",
+   "severity": "medium",
+   "family": "session-cookie-without-httponly-flag",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "vuln-express-post.js",
+   "line": 5,
+   "vuln": "Weak/Hardcoded Session Secret",
+   "severity": "high",
+   "family": "weak-hardcoded-session-secret",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "vuln-express-post.js",
+   "line": 7,
+   "vuln": "Missing CSRF protection on state-changing route (POST)",
+   "severity": "high",
+   "family": "missing-csrf-protection-on-state-changin",
+   "parser": "CSRF"
+  },
+  {
+   "root": "scanner/test/fixtures/csrf-routes",
+   "file": "vuln-express-post.js",
+   "line": 9,
+   "vuln": "Missing Positive-Integer Validation on Financial Field",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 12,
+   "vuln": "Missing CSRF protection on state-changing route (POST)",
+   "severity": "high",
+   "family": "missing-csrf-protection-on-state-changin",
+   "parser": "CSRF"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 14,
+   "vuln": "Command Injection (User-Controlled Input)",
+   "severity": "critical",
+   "family": "command-injection",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 19,
+   "vuln": "Hardcoded credential — secret split across concatenated literals to evade detection",
+   "severity": "high",
+   "family": "hardcoded-secret",
+   "parser": "SECRET-CONCAT"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 2,
+   "vuln": "Verify x-powered-by Header is Disabled",
+   "severity": "low",
+   "family": "header-hardening",
+   "parser": "ADV_STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 20,
+   "vuln": "Hardcoded Secret",
+   "severity": "critical",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 24,
+   "vuln": "MD5/SHA1 Password Hashing",
+   "severity": "critical",
+   "family": "weak-crypto",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 24,
+   "vuln": "Weak hash algorithm (MD5 / SHA-1 / MD2 / MD4) used",
+   "severity": "medium",
+   "family": "crypto-weak-hash",
+   "parser": "CRYPTO-PROTO"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 24,
+   "vuln": "Weak Password Hashing — createHash with weak algorithm for password without salt",
+   "severity": "critical",
+   "family": "weak-password-hash",
+   "parser": "WEAK-PW-HASH"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 28,
+   "vuln": "Code Injection (eval with User Input)",
+   "severity": "critical",
+   "family": "code-injection",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 34,
+   "vuln": "Path Traversal (User-Controlled Path)",
+   "severity": "high",
+   "family": "path-traversal",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 38,
+   "vuln": "Sensitive Mutation Without Audit Log (Repudiation Risk)",
+   "severity": "medium",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 38,
+   "vuln": "Sensitive Route Without Auth — POST /user",
+   "severity": "high",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 39,
+   "vuln": "Mass Assignment (req.body Direct to Model)",
+   "severity": "high",
+   "family": "mass-assignment",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 6,
+   "vuln": "Sensitive Route Without Auth — GET /users/:id",
+   "severity": "high",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 7,
+   "vuln": "get() looks up or mutates by request-supplied 'id' with no ownership check",
+   "severity": "high",
+   "family": "broken-access-control",
+   "parser": "OWNERSHIP-AUTHZ"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 7,
+   "vuln": "SQL Injection (Template Literal)",
+   "severity": "critical",
+   "family": "sql-injection",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "app.js",
+   "line": 8,
+   "vuln": "Reflected XSS (User Input in Response)",
+   "severity": "high",
+   "family": "xss",
+   "parser": "STRUCTURAL"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "package.json",
+   "line": 0,
+   "vuln": "License-review-needed: express@4.16.0 (no license) under saas distribution mode",
+   "severity": "low",
+   "family": "license-graph",
+   "parser": "REGEX"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "package.json",
+   "line": 0,
+   "vuln": "License-review-needed: lodash@4.17.4 (no license) under saas distribution mode",
+   "severity": "low",
+   "family": "license-graph",
+   "parser": "REGEX"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "package.json",
+   "line": 0,
+   "vuln": "License-review-needed: marked@0.3.6 (no license) under saas distribution mode",
+   "severity": "low",
+   "family": "license-graph",
+   "parser": "REGEX"
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "package.json",
+   "line": 1,
+   "vuln": "[Express Security Checklist] Apply express-rate-limit to authentication and any expensive routes",
+   "severity": "info",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "package.json",
+   "line": 1,
+   "vuln": "[Express Security Checklist] Never use body-parser / express.json() without a size limit — set `limit` explic",
+   "severity": "info",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "package.json",
+   "line": 1,
+   "vuln": "[Express Security Checklist] Set `app.disable('x-powered-by')` so error responses and headers do not advertis",
+   "severity": "info",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "package.json",
+   "line": 1,
+   "vuln": "[Express Security Checklist] Use a CSRF middleware (e.g. csrf-csrf) on any route that relies on cookie-based ",
+   "severity": "info",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "package.json",
+   "line": 1,
+   "vuln": "[Express Security Checklist] Use helmet() to set security headers (X-Frame-Options, X-Content-Type-Options, H",
+   "severity": "info",
+   "family": null,
+   "parser": null
+  },
+  {
+   "root": "scanner/test/fixtures/vulnerable-js",
+   "file": "package.json",
+   "line": 1,
+   "vuln": "[Express Security Checklist] Validate and sanitize all req.params / req.query / req.body — Express does not v",
+   "severity": "info",
+   "family": null,
+   "parser": null
+  }
+ ]
+}

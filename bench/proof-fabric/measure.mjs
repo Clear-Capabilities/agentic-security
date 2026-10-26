@@ -49,7 +49,7 @@ function environmentOf(all) {
     env.engine = { name: 'docker', serverVersion: engine.status === 0 ? engine.stdout.trim() : null };
     env.images = {};
     for (const lang of [...new Set(all.map((r) => r.lang))].sort()) {
-      const image = ({ javascript: 'node:24-slim', typescript: 'node:24-slim', python: 'python:3-slim', java: 'eclipse-temurin:21', c: 'gcc:latest', cpp: 'gcc:latest', csharp: 'mcr.microsoft.com/dotnet/sdk:8.0' })[lang];
+      const image = ({ javascript: 'node:24-slim', typescript: 'node:24-slim', python: 'python:3-slim', java: 'eclipse-temurin:21', c: 'gcc:latest', cpp: 'gcc:latest', csharp: 'mcr.microsoft.com/dotnet/sdk:8.0', haskell: 'haskell:9' })[lang];
       const id = image ? spawnSync('docker', ['image', 'inspect', '--format', '{{.Id}}', image], { encoding: 'utf8', timeout: 15000 }) : null;
       env.images[lang] = { image: image ?? null, id: id && id.status === 0 ? id.stdout.trim() : null };
     }
@@ -64,6 +64,9 @@ for (const cls of classes) {
   // inside a container the toolchain is the image's, not the host's
   const sup = REQUIRE_CONTAINER ? { supported: true } : languageSupport(reproducer.lang);
   if (!sup.supported) { skipped.push({ class: cls, lang: reproducer.lang, reason: sup.reason }); continue; }
+  // The haskell:9 image is wired (runner.js) but its toolchain layout for a non-root user has not been run against a real engine, so the
+  // container leg does not claim it until someone sets AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL=1 and the leg passes.
+  if (REQUIRE_CONTAINER && reproducer.lang === 'haskell' && process.env.AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL !== '1') { skipped.push({ class: cls, lang: reproducer.lang, reason: 'the haskell:9 image has not been verified against a real container engine; set AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL=1 to include it' }); continue; }
   if (reproducer.network === 'callback' && (REQUIRE_CONTAINER || detectBackend() !== 'userspace')) { skipped.push({ class: cls, lang: reproducer.lang, reason: REQUIRE_CONTAINER ? 'a container has no network, so a reproducer that needs the loopback callback listener cannot run in one' : `mediated network is unsupported on the ${detectBackend()} backend` }); continue; }
   for (let r = 0; r < ROUNDS; r++) {
     for (const side of ['vulnerable', 'mitigated']) {

@@ -670,8 +670,8 @@ MATRIX['CAP-124'] = {
 // CAP-125 (proof) and CAP-126 (rules): the proof fabric and the rule compiler have no Haskell or Nix branch.
 MATRIX['CAP-125'] = {
   na: {
-    reason: 'the proof fabric has no Haskell toolchain or harness builder, so there is no Haskell or Nix behavior to execute; a language it cannot run is reported as unsupported.',
-    behavior: 'A Haskell or Nix finding is reported as unsupported by `proof`, never as a pass, and the other proof commands treat it like any finding whose language cannot run on the host.',
+    reason: 'the proof fabric runs Haskell reproducers (GHC interpreter, packages that ship with GHC only) and is covered by its own suites (test/proof-fabric/generate-haskell.test.js, the proof lifecycle demo); no Haskell or Nix PRD requirement ID covers it and it has no Nix behavior at all, so there is no ecosystem-specific CLI behavior to execute in this matrix.',
+    behavior: 'A Haskell finding in a class and with imports the generator can honour is proven or not proven by execution; any other is refused with the reason, never reported as a pass. A Nix finding is not a language the fabric runs and is reported as unsupported.',
   },
 };
 MATRIX['CAP-126'] = {

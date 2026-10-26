@@ -11,6 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { mkTestTmp } from '../helpers/tmp.js';
 import { sandboxAvailable } from '../../src/sandbox/index.js';
 import { skipUnlessRuns } from '../helpers/toolchain-probe.js';
+import { hostTools } from '../../src/posture/proof-fabric/runner.js';
 import { signLastScan } from '../../src/posture/integrity.js';
 
 const CLI = fileURLToPath(new URL('../../bin/agentic-security.js', import.meta.url));
@@ -34,10 +35,18 @@ const CASES = [
     source: "import os\nimport subprocess\n\ndef greet(name):\n    os.system('echo hello ' + name)\n\nif __name__ == '__main__':\n    greet('world')\n",
     fixLine: "    subprocess.run(['echo', 'hello', name])", fixed: /subprocess/,
   },
+  {
+    id: 'DEMO-4', cwe: 'CWE-78', vuln: 'command injection (Haskell)', file: 'Label.hs', line: 7, lang: 'haskell', klass: 'command-injection', needsHaskell: true,
+    source: "module Label (makeLabel) where\n\nimport System.Process (callCommand, callProcess)\n\n-- | Print a label for an order.\nmakeLabel :: String -> IO ()\nmakeLabel name = callCommand (\"echo label \" ++ name)\n",
+    fixLine: 'makeLabel name = callProcess "echo" ["label", name]', fixed: /callProcess "echo"/,
+  },
 ];
 
+const hasHaskell = !!hostTools().ghc && !!hostTools().runghc;
 for (const c of CASES) {
-  const skip = !sandboxAvailable() ? 'no confinement backend on this host' : (c.needsPython ? (!hasPy ? 'python3 3.10+ is not installed' : skipUnlessRuns('python')) : false);
+  const skip = !sandboxAvailable() ? 'no confinement backend on this host'
+    : c.needsHaskell ? (!hasHaskell ? 'ghc is not installed (the Haskell case is skipped, not passed)' : skipUnlessRuns('haskell'))
+    : (c.needsPython ? (!hasPy ? 'python3 3.10+ is not installed' : skipUnlessRuns('python')) : false);
   test(`${c.id} ${c.vuln}: Find -> Reproduce (generated) -> Independently Verify -> Fix -> Replay -> Verify Fix`, { skip, timeout: 240000 }, () => {
     const dir = mkTestTmp('pf-demo-'); fs.mkdirSync(path.join(dir, '.git')); fs.mkdirSync(path.join(dir, '.agentic-security'), { recursive: true });
     const finding = { id: c.id, stableId: c.id, severity: 'critical', vuln: c.vuln, cwe: c.cwe, file: c.file, line: c.line, parser: 'IR-TAINT', fix: { replaceLine: c.fixLine } };

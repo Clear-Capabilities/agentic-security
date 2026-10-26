@@ -1,0 +1,8 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-path-traversal-haskell",
+  "lang": "haskell", "sources": { "Main.hs": "Main.hs" },
+  "run": ["{{GHC}}", "-ignore-dot-ghci", "-e", ":main \"../escaped.txt\"", "Main.hs"],
+  "watch": { "fs": "escaped.txt" },
+  "oracle": { "type": "filesystem_mutation", "params": { "canary": "fs" } },
+  "network": "none"
+}

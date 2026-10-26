@@ -1,0 +1,5342 @@
+[
+ {
+  "project": "hapi",
+  "language": "javascript",
+  "file": "lib/core.js",
+  "line": 553,
+  "vuln": "if() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "if (request) {"
+ },
+ {
+  "project": "hapi",
+  "language": "javascript",
+  "file": "lib/methods.js",
+  "line": 10,
+  "vuln": "Regex ReDoS — Catastrophic Backtracking",
+  "family": "",
+  "severity": "medium",
+  "text": "methodNameRx: /^[_$a-zA-Z][$\\w]*(?:\\.[_$a-zA-Z][$\\w]*)*$/"
+ },
+ {
+  "project": "hapi",
+  "language": "javascript",
+  "file": "lib/request.js",
+  "line": 413,
+  "vuln": "_invoke() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "async _invoke(event, options = {}) {"
+ },
+ {
+  "project": "hapi",
+  "language": "javascript",
+  "file": "lib/request.js",
+  "line": 415,
+  "vuln": "for() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "for (const ext of event.nodes) {"
+ },
+ {
+  "project": "hapi",
+  "language": "javascript",
+  "file": "lib/toolkit.js",
+  "line": 117,
+  "vuln": "failAction() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "async failAction(request, failAction, err, options) {"
+ },
+ {
+  "project": "hapi",
+  "language": "javascript",
+  "file": "lib/validation.js",
+  "line": 171,
+  "vuln": "Weak Randomness",
+  "family": "",
+  "severity": "medium",
+  "text": "const currentSample = Math.ceil(Math.random() * 100);"
+ },
+ {
+  "project": "koa",
+  "language": "javascript",
+  "file": ".github/workflows/node.js.yml",
+  "line": 28,
+  "vuln": "Pipeline: Third-party action pinned to major-version tag (mutable)",
+  "family": "pipeline-third-party-action-pinned-to-ma",
+  "severity": "medium",
+  "text": "uses: codecov/codecov-action@v7"
+ },
+ {
+  "project": "koa",
+  "language": "javascript",
+  "file": ".github/workflows/npm-publish.yml",
+  "line": 31,
+  "vuln": "Pipeline: OIDC id-token: write without explicit aud restriction",
+  "family": "pipeline-oidc-id-token-write-without-exp",
+  "severity": "medium",
+  "text": "id-token: write"
+ },
+ {
+  "project": "koa",
+  "language": "javascript",
+  "file": "lib/application.js",
+  "line": 192,
+  "vuln": "Code Injection — dynamic code/expression evaluation of a non-literal argument",
+  "family": "code-injection",
+  "severity": "critical",
+  "text": "return this.ctxStorage.run(ctx, async () => {"
+ },
+ {
+  "project": "koa",
+  "language": "javascript",
+  "file": "lib/application.js",
+  "line": 311,
+  "vuln": "if() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "if (ctx.response._explicitNullBody) {"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": ".github/workflows/auto-merge.yaml",
+  "line": 14,
+  "vuln": "Pipeline: GitHub Action pinned to floating tag",
+  "family": "pipeline-github-action-pinned-to-floatin",
+  "severity": "medium",
+  "text": "- uses: Mic92/auto-merge@main"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": ".github/workflows/claude.yaml",
+  "line": 26,
+  "vuln": "Pipeline: OIDC id-token: write without explicit aud restriction",
+  "family": "pipeline-oidc-id-token-write-without-exp",
+  "severity": "medium",
+  "text": "id-token: write"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": ".github/workflows/claude.yaml",
+  "line": 34,
+  "vuln": "Pipeline: GitHub Action pinned to floating tag",
+  "family": "pipeline-github-action-pinned-to-floatin",
+  "severity": "medium",
+  "text": "- uses: NixOS/nix-installer-action@main"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": ".github/workflows/claude.yaml",
+  "line": 86,
+  "vuln": "Pipeline: Third-party action pinned to major-version tag (mutable)",
+  "family": "pipeline-third-party-action-pinned-to-ma",
+  "severity": "medium",
+  "text": "uses: anthropics/claude-code-action@v1"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": ".github/workflows/claude.yaml",
+  "line": 112,
+  "vuln": "Pipeline: Third-party action pinned to major-version tag (mutable)",
+  "family": "pipeline-third-party-action-pinned-to-ma",
+  "severity": "medium",
+  "text": "uses: peter-evans/create-pull-request@v8"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": ".github/workflows/update-nvim-plugins.yaml",
+  "line": 14,
+  "vuln": "Pipeline: GitHub Action pinned to floating tag",
+  "family": "pipeline-github-action-pinned-to-floatin",
+  "severity": "medium",
+  "text": "- uses: NixOS/nix-installer-action@main"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "checks/effects.nix",
+  "line": 52,
+  "vuln": "Password in URL",
+  "family": "",
+  "severity": "medium",
+  "text": "\"https://x-access-token:$token@github.com/Mic92/dotfiles\" repo"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/neovim/nvim_open.py",
+  "line": 97,
+  "vuln": "Command Injection (os.popen / os.execlp)",
+  "family": "command-injection",
+  "severity": "high",
+  "text": "os.execlp(\"nvim\", \"nvim\", str(path))  # noqa: S606"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/neovim/nvim-open.nix",
+  "line": 18,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--set PYTHONPATH ${makePythonPath [ (toPythonModule neovim-remote) ]}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/neovim/nvim-standalone.nix",
+  "line": 26,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "export NVIM_APPNAME=${nvim-appname}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/neovim/nvim-standalone.nix",
+  "line": 38,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "[ \"$(cat \"$config_dir/.source-hash\" 2>/dev/null)\" != '${lua-config}' ]; then"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/neovim/nvim-standalone.nix",
+  "line": 41,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "cp -arfT '${lua-config}'/ \"$config_dir\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/neovim/nvim-standalone.nix",
+  "line": 43,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "echo '${lua-config}' > \"$config_dir/.source-hash\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/supervisor/etc.nix",
+  "line": 71,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${lib.concatMapStringsSep \"\\n\" ("
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/supervisor/supervisor.nix",
+  "line": 35,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${svc.preStart}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/supervisor/supervisor.nix",
+  "line": 36,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "high",
+  "text": "exec ${svc.settings.command}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home/.claude/commands/simplify.md",
+  "line": 103,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "3. **Update REFACTOR-TODO.md** with:"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/bernie/configuration.nix",
+  "line": 1,
+  "vuln": "SSH accepts password authentication",
+  "family": "ssh-access",
+  "severity": "medium",
+  "text": "# Edit this configuration file to define what should be installed on"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/blob64/configuration.nix",
+  "line": 1,
+  "vuln": "SSH accepts password authentication",
+  "family": "ssh-access",
+  "severity": "medium",
+  "text": "{"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/blob64/configuration.nix",
+  "line": 40,
+  "vuln": "systemd service runs as root",
+  "family": "service-identity",
+  "severity": "low",
+  "text": "serviceConfig.ExecStart = \"${fancontrol}/bin/fancontrol\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/blob64/modules/phantun.nix",
+  "line": 33,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "publicKey = \"n3jAKetBA7w0usNDIuN2+KvldFRZwrz7rJCS/AcKXFQ=\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/blob64/modules/phantun.nix",
+  "line": 40,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "publicKey = \"/Deus55uMwnvhHVNYUWpkufilTfeAoj/KBeGWaha1w4=\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/dorits-laptop/configuration.nix",
+  "line": 1,
+  "vuln": "SSH accepts password authentication",
+  "family": "ssh-access",
+  "severity": "medium",
+  "text": "# Edit this configuration file to define what should be installed on"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/authelia.nix",
+  "line": 44,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://127.0.0.1:9091\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/monitoring/default.nix",
+  "line": 166,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "# TODO"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/monitoring/default.nix",
+  "line": 197,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "bot_token = \"$TELEGRAM_BOT_TOKEN\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/monitoring/default.nix",
+  "line": 206,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "#     token = \"$PUSHOVER_TOKEN\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/monitoring/irc-alerts.py",
+  "line": 37,
+  "vuln": "TLS certificate verification disabled — MITM-vulnerable",
+  "family": "crypto-tls-no-verify",
+  "severity": "critical",
+  "text": "context.check_hostname = False"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/monitoring/irc-alerts.py",
+  "line": 38,
+  "vuln": "TLS certificate verification disabled — MITM-vulnerable",
+  "family": "crypto-tls-no-verify",
+  "severity": "critical",
+  "text": "context.verify_mode = ssl.CERT_NONE"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/monitoring/victorialogs.nix",
+  "line": 28,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://127.0.0.1:9428\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/nginx.nix",
+  "line": 61,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://@prometheus/\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/telegraf/http-sd.nix",
+  "line": 24,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${lib.concatMapStringsSep \"\\n\" (target: ''"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/telegraf/http-sd.nix",
+  "line": 92,
+  "vuln": "systemd service runs as root",
+  "family": "service-identity",
+  "severity": "low",
+  "text": "systemd.services.telegraf.serviceConfig.ExecStart = lib.mkForce ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/telegraf/private.nix",
+  "line": 172,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "password = \"$SYNCTHING_PASSWORD\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/atuin.nix",
+  "line": 7,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "locations.\"/\".proxyPass = \"http://localhost:8888\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/authelia.nix",
+  "line": 79,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "access_token = \"1 day\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/authelia.nix",
+  "line": 105,
+  "vuln": "Secret value reaches the world-readable Nix store",
+  "family": "secret-in-store",
+  "severity": "high",
+  "text": "client_secret = config.clan.core.vars.generators.buildbot-oidc.files.client-secret-hash.value;"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/authelia.nix",
+  "line": 147,
+  "vuln": "Secret value reaches the world-readable Nix store",
+  "family": "secret-in-store",
+  "severity": "high",
+  "text": "client_secret = config.clan.core.vars.generators.synapse-oidc.files.client-secret-hash.value;"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/authelia.nix",
+  "line": 159,
+  "vuln": "Secret value reaches the world-readable Nix store",
+  "family": "secret-in-store",
+  "severity": "high",
+  "text": "client_secret = config.clan.core.vars.generators.punchcard-oidc.files.client-secret-hash.value;"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/flakelet-relay.nix",
+  "line": 19,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "id_token = \"1 hour\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/freshrss/default.nix",
+  "line": 138,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://127.0.0.1:9091/api/verify\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/grafana.nix",
+  "line": 10,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "bind_password = \"$__file{${config.clan.core.vars.generators.lldap-grafana.files.bind-password.path}}\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/grafana.nix",
+  "line": 102,
+  "vuln": "Service is configured to listen on every interface",
+  "family": "firewall-exposure",
+  "severity": "medium",
+  "text": "http_addr = \"0.0.0.0\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/grafana.nix",
+  "line": 110,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "password = \"$__file{${config.clan.core.vars.generators.lldap-grafana.files.bind-password.path}}\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/grafana.nix",
+  "line": 122,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "admin_password = \"$__file{${config.sops.secrets.grafana-admin-password.path}}\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/kartei-enroll/default.nix",
+  "line": 35,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--set KARTEI_GITHUB_KEY_FILE ${gen.files.private-key.path}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/lldap.nix",
+  "line": 56,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "LLDAP_SMTP_OPTIONS__ENABLE_PASSWORD_RESET = \"true\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/mastodon-hnbot.nix",
+  "line": 15,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "\"$(cat ${config.sops.secrets.hnbot-password.path})\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 36,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapHost \"127.0.0.1\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 37,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapPort \"3890\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 38,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapAgentName \"uid=nextcloud,ou=people,dc=eve\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 39,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapAgentPassword \"$(cat ${config.sops.secrets.nextcloud-ldap-password.path})\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 40,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapBase \"dc=eve\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 41,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapBaseUsers \"ou=people,dc=eve\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 42,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapUserFilter \"(memberOf=cn=nextcloud,ou=groups,dc=eve)\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 43,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapUserDisplayName \"cn\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 44,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapEmailAttribute \"mail\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 45,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapLoginFilter \"(&(memberOf=cn=nextcloud,ou=groups,dc=eve)(mail=%uid))\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 46,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapExpertUsernameAttr \"mail\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 47,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapExpertUUIDUserAttr \"entryuuid\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 48,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapQuotaDefault \"10000000000\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 49,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapConfigurationActive \"1\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 52,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ app:enable user_ldap || true"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nginx/default.nix",
+  "line": 85,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "# RFC2136_TSIG_SECRET=\"00000000000000000000000000000000000000000000\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nginx/glowing-bear.nix",
+  "line": 8,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://127.0.0.1:4242\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nginx/photoprism.nix",
+  "line": 8,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://blob64.r:2342\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/paperless.nix",
+  "line": 94,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://127.0.0.1:9091/api/verify\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/postgresql.nix",
+  "line": 35,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "export OLDDATA=\"${cfg.dataDir}\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/shiori/default.nix",
+  "line": 26,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "locations.\"/\".proxyPass = \"http://localhost:4378\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/stalwart/bulwark.nix",
+  "line": 27,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://127.0.0.1:8643\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/stalwart/default.nix",
+  "line": 151,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "secret = \"%{file:/run/credentials/stalwart.service/admin_password}%\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/stalwart/default.nix",
+  "line": 151,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "secret = \"%{file:/run/credentials/stalwart.service/admin_password}%\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/stalwart/default.nix",
+  "line": 156,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "secret = \"%{file:/run/credentials/stalwart.service/admin_password}%\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/stalwart/default.nix",
+  "line": 168,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "secret = \"%{file:/run/credentials/stalwart.service/ldap_password}%\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/stalwart/default.nix",
+  "line": 328,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "cat ${staticConfig}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/stalwart/default.nix",
+  "line": 343,
+  "vuln": "systemd service runs as root",
+  "family": "service-identity",
+  "severity": "low",
+  "text": "ExecStart = lib.mkForce ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/step-ca/default.nix",
+  "line": 24,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"https://localhost:1443\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/synapse.nix",
+  "line": 8,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r ${pkgs.element-web} $out"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/synapse.nix",
+  "line": 9,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "chmod -R u+w $out"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/synapse.nix",
+  "line": 10,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "jq '.\"default_server_config\".\"m.homeserver\" = { \"base_url\": \"https://${nginx-vhost}:443\", \"server_name\": \"${server_name}\" }' \\"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/synapse.nix",
+  "line": 146,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "locations.\"/_matrix\".proxyPass = \"http://127.0.0.1:8043\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/users.nix",
+  "line": 26,
+  "vuln": "Members of wheel get passwordless root through sudo",
+  "family": "privilege-escalation",
+  "severity": "medium",
+  "text": "security.sudo.wheelNeedsPassword = false;"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/vaultwarden.nix",
+  "line": 10,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "vaultwarden_admin_token = \"@ADMIN_TOKEN@\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/vaultwarden.nix",
+  "line": 14,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "ldap_bind_password = \"@LDAP_PASSWORD@\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/vaultwarden.nix",
+  "line": 88,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "# Output format: ADMIN_TOKEN='$argon2id$...'"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/vaultwarden.nix",
+  "line": 125,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "-e \"s=@LDAP_PASSWORD@=$(<${config.clan.core.vars.generators.vaultwarden.files.ldap-password.path})=\" \\"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/vaultwarden.nix",
+  "line": 126,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "-e \"s=@ADMIN_TOKEN@=$(<${config.clan.core.vars.generators.vaultwarden.files.admin-token-plaintext.path})=\" \\"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/vaultwarden.nix",
+  "line": 152,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://localhost:3011\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/wireguard.nix",
+  "line": 17,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "publicKey = \"RTOE/69lnlAFwIXiFJAn+Q90ON4TfFdu417yJcpCjCM=\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/matchbox/configuration.nix",
+  "line": 32,
+  "vuln": "The console logs a user in without a password",
+  "family": "login-access",
+  "severity": "medium",
+  "text": "services.getty.autologinUser = \"root\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/matchbox/configuration.nix",
+  "line": 62,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "IPv6Token = \"::fd87:20d6:a932:6605\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/matchbox/modules/photoprism.nix",
+  "line": 19,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "locations.\"/\".proxyPass = \"http://localhost:2342\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/turingmachine/modules/localbackup.nix",
+  "line": 19,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${pkgs.bcachefs-tools}/bin/bcachefs unlock /dev/disk/by-partuuid/b315b307-bc54-4918-8ac4-5dd99c68fa70 < ${config.sops.secrets.turingmachine-bcachefs-password.path}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/turingmachine/modules/nfs.nix",
+  "line": 5,
+  "vuln": "NFS export keeps remote root as root",
+  "family": "network-filesystem",
+  "severity": "medium",
+  "text": "services.nfs.server.exports = ''"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/turingmachine/modules/toggle-keyboard/default.nix",
+  "line": 35,
+  "vuln": "systemd service runs as root",
+  "family": "service-identity",
+  "severity": "low",
+  "text": "ExecStart = \"${pkgs.kmod}/bin/modprobe i8042\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/utm-vm/configuration.nix",
+  "line": 29,
+  "vuln": "The console logs a user in without a password",
+  "family": "login-access",
+  "severity": "medium",
+  "text": "services.getty.autologinUser = \"root\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/experiments/test-consul.nix",
+  "line": 92,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "devRootTokenID = \"phony-secret\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/flakelet-relay/default.nix",
+  "line": 181,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://127.0.0.1:7400\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/fluent-bit-filter-wasm/src/lib.rs",
+  "line": 77,
+  "vuln": "unsafe block — review for memory-safety invariants",
+  "family": "unsafe-block",
+  "severity": "info",
+  "text": "let bytes = unsafe { std::slice::from_raw_parts(record.cast::<u8>(), record_len as usize) };"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/fluent-bit-filter-wasm/src/lib.rs",
+  "line": 77,
+  "vuln": "Unsafe raw-memory operation (transmute/from_raw_parts/get_unchecked)",
+  "family": "memory-safety",
+  "severity": "medium",
+  "text": "let bytes = unsafe { std::slice::from_raw_parts(record.cast::<u8>(), record_len as usize) };"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ip-update.nix",
+  "line": 24,
+  "vuln": "systemd service runs as root",
+  "family": "service-identity",
+  "severity": "low",
+  "text": "script = ''"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ip-update.nix",
+  "line": 33,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "echo \"zone ${config.networking.hostName}.thalheim.io.\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ip-update.nix",
+  "line": 34,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "echo \"update delete ${config.networking.hostName}.thalheim.io. A\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ip-update.nix",
+  "line": 36,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "echo \"update add ${config.networking.hostName}.thalheim.io. 600 A $ip\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ip-update.nix",
+  "line": 38,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "echo \"update delete ${config.networking.hostName}.thalheim.io. AAAA\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ip-update.nix",
+  "line": 40,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "echo \"update add ${config.networking.hostName}.thalheim.io. 600 AAAA $ip6\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ip-update.nix",
+  "line": 44,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "config.sops.secrets.\"${config.clan.core.settings.machine.name}-ip-update-key\".path"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/iroh-ssh.nix",
+  "line": 50,
+  "vuln": "Pre-quantum ED25519 (ed25519) — replace with ML-DSA-65 before CRQC arrives",
+  "family": "pqc-migration",
+  "severity": "medium",
+  "text": "key = Ed25519PrivateKey.generate()"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/iroh-ssh.nix",
+  "line": 84,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "install -m 0600 ${config.clan.core.vars.generators.iroh-ssh.files.\"irohssh_ed25519\".path} \\"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/iroh-ssh.nix",
+  "line": 86,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "install -m 0644 ${config.clan.core.vars.generators.iroh-ssh.files.\"irohssh_ed25519.pub\".path} \\"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/kde/choosers.nix",
+  "line": 21,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "lib.makeBinPath ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/kde/choosers.nix",
+  "line": 29,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${builtins.readFile ./audio_chooser.py}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ksmbd.nix",
+  "line": 107,
+  "vuln": "systemd service runs as root",
+  "family": "service-identity",
+  "severity": "low",
+  "text": "ExecStart = \"${pkgs.ksmbd-tools}/bin/ksmbd.mountd -C /etc/ksmbd/ksmbd.conf -P /run/ksmbd/passwd\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/lldap/default.nix",
+  "line": 47,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "force_ldap_user_pass_reset = \"always\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/lldap/ensure.nix",
+  "line": 83,
+  "vuln": "systemd service runs as root",
+  "family": "service-identity",
+  "severity": "low",
+  "text": "ExecStart = lib.concatStringsSep \" \" ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/lldap/import-from-openldap.py",
+  "line": 69,
+  "vuln": "Weak hash algorithm (MD5 / SHA-1 / MD2 / MD4) used",
+  "family": "crypto-weak-hash",
+  "severity": "medium",
+  "text": "digest = hashlib.sha1(password + salt).digest()  # noqa: S324"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/lldap/sync-replica.nix",
+  "line": 37,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "ssh -i ${syncKey.files.ssh-private-key.path} \\"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/niri/default.nix",
+  "line": 19,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "programs.ssh.askPassword = \"${sshAskPasswordWrapper}\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/niri/kwallet-tpm/kwallet-tpm-unlock.py",
+  "line": 72,
+  "vuln": "Command Injection (os.popen / os.execlp)",
+  "family": "command-injection",
+  "severity": "high",
+  "text": "os.execv(  # noqa: S606"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/radicle-node.nix",
+  "line": 46,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "ssh-keygen -t ed25519 -N \"\" -f $out/ssh-private-key -C \"radicle@${config.networking.hostName}\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/radicle-node.nix",
+  "line": 134,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${lib.concatMapStringsSep \"\\n\" (rid: ''"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/rqbit/default.nix",
+  "line": 4,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://127.0.0.1:9091/api/verify\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/rustdesk-client.nix",
+  "line": 51,
+  "vuln": "systemd service runs as root",
+  "family": "service-identity",
+  "severity": "low",
+  "text": "ExecStart = \"${cfg.package}/bin/rustdesk --service\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ssh-tpm-agent.nix",
+  "line": 67,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "PassEnvironment = \"SSH_AGENT_PID\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/update-prefetch.nix",
+  "line": 28,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "store_path=\"$(curl -fL https://nixbot.thalheim.io/nix-outputs/github/Mic92/dotfiles/main/checks.${pkgs.stdenv.hostPlatform.system}.nixos-${config.networking.hostName})\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/users.nix",
+  "line": 19,
+  "vuln": "A user is a member of a group that is equivalent to root",
+  "family": "privilege-escalation",
+  "severity": "medium",
+  "text": "extraGroups = ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/users.nix",
+  "line": 40,
+  "vuln": "Members of wheel get passwordless root through sudo",
+  "family": "privilege-escalation",
+  "severity": "medium",
+  "text": "security.sudo.wheelNeedsPassword = false;"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "openwrt/nix/nix-uci.nix",
+  "line": 14,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r ${../nix_uci} $out/nix_uci"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/cewe-fotowelt/default.nix",
+  "line": 130,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r * $out/opt/cewe-fotowelt/"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/cewe-fotowelt/default.nix",
+  "line": 154,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--prefix LD_LIBRARY_PATH : \"$out/opt/cewe-fotowelt:${lib.makeLibraryPath buildInputs}\" \\"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/cewe-fotowelt/default.nix",
+  "line": 155,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--prefix PATH : \"${lib.makeBinPath [ xdg-utils ]}\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/cewe-fotowelt/default.nix",
+  "line": 250,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "patchelf --set-rpath \"$out/opt/cewe-fotowelt:\\$ORIGIN:\\$ORIGIN/lib:\\$ORIGIN/../lib:${lib.makeLibraryPath buildInputs}\" \"$f\" 2>/dev/null || true"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/firefox-extensions/default.nix",
+  "line": 51,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "jq '. + {\"browser_specific_settings\": {\"gecko\": {\"id\": \"${extensionId}\"}}}' \\"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/firefox-extensions/default.nix",
+  "line": 64,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "zip -r \"$out/${pname}.xpi\" ."
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/herdr-autospace/default.nix",
+  "line": 23,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "wrapProgram $out/bin/herdr-autospace --prefix PATH : ${lib.makeBinPath [ git ]}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/live-text/default.nix",
+  "line": 67,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "lib.makeBinPath ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/maiao/default.nix",
+  "line": 45,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "$out/bin/git-review version | grep -q \"^${finalAttrs.version}$\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/merge-when-green/default.nix",
+  "line": 37,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--prefix PATH : ${lib.makeBinPath runtimeDeps} --suffix PATH : ${lib.makeBinPath [ openssh ]}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/merge-when-green/merge-when-green.py",
+  "line": 100,
+  "vuln": "Regex ReDoS — Catastrophic Backtracking",
+  "family": "",
+  "severity": "medium",
+  "text": ")(?P<owner>[^/]+)/(?P<repo>.+?)(?:\\.git)?/?$\"\"\","
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/minihydra/default.nix",
+  "line": 43,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "lib.makeBinPath ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/minihydra/src/minihydra/templates/_log.html",
+  "line": 7,
+  "vuln": "Reverse tabnabbing (target=\"_blank\" without rel=\"noopener\")",
+  "family": "client-side",
+  "severity": "low",
+  "text": "<a href=\"/run/{{ run_id }}/log/{{ job_id }}\" target=\"_blank\">full log →</a>"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/minihydra/src/minihydra/templates/base.html",
+  "line": 7,
+  "vuln": "Missing Subresource Integrity on cross-origin <script>",
+  "family": "supply-chain",
+  "severity": "medium",
+  "text": "<script src=\"https://unpkg.com/htmx.org@2.0.4\"></script>"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/nix-eval-warnings/default.nix",
+  "line": 31,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--prefix PATH : ${lib.makeBinPath [ nix-eval-jobs ]}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/pim/default.nix",
+  "line": 91,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--prefix PATH : ${lib.makeBinPath runtimeDeps}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/systemctl/systemctl.py",
+  "line": 76,
+  "vuln": "Command Injection",
+  "family": "command-injection",
+  "severity": "critical",
+  "text": "return subprocess.run(cmd, capture_output=True, text=True, check=True)"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/updater/__main__.py",
+  "line": 252,
+  "vuln": "SQL Injection (f-string SQL assigned to variable)",
+  "family": "sql-injection",
+  "severity": "high",
+  "text": "branch_name = f\"update/{pkg.name}\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/updater/__main__.py",
+  "line": 364,
+  "vuln": "SQL Injection (f-string SQL assigned to variable)",
+  "family": "sql-injection",
+  "severity": "high",
+  "text": "pr_body = f\"Automated update of {pkg.name} from {old_ver} to {new_ver}.\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/updater/default.nix",
+  "line": 24,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r *.py $out/lib/updater/"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/updater/default.nix",
+  "line": 29,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "lib.makeBinPath ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/csrc/frontend_shim.cc",
+  "line": 41,
+  "vuln": "Use-After-Free heuristic — free(p) followed by p->/p[ access in same function window",
+  "family": "use-after-free-heuristic-free-p-followed",
+  "severity": "high",
+  "text": "free(h);"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/default.nix",
+  "line": 130,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "lib.makeBinPath ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/src/clock.rs",
+  "line": 174,
+  "vuln": "unsafe block — review for memory-safety invariants",
+  "family": "unsafe-block",
+  "severity": "info",
+  "text": "unsafe {"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/src/skills/notes.rs",
+  "line": 730,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "(\"What do I have to do?\", Notes::Show(TODO)),"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/src/tts.rs",
+  "line": 44,
+  "vuln": "unsafe block — review for memory-safety invariants",
+  "family": "unsafe-block",
+  "severity": "info",
+  "text": "unsafe { sys::SherpaOnnxDestroyOfflineTts(self.0.as_ptr()) };"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/src/tts.rs",
+  "line": 54,
+  "vuln": "unsafe block — review for memory-safety invariants",
+  "family": "unsafe-block",
+  "severity": "info",
+  "text": "unsafe { sys::SherpaOnnxDestroyOfflineTtsGeneratedAudio(self.0.as_ptr()) };"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/src/tts.rs",
+  "line": 208,
+  "vuln": "unsafe block — review for memory-safety invariants",
+  "family": "unsafe-block",
+  "severity": "info",
+  "text": "let raw = unsafe {"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/src/tts.rs",
+  "line": 279,
+  "vuln": "Unsafe raw-memory operation (transmute/from_raw_parts/get_unchecked)",
+  "family": "memory-safety",
+  "severity": "medium",
+  "text": "piece(slice::from_raw_parts(samples, n));"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/src/wakeword.rs",
+  "line": 61,
+  "vuln": "unsafe block — review for memory-safety invariants",
+  "family": "unsafe-block",
+  "severity": "info",
+  "text": "let raw = unsafe { TfLiteModelCreateFromFile(c.as_ptr()) };"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/src/wakeword.rs",
+  "line": 72,
+  "vuln": "unsafe block — review for memory-safety invariants",
+  "family": "unsafe-block",
+  "severity": "info",
+  "text": "unsafe { TfLiteModelDelete(self.0.as_ptr()) };"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/src/wakeword.rs",
+  "line": 101,
+  "vuln": "unsafe block — review for memory-safety invariants",
+  "family": "unsafe-block",
+  "severity": "info",
+  "text": "unsafe { TfLiteInterpreterDelete(self.0.as_ptr()) };"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "AGENTS.md",
+  "line": 41,
+  "vuln": "Instruction file contains an override / role-rewriting directive (chat-template-spoof)",
+  "family": "agent-prompt-injection",
+  "severity": "high",
+  "text": "in `/tmp`): `curl -s https://api.github.com/repos/<owner>/<repo>/compare/<old>...<new>`."
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/cli/fish/bindings.nix",
+  "line": 59,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "installPhase = \"cp -r . $out\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 24,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "BTN_BG=${colors.primary_container}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 25,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "BTN_FG=${colors.on_primary_container}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 26,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "BG=${colors.surface}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 27,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "FG=${colors.on_surface}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 28,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "HDR_BTN_BG=${colors.secondary_container}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 29,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "HDR_BTN_FG=${colors.on_secondary_container}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 30,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "ACCENT_BG=${colors.primary}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 31,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "ACCENT_FG=${colors.on_primary}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 32,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "HDR_BG=${colors.surface_bright}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 33,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "HDR_FG=${colors.on_surface}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 34,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "MATERIA_SURFACE=${colors.surface_bright}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 35,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "MATERIA_VIEW=${colors.surface_dim}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 36,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "MENU_BG=${colors.surface_container}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 37,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "MENU_FG=${colors.on_surface}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 38,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "SEL_BG=${colors.primary_fixed_dim}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 39,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "SEL_FG=${colors.on_primary}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 40,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "TXT_BG=${colors.primary_container}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 41,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "TXT_FG=${colors.on_primary_container}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 42,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "WM_BORDER_FOCUS=${colors.outline}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 43,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "WM_BORDER_UNFOCUS=${colors.outline_variant}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 45,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "NAME=${name}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 49,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "./change_color.sh -o ${name} /build/gtk-colors -i False -t \"$out/share/themes\""
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/wayland-wm/waybar.nix",
+  "line": 37,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${script}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/wayland-wm/waybar.nix",
+  "line": 39,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--arg text \"${text}\" \\"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/wayland-wm/waybar.nix",
+  "line": 40,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--arg tooltip \"${tooltip}\" \\"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/wayland-wm/waybar.nix",
+  "line": 41,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--arg alt \"${alt}\" \\"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/wayland-wm/waybar.nix",
+  "line": 42,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--arg class \"${class}\" \\"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/wayland-wm/waybar.nix",
+  "line": 43,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--arg percentage \"${percentage}\" \\"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/wayland-wm/wofi.nix",
+  "line": 31,
+  "vuln": "Secret value reaches the world-readable Nix store",
+  "family": "secret-in-store",
+  "severity": "high",
+  "text": "lib.optional enable (pkgs.pass-wofi.override {pass = package;});"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/productivity/accounts/mgc.nix",
+  "line": 62,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "channel = commonChannelCfg; # TODO: check if I really need this one"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/productivity/accounts/usp.nix",
+  "line": 73,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "channel = commonChannelCfg; # TODO: check if I really need this one"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/alcyone/services/grafana/default.nix",
+  "line": 33,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "admin_password = \"$__file{${config.sops.secrets.grafana-gabriel-password.path}}\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/alcyone/services/grafana/default.nix",
+  "line": 44,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "password = \"$__file{${config.sops.secrets.grafana-mail-password.path}}\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/alcyone/services/headscale.nix",
+  "line": 90,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "| jq --argjson mapping '${builtins.toJSON domainToNode}' -r '"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/alcyone/services/radicale.nix",
+  "line": 18,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "htpasswd_encryption = \"autodetect\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/common/optional/ephemeral-btrfs.nix",
+  "line": 14,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "mount -t btrfs -o subvol=/ ${root.device} \"$MNTPOINT\""
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/common/optional/steam-gamescope-session.nix",
+  "line": 8,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${lib.optionalString enableOffloadCmd offloadCmdMainProgram} gamescope --steam -- steam -tenfoot &>/dev/null"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/common/users/gabriel/default.nix",
+  "line": 24,
+  "vuln": "Shell evaluates a variable as code in a generated script",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "eval \"$(XDG_RUNTIME_DIR=''${XDG_RUNTIME_DIR:-/run/user/$UID} ${pkgs.systemd}/bin/systemctl --user show-environment 2>/dev/null | ${lib.getExe pkgs.gnused} -En '/^(DBUS_SESSION_BUS_ADDRESS|DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_RUNTIME_DIR)="
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+  "line": 18,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "api_key = \"@sabnzbd-key@\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+  "line": 18,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "api_key = \"@sabnzbd-key@\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+  "line": 52,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "password = \"@frugalusenet-key@\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+  "line": 65,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "password = \"@frugalusenet-key@\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+  "line": 78,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "password = \"@frugalusenet-key@\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+  "line": 87,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "password = \"@blocknews-key@\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+  "line": 100,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "password = \"@blocknews-key@\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/taygeta/services/minecraft/servers/gtnh/configs/dynmap.default.nix",
+  "line": 6,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "compass-mode = \"newnorth\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "modules/nixos/hydra-auto-upgrade.nix",
+  "line": 23,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "jobset=\"''${2:-${cfg.jobset}}\""
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "modules/nixos/hydra-auto-upgrade.nix",
+  "line": 24,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "job=\"''${3:-${cfg.job}}\""
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "modules/nixos/hydra-auto-upgrade.nix",
+  "line": 44,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "latest=\"$(fetch_json \"${cfg.instance}/job/${cfg.project}/$jobset/$job/latest\")\""
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "modules/nixos/hydra-auto-upgrade.nix",
+  "line": 48,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "eval_data=\"$(fetch_json \"${cfg.instance}/eval/$eval\")\""
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "modules/nixos/hydra-auto-upgrade.nix",
+  "line": 153,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "script = \"${lib.getExe cached-nixos-rebuild} ${cfg.operation} ${cfg.jobset} ${cfg.job}\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "overlays/default.nix",
+  "line": 150,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--prefix LD_LIBRARY_PATH : \"${lib.makeLibraryPath [libGL]}\" \\"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "overlays/default.nix",
+  "line": 202,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r . $out/"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "pkgs/jj-hunk-tool/default.nix",
+  "line": 26,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--prefix PATH : ${lib.makeBinPath [jujutsu]}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "pkgs/pass-wofi/default.nix",
+  "line": 30,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "lib.makeBinPath ["
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "pkgs/plymouth-spinner-monochrome/default.nix",
+  "line": 17,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -rT . $out/share/plymouth/themes/spinner-monochrome"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "pkgs/runescape/default.nix",
+  "line": 57,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r usr/share/icons $out/share/icons"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "projects/gtkhal/default.nix",
+  "line": 44,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "export XDG_DATA_DIRS=\"${gsettings-desktop-schemas}/share/gsettings-schemas/${gsettings-desktop-schemas.name}:${gtk4}/share/gsettings-schemas/${gtk4.name}:$XDG_DATA_DIRS\""
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "projects/website/default.nix",
+  "line": 31,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r _site -T $out/public"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "machines/mac-studio.nix",
+  "line": 1,
+  "vuln": "SSH accepts password authentication",
+  "family": "ssh-access",
+  "severity": "medium",
+  "text": "{ config, lib, pkgs, ... }: {"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "machines/vm-shared.nix",
+  "line": 55,
+  "vuln": "Members of wheel get passwordless root through sudo",
+  "family": "privilege-escalation",
+  "severity": "high",
+  "text": "security.sudo.wheelNeedsPassword = false;"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "machines/vm-shared.nix",
+  "line": 136,
+  "vuln": "SSH accepts password authentication",
+  "family": "ssh-access",
+  "severity": "medium",
+  "text": "services.openssh.settings.PasswordAuthentication = true;"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "machines/vm-shared.nix",
+  "line": 149,
+  "vuln": "Host firewall is disabled",
+  "family": "firewall-exposure",
+  "severity": "high",
+  "text": "networking.firewall.enable = false;"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "users/mitchellh/home-manager.nix",
+  "line": 119,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "AMP_API_KEY = \"op://Private/Amp_API/credential\";"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "users/mitchellh/home-manager.nix",
+  "line": 119,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "AMP_API_KEY = \"op://Private/Amp_API/credential\";"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "users/mitchellh/home-manager.nix",
+  "line": 120,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "OPENAI_API_KEY = \"op://Private/OpenAPI_Personal/credential\";"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "users/mitchellh/nixos.nix",
+  "line": 24,
+  "vuln": "A user is a member of a group that is equivalent to root",
+  "family": "privilege-escalation",
+  "severity": "medium",
+  "text": "extraGroups = [ \"docker\" \"lxd\" \"wheel\" ];"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "users/mitchellh/nixos.nix",
+  "line": 26,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "medium",
+  "text": "hashedPassword = \"$6$p5nPhz3G6k$6yCK0m3Oglcj4ZkUXwbjrG403LBZkfNwlhgrQAqOospGJXJZ27dI84CbIYBNsTgsoH650C1EBsbCKesSVPSpB1\";"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "users/mitchellh/nixos.nix",
+  "line": 26,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "hashedPassword = \"$6$p5nPhz3G6k$6yCK0m3Oglcj4ZkUXwbjrG403LBZkfNwlhgrQAqOospGJXJZ27dI84CbIYBNsTgsoH650C1EBsbCKesSVPSpB1\";"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/05-sql-typeorm/docker-compose.yml",
+  "line": 11,
+  "vuln": "Docker Service Publishes Sensitive Port 3306 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- \"3306:3306\""
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/06-mongoose/docker-compose.yml",
+  "line": 9,
+  "vuln": "Docker Service Publishes Sensitive Port 27017 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- 27017:27017"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/07-sequelize/docker-compose.yml",
+  "line": 11,
+  "vuln": "Docker Service Publishes Sensitive Port 3306 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- \"3306:3306\""
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/12-graphql-schema-first/src/cats/cats.graphql",
+  "line": 6,
+  "vuln": "GraphQL Mutation Block (Verify Field-Level Auth)",
+  "family": "graphql-mutation-block-verify-field-leve",
+  "severity": "medium",
+  "text": "type Mutation {"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/13-mongo-typeorm/docker-compose.yml",
+  "line": 9,
+  "vuln": "Docker Service Publishes Sensitive Port 27017 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- 27017:27017"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/14-mongoose-base/docker-compose.yml",
+  "line": 9,
+  "vuln": "Docker Service Publishes Sensitive Port 27017 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- 27017:27017"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/15-mvc/views/index.hbs",
+  "line": 10,
+  "vuln": "Prompt Template: user input interpolated without isolation markers",
+  "family": "prompt-template-user-input-interpolated-",
+  "severity": "high",
+  "text": "{{ message }}"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/17-mvc-fastify/views/index.hbs",
+  "line": 10,
+  "vuln": "Prompt Template: user input interpolated without isolation markers",
+  "family": "prompt-template-user-input-interpolated-",
+  "severity": "high",
+  "text": "{{ message }}"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/19-auth-jwt/src/auth/constants.ts",
+  "line": 2,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "secret:"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/22-graphql-prisma/src/posts/posts.service.ts",
+  "line": 19,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "return this.prisma.post.findMany({});"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/22-graphql-prisma/src/posts/posts.service.ts",
+  "line": 19,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "return this.prisma.post.findMany({});"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/22-graphql-prisma/src/posts/schema.graphql",
+  "line": 25,
+  "vuln": "GraphQL Mutation Block (Verify Field-Level Auth)",
+  "family": "graphql-mutation-block-verify-field-leve",
+  "severity": "medium",
+  "text": "type Mutation {"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/23-graphql-code-first/schema.gql",
+  "line": 24,
+  "vuln": "GraphQL Mutation Block (Verify Field-Level Auth)",
+  "family": "graphql-mutation-block-verify-field-leve",
+  "severity": "medium",
+  "text": "type Mutation {"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/26-queues/docker-compose.yml",
+  "line": 6,
+  "vuln": "Docker Service Publishes Sensitive Port 6379 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- 6379:6379"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/32-graphql-federation-schema-first/users-application/src/users/users.graphql",
+  "line": 6,
+  "vuln": "GraphQL Sensitive Query Field (Verify Auth)",
+  "family": "graphql-sensitive-query-field-verify-aut",
+  "severity": "medium",
+  "text": "extend type Query {"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/33-graphql-mercurius/schema.gql",
+  "line": 22,
+  "vuln": "GraphQL Mutation Block (Verify Field-Level Auth)",
+  "family": "graphql-mutation-block-verify-field-leve",
+  "severity": "medium",
+  "text": "type Mutation {"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/37-outbox/docker-compose.yml",
+  "line": 9,
+  "vuln": "Docker Service Publishes Sensitive Port 5432 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- '5432:5432'"
+ },
+ {
+  "project": "nest",
+  "language": "javascript",
+  "file": "sample/38-webhooks/docker-compose.yml",
+  "line": 10,
+  "vuln": "Docker Service Publishes Sensitive Port 5432 to Host",
+  "family": "",
+  "severity": "high",
+  "text": "- '5432:5432'"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": ".github/workflows/test.yml",
+  "line": 13,
+  "vuln": "Pipeline: Third-party action pinned to major-version tag (mutable)",
+  "family": "pipeline-third-party-action-pinned-to-ma",
+  "severity": "medium",
+  "text": "- uses: cachix/install-nix-action@v31"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "apple/t2/pkgs/brcm-firmware/fetchmacos.nix",
+  "line": 29,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "macrecovery download -o . -b ${boardId} -m ${mlb} -os ${osType}"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "apple/t2/pkgs/linux-t2/update-patches.py",
+  "line": 90,
+  "vuln": "Unrestricted file upload — client-supplied filename used as the write destination",
+  "family": "unrestricted-file-upload",
+  "severity": "high",
+  "text": "with open(args.filename, \"w+\") as f:"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "compulab/ucm-imx95/bsp/ucm-imx95-firmware.nix",
+  "line": 39,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "export SILICON=${siliconRev}"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "framework/13-inch/common/classic-audio.nix",
+  "line": 329,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "\"node.passive\" = \"true\";"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "fydetab/duo/u-boot.nix",
+  "line": 84,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "cp -r ${rkbin.src} rkbin"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "gpd/duo/duo-specific/audio.nix",
+  "line": 330,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "\"node.passive\" = \"true\";"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "microsoft/surface/surface-go/firmware/ath10k/ath10k-replace.nix",
+  "line": 35,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "mkdir $out; cp -r ./. $out"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "milkv/pioneer/firmware.nix",
+  "line": 40,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "install -D ${fip} $out/fip.bin"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "milkv/pioneer/firmware.nix",
+  "line": 41,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "install -D ${zsbl} $out/zsbl.bin"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "milkv/pioneer/linuxboot-initrd.nix",
+  "line": 32,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r . $out/src"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 19,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-pocket-reform/0001-a311d-viu-fifo-lines-config.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 20,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-pocket-reform/0002-a311d-viu-fifo-lines-config-header.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 21,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-pocket-reform/0003-tlv320aic31xx-add-1228800hz-support.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 22,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0001-Revert-drm-bridge-synopsys-dw-mipi-dsi-enable-EoTp-b.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 23,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0001-meson-g12b-bananapi-cm4-mnt-reform2.dts-fix-audio-an.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 24,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0011-dw-mipi-dsi-phy-stop-wait-time.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 25,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0012-innolux-n125hce-gn1-timing-tweaks.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 26,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0013-meson-viu-hold-fifo-lines.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 27,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0014-meson-venc-sync.patch.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 28,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0015-meson-dw-mipi-dsi-sync-invert.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 29,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0016-sn65dsi86-burst-mode-support.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 30,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0018-sn65dsi86-never-turn-off.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 31,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0020-LOCAL-ALSA-Assign-internal-PCM-chmap-ELD-IEC958-kctl.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 32,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0021-HACK-of-partial-revert-of-fdt.c-changes.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 34,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0023-sdio-pullups.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 35,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0024-sdio-improve-wifi-speed.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 36,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0030-WORKAROUND-meson-plane-disable-afbc-32x8.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 54,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/rk3588-mnt-reform2/0075-PCI-host-common-Add-an-API-to-check-for-any-device-u.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/rk3588/installer.nix",
+  "line": 66,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.boot.loader.generic-extlinux-compatible.populateCmd} -c ${config.system.build.toplevel} -d ./rootImage/boot"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/rk3588/installer.nix",
+  "line": 75,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "cp -a --reflink=auto ${squashfs} ./rootImage/nix-store.squashfs"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/rk3588/installer.nix",
+  "line": 195,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "img=$out/installer-image/${config.image.baseName}.img"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/rk3588/installer.nix",
+  "line": 215,
+  "vuln": "Shell evaluates a variable as code in a generated script",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "eval $(partx $img -o START,SECTORS --nr 1 --pairs)"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/rk3588/uboot-image.nix",
+  "line": 9,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "cp ${uboot}/idbloader.img $out/rk3588-mnt-reform2${uboot.variant}-flash.bin"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/rk3588/uboot-image.nix",
+  "line": 10,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "dd if=${uboot}/u-boot.itb of=$out/rk3588-mnt-reform${uboot.variant}-flash.bin seek=16320"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "nxp/common/bsp/imx-uboot-builder.nix",
+  "line": 79,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "make ${defconfig}"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "nxp/common/bsp/imx-uboot-builder.nix",
+  "line": 91,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "cp ${dtbPath} $out"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "purism/librem/5r4/u-boot/default.nix",
+  "line": 24,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "cd ${fa.pname}-${fa.version}/firmware"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "raspberry-pi/common/firmware.nix",
+  "line": 117,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "copyForced ${config.hardware.raspberry-pi.configtxt.file} \"$target/config.txt\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "spacemit/k3-pico-itx/firmware.nix",
+  "line": 96,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "dd if=${config.system.build.fsbl}/FSBL.bin of=''${dev}p3 conv=fsync,notrunc"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "spacemit/k3-pico-itx/firmware.nix",
+  "line": 97,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "dd if=${config.system.build.opensbi}/share/opensbi/lp64/generic/firmware/fw_dynamic.itb of=''${dev}p5 conv=fsync,notrunc"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "spacemit/k3-pico-itx/firmware.nix",
+  "line": 98,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "dd if=${config.system.build.edk2}/edk2.itb of=''${dev}p6 conv=fsync,notrunc"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "starfive/visionfive/v2/firmware.nix",
+  "line": 60,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "flashcp -v ${config.system.build.uboot}/u-boot-spl.bin.normal.out /dev/mtd0"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "starfive/visionfive/v2/firmware.nix",
+  "line": 61,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "flashcp -v ${config.system.build.uboot}/u-boot.itb /dev/mtd2"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "starfive/visionfive/v2/firmware.nix",
+  "line": 69,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "dd if=${config.system.build.uboot}/u-boot-spl.bin.normal.out of=/dev/mmcblk0p1 conv=fsync"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "starfive/visionfive/v2/firmware.nix",
+  "line": 70,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "dd if=${config.system.build.uboot}/u-boot.itb of=/dev/mmcblk0p2 conv=fsync"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "toshiba/swanky/default.nix",
+  "line": 25,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "postFixup = \"cp -r ${ucm}/chtmax98090 $out/share/alsa/ucm\";"
+ },
+ {
+  "project": "srvos",
+  "language": "nix",
+  "file": "darwin/common/update-diff.nix",
+  "line": 10,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.srvos.update-diff.text}"
+ },
+ {
+  "project": "srvos",
+  "language": "nix",
+  "file": "dev/test-configurations.nix",
+  "line": 18,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "users.users.root.initialPassword = \"fnord23\";"
+ },
+ {
+  "project": "srvos",
+  "language": "nix",
+  "file": "nixos/mixins/terminfo.nix",
+  "line": 18,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r Ghostty.app/Contents/Resources/terminfo/67/ghostty $out/share/terminfo/g"
+ },
+ {
+  "project": "srvos",
+  "language": "nix",
+  "file": "nixos/mixins/terminfo.nix",
+  "line": 19,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r Ghostty.app/Contents/Resources/terminfo/78/xterm-ghostty $out/share/terminfo/x"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/ai/services/ai.ts",
+  "line": 102,
+  "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+  "family": "dos-sync-io",
+  "severity": "medium",
+  "text": "eeLicense = fs.readFileSync(licensePath).toString();"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/ai/services/ai.ts",
+  "line": 166,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const response = await fetch(`${aiServerUrl}/auth/getAiJWT`, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/ai/services/ai.ts",
+  "line": 254,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const response = await fetch(`${aiServerUrl}/cms/ai-data`, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/ai/services/ai.ts",
+  "line": 326,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "TODO: once all AI features are migrated to the providers architecture, consider removing this flag */"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/bootstrap.ts",
+  "line": 63,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const users = await strapi.db.query('admin::user').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/config/admin-conditions.ts",
+  "line": 1,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: TS User and role type"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/content-types/User.ts",
+  "line": 86,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// FIXME: Allow setting this"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/admin-token.ts",
+  "line": 92,
+  "vuln": "regenerate() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const token = await apiTokenService.getById(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/admin-token.ts",
+  "line": 123,
+  "vuln": "revoke() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const existingToken = await apiTokenService.getById(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/admin-token.ts",
+  "line": 143,
+  "vuln": "get() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const token = await apiTokenService.getById(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/admin-token.ts",
+  "line": 181,
+  "vuln": "update() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const existingToken = await apiTokenService.getById(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/admin.ts",
+  "line": 56,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO very temporary to check the switch ee/ce"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/admin.ts",
+  "line": 154,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "numberOfAllContentTypes, // TODO: V5: This event should be renamed numberOfContentTypes in V5 as the name is already taken to describe the number of content types using i18n."
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/api-token.ts",
+  "line": 51,
+  "vuln": "regenerate() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const token = await apiTokenService.getById(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/api-token.ts",
+  "line": 77,
+  "vuln": "revoke() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const apiToken = await apiTokenService.revoke(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/api-token.ts",
+  "line": 89,
+  "vuln": "get() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const token = await apiTokenService.getById(id, { includeDecryptedKey: true });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/api-token.ts",
+  "line": 101,
+  "vuln": "update() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "async update(ctx: Context) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/api-token.ts",
+  "line": 116,
+  "vuln": "update() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const existingToken = await apiTokenService.getById(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/role.ts",
+  "line": 38,
+  "vuln": "Mass Assignment (req.body Direct to Model)",
+  "family": "mass-assignment",
+  "severity": "high",
+  "text": "const role = await roleService.create(body);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/role.ts",
+  "line": 87,
+  "vuln": "update() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "async update(ctx: Context) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/role.ts",
+  "line": 95,
+  "vuln": "update() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const role = await roleService.findOne({ id });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/role.ts",
+  "line": 126,
+  "vuln": "getPermissions() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const role = await roleService.findOne({ id });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/role.ts",
+  "line": 132,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const permissions = await permissionService.findMany({ where: { role: { id: role.id } } });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/role.ts",
+  "line": 153,
+  "vuln": "updatePermissions() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const role = await roleService.findOne({ id });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/role.ts",
+  "line": 189,
+  "vuln": "deleteOne() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const roles = await roleService.deleteByIds([id]);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/transfer/token.ts",
+  "line": 33,
+  "vuln": "getById() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const transferToken = await tokenService.getById(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/transfer/token.ts",
+  "line": 71,
+  "vuln": "update() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "async update(ctx: Context) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/transfer/token.ts",
+  "line": 92,
+  "vuln": "update() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const apiTokenExists = await tokenService.getById(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/transfer/token.ts",
+  "line": 119,
+  "vuln": "revoke() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const transferToken = await tokenService.revoke(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/transfer/token.ts",
+  "line": 128,
+  "vuln": "regenerate() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const exists = await tokenService.getById(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/controllers/webhooks.ts",
+  "line": 22,
+  "vuln": "Regex ReDoS — Catastrophic Backtracking",
+  "family": "",
+  "severity": "medium",
+  "text": "/^(?:([a-z0-9+.-]+):\\/\\/)(?:\\S+(?::\\S*)?@)?(?:(?:[1-9]\\d?|1\\d\\d|2[01]\\d|22[0-3])(?:\\.(?:1?\\d{1,2}|2[0-4]\\d|25[0-5])){2}(?:\\.(?:[1-9]\\d?|1\\d\\d|2[0-4]\\d|25[0-4]))|(?:(?:[a-z\\u00a1-\\uffff0-9_]-*)*[a-z\\u00a1-\\uffff0-9_]+)(?:\\.(?:[a-z\\u00a1-\\uff"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/action.ts",
+  "line": 9,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: move actionProvider here instead of in the permission service"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 121,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: we need to ensure the permissions are actually valid registered permissions!"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 419,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const existingPermissions = await getService('permission').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 446,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const allCurrentPermissions = await getService('permission').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 546,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const tokens = await strapi.db.query('admin::api-token').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 579,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const users = await strapi.db.query('admin::user').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 786,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: createMany doesn't seem to create relation properly, implement a better way rather than a ton of queries"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 931,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO V5: stop reading API_TOKEN_SALT"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 972,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const tokens = await strapi.db.query('admin::api-token').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 1228,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: improve efficiency here"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 1237,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: improve efficiency here"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/api-token.ts",
+  "line": 1311,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const tokens = await strapi.db.query('admin::api-token').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/auth.ts",
+  "line": 97,
+  "vuln": "bcrypt cost factor too low (10); 12 is the modern floor",
+  "family": "crypto-kdf-weak",
+  "severity": "medium",
+  "text": "const hashPassword = (password: string) => bcrypt.hash(password, 10);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/auth.ts",
+  "line": 97,
+  "vuln": "bcrypt Rounds Below 10 (Weak Work Factor)",
+  "family": "weak-crypto",
+  "severity": "medium",
+  "text": "const hashPassword = (password: string) => bcrypt.hash(password, 10);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/index.ts",
+  "line": 23,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: TS - Export services one by one as this export is cjs"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/passport.ts",
+  "line": 19,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// @ts-expect-error - TODO: migrate auth service to TS"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/passport.ts",
+  "line": 26,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO - TS: ensure the handler is an EventHub.Listener"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/permission/permissions-manager/sanitize.ts",
+  "line": 57,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: sanitize relations to admin users in all sanitizers"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/permission/permissions-manager/validate.ts",
+  "line": 56,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: validate relations to admin users in all validators"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/permission/permissions-manager/validate.ts",
+  "line": 161,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/permission/queries.ts",
+  "line": 15,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const permissionsToDelete = await strapi.db.query('admin::permission').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/permission/queries.ts",
+  "line": 143,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "const results = (await strapi.db.query('admin::permission').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/permission/rename-fields.ts",
+  "line": 118,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const permissions = (await strapi.db.query(PERMISSION_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/project-settings.ts",
+  "line": 46,
+  "vuln": "Unrestricted file upload — client-supplied mimetype trusted as the stored Content-Type",
+  "family": "unrestricted-file-upload",
+  "severity": "medium",
+  "text": "type: file.mimetype,"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/project-settings.ts",
+  "line": 129,
+  "vuln": "Timing-Unsafe Comparison — secret/HMAC compared with === instead of timingSafeEqual",
+  "family": "timing-attack",
+  "severity": "medium",
+  "text": "previousSettings[inputName].hash === newSettings[inputName].hash"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/role.ts",
+  "line": 115,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "return strapi.db.query('admin::role').findMany({ where: params, populate });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/role.ts",
+  "line": 115,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "return strapi.db.query('admin::role').findMany({ where: params, populate });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/role.ts",
+  "line": 355,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const existingPermissions = await getService('permission').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/transfer/token.ts",
+  "line": 41,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const tokens: DatabaseTransferToken[] = await strapi.db.query(TRANSFER_TOKEN_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/transfer/token.ts",
+  "line": 174,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: improve efficiency here"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/user.ts",
+  "line": 277,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const [oldestUser] = await strapi.db.query('admin::user').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/user.ts",
+  "line": 490,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const users = await strapi.db.query('admin::user').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/user.ts",
+  "line": 520,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const users = await strapi.db.query('admin::user').findMany({ select: ['preferedLanguage'] });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/services/user.ts",
+  "line": 520,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "const users = await strapi.db.query('admin::user').findMany({ select: ['preferedLanguage'] });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/strategies/admin-token.ts",
+  "line": 16,
+  "vuln": "Timing-Unsafe Comparison — secret/HMAC compared with === instead of timingSafeEqual",
+  "family": "timing-attack",
+  "severity": "medium",
+  "text": "if (token === null) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/strategies/admin.ts",
+  "line": 60,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: use the ability from ctx.state.auth instead of"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/strategies/content-api-token.ts",
+  "line": 21,
+  "vuln": "Timing-Unsafe Comparison — secret/HMAC compared with === instead of timingSafeEqual",
+  "family": "timing-attack",
+  "severity": "medium",
+  "text": "if (token === null) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/strategies/data-transfer.ts",
+  "line": 56,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// @ts-expect-error - FIXME: verify lastUsedAt is defined"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/admin/server/src/utils/debug-dump/redact.ts",
+  "line": 36,
+  "vuln": "Regex ReDoS — Catastrophic Backtracking",
+  "family": "",
+  "severity": "medium",
+  "text": "const PEM_PRIVATE_KEY_PATTERN = /-----BEGIN(?: [A-Z0-9]+)* PRIVATE KEY-----/;"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 50,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "strapi.documents(uid).findMany({ ...baseParams, status: 'draft' }),"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 50,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "strapi.documents(uid).findMany({ ...baseParams, status: 'draft' }),"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 51,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "strapi.documents(uid).findMany({ ...baseParams, status: 'published' }),"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 237,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: Revert the creation if create permission conditions are not met"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 274,
+  "vuln": "async() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const [documentVersion, documentExists] = await Promise.all(["
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 465,
+  "vuln": "findOne() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const version = await documentManager.findOne(id, model, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 482,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// @ts-expect-error TODO: fix"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 497,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: Count populated relations by permissions"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 558,
+  "vuln": "clone() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const document = await documentManager.findOne(id, model, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 622,
+  "vuln": "delete() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const documentLocales = await documentManager.findLocales(id, model, { populate, locale });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 694,
+  "vuln": "publish() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const documentExists = await documentManager.exists(model, id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 753,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const documents = await strapi.documents(model as UID.CollectionType).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 877,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO allow multiple locales for bulk locale unpublish"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 879,
+  "vuln": "unpublish() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const document = await documentManager.findOne(id, model, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 928,
+  "vuln": "discard() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const document = await documentManager.findOne(id, model, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 1019,
+  "vuln": "countDraftRelations() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const entity = await documentManager.findOne(id, model, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/collection-types.ts",
+  "line": 1070,
+  "vuln": "SQL Injection",
+  "family": "sql-injection",
+  "severity": "high",
+  "text": "const count = await strapi.db.query(model).count({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/components.ts",
+  "line": 17,
+  "vuln": "findComponentConfiguration() looks up or mutates by request-supplied 'uid' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const component = componentService.findComponent(uid);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/components.ts",
+  "line": 40,
+  "vuln": "updateComponentConfiguration() looks up or mutates by request-supplied 'uid' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const component = componentService.findComponent(uid);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/content-types.ts",
+  "line": 49,
+  "vuln": "findContentTypeConfiguration() looks up or mutates by request-supplied 'uid' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const contentType = await contentTypeService.findContentType(uid);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/content-types.ts",
+  "line": 90,
+  "vuln": "updateContentTypeConfiguration() looks up or mutates by request-supplied 'uid' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const contentType = await contentTypeService.findContentType(uid);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/relations.ts",
+  "line": 81,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const availableStatus = await strapi.db.query(targetUid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/relations.ts",
+  "line": 81,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "const availableStatus = await strapi.db.query(targetUid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/relations.ts",
+  "line": 441,
+  "vuln": "findExisting() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "} = await this.extractAndValidateRequestInfo(ctx, id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/controllers/single-types.ts",
+  "line": 27,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": ".findMany({ ...opts, populate }, uid)"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/history/services/history.ts",
+  "line": 66,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "? await query.findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/history/services/lifecycles.ts",
+  "line": 140,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const localeEntries = await strapi.db.query(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/history/services/lifecycles.ts",
+  "line": 189,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const expiredVersions = await strapi.db.query(HISTORY_VERSION_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/homepage/services/homepage.ts",
+  "line": 49,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const rawConfigurations = await coreStore.findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/homepage/services/homepage.ts",
+  "line": 65,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const readPermissions: Modules.Permissions.PermissionRule[] = await permissionService.findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/mcp/handlers/single-type-handlers.ts",
+  "line": 144,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: fix UID.SingleType assignability in @strapi/types"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/preview/controllers/preview.ts",
+  "line": 24,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: Permissions to preview content"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/document-manager.ts",
+  "line": 63,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "return strapi.db.query(uid).findMany({ populate: opts.populate, where });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/document-manager.ts",
+  "line": 63,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "return strapi.db.query(uid).findMany({ populate: opts.populate, where });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/document-manager.ts",
+  "line": 270,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const entities = await strapi.documents(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/document-metadata.ts",
+  "line": 229,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "return strapi.db.query(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/document-metadata.ts",
+  "line": 229,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "return strapi.db.query(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/permission-checker.ts",
+  "line": 62,
+  "vuln": "Spec drift — sanitizeOutput() claims output-sanitizer but body lacks expected evidence",
+  "family": "spec-drift",
+  "severity": "high",
+  "text": "const sanitizeOutput = (data: Entity, { action = ACTIONS.read }: { action?: string } = {}) => {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/permission-checker.ts",
+  "line": 92,
+  "vuln": "Spec drift — sanitizeInput() claims output-sanitizer but body lacks expected evidence",
+  "family": "spec-drift",
+  "severity": "high",
+  "text": "const sanitizeInput = (action: string, data: any, entity?: Entity) => {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/permission-checker.ts",
+  "line": 133,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// @ts-expect-error TODO"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/uid.ts",
+  "line": 61,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const foundDocuments = await strapi.documents(contentTypeUID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/utils/draft.ts",
+  "line": 151,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const publishedRows = await strapi.db.query(targetUid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/utils/store.ts",
+  "line": 37,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const results = await strapi.db.query('strapi::core-store').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/content-manager/server/src/services/utils/store.ts",
+  "line": 89,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const results = await strapi.db.query('strapi::core-store').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/configuration/config-loader.ts",
+  "line": 30,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: it would be better to move these out of the root config and allow them to be loaded"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/configuration/config-loader.ts",
+  "line": 61,
+  "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+  "family": "dos-sync-io",
+  "severity": "low",
+  "text": "if (!fs.existsSync(dir)) return {};"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/core-api/controller/collection-type.ts",
+  "line": 42,
+  "vuln": "findOne() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "low",
+  "text": "const sanitizedEntity = await this.sanitizeOutput(entity, ctx);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/core-api/controller/collection-type.ts",
+  "line": 78,
+  "vuln": "update() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "low",
+  "text": "async update(ctx: Koa.Context) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/core-api/controller/collection-type.ts",
+  "line": 98,
+  "vuln": "update() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "low",
+  "text": "const sanitizedEntity = await this.sanitizeOutput(entity, ctx);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/core-api/service/collection-type.ts",
+  "line": 32,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const results = await strapi.documents(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/core-api/service/collection-type.ts",
+  "line": 32,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "low",
+  "text": "const results = await strapi.documents(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/ee/license.ts",
+  "line": 89,
+  "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+  "family": "dos-sync-io",
+  "severity": "low",
+  "text": "return fs.readFileSync(path).toString();"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/ee/license.ts",
+  "line": 106,
+  "vuln": "Pre-quantum RSA (rsa-sign) — replace with ML-DSA-65 before CRQC arrives",
+  "family": "pqc-migration",
+  "severity": "low",
+  "text": "const verify = crypto.createVerify('RSA-SHA256');"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/ee/license.ts",
+  "line": 146,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": ".fetch(`${LICENSE_REGISTRY_URI}/api/licenses/validate`, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/loaders/apis.ts",
+  "line": 57,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// @ts-expect-error TODO verify that it's a valid api, not missing bootstrap, register, and destroy"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/migrations/database/5.0.0-discard-drafts.ts",
+  "line": 217,
+  "vuln": "SQL Injection — query built with template literal / concat (JS/TS)",
+  "family": "sql-injection",
+  "severity": "medium",
+  "text": "trx.raw(`?? (${columnsToCopy.map(() => `??`).join(', ')})`, ["
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/migrations/database/5.0.0-discard-drafts.ts",
+  "line": 2634,
+  "vuln": "SQL Injection — query built with template literal / concat (JS/TS)",
+  "family": "sql-injection",
+  "severity": "medium",
+  "text": "await trx.raw("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/document-service/components.ts",
+  "line": 957,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: verify the compo is associated with the entity"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/document-service/repository.ts",
+  "line": 45,
+  "vuln": "Regex ReDoS — Catastrophic Backtracking",
+  "family": "",
+  "severity": "medium",
+  "text": "const LOCALE_FORMAT = /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/;"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/document-service/repository.ts",
+  "line": 452,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const entriesToClone = await strapi.db.query(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/document-service/repository.ts",
+  "line": 625,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "strapi.db.query(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/document-service/repository.ts",
+  "line": 634,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "strapi.db.query(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/document-service/repository.ts",
+  "line": 736,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "strapi.db.query(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/document-service/repository.ts",
+  "line": 745,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "strapi.db.query(uid).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/document-service/utils/bidirectional-relations.ts",
+  "line": 372,
+  "vuln": "SQL Injection — query built with template literal / concat (JS/TS)",
+  "family": "sql-injection",
+  "severity": "medium",
+  "text": "[orderColumn]: trx.raw(`CASE ${caseFragments.join(' ')} ELSE ?? END`, ["
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/document-service/utils/clone-relations.ts",
+  "line": 565,
+  "vuln": "SQL Injection",
+  "family": "sql-injection",
+  "severity": "low",
+  "text": "await strapi.db.query(targetUid).update({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/fs.ts",
+  "line": 20,
+  "vuln": "Regex ReDoS — Catastrophic Backtracking",
+  "family": "",
+  "severity": "medium",
+  "text": "const normalizedPath = path.posix.normalize(filePath).replace(/^\\/?(\\.\\/|\\.\\.\\/)+/, '');"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/mcp/authentication.ts",
+  "line": 38,
+  "vuln": "Timing-Unsafe Comparison — secret/HMAC compared with === instead of timingSafeEqual",
+  "family": "timing-attack",
+  "severity": "low",
+  "text": "if (token === null) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/mcp/handlers/handlePost.ts",
+  "line": 80,
+  "vuln": "Stack Trace in Code (Risk of Exposure)",
+  "family": "stack-trace-in-code-risk-of-exposure",
+  "severity": "low",
+  "text": "stack: error instanceof Error ? error.stack : undefined,"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/metrics/sender.ts",
+  "line": 109,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const res = await strapi.fetch(`${analyticsUrl}/api/v2/track`, reqParams);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/server/register-routes.ts",
+  "line": 106,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: remove once auth setup"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/session-manager.ts",
+  "line": 99,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const results = await this.db.query(this.contentType).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/session-manager.ts",
+  "line": 386,
+  "vuln": "Eternal Token: JWT issued without expiresIn / exp claim",
+  "family": "jwt-no-exp",
+  "severity": "low",
+  "text": "const token = jwt.sign(payload, jwtKey, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/session-manager.ts",
+  "line": 386,
+  "vuln": "JWT Sign (Verify Algorithm Pinned)",
+  "family": "jwt-no-verify",
+  "severity": "low",
+  "text": "const token = jwt.sign(payload, jwtKey, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/session-manager.ts",
+  "line": 445,
+  "vuln": "AuthZ: jwt.verify called without algorithms allow-list",
+  "family": "idor",
+  "severity": "low",
+  "text": "const payload = jwt.verify(token, jwtKey, verifyOptions) as RefreshTokenPayload;"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/session-manager.ts",
+  "line": 631,
+  "vuln": "Eternal Token: JWT issued without expiresIn / exp claim",
+  "family": "jwt-no-exp",
+  "severity": "low",
+  "text": "const childToken = jwt.sign(childPayload, signKey, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/session-manager.ts",
+  "line": 703,
+  "vuln": "Eternal Token: JWT issued without expiresIn / exp claim",
+  "family": "jwt-no-exp",
+  "severity": "low",
+  "text": "const childToken = jwt.sign(payloadOut, signKey, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/services/webhook-runner.ts",
+  "line": 145,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "return this.fetch(url, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/utils/detect-customizations.ts",
+  "line": 122,
+  "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+  "family": "dos-sync-io",
+  "severity": "low",
+  "text": "if (!fs.existsSync(contentTypesDir)) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/utils/fetch.ts",
+  "line": 68,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "return fetch(url, fetchOptions);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/utils/load-config-file.ts",
+  "line": 26,
+  "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+  "family": "dos-sync-io",
+  "severity": "low",
+  "text": "return JSON.parse(fs.readFileSync(file).toString());"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/core/src/utils/load-config-file.ts",
+  "line": 37,
+  "vuln": "Path Normalization Gap — extension extraction without null-byte/traversal sanitization",
+  "family": "path-normalization",
+  "severity": "low",
+  "text": "const ext = path.extname(file);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/dialects/postgresql/index.ts",
+  "line": 46,
+  "vuln": "SQL Injection (Template Literal)",
+  "family": "sql-injection",
+  "severity": "critical",
+  "text": "await this.db.connection"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/dialects/postgresql/index.ts",
+  "line": 47,
+  "vuln": "SQL Injection — query built with template literal / concat (JS/TS)",
+  "family": "sql-injection",
+  "severity": "critical",
+  "text": ".raw(`SET search_path TO \"${schemaName}\"`)"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/entity-manager/regular-relations.ts",
+  "line": 301,
+  "vuln": "SQL Injection — query built with template literal / concat (JS/TS)",
+  "family": "sql-injection",
+  "severity": "critical",
+  "text": ".raw("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/entity-manager/regular-relations.ts",
+  "line": 316,
+  "vuln": "SQL Injection (Template Literal)",
+  "family": "sql-injection",
+  "severity": "critical",
+  "text": "await db.connection"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/index.ts",
+  "line": 74,
+  "vuln": "Concurrency: fire-and-forget async call in afterCreate() — result not awaited",
+  "family": "concurrency-bug",
+  "severity": "low",
+  "text": "const afterCreate ="
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/metadata/relations.ts",
+  "line": 106,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: verify other side is valid"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/pool-diagnostics/index.ts",
+  "line": 53,
+  "vuln": "Stack Trace in Code (Risk of Exposure)",
+  "family": "stack-trace-in-code-risk-of-exposure",
+  "severity": "medium",
+  "text": "if (typeof error.stack === 'string' && !error.stack.includes(message)) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/pool-diagnostics/stack.ts",
+  "line": 15,
+  "vuln": "Stack Trace in Code (Risk of Exposure)",
+  "family": "stack-trace-in-code-risk-of-exposure",
+  "severity": "medium",
+  "text": "if (typeof error.stack !== 'string' || !(Error.stackTraceLimit > 0)) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/query/helpers/order-by.ts",
+  "line": 38,
+  "vuln": "SQL Injection (Template Literal)",
+  "family": "sql-injection",
+  "severity": "critical",
+  "text": "return db.connection.raw("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/schema/builder.ts",
+  "line": 452,
+  "vuln": "SQL Injection (Template Literal)",
+  "family": "sql-injection",
+  "severity": "critical",
+  "text": "const result = await db.connection.raw("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/schema/builder.ts",
+  "line": 494,
+  "vuln": "SQL Injection — query built with template literal / concat (JS/TS)",
+  "family": "sql-injection",
+  "severity": "critical",
+  "text": "await trx.raw(`ALTER TABLE ?? ALTER COLUMN ?? SET DEFAULT ${defaultValue}`, ["
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/schema/schema.ts",
+  "line": 8,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "* TODO: This needs to be refactored to support incoming names such as"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/database/src/utils/identifiers/index.ts",
+  "line": 348,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: this is the weakest thing of the shortener, but fortunately it can be improved later without a breaking change if it turns out to be a problem (for example, if there is some case we need 6+ name parts in one identifier). We could t"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-folder-file.ts",
+  "line": 48,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const permittedFiles = await strapi.db.query(FILE_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-folder-file.ts",
+  "line": 48,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "const permittedFiles = await strapi.db.query(FILE_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-folder-file.ts",
+  "line": 60,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const selectedFiles = await strapi.db.query(FILE_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-folder-file.ts",
+  "line": 271,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const updatedFolders = await strapi.db.query(FOLDER_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-folder-file.ts",
+  "line": 275,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const updatedFiles = await strapi.db.query(FILE_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-folder.ts",
+  "line": 84,
+  "vuln": "Mass Assignment (req.body Direct to Model)",
+  "family": "mass-assignment",
+  "severity": "high",
+  "text": "const folder = await folderService.create(body, { user });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-folder.ts",
+  "line": 110,
+  "vuln": "update() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "const updatedFolder = await folderService.update(id, body, { user });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-upload.ts",
+  "line": 75,
+  "vuln": "updateFileInfo() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "throw new errors.ValidationError('File id is required');"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-upload.ts",
+  "line": 112,
+  "vuln": "replaceFile() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "throw new errors.ValidationError('File id is required');"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/admin-upload.ts -> src/controllers/utils/find-entity-and-check-permissions.ts",
+  "line": 43,
+  "vuln": "Prototype Pollution",
+  "family": "prototype-pollution",
+  "severity": "critical",
+  "text": ""
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/content-api.ts",
+  "line": 16,
+  "vuln": "Spec drift — sanitizeOutput() claims output-sanitizer but body lacks expected evidence",
+  "family": "spec-drift",
+  "severity": "high",
+  "text": "const sanitizeOutput = async (data: unknown | unknown[], ctx: Context) => {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/content-api.ts",
+  "line": 89,
+  "vuln": "destroy() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "async destroy(ctx: Context) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/validation/admin/folder-file.ts",
+  "line": 38,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const folders = await strapi.db.query(FOLDER_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/validation/admin/folder-file.ts",
+  "line": 43,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const existingFolders = await strapi.db.query(FOLDER_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/controllers/validation/admin/folder-file.ts",
+  "line": 72,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const folders: Folder[] = await strapi.db.query(FOLDER_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/mcp/handlers/folder-handlers.ts",
+  "line": 300,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const matched: FolderRow[] = await strapi.db.query(FOLDER_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/services/ai-metadata-strapi-managed.ts",
+  "line": 10,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO(ai): add a helper function to get the AI server URL"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/services/ai-metadata-strapi-managed.ts",
+  "line": 41,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const res = await fetch(`${aiServerUrl}/media-library/generate-metadata`, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/services/ai-metadata.ts",
+  "line": 127,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const files: File[] = await strapi.db.query('plugin::upload.file').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/services/ai-metadata.ts",
+  "line": 195,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const files: File[] = await strapi.db.query('plugin::upload.file').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/services/file.ts",
+  "line": 281,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": ".findMany({ where: { id: { $in: ids } } });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/services/folder.ts",
+  "line": 71,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const folders = await strapi.db.query(FOLDER_MODEL_UID).findMany({ where: { id: { $in: ids } } });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/services/folder.ts",
+  "line": 83,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const filesToDelete = await strapi.db.query(FILE_MODEL_UID).findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/services/weekly-metrics.ts",
+  "line": 60,
+  "vuln": "SQL Injection (Template Literal)",
+  "family": "sql-injection",
+  "severity": "critical",
+  "text": "strapi.db.connection.raw("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/utils/images.ts",
+  "line": 14,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const resp = await fetch(fullUrl);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/core/upload/server/src/utils/images.ts",
+  "line": 25,
+  "vuln": "Unrestricted file upload — client-supplied mimetype trusted as the stored Content-Type",
+  "family": "unrestricted-file-upload",
+  "severity": "medium",
+  "text": "return new Blob([arrayBuffer], { type: file.mimetype || undefined });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/auth.js",
+  "line": 28,
+  "vuln": "Spec drift — sanitizeUser() claims output-sanitizer but body lacks expected evidence",
+  "family": "spec-drift",
+  "severity": "high",
+  "text": "const sanitizeUser = (user, ctx) => {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/auth.js",
+  "line": 157,
+  "vuln": "SQL Injection",
+  "family": "sql-injection",
+  "severity": "high",
+  "text": "const user = await strapi.db.query('plugin::users-permissions.user').findOne({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/auth.js",
+  "line": 159,
+  "vuln": "NoSQL Injection",
+  "family": "nosql-injection",
+  "severity": "high",
+  "text": "provider,"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/role.js",
+  "line": 10,
+  "vuln": "Spec drift — sanitizeOutput() claims output-sanitizer but body lacks expected evidence",
+  "family": "spec-drift",
+  "severity": "high",
+  "text": "const sanitizeOutput = async (role) => {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/role.js",
+  "line": 75,
+  "vuln": "SQL Injection",
+  "family": "sql-injection",
+  "severity": "high",
+  "text": "const publicRole = await strapi.db"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/user.js",
+  "line": 16,
+  "vuln": "Spec drift — sanitizeOutput() claims output-sanitizer but body lacks expected evidence",
+  "family": "spec-drift",
+  "severity": "high",
+  "text": "const sanitizeOutput = async (user, ctx) => {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/user.js",
+  "line": 105,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const user = await getService('user').fetch(id);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/user.js",
+  "line": 121,
+  "vuln": "update() looks up or mutates by request-supplied 'id' with no ownership check",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "if (userWithSameUsername && _.toString(userWithSameUsername.id) !== _.toString(id)) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/user.js",
+  "line": 168,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "let data = await getService('user').fetch(id, sanitizedQuery);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/user.js",
+  "line": 192,
+  "vuln": "destroy() acts on a resource without checking its lifecycle state",
+  "family": "broken-access-control",
+  "severity": "high",
+  "text": "async destroy(ctx) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/controllers/user.js",
+  "line": 215,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const user = await getService('user').fetch(authUser.id, sanitizedQuery);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/middlewares/rateLimit.js",
+  "line": 48,
+  "vuln": "Spec drift — normalizeRequestPathForRateLimit() claims rate-limit-impl but body lacks expected evidence",
+  "family": "spec-drift",
+  "severity": "medium",
+  "text": "const normalizeRequestPathForRateLimit = (requestPath) => {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/register.js",
+  "line": 19,
+  "vuln": "Synchronous Blocking I/O (DoS Risk in Server Context)",
+  "family": "dos-sync-io",
+  "severity": "medium",
+  "text": "const spec = fs.readFileSync(specPath, 'utf8');"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/jwt.js",
+  "line": 59,
+  "vuln": "Eternal Token: JWT issued without expiresIn / exp claim",
+  "family": "jwt-no-exp",
+  "severity": "high",
+  "text": "return jwt.sign("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/jwt.js",
+  "line": 59,
+  "vuln": "JWT Sign (Verify Algorithm Pinned)",
+  "family": "jwt-no-verify",
+  "severity": "high",
+  "text": "return jwt.sign("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/jwt.js",
+  "line": 91,
+  "vuln": "AuthZ: jwt.verify called without algorithms allow-list",
+  "family": "idor",
+  "severity": "high",
+  "text": "jwt.verify("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/jwt.js",
+  "line": 91,
+  "vuln": "jwt.verify called without algorithms allowlist — algorithm-confusion attack",
+  "family": "crypto-jwt-key-confusion",
+  "severity": "high",
+  "text": "jwt.verify("
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/permission.js",
+  "line": 23,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "return strapi.db.query('plugin::users-permissions.permission').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/permission.js",
+  "line": 23,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": "return strapi.db.query('plugin::users-permissions.permission').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/providers.js",
+  "line": 64,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const users = await strapi.db.query('plugin::users-permissions.user').findMany({"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/role.js",
+  "line": 74,
+  "vuln": "ORM Collection Query Without Pagination Limit (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": ".findMany({ sort: ['name'] });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/role.js",
+  "line": 74,
+  "vuln": "Potential Indirect IDOR — findAll Without Ownership Scope",
+  "family": "potential-indirect-idor-findall-without-",
+  "severity": "high",
+  "text": ".findMany({ sort: ['name'] });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/role.js",
+  "line": 167,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "// TODO: use delete many"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/services/user.js",
+  "line": 109,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "fetch(id, params) {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/oauth-connect/oauth1.js",
+  "line": 25,
+  "vuln": "Weak hash algorithm (MD5 / SHA-1 / MD2 / MD4) used",
+  "family": "crypto-weak-hash",
+  "severity": "medium",
+  "text": "return crypto.createHmac('sha1', signingMaterial).update(signatureBaseString).digest('base64');"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/oauth-connect/oauth1.js",
+  "line": 82,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const response = await fetch(url, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/oauth-connect/oauth1.js",
+  "line": 152,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const response = await fetch(target, {"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/oauth-connect/oauth2.js",
+  "line": 19,
+  "vuln": "AuthZ: OAuth2 authorization_code without PKCE",
+  "family": "idor",
+  "severity": "high",
+  "text": "response_type: 'code',"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/oauth-connect/oauth2.js",
+  "line": 77,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const response = await fetch(accessUrl, { method: 'POST', headers, body });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/oauth-connect/oauth2.js",
+  "line": 77,
+  "vuln": "SSRF",
+  "family": "ssrf",
+  "severity": "high",
+  "text": "const response = await fetch(accessUrl, { method: 'POST', headers, body });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/provider-http.js",
+  "line": 4,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const response = await fetch(url, options);"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/verify-jwt-with-jwks.js",
+  "line": 9,
+  "vuln": "JWT Decoded Without Signature Verification",
+  "family": "jwt-no-verify",
+  "severity": "high",
+  "text": "const decoded = jwt.decode(idToken, { complete: true });"
+ },
+ {
+  "project": "strapi",
+  "language": "javascript",
+  "file": "packages/plugins/users-permissions/server/src/utils/verify-jwt-with-jwks.js",
+  "line": 15,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "const response = await fetch(jwksUrl.toString());"
+ }
+]

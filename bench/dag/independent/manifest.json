@@ -1,0 +1,140 @@
+{
+ "projects": [
+  {
+   "id": "koa",
+   "language": "javascript",
+   "url": "https://github.com/koajs/koa.git",
+   "license": "MIT",
+   "roots": [
+    "."
+   ],
+   "excluded": "test dirs, node_modules, .git",
+   "commit": "a82feec38a7c28e14f4db7525b8f500801214a76",
+   "commitDate": "2026-10-20T23:54:21-07:00",
+   "acquiredAt": "2026-10-26",
+   "acquisition": "git init; git fetch --depth 1 <url> HEAD; checkout FETCH_HEAD into .cache/koa"
+  },
+  {
+   "id": "hapi",
+   "language": "javascript",
+   "url": "https://github.com/hapijs/hapi.git",
+   "license": "BSD-3-Clause",
+   "roots": [
+    "lib"
+   ],
+   "excluded": "test dirs (not under lib), docs",
+   "commit": "58630f377f819d3d172fcfb1c301f2aa29334f9e",
+   "commitDate": "2026-10-21T18:29:12+02:00",
+   "acquiredAt": "2026-10-26",
+   "acquisition": "git init; git fetch --depth 1 <url> HEAD; checkout FETCH_HEAD into .cache/hapi"
+  },
+  {
+   "id": "nest",
+   "language": "javascript",
+   "url": "https://github.com/nestjs/nest.git",
+   "license": "MIT",
+   "roots": [
+    "sample"
+   ],
+   "excluded": "framework packages/ and integration/ (framework internals and test apps); only the sample/ server apps scanned",
+   "commit": "d22065e0d5e865d06450d2566c09d5bc0c80d6ca",
+   "commitDate": "2026-10-26T09:02:24+01:00",
+   "acquiredAt": "2026-10-26",
+   "acquisition": "git init; git fetch --depth 1 <url> HEAD; checkout FETCH_HEAD into .cache/nest"
+  },
+  {
+   "id": "strapi",
+   "language": "javascript",
+   "url": "https://github.com/strapi/strapi.git",
+   "license": "MIT (Community Edition; ee/ directories carry a separate license and are not scanned)",
+   "roots": [
+    "packages/core/core/src",
+    "packages/core/content-manager/server",
+    "packages/core/upload/server",
+    "packages/core/admin/server",
+    "packages/core/database/src",
+    "packages/plugins/users-permissions/server"
+   ],
+   "excluded": "admin browser UI, ee/ directories, tests, docs, other packages",
+   "commit": "a3002ad16b6b75bc097fbd26936fbc39b51a9aee",
+   "commitDate": "2026-10-26T09:24:22Z",
+   "acquiredAt": "2026-10-26",
+   "acquisition": "git init; git fetch --depth 1 <url> HEAD; checkout FETCH_HEAD into .cache/strapi"
+  },
+  {
+   "id": "srvos",
+   "language": "nix",
+   "url": "https://github.com/nix-community/srvos.git",
+   "license": "MIT",
+   "roots": [
+    "."
+   ],
+   "excluded": ".git",
+   "commit": "f806ae6af3b2205518b13211c623a7e4839d010d",
+   "commitDate": "2026-10-26T02:43:35Z",
+   "acquiredAt": "2026-10-26",
+   "acquisition": "git init; git fetch --depth 1 <url> HEAD; checkout FETCH_HEAD into .cache/srvos"
+  },
+  {
+   "id": "mic92-dotfiles",
+   "language": "nix",
+   "url": "https://github.com/Mic92/dotfiles.git",
+   "license": "MIT",
+   "roots": [
+    "."
+   ],
+   "excluded": ".git",
+   "commit": "4529a983cc12025e18470a13f3b34d275d3a35a4",
+   "commitDate": "2026-10-26T12:40:44+01:00",
+   "acquiredAt": "2026-10-26",
+   "acquisition": "git init; git fetch --depth 1 <url> HEAD; checkout FETCH_HEAD into .cache/mic92-dotfiles"
+  },
+  {
+   "id": "misterio77-nix-config",
+   "language": "nix",
+   "url": "https://github.com/Misterio77/nix-config.git",
+   "license": "MIT",
+   "roots": [
+    "."
+   ],
+   "excluded": ".git",
+   "commit": "d8ee16aefaa6a2496c2474e1104c9981b04e0b56",
+   "commitDate": "2026-10-26T10:16:48-03:00",
+   "acquiredAt": "2026-10-26",
+   "acquisition": "git init; git fetch --depth 1 <url> HEAD; checkout FETCH_HEAD into .cache/misterio77-nix-config"
+  },
+  {
+   "id": "mitchellh-nixos-config",
+   "language": "nix",
+   "url": "https://github.com/mitchellh/nixos-config.git",
+   "license": "MIT",
+   "roots": [
+    "."
+   ],
+   "excluded": ".git",
+   "commit": "40d483d74cf48d64379fc9a857237ee18c519ff4",
+   "commitDate": "2026-09-28T09:39:06-07:00",
+   "acquiredAt": "2026-10-26",
+   "acquisition": "git init; git fetch --depth 1 <url> HEAD; checkout FETCH_HEAD into .cache/mitchellh-nixos-config"
+  },
+  {
+   "id": "nixos-hardware",
+   "language": "nix",
+   "url": "https://github.com/NixOS/nixos-hardware.git",
+   "license": "CC0-1.0 (COPYING)",
+   "roots": [
+    "."
+   ],
+   "excluded": ".git",
+   "commit": "1b418b8f203e49a92f250f8babdd19af1b6f7a7f",
+   "commitDate": "2026-10-22T19:28:46Z",
+   "acquiredAt": "2026-10-26",
+   "acquisition": "git init; git fetch --depth 1 <url> HEAD; checkout FETCH_HEAD into .cache/nixos-hardware"
+  }
+ ],
+ "manifestVersion": 1,
+ "purpose": "Independent labeled precision set. Projects absent from bench/dag/manifest.json; chosen without reading any existing labels or detector code.",
+ "globalExclusions": "Test directories (tests, __tests__, spec, e2e, fixtures, testing, *.test.*, *.spec.*), node_modules, .git, and findings with line < 1 (dependency or file-level, no code site). Flagged-set sources: findings, logicVulns, secrets arrays; supplyChain is not a code site.",
+ "sampling": "Seeded draw (mulberry32, seed 20261026) of 60 flagged sites per language via sample.mjs, fixed before any labeling.",
+ "notes": "Scan roots for strapi and nest were chosen to cover server code and exclude admin UI and framework internals; the line>=1 filter was added after a first run showed dependency-level (line 0) findings in the draw, before any labeling."
+}

@@ -139,3 +139,27 @@ test('fix --require-proof uses a generated reproducer, blocks the exploit with t
   assert.match(fix.stdout, /sibling-exposures:1/, 'the same shape in other.js is reported, so the fix is DEGRADED rather than FULL');
   assert.match(fs.readFileSync(path.join(dir, 'lib.js'), 'utf8'), /execFileSync/);
 });
+
+// ---- Haskell ----------------------------------------------------------------------------------------------------------------------------
+
+test('proof doctor lists haskell, supported or with the missing tool named, never absent', () => {
+  const r = run(['proof', 'doctor']);
+  assert.match(r.stdout, /^ {2}haskell {5}(?:supported|unsupported \(missing toolchain: (?:ghc|runghc|ghc, runghc)\))$/m);
+  assert.match(r.stdout, /environment for haskell: /);
+});
+
+test('fix --require-proof applies to a Haskell finding too: with no reproducer that can be generated it refuses and writes nothing', { timeout: 120000 }, () => {
+  // a handler that needs a web framework: the engine finds the injection and has a verified fix, but the proof environment cannot load scotty
+  const dir = mkTestTmp('pf-hs-');
+  fs.mkdirSync(path.join(dir, '.git'));
+  const src = 'module Main (main) where\n\nimport Control.Monad.IO.Class (liftIO)\nimport System.Process (callCommand)\nimport Web.Scotty\n\nmakeLabel :: String -> IO ()\nmakeLabel name = callCommand ("echo label " ++ name)\n\nmain :: IO ()\nmain = scotty 3000 $ post "/label" $ do\n  name <- param "name"\n  liftIO (makeLabel name)\n  text "queued"\n';
+  fs.writeFileSync(path.join(dir, 'Web.hs'), src);
+  fs.writeFileSync(path.join(dir, 'package.json'), '{"name":"x"}');
+  const scan = runIn(dir, ['scan', '.', '--format', 'json'], { timeout: 90000, maxBuffer: 64 * 1024 * 1024 });
+  const finding = (JSON.parse(scan.stdout).findings || []).find((x) => x.cwe === 'CWE-78' && /\.hs$/.test(x.file));
+  assert.ok(finding, `the engine must find the injection first: ${scan.stdout.slice(0, 300)}`);
+  const r = runIn(dir, ['fix', '--finding', finding.id, '--apply', '--require-proof'], { timeout: 90000 });
+  assert.equal(r.status, 4, r.stdout + r.stderr);
+  assert.match(r.stderr, /--require-proof: no reproducer for .* none could be generated: the flagged code needs scotty/);
+  assert.equal(fs.readFileSync(path.join(dir, 'Web.hs'), 'utf8'), src, 'nothing may be written when the proof cannot be made');
+});

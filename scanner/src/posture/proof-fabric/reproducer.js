@@ -8,12 +8,12 @@ import { validateAttackFacts } from '../dnr/attack-facts.js';
 
 const REPRODUCER_SCHEMA = 'agentic-security/reproducer';
 const REPRODUCER_VERSION = 1;
-export const LANGUAGES = Object.freeze(['javascript', 'typescript', 'python', 'java', 'c', 'cpp', 'csharp']);
+export const LANGUAGES = Object.freeze(['javascript', 'typescript', 'python', 'java', 'c', 'cpp', 'csharp', 'haskell']);
 export const MAX_FILES = 64;
 export const MAX_FILE_BYTES = 256 * 1024;
 const MAX_TOTAL_BYTES = 1024 * 1024;
 const PLACEHOLDER_RE = /\{\{([A-Z_]+)(?::([a-z0-9_-]{1,32}))?\}\}/g;
-const ALLOWED_PLACEHOLDERS = new Set(['NONCE', 'SECRET', 'CANARY', 'CALLBACK_URL', 'CALLBACK_PORT', 'ROOT', 'NODE', 'PYTHON', 'JAVA', 'JAVAC', 'CC']);
+const ALLOWED_PLACEHOLDERS = new Set(['NONCE', 'SECRET', 'CANARY', 'CALLBACK_URL', 'CALLBACK_PORT', 'ROOT', 'NODE', 'PYTHON', 'JAVA', 'JAVAC', 'CC', 'GHC', 'RUNGHC']);
 
 export function isSafeRelPath(rel) {
   if (typeof rel !== 'string' || !rel || rel.length > 200) return false;
@@ -105,6 +105,8 @@ export function substitute(text, ctx) {
       case 'JAVA': return ctx.tools.java ?? whole;
       case 'JAVAC': return ctx.tools.javac ?? whole;
       case 'CC': return ctx.tools.cc ?? whole;
+      case 'GHC': return ctx.tools.ghc ?? whole;
+      case 'RUNGHC': return ctx.tools.runghc ?? whole;
       default: return whole;
     }
   });

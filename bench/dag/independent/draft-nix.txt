@@ -1,0 +1,60 @@
+0|tp|Action Mic92/auto-merge is referenced by the mutable branch @main.
+1|tp|NixOS/nix-installer-action is referenced by the mutable branch @main.
+2|tp|Third-party action is referenced by the mutable major tag @v1.
+3|fp|Interpolates evaluation-time NixOS option values into a script; no untrusted input.
+4|fp|preStart and command are operator-supplied module options, not untrusted input.
+5|fp|openssh is enabled but the machine imports srvos nixosModules.server, which sets PasswordAuthentication = false.
+6|fp|openssh is enabled but the machine imports srvos nixosModules.server, which sets PasswordAuthentication = false.
+7|fp|String is a WireGuard public key, not a secret.
+8|tp|check_hostname = False and verify_mode = CERT_NONE disables TLS verification on the IRC connection.
+9|fp|nginx proxyPass upstream name, not a credential.
+10|fp|nginx proxyPass to localhost, not a credential.
+11|fp|Value is a hash of the OIDC client secret, which the identity provider config expects, not the plaintext secret.
+12|fp|Token lifespan durations, not credentials.
+13|fp|Constant LDAP configuration argument; nothing untrusted is interpolated.
+14|fp|Constant LDAP configuration argument; nothing untrusted is interpolated.
+15|fp|Constant LDAP configuration argument; nothing untrusted is interpolated.
+16|fp|nginx proxyPass upstream, not a credential.
+17|fp|Interpolates the module's own dataDir option into a upgrade script; no untrusted input.
+18|fp|Secret is a file reference to a runtime credentials path, not a literal.
+19|fp|Match is inside a comment about the hash output format; the token is generated at build time.
+20|fp|nginx proxyPass to localhost, not a credential.
+21|fp|Redirects a sops secret path into bcachefs stdin; store path of the secret file, no untrusted input.
+22|fp|nginx proxyPass to loopback, not a credential.
+23|ambiguous|from_raw_parts on host-supplied pointer and length with no null check; whether the plugin host contract guarantees validity is not visible in this repository.
+24|fp|hostName is operator configuration echoed into an nsupdate script.
+25|fp|hostName is operator configuration echoed into an nsupdate script.
+26|fp|Generating an Ed25519 key for SSH is the required key type for this tool; not a defect in this code.
+27|fp|Interpolated values are store paths of generated key files.
+28|fp|makeBinPath produces store paths at evaluation time; no untrusted input.
+29|fp|Setting name force_ldap_user_pass_reset is a policy flag, not a credential.
+30|fp|Interpolates a path to a generated key file, not untrusted input.
+31|fp|os.execv with a fixed binary path and an argument list, no shell, no untrusted string.
+32|fp|pname is a derivation attribute; no untrusted input.
+33|fp|finalAttrs.version is a derivation attribute; no untrusted input.
+34|fp|makeBinPath store paths; no untrusted input.
+35|fp|f-string builds a pull request body for gh, not an SQL statement.
+36|fp|makeBinPath store paths; no untrusted input.
+37|fp|Drop impl with a SAFETY comment documenting the single-delete and ordering invariants; flagged by a review prompt only.
+38|fp|Interpolates theme colour constants; no untrusted input.
+39|fp|Interpolates theme colour constants; no untrusted input.
+40|fp|Interpolates theme colour constants; no untrusted input.
+41|fp|Values are Nix-evaluated constants passed to jq as --arg; no untrusted input.
+42|fp|TODO asks whether a mail channel setting is needed, not a security defect.
+43|fp|Setting is the htpasswd encryption mode; the credential file comes from a sops secret.
+44|fp|"@sabnzbd-key@" is a substitution placeholder replaced at runtime from a secret file.
+45|fp|"@frugalusenet-key@" is a substitution placeholder replaced at runtime from a secret file.
+46|fp|Copies into $out, which is a Nix store path without spaces; no destructive risk.
+47|fp|Copies into $out, which is a Nix store path without spaces; no destructive risk.
+48|fp|Values are 1Password op:// secret references, not secret values.
+49|fp|Interpolates derivation store paths; no untrusted input.
+50|fp|cp into $out, a store path without spaces; not destructive.
+51|fp|Matched string is a kernel patch file name, not a credential.
+52|fp|Matched string is a kernel patch file name, not a credential.
+53|fp|Matched string is a kernel patch file name, not a credential.
+54|fp|Matched string is a kernel patch file name, not a credential.
+55|fp|Matched string is a kernel patch file name, not a credential.
+56|fp|eval runs partx output for an image file the same script just created; not attacker-controlled input.
+57|fp|Interpolates derivation store paths; no untrusted input.
+58|fp|Interpolates a module option that holds the operator's own script text.
+59|fp|cp into $out, a store path without spaces; not destructive.

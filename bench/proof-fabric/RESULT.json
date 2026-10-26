@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/proof-fabric-measurement",
-  "measuredAt": "2026-10-18T22:43:46.882Z",
+  "measuredAt": "2026-10-26T14:32:25.110Z",
   "rounds": 3,
   "host": {
     "platform": "darwin",
@@ -8,15 +8,22 @@
     "node": "v24.20.0",
     "backend": "userspace"
   },
+  "environment": {
+    "modes": {
+      "local-confined": 90
+    }
+  },
   "classesMeasured": [
     "auth-bypass",
     "buffer-overflow",
     "command-injection",
+    "command-injection-haskell",
     "command-injection-java",
     "command-injection-python",
     "insecure-deserialization",
     "insecure-deserialization-python",
     "path-traversal",
+    "path-traversal-haskell",
     "path-traversal-java",
     "sql-injection",
     "sql-injection-python",
@@ -25,13 +32,13 @@
   ],
   "classesSkipped": [],
   "reproduction": {
-    "runs": 39,
-    "confirmed": 39,
+    "runs": 45,
+    "confirmed": 45,
     "ratePercent": 100,
     "targetPercent": 90
   },
   "falseConfirmations": {
-    "runs": 39,
+    "runs": 45,
     "confirmed": 0,
     "target": 0
   },
@@ -42,8 +49,8 @@
     "targetPercent": 100
   },
   "proofTiming": {
-    "medianMs": 613,
-    "maxMs": 3488,
+    "medianMs": 670,
+    "maxMs": 3613,
     "note": "reported by the proof result itself (timing.proofMs), independent of scan time"
   },
   "perClass": {
@@ -56,6 +63,10 @@
       "mitigatedConfirmed": "0/3"
     },
     "command-injection": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "command-injection-haskell": {
       "vulnerableConfirmed": "3/3",
       "mitigatedConfirmed": "0/3"
     },
@@ -76,6 +87,10 @@
       "mitigatedConfirmed": "0/3"
     },
     "path-traversal": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "path-traversal-haskell": {
       "vulnerableConfirmed": "3/3",
       "mitigatedConfirmed": "0/3"
     },
@@ -103,6 +118,8 @@
   "verdict": {
     "reproduction": "met",
     "falseConfirmations": "met",
-    "timeouts": "met"
+    "timeouts": "met",
+    "environment": "not asserted",
+    "comparison": "met"
   }
 }

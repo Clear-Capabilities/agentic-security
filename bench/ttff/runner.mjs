@@ -80,11 +80,14 @@ const record = { ...run, at: new Date().toISOString() };
 try { fs.appendFileSync(HISTORY, JSON.stringify(record) + '\n'); } catch { /* history is best-effort */ }
 
 if (isUpdate) {
+  let keepHosted = null;
+  try { keepHosted = JSON.parse(fs.readFileSync(BASELINE, 'utf8')).hosted || null; } catch { /* first baseline */ }
   fs.writeFileSync(BASELINE, JSON.stringify({
     schema: 'ttff/v1',
     note: 'Time-to-first-finding on a cold cache. This engine is batch, so this equals time-to-all-findings today.',
     target: 'scanner/src/posture',
     regressionFactor: REGRESSION_FACTOR,
+    ...(keepHosted ? { hosted: keepHosted } : {}),
     ...run,
     recordedAt: record.at,
   }, null, 1) + '\n');
@@ -105,8 +108,14 @@ try {
   console.error('✗ no baseline — run `npm run bench:ttff:update-baseline`. An unmeasurable gate is a failure, not a skip.');
   process.exit(1);
 }
-const base = JSON.parse(baseRaw);
-const limit = Math.round(base.ms * REGRESSION_FACTOR);
+const baseFile = JSON.parse(baseRaw);
+// On the hosted runner the budget comes from hosted measurements: a laptop number says nothing about a shared runner (the same
+// scan took 7.9 s locally and 9 to 13 s hosted). `hosted` is the median of recent passing hosted runs and its own factor, taken
+// from the observed spread (largest sample over the median); local runs keep using the local baseline.
+const hosted = process.env.GITHUB_ACTIONS === 'true' && baseFile.hosted && Number.isFinite(baseFile.hosted.ms) ? baseFile.hosted : null;
+const base = hosted ? { ...baseFile, ms: hosted.ms } : baseFile;
+const factor = hosted && Number.isFinite(hosted.regressionFactor) ? hosted.regressionFactor : REGRESSION_FACTOR;
+const limit = Math.round(base.ms * factor);
 
 // A finding-count change is reported but does NOT fail: this gate is about
 // latency. Coupling it to detection would make every legitimate rule addition
@@ -116,7 +125,7 @@ if (run.findings !== base.findings) {
 }
 
 if (run.ms > limit) {
-  console.error(`✗ time-to-first-finding regressed: ${run.ms} ms vs baseline ${base.ms} ms (limit ${limit} ms, ${REGRESSION_FACTOR}×)`);
+  console.error(`✗ time-to-first-finding regressed: ${run.ms} ms vs baseline ${base.ms} ms (limit ${limit} ms, ${factor}×${hosted ? ', hosted baseline' : ''})`);
   console.error('  If this is an accepted cost, re-baseline deliberately and say why in the commit.');
   process.exit(1);
 }

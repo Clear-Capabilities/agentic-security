@@ -2413,7 +2413,7 @@
       "modesJustification": "CLI-only command group (show|replay|doctor|generate) with no named report modes.",
       "haskell": {
         "applicability": "not-applicable",
-        "justification": "proof runs a reproducer in a sandbox for JavaScript, TypeScript, Python, Java, C, C++ and C#; the proof fabric has no Haskell toolchain or harness builder, so a Haskell finding cannot be proven and is reported as unsupported, never as a pass."
+        "justification": "proof runs a reproducer in a sandbox for JavaScript, TypeScript, Python, Java, C, C++, C# and Haskell (GHC interpreter, packages that ship with GHC only); no requirement ID in the Haskell and Nix PRD covers the proof fabric, so the entry stays not-applicable rather than inventing one. A Haskell finding whose class or imports the generator cannot honour is refused with the reason, never reported as a pass."
       },
       "nix": {
         "applicability": "not-applicable",

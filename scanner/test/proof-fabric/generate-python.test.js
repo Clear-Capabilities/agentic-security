@@ -54,7 +54,7 @@ test('refusals name the reason: third-party import, decorated function, no param
   refuse({ 'app.py': "def f(\n" }, { line: 1 }, /could not be parsed by Python/);
   refuse({ 'app.py': FN_VULN }, { cwe: 'CWE-89' }, /no payload and oracle exist for CWE-89/);
   refuse({ 'app.py': "import os\n\ndef f(p):\n    return open(p).read()\n" }, { cwe: 'CWE-22', line: 4 }, /not a write/);
-  refuse({ 'app.rb': 'x' }, { file: 'app.rb' }, /JavaScript and Python only/);
+  refuse({ 'app.rb': 'x' }, { file: 'app.rb' }, /JavaScript, Python and Haskell only/);
 });
 
 test('a sibling module in the same directory is carried into the workspace; its path cannot escape the repository', { skip: skipNoPy }, () => {

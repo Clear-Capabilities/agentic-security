@@ -792,6 +792,29 @@ jobs:
           path: ${{ runner.temp }}/artifact-real.json
           if-no-files-found: warn
 
+  # TIME-TO-FIRST-FINDING ON THE RUNNER THAT MATTERS
+  # ------------------------------------------------
+  # The scan-speed budget used to be checked only when a release was cut, so a slowdown (0.186.0: more findings carried a line, so
+  # the git history step ran for twice as many) was found after the tag. This runs the same check on every PR against the hosted
+  # baseline in bench/ttff/BASELINE.json (median of recent hosted runs; a laptop number does not apply to a shared runner).
+  ttff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        working-directory: scanner
+        timeout-minutes: 10
+      - name: Time to first finding against the hosted baseline
+        run: npm run bench:ttff:check
+        working-directory: scanner
+        timeout-minutes: 10
+
   # GA PROMOTION, WAVE 2: LOCAL MODEL SUPPORT AGAINST A REAL MODEL SERVER
   # ---------------------------------------------------------------------
   # Runs a real Ollama server on loopback with the smallest supported model, then validation, fix proposal, hunt and one Eval Lab comparison

@@ -1,0 +1,602 @@
+[
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": ".github/workflows/auto-merge.yaml",
+  "line": 14,
+  "vuln": "Pipeline: GitHub Action pinned to floating tag",
+  "family": "pipeline-github-action-pinned-to-floatin",
+  "severity": "medium",
+  "text": "- uses: Mic92/auto-merge@main"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": ".github/workflows/claude.yaml",
+  "line": 34,
+  "vuln": "Pipeline: GitHub Action pinned to floating tag",
+  "family": "pipeline-github-action-pinned-to-floatin",
+  "severity": "medium",
+  "text": "- uses: NixOS/nix-installer-action@main"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": ".github/workflows/claude.yaml",
+  "line": 86,
+  "vuln": "Pipeline: Third-party action pinned to major-version tag (mutable)",
+  "family": "pipeline-third-party-action-pinned-to-ma",
+  "severity": "medium",
+  "text": "uses: anthropics/claude-code-action@v1"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/supervisor/etc.nix",
+  "line": 71,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${lib.concatMapStringsSep \"\\n\" ("
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "home-manager/modules/supervisor/supervisor.nix",
+  "line": 35,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${svc.preStart}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/bernie/configuration.nix",
+  "line": 1,
+  "vuln": "SSH accepts password authentication",
+  "family": "ssh-access",
+  "severity": "medium",
+  "text": "# Edit this configuration file to define what should be installed on"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/blob64/configuration.nix",
+  "line": 1,
+  "vuln": "SSH accepts password authentication",
+  "family": "ssh-access",
+  "severity": "medium",
+  "text": "{"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/blob64/modules/phantun.nix",
+  "line": 40,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "publicKey = \"/Deus55uMwnvhHVNYUWpkufilTfeAoj/KBeGWaha1w4=\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/monitoring/irc-alerts.py",
+  "line": 37,
+  "vuln": "TLS certificate verification disabled — MITM-vulnerable",
+  "family": "crypto-tls-no-verify",
+  "severity": "critical",
+  "text": "context.check_hostname = False"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eva/modules/nginx.nix",
+  "line": 61,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://@prometheus/\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/atuin.nix",
+  "line": 7,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "locations.\"/\".proxyPass = \"http://localhost:8888\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/authelia.nix",
+  "line": 105,
+  "vuln": "Secret value reaches the world-readable Nix store",
+  "family": "secret-in-store",
+  "severity": "high",
+  "text": "client_secret = config.clan.core.vars.generators.buildbot-oidc.files.client-secret-hash.value;"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/flakelet-relay.nix",
+  "line": 19,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "id_token = \"1 hour\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 42,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapUserFilter \"(memberOf=cn=nextcloud,ou=groups,dc=eve)\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 44,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapEmailAttribute \"mail\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nextcloud.nix",
+  "line": 47,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.services.nextcloud.occ}/bin/nextcloud-occ ldap:set-config \"\" ldapExpertUUIDUserAttr \"entryuuid\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/nginx/photoprism.nix",
+  "line": 8,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://blob64.r:2342\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/postgresql.nix",
+  "line": 35,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "export OLDDATA=\"${cfg.dataDir}\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/stalwart/default.nix",
+  "line": 156,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "secret = \"%{file:/run/credentials/stalwart.service/admin_password}%\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/vaultwarden.nix",
+  "line": 88,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "# Output format: ADMIN_TOKEN='$argon2id$...'"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/eve/modules/vaultwarden.nix",
+  "line": 152,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://localhost:3011\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "machines/turingmachine/modules/localbackup.nix",
+  "line": 19,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${pkgs.bcachefs-tools}/bin/bcachefs unlock /dev/disk/by-partuuid/b315b307-bc54-4918-8ac4-5dd99c68fa70 < ${config.sops.secrets.turingmachine-bcachefs-password.path}"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/flakelet-relay/default.nix",
+  "line": 181,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "proxyPass = \"http://127.0.0.1:7400\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/fluent-bit-filter-wasm/src/lib.rs",
+  "line": 77,
+  "vuln": "unsafe block — review for memory-safety invariants",
+  "family": "unsafe-block",
+  "severity": "info",
+  "text": "let bytes = unsafe { std::slice::from_raw_parts(record.cast::<u8>(), record_len as usize) };"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ip-update.nix",
+  "line": 36,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "echo \"update add ${config.networking.hostName}.thalheim.io. 600 A $ip\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/ip-update.nix",
+  "line": 38,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "echo \"update delete ${config.networking.hostName}.thalheim.io. AAAA\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/iroh-ssh.nix",
+  "line": 50,
+  "vuln": "Pre-quantum ED25519 (ed25519) — replace with ML-DSA-65 before CRQC arrives",
+  "family": "pqc-migration",
+  "severity": "medium",
+  "text": "key = Ed25519PrivateKey.generate()"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/iroh-ssh.nix",
+  "line": 86,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "install -m 0644 ${config.clan.core.vars.generators.iroh-ssh.files.\"irohssh_ed25519.pub\".path} \\"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/kde/choosers.nix",
+  "line": 21,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "lib.makeBinPath ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/lldap/default.nix",
+  "line": 47,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "force_ldap_user_pass_reset = \"always\";"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/lldap/sync-replica.nix",
+  "line": 37,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "ssh -i ${syncKey.files.ssh-private-key.path} \\"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "nixosModules/niri/kwallet-tpm/kwallet-tpm-unlock.py",
+  "line": 72,
+  "vuln": "Command Injection (os.popen / os.execlp)",
+  "family": "command-injection",
+  "severity": "high",
+  "text": "os.execv(  # noqa: S606"
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/firefox-extensions/default.nix",
+  "line": 64,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "zip -r \"$out/${pname}.xpi\" ."
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/maiao/default.nix",
+  "line": 45,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "$out/bin/git-review version | grep -q \"^${finalAttrs.version}$\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/minihydra/default.nix",
+  "line": 43,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "lib.makeBinPath ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/updater/__main__.py",
+  "line": 364,
+  "vuln": "SQL Injection (f-string SQL assigned to variable)",
+  "family": "sql-injection",
+  "severity": "high",
+  "text": "pr_body = f\"Automated update of {pkg.name} from {old_ver} to {new_ver}.\""
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/updater/default.nix",
+  "line": 29,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "lib.makeBinPath ["
+ },
+ {
+  "project": "mic92-dotfiles",
+  "language": "nix",
+  "file": "pkgs/voice-assistant/src/wakeword.rs",
+  "line": 72,
+  "vuln": "unsafe block — review for memory-safety invariants",
+  "family": "unsafe-block",
+  "severity": "info",
+  "text": "unsafe { TfLiteModelDelete(self.0.as_ptr()) };"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 27,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "FG=${colors.on_surface}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 29,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "HDR_BTN_FG=${colors.on_secondary_container}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/gtk.nix",
+  "line": 41,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "TXT_FG=${colors.on_primary_container}"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/desktop/common/wayland-wm/waybar.nix",
+  "line": 43,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "--arg percentage \"${percentage}\" \\"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "home/gabriel/features/productivity/accounts/usp.nix",
+  "line": 73,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "channel = commonChannelCfg; # TODO: check if I really need this one"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/alcyone/services/radicale.nix",
+  "line": 18,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "htpasswd_encryption = \"autodetect\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+  "line": 18,
+  "vuln": "Credential written as a literal in Nix source",
+  "family": "hardcoded-secret",
+  "severity": "high",
+  "text": "api_key = \"@sabnzbd-key@\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "hosts/nixos/merope/services/media/sabnzbd.nix",
+  "line": 65,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "password = \"@frugalusenet-key@\";"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "pkgs/plymouth-spinner-monochrome/default.nix",
+  "line": 17,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -rT . $out/share/plymouth/themes/spinner-monochrome"
+ },
+ {
+  "project": "misterio77-nix-config",
+  "language": "nix",
+  "file": "pkgs/runescape/default.nix",
+  "line": 57,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r usr/share/icons $out/share/icons"
+ },
+ {
+  "project": "mitchellh-nixos-config",
+  "language": "nix",
+  "file": "users/mitchellh/home-manager.nix",
+  "line": 119,
+  "vuln": "Hardcoded Secret",
+  "family": "",
+  "severity": "critical",
+  "text": "AMP_API_KEY = \"op://Private/Amp_API/credential\";"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "milkv/pioneer/firmware.nix",
+  "line": 41,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "install -D ${zsbl} $out/zsbl.bin"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "milkv/pioneer/linuxboot-initrd.nix",
+  "line": 32,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r . $out/src"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 21,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-pocket-reform/0003-tlv320aic31xx-add-1228800hz-support.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 22,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0001-Revert-drm-bridge-synopsys-dw-mipi-dsi-enable-EoTp-b.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 23,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0001-meson-g12b-bananapi-cm4-mnt-reform2.dts-fix-audio-an.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 24,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0011-dw-mipi-dsi-phy-stop-wait-time.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/kernelPatches.nix",
+  "line": 28,
+  "vuln": "High-Entropy Credential Candidate",
+  "family": "",
+  "severity": "high",
+  "text": "\"linux/patches6.19/meson-g12b-bananapi-cm4-mnt-reform2/0015-meson-dw-mipi-dsi-sync-invert.patch\""
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "mnt/reform/rk3588/installer.nix",
+  "line": 215,
+  "vuln": "Shell evaluates a variable as code in a generated script",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "eval $(partx $img -o START,SECTORS --nr 1 --pairs)"
+ },
+ {
+  "project": "nixos-hardware",
+  "language": "nix",
+  "file": "spacemit/k3-pico-itx/firmware.nix",
+  "line": 97,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "dd if=${config.system.build.opensbi}/share/opensbi/lp64/generic/firmware/fw_dynamic.itb of=''${dev}p5 conv=fsync,notrunc"
+ },
+ {
+  "project": "srvos",
+  "language": "nix",
+  "file": "darwin/common/update-diff.nix",
+  "line": 10,
+  "vuln": "Nix interpolation reaches a shell command unescaped",
+  "family": "cmdi",
+  "severity": "medium",
+  "text": "${config.srvos.update-diff.text}"
+ },
+ {
+  "project": "srvos",
+  "language": "nix",
+  "file": "nixos/mixins/terminfo.nix",
+  "line": 18,
+  "vuln": "Unquoted shell expansion in a destructive command",
+  "family": "cmdi",
+  "severity": "low",
+  "text": "cp -r Ghostty.app/Contents/Resources/terminfo/67/ghostty $out/share/terminfo/g"
+ }
+]
