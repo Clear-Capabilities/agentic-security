@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-09",
-  "entriesScored": 220,
+  "generatedAt": "2026-10-26",
+  "entriesScored": 228,
   "taintByLanguage": {
     "js/ts": 22,
     "java": 13,
@@ -11,7 +11,8 @@
     "c#": 13,
     "kotlin": 10,
     "c/c++": 2,
-    "rust": 5
+    "rust": 5,
+    "haskell": 8
   },
   "totalByLanguage": {
     "js/ts": 38,
@@ -25,12 +26,14 @@
     "c/c++": 11,
     "json": 1,
     "rust": 5,
-    "terraform": 1
+    "terraform": 1,
+    "haskell": 8
   },
   "deepTier": {
-    "entriesScored": 10,
+    "entriesScored": 18,
     "taintByLanguage": {
       "c/c++": 1,
+      "haskell": 8,
       "js/ts": 3,
       "kotlin": 1,
       "php": 1,
@@ -39,6 +42,7 @@
     },
     "totalByLanguage": {
       "c/c++": 1,
+      "haskell": 8,
       "js/ts": 3,
       "kotlin": 1,
       "php": 1,

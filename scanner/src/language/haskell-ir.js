@@ -363,6 +363,25 @@ function inlinableBody(fnAst) {
   return acc.ok ? { params: c.pats.map((p) => p.name), body: c.rhs.body } : null;
 }
 
+// A point-free alias: `tidy = takeFileName`, `clean = trim . takeFileName`. A zero-argument binding whose whole right-hand side is a
+// function name or a composition of function names IS the function it names, so applying it is applying them. Without this the
+// application is an unresolved call, and a sanitizer (or a sink) reached through the alias loses its identity.
+// Returns the right-hand side AST and the unqualified names it mentions, or null for anything else (guards, where, any other form).
+function aliasBodyOf(fnAst) {
+  if (!fnAst || fnAst.clauses.length !== 1) return null;
+  const c = fnAst.clauses[0];
+  if (c.pats.length || !c.rhs || (c.rhs.guards && c.rhs.guards.length) || (c.rhs.where && c.rhs.where.length) || !c.rhs.body) return null;
+  const names = [];
+  const ok = (e) => {
+    const x = unparen(e);
+    if (!x) return false;
+    if (x.t === 'var') { if (!x.qual) names.push(x.name); return x.name !== fnAst.name; }
+    if (x.t === 'op' && x.op === '.' && !x.qual) return ok(x.l) && ok(x.r);
+    return false;
+  };
+  return ok(c.rhs.body) ? { body: c.rhs.body, names } : null;
+}
+
 // ── per-function lowering ────────────────────────────────────────────────────
 class FnLowerer {
   constructor(proj, mod, fnInfo, scopes) {
@@ -563,6 +582,8 @@ class FnLowerer {
       const mem = { kind: 'member', object: obj, prop: r.name };
       return argAsts.length === 1 ? mem : { kind: 'call', callee: '<indirect>', args: [mem, ...argAsts.slice(1).map((a) => this.lowerExpr(a, ln))], hs: { status: 'unknown', reason: 'field-applied' } };
     }
+    const viaAlias = this.applyAlias(r, argAsts, ln, via);
+    if (viaAlias) return viaAlias;
     let args = argAsts.map((a) => this.lowerExpr(a, ln));
     // `lookup key table` returns an element OF the table: the key chooses which, it is not where the value comes from. Only the table
     // flows to the result, so a constant table gives a constant result however tainted the key is.
@@ -633,6 +654,39 @@ class FnLowerer {
     const t = `$src${this.tmp++}`;
     this.cfg.add('assign', call.line || ln, { target: t, source: call, hs: { demand: 'executed', source: true } });
     return { kind: 'ident', name: t, hs: { sourceTemp: call.callee } };
+  }
+
+  // Apply a point-free alias (see aliasBodyOf) as the function(s) it names. The names are looked up where the alias was DEFINED; a
+  // local binding of one of them at the use site would capture it, so that case is left to the ordinary (unresolved) call.
+  applyAlias(r, argAsts, ln, via) {
+    let alias = null; let calleeMod = this.mod;
+    if (r.kind === 'local' && r.alias) alias = r.alias;
+    else if (r.kind === 'def' && r.def.kind === 'fun' && r.def.arity === 0) {
+      calleeMod = this.proj.modules.get(r.mod);
+      alias = calleeMod ? aliasBodyOf(calleeMod.groups.funs.find((f) => f.name === r.name)) : null;
+    }
+    if (!alias || (this.inlineDepth || 0) >= INLINE_MAX_DEPTH) return null;
+    if (alias.names.some((n) => this.lookupLocal(n))) return null;
+    const savedMod = this.mod;
+    // Only an alias of LIBRARY functions is expanded. A project function keeps its own summary and call-graph node, and
+    // expanding it here would replace the edge to it with edges to what it calls.
+    this.mod = calleeMod;
+    const libraryOnly = alias.names.every((n) => { const k = this.resolve(n, null).kind; return k === 'external' || k === 'builtin'; });
+    this.mod = savedMod;
+    if (!libraryOnly) return null;
+    // Arguments belong to the CALLER: lower them here, once, then hand them over as already-lowered expressions.
+    const lowered = argAsts.map((a) => ({ t: 'lowered', expr: this.lowerExpr(a, ln) }));
+    const savedOverride = this.lineOverride;
+    this.lineOverride = this.lineOverride || ln;
+    this.inlineDepth = (this.inlineDepth || 0) + 1;
+    this.mod = calleeMod;
+    // The alias is still CALLED here: keep its call-graph edge, exactly as an inlined function body does.
+    if (r.kind === 'def') (this.inlinedCalls ||= []).push({ site: null, callee: this.canonical(r), args: [], line: ln, hs: { status: 'resolved', target: r.qid, effect: 'unknown', inlined: true, ...(via ? { via } : {}) } });
+    try { return this.lowerApp(alias.body, lowered, ln); } finally {
+      this.mod = savedMod;
+      this.lineOverride = savedOverride;
+      this.inlineDepth -= 1;
+    }
   }
 
   // Substitute lowered arguments into a small pure callee body. Returns null when the callee is not inlinable.
@@ -940,6 +994,9 @@ class FnLowerer {
       const rhsAsts = f.clauses.map((c) => c.rhs);
       const others = siblingAsts.filter((a) => a && !rhsAsts.includes(a));
       this.bindLazy([f.name], () => this.lowerRhs(f.clauses[0].rhs, f.line || ln), bodyAsts, others, strict, f.line || ln);
+      // bindLazy declares a plain local; a point-free alias keeps what it names so applying it resolves to that function.
+      const alias = aliasBodyOf(f);
+      if (alias && !alias.names.some((n) => this.lookupLocal(n))) scope.set(f.name, { kind: 'local', alias });
     }
     for (const pb of g.patbinds) {
       const names = patternVars(pb.pat);
