@@ -36,7 +36,8 @@ function basenameLike(file) {
 function pathShape(f) {
   if (!f) return '';
   const segments = [];
-  if (f.source) segments.push(`${f.source.type || ''}@${f.source.label || ''}`);
+  // a parameter source (`kind: 'parameter'`, named by the Haskell evidence chain) is not part of the identity: a finding keeps the id it had before its source was named
+  if (f.source && f.source.kind !== 'parameter') segments.push(`${f.source.type || ''}@${f.source.label || ''}`);
   if (Array.isArray(f.pathSteps)) {
     for (const step of f.pathSteps) {
       segments.push(`${step.type || ''}@${step.label || ''}`);

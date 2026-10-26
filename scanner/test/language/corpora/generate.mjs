@@ -322,7 +322,7 @@ function buildBackport() {
 }
 
 // ── shape sets: author-labelled code shapes absent from train, validation and holdout ───────────────────────────────────────────────────
-// `unseen` (templates-unseen.mjs, v3) is measured once and never tuned against. `shape-dev` (templates-shapedev.mjs, the former unseen-v1) and
+// `unseen` (templates-unseen.mjs, v3) was measured once and never tuned against until 2026-10-26, when it became a development set (see provenance.json). `shape-dev` (templates-shapedev.mjs, the former unseen-v1) and
 // `shape-dev-2` (templates-shapedev2.mjs, the former unseen-v2) were used to change the engine and are kept as regression sets.
 function buildShapeSet({ split, hsT, nixT, hsNouns, nixNouns, idPrefix }) {
   const out = [];
@@ -397,7 +397,7 @@ export function materialize(ds) {
     holdoutHashes: hold,
     contentRollup: sha256(all.join('\n')),
     holdoutRollup: sha256(Object.entries(hold).map(([k, v]) => `${k}:${v}`).join('\n')),
-    unseen: { version: UNSEEN_VERSION, cases: ds.unseen.length, rollup: sha256(ds.unseen.map((c) => `${c.id}:${sha256(c.source)}:${c.label}`).sort().join('\n')), note: 'author-labelled single-flaw shapes written AFTER the fixes they would otherwise have motivated; measured once per promotion; never tuned against' },
+    unseen: { version: UNSEEN_VERSION, cases: ds.unseen.length, rollup: sha256(ds.unseen.map((c) => `${c.id}:${sha256(c.source)}:${c.label}`).sort().join('\n')), note: 'unseen-v3: author-labelled single-flaw shapes, a DEVELOPMENT set since 2026-10-26 (its failures were read and used to change the engine); no longer a generalisation measure, kept as a regression set; a new unseen set is required for any generalisation claim', role: 'development', developmentSince: '2026-10-26' },
     shapeDev: { version: SHAPEDEV_VERSION, cases: ds.shapeDev.length, rollup: sha256(ds.shapeDev.map((c) => `${c.id}:${sha256(c.source)}:${c.label}`).sort().join('\n')), note: 'the former unseen-v1: used to change the engine, kept as a regression set; NOT a generalisation measure' },
     shapeDev2: { version: SHAPEDEV2_VERSION, cases: ds.shapeDev2.length, rollup: sha256(ds.shapeDev2.map((c) => `${c.id}:${sha256(c.source)}:${c.label}`).sort().join('\n')), note: 'the former unseen-v2: used to change the engine, kept as a regression set; NOT a generalisation measure' },
   }));

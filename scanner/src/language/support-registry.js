@@ -221,7 +221,8 @@ export function evaluateSupport(language, input) {
     const strict = r.evidence.metric === 'sast-holdout' || r.evidence.metric === 'taint-holdout' ? (detection.layers || {})[key] && (detection.layers[key].strict || null) : null;
     r.evidence = withInterval({ ...r.evidence, ...(strict && Number.isFinite(strict.precision) ? { strictPrecision: strict.precision } : {}) });
   }
-  // Generalisation: the SAME layers measured on shapes absent from train, validation and holdout. It never changes a row's status (the
+  // Generalisation: the SAME layers measured on shapes absent from train, validation and holdout. When that split has become a DEVELOPMENT set (its
+  // failures were read and the engine was changed for them) the result is a regression number and is labelled so (`role`). It never changes a row's status (the
   // PRD's gates are defined on the frozen holdout); it is stated beside it, with the shortfalls named, so "supported" is not read as more.
   const un = input.unseen && input.unseen.ecosystems && input.unseen.ecosystems[language] && input.unseen.ecosystems[language].detection;
   out.generalizationGaps = [];
@@ -234,7 +235,7 @@ export function evaluateSupport(language, input) {
     if (!(u.precision >= TARGETS.precision)) shortfalls.push(`precision ${pct(u.precision)} < ${pct(TARGETS.precision)}`);
     if (!(u.recall >= TARGETS.recall)) shortfalls.push(`recall ${pct(u.recall)} < ${pct(TARGETS.recall)}`);
     if (!(u.f1 >= TARGETS.f1)) shortfalls.push(`F1 ${pct(u.f1)} < ${pct(TARGETS.f1)}`);
-    r.generalization = { status: shortfalls.length ? 'below-target' : 'meets-targets', shortfalls, cases: u.cases, tp: u.tp, fp: u.fp, fn: u.fn, tn: u.tn, precision: u.precision, recall: u.recall, f1: u.f1, strictPrecision: u.strict && u.strict.precision, ci: { precision: ciShapes(u.tp, u.tp + u.fp), recall: ciShapes(u.tp, u.tp + u.fn), level: 0.95, method: `Clopper-Pearson over shapes (${SHAPE_CLUSTER} near-identical cases per shape)` } };
+    r.generalization = { status: shortfalls.length ? 'below-target' : 'meets-targets', role: (input.unseen && input.unseen.splitRole) || 'generalisation', shortfalls, cases: u.cases, tp: u.tp, fp: u.fp, fn: u.fn, tn: u.tn, precision: u.precision, recall: u.recall, f1: u.f1, strictPrecision: u.strict && u.strict.precision, ci: { precision: ciShapes(u.tp, u.tp + u.fp), recall: ciShapes(u.tp, u.tp + u.fn), level: 0.95, method: `Clopper-Pearson over shapes (${SHAPE_CLUSTER} near-identical cases per shape)` } };
     if (shortfalls.length) out.generalizationGaps.push(`${r.capability}: ${shortfalls.join(', ')}`);
   }
   // a capability whose tool is absent is blocked, not passed and not skipped

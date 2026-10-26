@@ -1,24 +1,24 @@
 {
   "schema": "agentic-security/language-support-measurement@2",
   "split": "unseen",
-  "measuredAt": "2026-10-09",
+  "measuredAt": "2026-10-26",
   "corpusVersion": "qa001-v2",
   "ecosystems": {
     "haskell": {
       "detection": {
         "cases": 156,
         "scored": 156,
-        "advisoryFindingsNotScored": 0,
+        "advisoryFindingsNotScored": 2,
         "layers": {
           "sast": {
             "cases": 96,
-            "tp": 24,
-            "fp": 8,
-            "fn": 24,
-            "tn": 40,
-            "precision": 0.75,
-            "recall": 0.5,
-            "f1": 0.6,
+            "tp": 48,
+            "fp": 0,
+            "fn": 0,
+            "tn": 46,
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
             "measured": true,
             "families": {
               "weak-password-hash": {
@@ -31,398 +31,142 @@
                 "measured": true
               },
               "weak-randomness": {
-                "tp": 4,
-                "fp": 2,
-                "fn": 2,
-                "precision": 0.6666666666666666,
-                "recall": 0.6666666666666666,
-                "f1": 0.6666666666666666,
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
                 "measured": true
               },
               "resource-limits": {
-                "tp": 2,
-                "fp": 2,
-                "fn": 4,
-                "precision": 0.5,
-                "recall": 0.3333333333333333,
-                "f1": 0.4,
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
                 "measured": true
               },
               "parser-safety": {
-                "tp": 2,
-                "fp": 2,
-                "fn": 4,
-                "precision": 0.5,
-                "recall": 0.3333333333333333,
-                "f1": 0.4,
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
                 "measured": true
               },
               "sensitive-logging": {
-                "tp": 4,
+                "tp": 6,
                 "fp": 0,
-                "fn": 2,
+                "fn": 0,
                 "precision": 1,
-                "recall": 0.6666666666666666,
-                "f1": 0.8,
+                "recall": 1,
+                "f1": 1,
                 "measured": true
               },
               "route-authentication": {
-                "tp": 4,
-                "fp": 2,
-                "fn": 2,
-                "precision": 0.6666666666666666,
-                "recall": 0.6666666666666666,
-                "f1": 0.6666666666666666,
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
                 "measured": true
               },
               "object-authorization": {
-                "tp": 2,
+                "tp": 6,
                 "fp": 0,
-                "fn": 4,
+                "fn": 0,
                 "precision": 1,
-                "recall": 0.3333333333333333,
-                "f1": 0.5,
+                "recall": 1,
+                "f1": 1,
                 "measured": true
               },
               "session-cookie": {
-                "tp": 0,
+                "tp": 6,
                 "fp": 0,
-                "fn": 6,
-                "precision": null,
-                "recall": 0,
-                "f1": null,
-                "measured": false
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
               }
             },
-            "misses": [
-              {
-                "case": "hsy-00ae66e67a",
-                "label": {
-                  "cwe": "CWE-338"
-                }
-              },
-              {
-                "case": "hsy-b8dd875745",
-                "label": {
-                  "cwe": "CWE-338"
-                }
-              },
-              {
-                "case": "hsy-d3100692f0",
-                "label": {
-                  "cwe": "CWE-770"
-                }
-              },
-              {
-                "case": "hsy-a96d85263e",
-                "label": {
-                  "cwe": "CWE-770"
-                }
-              },
-              {
-                "case": "hsy-973c5d77ce",
-                "label": {
-                  "cwe": "CWE-770"
-                }
-              },
-              {
-                "case": "hsy-0f5bd0295e",
-                "label": {
-                  "cwe": "CWE-770"
-                }
-              },
-              {
-                "case": "hsy-d9e50754bd",
-                "label": {
-                  "cwe": "CWE-248"
-                }
-              },
-              {
-                "case": "hsy-9fec491fd4",
-                "label": {
-                  "cwe": "CWE-248"
-                }
-              },
-              {
-                "case": "hsy-634ab904ab",
-                "label": {
-                  "cwe": "CWE-248"
-                }
-              },
-              {
-                "case": "hsy-68e1da4214",
-                "label": {
-                  "cwe": "CWE-248"
-                }
-              },
-              {
-                "case": "hsy-3f80ace6a6",
-                "label": {
-                  "cwe": "CWE-532"
-                }
-              },
-              {
-                "case": "hsy-09adcf9c83",
-                "label": {
-                  "cwe": "CWE-532"
-                }
-              },
-              {
-                "case": "hsy-bda5c8a726",
-                "label": {
-                  "cwe": "CWE-306"
-                }
-              },
-              {
-                "case": "hsy-b42c0f6af9",
-                "label": {
-                  "cwe": "CWE-306"
-                }
-              },
-              {
-                "case": "hsy-0c43a7d5e7",
-                "label": {
-                  "cwe": "CWE-639"
-                }
-              },
-              {
-                "case": "hsy-f64e503fc6",
-                "label": {
-                  "cwe": "CWE-639"
-                }
-              },
-              {
-                "case": "hsy-486258d84b",
-                "label": {
-                  "cwe": "CWE-639"
-                }
-              },
-              {
-                "case": "hsy-4eb44c2d05",
-                "label": {
-                  "cwe": "CWE-639"
-                }
-              },
-              {
-                "case": "hsy-cedfbead1a",
-                "label": {
-                  "cwe": "CWE-1004"
-                }
-              },
-              {
-                "case": "hsy-972fcdb3ec",
-                "label": {
-                  "cwe": "CWE-1004"
-                }
-              },
-              {
-                "case": "hsy-a8496fb1e3",
-                "label": {
-                  "cwe": "CWE-1004"
-                }
-              },
-              {
-                "case": "hsy-948509b8dc",
-                "label": {
-                  "cwe": "CWE-1004"
-                }
-              },
-              {
-                "case": "hsy-5b622385f8",
-                "label": {
-                  "cwe": "CWE-1004"
-                }
-              },
-              {
-                "case": "hsy-4b2f14f91e",
-                "label": {
-                  "cwe": "CWE-1004"
-                }
-              }
-            ],
-            "strays": [
-              {
-                "file": "hsy-080edd5d6c/src/Svc.hs",
-                "line": 9,
-                "cwe": "CWE-338"
-              },
-              {
-                "file": "hsy-d68580cb8c/src/Svc.hs",
-                "line": 9,
-                "cwe": "CWE-338"
-              },
-              {
-                "file": "hsy-e5698cab9f/src/Svc.hs",
-                "line": 8,
-                "cwe": "CWE-770"
-              },
-              {
-                "file": "hsy-7de82d4ff1/src/Svc.hs",
-                "line": 8,
-                "cwe": "CWE-770"
-              },
-              {
-                "file": "hsy-1494c1ca4b/src/Svc.hs",
-                "line": 8,
-                "cwe": "CWE-248"
-              },
-              {
-                "file": "hsy-b4c4db646a/src/Svc.hs",
-                "line": 8,
-                "cwe": "CWE-248"
-              },
-              {
-                "file": "hsy-5835357679/src/Svc.hs",
-                "line": 14,
-                "cwe": "CWE-306"
-              },
-              {
-                "file": "hsy-26f763e1d3/src/Svc.hs",
-                "line": 14,
-                "cwe": "CWE-306"
-              }
-            ],
+            "misses": [],
+            "strays": [],
             "crossFamilyFindingsNotScored": 2,
             "strict": {
-              "fp": 10,
-              "precision": 0.7058823529411765,
-              "f1": 0.5853658536585366
+              "fp": 2,
+              "precision": 0.96,
+              "f1": 0.9795918367346939
             }
           },
           "taint": {
             "cases": 60,
-            "tp": 22,
-            "fp": 4,
-            "fn": 8,
-            "tn": 24,
-            "precision": 0.8461538461538461,
-            "recall": 0.7333333333333333,
-            "f1": 0.7857142857142856,
+            "tp": 30,
+            "fp": 0,
+            "fn": 0,
+            "tn": 28,
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
             "measured": true,
             "families": {
               "sql-injection": {
-                "tp": 4,
+                "tp": 6,
                 "fp": 0,
-                "fn": 2,
+                "fn": 0,
                 "precision": 1,
-                "recall": 0.6666666666666666,
-                "f1": 0.8,
+                "recall": 1,
+                "f1": 1,
                 "measured": true
               },
               "command-injection": {
                 "tp": 6,
-                "fp": 2,
+                "fp": 0,
                 "fn": 0,
-                "precision": 0.75,
+                "precision": 1,
                 "recall": 1,
-                "f1": 0.8571428571428571,
+                "f1": 1,
                 "measured": true
               },
               "path-traversal": {
-                "tp": 4,
+                "tp": 6,
                 "fp": 0,
-                "fn": 2,
+                "fn": 0,
                 "precision": 1,
-                "recall": 0.6666666666666666,
-                "f1": 0.8,
+                "recall": 1,
+                "f1": 1,
                 "measured": true
               },
               "ssrf": {
-                "tp": 4,
+                "tp": 6,
                 "fp": 0,
-                "fn": 2,
+                "fn": 0,
                 "precision": 1,
-                "recall": 0.6666666666666666,
-                "f1": 0.8,
+                "recall": 1,
+                "f1": 1,
                 "measured": true
               },
               "html-injection": {
-                "tp": 4,
-                "fp": 2,
-                "fn": 2,
-                "precision": 0.6666666666666666,
-                "recall": 0.6666666666666666,
-                "f1": 0.6666666666666666,
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
                 "measured": true
               }
             },
-            "misses": [
-              {
-                "case": "hsy-8c23dfb1a5",
-                "label": {
-                  "cwe": "CWE-89"
-                }
-              },
-              {
-                "case": "hsy-e6ba2e2122",
-                "label": {
-                  "cwe": "CWE-89"
-                }
-              },
-              {
-                "case": "hsy-74b6f96af3",
-                "label": {
-                  "cwe": "CWE-22"
-                }
-              },
-              {
-                "case": "hsy-6ec3217b59",
-                "label": {
-                  "cwe": "CWE-22"
-                }
-              },
-              {
-                "case": "hsy-b2835a757a",
-                "label": {
-                  "cwe": "CWE-918"
-                }
-              },
-              {
-                "case": "hsy-610697846e",
-                "label": {
-                  "cwe": "CWE-918"
-                }
-              },
-              {
-                "case": "hsy-cf84a1ceb6",
-                "label": {
-                  "cwe": "CWE-79"
-                }
-              },
-              {
-                "case": "hsy-bc9a75d067",
-                "label": {
-                  "cwe": "CWE-79"
-                }
-              }
-            ],
-            "strays": [
-              {
-                "file": "hsy-af4721fdb6/src/Svc.hs",
-                "line": 6,
-                "cwe": "CWE-78"
-              },
-              {
-                "file": "hsy-b3dff46a17/src/Svc.hs",
-                "line": 6,
-                "cwe": "CWE-78"
-              },
-              {
-                "file": "hsy-ee44f15e2b/src/Svc.hs",
-                "line": 18,
-                "cwe": "CWE-79"
-              },
-              {
-                "file": "hsy-d96c684ed3/src/Svc.hs",
-                "line": 18,
-                "cwe": "CWE-79"
-              }
-            ],
+            "misses": [],
+            "strays": [],
             "crossFamilyFindingsNotScored": 2,
             "strict": {
-              "fp": 6,
-              "precision": 0.7857142857142857,
-              "f1": 0.7586206896551724
+              "fp": 2,
+              "precision": 0.9375,
+              "f1": 0.967741935483871
             }
           }
         },
@@ -676,11 +420,11 @@
               }
             ],
             "strays": [],
-            "crossFamilyFindingsNotScored": 0,
+            "crossFamilyFindingsNotScored": 4,
             "strict": {
-              "fp": 0,
-              "precision": 1,
-              "f1": 0.9354838709677419
+              "fp": 4,
+              "precision": 0.9354838709677419,
+              "f1": 0.90625
             }
           },
           "taint": {
@@ -796,6 +540,8 @@
       }
     }
   },
+  "splitRole": "development",
+  "developmentSince": "2026-10-26",
   "corpusTotals": {
     "haskell": {
       "security": {
@@ -830,6 +576,6 @@
     "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
     "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
     "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-    "manifestSha256": "e826f48ae72dd230096f8eda3d7d308743aaf61c50c8eb614eb3c9bf983ab0c6"
+    "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
   }
 }

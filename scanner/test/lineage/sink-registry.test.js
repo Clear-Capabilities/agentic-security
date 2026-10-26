@@ -255,7 +255,9 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
   // 41 -> 47: six Haskell text-output sinks (putStrLn/putStr x Prelude, System.IO, Data.Text.IO) that are XSS sinks only when the
   // string being assembled carries markup (`hs.htmlSkeleton`). Their destination is standard output, so they reclassify to the
   // `log` category, not `http-response`.
-  assert.equal(cwe79.length, 47);
+  // 47 -> 59: twelve Haskell XSS sinks, all server-side: the pre-escaped constructors re-exported by Yesod / Yesod.Core / Yesod.Core.Widget / Text.Blaze*
+  // (`preEscapedToMarkup`, `preEscapedToHtml`) that the earlier list did not resolve through those modules.
+  assert.equal(cwe79.length, 59);
   let domCount = 0;
   let otherCount = 0;
   let stdoutText = 0;
@@ -279,7 +281,7 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
     }
   }
   assert.equal(domCount, 6);   // 4 dom + 2 react
-  assert.equal(otherCount, 35);   // 18 -> 35 with the 17 Haskell server-side XSS sinks
+  assert.equal(otherCount, 47);   // 18 -> 35 with the 17 Haskell server-side XSS sinks, 35 -> 47 with the re-exported pre-escaped constructors
   assert.equal(stdoutText, 6);
 });
 
@@ -531,12 +533,15 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // 478 -> 481 and 329 -> 332 modeled: QA-006 added php-header-location (a static-prefix gated header() sink) and two Go redirect helpers.
   // 481 -> 574 and 332 -> 385 modeled, 134 -> 174 unsupported: 93 Haskell sinks added after 0.173 (legacy System.Cmd, Turtle, Shelly, hint, HDBC,
   // direct-sqlite, libpq, persistent backends, Req, HTTP, redirects in five frameworks, more path operations). Re-measured against the live catalog.
-  assert.equal(SINKS.length, 574);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 385);
+  // 574 -> 597 and 385 -> 408 modeled: 23 Haskell sinks made for the unseen-v3 development set (file-serving responses in five frameworks, `useURI`, the
+  // re-exported pre-escaped HTML constructors, the conduit module's http-client re-exports) net of the nine HTTP parse and URI-conversion sinks removed because the SEND is the
+  // sink (a host check can only follow the parse). Re-measured against the live catalog.
+  assert.equal(SINKS.length, 597);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 408);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 174);
-  assert.equal(385 + 6 + 9 + 174, SINKS.length);
+  assert.equal(408 + 6 + 9 + 174, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

@@ -27,7 +27,7 @@ import { createHash } from 'node:crypto';
 import { parseSyntax, groupDecls, patternVars } from './haskell-syntax.js';
 import { preprocessForSyntax } from './haskell-parser.js';
 import { deriveCppContext } from './haskell-cpp.js';
-import { isKnownApi, isSourceApi, qualifyAmbiguous } from './haskell-models.js';
+import { isKnownApi, isSourceApi, qualifyAmbiguous, handlerFrameworkOf } from './haskell-models.js';
 
 export const HS_IR_LIMITS = Object.freeze({
   maxExprDepth: 200,
@@ -50,8 +50,13 @@ const HOF = {
   forM_: { fn: 1, coll: 0, kind: 'traverse_' }, for_: { fn: 1, coll: 0, kind: 'traverse_' },
   filter: { fn: 0, coll: 1, kind: 'filter' },
   foldr: { fn: 0, seed: 1, coll: 2, kind: 'fold' }, foldl: { fn: 0, seed: 1, coll: 2, kind: 'fold' }, "foldl'": { fn: 0, seed: 1, coll: 2, kind: 'fold' },
+  foldM: { fn: 0, seed: 1, coll: 2, kind: 'fold', monadic: true }, foldM_: { fn: 0, seed: 1, coll: 2, kind: 'fold', monadic: true },
+  zipWith: { fn: 0, coll: 1, coll2: 2, kind: 'map' }, zipWithM: { fn: 0, coll: 1, coll2: 2, kind: 'traverse' }, zipWithM_: { fn: 0, coll: 1, coll2: 2, kind: 'traverse_' },
   sequence: { coll: 0, kind: 'sequence' }, sequenceA: { coll: 0, kind: 'sequence' }, sequence_: { coll: 0, kind: 'sequence' },
 };
+
+// Predicates that accept only letters and digits (Data.Char): a string filtered by one holds nothing else.
+const CHAR_CLASS = new Set(['Data.Char.isAlphaNum', 'Data.Char.isAlpha', 'Data.Char.isDigit', 'Data.Char.isHexDigit', 'Data.Char.isOctDigit', 'Data.Char.isLetter', 'Data.Char.isNumber']);
 
 const ARITH = new Set(['+', '-', '*', '/', '^', '**', '==', '/=', '<', '<=', '>', '>=', '!!', '%']);
 
@@ -84,7 +89,7 @@ function sigInfo(tokens, sig) {
       else if (depth === 0 && t.t === 'rop' && t.v === '->') { argTypes.push(tokens.slice(start, i).map((x) => x.v).join(' ')); start = i + 1; }
     }
   }
-  return { arity, returnsIO: !!first && first.t === 'con' && first.v === 'IO', text: tokens.slice(sig.ta, sig.tb).map((t) => t.v).join(' '), argTypes };
+  return { arity, returnsIO: !!first && first.t === 'con' && first.v === 'IO', text: tokens.slice(sig.ta, sig.tb).map((t) => t.v).join(' '), argTypes, resultText: tokens.slice(resStart, sig.tb).map((t) => t.v).join(' ') };
 }
 
 // Parameters of an EXPORTED function whose declared type is text-like: the caller supplies that text, and nothing in the
@@ -92,10 +97,72 @@ function sigInfo(tokens, sig) {
 // request or stdin read: the finding says so). A function without a signature, a non-exported function and a parameter
 // of any other type (a connection, a number, a record) are never sources.
 const TEXT_LIKE = /^\(?\s*(?:Maybe\s+)?(?:String|Text|ByteString|FilePath|URI|Url|URL|\[\s*Char\s*\]|\[\s*(?:String|Text)\s*\])\s*\)?$/;
-function callerControlledParams(fn, sig, exported) {
+// Parameters of an exported function whose declared type is a container or text (a list, a map, a set, a sequence, a vector, a string):
+// a PARTIAL function (`maximum`, `head`, `Map.!`) applied to one fails on the empty or missing case the caller can supply. Wider than
+// TEXT_LIKE on purpose, and used only by the partial-function rule, never as an injection source.
+const COLLECTION_LIKE = /^\(?\s*(?:Maybe\s+)?(?:\[.*\]|(?:Map|HashMap|IntMap|Set|HashSet|IntSet|Seq|Vector|Text|String|ByteString)\b.*)\)?$/;
+function inputParams(fn, sig, exported) {
   if (!exported || !sig || !Array.isArray(sig.argTypes) || !Array.isArray(fn.params)) return [];
   const out = [];
-  sig.argTypes.forEach((t, i) => { const name = fn.params[i]; if (name && TEXT_LIKE.test(t)) out.push({ index: i, name, decorator: 'hs:caller-controlled' }); });
+  sig.argTypes.forEach((t, i) => { const name = fn.params[i]; if (name && (TEXT_LIKE.test(t) || COLLECTION_LIKE.test(t))) out.push(name); });
+  return out;
+}
+function callerControlledParams(fn, sig, exported, imports) {
+  if (!exported || !sig || !Array.isArray(sig.argTypes) || !Array.isArray(fn.params)) return [];
+  const out = [];
+  // The result type is the part of the signature after the last top-level arrow; a function returning a framework handler value gets its text
+  // parameters labelled as request input, any other exported function keeps the weaker caller-controlled label.
+  const handler = handlerFrameworkOf(imports, sig.resultText);
+  const decorator = handler ? handler.decorator : 'hs:caller-controlled';
+  sig.argTypes.forEach((t, i) => { const name = fn.params[i]; if (name && TEXT_LIKE.test(t)) out.push({ index: i, name, decorator }); });
+  return out;
+}
+
+// A Servant endpoint written as a function (`server acct rowId = ...` for `type API = AuthProtect "jwt" :> Capture "id" Int :> Get ..`): its parameters are
+// the values the API type takes from the request, in order of appearance. Only a single-endpoint API can be paired with one function by position (several
+// endpoints are joined with `:<|>` and each handler is its own function, which the handler-result rule already covers). A parameter is a request source
+// when its API combinator reads the request (capture, query, header, body) and its declared type is text; an authenticated principal is not.
+const SERVANT_READS = new Set(['Capture', "Capture'", 'QueryParam', "QueryParam'", 'QueryParams', 'Header', "Header'", 'ReqBody', "ReqBody'"]);
+const SERVANT_PRINCIPAL = new Set(['AuthProtect', 'BasicAuth', 'Auth']);
+function servantEndpointParams(mod, fn, sig, exported) {
+  if (!exported || !sig || !sig.resultText || !Array.isArray(fn.params) || !fn.params.length) return [];
+  const m = /^\s*(?:Server|ServerT)\s+([A-Z][A-Za-z0-9_']*)\b/.exec(sig.resultText);
+  if (!m || !mod.imports.some((i) => /^Servant(?:\.|$)/.test(i.module))) return [];
+  const td = (mod.parse.typeDecls || []).find((d) => d.name === m[1]);
+  if (!td) return [];
+  const T = mod.parse.tokens;
+  const slice = T.slice(td.a, td.b);
+  const eq = slice.findIndex((t) => t.t === 'rop' && t.v === '=');
+  if (eq < 0) return [];
+  const split = (tokens, sep) => {
+    const parts = [[]]; let depth = 0;
+    for (const t of tokens) {
+      if (t.t === 'sp' && (t.v === '(' || t.v === '[')) depth++;
+      if (t.t === 'sp' && (t.v === ')' || t.v === ']')) depth--;
+      if (depth === 0 && t.t === 'op' && t.v === sep) { parts.push([]); continue; }
+      parts[parts.length - 1].push(t);
+    }
+    return parts;
+  };
+  const body = slice.slice(eq + 1);
+  if (split(body, ':<|>').filter((p) => p.length).length !== 1) return [];
+  const out = [];
+  let idx = 0;
+  for (const part of split(body, ':>').filter((p) => p.length)) {
+    const head = part[0];
+    if (!head || head.t !== 'con') continue;
+    const isPrincipal = SERVANT_PRINCIPAL.has(head.v);
+    if (!isPrincipal && !SERVANT_READS.has(head.v)) continue;
+    const name = fn.params[idx];
+    idx++;
+    if (isPrincipal || !name) continue;
+    // the carried type is what follows the name string (or the content-type list for a body): its text decides whether it is text
+    const lastStr = part.map((t) => t.t).lastIndexOf('str');
+    let rest = part.slice(lastStr >= 0 ? lastStr + 1 : 1);
+    if (/^ReqBody/.test(head.v)) { const close = rest.findIndex((t) => t.t === 'sp' && t.v === ']'); rest = close >= 0 ? rest.slice(close + 1) : rest; }
+    const type = rest.map((t) => t.v).join(' ').trim();
+    if (type && TEXT_LIKE.test(type.replace(/^\[\s*(.*)\s*\]$/, '[ $1 ]').replace(/\s+/g, ' '))) out.push({ index: idx - 1, name, decorator: 'hs:handler-param:servant' });
+  }
   return out;
 }
 
@@ -448,6 +515,10 @@ class FnLowerer {
       case 'app': return this.lowerApp(e.f, e.args, ln);
       case 'op': return this.lowerOp(e, ln);
       case 'neg': return { kind: 'binary', op: '-', left: { kind: 'literal', value: 0 }, right: this.lowerExpr(e.e, ln) };
+      // `read s :: Int`: the value is a number, so it is a clean constant for the taint engine. The lowered inner expression rides on `hs.inner`, which the rule and web
+      // analyses read (an unsafe coercion in it, the id it names), exactly as they read `hs.selector`. (A sanitizer call would be wrong here: the engine's sanitizer label is per expression, so a
+      // number in `"kill " ++ show n ++ name` would mark the tainted `name` sanitized too.)
+      case 'typed': return { kind: 'literal', value: 0, hs: { numeric: e.type, inner: this.lowerExpr(e.e, ln) } };
       case 'tuple': return { kind: 'array', elements: e.items.map((x) => this.lowerExpr(x, ln)), hs: { tuple: true } };
       case 'list': return { kind: 'array', elements: e.items.map((x) => this.lowerExpr(x, ln)) };
       case 'range': return { kind: 'array', elements: e.items.map((x) => this.lowerExpr(x, ln)), hs: { range: true } };
@@ -545,7 +616,9 @@ class FnLowerer {
     }
     if (f.t === 'rsec') return this.lowerOp({ t: 'op', op: f.op, qual: f.qual, l: argAsts[0], r: f.e, line: ln }, ln);
     if (f.t === 'lsec') return this.lowerOp({ t: 'op', op: f.op, qual: f.qual, l: f.e, r: argAsts[0], line: ln }, ln);
-    if (f.t === 'lam') return this.betaReduce(f, argAsts, ln);
+    if (f.t === 'lam') return this.betaReduce(f, argAsts, ln, via);
+    // `m >>= \case ...`: a \case applied to its argument is a case on that argument, run here (not a call of an unknown lifted function)
+    if (f.t === 'lamcase') return this.betaReduce({ params: [{ t: 'pvar', name: '$lc' }], body: { t: 'case', scrut: { t: 'var', name: '$lc', qual: null }, alts: f.alts, line: ln }, line: ln }, argAsts, ln, via);
     if (f.t === 'var') return this.applyVar(f, argAsts, ln, via);
     if (f.t === 'con') {
       const cons = this.mod.cons.get(f.name) || this.proj.findCon(f.name);
@@ -558,11 +631,14 @@ class FnLowerer {
     return { kind: 'call', callee: '<indirect>', args: [fv, ...argAsts.map((a) => this.lowerExpr(a, ln))], hs: { status: 'unknown', reason: 'computed-function', via } };
   }
 
-  betaReduce(lam, argAsts, ln) {
+  betaReduce(lam, argAsts, ln, via) {
     const n = Math.min(lam.params.length, argAsts.length);
     this.push();
     try {
-      for (let i = 0; i < n; i++) this.bindPattern(lam.params[i], this.lowerExpr(argAsts[i], ln), ln);
+      // `action >>= \x -> k` and `f <$> action` RUN the action and hand its result to the lambda, even when the lambda ignores it (`\_ -> k`):
+      // the action is executed where it is sequenced, not only where its result is used.
+      const runs = via === 'bind' || via === 'fmap' || via === 'applicative';
+      for (let i = 0; i < n; i++) this.bindPattern(lam.params[i], this.lowerExpr(argAsts[i], ln), ln, runs ? { executed: true } : undefined);
       if (lam.params.length > argAsts.length) return { kind: 'array', elements: argAsts.map((a) => this.lowerExpr(a, ln)), hs: { partial: { remaining: lam.params.length - argAsts.length }, closure: true } };
       const body = this.lowerExpr(lam.body, ln);
       if (argAsts.length > n) return { kind: 'call', callee: '<indirect>', args: [body, ...argAsts.slice(n).map((a) => this.lowerExpr(a, ln))], hs: { status: 'unknown', reason: 'result-applied' } };
@@ -576,6 +652,23 @@ class FnLowerer {
     if (HOF[f.name] && (r.kind === 'builtin' || r.kind === 'external')) {
       const out = this.lowerHof(f.name, argAsts, ln);
       if (out) return out;
+    }
+    // `maybe d f m` and `either f g e` apply a function to the value inside: `f` (and `g`) are called with it, so a sink passed as the function
+    // (`maybe (pure ()) callCommand mc`) is reached by the value. The result is whichever branch ran.
+    if ((r.kind === 'builtin' || r.kind === 'external') && ((f.name === 'maybe' && argAsts.length >= 3) || (f.name === 'either' && argAsts.length >= 3))) {
+      // The scrutinee is examined whichever branch runs, so it is the condition of a two-way branch (an ignored payload, `\\_ -> ..`, still reads it).
+      const scrut = this.lowerExpr(argAsts[2], ln);
+      const inner = { t: 'lowered', expr: scrut };
+      return f.name === 'maybe'
+        ? this.branch(scrut, ln, () => this.lowerApp(argAsts[1], [inner], ln, f.name), () => this.lowerExpr(argAsts[0], ln))
+        : this.branch(scrut, ln, () => this.lowerApp(argAsts[1], [inner], ln, f.name), () => this.lowerApp(argAsts[0], [inner], ln, f.name));
+    }
+    // Selectors and combinators over a tuple that is written out: `fst (a, b)` is `a`, `const x y` is `x`, `uncurry f (a, b)` is `f a b`.
+    if ((r.kind === 'builtin' || r.kind === 'external') && !f.qual) {
+      const tup = (a) => { const u = unparen(a); return u && u.t === 'tuple' && u.items.length === 2 ? u.items : null; };
+      if ((f.name === 'fst' || f.name === 'snd') && argAsts.length === 1 && tup(argAsts[0])) return this.lowerExpr(tup(argAsts[0])[f.name === 'fst' ? 0 : 1], ln);
+      if (f.name === 'const' && argAsts.length === 2) { this.lowerExpr(argAsts[1], ln); return this.lowerExpr(argAsts[0], ln); }
+      if (f.name === 'uncurry' && argAsts.length === 2 && tup(argAsts[1])) return this.lowerApp(argAsts[0], tup(argAsts[1]), ln, via);
     }
     if (r.kind === 'def' && r.def.kind === 'field' && argAsts.length >= 1) {
       const obj = this.lowerExpr(argAsts[0], ln);
@@ -727,19 +820,31 @@ class FnLowerer {
   // Bounded collection/traversal summaries. Returns null to fall back to a plain call.
   lowerHof(name, argAsts, ln) {
     const spec = HOF[name];
-    const need = Math.max(spec.fn === undefined ? 0 : spec.fn, spec.coll) + 1;
+    const need = Math.max(spec.fn === undefined ? 0 : spec.fn, spec.coll, spec.coll2 === undefined ? 0 : spec.coll2) + 1;
     if (argAsts.length < need || (spec.seed !== undefined && argAsts.length < 3)) return null;
     const coll = this.lowerExpr(argAsts[spec.coll], ln);
     const elem = { kind: 'member', object: coll, prop: '[]' };
+    // a function of two collections (`zipWithM_ f xs ys`): it is applied to an element of each
+    const el2 = spec.coll2 !== undefined && argAsts[spec.coll2] ? { t: 'lowered', expr: { kind: 'member', object: this.lowerExpr(argAsts[spec.coll2], ln), prop: '[]' } } : null;
     if (spec.kind === 'sequence') { this.sawIO = true; return coll; }
     const fnAst = argAsts[spec.fn];
     const el = { t: 'lowered', expr: elem };
     if (spec.kind === 'fold') {
       const seed = this.lowerExpr(argAsts[spec.seed], ln);
       const step = this.lowerApp(fnAst, [spec.fn === 0 && (name === 'foldr') ? el : { t: 'lowered', expr: seed }, name === 'foldr' ? { t: 'lowered', expr: seed } : el], ln, name);
+      if (spec.monadic) this.sawIO = true;
       return mkUnion(seed, step);
     }
-    const res = this.lowerApp(fnAst, [el], ln, name);
+    const res = this.lowerApp(fnAst, el2 ? [el, el2] : [el], ln, name);
+    // `filter isAlphaNum s` keeps only letters and digits: no quote, separator, dot or markup character survives, so nothing in the result
+    // can change the meaning of a command, a query, a path or a page. A predicate that merely drops some characters (`/= ';'`) is not that.
+    if (spec.kind === 'filter') {
+      const pf = unparen(fnAst);
+      if (pf && pf.t === 'var') {
+        const pr = this.resolve(pf.name, pf.qual);
+        if ((pr.kind === 'external' || pr.kind === 'builtin') && CHAR_CLASS.has(libraryName(pr, pf.name, pf.qual).name)) return { kind: 'literal', value: '', hs: { charClassFilter: pf.name } };
+      }
+    }
     if (spec.kind === 'filter') {
       this.cfg.add('if', ln, { cond: res, hs: { via: 'filter' } });
       return coll;
@@ -974,6 +1079,14 @@ class FnLowerer {
   processDecls(decls, bodyAsts, ln) {
     if (!decls.length) return;
     const g = groupDecls(decls);
+    // `let run = \x -> ...` is a function of one parameter written in lambda form: treat it as `run x = ...` so a call `run c` is resolved and analysed
+    // for the value it is given, instead of being an unknown call of a local value.
+    g.funs = g.funs.map((f) => {
+      if (f.clauses.length !== 1) return f;
+      const c = f.clauses[0];
+      const body = c.pats.length === 0 && c.rhs && !(c.rhs.guards && c.rhs.guards.length) && !(c.rhs.where && c.rhs.where.length) ? unparen(c.rhs.body) : null;
+      return body && body.t === 'lam' && body.params.every((p) => p && p.t === 'pvar') ? { ...f, clauses: [{ ...c, pats: body.params, rhs: { ...c.rhs, body: body.body } }] } : f;
+    });
     const scope = this.scopes[this.scopes.length - 1];
     const parent = this.info.parentName || this.info.name;
     for (const f of g.funs) {
@@ -1219,8 +1332,10 @@ function lowerTopFunction(proj, mod, fun, def) {
   const kind = def.arity > 0 ? 'function' : (sig && sig.returnsIO) || fun.name === 'main' ? 'io-action' : 'value';
   const exported = !mod.exports || mod.exports.some((x) => x.kind === 'var' && x.name === fun.name || x.kind === 'module' && x.name === mod.name);
   const fn = L.finishFn({ kind, arity: def.arity, effect: sig ? (sig.returnsIO ? 'io' : 'pure') : (L.sawIO ? 'io' : 'unknown'), sig: sig ? sig.text : null, exported });
-  const ann = callerControlledParams(fn, sig, exported);
+  const ann = callerControlledParams(fn, sig, exported, mod.imports.map((i) => i.module));
+  for (const a of servantEndpointParams(mod, fn, sig, exported)) if (!ann.some((x) => x.name === a.name)) ann.push(a);
   fn.hs.textParams = ann.map((a) => a.name);
+  fn.hs.inputParams = inputParams(fn, sig, exported);
   // Parameters of an exported function whose type is a record DECLARED IN THE PROJECT: the lineage view treats each such
   // parameter as a source of that record's fields (a customer record handed to an entry point), field by field.
   const recTypes = proj.recordTypes();

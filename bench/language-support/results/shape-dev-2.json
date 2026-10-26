@@ -1,7 +1,7 @@
 {
   "schema": "agentic-security/language-support-measurement@2",
   "split": "shape-dev-2",
-  "measuredAt": "2026-10-09",
+  "measuredAt": "2026-10-26",
   "corpusVersion": "qa001-v2",
   "ecosystems": {
     "haskell": {
@@ -13,12 +13,12 @@
           "sast": {
             "cases": 96,
             "tp": 48,
-            "fp": 2,
+            "fp": 0,
             "fn": 0,
-            "tn": 44,
-            "precision": 0.96,
+            "tn": 46,
+            "precision": 1,
             "recall": 1,
-            "f1": 0.9795918367346939,
+            "f1": 1,
             "measured": true,
             "families": {
               "weak-password-hash": {
@@ -68,11 +68,11 @@
               },
               "route-authentication": {
                 "tp": 6,
-                "fp": 2,
+                "fp": 0,
                 "fn": 0,
-                "precision": 0.75,
+                "precision": 1,
                 "recall": 1,
-                "f1": 0.8571428571428571,
+                "f1": 1,
                 "measured": true
               },
               "object-authorization": {
@@ -95,23 +95,12 @@
               }
             },
             "misses": [],
-            "strays": [
-              {
-                "file": "hsv-e0c01d0ad3/src/Svc.hs",
-                "line": 12,
-                "cwe": "CWE-306"
-              },
-              {
-                "file": "hsv-b06ed7e5d7/src/Svc.hs",
-                "line": 12,
-                "cwe": "CWE-306"
-              }
-            ],
+            "strays": [],
             "crossFamilyFindingsNotScored": 2,
             "strict": {
-              "fp": 4,
-              "precision": 0.9230769230769231,
-              "f1": 0.9600000000000001
+              "fp": 2,
+              "precision": 0.96,
+              "f1": 0.9795918367346939
             }
           },
           "taint": {
@@ -364,11 +353,11 @@
             },
             "misses": [],
             "strays": [],
-            "crossFamilyFindingsNotScored": 0,
+            "crossFamilyFindingsNotScored": 12,
             "strict": {
-              "fp": 0,
-              "precision": 1,
-              "f1": 1
+              "fp": 12,
+              "precision": 0.8461538461538461,
+              "f1": 0.9166666666666666
             }
           },
           "taint": {
@@ -463,6 +452,7 @@
       }
     }
   },
+  "splitRole": "development",
   "corpusTotals": {
     "haskell": {
       "security": {
@@ -497,6 +487,6 @@
     "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
     "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
     "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-    "manifestSha256": "e826f48ae72dd230096f8eda3d7d308743aaf61c50c8eb614eb3c9bf983ab0c6"
+    "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
   }
 }
