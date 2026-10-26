@@ -371,6 +371,7 @@ capabilities:
       - scanner/src/lineage/scc-solver.js
       - scanner/src/lineage/correlation.js
       - scanner/src/lineage/path-predicates.js
+      - scanner/src/lineage/smt-z3-backend.js
       - scanner/src/lineage/cut-planner.js
       - scanner/src/dataflow/demand-query.js
       - scanner/src/dataflow/dep-fingerprint.js

@@ -19,6 +19,17 @@ This page describes the graph and reachability work specified in `AGENTIC_SECURI
 | Control placement planning | Minimum cuts over the modeled flow network, a labeled approximate planner for shared controls, and scenario validation of residual bypasses. | `dataflow plan-cuts`. |
 | Witness bundles | A signed, replayable record of one path with its digests, transfer-model fingerprints, completion and four separate evidence statuses. | `buildWitnessBundle`; `verify-attestation --witness-artifacts`. |
 
+## The optional z3 solver
+
+Path conditions are decided by the bounded abstract domains first. A real solver backend (`scanner/src/lineage/smt-z3-backend.js`, on the optional `z3-solver` dependency) can be added behind them. It is off unless a solver is passed in or `AGENTIC_SECURITY_LINEAGE_SMT=z3` is set, and it is only reached through the async entry points (`evaluatePathEvidenceAsync`, `evaluateWitnessConditionsAsync`); the synchronous graph build never calls it, so a default scan loads nothing and its output does not change.
+
+- **Only a verified encoding may say infeasible.** The conditions are translated to SMT-LIB with numbers as Real, variables renamed `v0..vN` and an unmodeled predicate encoded as "no constraint". A problem the translator cannot express exactly (a variable used as both a number and a string, a number with no plain decimal form, an unknown operator) is `unknown`, not `unsat`. A `sat` that relied on an unmodeled predicate is also `unknown`.
+- **Only `unsat` reduces anything.** An `unsat` becomes `infeasible-under-model`, and the path is then listed and excluded from the all-paths-protected claim, exactly as for an interval contradiction. `sat`, `unknown`, timeout, an unavailable solver and a memory stop leave the abstract answer unchanged. An `unsat` over two branch arms inside a loop is not trusted, because the solver cannot see iterations.
+- **Where it helps.** The interval domain cannot relate two variables, so a cycle such as `a < b`, `b < c`, `c < a` is feasible to it. With `consultOnFeasible` (on by default when the z3 switch is set) a `feasible-model` answer is also put to the solver. When the abstract answer is `unknown` (an unmodeled predicate beside the contradiction) the solver is asked regardless.
+- **Bounds.** A per-query timeout (default 1000 ms), a memory cap (default 256 MB), the orchestrator's own deadline, and cancellation. A context that ignores its timeout is retired and reported unavailable. Only definitive answers are cached, keyed by the SMT-LIB text; the solver seed is fixed.
+- **Cost, measured once on a development machine.** Loading the backend module adds under 1 ms to an import. The first query loads and initialises z3 (about 190 ms); later distinct queries took about 6 ms and a repeated one is served from the cache.
+- **Limits.** Satisfiability is relative to the stated model, not the running program, and never implies a working exploit. Comparisons are treated as total orders over Real values, so NaN and loose-equality coercion are not modeled.
+
 ## What it does not claim
 
 - "No modeled path" means the modeled graph has none. It says nothing about the software.

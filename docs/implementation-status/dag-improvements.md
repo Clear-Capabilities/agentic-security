@@ -9,7 +9,7 @@ Verified means the requirement's acceptance tests pass in the integrated tree. A
 - Performance targets missed or partly met: demand-mode sink queries (1.8x cold index on this repository, 10 of 30 queries fell back to full analysis); incremental analysis (deep stage meets 3x, end to end 1.8x to 2.9x; no benefit above about 5000 functions at the default summary budget).
 - Benchmarks (`bench/dag`): evidence replay rate, false source attribution and impossible call/return witnesses are not yet measured. Labeled precision on the pinned JS and Nix samples is low and the multi-service fixture finds 3 of 8 labeled positives.
 - Not wired into a normal scan: boundary contracts (library entry point), witness building (no persisted hop stream), the graph view layer, demand queries.
-- No real SMT solver ships; only the cancellable orchestration interface and a stub.
+- SMT: an optional z3 backend now exists (`lineage/smt-z3-backend.js`, `AGENTIC_SECURITY_LINEAGE_SMT=z3`, lazy, only `unsat` over a verified encoding reduces anything). It is reached only through the async path-evidence entry points; the synchronous graph build still uses the abstract domains alone, and z3 is not part of the default scan.
 - Java parser tests fail only where `scanner/vendor` is missing (worktrees); they pass in the main checkout.
 
 ## Per-workstream pointers
