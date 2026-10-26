@@ -1,0 +1,607 @@
+{
+ "labelsVersion": 1,
+ "labeledBy": "an LLM agent reading source; not a human audit, not the scanner authors",
+ "labelsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
+ "labels": [
+  {
+   "id": "071f15d42a50",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "shellcheck.hs",
+   "line": 254,
+   "vuln": "Whole input read into memory without a size limit",
+   "verdict": "fp",
+   "evidence": "Reads a file list from stdin in a CLI whose user supplies their own input; memory use is not a security boundary here."
+  },
+  {
+   "id": "085326f1c11e",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-web/Hledger/Web/App.hs",
+   "line": 524,
+   "vuln": "Open Redirect",
+   "verdict": "fp",
+   "evidence": "The redirect target is a typed Yesod route of the same application with a rebuilt query list, not a user-supplied URL."
+  },
+  {
+   "id": "0a649cde0edd",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/String.hs",
+   "line": 259,
+   "vuln": "Partial function applied to caller-supplied text",
+   "verdict": "fp",
+   "evidence": "The preceding isSingleQuoted/isDoubleQuoted checks require at least two characters, so tailErr and init cannot fail (the line says so)."
+  },
+  {
+   "id": "1512702b6f02",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/Commands/Run.hs",
+   "line": 444,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "NOINLINE global MVar cache, the standard idiom."
+  },
+  {
+   "id": "19797f31b0ac",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/CliOptions.hs",
+   "line": 994,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "The XXX is about catching a narrower exception type when reading an environment variable; not security-sensitive."
+  },
+  {
+   "id": "1b34be234d42",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/DocFiles.hs",
+   "line": 277,
+   "vuln": "OS Command Injection (shell string)",
+   "verdict": "tp",
+   "evidence": "The topic, from the user's command-line argument, is spliced unquoted inside single quotes in a shell string passed to callCommand while the file path is quoted; a quote in the topic breaks out. Practical impact is limited because the invoker is the local user."
+  },
+  {
+   "id": "1be8b700f0a8",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/IO.hs",
+   "line": 924,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "Same terminal colour detection for stderr; no attacker influence."
+  },
+  {
+   "id": "23c56dff3212",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/String.hs",
+   "line": 103,
+   "vuln": "Partial function applied to caller-supplied text",
+   "verdict": "fp",
+   "evidence": "last and init are guarded by \"not $ null cs\" in the same guard, so they cannot fail."
+  },
+  {
+   "id": "28298b65a032",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "builders/windows.x86_64/Dockerfile",
+   "line": 6,
+   "vuln": "Dockerfile USER root (container runs with root privileges)",
+   "verdict": "ambiguous",
+   "evidence": "USER root in a build-only image; true as stated, not a deployed service."
+  },
+  {
+   "id": "2b22b6a51328",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "builders/linux.riscv64/Dockerfile",
+   "line": 7,
+   "vuln": "Dockerfile USER root (container runs with root privileges)",
+   "verdict": "ambiguous",
+   "evidence": "USER root in a build-only image; true as stated, not a deployed service."
+  },
+  {
+   "id": "2cd8d75eac37",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/Version.hs",
+   "line": 269,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "An XXX comment about git dirty-state in the version string; not security logic."
+  },
+  {
+   "id": "2d44bb285e0f",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/Utils.hs",
+   "line": 447,
+   "vuln": "Path Traversal (copy/rename)",
+   "verdict": "fp",
+   "evidence": "Copies the user-named file to a numbered backup name in the same directory; no privilege boundary."
+  },
+  {
+   "id": "3101eaf5b465",
+   "project": "postgrest",
+   "language": "haskell",
+   "file": "src/library/PostgREST/App.hs",
+   "line": 255,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "A TODO about duplicated query observation calls; not security logic."
+  },
+  {
+   "id": "386d86cd8699",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/Commands/Run.hs",
+   "line": 449,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "NOINLINE global MVar cache, the standard idiom."
+  },
+  {
+   "id": "43f31dd7d944",
+   "project": "postgrest",
+   "language": "haskell",
+   "file": "src/library/PostgREST/MediaType.hs",
+   "line": 199,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "A TODO about RFC conformance of the media type parser used for content negotiation; the marker is accurate but this is not security logic."
+  },
+  {
+   "id": "47e916d645e8",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Read/LatestDates.hs",
+   "line": 87,
+   "vuln": "Path Traversal (filesystem operation)",
+   "verdict": "fp",
+   "evidence": "Looks up a sidecar file derived from the journal path the CLI user named; the user already controls which files the tool reads."
+  },
+  {
+   "id": "4c43e5505b7b",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "shellcheck.hs",
+   "line": 714,
+   "vuln": "Whole input read into memory without a size limit",
+   "verdict": "fp",
+   "evidence": "Reads the script file the CLI user asked to check, as the tool's purpose requires; no untrusted size source."
+  },
+  {
+   "id": "5105c51583f8",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-web/Hledger/Web/Test.hs",
+   "line": 1046,
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "verdict": "fp",
+   "evidence": "This is test code that sets a UI preference cookie (showcontrols); it is not a session cookie and not production behaviour."
+  },
+  {
+   "id": "53f7df7ae734",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "builders/linux.armv6hf/Dockerfile",
+   "line": 9,
+   "vuln": "Dockerfile USER root (container runs with root privileges)",
+   "verdict": "ambiguous",
+   "evidence": "USER root in a build-only QEMU image; true as stated, not a deployed service."
+  },
+  {
+   "id": "5a67934d3523",
+   "project": "hakyll",
+   "language": "haskell",
+   "file": "lib/Hakyll/Core/UnixFilter.hs",
+   "line": 58,
+   "vuln": "Whole input read into memory without a size limit",
+   "verdict": "fp",
+   "evidence": "Reads the output of a subprocess the site author configured, forced by deepseq; unbounded by design in a build tool and not attacker-fed."
+  },
+  {
+   "id": "5b98ad936a45",
+   "project": "hakyll",
+   "language": "haskell",
+   "file": "lib/Hakyll/Core/Store.hs",
+   "line": 199,
+   "vuln": "Whole input read into memory without a size limit",
+   "verdict": "fp",
+   "evidence": "Lazy read of the program's own cache file, forced and closed immediately; the file is written by the same program, not attacker input."
+  },
+  {
+   "id": "5c5c11a50c1f",
+   "project": "postgrest",
+   "language": "haskell",
+   "file": "src/library/PostgREST/App.hs",
+   "line": 242,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "A TODO about where to store the raw query string for an observability message; not security logic."
+  },
+  {
+   "id": "5da79cb06f6c",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/IO.hs",
+   "line": 937,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "Reads the COLORTERM environment variable once; value only picks a colour mode."
+  },
+  {
+   "id": "639a92b064ab",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/Version.hs",
+   "line": 227,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "A TODO in a comment about building the version string; not security logic."
+  },
+  {
+   "id": "6d19d04d6f1c",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/Debug.hs",
+   "line": 590,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "NOINLINE global IORef initialisation, the standard idiom; not a safety boundary violation."
+  },
+  {
+   "id": "763bed03bb30",
+   "project": "hakyll",
+   "language": "haskell",
+   "file": "lib/Hakyll/Core/UnixFilter.hs",
+   "line": 148,
+   "vuln": "Whole input read into memory without a size limit",
+   "verdict": "fp",
+   "evidence": "Reads stderr of a developer-configured filter subprocess for error reporting; no untrusted input."
+  },
+  {
+   "id": "77709e52b5a2",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "builders/darwin.aarch64/Dockerfile",
+   "line": 7,
+   "vuln": "Dockerfile USER root (container runs with root privileges)",
+   "verdict": "ambiguous",
+   "evidence": "USER root in a build-only image for cross-compiling release binaries; the claim is literally true but the image is not a deployed service."
+  },
+  {
+   "id": "828b47072acf",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/Version.hs",
+   "line": 229,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "A TODO in a comment about building the version string; not security logic."
+  },
+  {
+   "id": "8b36d5ca966e",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-web/static/hledger.js",
+   "line": 619,
+   "vuln": "Data Exposure",
+   "verdict": "fp",
+   "evidence": "Stores a scroll offset in sessionStorage, which is not sensitive data."
+  },
+  {
+   "id": "8c320f7b2b22",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "builders/linux.aarch64/Dockerfile",
+   "line": 7,
+   "vuln": "Dockerfile USER root (container runs with root privileges)",
+   "verdict": "ambiguous",
+   "evidence": "USER root in a build-only image; true as stated, not a deployed service."
+  },
+  {
+   "id": "927487a7c443",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/String.hs",
+   "line": 262,
+   "vuln": "Partial function applied to caller-supplied text",
+   "verdict": "fp",
+   "evidence": "The pattern s@(_:_:_) guarantees at least two characters, so headErr and last cannot fail."
+  },
+  {
+   "id": "9787d6b353cc",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/IO.hs",
+   "line": 255,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "NOINLINE global IORef holding the warning handler, the standard idiom."
+  },
+  {
+   "id": "9cccffef28bf",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "builders/windows.x86_64/Dockerfile",
+   "line": 4,
+   "vuln": "Dockerfile: USER root — container runs as root",
+   "verdict": "ambiguous",
+   "evidence": "Reported line is blank; the build-only image sets USER root on line 6, so the claim is true but of doubtful security meaning."
+  },
+  {
+   "id": "a537e2c28839",
+   "project": "hakyll",
+   "language": "haskell",
+   "file": "lib/Hakyll/Core/UnixFilter.hs",
+   "line": 73,
+   "vuln": "Whole input read into memory without a size limit",
+   "verdict": "fp",
+   "evidence": "Reads the output of a developer-configured filter subprocess in a static site generator; no untrusted size source."
+  },
+  {
+   "id": "a918e4d35aa0",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/IO.hs",
+   "line": 604,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "NOINLINE read-once of the program arguments; constant for the process."
+  },
+  {
+   "id": "aae0cd0f129c",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/Conf.hs",
+   "line": 230,
+   "vuln": "Path Traversal",
+   "verdict": "fp",
+   "evidence": "Same: the CLI user chooses the config file to read."
+  },
+  {
+   "id": "ab634e8f0965",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/String.hs",
+   "line": 266,
+   "vuln": "Partial function applied to caller-supplied text",
+   "verdict": "fp",
+   "evidence": "The pattern s@(_:_:_) guarantees at least two characters, so headErr and last cannot fail."
+  },
+  {
+   "id": "ad05f09817f0",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "builders/linux.x86_64/Dockerfile",
+   "line": 11,
+   "vuln": "Dockerfile: USER root — container runs as root",
+   "verdict": "ambiguous",
+   "evidence": "Reported line is blank; the build-only image sets USER root on line 13, so the claim is true but of doubtful security meaning."
+  },
+  {
+   "id": "affc0b2ecdf3",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/IO.hs",
+   "line": 504,
+   "vuln": "Path Traversal",
+   "verdict": "fp",
+   "evidence": "Path is whatever file the CLI user asked the tool to read; there is no privilege boundary."
+  },
+  {
+   "id": "b4d1615fa43f",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/Debug.hs",
+   "line": 252,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "NOINLINE top-level getProgName; constant for the process, idiomatic and harmless."
+  },
+  {
+   "id": "b4fdef81a787",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-web/Hledger/Web/Test.hs",
+   "line": 1054,
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "verdict": "fp",
+   "evidence": "Test code that sets a UI preference cookie for another port; not a session cookie."
+  },
+  {
+   "id": "b60eee4ca75c",
+   "project": "postgrest",
+   "language": "haskell",
+   "file": "src/library/PostgREST/Config.hs",
+   "line": 648,
+   "vuln": "PostgreSQL Connection URI",
+   "verdict": "fp",
+   "evidence": "A doc-test example with a fake connection string and placeholder credentials inside a comment, not a real secret."
+  },
+  {
+   "id": "bb573c05936e",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/Conf.hs",
+   "line": 226,
+   "vuln": "Path Traversal (filesystem operation)",
+   "verdict": "fp",
+   "evidence": "Config file path comes from the CLI invocation or the user's own search directories; there is no privilege boundary."
+  },
+  {
+   "id": "c5f36cbeb8f1",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger/Hledger/Cli/Utils.hs",
+   "line": 437,
+   "vuln": "Path Traversal",
+   "verdict": "fp",
+   "evidence": "Writes back to the journal file the CLI user named, after making a backup; no privilege boundary."
+  },
+  {
+   "id": "cbc7944bd525",
+   "project": "hakyll",
+   "language": "haskell",
+   "file": "lib/Hakyll/Web/CompressCss.hs",
+   "line": 106,
+   "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+   "verdict": "fp",
+   "evidence": "A TODO about backslash escapes in a CSS minifier that processes the site author's own stylesheets; not security-sensitive logic."
+  },
+  {
+   "id": "cc7ea941e402",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "builders/linux.armv6hf/Dockerfile",
+   "line": 7,
+   "vuln": "Dockerfile: USER root — container runs as root",
+   "verdict": "ambiguous",
+   "evidence": "Reported line is blank; the build-only image sets USER root on line 9, so the claim is true but of doubtful security meaning."
+  },
+  {
+   "id": "d397fec9e4c7",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/Debug.hs",
+   "line": 340,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "Debug-only logging helper that appends to a log file named after the program; the unsafePerformIO is intentional and takes no outside input."
+  },
+  {
+   "id": "d4307310ee3a",
+   "project": "postgrest",
+   "language": "haskell",
+   "file": "src/library/PostgREST/Client.hs",
+   "line": 37,
+   "vuln": "Server-Side Request Forgery",
+   "verdict": "fp",
+   "evidence": "The request is the health check built from the server's own admin host and port configuration; no request input."
+  },
+  {
+   "id": "d461e38de8ed",
+   "project": "hakyll",
+   "language": "haskell",
+   "file": "lib/Hakyll/Web/Template/Internal.hs",
+   "line": 258,
+   "vuln": "Path Traversal",
+   "verdict": "fp",
+   "evidence": "Deprecated helper that reads a template path passed by the site author's own build code; the path is not request-controlled."
+  },
+  {
+   "id": "d4acddcd779c",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/I18n.hs",
+   "line": 158,
+   "vuln": "Partial function applied to caller-supplied text",
+   "verdict": "fp",
+   "evidence": "The index is bounds-checked (i >= 0 and i < length forms) in the same expression before the (!!), so the partial call cannot fail."
+  },
+  {
+   "id": "d64f0ac6f13a",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "builders/darwin.x86_64/Dockerfile",
+   "line": 7,
+   "vuln": "Dockerfile USER root (container runs with root privileges)",
+   "verdict": "ambiguous",
+   "evidence": "USER root in a build-only image for cross-compiling release binaries; the claim is literally true but not a deployed service."
+  },
+  {
+   "id": "d758f0d8ed02",
+   "project": "shellcheck",
+   "language": "haskell",
+   "file": "builders/linux.aarch64/Dockerfile",
+   "line": 5,
+   "vuln": "Dockerfile: USER root — container runs as root",
+   "verdict": "ambiguous",
+   "evidence": "Reported line is blank; the same build-only image sets USER root two lines later, so the claim is true but of doubtful security meaning."
+  },
+  {
+   "id": "d8b79a88b461",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/IO.hs",
+   "line": 920,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "Reads terminal colour support once via unsafePerformIO for low-level debug code; no attacker influence."
+  },
+  {
+   "id": "e2b080f37f96",
+   "project": "hakyll",
+   "language": "haskell",
+   "file": "lib/Hakyll/Core/File.hs",
+   "line": 84,
+   "vuln": "Path Traversal (filesystem operation)",
+   "verdict": "fp",
+   "evidence": "Temp path is the configured tmp dir plus a hash of a random number and a fixed suffix; no external input reaches it."
+  },
+  {
+   "id": "ec318281e006",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/String.hs",
+   "line": 142,
+   "vuln": "Partial function applied to caller-supplied text",
+   "verdict": "ambiguous",
+   "evidence": "last on a possibly empty string would crash; it is an exported helper with no caller in the repository, so reachability and impact are unclear."
+  },
+  {
+   "id": "ec833848f31f",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/Debug.hs",
+   "line": 607,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "Debug timing helper gated on the debug level; unsafePerformIO is documented and takes no outside input."
+  },
+  {
+   "id": "ee92ccabdadb",
+   "project": "postgrest",
+   "language": "haskell",
+   "file": "src/library/PostgREST/Client.hs",
+   "line": 36,
+   "vuln": "Server-Side Request Forgery",
+   "verdict": "fp",
+   "evidence": "The URL is built from the server's own admin host and port configuration for a health-check subcommand; no request input."
+  },
+  {
+   "id": "f4670ee94fa1",
+   "project": "hakyll",
+   "language": "haskell",
+   "file": "lib/Hakyll/Main.hs",
+   "line": 202,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "verdict": "fp",
+   "evidence": "Idiomatic NOINLINE read-once of the program name; constant for the process, no attacker influence."
+  },
+  {
+   "id": "f6a07f832ae2",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-web/static/hledger.js",
+   "line": 926,
+   "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+   "verdict": "fp",
+   "evidence": "A same-origin liveness ping to /_ping every 30 seconds in the page's own script; a missing timeout here is not a denial-of-service vector."
+  },
+  {
+   "id": "fcc58679a9b3",
+   "project": "hledger",
+   "language": "haskell",
+   "file": "hledger-lib/Hledger/Utils/String.hs",
+   "line": 91,
+   "vuln": "Partial function applied to caller-supplied text",
+   "verdict": "fp",
+   "evidence": "last and init are guarded by \"not $ null cs\" in the same guard, so they cannot fail."
+  }
+ ]
+}

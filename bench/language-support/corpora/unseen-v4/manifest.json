@@ -1,0 +1,9 @@
+{
+ "split": "unseen-v4",
+ "frozenOn": "2026-10-26",
+ "cases": 78,
+ "perFamily": 3,
+ "sourcesSha256": "14f46672659858b173d88ac449cc098f7d11a55df030638e7ad46da783778e0a",
+ "labelsSha256": "c15099a79aab465a0dfa4332e5205bdc94134ffe7f7237f42d869582d0be4438",
+ "note": "sourcesSha256 = sha256 over \"id:sha256(source)\" lines in id order; labelsSha256 = sha256 of the exact JSON array of cases (canonical build order)"
+}

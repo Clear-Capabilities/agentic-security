@@ -1,0 +1,9 @@
+{
+ "measurementOnly": true,
+ "projects": [
+  {"id":"postgrest","language":"haskell","pattern":"web service (HTTP API server over PostgreSQL)","url":"https://github.com/PostgREST/postgrest.git","license":"MIT","roots":["src"],"excluded":"vendor/, test/, nix/","commit":"5acbb369111bfe154af4a85e43121f8c78cd18b9","commitDate":"2026-10-24T13:11:48+05:00","acquiredAt":"2026-10-26","acquisition":"shallow fetch of HEAD from <url>, checkout into .cache/postgrest"},
+  {"id":"shellcheck","language":"haskell","pattern":"command-line tool (shell script analyzer)","url":"https://github.com/koalaman/shellcheck.git","license":"GPL-3.0","roots":["."],"excluded":"test dirs (filtered by flag.mjs)","commit":"919d37c4d77a7ce16cfc76ebdd781dd6e8081fa5","commitDate":"2026-10-25T18:55:51-07:00","acquiredAt":"2026-10-26","acquisition":"shallow fetch of HEAD from <url>, checkout into .cache/shellcheck"},
+  {"id":"hakyll","language":"haskell","pattern":"library (static site generator with preview server and external-process helpers)","url":"https://github.com/jaspervdj/hakyll.git","license":"BSD-3-Clause","roots":["lib"],"excluded":"tests/, web/, examples","commit":"3b62127a9d9c9c6df84acc9db0a42f02a4d8e07c","commitDate":"2026-10-25T21:10:11-04:00","acquiredAt":"2026-10-26","acquisition":"shallow fetch of HEAD from <url>, checkout into .cache/hakyll"},
+  {"id":"hledger","language":"haskell","pattern":"CLI plus library plus web UI (plain-text accounting)","url":"https://github.com/simonmichael/hledger.git","license":"GPL-3.0","roots":["hledger-lib","hledger","hledger-web","hledger-ui"],"excluded":"test dirs (filtered by flag.mjs), tools/","commit":"6833d59b175974f9d15ecf3f87d134347df9ae3d","commitDate":"2026-10-25T14:02:40-10:00","acquiredAt":"2026-10-26","acquisition":"shallow fetch of HEAD from <url>, checkout into .cache/hledger"}
+ ]
+}

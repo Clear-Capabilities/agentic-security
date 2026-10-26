@@ -1,0 +1,772 @@
+[
+ {
+  "project": "hakyll",
+  "language": "haskell",
+  "file": "lib/Hakyll/Core/File.hs",
+  "line": 84,
+  "vuln": "Path Traversal (filesystem operation)",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "exists <- compilerUnsafeIO $ doesFileExist path"
+ },
+ {
+  "project": "hakyll",
+  "language": "haskell",
+  "file": "lib/Hakyll/Core/Store.hs",
+  "line": 199,
+  "vuln": "Whole input read into memory without a size limit",
+  "family": "resource-exhaustion",
+  "severity": "medium",
+  "text": "lbs <- BL.hGetContents h"
+ },
+ {
+  "project": "hakyll",
+  "language": "haskell",
+  "file": "lib/Hakyll/Core/UnixFilter.hs",
+  "line": 58,
+  "vuln": "Whole input read into memory without a size limit",
+  "family": "resource-exhaustion",
+  "severity": "medium",
+  "text": "out <- hGetContents handle"
+ },
+ {
+  "project": "hakyll",
+  "language": "haskell",
+  "file": "lib/Hakyll/Core/UnixFilter.hs",
+  "line": 73,
+  "vuln": "Whole input read into memory without a size limit",
+  "family": "resource-exhaustion",
+  "severity": "medium",
+  "text": "out <- LB.hGetContents handle"
+ },
+ {
+  "project": "hakyll",
+  "language": "haskell",
+  "file": "lib/Hakyll/Core/UnixFilter.hs",
+  "line": 148,
+  "vuln": "Whole input read into memory without a size limit",
+  "family": "resource-exhaustion",
+  "severity": "medium",
+  "text": "err <- hGetContents errh"
+ },
+ {
+  "project": "hakyll",
+  "language": "haskell",
+  "file": "lib/Hakyll/Main.hs",
+  "line": 202,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "progName = unsafePerformIO getProgName"
+ },
+ {
+  "project": "hakyll",
+  "language": "haskell",
+  "file": "lib/Hakyll/Web/CompressCss.hs",
+  "line": 106,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "-- TODO: handle backslash escapes"
+ },
+ {
+  "project": "hakyll",
+  "language": "haskell",
+  "file": "lib/Hakyll/Web/Template/Internal.hs",
+  "line": 258,
+  "vuln": "Path Traversal",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "tpl <- unsafeCompiler $ readFile file"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Data/Json.hs",
+  "line": 339,
+  "vuln": "Path Traversal",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "bl <- BL.readFile f"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Data/StringFormat.hs",
+  "line": 113,
+  "vuln": "Unsafe boundary: function Object() { [native code] }",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "constructor <$> many componentp"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Read/LatestDates.hs",
+  "line": 87,
+  "vuln": "Path Traversal (filesystem operation)",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "exists <- doesFileExist latestfile"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/Debug.hs",
+  "line": 252,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "modifiedProgName = unsafePerformIO getProgName"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/Debug.hs",
+  "line": 340,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "log' s x = unsafePerformIO $ do"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/Debug.hs",
+  "line": 590,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "dbgTimeState = unsafePerformIO $ timeReadings >>= \\r -> newIORef (0, r)"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/Debug.hs",
+  "line": 607,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "| otherwise = unsafePerformIO $ dbgTimeIO level lbl x"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/I18n.hs",
+  "line": 158,
+  "vuln": "Partial function applied to caller-supplied text",
+  "family": "unhandled-exception",
+  "severity": "low",
+  "text": "f <- if i >= 0 && i < length forms then Just (forms !! i) else Nothing"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/IO.hs",
+  "line": 255,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "warningHandler = unsafePerformIO $ newIORef $ traceIO . formatWarning"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/IO.hs",
+  "line": 504,
+  "vuln": "Path Traversal",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "readFileStrictly f = readFilePortably f >>= \\t -> evaluate (T.length t) >> return t"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/IO.hs",
+  "line": 533,
+  "vuln": "Path Traversal",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "withFileOrStdout f   mode action = withFile f mode action"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/IO.hs",
+  "line": 604,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "progArgs = unsafePerformIO getArgs"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/IO.hs",
+  "line": 630,
+  "vuln": "Partial function applied to caller-supplied text",
+  "family": "unhandled-exception",
+  "severity": "low",
+  "text": "(argsafter,_) -> Just $ last argsafter"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/IO.hs",
+  "line": 920,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "useColorOnStdoutUnsafe = unsafePerformIO useColorOnStdout"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/IO.hs",
+  "line": 924,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "useColorOnStderrUnsafe = unsafePerformIO useColorOnStderr"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/IO.hs",
+  "line": 937,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "supportsTrueColorUnsafe = unsafePerformIO supportsTrueColor"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/String.hs",
+  "line": 91,
+  "vuln": "Partial function applied to caller-supplied text",
+  "family": "unhandled-exception",
+  "severity": "low",
+  "text": "(c:cs) | c==b, not $ null cs, last cs==e -> init cs"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/String.hs",
+  "line": 103,
+  "vuln": "Partial function applied to caller-supplied text",
+  "family": "unhandled-exception",
+  "severity": "low",
+  "text": "(c:cs) | f c, not $ null cs, last cs==c -> init cs"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/String.hs",
+  "line": 142,
+  "vuln": "Partial function applied to caller-supplied text",
+  "family": "unhandled-exception",
+  "severity": "low",
+  "text": "| last s == '\\n' = s"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/String.hs",
+  "line": 259,
+  "vuln": "Partial function applied to caller-supplied text",
+  "family": "unhandled-exception",
+  "severity": "low",
+  "text": "stripQuotes s = if isSingleQuoted s || isDoubleQuoted s then init $ tailErr s else s  -- PARTIAL tailErr won't fail because isDoubleQuoted"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/String.hs",
+  "line": 262,
+  "vuln": "Partial function applied to caller-supplied text",
+  "family": "unhandled-exception",
+  "severity": "low",
+  "text": "isSingleQuoted s@(_:_:_) = headErr s == '\\'' && last s == '\\''  -- PARTIAL headErr, last will succeed because of pattern"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-lib/Hledger/Utils/String.hs",
+  "line": 266,
+  "vuln": "Partial function applied to caller-supplied text",
+  "family": "unhandled-exception",
+  "severity": "low",
+  "text": "isDoubleQuoted s@(_:_:_) = headErr s == '\"' && last s == '\"'  -- PARTIAL headErr, last will succeed because of pattern"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-ui/Hledger/UI/UIUtils.hs",
+  "line": 148,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "uiWarningsRef = unsafePerformIO $ newIORef []"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-web/Hledger/Web/App.hs",
+  "line": 524,
+  "vuln": "Open Redirect",
+  "family": "open-redirect",
+  "severity": "low",
+  "text": "redirect (route, params')"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-web/Hledger/Web/Test.hs",
+  "line": 1046,
+  "vuln": "Session cookie without HttpOnly or Secure",
+  "family": "cookie-attributes",
+  "severity": "medium",
+  "text": "testSetCookie defaultSetCookie{setCookieName = uiCookieName \"showcontrols\", setCookieValue = \"1\"}"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-web/Hledger/Web/Test.hs",
+  "line": 1054,
+  "vuln": "Session cookie without HttpOnly or Secure",
+  "family": "cookie-attributes",
+  "severity": "medium",
+  "text": "testSetCookie defaultSetCookie{setCookieName = fromString (\"showcontrols_\" <> show (defport + 1)), setCookieValue = \"1\"}"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-web/static/hledger.js",
+  "line": 619,
+  "vuln": "Data Exposure",
+  "family": "data-exposure",
+  "severity": "medium",
+  "text": "try { sessionStorage.setItem('commodityScrollTop', cl.scrollTop); } catch (e) {}"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-web/static/hledger.js",
+  "line": 920,
+  "vuln": "Concurrency: fire-and-forget async call in browsePingInit() — result not awaited",
+  "family": "concurrency-bug",
+  "severity": "low",
+  "text": "function browsePingInit() {"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger-web/static/hledger.js",
+  "line": 926,
+  "vuln": "Missing Timeout on Outbound HTTP Request (DoS)",
+  "family": "",
+  "severity": "medium",
+  "text": "fetch(url, { cache: 'no-store' }).then("
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/CliOptions.hs",
+  "line": 994,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "getEnvSafe v = getEnv v `C.catch` (\\(_::C.IOException) -> return \"\") -- XXX should catch only isDoesNotExistError e"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/Commands/Run.hs",
+  "line": 444,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "journalCache = unsafePerformIO $ newMVar Map.empty"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/Commands/Run.hs",
+  "line": 449,
+  "vuln": "Unsafe boundary: unsafePerformIO",
+  "family": "unsafe-boundary",
+  "severity": "low",
+  "text": "stdinCache = unsafePerformIO $ newMVar Nothing"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/Conf.hs",
+  "line": 226,
+  "vuln": "Path Traversal (filesystem operation)",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "exists <- doesFileExist f"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/Conf.hs",
+  "line": 230,
+  "vuln": "Path Traversal",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "txt <- readFile f <&> T.pack"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/DocFiles.hs",
+  "line": 277,
+  "vuln": "OS Command Injection (shell string)",
+  "family": "command-injection",
+  "severity": "critical",
+  "text": "callCommand $ dbg1 \"pager command\" $ unwords [pager, searcharg, shellQuoteIfNeeded f]"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/Utils.hs",
+  "line": 437,
+  "vuln": "Path Traversal",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "writeFileWithBackup f t = backUpFile f >> writeFile f t"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/Utils.hs",
+  "line": 447,
+  "vuln": "Path Traversal (copy/rename)",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "copyFile fp (d </> f')"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/Utils.hs",
+  "line": 451,
+  "vuln": "Path Traversal (filesystem operation)",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "safeGetDirectoryContents fp = getDirectoryContents fp"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/Version.hs",
+  "line": 227,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "--   and (TODO, requires githash to use -uno for giDirty):"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/Version.hs",
+  "line": 229,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "-- * (TODO, requires adding --match support to githash:"
+ },
+ {
+  "project": "hledger",
+  "language": "haskell",
+  "file": "hledger/Hledger/Cli/Version.hs",
+  "line": 269,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "--   XXX giDirty is wrong when repo shows untracked files by default, skip it for now"
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/App.hs",
+  "line": 227,
+  "vuln": "Request body read without a size limit",
+  "family": "resource-exhaustion",
+  "severity": "medium",
+  "text": "body <- liftIO $ Wai.strictRequestBody req"
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/App.hs",
+  "line": 242,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "LegacyTargetNameWarningObs (legacyWarnMsg, legacyWarnHint) vMethod (vPath <> Wai.rawQueryString req) -- TODO maybe store rawQueryString in RequestValues for consistency"
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/App.hs",
+  "line": 255,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "-- TODO: we use obsQuery twice, one here and one below because in case of an error with the usePool above, the request will finish here and return an error message."
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/Client.hs",
+  "line": 36,
+  "vuln": "Server-Side Request Forgery",
+  "family": "ssrf",
+  "severity": "high",
+  "text": "req <- HC.parseRequest (T.unpack readyURL) `catch` handleHttpException"
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/Client.hs",
+  "line": 37,
+  "vuln": "Server-Side Request Forgery",
+  "family": "ssrf",
+  "severity": "high",
+  "text": "resp <- HC.httpLbs req client `catch` handleHttpException"
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/Config.hs",
+  "line": 647,
+  "vuln": "PostgreSQL Connection URI",
+  "family": "",
+  "severity": "high",
+  "text": "-- >>> addFallbackAppName ver \"postgres://user:invalid_chars[]#@host:5432/postgres\""
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/Config.hs",
+  "line": 648,
+  "vuln": "PostgreSQL Connection URI",
+  "family": "",
+  "severity": "high",
+  "text": "-- \"postgres://user:invalid_chars[]#@host:5432/postgres?fallback_application_name=PostgREST%2011.1.0%20%285a04ec7%29\""
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/Config/Proxy.hs",
+  "line": 34,
+  "vuln": "Partial function applied to caller-supplied text",
+  "family": "unhandled-exception",
+  "severity": "low",
+  "text": "| isAbsoluteURI (toS uri) = not $ isUriValid $ toURI uri"
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/Config/Proxy.hs",
+  "line": 38,
+  "vuln": "Partial function applied to caller-supplied text",
+  "family": "unhandled-exception",
+  "severity": "low",
+  "text": "toURI uri = fromJust $ parseURI (toS uri)"
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/MediaType.hs",
+  "line": 199,
+  "vuln": "Known-Broken Code Marker Near Security-Sensitive Logic",
+  "family": "",
+  "severity": "medium",
+  "text": "-- TODO: Improve mediatype parser as per RFC 2045 https://datatracker.ietf.org/doc/html/rfc2045#section-5.1"
+ },
+ {
+  "project": "postgrest",
+  "language": "haskell",
+  "file": "src/library/PostgREST/Unix.hs",
+  "line": 70,
+  "vuln": "Path Traversal (filesystem operation)",
+  "family": "path-traversal",
+  "severity": "high",
+  "text": "removeFile path' `catch` handleDoesNotExist"
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": ".github/workflows/build.yml",
+  "line": 65,
+  "vuln": "Pipeline: Third-party action pinned to major-version tag (mutable)",
+  "family": "pipeline-third-party-action-pinned-to-ma",
+  "severity": "medium",
+  "text": "uses: haskell-actions/setup@v2"
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/darwin.aarch64/Dockerfile",
+  "line": 5,
+  "vuln": "Dockerfile: USER root — container runs as root",
+  "family": "dockerfile-user-root-container-runs-as-r",
+  "severity": "medium",
+  "text": ""
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/darwin.aarch64/Dockerfile",
+  "line": 7,
+  "vuln": "Dockerfile USER root (container runs with root privileges)",
+  "family": "container-runtime",
+  "severity": "high",
+  "text": "USER root"
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/darwin.x86_64/Dockerfile",
+  "line": 5,
+  "vuln": "Dockerfile: USER root — container runs as root",
+  "family": "dockerfile-user-root-container-runs-as-r",
+  "severity": "medium",
+  "text": ""
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/darwin.x86_64/Dockerfile",
+  "line": 7,
+  "vuln": "Dockerfile USER root (container runs with root privileges)",
+  "family": "container-runtime",
+  "severity": "high",
+  "text": "USER root"
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/linux.aarch64/Dockerfile",
+  "line": 5,
+  "vuln": "Dockerfile: USER root — container runs as root",
+  "family": "dockerfile-user-root-container-runs-as-r",
+  "severity": "medium",
+  "text": ""
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/linux.aarch64/Dockerfile",
+  "line": 7,
+  "vuln": "Dockerfile USER root (container runs with root privileges)",
+  "family": "container-runtime",
+  "severity": "high",
+  "text": "USER root"
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/linux.armv6hf/Dockerfile",
+  "line": 7,
+  "vuln": "Dockerfile: USER root — container runs as root",
+  "family": "dockerfile-user-root-container-runs-as-r",
+  "severity": "medium",
+  "text": ""
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/linux.armv6hf/Dockerfile",
+  "line": 9,
+  "vuln": "Dockerfile USER root (container runs with root privileges)",
+  "family": "container-runtime",
+  "severity": "high",
+  "text": "USER root"
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/linux.riscv64/Dockerfile",
+  "line": 5,
+  "vuln": "Dockerfile: USER root — container runs as root",
+  "family": "dockerfile-user-root-container-runs-as-r",
+  "severity": "medium",
+  "text": ""
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/linux.riscv64/Dockerfile",
+  "line": 7,
+  "vuln": "Dockerfile USER root (container runs with root privileges)",
+  "family": "container-runtime",
+  "severity": "high",
+  "text": "USER root"
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/linux.x86_64/Dockerfile",
+  "line": 11,
+  "vuln": "Dockerfile: USER root — container runs as root",
+  "family": "dockerfile-user-root-container-runs-as-r",
+  "severity": "medium",
+  "text": ""
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/linux.x86_64/Dockerfile",
+  "line": 13,
+  "vuln": "Dockerfile USER root (container runs with root privileges)",
+  "family": "container-runtime",
+  "severity": "high",
+  "text": "USER root"
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/windows.x86_64/Dockerfile",
+  "line": 4,
+  "vuln": "Dockerfile: USER root — container runs as root",
+  "family": "dockerfile-user-root-container-runs-as-r",
+  "severity": "medium",
+  "text": ""
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "builders/windows.x86_64/Dockerfile",
+  "line": 6,
+  "vuln": "Dockerfile USER root (container runs with root privileges)",
+  "family": "container-runtime",
+  "severity": "high",
+  "text": "USER root"
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "shellcheck.hs",
+  "line": 254,
+  "vuln": "Whole input read into memory without a size limit",
+  "family": "resource-exhaustion",
+  "severity": "medium",
+  "text": "contents <- lift getContents"
+ },
+ {
+  "project": "shellcheck",
+  "language": "haskell",
+  "file": "shellcheck.hs",
+  "line": 714,
+  "vuln": "Whole input read into memory without a size limit",
+  "family": "resource-exhaustion",
+  "severity": "medium",
+  "text": "contents <- decodeString <$> hGetContents handle -- closes handle"
+ }
+]

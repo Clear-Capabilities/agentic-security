@@ -24,6 +24,16 @@ export const unseenSource = (eco, id, rel) => read(path.join(DATA, 'sources-unse
 export const shapeDevSource = (eco, id, rel) => read(path.join(DATA, 'sources-shape-dev', eco, id, rel));
 /** The shape-dev-2 set (the former unseen-v2, also used to change the engine). */
 export const shapeDev2Source = (eco, id, rel) => read(path.join(DATA, 'sources-shape-dev-2', eco, id, rel));
+/** The unseen-v4 split (bench/language-support/corpora/unseen-v4, MEASUREMENT ONLY): own directory, own digest, checked on every load. */
+export const V4 = path.join(HERE, 'corpora', 'unseen-v4');
+export function unseenV4Cases() {
+  const cases = JSON.parse(read(path.join(V4, 'labels.json')));
+  const m = JSON.parse(read(path.join(V4, 'manifest.json')));
+  const per = [...cases].sort((a, b) => a.id.localeCompare(b.id)).map((c) => `${c.id}:${sha(read(path.join(V4, 'sources', 'haskell', c.id, c.path)))}`).join('\n');
+  if (sha(per) !== m.sourcesSha256 || sha(JSON.stringify(cases)) !== m.labelsSha256) throw new Error('unseen-v4 digest mismatch: the frozen split was modified after freezing (see corpora/unseen-v4/USE-LOG.md)');
+  return cases;
+}
+export const unseenV4Source = (eco, id, rel) => read(path.join(V4, 'sources', eco, id, rel));
 
 // Which layer is RESPONSIBLE for a family: declared here, never derived from engine output (see measure.mjs README).
 export const TAINT_FAMILIES = {
