@@ -763,3 +763,76 @@ test('[REL-001.AC03] the hosted runner runs only the static closure and says so;
   assert.match(HOSTED_CLOSURE_NOTE, /NOT claimed by this leg/);
   assert.match(HOSTED_CLOSURE_NOTE, /static closure/);
 });
+
+// ---- changelogSection (the one changelog-section extractor) and scripts/release-notes.mjs (feeds the GitHub Release page) ----
+import * as os from 'node:os';
+import { changelogSection } from '../../scripts/release-check.mjs';
+import { releaseNotes } from '../../scripts/release-notes.mjs';
+const NOTES_SCRIPT = path.join(REPO_ROOT, 'scripts', 'release-notes.mjs');
+
+const NOTES_LOG = [
+  '# Changelog', '', 'preamble mentioning ## 1.2.3 inline and nothing else', '',
+  '## 1.2.30 - thirty', '', '- thirty body', '',
+  '## 1.2.3 - three', '', '- three body', '- more', '',
+  '## 1.2.3-rc1 - candidate', '', '- rc body', '',
+  '## 1.10.0 - ten', '', '- ten body (last section, no trailing heading)', '',
+].join('\n');
+
+test('a version with dots matches literally, not as a wildcard', () => {
+  assert.equal(changelogSection('## 1x2x3 - fake\n\n- no\n', '1.2.3'), '');
+  assert.match(changelogSection(NOTES_LOG, '1.2.3'), /three body/);
+});
+
+test('1.2.30 never satisfies 1.2.3, and 1.2.3 never satisfies 1.2.30', () => {
+  const three = changelogSection(NOTES_LOG, '1.2.3');
+  assert.ok(three.startsWith('## 1.2.3 - three'));
+  assert.ok(!three.includes('thirty'));
+  assert.ok(!three.includes('rc body'), 'a section ends at the next ## heading');
+  assert.ok(changelogSection(NOTES_LOG, '1.2.30').includes('thirty body'));
+  assert.equal(changelogSection('## 1.2.30 - x\n- y\n', '1.2.3'), '');
+});
+
+test('a pre-release heading does not satisfy the plain version', () => {
+  assert.equal(changelogSection('## 1.2.3-rc1 - x\n- y\n', '1.2.3'), '');
+});
+
+test('the last section in the file is returned to the end', () => {
+  const last = changelogSection(NOTES_LOG, '1.10.0');
+  assert.ok(last.includes('last section'));
+  assert.ok(last.startsWith('## 1.10.0'));
+});
+
+test('a missing version, empty text and null text give an empty string', () => {
+  assert.equal(changelogSection(NOTES_LOG, '9.9.9'), '');
+  assert.equal(changelogSection('', '1.0.0'), '');
+  assert.equal(changelogSection(null, '1.0.0'), '');
+});
+
+test('the preamble is never part of a section', () => {
+  for (const v of ['1.2.3', '1.2.30', '1.10.0']) assert.ok(!changelogSection(NOTES_LOG, v).includes('preamble'));
+});
+
+test('releaseNotes strips only the heading line and trailing whitespace', () => {
+  assert.equal(releaseNotes(NOTES_LOG, '1.2.3'), '- three body\n- more');
+  assert.equal(releaseNotes(NOTES_LOG, '9.9.9'), '');
+  assert.equal(releaseNotes('## 1.0.0 - empty\n\n## 1.0.1 - next\n- x\n', '1.0.0'), '');
+});
+
+test('CLI prints the section and exits 0, exits non-zero for a missing version', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'relnotes-'));
+  const f = path.join(dir, 'CHANGELOG.md');
+  fs.writeFileSync(f, NOTES_LOG);
+  const ok = spawnSync(process.execPath, [NOTES_SCRIPT, 'v1.2.3', '--changelog', f], { encoding: 'utf8' });
+  assert.equal(ok.status, 0);
+  assert.equal(ok.stdout, '- three body\n- more\n');
+  const missing = spawnSync(process.execPath, [NOTES_SCRIPT, '9.9.9', '--changelog', f], { encoding: 'utf8' });
+  assert.equal(missing.status, 1);
+  assert.equal(missing.stdout, '');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('CLI finds a real released version in the root CHANGELOG.md', () => {
+  const r = spawnSync(process.execPath, [NOTES_SCRIPT, '0.188.0'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Who controls the input/);
+});

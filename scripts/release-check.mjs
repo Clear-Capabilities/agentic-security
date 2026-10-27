@@ -639,6 +639,18 @@ export function evaluateVersionConsistency({ sources }) {
  * notes — so callers can supply a per-file `remedy` that says so.
  */
 /**
+ * The text of the `## <version>` section of a changelog: the heading line through the line before the next `## ` heading (or end of
+ * file). '' when there is no such section. The version is matched literally and must end at the heading's word boundary, so 1.2.30
+ * and 1.2.3-rc1 never satisfy 1.2.3. Anything before the first `## ` heading (the preamble) is never part of a section.
+ * Shared by the completion check below and scripts/release-notes.mjs, so there is one extractor.
+ */
+export function changelogSection(text, version) {
+  const escaped = String(version).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = new RegExp(`^## ${escaped}(?![\\w.-])[\\s\\S]*?(?=^## |$(?![\\s\\S]))`, 'm').exec(text || '');
+  return m ? m[0] : '';
+}
+
+/**
  * A release must not read as complete when requirements are open. `status` is docs/completion-status.json (null when absent).
  * Pure: the caller supplies the texts.
  */
@@ -646,8 +658,7 @@ export function evaluateCompletionDeclared({ version, status, changelogText, rea
   if (!status || !Array.isArray(status.remaining) || status.remaining.length === 0) return result();
   const errors = [];
   const ids = status.remaining.map((r) => r.id);
-  const m = new RegExp(`^## ${String(version).replace(/\./g, '\\.')}\\b[\\s\\S]*?(?=^## |$(?![\\s\\S]))`, 'm').exec(changelogText || '');
-  const section = m ? m[0] : '';
+  const section = changelogSection(changelogText, version);
   if (!section) errors.push(`CHANGELOG.md has no section for ${version}`);
   else {
     if (!/Partial release/.test(section)) errors.push(`${ids.length} requirement(s) are unverified (${ids.join(', ')}) but the ${version} changelog section does not say "Partial release"`);
