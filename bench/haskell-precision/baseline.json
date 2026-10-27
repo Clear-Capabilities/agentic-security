@@ -291,5 +291,17 @@
    }
   }
  },
- "sealed": null
+ "sealed": {
+  "labelsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
+  "resultsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
+  "scannerVersion": "0.188.0",
+  "all": {
+   "flagged": 73,
+   "tp": 1,
+   "fp": 34,
+   "ambiguous": 11,
+   "unlabeled": 27,
+   "precision": 0.0286
+  }
+ }
 }

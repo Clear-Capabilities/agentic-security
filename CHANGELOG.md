@@ -9,6 +9,16 @@
 > make the history less accurate, not more.
 
 
+## 0.189.0 - Caller-aware reachability, and a precision measurement that can catch a regression
+
+- **Project reachability for Haskell.** Each function now gets one of four verdicts: `entrypoint-reachable`, `unreachable-in-project`, `external-api` or `unknown`. A negative verdict needs a complete scan, a hole-free call graph, a real entry point, a known exposed-module list and a function that is not an instance method; anything less is `unknown`, never "unreachable". Template Haskell, `foreign export`, the function cap, unresolved names and withheld code are holes. The verdict is a separate record from the trust-boundary verdict.
+- **Measured effect: none on real code.** On the 14 labelled real projects no finding changed severity and no labelled site landed in `unreachable-in-project`; 0 of about 41,000 functions were judged unreachable. Template Haskell blocks 11 of the 14 projects, the test-directory scan policy blocks 7, unresolved calls block 8. The mechanism is correct and inert here, so this release makes no precision claim.
+- **Sealed sets, measured once.** Independent Haskell set: 1 true positive in 35 decided sites, 2.9% (0.5% to 14.5%), identical to 0.188.0, so by the rule fixed beforehand (under 2 points means no generalisation) this did not generalise. unseen-v4 taint recall is 66.7% (10 of 15), unchanged from 0.188.0: the case lost in 0.188.0 was **not** restored.
+- **A regression can now be seen.** `npm run bench:haskell-precision:check` compares the development and fresh results for equality and the sealed result against a recorded baseline, and is part of the pre-push gate and the release check. A labelled true positive in `unreachable-in-project` fails it.
+- **Two labelers.** The sealed-set tooling accepts a second labeler, computes percent agreement and Cohen's kappa and records an adjudication pass. Only exercised on a synthetic fixture so far; the sealed set still has one labeler.
+- **Smaller changes.** One shared Wilson interval; `originalSeverity` is now recorded when the neutral dead-code pass demotes a finding; relevance ranking can consume a reachability verdict (rank only, severity untouched).
+- **Left out on purpose:** treating `external-api` as "callers unknown" lowered dev precision (35.7% to 23.8%) with no true positives gained, so it is recorded but not acted on.
+
 ## 0.188.0 - Haskell trust-boundary precision for real code
 
 - **Who controls the input.** Haskell taint findings now carry a `trustBoundary` verdict. Flows whose only origin is the operator's own command line, environment or configuration, and thin process wrappers, are lowered to `info` (original severity kept), never dropped. Origins are now tracked through derivations, calls and returns. Unreachable-looking functions caused by ambiguous platform imports, Haskell pragmas read as JSON policy, JavaScript-syntax patterns firing on Haskell text, and comments leaking into finding snippets (and so into stable ids) were fixed. `unsafe*` boundary notes report as informational.
