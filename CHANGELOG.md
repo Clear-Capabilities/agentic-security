@@ -9,6 +9,12 @@
 > make the history less accurate, not more.
 
 
+## 0.191.0 - GitHub Release pages from the changelog
+
+- **A Release page for every tag.** The `publish` job now creates a GitHub Release after `npm publish`, with its body taken from this file's section for the version (one shared `changelogSection` extractor, which no longer lets `1.2.3` match a `1.2.3-rc1` heading). An existing Release is edited, never recreated; `--verify-tag` means the step cannot create or move a tag; a dry run never creates one; `contents: write` is held by `publish` alone. **This step has not run on hosted infrastructure yet.** It is first exercised by this release's own tag, and if it fails after npm has published, the workflow run fails while the package stays published.
+- **Backfill.** `scripts/backfill-github-releases.mjs` creates the missing pages from existing tags and changelog sections. It is a dry run by default, applies only with `--apply`, and never touches a tag.
+- **Haskell container leg: still not verified.** The proof-fabric skip for the `haskell:9` image stays, because the machine used has no running container engine. The skip message now says exactly that. Closing it needs a host with an engine and the blocking `proof-container` CI job.
+
 ## 0.190.0 - Haskell remediation: four more verified fixers, and refusals that name the decision
 
 - **Four new fixers (ten in total).** TLS validation (`connection` `TLSSettingsSimple` literal `True` to `False`), cookie attributes (a `Set-Cookie` header literal, a `Web.Cookie` record update, servant-auth `NotSecure`, scotty simple cookies), predictable randomness (`randomIO` replaced by OS entropy, only for a fixed-width integer in a file that already imports `System.Entropy`) and an unbounded request body (a mitigation: a bounded reader with a 1 MiB limit that is a declared default, not a measured need). Each has a paired refusal case and is checked by a rescan, an independent effective-change check and a compile against declared stubs of the package API. The randomness, cookie-header and request-body fixes are also run against benign and hostile inputs under GHC.
