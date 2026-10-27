@@ -216,8 +216,8 @@ newSession = randomRIO (0, 1000000000)
   }
 });
 
-test('the fixer set is exactly the six rewrites that are proved the same program minus the vulnerability (or a stated mitigation)', () => {
-  assert.deepEqual([...SUPPORTED_FIX_IDS].sort(), ['hs-hash-sha256', 'hs-html-escape', 'hs-log-redact', 'hs-path-takefilename', 'hs-process-argv', 'hs-sql-parameterize']);
+test('the fixer set is exactly the ten rewrites that are proved the same program minus the vulnerability (or a stated mitigation)', () => {
+  assert.deepEqual([...SUPPORTED_FIX_IDS].sort(), ['hs-cookie-attributes', 'hs-hash-sha256', 'hs-html-escape', 'hs-log-redact', 'hs-path-takefilename', 'hs-process-argv', 'hs-random-os-entropy', 'hs-request-body-bound', 'hs-sql-parameterize', 'hs-tls-validate']);
 });
 
 test('validateHaskellFix never writes without apply and reports the compile gate as not run by default', async () => {

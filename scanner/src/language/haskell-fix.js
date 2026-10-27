@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { parseHaskell } from './haskell-parser.js';
 import { SENSITIVE } from './haskell-security-rules.js';
+import { stripComments } from './haskell-comments.js';
 import { compareVersions, parseVersion } from './haskell-manifests.js';
 import { runFixLifecycle, unifiedDiff, writeWithBackup, undoFix } from './fix-lifecycle.js';
 
@@ -351,7 +352,362 @@ function fixLogging(text, f) {
   return { ruleId: 'hs-log-redact', label: 'MITIGATION', text: next, explanation: `Replaced ${n} sensitive log argument(s) with "[REDACTED]". The value is no longer logged; the log line loses that detail.`, behavior: { kind: 'log', redacted: n } };
 }
 
+// ── TLS certificate validation (CWE-295) ─────────────────────────────────────
+// One boolean literal: `TLSSettingsSimple True ..` / `{ settingDisableCertificateValidation = True }` of the `connection` package becomes False.
+// API (checked against the package documentation): `data TLSSettings = TLSSettingsSimple { settingDisableCertificateValidation, settingDisableSession,
+// settingUseServerName :: Bool } | TLSSettings ClientParams`. The OpenSSL `VerifyNone` shape is NOT rewritten: `VerifyPeer` needs a CA bundle to be
+// loaded and a host-name check, which are deployment decisions (see CLASS_REASONS).
+const TLS_FIELD = 'settingDisableCertificateValidation';
+const TLS_CTOR_RE = /(?<![\w'.])(?:[A-Z][\w']*\.)?TLSSettingsSimple(?![\w'])/g;
+
+/** Index after the `}` matching the `{` at s[i] (strings skipped), or -1. */
+function braceEnd(s, i) {
+  let depth = 0;
+  for (let j = i; j < s.length; j++) {
+    if (s[j] === '"') { const e = atomEnd(s, j); if (e < 0) return -1; j = e - 1; continue; }
+    if (s[j] === '{') depth++; else if (s[j] === '}' && --depth === 0) return j + 1;
+  }
+  return -1;
+}
+/** Splits `a (b c) "d"` at top-level whitespace into atoms. */
+function wordsOf(s) {
+  const out = []; let i = 0;
+  while (i < s.length) {
+    while (i < s.length && /\s/.test(s[i])) i++;
+    if (i >= s.length) break;
+    const e = atomEnd(s, i);
+    if (e < 0) return null;
+    out.push(s.slice(i, e).trim()); i = e;
+  }
+  return out;
+}
+
+/**
+ * The structural reading of every `TLSSettingsSimple` construction in `text`: [{start, form, disableCertificateValidation: true|false|null, others}].
+ * null means "not a literal". This is the behavior model of the TLS fixer AND the independent reader its effective-change check uses.
+ */
+export function tlsSettingsOf(text) {
+  const code = stripComments(text);
+  const out = [];
+  for (const m of code.matchAll(TLS_CTOR_RE)) {
+    let i = m.index + m[0].length;
+    while (/\s/.test(code[i] || '')) i++;
+    const lit = (v) => { const t = trimParens(v); return t === 'True' ? true : t === 'False' ? false : null; };
+    if (code[i] === '{') {
+      const end = braceEnd(code, i);
+      if (end < 0) { out.push({ start: m.index, form: 'record', disableCertificateValidation: null, others: [] }); continue; }
+      const fields = {};
+      for (const part of (topLevelSplit(code.slice(i + 1, end - 1), ',') || [])) { const kv = /^\s*([\w']+)\s*=\s*([\s\S]*?)\s*$/.exec(part); if (kv) fields[kv[1]] = kv[2]; }
+      out.push({ start: m.index, form: 'record', disableCertificateValidation: fields[TLS_FIELD] === undefined ? null : lit(fields[TLS_FIELD]), others: ['settingDisableSession', 'settingUseServerName'].map((k) => fields[k] ?? null) });
+    } else {
+      const lineEnd = code.indexOf('\n', i); const rest = code.slice(i, lineEnd < 0 ? code.length : lineEnd);
+      const ws = wordsOf(rest) || [];
+      out.push({ start: m.index, form: 'positional', disableCertificateValidation: ws.length >= 1 ? lit(ws[0]) : null, others: ws.slice(1, 3) });
+    }
+  }
+  return out;
+}
+
+function fixTls(text, f) {
+  if (!importInfo(text, 'Network.Connection') && !importInfo(text, 'Network.Connection.Types')) return null;   // the detector's own precondition
+  const lb = lineBounds(text, f.line);
+  const m = new RegExp(TLS_CTOR_RE.source).exec(lb.text);
+  if (!m) return null;
+  let i = lb.start + m.index + m[0].length;
+  while (/\s/.test(text[i] || '')) i++;
+  let at = -1; let form;
+  if (text[i] === '{') {
+    const end = braceEnd(text, i); if (end < 0) return null;
+    const hits = [...text.slice(i, end).matchAll(new RegExp(`(?<![\\w'.])${TLS_FIELD}\\s*=\\s*(True)(?![\\w'.])`, 'g'))];
+    if (hits.length !== 1) return null;
+    at = i + hits[0].index + hits[0][0].lastIndexOf('True'); form = 'record';
+  } else {
+    const p = /^(\(\s*)?True(?![\w'.])/.exec(text.slice(i, i + 40));
+    if (!p) return null;
+    at = i + (p[1] ? p[1].length : 0); form = 'positional';
+  }
+  const next = splice(text, at, at + 4, 'False');
+  const before = tlsSettingsOf(text); const after = tlsSettingsOf(next);
+  const ordinal = before.filter((s) => s.start <= at).length - 1;
+  return {
+    ruleId: 'hs-tls-validate', label: 'FULL', text: next,
+    explanation: `Set ${TLS_FIELD} to False (${form} form): TLS certificate validation is on again for this connection; nothing else in the settings changed.`,
+    consequences: ['Connections to a server whose certificate is self-signed, expired, issued by an authority missing from the system trust store, or issued for another host name now fail. A private certificate authority must be added to the system trust store (or the settings built with TLSSettings and an explicit ClientParams) before this is deployed.'],
+    behavior: { kind: 'tls', form, setting: TLS_FIELD, from: true, to: false },
+    expectEffective: { kind: 'tls', ordinal, siteCount: before.length, expectSites: after.length },
+  };
+}
+
+// ── cookie attributes (CWE-1004) ──────────────────────────────────────────────
+// Four framework shapes, each a table row: a hand-written Set-Cookie header literal, a `Web.Cookie` SetCookie record update, servant-auth's
+// `cookieIsSecure = NotSecure`, and scotty's `setSimpleCookie` / `makeSimpleCookie` (which build a cookie with neither attribute).
+// APIs (checked against the package documentation): cookie `SetCookie { setCookieHttpOnly, setCookieSecure :: Bool, .. }`;
+// servant-auth-server `CookieSettings { cookieIsSecure :: IsSecure }`, `data IsSecure = Secure | NotSecure`; scotty's `Web.Scotty.Cookie` re-exports
+// `setCookie`, `makeSimpleCookie`, `setCookieHttpOnly`, `setCookieSecure`. SameSite is NOT touched.
+const COOKIE_CONSEQ_SECURE = 'Secure: the browser sends the cookie over HTTPS only. A plain-HTTP deployment (or local development over HTTP, in browsers that do not exempt localhost) stops keeping the session.';
+const COOKIE_CONSEQ_HTTPONLY = 'HttpOnly: page scripts can no longer read the cookie through document.cookie; code that does must be changed.';
+const SET_COOKIE_KEY = /^(?:(?:[\w.]*\.)?hSetCookie|"[Ss]et-[Cc]ookie"|(?:[\w.]*\.)?(?:pack|fromString)\s+"[Ss]et-[Cc]ookie")$/;
+
+/** The module qualifier written just before `idx` (`C.` or `A.B.`), or ''. Walks back by hand: no nested-quantifier pattern. */
+function qualifierBefore(s, idx) {
+  let i = idx;
+  while (i > 1 && s[i - 1] === '.') {
+    let j = i - 1;
+    while (j > 0 && /[\w']/.test(s[j - 1])) j--;
+    if (j === i - 1 || !/[A-Z]/.test(s[j])) break;
+    i = j;
+  }
+  return s.slice(i, idx);
+}
+
+/** Every place a cookie is configured, with what the code says about its attributes: [{kind, start, end, httpOnly, secure}] in source order. */
+export function cookieSitesOf(text) {
+  const code = stripComments(text);
+  const sites = [];
+  // 1. a Set-Cookie header tuple on one line
+  for (const m of code.matchAll(/\(\s*((?:[\w.]*\.)?hSetCookie|"[Ss]et-[Cc]ookie"|(?:[\w.]*\.)?(?:pack|fromString)\s+"[Ss]et-[Cc]ookie")\s*,/g)) {
+    const end = atomEnd(code, m.index); if (end < 0 || code.slice(m.index, end).includes('\n')) continue;
+    const lits = [...code.slice(m.index, end).matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((x) => x[1]).join('');
+    sites.push({ kind: 'header', start: m.index, end, httpOnly: /;\s*HttpOnly\b/i.test(lits), secure: /;\s*Secure\b/i.test(lits) });
+  }
+  // 2. a record update that names setCookieName
+  for (const m of code.matchAll(/(?<![\w'])setCookieName\s*=/g)) {
+    let open = -1; let depth = 0;
+    for (let j = m.index - 1; j >= 0; j--) { if (code[j] === '}') depth++; else if (code[j] === '{') { if (depth === 0) { open = j; break; } depth--; } }
+    if (open < 0) continue;
+    const end = braceEnd(code, open); if (end < 0) continue;
+    const body = code.slice(open, end);
+    const flag = (name) => new RegExp(`(?<![\\w'])(?:[A-Z][\\w']*\\.)?${name}\\s*=\\s*True(?![\\w'.])`).test(body);
+    if (!sites.some((s) => s.kind === 'record' && s.start === open)) sites.push({ kind: 'record', start: open, end, httpOnly: flag('setCookieHttpOnly'), secure: flag('setCookieSecure') });
+  }
+  // 3. servant-auth
+  for (const m of code.matchAll(/(?<![\w'])cookieIsSecure\s*=\s*((?:[A-Z][\w']*\.)?(?:Not)?Secure)(?![\w'])/g)) sites.push({ kind: 'servant', start: m.index, end: m.index + m[0].length, httpOnly: true, secure: !/NotSecure$/.test(m[1]) });
+  // 4. scotty helpers; a call wrapped as `(makeSimpleCookie a b) { setCookieHttpOnly = True, setCookieSecure = True }` is already secured
+  for (const m of code.matchAll(/(?<![\w'.])((?:[A-Z][\w']*\.)?)(setSimpleCookie|makeSimpleCookie)(?![\w'])/g)) {
+    const a1 = atomEnd(code, m.index + m[0].length); const a2 = a1 < 0 ? -1 : atomEnd(code, a1);
+    if (a2 < 0) continue;
+    let after = a2; while (code[after] === ' ') after++;
+    let httpOnly = false; let secure = false; let end = a2;
+    if (m[2] === 'makeSimpleCookie' && code[after] === ')') {
+      let k = after + 1; while (code[k] === ' ') k++;
+      if (code[k] === '{') { const be = braceEnd(code, k); if (be > 0) { const body = code.slice(k, be); httpOnly = /setCookieHttpOnly\s*=\s*True(?![\w'.])/.test(body); secure = /setCookieSecure\s*=\s*True(?![\w'.])/.test(body); end = be; } }
+    }
+    sites.push({ kind: 'scotty-helper', start: m.index, end, httpOnly, secure });
+  }
+  return sites.sort((a, b) => a.start - b.start);
+}
+
+function lastLiteralAppend(valueExpr, missing) {
+  // `"a=" <> sid <> "; Path=/"` -> the final operand must be a string literal; the attributes are appended inside its quotes
+  const ops = splitOperators(valueExpr);
+  if (!ops || ops.length < 1) return null;
+  const last = ops[ops.length - 1];
+  const t = last.trim();
+  if (!STRING.test(t)) return null;
+  const body = litValue(t);
+  if (/;\s*$/.test(body) || /\\$/.test(body)) return null;           // a trailing separator or escape: the join would be ambiguous
+  const idx = last.lastIndexOf(t);
+  const patchedLit = `"${body}${missing.map((a) => `; ${a}`).join('')}"`;
+  const ls = ops.slice(0, -1).join('') + last.slice(0, idx) + patchedLit + last.slice(idx + t.length);
+  return ls;
+}
+
+function fixCookie(text, f) {
+  const before = cookieSitesOf(text);
+  if (!before.length) return null;
+  const lb = lineBounds(text, f.line);
+  // the site the finding is on: the first insecure site that starts within the reported statement (the site may span lines)
+  const lineOf = (off) => text.slice(0, off).split('\n').length;
+  const site = before.filter((s) => (!s.httpOnly || !s.secure) && lineOf(s.end) >= f.line && lineOf(s.start) <= f.line + 8).sort((a, b) => a.start - b.start)[0];
+  if (!site) return null;
+  const missing = [];
+  if (!site.httpOnly) missing.push('HttpOnly'); if (!site.secure) missing.push('Secure');
+  const consequences = [...(missing.includes('Secure') ? [COOKIE_CONSEQ_SECURE] : []), ...(missing.includes('HttpOnly') ? [COOKIE_CONSEQ_HTTPONLY] : []), 'SameSite is not changed by this fix.'];
+  let next = null; let editAt = site.start; let how = site.kind;
+  if (site.kind === 'header') {
+    const seg = text.slice(site.start, site.end);
+    const inner = seg.slice(1, -1);
+    const parts = topLevelSplit(inner, ',');
+    if (!parts || parts.length !== 2 || !SET_COOKIE_KEY.test(parts[0].trim())) return null;
+    const val = lastLiteralAppend(parts[1], missing); if (val === null) return null;
+    next = splice(text, site.start, site.end, `(${parts[0]},${val})`);
+  } else if (site.kind === 'servant') {
+    const mm = /NotSecure/.exec(text.slice(site.start, site.end)); if (!mm) return null;
+    const imp = importInfo(text, 'Servant.Auth.Server');
+    if (!imp || imp.hiding || (imp.items !== null && !imp.items.some((x) => /^IsSecure\(\.\.\)$/.test(x.replace(/\s+/g, ''))))) return null;     // `Secure` must already be in scope
+    next = splice(text, site.start + mm.index, site.start + mm.index + 'NotSecure'.length, 'Secure');
+    editAt = site.start + mm.index;
+  } else if (site.kind === 'record') {
+    const body = text.slice(site.start, site.end);
+    const q = qualifierBefore(body, body.search(/(?<![\w'])setCookieName\s*=/));
+    let b2 = body; const adds = [];
+    for (const [flag, field] of [[site.httpOnly, 'setCookieHttpOnly'], [site.secure, 'setCookieSecure']]) {
+      if (flag) continue;
+      const re = new RegExp(`(?<![\\w'])((?:[A-Z][\\w']*\\.)?${field})(\\s*=\\s*)(False)(?![\\w'.])`);
+      if (re.test(b2)) b2 = b2.replace(re, '$1$2True');
+      else if (new RegExp(`(?<![\\w'])(?:[A-Z][\\w']*\\.)?${field}\\s*=`).test(b2)) return null;     // set from an expression: not a literal we can judge
+      else adds.push(field);
+    }
+    let t2 = text;
+    if (adds.length) {
+      // the new field names must be in scope where the update is written: a module that exports them and is already imported
+      let ok = false; let imported = text;
+      for (const mod of ['Web.Cookie', 'Web.Scotty.Cookie']) {
+        const info = importInfo(text, mod); if (!info) continue;
+        if (info.hiding) return null;
+        const allFields = info.items && info.items.some((x) => /^SetCookie\(\.\.\)$/.test(x.replace(/\s+/g, '')));
+        const r = allFields ? { text: imported, prefix: info.qualified ? `${info.alias || mod}.` : '' } : ensureImport(imported, mod, adds); if (!r) return null;
+        if (q && r.prefix && r.prefix !== q) continue;
+        imported = r.text; ok = true; break;
+      }
+      if (!ok) return null;
+      t2 = imported;
+      const closeAt = b2.lastIndexOf('}');
+      const head = b2.slice(0, closeAt).replace(/\s+$/, '');
+      b2 = `${head}, ${adds.map((a) => `${q}${a} = True`).join(', ')} ${b2.slice(closeAt)}`;
+    }
+    const patched = splice(text, site.start, site.end, b2);
+    next = t2 === text ? patched : applyImportDelta(text, t2, patched);
+  } else if (site.kind === 'scotty-helper') {
+    if (!importInfo(text, 'Web.Scotty.Cookie') || /^module\s+Web\.Scotty\.Cookie\b/m.test(text) || /^setCookie\b/m.test(text)) return null;
+    const head = text.slice(site.start, site.end);
+    const m = /^((?:[A-Z][\w']*\.)?)(setSimpleCookie|makeSimpleCookie)\s+/.exec(head); if (!m) return null;
+    const nameEnd = atomEnd(text, site.start + m[0].length); const valEnd = nameEnd < 0 ? -1 : atomEnd(text, nameEnd);
+    if (valEnd < 0) return null;
+    const tail = text.slice(valEnd, text.indexOf('\n', valEnd) < 0 ? text.length : text.indexOf('\n', valEnd)).trim();
+    const lineStart = text.lastIndexOf('\n', site.start) + 1;
+    // The helper is written out as the record update it is (scotty's `makeSimpleCookie n v = defaultSetCookie { setCookieName = encodeUtf8 n,
+    // setCookieValue = encodeUtf8 v }`, read from the scotty source): the wrapped form `(makeSimpleCookie n v) { .. }` is a shape the rule cannot
+    // see through, and a rescan that cannot confirm the cookie is secured is not a verification.
+    const nameArg = text.slice(site.start + m[0].length, nameEnd).trim(); const valArg = text.slice(nameEnd, valEnd).trim();
+    const needed = ['defaultSetCookie', 'setCookieName', 'setCookieValue', 'setCookieHttpOnly', 'setCookieSecure', ...(m[2] === 'setSimpleCookie' ? ['setCookie'] : [])];
+    const imp = ensureImport(text, 'Web.Scotty.Cookie', needed); if (!imp) return null;
+    if (/(?<![\w'.])AgenticTE\./.test(text)) return null;
+    const px = m[1] || imp.prefix;
+    const rec = `${px}defaultSetCookie { ${px}setCookieName = AgenticTE.encodeUtf8 ${nameArg}, ${px}setCookieValue = AgenticTE.encodeUtf8 ${valArg}, ${px}setCookieHttpOnly = True, ${px}setCookieSecure = True }`;
+    let repl;
+    if (m[2] === 'setSimpleCookie') {
+      if (tail !== '' || text.slice(lineStart, site.start).trim() !== '') return null;       // only a whole statement: `setSimpleCookie name value`
+      repl = `${px}setCookie (${rec})`;
+    } else repl = `(${rec})`;
+    const patched = splice(text, site.start, valEnd, repl);
+    const withImports = applyImportDelta(text, imp.text, patched);
+    const ls = withImports.split('\n'); let lastImp = -1; ls.forEach((l, i) => { if (/^import\s/.test(l)) lastImp = i; });
+    ls.splice(lastImp + 1, 0, 'import qualified Data.Text.Encoding as AgenticTE');
+    next = ls.join('\n');
+    how = m[2];
+  }
+  if (!next || next === text) return null;
+  const sitesAfter = cookieSitesOf(next);
+  const ordinal = before.indexOf(site);
+  return {
+    ruleId: 'hs-cookie-attributes', label: 'FULL', text: next,
+    explanation: `Set ${missing.join(' and ')} on the cookie (${how} form). SameSite is not changed.`,
+    consequences,
+    behavior: { kind: 'cookie', form: how, add: missing },
+    expectEffective: { kind: 'cookie', ordinal, siteCount: before.length, expectSites: sitesAfter.length, httpOnly: true, secure: true, editAt },
+  };
+}
+
+// ── predictable randomness (CWE-338) ──────────────────────────────────────────
+// Attempted ONLY where the generator is the entire value of a one-line action whose declared type is `IO <fixed-width integer>`:
+//   newCsrfToken :: IO Word64        ->    newCsrfToken = foldl' (\acc b -> acc * 256 + fromIntegral b) 0 <$> getEntropy 8
+//   newCsrfToken = randomIO
+// and ONLY when the file already imports System.Entropy (the dependency is therefore already declared). `randomRIO (lo, hi)`, a range, a generator
+// threaded through other code, a non-integer result and every other shape are refused: the result type of an OS CSPRNG differs from System.Random's.
+const FIXED_WIDTH = { Word8: 1, Word16: 2, Word32: 4, Word64: 8, Word: 8, Int8: 1, Int16: 2, Int32: 4, Int64: 8, Int: 8 };
+function fixRandom(text, f) {
+  const lb = lineBounds(text, f.line);
+  const m = /^([a-z_][\w']*)\s*=\s*(?:System\.Random\.)?randomIO\s*$/.exec(lb.text);
+  if (!m) return null;
+  const name = m[1];
+  const sig = new RegExp(`^${name}\\s*::\\s*IO\\s+(${Object.keys(FIXED_WIDTH).join('|')})\\s*$`, 'm').exec(text);
+  if (!sig) return null;
+  if ((text.match(new RegExp(`^${name}\\s*=`, 'gm')) || []).length !== 1) return null;
+  const bytes = FIXED_WIDTH[sig[1]];
+  const ent = importInfo(text, 'System.Entropy'); if (!ent || ent.hiding) return null;
+  const e1 = ensureImport(text, 'System.Entropy', ['getEntropy']); if (!e1) return null;
+  if (/(?<![\w'.])AgenticBS\./.test(text)) return null;
+  let t2 = e1.text;
+  const lines = t2.split('\n'); let at = -1; lines.forEach((l, i) => { if (/^import\s/.test(l)) at = i; });
+  lines.splice(at + 1, 0, 'import qualified Data.ByteString as AgenticBS');
+  t2 = lines.join('\n');
+  const body = `${name} = AgenticBS.foldl' (\\acc b -> acc * 256 + fromIntegral b) 0 <$> ${e1.prefix}getEntropy ${bytes}`;
+  const replaced = t2.replace(new RegExp(`^${name}\\s*=\\s*(?:System\\.Random\\.)?randomIO\\s*$`, 'm'), body);
+  if (replaced === t2) return null;
+  // the System.Random import loses `randomIO` when nothing else in the file uses it (an unused import is an error under -Werror)
+  let out = replaced;
+  const stillUsed = new RegExp(`(?<![\\w'])randomIO(?![\\w'])`).test(out.split('\n').filter((l) => !/^import\s/.test(l)).join('\n'));
+  const ri = importInfo(out, 'System.Random');
+  if (!stillUsed && ri && !ri.qualified && ri.items && ri.items.length === 1 && ri.items[0] === 'randomIO') out = out.replace(ri.line + '\n', '');
+  else if (!stillUsed && ri && !ri.qualified && ri.items && ri.items.includes('randomIO')) out = out.replace(ri.line, ri.line.replace(/\((.*)\)/, (_, inner) => `(${ri.items.filter((x) => x !== 'randomIO').join(', ')})`));
+  return {
+    ruleId: 'hs-random-os-entropy', label: 'FULL', text: out,
+    explanation: `${name} now reads ${bytes} byte(s) from the operating system CSPRNG (System.Entropy.getEntropy) and decodes them big-endian into ${sig[1]}, instead of System.Random's deterministic generator.`,
+    consequences: [`Requires the \`entropy\` and \`bytestring\` packages to be declared by the component (this file already imports System.Entropy, so the first is); the build is not checked against the cabal file.`, 'The value is uniform over the full range of its type; a caller that relied on a smaller range or on a seeded sequence changes behavior.'],
+    behavior: { kind: 'random', fn: name, type: sig[1], bytes },
+    expectEffective: { kind: 'random', fn: name, bytes },
+  };
+}
+
+// ── request body size (CWE-770) ───────────────────────────────────────────────
+// `strictRequestBody req` reads the whole body into memory. The mitigation replaces the call with a bounded reader defined in the same file
+// (getRequestBodyChunk until the end, or until a fixed byte limit is passed, in which case it throws). The limit is NOT derived from the service:
+// it is a declared default (1 MiB), written as a named constant the operator must review. Only the wai `strictRequestBody <Request variable>` shape.
+const BODY_LIMIT_DEFAULT = 1048576;
+const BODY_HELPER = `-- Upper bound, in bytes, for a request body read by boundedRequestBody. This is a default chosen by the fixer, not a measured need: set it for this service.
+requestBodyLimitBytes :: Int
+requestBodyLimitBytes = ${BODY_LIMIT_DEFAULT}
+
+-- Reads a request body chunk by chunk and throws once more than requestBodyLimitBytes have arrived, instead of buffering without limit.
+boundedRequestBody req = go 0 []
+  where
+    go total acc = do
+      chunk <- AgentcW.getRequestBodyChunk req
+      if AgentcBS.null chunk
+        then pure (AgentcLBS.fromChunks (reverse acc))
+        else do
+          let total' = total + AgentcBS.length chunk
+          if total' > requestBodyLimitBytes
+            then AgentcE.throwIO (userError "request body exceeds requestBodyLimitBytes")
+            else go total' (chunk : acc)
+`;
+export { BODY_HELPER };
+function fixBody(text, f) {
+  // The rule reports one finding per function, so fixing only the reported call would leave the next call of the same function as "the" finding. Every
+  // `strictRequestBody <variable>` call in the file is rewritten, and the plan says how many.
+  const code = stripComments(text);
+  const hits = [...code.matchAll(/(?<![\w'])strictRequestBody\s+([a-z_][\w']*)(?![\w'])/g)].map((h) => { const q = qualifierBefore(code, h.index); return { index: h.index - q.length, end: h.index + h[0].length, variable: h[1] }; });
+  const lineAt = (off) => text.slice(0, off).split('\n').length;
+  if (!hits.some((h) => lineAt(h.index) === f.line)) return null;
+  if (!importInfo(text, 'Network.Wai') || !importInfo(text, 'Data.ByteString.Lazy')) return null;      // wai and bytestring are then declared by this component
+  if (hasPragma(text, 'NoImplicitPrelude') || /^import\s+(?:qualified\s+)?Prelude\s*(?:\(|hiding\b|as\b)/m.test(text)) return null;   // the helper uses reverse, pure and userError from the Prelude
+  if (importInfo(text, 'Network.Wai').hiding) return null;
+  const hasHelper = text.includes(BODY_HELPER);
+  if (!hasHelper && /(?<![\w'.])(?:boundedRequestBody|requestBodyLimitBytes)(?![\w'])/.test(code)) return null;      // a name of ours is already taken
+  let next = text;
+  for (const h of hits.slice().reverse()) next = splice(next, h.index, h.end, `boundedRequestBody ${h.variable}`);
+  if (!hasHelper) {
+    const lines = next.split('\n'); let at = -1; lines.forEach((l, i) => { if (/^import\s/.test(l)) at = i; });
+    if (at < 0) return null;
+    lines.splice(at + 1, 0, 'import qualified Network.Wai as AgentcW', 'import qualified Data.ByteString as AgentcBS', 'import qualified Data.ByteString.Lazy as AgentcLBS', 'import qualified Control.Exception as AgentcE');
+    next = lines.join('\n').replace(/\n*$/, '\n') + '\n' + BODY_HELPER;
+  }
+  const n = hits.length;
+  return {
+    ruleId: 'hs-request-body-bound', label: 'MITIGATION', text: next,
+    explanation: `Replaced ${n} strictRequestBody call${n === 1 ? '' : 's'} with boundedRequestBody, which stops reading and throws once the body passes requestBodyLimitBytes (${BODY_LIMIT_DEFAULT} bytes, a declared default, not a measured need).`,
+    consequences: [`A request body larger than ${BODY_LIMIT_DEFAULT} bytes now raises an IOException in the ${n} rewritten call${n === 1 ? '' : 's'} (a 500 from the default handler, not a 413). Legitimate large uploads are rejected until requestBodyLimitBytes is raised.`, 'The limit applies only to the calls rewritten; every other body read keeps its old behavior.'],
+    behavior: { kind: 'body-limit', limit: BODY_LIMIT_DEFAULT, replaced: n },
+    expectEffective: { kind: 'body', replaced: n },
+  };
+}
+
 const FIXERS = [
+  { id: 'hs-tls-validate', applies: (f) => f.cwe === 'CWE-295' || f.rule === 'hs-tls-validation-disabled', run: fixTls, reportedLineOnly: true },
+  { id: 'hs-cookie-attributes', applies: (f) => f.cwe === 'CWE-1004' || f.rule === 'hs-insecure-cookie', run: fixCookie, reportedLineOnly: true },
+  { id: 'hs-random-os-entropy', applies: (f) => f.cwe === 'CWE-338' || f.rule === 'hs-predictable-random', run: fixRandom, reportedLineOnly: true },
+  { id: 'hs-request-body-bound', applies: (f) => f.rule === 'hs-unbounded-request-body' || (f.cwe === 'CWE-770' && /request body/i.test(String(f.vuln || ''))), run: fixBody, reportedLineOnly: true },
   { id: 'hs-sql-parameterize', applies: (f) => f.cwe === 'CWE-89', run: fixSql },
   { id: 'hs-process-argv', applies: (f) => f.cwe === 'CWE-78', run: fixProcess },
   { id: 'hs-html-escape', applies: (f) => f.cwe === 'CWE-79', run: fixHtml },
@@ -390,33 +746,58 @@ export function planHaskellFix(finding, files) {
   const before = files[finding.file];
   if (typeof before !== 'string') return { ok: false, reason: `file ${finding.file} is not in the supplied tree` };
   if (!/\.l?hs$/i.test(finding.file)) return { ok: false, reason: 'not a Haskell source file' };
-  if (/\{-#\s*LANGUAGE[^#]*\bCPP\b|^#\s*(?:if|define|include)\b/m.test(before)) return { ok: false, reason: 'the file uses CPP: a rewrite could change a branch that is not visible here', proposal: 'model-assisted' };
+  if (/\{-#\s*LANGUAGE[^#]*\bCPP\b|^#\s*(?:if|define|include)\b/m.test(before)) {
+    const cls = CLASS_REASONS[finding.cwe]; const marker = 'The decision needed:';
+    const classDecision = cls && cls.includes(marker) ? cls.slice(cls.indexOf(marker) + marker.length).trim() : null;
+    const decision = `${classDecision ? `${classDecision} Also, ` : ''}which build configuration (platform, compiler, flags) the patch is for, because a rewrite of a CPP file could change a branch that is not visible here.`;
+    return { ok: false, tier: TIERS.guidance, reason: `the file uses CPP: a rewrite could change a branch that is not visible here. The decision needed: ${decision}`, decision, proposal: 'model-assisted' };
+  }
   for (const fx of FIXERS) {
     let applies = false; try { applies = fx.applies(finding); } catch { /* ignore */ }
     if (!applies) continue;
     // The finding is reported where the tainted value ENTERS the code that reaches the sink: for a flow through a function of this
     // file that is the call, while the dangerous API call is inside the callee. Try the reported line first, then the bodies of
     // the same-file functions called on it.
-    for (const line of [finding.line, ...calleeLines(before, finding.line)]) {
+    // An attribute, a generator or a limit is fixed where the finding says it is, never in the body of a function called on that line (that would change a
+    // helper for all of its callers: the scotty cookie helpers, for instance, are the library's own definitions).
+    for (const line of fx.reportedLineOnly ? [finding.line] : [finding.line, ...calleeLines(before, finding.line)]) {
       let r = null; try { r = fx.run(before, { ...finding, line }); } catch { r = null; }
-      if (r && r.text && r.text !== before) return { ok: true, ruleId: r.ruleId, label: r.label, file: finding.file, before, after: r.text, explanation: r.explanation, behavior: r.behavior, ...(line !== finding.line ? { fixedAtLine: line } : {}) };
+      if (r && r.text && r.text !== before) return { ok: true, tier: TIERS.edit, ruleId: r.ruleId, label: r.label, file: finding.file, before, after: r.text, explanation: r.explanation, consequences: r.consequences || DEFAULT_CONSEQUENCES[r.ruleId] || [], behavior: r.behavior, expectEffective: r.expectEffective || null, ...(line !== finding.line ? { fixedAtLine: line } : {}) };
     }
   }
-  return { ok: false, reason: CLASS_REASONS[finding.cwe] || 'no deterministic fix is supported for this exact shape', proposal: 'model-assisted' };
+  const reason = CLASS_REASONS[finding.cwe] || 'no deterministic fix is supported for this exact shape. The decision needed: what correct handling of this value is for this code (validate it, encode it for the sink it reaches, or stop it reaching the sink); the scanner has no verified rewrite for this shape.';
+  const marker = 'The decision needed:';
+  return { ok: false, tier: TIERS.guidance, reason, decision: reason.includes(marker) ? reason.slice(reason.indexOf(marker) + marker.length).trim() : null, proposal: 'model-assisted' };
 }
 
+export const TIERS = Object.freeze({ edit: 'full-source-edit', guidance: 'guidance-only', blocked: 'blocked' });
+// What each rewrite changes for the running program, stated so a patch never silently alters behavior (the fixers added with the
+// remediation work carry their own, which also name the build requirements).
+const DEFAULT_CONSEQUENCES = Object.freeze({
+  'hs-sql-parameterize': ['Interpolated values are now bound parameters. A splice that is not a value (a table or column name, an operator, a keyword) cannot be a parameter and needs an allow-list instead.'],
+  'hs-process-argv': ['No shell parses the command any more: pipes, redirection, globbing, variable expansion and quoting in the old string no longer apply, and the program is found by name on PATH.'],
+  'hs-html-escape': ['Markup the value deliberately contained is now shown as text.'],
+  'hs-hash-sha256': ['Every digest this code produces changes. Anything that stored or compares the old digests (a stored hash, a cache key, a signature) must be migrated.'],
+  'hs-log-redact': ['The redacted value no longer appears in the log; the line loses that detail.'],
+  'hs-path-takefilename': ['A name that carried subdirectories now selects a file directly inside the fixed directory; "." and ".." survive takeFileName, so directory operations are not rewritten.'],
+});
+
 // Classes whose repair needs a choice the code does not contain (a policy, a library, a limit). The scanner reports them; it does not guess.
+// Each reason ends with "The decision needed: ..." naming what the operator has to decide; planHaskellFix returns that part as `decision`.
 const CLASS_REASONS = Object.freeze({
-  'CWE-918': 'server-side request forgery is fixed by an allow-list of hosts or a resolved-address policy, which is a decision about this service, not a rewrite of this line',
-  'CWE-88': 'argument injection is fixed by validating the value against what the program accepts; inserting "--" only helps programs that honour it, so no patch is made',
-  'CWE-916': 'password hashing needs a memory-hard or iterated KDF (Argon2id, scrypt, bcrypt, PBKDF2) from a library the project may not depend on, and existing stored hashes must be migrated',
-  'CWE-338': 'a predictable generator is replaced by the operating system CSPRNG (Crypto.Random), whose result type differs from System.Random: the surrounding code must change with it',
-  'CWE-1004': 'cookie attributes live in different places for each framework (a record field, a header string, a helper); the rewrite is not provably the same program',
-  'CWE-306': 'a missing authentication check needs a policy (which credential, which rejection); the scanner reports the handler and does not invent the guard',
-  'CWE-770': 'a resource limit is a number only the operator can choose (how many bytes, how many requests)',
-  'CWE-295': 'enabling certificate validation can break connections the project depends on; the trust store to use is a deployment decision',
-  'CWE-798': 'a hard-coded secret must be rotated and moved to a secret store; rewriting the line would leave the leaked value valid',
-  'CWE-611': 'XML entity handling depends on the parser configuration in use',
+  'CWE-918': 'server-side request forgery has no line-level repair: a check on the URL string is bypassed by redirects, alternate encodings and DNS. The decision needed: which hosts or networks this service may call (an allow-list of exact hosts, or an address policy that rejects loopback, link-local and private ranges after name resolution and on every redirect).',
+  'CWE-88': 'argument injection is repaired by a rule about what the called program accepts; inserting "--" only helps programs that honour it, so no patch is made. The decision needed: the permitted values for this argument (a closed list or a strict pattern), or the option of that program that ends option parsing.',
+  'CWE-916': 'password hashing needs a password KDF (Argon2id, scrypt, bcrypt, or PBKDF2 with a high iteration count) from a library the project may not declare as a dependency, and every stored hash was produced by the old function: swapping it makes every existing password fail to verify and locks the users out. The decision needed: which KDF and library, with which cost parameters, and the migration (verify the old hash once, then re-hash with the new KDF at the next successful login, or force a password reset).',
+  'CWE-338': 'a predictable generator is replaced by the operating system CSPRNG (System.Entropy or Crypto.Random), whose result type is bytes, not System.Random\'s: the surrounding code must change with it. Only a one-line action of type IO <fixed-width integer> equal to randomIO, in a file that already imports System.Entropy, is rewritten. The decision needed: the token\'s type and size (a 30-bit integer cannot be made unguessable by changing the generator) and the entropy library the project declares.',
+  'CWE-1004': 'cookie attributes live in different places per framework. The recognised shapes are a Set-Cookie header string literal, a Web.Cookie SetCookie record update, servant-auth cookieIsSecure, and scotty setSimpleCookie/makeSimpleCookie; this is none of them, or an attribute is set from an expression. The decision needed: which attributes to send (Secure, HttpOnly, SameSite) and whether this cookie must work over plain HTTP.',
+  'CWE-306': 'a missing authentication check needs a policy; the scanner reports the handler and does not invent the guard. The decision needed: which credential authenticates this route (session, token, API key) and what an unauthenticated caller receives (401, a redirect to login).',
+  'CWE-770': 'a resource limit is a number only the operator can choose (how many bytes a body may have, how many requests, how large an allocation). The one recognised shape is wai strictRequestBody of a Request variable in a file importing Network.Wai and Data.ByteString.Lazy, which gets a bounded reader with a declared default; this is not that shape. The decision needed: the limit for this input, and what happens past it (reject with 413, truncate, spool to disk).',
+  'CWE-295': 'enabling certificate validation can break connections the project depends on. Only the connection package\'s TLSSettingsSimple with a literal True is flipped. The decision needed: the trust store (the system store, a pinned CA bundle, a private authority) and host-name verification; an OpenSSL VerifyNone is not rewritten because VerifyPeer verifies nothing until a CA bundle is loaded and does not check the host name.',
+  'CWE-798': 'a hard-coded secret must be rotated and moved to a secret store; rewriting the line would leave the leaked value valid. The decision needed: where the secret is read from at run time (environment, a secrets manager, a file outside the repository) and rotating the exposed value, which no edit of this file can do.',
+  'CWE-611': 'XML entity handling depends on the parser configuration in use. The decision needed: whether this document source is trusted and which entity and DTD features the parser may enable.',
+  'CWE-22': 'path traversal is repaired by confining the final path to a base directory. takeFileName is applied only to a String/FilePath parameter spliced under a fixed directory in a file operation; this shape (several segments, a base chosen at run time, a directory operation, a path handed through other functions) is not that. The decision needed: the directory the files must stay in, and whether a name containing separators or ".." is rejected or reduced to its last segment.',
+  'CWE-79': 'output encoding depends on the context the value is written into (HTML text, attribute, script, URL) and on the library that renders it; only blaze-html\'s preEscapedToHtml is rewritten. The decision needed: render the value through the project\'s escaping HTML library, or send it as text/plain.',
+  'CWE-601': 'an open redirect is repaired by restricting where the redirect may go. The decision needed: the permitted destinations (an allow-list of hosts, or relative paths only).',
 });
 
 // ── gates ────────────────────────────────────────────────────────────────────
@@ -440,19 +821,103 @@ export function syntaxGate(file, before, after) {
   return { ok: na <= nb, errorsBefore: nb, errorsAfter: na, detail: na <= nb ? 'no new syntax errors' : `${na - nb} new syntax error(s)` };
 }
 
-/** Compile check is OPT-IN. `opts.compile` must be true AND a ghc must exist; otherwise the result says it did not run. */
+const _ghcProbe = new Map();
+function probeGhc(ghc) {
+  if (_ghcProbe.has(ghc)) return _ghcProbe.get(ghc);
+  const probe = spawnSync(ghc, ['--numeric-version'], { encoding: 'utf8', timeout: 20000 });
+  const ok = !probe.error && probe.status === 0;
+  _ghcProbe.set(ghc, ok);
+  return ok;
+}
+
+/** The `-i` root a file implies from its `module A.B.C` header and its path (src/A/B/C.hs -> src). */
+function sourceRootOf(file, text) {
+  const m = /^module\s+([A-Z][\w'.]*)/m.exec(String(text || ''));
+  if (!m || /\.\.|\.$/.test(m[1])) return null;
+  const tail = `${m[1].replace(/\./g, '/')}.hs`;
+  return file === tail ? '.' : (file.endsWith(`/${tail}`) ? file.slice(0, file.length - tail.length - 1) : null);
+}
+
+function ghcTypeCheck(ghc, tree, targets, timeoutMs) {
+  const dir = mkdtempSync(join(tmpdir(), 'hs-compile-'));
+  try {
+    for (const [f, t] of Object.entries(tree)) if (/\.l?hs$/i.test(f) && typeof t === 'string') { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), t); }
+    const roots = new Set(['src', '.']);
+    for (const f of targets) { const r = sourceRootOf(f, tree[f]); if (r) roots.add(r); }
+    const r = spawnSync(ghc, ['-fno-code', ...[...roots].map((x) => `-i${x}`), ...targets], { cwd: dir, encoding: 'utf8', timeout: timeoutMs });
+    return { status: r.status, stderr: String(r.stderr || '') };
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
+/**
+ * Compile check is OPT-IN. `opts.compile` must be true AND a ghc must exist; otherwise the result says it did not run (never a pass).
+ * `opts.targets` limits the files handed to GHC (their local imports are found through the source roots); default is every .hs file.
+ * `opts.baseline` is the tree BEFORE the patch: a patched tree that fails to type-check is only a failure of the patch when the original
+ * type-checks on this host. When the original does not (a package this host lacks, a source directory GHC was not told about), or when the
+ * patch imports a module this host lacks, nothing can be concluded and the gate reports `ran:false`, not a pass and not a failure.
+ */
 export function compileGate(files, opts = {}) {
   if (opts.compile !== true) return { ran: false, ok: null, detail: 'not requested (default static scans never start GHC)' };
   const ghc = opts.ghc || 'ghc';
-  const probe = spawnSync(ghc, ['--numeric-version'], { encoding: 'utf8', timeout: 20000 });
-  if (probe.error || probe.status !== 0) return { ran: false, ok: null, detail: 'GHC is not available on this host; compile verification was not performed' };
-  const dir = mkdtempSync(join(tmpdir(), 'hs-compile-'));
-  try {
-    for (const [f, t] of Object.entries(files)) if (/\.l?hs$/i.test(f)) { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), t); }
-    const hs = Object.keys(files).filter((f) => /\.hs$/i.test(f));
-    const r = spawnSync(ghc, ['-fno-code', '-isrc', '-i.', ...hs], { cwd: dir, encoding: 'utf8', timeout: opts.timeoutMs || 120000 });
-    return { ran: true, ok: r.status === 0, detail: r.status === 0 ? 'type-checked' : (r.stderr || '').slice(0, 400) };
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  if (!probeGhc(ghc)) return { ran: false, ok: null, detail: 'GHC is not available on this host; compile verification was not performed' };
+  const hsAll = Object.keys(files).filter((f) => /\.hs$/i.test(f));
+  const targets = (opts.targets && opts.targets.length ? opts.targets.filter((f) => /\.hs$/i.test(f) && f in files) : hsAll);
+  if (!targets.length) return { ran: false, ok: null, detail: 'no .hs file to type-check' };
+  const timeoutMs = opts.timeoutMs || 120000;
+  const r = ghcTypeCheck(ghc, files, targets, timeoutMs);
+  if (r.status === 0) return { ran: true, ok: true, detail: 'type-checked' };
+  if (opts.baseline) {
+    const missing = /Could not find module\s+[‘'`]([^’'`]+)[’'`]/.exec(r.stderr);
+    const b = ghcTypeCheck(ghc, opts.baseline, targets.filter((f) => f in opts.baseline), timeoutMs);
+    if (b.status !== 0) return { ran: false, ok: null, detail: `the original does not type-check on this host either (${(b.stderr.split('\n').find((l) => /error/i.test(l)) || b.stderr).trim().slice(0, 160)}), so the patch could not be judged by compiling` };
+    if (missing) return { ran: false, ok: null, detail: `the patch uses module ${missing[1]}, which is not installed on this host; the patch was not type-checked` };
+  }
+  return { ran: true, ok: false, detail: r.stderr.slice(0, 400) };
+}
+
+// ── the effective-change check ────────────────────────────────────────────────
+// A rescan going quiet proves only that the finding stopped being REPORTED. This reads the value back from the patched file with readers that
+// are independent of the editor (`tlsSettingsOf`, `cookieSitesOf`, the call counts) and requires the intended attribute to be the one that changed.
+export function haskellEffectiveCheck(plan, patched) {
+  const want = plan.expectEffective;
+  if (!want) return { ok: true, ran: false, detail: 'not an attribute fix' };
+  const after = patched[plan.file];
+  if (typeof after !== 'string') return { ok: false, ran: true, detail: 'the patched file is not in the tree' };
+  const before = plan.before;
+  if (want.kind === 'tls') {
+    const b = tlsSettingsOf(before); const a = tlsSettingsOf(after);
+    if (a.length !== b.length) return { ok: false, ran: true, detail: `the number of TLS settings changed (${b.length} to ${a.length})` };
+    const at = want.ordinal;
+    if (!(b[at] && b[at].disableCertificateValidation === true)) return { ok: false, ran: true, detail: 'the planned site did not disable validation before the patch' };
+    if (a[at].disableCertificateValidation !== false) return { ok: false, ran: true, detail: `${TLS_FIELD} reads ${JSON.stringify(a[at].disableCertificateValidation)} after the patch, not False` };
+    for (let i = 0; i < b.length; i++) if (i !== at && (b[i].disableCertificateValidation !== a[i].disableCertificateValidation || JSON.stringify(b[i].others) !== JSON.stringify(a[i].others))) return { ok: false, ran: true, detail: `another TLS setting changed (site ${i})` };
+    if (JSON.stringify(b[at].others) !== JSON.stringify(a[at].others)) return { ok: false, ran: true, detail: 'the other settings of the edited site changed' };
+    return { ok: true, ran: true, detail: `${TLS_FIELD} reads False at the edited site and nothing else changed` };
+  }
+  if (want.kind === 'cookie') {
+    const b = cookieSitesOf(before); const a = cookieSitesOf(after);
+    if (a.length !== b.length) return { ok: false, ran: true, detail: `the number of cookie sites changed (${b.length} to ${a.length})` };
+    const at = want.ordinal;
+    if (!a[at] || !(a[at].httpOnly && a[at].secure)) return { ok: false, ran: true, detail: `the edited cookie still reads HttpOnly=${a[at] && a[at].httpOnly} Secure=${a[at] && a[at].secure} after the patch` };
+    for (let i = 0; i < b.length; i++) if (i !== at && (b[i].httpOnly !== a[i].httpOnly || b[i].secure !== a[i].secure || b[i].kind !== a[i].kind)) return { ok: false, ran: true, detail: `another cookie site changed (site ${i})` };
+    return { ok: true, ran: true, detail: 'the edited cookie reads HttpOnly and Secure after the patch and no other cookie changed' };
+  }
+  if (want.kind === 'random') {
+    const defLine = (t) => (stripComments(t).split('\n').find((l) => new RegExp(`^${want.fn}\\s*=`).test(l)) || '');
+    const d = defLine(after);
+    if (/randomIO|System\.Random/.test(d)) return { ok: false, ran: true, detail: 'the action still calls System.Random' };
+    if (!new RegExp(`getEntropy\\s+${want.bytes}\\s*$`).test(d)) return { ok: false, ran: true, detail: `the action does not read ${want.bytes} entropy byte(s)` };
+    return { ok: true, ran: true, detail: `${want.fn} reads ${want.bytes} byte(s) from getEntropy and no longer calls System.Random` };
+  }
+  if (want.kind === 'body') {
+    const count = (t, re) => (stripComments(t).match(re) || []).length;
+    const calls = (t) => count(t, /(?<![\w'])(?:[A-Z][\w']*\.)?strictRequestBody(?![\w'])/g);
+    if (calls(after) !== calls(before) - want.replaced) return { ok: false, ran: true, detail: `exactly ${want.replaced} strictRequestBody call(s) should have been replaced` };
+    if (!after.includes(BODY_HELPER)) return { ok: false, ran: true, detail: 'the bounded reader is not defined in the patched file' };
+    if (!new RegExp(`requestBodyLimitBytes\\s*=\\s*${BODY_LIMIT_DEFAULT}\\b`).test(after)) return { ok: false, ran: true, detail: 'the declared limit is not the one the patch states' };
+    return { ok: true, ran: true, detail: `${want.replaced} strictRequestBody call(s) were replaced by the bounded reader, whose limit is the declared constant` };
+  }
+  return { ok: false, ran: true, detail: `unknown effective check ${want.kind}` };
 }
 
 /**
@@ -463,23 +928,25 @@ export function compileGate(files, opts = {}) {
 export async function validateHaskellFix(finding, o) {
   const plan = planHaskellFix(finding, o.files);
   if (!plan.ok) return { status: 'unsupported', applied: false, ...plan };
-  return runFixLifecycle({
+  const res = await runFixLifecycle({
     plan, files: o.files, finding, matchKey: key, rescan: o.rescan || defaultRescan,
-    syntax: (p) => syntaxGate(p.file, p.before, p.after), behaviorCheck: o.behaviorCheck, witness: o.witness, requireWitness: o.requireWitness,
-    compile: (patched) => compileGate(patched, o), requireCompile: o.requireCompile, apply: o.apply, root: o.root,
+    syntax: (p) => syntaxGate(p.file, p.before, p.after), behaviorCheck: o.behaviorCheck, effectiveCheck: haskellEffectiveCheck, witness: o.witness, requireWitness: o.requireWitness,
+    compile: (patched) => compileGate(patched, { ...o, baseline: o.files, targets: [plan.file] }), requireCompile: o.requireCompile, apply: o.apply, root: o.root,
   });
+  return { ...res, consequences: plan.consequences || [], tier: res.status === 'blocked' ? TIERS.blocked : plan.tier, explanation: plan.explanation };
 }
 
 /**
  * Verify a patch SUPPLIED BY SOMEONE ELSE (a user, a model) through the same gates as a deterministic fix: path, syntax,
- * the original finding gone, no new medium-or-higher finding. Nothing is written. `proposal` is the new text of `file`.
+ * the original finding gone, no new medium-or-higher finding, and a compile check when asked. Nothing is written. `proposal` is the new text of
+ * `file`. Reached from `agentic-security fix <id> --proposal <file>` (see `languageProposalPreview` in context.js).
  */
 export async function verifyHaskellProposal(finding, { files, file, proposal, rescan, compile, requireCompile }) {
   const before = files[file];
   const plan = { file, before: typeof before === 'string' ? before : '', after: proposal, label: 'WORKAROUND' };
   return runFixLifecycle({
     plan, files, finding, matchKey: key, rescan: rescan || defaultRescan, syntax: (p) => syntaxGate(p.file, p.before, p.after),
-    compile: (patched) => compileGate(patched, { compile }), requireCompile, apply: false,
+    compile: (patched) => compileGate(patched, { compile, baseline: files, targets: [file] }), requireCompile, apply: false,
   });
 }
 

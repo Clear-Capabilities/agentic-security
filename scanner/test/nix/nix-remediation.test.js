@@ -238,7 +238,8 @@ test('[NIX-010.AC04] preview, backup, apply and undo use the same lifecycle as t
   await assert.rejects(() => validateNixFix(f, { files: SSH_FILES, apply: true, root }), /changed on disk/);
   // the Haskell lifecycle is the same code: identical result keys
   const hs = await validateHaskellFix({ cwe: 'CWE-79', file: 'a.hs', line: 3 }, { files: { 'a.hs': 'module A where\nimport Text.Blaze.Html (preEscapedToHtml)\nr n = preEscapedToHtml n\n' }, rescan: async (fs) => (/preEscapedToHtml n/.test(fs['a.hs']) ? [{ file: 'a.hs', cwe: 'CWE-79', severity: 'high' }] : []) });
-  assert.deepEqual(Object.keys(hs).sort(), Object.keys(dry).filter((k) => k !== 'consequences' && k !== 'tier' && k !== 'explanation').sort());
+  // (since 0.190.0 a Haskell result carries `tier`, `consequences` and `explanation` exactly as a Nix one does: the key sets are now identical)
+  assert.deepEqual(Object.keys(hs).sort(), Object.keys(dry).sort());
 });
 
 test('[NIX-010.AC04] a fix that introduces a new medium-or-higher finding, or breaks syntax, is rejected', async () => {

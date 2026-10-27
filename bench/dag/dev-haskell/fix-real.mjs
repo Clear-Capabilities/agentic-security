@@ -16,7 +16,7 @@ process.env.AGENTIC_SECURITY_DEEP = '1';
 delete process.env.CI;
 const { runScan } = await import('../../../scanner/src/runScan.js');
 const { scan } = await runScan(root);
-const project = loadLanguageProject(root);
+const project = loadLanguageProject(root, { maxFiles: 8000, maxBytes: 80 * 1024 * 1024 });   // IHP has more than the default 600 files; a truncated tree reports "file is not in the supplied tree"
 const files = project.files || project;
 const rows = scan.findings.filter((f) => /\.hs$/.test(f.file || '') && f.severity !== 'info' && (all || /Password hashed|Predictable random|Weak hash|Path Traversal|Command|SQL|Cross-Site|Sensitive/.test(f.vuln || '')));
 for (const f of rows) {

@@ -26,6 +26,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { runConfined, sandboxAvailable } from '../sandbox/index.js';
 import { analyzeNixScripts, SHELL_PLACEHOLDER } from './nix-script-taint.js';
+import { bootModuleSet } from '../posture/proof-fabric/generate-haskell.js';
 
 export const WITNESS_VERSION = 'language-witness/1';
 export const PROOF_MARKER = 'PROVEN';
@@ -183,5 +184,100 @@ export function nixFixWitness(finding, opts = {}) {
     const target = nixFlowTarget(nixOnly(files), finding);
     if (!target) return { ok: false, verified: false, reason: 'the finding is not a generated-script interpolation, so no witness applies' };
     return judgeFixWitness(witnessNixFlow(nixOnly(files), target, opts), witnessNixFlow(nixOnly(patched), target, opts));
+  };
+}
+
+// ── Haskell: the fix witness ──────────────────────────────────────────────────
+// `haskellFixWitness(finding)` is the `witness` hook of `runFixLifecycle` for a Haskell fix, the counterpart of `nixFixWitness`. It runs the ORIGINAL
+// and the PATCHED file under GHC's interpreter inside the confinement sandbox (`ghc -e ':load *File' -e 'fn "<payload>"'`, every top-level name in
+// scope, so the function need not be exported) and judges them with `judgeFixWitness`: verified only when the original reproduced the effect and the
+// patched code ran without reproducing it.
+//
+// Where it can honestly be built: a command-injection fix (`behavior.kind === 'process'`) in a top-level function whose parameters are all
+// String/FilePath and whose result is IO, in a file whose imports are all modules of the packages that ship with GHC (`bootModuleSet`, the same
+// decision the proof fabric makes before it runs anything). The payload makes the shell create `PROVEN`; the marker is the only thing that proves.
+// Every other class is REFUSED with the reason (never faked): the effect is not observable by a program GHC can run alone (a TLS peer, a response
+// header of a web framework, a database), not an exploit at all (a digest, a log line), or a property of a distribution (randomness).
+const WITNESS_REFUSALS = Object.freeze({
+  tls: 'certificate validation is observable only against a TLS server presenting an untrusted certificate, and the confinement environment denies the network',
+  cookie: 'a cookie attribute is a property of a response header produced by a web framework (wai, scotty, servant) that GHC does not ship, so no program can run it here',
+  random: 'unpredictability is a property of a distribution; no single run reproduces or refutes it',
+  'body-limit': 'the effect needs a wai Request with a streamed body, and wai is not a package GHC ships',
+  sql: 'the effect is observable only in a database driver, which GHC does not ship',
+  html: 'the effect is observable only in the rendering library, which GHC does not ship',
+  hash: 'a weaker digest is not an exploitable effect a program can demonstrate',
+  log: 'the effect is a value appearing in a log, which depends on the logging setup the file does not state',
+  path: 'the base directory is the program\'s own and is not present in the sandbox, so a traversal out of it cannot be planted and observed',
+});
+
+/** The top-level function around `line`: {name, params:[{name,type}], result} from its signature and first clause, or null. */
+export function haskellFunctionAt(text, line) {
+  const lines = String(text).split('\n');
+  let clause = -1;
+  for (let i = Math.min(line - 1, lines.length - 1); i >= 0; i--) if (/^[a-z_][\w']*\b[^:\n]*=/.test(lines[i]) && !/^[a-z_][\w']*\s*::/.test(lines[i])) { clause = i; break; }
+  if (clause < 0) return null;
+  const m = /^([a-z_][\w']*)([^=]*)=/.exec(lines[clause]);
+  if (!m) return null;
+  const params = m[2].trim() ? m[2].trim().split(/\s+/) : [];
+  if (params.some((p) => !/^[a-z_][\w']*$/.test(p))) return null;
+  const sigLine = lines.findIndex((l) => new RegExp(`^${m[1]}\\s*::`).test(l));
+  if (sigLine < 0) return null;
+  let sig = lines[sigLine].replace(/^[^:]*::/, '');
+  for (let j = sigLine + 1; j < lines.length && /^\s+\S/.test(lines[j]) && !/^[a-z_][\w']*\s*(::|=)/.test(lines[j]); j++) sig += ` ${lines[j].trim()}`;
+  if (/=>/.test(sig)) return null;                       // a constrained signature: the argument types are not concrete
+  const types = []; let depth = 0; let cur = '';
+  for (let i = 0; i < sig.length; i++) {
+    const c = sig[i];
+    if (c === '(' || c === '[') depth++; else if (c === ')' || c === ']') depth--;
+    if (depth === 0 && sig.startsWith('->', i)) { types.push(cur.trim()); cur = ''; i++; continue; }
+    cur += c;
+  }
+  types.push(cur.trim());
+  if (types.length !== params.length + 1) return null;
+  return { name: m[1], params: params.map((p, i) => ({ name: p, type: types[i] })), result: types[types.length - 1] };
+}
+
+/** Runs `expr` in the interpreter with `file` loaded (all its top-level names in scope), confined. Never throws. */
+export function runHaskellEval(tree, file, expr, { timeoutMs = 60_000, force } = {}) {
+  const base = { witness: WITNESS_VERSION, lang: 'haskell', ran: false, backend: null, marker: PROOF_MARKER };
+  const ghc = which('ghc');
+  if (!ghc) return { ...base, status: 'unavailable', reason: 'no GHC on PATH; the Haskell witness cannot run here' };
+  if (!sandboxAvailable()) return { ...base, status: 'invalid', reason: 'no confinement primitive available; refusing to execute' };
+  let root;
+  try {
+    root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'witness-hs-')));
+    for (const [f, t] of Object.entries(tree)) if (/\.l?hs$/i.test(f) && typeof t === 'string') { fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true }); fs.writeFileSync(path.join(root, f), t); }
+    const r = runConfined([ghc, '-isrc', '-i.', '-e', `:load *${file}`, '-e', expr], { root, timeoutMs, force });
+    if (r.status === 'disabled' || r.status === 'error') return { ...base, backend: r.backend, status: 'invalid', reason: `the sandbox could not execute it: ${String(r.stderr || '').trim() || r.status}` };
+    if (r.timedOut) return { ...base, backend: r.backend, status: 'invalid', reason: 'the witness exceeded its time budget', timedOut: true };
+    const proven = fs.existsSync(path.join(root, PROOF_MARKER));
+    if (!proven && /\[GHC-\d+\]|Could not find module|parse error|error:\s/.test(String(r.stderr || ''))) return { ...base, backend: r.backend, status: 'invalid', reason: `the module did not load or run: ${String(r.stderr).trim().split('\n').find((l) => l.trim()) || 'GHC rejected it'}` };
+    return { ...base, ran: true, backend: r.backend, status: proven ? 'reproduced' : 'not-reproduced', exitCode: r.exitCode, reason: proven ? null : 'the function ran and the marker was not created' };
+  } catch (e) {
+    return { ...base, status: 'invalid', reason: `witness harness error: ${String((e && e.message) || e)}` };
+  } finally { if (root) fs.rmSync(root, { recursive: true, force: true }); }
+}
+
+const importsOf = (text) => [...String(text).matchAll(/^import\s+(?:safe\s+)?(?:qualified\s+)?([A-Z][\w.']*)/gm)].map((m) => m[1]);
+
+/** A `witness` hook for runFixLifecycle over a Haskell fix. See the block comment above for what is and is not supported. */
+export function haskellFixWitness(finding, opts = {}) {
+  return (plan, files, patched) => {
+    const kind = plan && plan.behavior && plan.behavior.kind;
+    const no = (reason) => ({ ok: false, verified: false, reason });
+    if (kind !== 'process') return no(`no controlled witness can be built for ${kind || 'this'} fixes: ${WITNESS_REFUSALS[kind] || 'the class has no observable effect a program GHC runs alone could produce'}`);
+    const fn = haskellFunctionAt(plan.before, plan.fixedAtLine || finding.line);
+    if (!fn || !fn.params.length || !/^IO\b/.test(fn.result) || fn.params.some((p) => !/^(?:String|FilePath)$/.test(p.type))) return no('the flagged call is not in a top-level function of String/FilePath parameters returning IO, so there is no argument to put a payload in');
+    const ghc = opts.ghc || which('ghc');
+    if (!ghc) return { ok: false, verified: false, status: 'unavailable', reason: 'no GHC on PATH; the Haskell witness is unavailable here' };
+    const boot = bootModuleSet(ghc);
+    if (!boot) return no('the modules the installed GHC provides could not be listed, so whether the file can be loaded is unknown');
+    const external = [...new Set([...importsOf(plan.before), ...importsOf(plan.after)])].filter((m) => !boot.has(m));
+    if (external.length) return no(`the file imports ${external.slice(0, 4).join(', ')}, which GHC's boot packages do not provide, so it cannot be loaded for a witness`);
+    if (/\{-#\s*LANGUAGE[^#]*\b(?:TemplateHaskell|QuasiQuotes|CPP)\b/.test(plan.before)) return no('the file uses Template Haskell, quasi-quotes or CPP, which run code at load time');
+    const payload = `x; touch ${PROOF_MARKER}`;
+    const expr = `${fn.name} ${fn.params.map(() => JSON.stringify(payload)).join(' ')}`;
+    const only = (t) => Object.fromEntries(Object.entries(t).filter(([p, x]) => p === plan.file && typeof x === 'string'));
+    return judgeFixWitness(runHaskellEval(only(files), plan.file, expr, opts), runHaskellEval(only(patched), plan.file, expr, opts));
   };
 }
