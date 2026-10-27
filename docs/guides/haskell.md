@@ -345,8 +345,13 @@ this `sqlite-simple` example, and is regenerated at the next build.
 
 <!-- generated:fix-hs-sql:start -->
 ```text
-$ agentic-security fix --finding <id> --preview     # exit 4
-No verified fix for this finding (blocked): the patch adds an import of a database library the file did not use (Database.PostgreSQL.Simple); which driver the project uses is not provable from this file, so the edit is refused rather than guessed. Apply the parameterised query by hand with the project's own driver
+$ agentic-security fix --finding <id> --preview     # exit 0
+FULL: Moved 1 interpolated value(s) out of the SQL text into query parameters.
+--- a/src/Main.hs
++++ b/src/Main.hs
+@@ -13,1 +13,1 @@
+-lookupOrder conn ref = query_ conn (fromString ("SELECT status FROM orders WHERE ref = '" ++ ref ++ "'"))
++lookupOrder conn ref = query conn "SELECT status FROM orders WHERE ref = ?" (Only ref)
 ```
 <!-- generated:fix-hs-sql:end -->
 

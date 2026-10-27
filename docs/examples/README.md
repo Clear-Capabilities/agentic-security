@@ -519,15 +519,14 @@ No verified fix for this finding (blocked): the patch introduces 1 new medium-or
 `examples/haskell-on-nix/vulnerable`: a Haskell program and the flake that builds and runs it as `root`.
 
 <!-- generated:ex-hn-vuln:start -->
-Captured from the built bundle on `examples/haskell-on-nix/vulnerable`: exit code **3**, scan health **partial**.
+Captured from the built bundle on `examples/haskell-on-nix/vulnerable`: exit code **1**, scan health **partial**.
 
 | Severity | Family | CWE | Location |
 | --- | --- | --- | --- |
 | medium | `vulnerable-dep` | CWE-829 | flake.nix:0 |
 | low | `vulnerable-dep` | CWE-829 | flake.nix:0 |
-| high | `path-traversal` | CWE-22 | src/Main.hs:14 |
-| critical | `command-injection` | CWE-78 | src/Main.hs:15 |
-| critical | `multi-sink-taint-chain` | CWE-20 | src/Main.hs:15 |
+| info | `path-traversal` | CWE-22 | src/Main.hs:14 |
+| info | `command-injection` | CWE-78 | src/Main.hs:15 |
 
 Scan-health conditions:
 - no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
