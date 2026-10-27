@@ -1,0 +1,77 @@
+{
+ "id": "stack",
+ "ms": 8205,
+ "totalFindings": 32,
+ "haskell": [
+  {
+   "id": "ir-taint:etc/scripts/build-stack-installer.hs:20:hs-sink-prelude.writefile.cwe-22.0:1840b2c9",
+   "stableId": "a3adc5672a951711",
+   "file": "etc/scripts/build-stack-installer.hs",
+   "line": 20,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "etc/scripts/build-stack-installer.hs",
+    "line": 18,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "etc/scripts/build-stack-installer.hs",
+    "line": 20,
+    "label": "hs-sink-prelude.writefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:etc/scripts/install-many-stack-releases.hs:66:hs-sink-system.directory.doesdirectoryexist.cwe-22.0:9253bf07",
+   "stableId": "9640f7854a9226dd",
+   "file": "etc/scripts/install-many-stack-releases.hs",
+   "line": 66,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "etc/scripts/install-many-stack-releases.hs",
+    "line": 61,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "etc/scripts/install-many-stack-releases.hs",
+    "line": 66,
+    "label": "hs-sink-system.directory.doesdirectoryexist.cwe-22.0"
+   }
+  }
+ ]
+}

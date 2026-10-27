@@ -1,0 +1,63 @@
+{
+ "id": "stack",
+ "ms": 8473,
+ "totalFindings": 34,
+ "haskell": [
+  {
+   "id": "ir-taint:etc/scripts/build-stack-installer.hs:20:hs-sink-prelude.writefile.cwe-22.0:1840b2c9",
+   "stableId": "a3adc5672a951711",
+   "file": "etc/scripts/build-stack-installer.hs",
+   "line": 20,
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": ""
+  },
+  {
+   "id": "ir-taint:etc/scripts/install-many-stack-releases.hs:66:hs-sink-system.directory.doesdirectoryexist.cwe-22.0:9253bf07",
+   "stableId": "9640f7854a9226dd",
+   "file": "etc/scripts/install-many-stack-releases.hs",
+   "line": 66,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": ""
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Stack/Package.hs:270",
+   "stableId": "d48af305e5aa094d",
+   "file": "src/Stack/Package.hs",
+   "line": 270,
+   "severity": "low",
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: function Object() { [native code] }"
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Stack/Types/Cache.hs:80",
+   "stableId": "9fcb1badab4ec789",
+   "file": "src/Stack/Types/Cache.hs",
+   "line": 80,
+   "severity": "low",
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: function Object() { [native code] }"
+  }
+ ]
+}

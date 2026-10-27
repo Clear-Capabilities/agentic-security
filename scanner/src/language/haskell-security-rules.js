@@ -15,6 +15,7 @@
 
 import { buildHaskellIR } from './haskell-ir.js';
 import { HS_LOG_SINKS, HS_MODEL_VERSION } from './haskell-models.js';
+import { codeOfLine } from './haskell-comments.js';
 
 export const HS_RULES_VERSION = 'haskell-security-rules/1';
 
@@ -68,7 +69,9 @@ const UNSAFE_CALLS = { 'System.IO.Unsafe.unsafePerformIO': 'unsafePerformIO', 'S
 const SECRET_KEY_CALLS = new Set(['Web.JWT.hmacSecret', 'Web.JWT.secret', 'Servant.Auth.Server.fromSecret', 'Web.ClientSession.initKey']);
 const isTrueLit = (e) => !!e && ((e.kind === 'literal' && /^true$/i.test(String(e.value))) || (e.kind === 'ident' && /(?:^|\.)True$/.test(e.name || '')));
 const TIME_SOURCES = new Set(['Data.Time.Clock.POSIX.getPOSIXTime', 'Data.Time.Clock.getCurrentTime', 'System.CPUTime.getCPUTime']);
-const SECURITY_FN_SUBSTR = /(?:token|nonce|secret|otp|csrf|session|salt|apikey|resetcode|passcode|verification)/i;
+// A salt is deliberately absent: it must be unique, not unpredictable or secret (it is stored beside the hash), so a non-cryptographic generator
+// producing one is not a weakness the way it is for a token, nonce or key.
+const SECURITY_FN_SUBSTR = /(?:token|nonce|secret|otp|csrf|session|apikey|resetcode|passcode|verification)/i;
 // Short credential words that would over-match as substrings (`spin`, `mapping`, `keyboard`): matched as whole camelCase / snake_case words.
 const SECURITY_WORDS = new Set(['pin', 'password', 'passwd', 'credential', 'credentials']);
 const SECURITY_FN = { test: (name) => SECURITY_FN_SUBSTR.test(name) || String(name).replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some((w) => SECURITY_WORDS.has(w)) };
@@ -89,7 +92,7 @@ const EMPTINESS_CHECK = /(?:^|\.)(?:null|notNull|isEmpty|length|size|isJust|isNo
 const SESSION_COOKIE = /(?:sess|sid|token|tok|auth|jwt|csrf|login|remember|secret)/i;
 
 // What makes a bound variable security-shaped, and what makes a value sensitive for logging.
-const SECURITY_VAR = /^(?:.*(?:token|secret|nonce|salt|otp|csrf|apikey|api_?key|sessionid|session_?key|sessiontoken|resettoken)[a-z0-9_']*|key|iv|sessionId|sid)$/i;
+const SECURITY_VAR = /^(?:.*(?:token|secret|nonce|otp|csrf|apikey|api_?key|sessionid|session_?key|sessiontoken|resettoken)[a-z0-9_']*|key|iv|sessionId|sid)$/i;
 const PASSWORD_VAR = /(?:^|[^a-z])(?:pass(?:word|wd|phrase)?|pwd|pw)(?:[^a-z]|$)|password/i;
 const LOW_ENTROPY = /(?:pass(?:word|wd|phrase)?|pwd|ssn|creditcard|cardnumber|cvv|\bpin\b)/i;
 export const SENSITIVE = /(?:pass(?:word|wd|phrase)?|pwd|(?:^|[^a-z])pw(?:[^a-z]|$)|secret|token|api_?key|ssn|credit_?card|card_?number|cvv|authorization|bearer|private_?key|session_?id)/i;
@@ -128,6 +131,15 @@ const isLiteralLike = (e, depth = 0) => {
   return false;
 };
 
+// A concatenation of literals only (`"a=" <> "0" <> "; Path=/"`).
+const constantConcat = (e, depth = 0) => {
+  if (!e || depth > 12) return false;
+  if (e.kind === 'literal') return true;
+  if (e.kind === 'binary' && e.hs && e.hs.concat) return constantConcat(e.left, depth + 1) && constantConcat(e.right, depth + 1);
+  if (e.kind === 'call' && /(?:^|\.)(?:pack|fromString|encodeUtf8|fromStrict|toStrict)$/.test(e.callee || '') && e.args && e.args.length === 1) return constantConcat(e.args[0], depth + 1);
+  return false;
+};
+
 function fnNodes(fn) { return Object.values(fn.cfg.nodes); }
 
 // The text a concatenation spells out, in order, skipping the parts that are not literals (`"session_id=" <> sid <> "; Path=/"` -> `session_id=; Path=/`).
@@ -142,7 +154,80 @@ function literalTextOf(e, depth = 0) {
 function snippetOf(text, line) {
   if (!text || !Number.isInteger(line) || line < 1) return '';
   const l = text.split('\n')[line - 1];
-  return typeof l === 'string' ? l.trim().slice(0, 240) : '';
+  return typeof l === 'string' ? codeOfLine(l).slice(0, 240) : '';
+}
+
+// An unbounded read is a resource-exhaustion finding when the party that fills the input is not the operator. A handle opened on a
+// local file, a child process's pipe or a handle passed in is the operator's own (a file's size is what the file system says); a
+// socket or connection handle is filled by the peer. A read of standard input is the operator's in a program's own control flow, and
+// the caller's only in an entry point nothing in the analysed code calls (a library function handing back whatever its caller pipes in).
+const NETWORK_HANDLE_CALL = /(?:^|\.)(?:socketToHandle|connectTo|accept|acceptOn|openTCPConnection)$/;
+function readsOutsideInput(fn, callee, args, importsNetwork) {
+  const h = args && args[0];
+  const isStdin = !!h && h.kind === 'ident' && /(?:^|\.)stdin$/.test(h.name || '');
+  const handleRead = /hGetContents$/.test(callee) && !isStdin;
+  // the networking packages are not all in the model registry, so a call keeps its bare name; the module imports say which library it is
+  if (handleRead) return !!importsNetwork && (fn.calls || []).some((x) => typeof x.callee === 'string' && NETWORK_HANDLE_CALL.test(x.callee));
+  const hs = fn.hs || {};
+  return !hs.reached && !/(?:^|\.)main$/.test(fn.name || '');
+}
+
+const EQUALITY_OPS = new Set(['==', '/=', '!=']);
+const VERIFY_CALL = /(?:^|\.)(?:constEq|secureCompare|verify\w*|authenticate\w*|checkPassword|validate\w*|hmac\w*|sign\w*|jwt\w*|encode(?:Signed)?)$/i;
+// Whole camelCase / snake_case words: `sig` must not match `design`, `mac` must not match `machine`.
+const CREDENTIAL_WORDS = new Set(['token', 'secret', 'nonce', 'otp', 'csrf', 'apikey', 'session', 'signature', 'sig', 'mac', 'hmac', 'credential', 'credentials', 'auth', 'cookie', 'passcode', 'cert', 'fingerprint']);
+const CREDENTIAL_NAME = { test: (name) => String(name).replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some((w) => CREDENTIAL_WORDS.has(w)) };
+
+/**
+ * Why a weak-hash call is a security matter: the list is empty when the digest is only an identifier or its use is not visible.
+ * Everything is read from the function's own IR (a value compared, bound to a credential-shaped name, hashing a secret-shaped value,
+ * handed to a signing or verifying call); nothing is read from comments or from the file's name.
+ */
+function weakDigestUse(fn, node, hashCall, hashArgs, fnBase) {
+  const reasons = [];
+  const nodes = Object.values(fn.cfg.nodes);
+  const exprsOf = (n) => [n.source, n.value, n.cond, ...(n.args || [])].filter(Boolean);
+  const hasNode = (x, target) => { for (const y of walk(x)) if (y === target) return true; return false; };
+  // 1. what is hashed
+  const hashed = (hashArgs || []).flatMap((a) => [...names(a)]).map((n) => n.replace(/^\./, ''));
+  if (hashed.some((n) => SENSITIVE.test(n) && !PASSWORD_VAR.test(n))) reasons.push('hashes a secret-shaped value');
+  // 2. values carrying the digest: the assignment target and everything derived from it
+  const carriers = new Set();
+  // the digest travels through formatting (`show`, `pack`, hex encoding, concatenation), not through an arbitrary call that merely receives it
+  const FORMAT = /(?:^|\.)(?:show|pack|unpack|take|drop|toLower|toUpper|showDigest|convertToBase|encode\w*|decode\w*|fromStrict|toStrict|toString|fromString|digestToHexByteString|toHex|hexlify|concat|append|map|fmap|fromText|toText)$/;
+  const flowsFrom = (e, depth = 0) => {
+    if (!e || depth > 10) return false;
+    if (e === hashCall) return true;
+    if (e.kind === 'ident') return carriers.has(e.name);
+    if (e.kind === 'binary' && e.hs && e.hs.concat) return flowsFrom(e.left, depth + 1) || flowsFrom(e.right, depth + 1);
+    if (e.kind === 'call' && typeof e.callee === 'string' && FORMAT.test(e.callee)) return (e.args || []).some((a) => flowsFrom(a, depth + 1));
+    if (e.kind === 'call' && e === hashCall) return true;
+    return false;
+  };
+  if (node.kind === 'assign' && node.target && node.source && flowsFrom(node.source)) carriers.add(node.target);
+  for (let round = 0; round < 8; round++) {
+    let grew = false;
+    for (const n of nodes) if (n.kind === 'assign' && n.target && n.source && !carriers.has(n.target) && flowsFrom(n.source)) { carriers.add(n.target); grew = true; }
+    if (!grew) break;
+  }
+  const carries = (x) => !!x && (flowsFrom(x) || [...names(x)].some((y) => carriers.has(y)));
+  let compared = false; let signed = false;
+  for (const n of nodes) {
+    for (const root of exprsOf(n)) {
+      for (const x of walk(root)) {
+        if (x.kind === 'binary' && EQUALITY_OPS.has(x.op) && (carries(x.left) || carries(x.right))) compared = true;
+        if (x.kind === 'call' && typeof x.callee === 'string' && VERIFY_CALL.test(x.callee) && (x.args || []).some((a) => carries(a))) signed = true;
+      }
+    }
+  }
+  if (compared) reasons.push('the digest is compared with another value');
+  if (signed) reasons.push('the digest is passed to a verifying or signing call');
+  // 3. what it becomes: a credential-shaped binding, or the result of a credential-shaped function
+  const bound = [...carriers].find((c) => CREDENTIAL_NAME.test(c) || SECURITY_VAR.test(c));
+  if (bound) reasons.push(`the digest is bound to \`${bound}\``);
+  const returned = nodes.some((n) => n.kind === 'return' && n.value && carries(n.value));
+  if (returned && (SECURITY_FN.test(fnBase) || CREDENTIAL_NAME.test(fnBase))) reasons.push(`the digest is the result of \`${fnBase}\``);
+  return reasons;
 }
 
 /**
@@ -186,6 +271,7 @@ export function analyzeHaskellRules(files, opts = {}) {
   };
 
   for (const [file, fir] of Object.entries(ir.perFile)) {
+    const importsNetwork = (fir.imports || []).some((im) => /^Network(?:\.|$)/.test(im.module));
     // imports of obsolete primitives (type-directed use is not resolved: disclosed on the finding)
     for (const imp of fir.imports || []) {
       if (WEAK_CIPHER_MODULES.has(imp.module)) {
@@ -199,7 +285,14 @@ export function analyzeHaskellRules(files, opts = {}) {
 
       const fnBase = fn.name.replace(/^.*\./, '');
       // text-typed parameters of an exported function, and every local value derived from them
-      const derivedText = new Set([...((fn.hs && fn.hs.textParams) || []), ...((fn.hs && fn.hs.inputParams) || [])]);
+      // A parameter a web framework hands to a handler IS request input wherever the handler is registered. Any other exported
+      // function's text parameter is "caller-supplied" only while nothing in the analysed code calls the function: once something does,
+      // its parameters take the values those callers pass (a check the taint engine makes per call), and a rule that does not follow
+      // calls cannot say the text comes from outside.
+      const fnHs = fn.hs || {};
+      const strongParam = new Set((fnHs.paramSources || []).filter((p) => /^hs:handler-param:/.test(p.decorator || '')).map((p) => p.name));
+      const entryLike = !fnHs.reached;
+      const derivedText = new Set([...(fnHs.textParams || []).filter((n) => strongParam.has(n) || entryLike), ...(entryLike ? (fnHs.inputParams || []) : [])]);
       if (derivedText.size) {
         for (let round = 0; round < 8; round++) {
           let grew = false;
@@ -255,7 +348,7 @@ export function analyzeHaskellRules(files, opts = {}) {
               if (TIME_SOURCES.has(e.name) && SECURITY_FN.test(fnBase)) emitRandom(node.line, { vuln: 'Clock value used as a security value', detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
               // a generator named as the whole value of a security-shaped action (`newCsrfToken = randomIO`): no call is written, the name is the call
               if (RANDOM_CALLS.has(e.name) && SECURITY_FN.test(fnBase) && !(e.hs && e.hs.functionRef)) emitRandom(node.line, { detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
-              if (INPUT_READS.has(e.name) && !bounded) emit('hs-unbounded-input-read', file, node.line, { detail: `${e.name} reads everything`, confidence: 0.6 });
+              if (INPUT_READS.has(e.name) && !bounded && readsOutsideInput(fn, e.name, [], importsNetwork)) emit('hs-unbounded-input-read', file, node.line, { detail: `${e.name} reads everything`, confidence: 0.6 });
               continue;
             }
             // a Set-Cookie header written by hand: `(hSetCookie, "session_id=" <> sid <> "; Path=/")`
@@ -268,7 +361,8 @@ export function analyzeHaskellRules(files, opts = {}) {
                 const sessionLike = !nm || SESSION_COOKIE.test(nm[1]);
                 const secure = /;\s*Secure\b/i.test(text); const httpOnly = /;\s*HttpOnly\b/i.test(text);
                 // an attribute string that is not written here (a rendered cookie value) cannot be judged: only a cookie whose text is visible is
-                if (text && sessionLike && (!secure || !httpOnly)) emit('hs-insecure-cookie', file, e.line || node.line, { detail: `${!httpOnly ? 'HttpOnly missing' : ''}${!httpOnly && !secure ? ', ' : ''}${!secure ? 'Secure missing' : ''}`, evidence: { httpOnly, secure, cookie: nm ? nm[1] : null } });
+                // a header value that is entirely constant text (`authn=0` written to clear a login) carries no per-user credential
+                if (text && sessionLike && !isLiteralLike(v) && !constantConcat(v) && (!secure || !httpOnly)) emit('hs-insecure-cookie', file, e.line || node.line, { detail: `${!httpOnly ? 'HttpOnly missing' : ''}${!httpOnly && !secure ? ', ' : ''}${!secure ? 'Secure missing' : ''}`, evidence: { httpOnly, secure, cookie: nm ? nm[1] : null } });
               }
             }
             if (e.kind === 'object' && e.hs && e.hs.update && Array.isArray(e.props)) {
@@ -324,7 +418,17 @@ export function analyzeHaskellRules(files, opts = {}) {
             // weak hash
             if (WEAK_HASH_CALLS.has(c) || (c === 'Crypto.Hash.hashWith' && args[0] && args[0].kind === 'literal' && WEAK_ALGO_CONS.has(args[0].value))) {
               const pw = args.some((a) => [...names(a)].some((n) => PASSWORD_VAR.test(n)));
-              if (!pw) emit('hs-weak-hash', file, line, { detail: c });
+              // MD5 and SHA-1 are broken for collision and preimage resistance, which only matters where an attacker gains from a
+              // collision: a digest that is VERIFIED (compared with an expected value), that authenticates or signs, that hashes a
+              // secret, or that is a credential. A digest that only NAMES something (a file name, a cache key, a bookmark, an ETag) is
+              // an identifier, and a hash helper handed on to callers says nothing about its use: neither is a finding.
+              if (!pw) {
+                const use = weakDigestUse(fn, node, e, args, fnBase);
+                // The API identity is always reported (a reviewer wants to know where MD5/SHA-1 is computed); it is a vulnerability
+                // finding only where a use that depends on the hash's strength is visible. Otherwise it is an `info` note.
+                if (use.length) emit('hs-weak-hash', file, line, { detail: `${c}: ${use.join('; ')}`, evidence: { call: c, use } });
+                else emit('hs-weak-hash', file, line, { severity: 'info', confidence: 0.4, detail: `${c}: no use that depends on the digest's collision or preimage resistance is visible (it may only name or key something)`, evidence: { call: c, use: [] } });
+              }
             }
             // password hashed with a fast hash
             if (ANY_HASH_CALLS.has(c) && !STRONG_KDF.test(c) && args.some((a) => [...names(a)].some((n) => PASSWORD_VAR.test(n.replace(/^\./, ''))))) {
@@ -346,7 +450,7 @@ export function analyzeHaskellRules(files, opts = {}) {
               emitRandom(line, { detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
             }
             if (TIME_SOURCES.has(c) && SECURITY_FN.test(fnBase)) emitRandom(line, { vuln: 'Clock value used as a security value', detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
-            if (INPUT_READS.has(c) && !bounded) emit('hs-unbounded-input-read', file, line, { detail: `${c} reads everything`, confidence: 0.6 });
+            if (INPUT_READS.has(c) && !bounded && readsOutsideInput(fn, c, args, importsNetwork)) emit('hs-unbounded-input-read', file, line, { detail: `${c} reads everything`, confidence: 0.6 });
             // an allocation whose size is parsed caller text and is not clamped
             if (ALLOCATORS.has(c) && args[0] && mentionsText(args[0]) && callsIn(args[0]).some((x) => /(?:^|\.)(?:read|readMaybe|readEither)$/.test(x.callee)) && !callsIn(args[0]).some((x) => CLAMPS.test(x.callee))) {
               emit('hs-unbounded-allocation', file, line, { detail: `${c} sized by parsed caller text`, evidence: { allocator: c } });
@@ -369,7 +473,7 @@ export function analyzeHaskellRules(files, opts = {}) {
               if (yes) emit('hs-xml-entity-substitution', file, line, { detail: 'withSubstDTDEntities yes' });
             }
             // boundaries
-            if (UNSAFE_CALLS[c]) {
+            if (Object.hasOwn(UNSAFE_CALLS, c)) {
               const b = UNSAFE_CALLS[c];
               emit('hs-unsafe-io-boundary', file, line, { vuln: `Unsafe boundary: ${b}`, confidence: 0.5, modelNote: BOUNDARIES[b], detail: BOUNDARIES[b] });
             }

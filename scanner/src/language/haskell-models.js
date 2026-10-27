@@ -73,6 +73,7 @@ export const HS_PACKAGES = Object.freeze({
   HsOpenSSL: { modules: ['OpenSSL.Session'], tested: [] },
   'wai-extra': { modules: ['Network.Wai.Parse', 'Network.Wai.Conduit'], tested: [] },
   'scotty-cookie': { modules: ['Web.Scotty.Cookie'], tested: [] },
+  ihp: { modules: ['IHP.ControllerPrelude', 'IHP.Controller.Param'], tested: [] },
   'http-types': { modules: ['Network.HTTP.Types', 'Network.HTTP.Types.Header'], tested: [] },
   'conduit-extra': { modules: ['Data.Conduit.Binary', 'Data.Conduit.Combinators'], tested: [] },
   'uri-parsing': { modules: ['Text.URI'], tested: [] },
@@ -85,10 +86,16 @@ const SRC = [];
 const src = (module, names, provenance, label, extra = {}) => { for (const e of E(module, names)) SRC.push({ ...e, provenance, label: `${label}${names.length > 1 ? '' : ''}`, package: extra.package, framework: extra.framework || null }); };
 
 src('Prelude', ['getLine', 'getContents', 'readLn', 'interact'], 'stdin', 'standard input', { package: 'base' });
-src('System.IO', ['getLine', 'getContents', 'hGetLine', 'hGetContents', 'hGetChar'], 'stdin', 'handle input', { package: 'base' });
-src('Data.Text.IO', ['getLine', 'getContents', 'hGetLine', 'hGetContents', 'interact'], 'stdin', 'text input', { package: 'text' });
-src('Data.ByteString', ['getLine', 'getContents', 'hGetLine', 'hGetContents'], 'stdin', 'bytes input', { package: 'bytestring' });
-src('Data.ByteString.Char8', ['getLine', 'getContents', 'hGetLine', 'hGetContents'], 'stdin', 'bytes input', { package: 'bytestring' });
+// `getLine` and `getContents` read standard input. `hGetLine`/`hGetContents`/`hGetChar` read WHATEVER handle they are given (a file the program opened,
+// a child process's pipe, a socket, or stdin), so they are modelled as a read through a handle, not as standard input.
+src('System.IO', ['getLine', 'getContents'], 'stdin', 'handle input', { package: 'base' });
+src('System.IO', ['hGetLine', 'hGetContents', 'hGetChar'], 'file-read', 'handle input', { package: 'base' });
+src('Data.Text.IO', ['getLine', 'getContents', 'interact'], 'stdin', 'text input', { package: 'text' });
+src('Data.Text.IO', ['hGetLine', 'hGetContents'], 'file-read', 'text input', { package: 'text' });
+src('Data.ByteString', ['getLine', 'getContents'], 'stdin', 'bytes input', { package: 'bytestring' });
+src('Data.ByteString', ['hGetLine', 'hGetContents'], 'file-read', 'bytes input', { package: 'bytestring' });
+src('Data.ByteString.Char8', ['getLine', 'getContents'], 'stdin', 'bytes input', { package: 'bytestring' });
+src('Data.ByteString.Char8', ['hGetLine', 'hGetContents'], 'file-read', 'bytes input', { package: 'bytestring' });
 src('System.Environment', ['getArgs'], 'cli', 'command-line argument', { package: 'base' });
 src('System.Environment', ['getEnv', 'lookupEnv', 'getEnvironment'], 'env', 'environment variable', { package: 'base' });
 src('Prelude', ['readFile'], 'file-read', 'file content', { package: 'base' });
@@ -144,6 +151,10 @@ for (const mod of ['Web.Scotty', 'Web.Scotty.Trans']) {
   src(mod, ['bodyReader', 'bodyRaw'], 'http-body', 'scotty request body', { package: 'scotty', framework: 'scotty' });
 }
 src('Web.Scotty.Cookie', ['getCookie', 'getCookies'], 'cookie', 'scotty request cookie', { package: 'scotty-cookie', framework: 'scotty' });
+// IHP: a controller action reads the request with `param @Text "name"` (a pure function over the implicit request): the value is whatever the client sent.
+for (const mod of ['IHP.ControllerPrelude', 'IHP.Controller.Param']) {
+  src(mod, ['param', 'paramText', 'paramOrNothing', 'paramOrDefault', 'paramList'], 'url-param', 'IHP request parameter', { package: 'ihp', framework: 'ihp' });
+}
 for (const mod of ['Yesod.Core', 'Yesod']) {
   src(mod, ['parseJsonBody', 'requireJsonBody', 'parseCheckJsonBody', 'requireCheckJsonBody', 'lookupCookies', 'lookupHeaders'], 'http-body', 'yesod request body', { package: 'yesod', framework: 'yesod' });
   src(mod, ['lookupBasicAuth'], 'header', 'yesod request header', { package: 'yesod', framework: 'yesod' });

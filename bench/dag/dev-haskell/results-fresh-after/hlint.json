@@ -1,0 +1,370 @@
+{
+ "id": "hlint",
+ "ms": 3036,
+ "totalFindings": 25,
+ "haskell": [
+  {
+   "id": "ir-taint:cc/Engine.hs:65:hs-sink-system.process.callprocess.cwe-88.1:28d0affb",
+   "stableId": "021f512925390650",
+   "file": "cc/Engine.hs",
+   "line": 65,
+   "severity": "info",
+   "vuln": "Argument Injection (process arguments)",
+   "cwe": "CWE-88",
+   "parser": "IR-TAINT",
+   "family": "argument-injection",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "cc/Engine.hs",
+    "line": 63,
+    "label": "interproc-return:Main.readConfig"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "cc/Engine.hs",
+    "line": 65,
+    "label": "hs-sink-system.process.callprocess.cwe-88.1"
+   }
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:data/HLint_QuickCheck.hs:63",
+   "stableId": "468121d0734a2e4d",
+   "file": "data/HLint_QuickCheck.hs",
+   "line": 63,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:data/HLint_QuickCheck.hs:86",
+   "stableId": "ef41b1b16e313b68",
+   "file": "data/HLint_QuickCheck.hs",
+   "line": 86,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:data/HLint_QuickCheck.hs:98",
+   "stableId": "e88a0150c9e242d4",
+   "file": "data/HLint_QuickCheck.hs",
+   "line": 98,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "struct:src/Config/Yaml.hs:186:Unsafe_XML_Parsing_(XXE_Risk)",
+   "stableId": "7022979c9f7c79b0",
+   "file": "src/Config/Yaml.hs",
+   "line": 186,
+   "severity": "high",
+   "vuln": "Unsafe XML Parsing (XXE Risk)",
+   "cwe": "CWE-611",
+   "parser": "STRUCTURAL",
+   "family": "xxe",
+   "rule": null,
+   "confidence": 0.616,
+   "description": "",
+   "origin": {
+    "label": "Structural Pattern",
+    "category": "Static Analysis",
+    "inputType": "structural",
+    "variable": "(pattern)",
+    "line": 186,
+    "file": "src/Config/Yaml.hs",
+    "snippet": "parseString (getVal -> String x) = pure $ T.unpack x"
+   },
+   "trust": null,
+   "sinkInfo": {
+    "type": "XML Parser",
+    "severity": "high",
+    "vuln": "Unsafe XML Parsing (XXE Risk)",
+    "cwe": "CWE-611",
+    "stride": "Information Disclosure",
+    "line": 186,
+    "snippet": "parseString (getVal -> String x) = pure $ T.unpack x",
+    "args": "parseString (getVal -> String x) = pure $ T.unpack x"
+   }
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Parallel.hs:27",
+   "stableId": "e1bb8190f9cc6548",
+   "file": "src/Parallel.hs",
+   "line": 27,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafeInterleaveIO: Defers an IO action until demanded. Modelled as a boundary only.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "ir-taint:src/Test/All.hs:39:hs-sink-system.directory.getdirectorycontents.cwe-22.0:cba8c581",
+   "stableId": "265fc6f1481ede81",
+   "file": "src/Test/All.hs",
+   "line": 39,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Main.hs",
+    "line": 58,
+    "label": "interproc-return:CmdLine.getCmd"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Main.hs",
+    "line": 39,
+    "label": "hs-sink-system.directory.getdirectorycontents.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:src/Test/Annotations.hs:121:hs-sink-prelude.readfile.cwe-22.0:e173b8a8",
+   "stableId": "e5b31958d0598d0a",
+   "file": "src/Test/Annotations.hs",
+   "line": 121,
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Test/Annotations.hs",
+    "line": 60,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Test/Annotations.hs",
+    "line": 121,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:src/Test/InputOutput.hs:36:hs-sink-prelude.writefile.cwe-22.0:f38cc609",
+   "stableId": "195c7f3797347b5d",
+   "file": "src/Test/InputOutput.hs",
+   "line": 36,
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Test/InputOutput.hs",
+    "line": 31,
+    "label": "file content"
+   },
+   "trust": {
+    "verdict": "data-input",
+    "reason": "standard input or file content supplies the value",
+    "role": "library",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Test/InputOutput.hs",
+    "line": 36,
+    "label": "hs-sink-prelude.writefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:src/Test/InputOutput.hs:38:hs-sink-system.directory.removefile.cwe-22.0:4e9afb18",
+   "stableId": "a528c985560198ec",
+   "file": "src/Test/InputOutput.hs",
+   "line": 38,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Test/InputOutput.hs",
+    "line": 31,
+    "label": "file content"
+   },
+   "trust": {
+    "verdict": "data-input",
+    "reason": "standard input or file content supplies the value",
+    "role": "library",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Test/InputOutput.hs",
+    "line": 38,
+    "label": "hs-sink-system.directory.removefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Timing.hs:26",
+   "stableId": "b7dd2dd042fd3e45",
+   "file": "src/Timing.hs",
+   "line": 26,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Timing.hs:30",
+   "stableId": "11593b51a49045e5",
+   "file": "src/Timing.hs",
+   "line": 30,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Timing.hs:34",
+   "stableId": "8ffb4144141d59eb",
+   "file": "src/Timing.hs",
+   "line": 34,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Timing.hs:38",
+   "stableId": "381c5c246f7bb7fe",
+   "file": "src/Timing.hs",
+   "line": 38,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Util.hs:55",
+   "stableId": "f1c0890e220214c8",
+   "file": "src/Util.hs",
+   "line": 55,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafeCoerce: Reinterprets a value as another type without a check. Modelled as a boundary only.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  }
+ ]
+}

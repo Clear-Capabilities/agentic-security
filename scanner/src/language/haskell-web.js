@@ -19,6 +19,7 @@
 //     is recorded as `unknown` coverage, never as protected and never omitted.
 
 import { buildHaskellIR, lowerHandlerExpr, resolveName } from './haskell-ir.js';
+import { codeOfLine } from './haskell-comments.js';
 import { qualifyAmbiguous, HS_WEB_FRAMEWORKS, HS_WEB_MODEL_VERSION, modelStatus } from './haskell-models.js';
 
 export const HS_WEB_RULES_VERSION = 'haskell-web-rules/1';
@@ -1055,7 +1056,7 @@ function emitFindings(ctx, result, yesodAuthz) {
     const vs = result.versionStatus[R.framework];
     const untested = vs && vs.status !== 'tested';
     if (untested) extra = { ...extra, confidence: (extra.confidence ?? 0.75) * 0.8, uncertainty: [...(extra.uncertainty || []), { kind: 'untested-model', detail: `${vs.package} ${vs.version || '(version unknown)'} is not in the tested set (${vs.tested.join(', ')}); the route model is applied best-effort` }] };
-    const snip = (text.split('\n')[line - 1] || '').trim().slice(0, 240);
+    const snip = codeOfLine(text.split('\n')[line - 1] || '').slice(0, 240);
     out.push({
       id: `hs-web:${rule}:${R.file}:${line}:${R.method}:${R.path}`, severity: extra.severity || r.severity, file: R.file, line, vuln: r.vuln, cwe: r.cwe,
       description: `${r.vuln}: ${R.method} ${R.path} (${R.framework})${extra.detail ? ` - ${extra.detail}` : ''}`,

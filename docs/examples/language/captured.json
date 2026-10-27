@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "engineVersion": "0.187.0",
-  "bundleSha256": "347fbe455e8a916364d4ff2776ca5407f97e776d925bb5f2e3590d13f565a96b",
+  "engineVersion": "0.188.0",
+  "bundleSha256": "f70bb09f8b0030636bb4ba27a72de9beb7087bcedadb2d27127bad3cfb960f01",
   "examples": {
     "haskell-app/vulnerable": {
       "exitCode": 3,
@@ -109,7 +109,7 @@
           "family": "weak-randomness",
           "line": 21,
           "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+          "text": "No verified fix for this finding (unsupported): a predictable generator is replaced by the operating system CSPRNG (Crypto.Random), whose result type differs from System.Random: the surrounding code must change with it"
         },
         {
           "family": "sensitive-logging",
@@ -126,14 +126,14 @@
         {
           "family": "sql-injection",
           "line": 32,
-          "exitCode": 4,
-          "text": "No verified fix for this finding (blocked): the patch adds an import of a database library the file did not use (Database.PostgreSQL.Simple); which driver the project uses is not provable from this file, so the edit is refused rather than guessed. Apply the parameterised query by hand with the project's own driver"
+          "exitCode": 0,
+          "text": "FULL: Moved 1 interpolated value(s) out of the SQL text into query parameters.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -13,1 +13,1 @@\n-lookupOrder conn ref = query_ conn (fromString (\"SELECT status FROM orders WHERE ref = '\" ++ ref ++ \"'\"))\n+lookupOrder conn ref = query conn \"SELECT status FROM orders WHERE ref = ?\" (Only ref)"
         },
         {
           "family": "missing-authentication",
           "line": 34,
           "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+          "text": "No verified fix for this finding (unsupported): a missing authentication check needs a policy (which credential, which rejection); the scanner reports the handler and does not invent the guard"
         },
         {
           "family": "command-injection",
@@ -145,7 +145,7 @@
           "family": "missing-authentication",
           "line": 38,
           "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+          "text": "No verified fix for this finding (unsupported): a missing authentication check needs a policy (which credential, which rejection); the scanner reports the handler and does not invent the guard"
         }
       ]
     },
@@ -459,7 +459,7 @@
       ]
     },
     "haskell-on-nix/vulnerable": {
-      "exitCode": 3,
+      "exitCode": 1,
       "health": {
         "status": "partial",
         "conditions": [
@@ -502,7 +502,7 @@
         },
         {
           "family": "path-traversal",
-          "severity": "high",
+          "severity": "info",
           "file": "src/Main.hs",
           "line": 14,
           "cwe": "CWE-22",
@@ -512,23 +512,13 @@
         },
         {
           "family": "command-injection",
-          "severity": "critical",
+          "severity": "info",
           "file": "src/Main.hs",
           "line": 15,
           "cwe": "CWE-78",
           "vuln": "OS Command Injection (shell string)",
           "parser": "IR-TAINT",
           "stableId": "9dbc017f57a15f9e"
-        },
-        {
-          "family": "multi-sink-taint-chain",
-          "severity": "critical",
-          "file": "src/Main.hs",
-          "line": 15,
-          "cwe": "CWE-20",
-          "vuln": "Multi-Sink Taint Chain — command-line argument reaches 2 sinks",
-          "parser": "MULTI-SINK",
-          "stableId": "abe5d32dddc67eb4"
         }
       ],
       "sbom": [
@@ -558,14 +548,8 @@
         {
           "family": "command-injection",
           "line": 15,
-          "exitCode": 4,
-          "text": "No verified fix for this finding (blocked): the patch introduces 1 new medium-or-higher finding(s)"
-        },
-        {
-          "family": "multi-sink-taint-chain",
-          "line": 15,
-          "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+          "exitCode": 0,
+          "text": "MITIGATION: Replaced a shell command string with a direct callProcess of \"pandoc\" and an argument list; no shell parses the value (a value fused into an argument is still passed as data). A value that starts with \"-\" can still be read as an option by the program: add \"--\" or validate it.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -5,5 +5,5 @@\n-import System.Process (callCommand)\n-\n--- | Export a note by name: the name goes straight into a shell command.\n-exportNote :: String -> IO ()\n-exportNote name = callCommand (\"pandoc notes/\" ++ name ++ \".md -o /srv/export/\" ++ name ++ \".pdf\")\n+import System.Process (callCommand, callProcess)\n+\n+-- | Export a note by name: the name goes straight into a shell command.\n+exportNote :: String -> IO ()\n+exportNote name = callProcess \"pandoc\" [(\"notes/\" ++ name ++ \".md\"), \"-o\", (\"/srv/export/\" ++ name ++ \".pdf\")]"
         }
       ]
     },

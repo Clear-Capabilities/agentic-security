@@ -264,6 +264,7 @@ function resolveGlobalUncached(proj, mod, name, qual, depth, seen) {
   const hits = [];
   const wildcard = [];
   let unknownReason = null;
+  let unknownCandidates = null;
   for (const imp of visibleImports(mod, name, qual)) {
     const target = proj.modules.get(imp.module);
     if (target) {
@@ -274,7 +275,7 @@ function resolveGlobalUncached(proj, mod, name, qual, depth, seen) {
         const owner = r.kind === 'def' ? (r.def.kind === 'field' ? (proj.modules.get(r.mod)?.cons.get(r.def.con)?.type) : r.def.kind === 'method' ? r.def.cls : null) : null;
         if (!owner || !(imp.typeAll || []).includes(owner)) continue;
       }
-      if (r.kind === 'unknown') unknownReason = r.reason; else hits.push(r);
+      if (r.kind === 'unknown') { unknownReason = r.reason; if (r.candidates) unknownCandidates = r.candidates; } else hits.push(r);
     } else if (qual || (imp.items && !imp.hiding && imp.items.includes(name))) hits.push({ kind: 'external', module: imp.module, name, certain: true });
     else wildcard.push(imp.module);   // includes `import M (T(..))` of a module we cannot read: possible, never certain
   }
@@ -282,7 +283,7 @@ function resolveGlobalUncached(proj, mod, name, qual, depth, seen) {
   const distinct = [...new Map(hits.map((r) => [keyOf(r), r])).values()];
   if (distinct.length === 1) return distinct[0];
   if (distinct.length > 1) return { kind: 'unknown', reason: 'ambiguous-import', candidates: distinct.map(keyOf) };
-  if (unknownReason) return { kind: 'unknown', reason: unknownReason };
+  if (unknownReason) return unknownCandidates ? { kind: 'unknown', reason: unknownReason, candidates: unknownCandidates } : { kind: 'unknown', reason: unknownReason };
   if (!qual && PRELUDE.has(name)) return { kind: 'builtin', module: 'Prelude', name };
   if (wildcard.length) return { kind: 'external', module: wildcard.length === 1 ? wildcard[0] : null, candidates: wildcard, name, certain: false };
   return { kind: 'unknown', reason: qual ? 'unknown-qualifier' : 'unbound-name' };
@@ -584,6 +585,7 @@ class FnLowerer {
       return { kind: 'ident', name: this.canonical(r), hs: { functionRef: r.qid } };
     }
     if (r.kind === 'param' || r.kind === 'local') return { kind: 'ident', name: e.name };
+    if (r.kind === 'unknown' && r.reason === 'ambiguous-import') for (const q of r.candidates || []) this.noteRef(q, 'ambiguous-import', ln);
     const lib = libraryName(r, e.name, e.qual);
     const viaReg = lib.viaRegistry ? { viaRegistry: true, certain: false } : {};
     // A modelled SOURCE action named as a value (`getLine >>= f`, `fmap g getLine`) yields untrusted data
@@ -725,6 +727,10 @@ class FnLowerer {
       if (IO_NAMES.has(f.name)) this.sawIO = true;
     } else {
       hs.status = 'unknown'; hs.reason = r.reason || 'unresolved'; hs.effect = 'unknown';
+      // An import that two modules both satisfy (the Posix and Windows variants of one module behind a CPP conditional, two re-exports of
+      // one name) is a call to ONE of them, which one is not decided here. Each candidate is referenced, so none of them reads as a
+      // function nothing in the project uses.
+      if (r.reason === 'ambiguous-import') for (const q of r.candidates || []) this.noteRef(q, 'ambiguous-import', ln);
     }
     if (hs.status === 'resolved' || hs.status === 'typeclass') {
       const ctxTargets = args.map((a) => argTargets(a));
@@ -1335,6 +1341,7 @@ function lowerTopFunction(proj, mod, fun, def) {
   const ann = callerControlledParams(fn, sig, exported, mod.imports.map((i) => i.module));
   for (const a of servantEndpointParams(mod, fn, sig, exported)) if (!ann.some((x) => x.name === a.name)) ann.push(a);
   fn.hs.textParams = ann.map((a) => a.name);
+  fn.hs.paramSources = ann.map((a) => ({ name: a.name, decorator: a.decorator }));
   fn.hs.inputParams = inputParams(fn, sig, exported);
   // Parameters of an exported function whose type is a record DECLARED IN THE PROJECT: the lineage view treats each such
   // parameter as a source of that record's fields (a customer record handed to an entry point), field by field.
@@ -1454,7 +1461,13 @@ function buildHaskellIRUncached(fileContents) {
   const reached = new Set();
   for (const e of callGraph.edges || []) if (e && e.callee) reached.add(e.callee);
   for (const fn of callGraph.functions.values()) for (const r of (fn.hs && fn.hs.refs) || []) if (r && r.target) reached.add(r.target);
-  for (const fn of callGraph.functions.values()) if (reached.has(fn.qid)) { if (fn.paramAnnotations) delete fn.paramAnnotations; if (fn.hs && fn.hs.recordParams) fn.hs.recordParams = []; }
+  assignEntryRoles(proj, callGraph);
+  for (const fn of callGraph.functions.values()) {
+    // `reached`: something in the analysed code calls or references this function, so its parameters take their values from THOSE callers
+    // (which the taint engine follows) and not from an unknown outside one. Rules that reason about "caller-supplied" text read it.
+    if (fn.hs) fn.hs.reached = reached.has(fn.qid);
+    if (reached.has(fn.qid)) { if (fn.paramAnnotations) delete fn.paramAnnotations; if (fn.hs && fn.hs.recordParams) fn.hs.recordParams = []; }
+  }
   return { perFile, callGraph, modules: proj.modules, diagnostics: proj.diagnostics, project: proj };
 }
 
@@ -1466,6 +1479,36 @@ function incomplete(proj, mod, f, err) {
     hs: { module: mod.name, kind: 'function', incomplete: true, reason: String(err && err.message), refs: [], deferred: [], diagnostics: [] },
   });
   proj.diagnostics.push({ file: mod.file, line: f.line, kind: 'ir-lowering-failure', detail: String(err && err.message) });
+}
+
+// ── entry roles ──────────────────────────────────────────────────────────────
+// Who is on the other end of the program's inputs depends on what kind of program the function belongs to. A function reachable from a
+// `main` whose reachable modules import no server framework or socket library belongs to a command-line program: whoever runs it supplies its
+// arguments, environment, standard input and the files it is pointed at. One reachable from a `main` that imports a server framework (a WAI,
+// Scotty, Servant, Yesod, Snap, Happstack or Spock application, a socket listener) belongs to a service, whose inputs come from its clients.
+// A function no `main` reaches is `library`: its callers are unknown. The call graph is incomplete (an unresolved call ends a path), so a
+// function the walk does not reach is `library`, never `cli`.
+const SERVER_IMPORT = /^(?:Network\.Wai|Web\.Scotty|Servant|Yesod|Snap|Happstack\.Server|Web\.Spock)(?:\.|$)|^Network\.(?:Socket|Simple\.TCP|Run\.TCP|HTTP\.Server)$/;
+export function assignEntryRoles(proj, callGraph) {
+  const out = new Map();
+  for (const e of callGraph.edges || []) if (e && e.callee && e.caller) { if (!out.has(e.caller)) out.set(e.caller, []); out.get(e.caller).push(e.callee); }
+  const mains = [];
+  for (const fn of callGraph.functions.values()) if (fn.hs && fn.hs.module && fn.name === `${fn.hs.module}.main`) mains.push(fn);
+  const cli = new Set(); const service = new Set();
+  for (const m of mains) {
+    const seen = new Set([m.qid]);
+    const todo = [m.qid];
+    while (todo.length) { const q = todo.pop(); for (const c of out.get(q) || []) if (!seen.has(c)) { seen.add(c); todo.push(c); } }
+    const mods = new Set();
+    for (const q of seen) { const f = callGraph.functions.get(q); if (f && f.hs && f.hs.module) mods.add(f.hs.module); }
+    let isService = false;
+    for (const name of mods) { const mi = proj.modules.get(name); if (mi && (mi.imports || []).some((i) => SERVER_IMPORT.test(i.module))) { isService = true; break; } }
+    for (const q of seen) (isService ? service : cli).add(q);
+  }
+  for (const fn of callGraph.functions.values()) {
+    if (!fn.hs) continue;
+    fn.hs.entryRole = service.has(fn.qid) ? 'service' : (cli.has(fn.qid) ? 'cli' : 'library');
+  }
 }
 
 // ── call graph ───────────────────────────────────────────────────────────────

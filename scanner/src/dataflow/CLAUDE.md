@@ -38,6 +38,19 @@ Layer-2 taint engine. Walks the Layer-1 IR (`../ir/`) with field-sensitive forwa
   - **Flat-string callees — the one that mattered most.** The mutator rule tested `callee.kind === 'member'`, a shape ONLY `parser-js.js` (Babel) emits. The seven hand-rolled parsers emit a flat dot-joined string (`"items.append"`), so container writes in Python/Ruby/PHP/Go/Java/C#/Kotlin never matched at all. Same frontend duality `_calleeReceiverTainted` documents. This was invisible from the outside because a PY-SAST pattern rule caught the same sink, so the taint-layer miss looked like a detection.
   - **Measured honestly:** `bench:layer-recall` is UNCHANGED at 116/215 after this landed — the corpus holds no container-shaped entries, which is exactly why the taint-recall-to-80% push closed at 83.9% (115/137 of the dataflow-shaped subset) "without Tier 5". This is capability proven by targeted tests (`test/container-taint.test.js`, including two precision cases that must NOT fire), not a measured recall gain. Do not quote it as one. Self-scan held at 427 with zero new findings across ~700 files.
 
+## Source attribution (evidence chain origin)
+
+A finding's `source`/`chain` come from `_taintSources`: records keyed by the variable a source call was assigned to. Before this was
+extended, a value DERIVED from a source (`b = 'ls ' + a`), a value that crossed a call, or one returned from a function reached the sink with an
+empty chain, so nothing downstream could tell a request read from a command-line argument. Now: `_inheritSources` copies the records reaching
+a derived value; a summary computed under an entry-taint state names its tainted parameters with placeholder records (`_paramPlaceholders`,
+`isParam`) that `_mergeSummaryFindings` resolves, at the call site that merges the finding, to the sources of the actual arguments
+(`_resolveParams`); a function's return keeps the sources behind it (`returnSources`, followed through `from` into the finding's
+`sourceRoots`). A parameter annotation that is a catalog source is recorded too (`matchAnnotationParamSources`, `annotation: true`, mapped to
+`source.kind: 'parameter'`). The summary cache is keyed by entry state only, so the cached summary never carries a caller's sources: they
+are added to a COPY at each merge. Pinned in `test/dataflow-source-attribution.test.js`. The multi-sink aggregation in `engine.js` ignores
+`info` findings (a finding lowered by a guard or a trust verdict is not a flow worth aggregating).
+
 ## Scope — what we still do NOT model (today)
 
 - **Call-string (k>1) context-sensitivity.** Context is the *value* abstraction — which params are tainted at entry — not the call stack. Two call paths that reach a helper with the same tainted-arg shape share a summary. Entry-state granularity is also param-level, not arbitrary access paths (`f(obj)` with `obj.a` tainted ≡ `obj.b` tainted).

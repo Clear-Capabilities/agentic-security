@@ -1,61 +1,61 @@
 {
- "scannerVersion": "0.186.2",
+ "scannerVersion": "0.187.0",
  "labelsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
  "definition": "precision = tp / (tp + fp); ambiguous and unlabeled excluded from the denominator; 95% Wilson interval",
  "all": {
   "all haskell projects": {
-   "flagged": 84,
+   "flagged": 73,
    "tp": 1,
-   "fp": 42,
+   "fp": 34,
    "ambiguous": 11,
-   "unlabeled": 30,
-   "labeledDenominator": 43,
-   "precision": 0.0233,
+   "unlabeled": 27,
+   "labeledDenominator": 35,
+   "precision": 0.0286,
    "wilson95": [
-    0.0041,
-    0.1206
+    0.0051,
+    0.1453
    ],
-   "ifAmbiguousAllFp": 0.0185,
-   "ifAmbiguousAllTp": 0.2222
+   "ifAmbiguousAllFp": 0.0217,
+   "ifAmbiguousAllTp": 0.2609
   }
  },
  "perProject": {
   "hakyll": {
-   "flagged": 8,
+   "flagged": 4,
    "tp": 0,
-   "fp": 8,
+   "fp": 4,
    "ambiguous": 0,
    "unlabeled": 0,
-   "labeledDenominator": 8,
+   "labeledDenominator": 4,
    "precision": 0,
    "wilson95": [
     0,
-    0.3244
+    0.4899
    ],
    "ifAmbiguousAllFp": 0,
    "ifAmbiguousAllTp": 0
   },
   "hledger": {
-   "flagged": 46,
+   "flagged": 43,
    "tp": 1,
-   "fp": 27,
+   "fp": 25,
    "ambiguous": 1,
-   "unlabeled": 17,
-   "labeledDenominator": 28,
-   "precision": 0.0357,
+   "unlabeled": 16,
+   "labeledDenominator": 26,
+   "precision": 0.0385,
    "wilson95": [
-    0.0063,
-    0.1771
+    0.0068,
+    0.1889
    ],
-   "ifAmbiguousAllFp": 0.0345,
-   "ifAmbiguousAllTp": 0.069
+   "ifAmbiguousAllFp": 0.037,
+   "ifAmbiguousAllTp": 0.0741
   },
   "postgrest": {
-   "flagged": 12,
+   "flagged": 10,
    "tp": 0,
    "fp": 5,
    "ambiguous": 0,
-   "unlabeled": 7,
+   "unlabeled": 5,
    "labeledDenominator": 5,
    "precision": 0,
    "wilson95": [
@@ -66,36 +66,33 @@
    "ifAmbiguousAllTp": 0
   },
   "shellcheck": {
-   "flagged": 18,
+   "flagged": 16,
    "tp": 0,
-   "fp": 2,
+   "fp": 0,
    "ambiguous": 10,
    "unlabeled": 6,
-   "labeledDenominator": 2,
-   "precision": 0,
-   "wilson95": [
-    0,
-    0.6576
-   ],
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
    "ifAmbiguousAllFp": 0,
-   "ifAmbiguousAllTp": 0.8333
+   "ifAmbiguousAllTp": 1
   }
  },
  "perSourceKind": {
   "haskell source (.hs)": {
-   "flagged": 66,
+   "flagged": 55,
    "tp": 1,
-   "fp": 40,
+   "fp": 32,
    "ambiguous": 1,
-   "unlabeled": 24,
-   "labeledDenominator": 41,
-   "precision": 0.0244,
+   "unlabeled": 21,
+   "labeledDenominator": 33,
+   "precision": 0.0303,
    "wilson95": [
-    0.0043,
-    0.126
+    0.0054,
+    0.1532
    ],
-   "ifAmbiguousAllFp": 0.0238,
-   "ifAmbiguousAllTp": 0.0476
+   "ifAmbiguousAllFp": 0.0294,
+   "ifAmbiguousAllTp": 0.0588
   },
   "non-Haskell file in a Haskell project": {
    "flagged": 18,
@@ -226,11 +223,11 @@
    "ifAmbiguousAllTp": 0
   },
   "Partial function applied to caller-supplied text": {
-   "flagged": 4,
+   "flagged": 2,
    "tp": 0,
    "fp": 1,
    "ambiguous": 1,
-   "unlabeled": 2,
+   "unlabeled": 0,
    "labeledDenominator": 1,
    "precision": 0,
    "wilson95": [
@@ -256,31 +253,31 @@
    "ifAmbiguousAllTp": 0
   },
   "Path Traversal (filesystem operation)": {
-   "flagged": 5,
+   "flagged": 4,
    "tp": 0,
-   "fp": 3,
+   "fp": 2,
    "ambiguous": 0,
    "unlabeled": 2,
-   "labeledDenominator": 3,
+   "labeledDenominator": 2,
    "precision": 0,
    "wilson95": [
     0,
-    0.5615
+    0.6576
    ],
    "ifAmbiguousAllFp": 0,
    "ifAmbiguousAllTp": 0
   },
   "Path Traversal": {
-   "flagged": 9,
+   "flagged": 8,
    "tp": 0,
-   "fp": 4,
+   "fp": 3,
    "ambiguous": 0,
    "unlabeled": 5,
-   "labeledDenominator": 4,
+   "labeledDenominator": 3,
    "precision": 0,
    "wilson95": [
     0,
-    0.4899
+    0.5615
    ],
    "ifAmbiguousAllFp": 0,
    "ifAmbiguousAllTp": 0
@@ -462,18 +459,6 @@
    "ifAmbiguousAllFp": 0,
    "ifAmbiguousAllTp": 0
   },
-  "Unsafe boundary: function Object() { [native code] }": {
-   "flagged": 1,
-   "tp": 0,
-   "fp": 0,
-   "ambiguous": 0,
-   "unlabeled": 1,
-   "labeledDenominator": 0,
-   "precision": null,
-   "wilson95": null,
-   "ifAmbiguousAllFp": null,
-   "ifAmbiguousAllTp": null
-  },
   "Unsafe boundary: unsafePerformIO": {
    "flagged": 13,
    "tp": 0,
@@ -488,22 +473,7 @@
    ],
    "ifAmbiguousAllFp": 0,
    "ifAmbiguousAllTp": 0
-  },
-  "Whole input read into memory without a size limit": {
-   "flagged": 6,
-   "tp": 0,
-   "fp": 6,
-   "ambiguous": 0,
-   "unlabeled": 0,
-   "labeledDenominator": 6,
-   "precision": 0,
-   "wilson95": [
-    0,
-    0.3903
-   ],
-   "ifAmbiguousAllFp": 0,
-   "ifAmbiguousAllTp": 0
   }
  },
- "staleLabels": 6
+ "staleLabels": 14
 }

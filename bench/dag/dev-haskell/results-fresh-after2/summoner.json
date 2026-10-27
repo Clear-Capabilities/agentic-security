@@ -1,0 +1,81 @@
+{
+ "id": "summoner",
+ "ms": 1463,
+ "totalFindings": 5,
+ "haskell": [
+  {
+   "id": "ir-taint:summoner-cli/src/Summoner/Project.hs:284:hs-sink-system.directory.setcurrentdirectory.cwe-22.0:74fa62a8",
+   "stableId": "725bb55d1d88ad82",
+   "file": "summoner-cli/src/Summoner/Project.hs",
+   "line": 284,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "summoner-cli/src/Summoner/Project.hs",
+    "line": 69,
+    "label": "interproc-return:Summoner.Question.queryDef"
+   },
+   "trust": {
+    "verdict": "data-input",
+    "reason": "standard input or file content supplies the value",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "standard input",
+      "provenance": "stdin",
+      "file": "summoner-cli/src/Summoner/Question.hs",
+      "line": 296
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "summoner-cli/src/Summoner/Project.hs",
+    "line": 284,
+    "label": "hs-sink-system.directory.setcurrentdirectory.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:summoner-cli/src/Summoner/Tree.hs:42:hs-sink-system.directory.withcurrentdirectory.cwe-22.0:f38cc609",
+   "stableId": "34844eafb6183ec1",
+   "file": "summoner-cli/src/Summoner/Tree.hs",
+   "line": 42,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "summoner-cli/src/Summoner/Project.hs",
+    "line": 280,
+    "label": "interproc-return:Summoner.Template.createProjectTemplate"
+   },
+   "trust": {
+    "verdict": "data-input",
+    "reason": "standard input or file content supplies the value",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "standard input",
+      "provenance": "stdin",
+      "file": "summoner-cli/src/Summoner/Question.hs",
+      "line": 296
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "summoner-cli/src/Summoner/Project.hs",
+    "line": 42,
+    "label": "hs-sink-system.directory.withcurrentdirectory.cwe-22.0"
+   }
+  }
+ ]
+}

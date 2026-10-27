@@ -42,7 +42,7 @@
 // sanitizer must never silently drop a real vulnerability, so the walk never
 // treats a sanitizer call as clearing the tainted path on its own.
 
-import { matchSource, matchSinkOrSanitizer, matchMemberWriteSink, matchAnnotationParams } from './catalog.js';
+import { matchSource, matchSinkOrSanitizer, matchMemberWriteSink, matchAnnotationParams, matchAnnotationParamSources } from './catalog.js';
 import { functionRecord } from '../ir/callgraph.js';
 import { accessPathOf, isCoveredBy, hasTaintedDescendant, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual, pathIsCoveredByPrefix } from './access-paths.js';
 import { aliasesForVar } from './points-to.js';
@@ -394,7 +394,7 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext, argT
   if (!sum && fn && fn.cfg) {
     sum = callContext._summaryCache.compute(qid, entry, () => {
       const inner = {
-        _findings: [], _taintSources: [], _returnTainted: false,
+        _findings: [], _taintSources: _paramPlaceholders(fn, entry), _returnTainted: false,
         _stack: new Set(), deadlineMs: callContext.deadlineMs,
         _summaryCache: callContext._summaryCache,
         _callGraph: callContext._callGraph,
@@ -404,6 +404,7 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext, argT
       try { analyzeFunction(fn, _unionAnnotationTaint(fn, entry), inner); } catch {}
       return {
         returnTainted: !!inner._returnTainted,
+                returnSources: inner._returnSources || [],
         mutatedParams: inner._mutatedParamsOut || new Set(),
         mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
         taintedGlobals: new Set(),
@@ -411,7 +412,7 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext, argT
       };
     });
   }
-  _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc');
+  _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc', { args: argExprs || [], state });
   // Next-gen taint capability #3: a single-field getter's return is tainted
   // whenever THIS call's own receiver already carries that field as
   // tainted, independent of `sum.returnTainted` (which reflects only the
@@ -1502,14 +1503,100 @@ function _memberWriteSinkFindings(hits, sourceExpr, state, callContext, line, ta
 // list: a chain of 20 one-line wrappers produced 131072 copies of one finding, and the explosion ended in the whole result being dropped. The
 // same sink reached again by the same finding is one finding, so a copy is skipped when this context already holds it.
 function _findingKey(f) { return `${f.file ?? ''}|${f.line ?? ''}|${f.cwe ?? ''}|${f.vuln ?? ''}|${typeof f.callee === 'string' ? f.callee : ''}|${f.id ?? ''}`; }
-function _mergeSummaryFindings(callContext, callerQid, sum, via) {
+// A variable that is TAINTED BY DERIVATION (`y = f(x)`, `(a : b) <- return x`) has no source of its own: the sources the engine recorded are
+// keyed by the variable a source call was assigned to. Without a record for `y` the evidence chain of a sink reached through `y` begins at the
+// sink, and nothing downstream can say where the data came from. The sources reaching the expression it was derived from are copied to it.
+// Bounded: at most 5 per assignment and 4000 records per analysis; the original record is untouched.
+// A callee is analysed once per ENTRY STATE (which parameters carry taint), not per caller, so inside that analysis a tainted parameter has no
+// origin of its own. Each tainted parameter gets a placeholder record (`isParam`); a finding or return that rests on it is resolved to the
+// sources of the arguments at the call site that merges it (`_resolveParams`), and a placeholder that no call site resolves is dropped.
+function _paramPlaceholders(fn, entry) {
+  const out = [];
+  if (!fn || !Array.isArray(fn.params) || !entry || !entry.size) return out;
+  for (const p of fn.params) {
+    if (typeof p !== 'string') continue;
+    let hit = entry.has(p);
+    if (!hit) for (const x of entry) if (typeof x === 'string' && x.startsWith(p + '.')) { hit = true; break; }
+    if (hit) out.push({ varName: p, sourceId: `param:${fn.qid}:${p}`, sourceLabel: `parameter ${p}`, provenance: 'param', line: fn.line || 0, isParam: true });
+  }
+  return out;
+}
+
+function _resolveParams(entries, replacement, depth = 0) {
+  const out = [];
+  const seen = new Set();
+  const add = (e) => { const k = `${e.sourceId}|${e.line}`; if (!seen.has(k)) { seen.add(k); out.push(e); } };
+  for (const e of entries || []) {
+    if (!e) continue;
+    if (e.isParam) { for (const r of replacement || []) add(r); continue; }
+    if (Array.isArray(e.from) && e.from.length && depth < 8) add({ ...e, from: _resolveParams(e.from, replacement, depth + 1) });
+    else add(e);
+  }
+  return out;
+}
+
+function _inheritSources(callContext, target, exprs, state) {
+  const list = callContext._taintSources;
+  if (!target || !Array.isArray(list) || list.length === 0 || list.length > 4000) return;
+  let n = 0;
+  for (const ex of exprs) {
+    for (const s of _sourcesReachingExpr(ex, state, list)) {
+      if (n >= 5) return;
+      if (s.varName === target) continue;
+      if (list.some((x) => x.varName === target && x.sourceId === s.sourceId && x.line === s.line)) continue;
+      list.push({ ...s, varName: target, derivedFrom: s.varName });
+      n++;
+    }
+  }
+}
+
+function _rootSources(trace, depth = 0, out = [], seen = new Set()) {
+  for (const t of trace || []) {
+    if (!t) continue;
+    if (Array.isArray(t.from) && t.from.length && depth < 8) { _rootSources(t.from, depth + 1, out, seen); continue; }
+    const k = `${t.sourceLabel}|${t.line}|${t.provenance}`;
+    if (!seen.has(k)) { seen.add(k); out.push({ label: t.sourceLabel, provenance: t.provenance || null, line: t.line, file: t.file || null }); }
+  }
+  return out;
+}
+
+function _mergeSummaryFindings(callContext, callerQid, sum, via, callSite) {
   if (!sum || !Array.isArray(sum.findings) || !sum.findings.length) return;
   if (!callContext._findingKeys) callContext._findingKeys = new Set(callContext._findings.map(_findingKey));
+  // A callee's finding was computed under an entry-taint state (which parameters carry taint), not under any
+  // particular caller, so the summary cannot name where that taint came from. THIS call site can: the sources the
+  // caller's own analysis recorded for the arguments it passes. A finding with no source of its own inherits them
+  // (a copy; the shared summary is untouched). Without this an evidence chain begins at the sink with no origin,
+  // and nothing downstream can tell a request value from a command-line argument.
+  let argSources = null;
+  const inherited = () => {
+    if (argSources) return argSources;
+    argSources = [];
+    if (callSite && Array.isArray(callSite.args)) {
+      const seen = new Set();
+      for (const a of callSite.args) {
+        for (const src of _sourcesReachingExpr(a, callSite.state, callContext._taintSources)) {
+          const k = `${src.sourceId}|${src.line}`;
+          if (!seen.has(k)) { seen.add(k); argSources.push(src); }
+        }
+      }
+    }
+    return argSources;
+  };
   for (const f of sum.findings) {
     const key = _findingKey(f);
     if (callContext._findingKeys.has(key)) continue;
     callContext._findingKeys.add(key);
-    callContext._findings.push({ ...f, _funcQid: callerQid || null, _via: via });
+    let out = { ...f, _funcQid: callerQid || null, _via: via };
+    const tr = Array.isArray(f.trace) ? f.trace : [];
+    if (tr.some((t) => t && (t.isParam || (t.from && t.from.length)))) {
+      const resolved = _resolveParams(tr, callSite ? inherited() : []).slice(0, 5);
+      out = { ...out, trace: resolved, sourceProvenance: resolved[0] ? (resolved[0].provenance || null) : null };
+    } else if (callSite && tr.length === 0) {
+      const inh = inherited();
+      if (inh.length) out = { ...out, trace: inh.slice(0, 5), sourceProvenance: inh[0].provenance || null };
+    }
+    callContext._findings.push(out);
   }
 }
 
@@ -1634,7 +1721,7 @@ function step(node, stateIn, callContext) {
             // callee's internal noise.
             sum = callContext._summaryCache.compute(qid, entry, () => {
               const inner = {
-                _findings: [], _taintSources: [], _returnTainted: false,
+                _findings: [], _taintSources: _paramPlaceholders(fn, entry), _returnTainted: false,
                 _stack: new Set(), deadlineMs: callContext.deadlineMs,
                 _summaryCache: callContext._summaryCache,
                 _callGraph: callContext._callGraph,
@@ -1644,6 +1731,7 @@ function step(node, stateIn, callContext) {
               try { analyzeFunction(fn, _unionAnnotationTaint(fn, entry), inner); } catch {}
               return {
                 returnTainted: !!inner._returnTainted,
+                returnSources: inner._returnSources || [],
                 mutatedParams: inner._mutatedParamsOut || new Set(),
                 mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
                 taintedGlobals: new Set(),
@@ -1659,7 +1747,7 @@ function step(node, stateIn, callContext) {
               };
             });
           }
-          _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc');
+          _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc', { args: callArgs, state: callerTainted });
           // Next-gen taint capability #3: `x = bad.getData()` — a single-
           // field getter's return is tainted whenever THIS call's own
           // receiver already carries that field, independent of `sum`
@@ -1667,12 +1755,19 @@ function step(node, stateIn, callContext) {
           const _getterTainted = _calleeGetterFieldTainted(node.source.callee, newState, callContext);
           if ((sum && sum.returnTainted) || _getterTainted) {
             newState = _addPathAliasAware(newState, target, callContext);
+            // `from`: what made the arguments tainted. The return is the callee's, but the taint it carries began wherever the
+            // caller's own arguments got theirs, and a reader (or a trust-boundary check) needs that origin, not the hop.
+            const _from = [];
+            for (const a of callArgs) for (const sr of _sourcesReachingExpr(a, callerTainted, callContext._taintSources)) _from.push(sr);
+            if (sum && Array.isArray(sum.returnSources)) for (const sr of _resolveParams(sum.returnSources, _from.slice())) _from.push(sr);
             callContext._taintSources.push({
               varName: target,
               sourceId: `interproc:${qid}`,
               sourceLabel: `interproc-return:${calleeName}`,
               provenance: 'interproc',
               line: node.line,
+              file: _currentFile || null,
+              ...(_from.length ? { from: _from.slice(0, 5) } : {}),
             });
           }
           // applyAtCallSite — mutated params (and, next-gen capability #3,
@@ -1693,6 +1788,7 @@ function step(node, stateIn, callContext) {
             const _argTainted = (node.source.args || []).some(a => exprTaint(a, newState, callContext));
             if (builtin.returnTainted && _argTainted) {
               newState = _addPathAliasAware(newState, target, callContext);
+              _inheritSources(callContext, target, node.source.args || [], newState);
             } else if (!builtin.returnTainted) {
               // PRD R4b: a builtin summary saying returnTainted:false can mean
               // two very different things — a genuinely non-deriving function
@@ -1754,7 +1850,7 @@ function step(node, stateIn, callContext) {
         newState = _addPathAliasAware(newState, target, callContext);
         const sourcePath = accessPathOf(node.source);
         if (sourcePath) newState = addPath(newState, sourcePath);
-        callContext._taintSources.push({ varName: target, sourceId: src.id, sourceLabel: src.label, provenance: src.provenance || null, line: node.line });
+        callContext._taintSources.push({ varName: target, sourceId: src.id, sourceLabel: src.label, provenance: src.provenance || null, line: node.line, file: _currentFile || null });
       } else if (exprTaint(node.source, newState, callContext)) {
         // P1.1: when the source IS a pure access path (e.g., RHS is `obj.foo.bar`),
         // taint the TARGET as well as transitively propagate the source path so
@@ -1764,6 +1860,7 @@ function step(node, stateIn, callContext) {
           newState = _addPathAliasAware(newState, target, callContext);
           const sourcePath = accessPathOf(node.source);
           if (sourcePath && !isCoveredBy(newState, sourcePath)) newState = addPath(newState, sourcePath);
+          _inheritSources(callContext, target, [node.source], newState);
         }
       } else {
         // Re-assigning a previously-tainted var to a clean value clears it
@@ -1802,7 +1899,7 @@ function step(node, stateIn, callContext) {
           if (!sum && entry.size && fn && fn.cfg) {
             sum = callContext._summaryCache.compute(qid, entry, () => {
               const inner = {
-                _findings: [], _taintSources: [], _returnTainted: false,
+                _findings: [], _taintSources: _paramPlaceholders(fn, entry), _returnTainted: false,
                 _stack: new Set(), deadlineMs: callContext.deadlineMs,
                 _summaryCache: callContext._summaryCache,
                 _callGraph: callContext._callGraph,
@@ -1812,6 +1909,7 @@ function step(node, stateIn, callContext) {
               try { analyzeFunction(fn, _unionAnnotationTaint(fn, entry), inner); } catch {}
               return {
                 returnTainted: !!inner._returnTainted,
+                returnSources: inner._returnSources || [],
                 mutatedParams: inner._mutatedParamsOut || new Set(),
                 mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
                 taintedGlobals: new Set(),
@@ -1822,7 +1920,7 @@ function step(node, stateIn, callContext) {
               };
             });
           }
-          _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc');
+          _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc', { args: node.args || [], state });
           // Next-gen taint capability #3: the plain-statement-position
           // counterpart of the assign-from-call site above — `bad.setData(
           // tainted);` never assigns anything, but the receiver's OWN field
@@ -2063,6 +2161,12 @@ function step(node, stateIn, callContext) {
       }
       if (exprTaint(node.value, state, callContext)) {
         callContext._returnTainted = true;
+        // Where the returned taint began, for the caller that will name this function's return as a source (`from`, below).
+        const rs = _sourcesReachingExpr(node.value, state, callContext._taintSources);
+        if (rs.length) {
+          const keep = (callContext._returnSources ||= []);
+          for (const r of rs) if (keep.length < 8 && !keep.some((k) => k.sourceId === r.sourceId && k.line === r.line)) keep.push(r);
+        }
       }
       return { state, findings };
     }
@@ -2196,6 +2300,13 @@ function analyzeFunction(fn, entryState, callContext) {
   // unchanged and lets `step` consult `aliasesForVar` when callContext._pointsTo
   // is present.
   if (callContext) callContext._currentFnQid = fn.qid;
+  // A parameter the language front end marked as an input source (a request value handed to a handler, a caller-supplied text) has an
+  // origin like any other source read: record it, so the evidence chain of a finding that rests on it names where the value came from.
+  if (callContext && Array.isArray(callContext._taintSources) && Array.isArray(fn.paramAnnotations) && fn.paramAnnotations.length) {
+    for (const r of matchAnnotationParamSources(fn.paramAnnotations, fn.file)) {
+      if (!callContext._taintSources.some((x) => x.varName === r.name && x.sourceId === r.id)) callContext._taintSources.push({ varName: r.name, sourceId: r.id, sourceLabel: r.label, provenance: r.provenance, line: fn.line || 0, file: fn.file || null, annotation: true });
+    }
+  }
   const deadlineMs = (callContext && typeof callContext.deadlineMs === 'number') ? callContext.deadlineMs : Infinity;
   const visited = 0;
   let iterations = 0;
@@ -2510,6 +2621,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       exitStateByQid.set(fn.qid, ctx._exitState || new Set());
       const next = {
         returnTainted: !!ctx._returnTainted,
+        returnSources: ctx._returnSources || [],
         mutatedParams: ctx._mutatedParamsOut || new Set(),
         mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
         taintedGlobals: new Set(),
@@ -2711,6 +2823,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       // _mergeSummaryFindings — dedup in _collectFindings makes this safe.
       const fieldSummary = {
         returnTainted: !!ctx._returnTainted,
+        returnSources: ctx._returnSources || [],
         mutatedParams: ctx._mutatedParamsOut || new Set(),
         mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
         taintedGlobals: new Set(),
@@ -2817,6 +2930,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _collectFindings(fn, ctx._findings);
         summaryCache.set(fn.qid, qualifiedSeeds, {
           returnTainted: !!ctx._returnTainted,
+        returnSources: ctx._returnSources || [],
           mutatedParams: ctx._mutatedParamsOut || new Set(),
           mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
           taintedGlobals: new Set(),
@@ -2862,6 +2976,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     // only place that used to merge findings) at all.
     summaryCache.set(fn.qid, taintedEntry, {
       returnTainted: !!ctx._returnTainted,
+        returnSources: ctx._returnSources || [],
       mutatedParams: ctx._mutatedParamsOut || new Set(),
       mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
       taintedGlobals: new Set(),
@@ -2938,6 +3053,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
           try { analyzeFunction(cbFn, _unionAnnotationTaint(cbFn, cbEntry), inner); } catch {}
           return {
             returnTainted: !!inner._returnTainted,
+                returnSources: inner._returnSources || [],
             mutatedParams: inner._mutatedParamsOut || new Set(),
             mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
             taintedGlobals: new Set(),
@@ -3080,10 +3196,15 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         // 'source-from-network' factor permanently dead (it reads
         // t.provenance off chain/trace entries).
         sourceProvenance: f.sourceProvenance || null,
+        // The ORIGINS behind the trace: an `interproc-return` hop is followed back through `from` to the sources that tainted its
+        // arguments. Only a finding whose trace has such a hop gets the field, so every other finding is unchanged.
+        ...(Array.isArray(f.trace) && f.trace.some((t) => t && t.from) ? { sourceRoots: _rootSources(f.trace) } : {}),
         source: f.trace && f.trace.length ? {
           file: fn.file,
           line: f.trace[0].line,
           label: f.trace[0].sourceLabel,
+          // a parameter annotated as a source is not part of a finding's stable identity (posture/stable-id.js): naming it must not rename the finding
+          ...(f.trace[0].annotation ? { kind: 'parameter' } : {}),
         } : null,
         sink: {
           file: fn.file,

@@ -320,6 +320,7 @@ import { annotateHaskellFindings } from './language/haskell-findings.js';
 import { annotateHaskellLlm, analyzeHaskellLlmRules } from './language/haskell-llm.js';
 import { languagePragmaOnLine as _languagePragmaOnLine, languagePragmaSuppresses as _languagePragmaSuppresses } from './language/pragma.js';
 import { applyHaskellGuards, consolidateFlowSinks } from './language/haskell-guards.js';
+import { applyTrustBoundary } from './language/haskell-trust.js';
 import { annotateUnresolvedTargets, attachEvidenceChains } from './language/haskell-disclosure.js';
 import { analyzeHaskellRules } from './language/haskell-security-rules.js';
 import { scanLanguageSecretConcat, scanDependencyUrlCredentials, providerInfo as _secretProvider } from './language/secrets.js';
@@ -2556,6 +2557,10 @@ function scanStructuralVulns(fp, raw, _suppOut) {
   for (const pat of STRUCTURAL_VULN_PATTERNS) {
     if (!_ruleAppliesIn(pat, ctx)) { _supp.push({vuln:pat.vuln,file:fp,line:0,snippet:'',reason:'context-mismatch:'+ctx.kind}); continue; }
     if (pat.langScope && !pat.langScope.test(fp)) { continue; }
+    // These patterns are written in the syntax of JavaScript, Python, Java and C-family code (`parseString(`, `$(document)`, `exec(`). Haskell and
+    // Nix have their own analyzers; a pattern with no language scope has no meaning there, and one that fires (a record pattern named `String`
+    // read as an XML parser call, a script inside an HTML quasi-quote) is an artefact of the text.
+    if (!pat.langScope && isLanguageSource(fp)) continue;
     const re = new RegExp(pat.regex.source, pat.regex.flags);
     // Default: match against the string-stripped view so rule-library shapes
     // ('exec(' inside a fix-message) don't self-detect. Patterns that need to
@@ -9615,7 +9620,7 @@ function _deterministicFileTimings(timings) {
         f.unvalidated = true;
         f.validator_verdict = 'unvalidated';
       }
-      try { applyHaskellGuards(irFindings, perFile); consolidateFlowSinks(irFindings, perFile); annotateUnresolvedTargets(irFindings, perFile); attachEvidenceChains(irFindings, perFile); annotateHaskellFindings(irFindings, fc); annotateHaskellLlm(irFindings, fc); } catch (_) { /* metadata only; the finding stands without it */ }
+      try { applyHaskellGuards(irFindings, perFile); applyTrustBoundary(irFindings, perFile); consolidateFlowSinks(irFindings, perFile); annotateUnresolvedTargets(irFindings, perFile); attachEvidenceChains(irFindings, perFile); annotateHaskellFindings(irFindings, fc); annotateHaskellLlm(irFindings, fc); } catch (_) { /* metadata only; the finding stands without it */ }
       aF.push(...irFindings);
     } catch (e) {
       // Deep mode is best-effort. A parser blowup in one file shouldn't kill
@@ -9823,7 +9828,10 @@ function _deterministicFileTimings(timings) {
     } catch { /* Java SCA enrichment is best-effort */ }
   }
   // Haskell crypto / randomness / resource / XML / sensitive-logging rules (project-level: imports resolve across modules).
-  try{aF.push(...analyzeHaskellRules(fc).findings);}catch(_){}
+  // An `unsafePerformIO` / `unsafeCoerce` / `unsafeInterleaveIO` boundary note says (in its own text) that it claims no vulnerability class: it marks where the
+  // type system is stepped around. In a scan it is information, not a finding that gates a release; the rules module keeps emitting it at `low` (its contract),
+  // and the severity is lowered here with the original kept.
+  try{aF.push(...analyzeHaskellRules(fc).findings.map((f)=>f&&f.rule==='hs-unsafe-io-boundary'?{...f,originalSeverity:f.severity,severity:'info'}:f));}catch(_){}
   try{aF.push(...analyzeHaskellLlmRules(fc));}catch(_){}
   try{const{analyzeLanguageFindings}=await import('./language/engine-pass.js');aF.push(...analyzeLanguageFindings(allFileContents).findings);}catch(_){}
   let _languageBridges=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$/i.test(f))){const{analyzePolyglotBridges}=await import('./language/bridges.js');_languageBridges=analyzePolyglotBridges(allFileContents);}}catch(_){}
@@ -10727,7 +10735,7 @@ function _deterministicFileTimings(timings) {
   // classes from one source" finding, not a duplicate of any single
   // existing finding) still gets its own standalone finding, tagged with
   // the honest generic CWE-20/'multi-sink-taint-chain' label.
-  try{const srcGroups=new Map();for(const f of finalFindings){const src=f.chain?.[0]?.label;if(!src)continue;if(!srcGroups.has(src))srcGroups.set(src,[]);srcGroups.get(src).push(f);}for(const[src,group]of srcGroups){if(group.length<2)continue;const groupId=`multi-sink:${src}:${group.length}`;for(const f of group)f._multiSinkGroupId=groupId;const sharedFamily=group.every(f=>f.family&&f.family===group[0].family)?group[0].family:null;const sharedCwe=group.every(f=>f.cwe&&f.cwe===group[0].cwe)?group[0].cwe:null;const sinks=group.map(f=>({file:f.file,line:f.line,vuln:f.vuln}));if(sharedFamily&&sharedCwe){for(const f of group)f.multiSinkChain={source:src,sinkCount:group.length,sinks};continue;}finalFindings.push({id:groupId,file:group[0].file,line:group[0].line,vuln:`Multi-Sink Taint Chain — ${src} reaches ${group.length} sinks`,severity:group.some(f=>f.severity==='critical')?'critical':'high',cwe:'CWE-20',family:'multi-sink-taint-chain',parser:'MULTI-SINK',confidence:0.85,sinks,_aggregated:true});}}catch(_){}
+  try{const srcGroups=new Map();for(const f of finalFindings){const src=f.chain?.[0]?.label;if(!src)continue;if(f.severity==='info')continue;if(!srcGroups.has(src))srcGroups.set(src,[]);srcGroups.get(src).push(f);}for(const[src,group]of srcGroups){if(group.length<2)continue;const groupId=`multi-sink:${src}:${group.length}`;for(const f of group)f._multiSinkGroupId=groupId;const sharedFamily=group.every(f=>f.family&&f.family===group[0].family)?group[0].family:null;const sharedCwe=group.every(f=>f.cwe&&f.cwe===group[0].cwe)?group[0].cwe:null;const sinks=group.map(f=>({file:f.file,line:f.line,vuln:f.vuln}));if(sharedFamily&&sharedCwe){for(const f of group)f.multiSinkChain={source:src,sinkCount:group.length,sinks};continue;}finalFindings.push({id:groupId,file:group[0].file,line:group[0].line,vuln:`Multi-Sink Taint Chain — ${src} reaches ${group.length} sinks`,severity:group.some(f=>f.severity==='critical')?'critical':'high',cwe:'CWE-20',family:'multi-sink-taint-chain',parser:'MULTI-SINK',confidence:0.85,sinks,_aggregated:true});}}catch(_){}
   // SCA transitive dedup: collapse duplicate CVEs across dep chains
   try{const osvGroups=new Map();for(const sc of supplyChain){if(sc.type!=='vulnerable_dep'||!sc.osvId)continue;if(!osvGroups.has(sc.osvId))osvGroups.set(sc.osvId,[]);osvGroups.get(sc.osvId).push(sc);}for(const[osvId,group]of osvGroups){if(group.length<=1)continue;const primary=group.find(s=>s.isDirect)||group[0];primary.dependents=group.filter(s=>s!==primary).map(s=>({name:s.name,version:s.version,depChain:s.depChain,isDirect:s.isDirect}));primary._transitiveDeduped=group.length-1;for(const dup of group){if(dup!==primary)dup._deduplicatedInto=primary.osvId;}supplyChain.splice(0,supplyChain.length,...supplyChain.filter(s=>!s._deduplicatedInto));}}catch(_){}
   // ── World-class post-scan artifact emitters ──────────────────────────

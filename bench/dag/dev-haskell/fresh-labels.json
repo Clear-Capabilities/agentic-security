@@ -1,0 +1,2225 @@
+{
+ "note": "Hand labels by code behaviour, one labeller (a stated limit). Held-out measurement set: labelled after the fixes, never used to tune.",
+ "labels": {
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Backend/Dhall.hs:442:unsafe-boundary": {
+   "index": 0,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Backend/Freezing.hs:106:unsafe-boundary": {
+   "index": 1,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Backend/Freezing.hs:118:unsafe-boundary": {
+   "index": 2,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Features.hs:506:unsafe-boundary": {
+   "index": 3,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:213:unsafe-boundary": {
+   "index": 4,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:666:unsafe-boundary": {
+   "index": 5,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:680:unsafe-boundary": {
+   "index": 6,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:687:unsafe-boundary": {
+   "index": 7,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:689:unsafe-boundary": {
+   "index": 8,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:691:unsafe-boundary": {
+   "index": 9,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:720:unsafe-boundary": {
+   "index": 10,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:1673:unsafe-boundary": {
+   "index": 11,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-test-server/src/Dhall/Test/Server.hs:184:path-traversal": {
+   "index": 12,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "dhall-haskell",
+   "label": "TP",
+   "reason": "The test server turns the request path (pathInfo segments after /tests/import/) into a file path with joinPath and reads it, trying ../ variants, with no check that the result stays under the fixtures directory: a request containing .. segments reads arbitrary files. Two sites of one flaw (the read and the existence test)."
+  },
+  "dhall-haskell:dhall-test-server/src/Dhall/Test/Server.hs:205:path-traversal": {
+   "index": 13,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "dhall-haskell",
+   "label": "TP",
+   "reason": "The test server turns the request path (pathInfo segments after /tests/import/) into a file path with joinPath and reads it, trying ../ variants, with no check that the result stays under the fixtures directory: a request containing .. segments reads arbitrary files. Two sites of one flaw (the read and the existence test)."
+  },
+  "dhall-haskell:dhall-try/src/Callback.hs:18:unsafe-boundary": {
+   "index": 14,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-try/src/Main.hs:168:unsafe-boundary": {
+   "index": 15,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall-try/src/Main.hs:182:unsafe-boundary": {
+   "index": 16,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/benchmark/evaluation/Bench/Common.hs:138:unsafe-boundary": {
+   "index": 17,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/ghcjs-src/Dhall/Crypto.hs:65:unsafe-boundary": {
+   "index": 18,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall.hs:436:unsafe-boundary": {
+   "index": 19,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Bounded.hs:95:unsafe-boundary": {
+   "index": 20,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Bounded.hs:102:unsafe-boundary": {
+   "index": 21,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/DirectoryTree/Types.hs:147:unsafe-boundary": {
+   "index": 22,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Format.hs:70:path-traversal": {
+   "index": 23,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Freeze.hs:309:path-traversal": {
+   "index": 24,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:515:unsafe-boundary": {
+   "index": 25,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:788:unsafe-boundary": {
+   "index": 26,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:840:unsafe-boundary": {
+   "index": 27,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:849:unsafe-boundary": {
+   "index": 28,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:865:unsafe-boundary": {
+   "index": 29,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:890:unsafe-boundary": {
+   "index": 30,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1028:unsafe-boundary": {
+   "index": 31,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1046:path-traversal": {
+   "index": 32,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1047:path-traversal": {
+   "index": 33,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1120:unsafe-boundary": {
+   "index": 34,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1121:unsafe-boundary": {
+   "index": 35,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1161:unsafe-boundary": {
+   "index": 36,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1210:unsafe-boundary": {
+   "index": 37,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1226:unsafe-boundary": {
+   "index": 38,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1314:unsafe-boundary": {
+   "index": 39,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1342:unsafe-boundary": {
+   "index": 40,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1365:unsafe-boundary": {
+   "index": 41,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1392:unsafe-boundary": {
+   "index": 42,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1524:unsafe-boundary": {
+   "index": 43,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1852:path-traversal": {
+   "index": 44,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1853:path-traversal": {
+   "index": 45,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1876:path-traversal": {
+   "index": 46,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1879:path-traversal": {
+   "index": 47,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1908:path-traversal": {
+   "index": 48,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1910:path-traversal": {
+   "index": 49,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2306:unsafe-boundary": {
+   "index": 50,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2332:unsafe-boundary": {
+   "index": 51,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2390:unsafe-boundary": {
+   "index": 52,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2395:unsafe-boundary": {
+   "index": 53,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2474:unsafe-boundary": {
+   "index": 54,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2489:unsafe-boundary": {
+   "index": 55,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2490:unsafe-boundary": {
+   "index": 56,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2526:unsafe-boundary": {
+   "index": 57,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2550:unsafe-boundary": {
+   "index": 58,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2577:unsafe-boundary": {
+   "index": 59,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2591:unsafe-boundary": {
+   "index": 60,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2634:unsafe-boundary": {
+   "index": 61,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2645:unsafe-boundary": {
+   "index": 62,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2660:unsafe-boundary": {
+   "index": 63,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2678:unsafe-boundary": {
+   "index": 64,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2711:unsafe-boundary": {
+   "index": 65,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2722:unsafe-boundary": {
+   "index": 66,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2724:unsafe-boundary": {
+   "index": 67,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2844:unsafe-boundary": {
+   "index": 68,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2925:unsafe-boundary": {
+   "index": 69,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:971:unsafe-boundary": {
+   "index": 70,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:1314:path-traversal": {
+   "index": 71,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:1412:unsafe-boundary": {
+   "index": 72,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:1432:unsafe-boundary": {
+   "index": 73,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/TH.hs:112:unsafe-boundary": {
+   "index": 74,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/Tags.hs:93:path-traversal": {
+   "index": 75,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:153:unsafe-boundary": {
+   "index": 76,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:171:unsafe-boundary": {
+   "index": 77,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:283:unsafe-boundary": {
+   "index": 78,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:295:unsafe-boundary": {
+   "index": 79,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:308:unsafe-boundary": {
+   "index": 80,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:316:unsafe-boundary": {
+   "index": 81,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:330:unsafe-boundary": {
+   "index": 82,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:358:unsafe-boundary": {
+   "index": 83,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:438:unsafe-boundary": {
+   "index": 84,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:1560:unsafe-boundary": {
+   "index": 85,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "hlint:data/HLint_QuickCheck.hs:63:unsafe-boundary": {
+   "index": 86,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "hlint:data/HLint_QuickCheck.hs:86:unsafe-boundary": {
+   "index": 87,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "hlint:data/HLint_QuickCheck.hs:98:unsafe-boundary": {
+   "index": 88,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "hlint:src/Config/Yaml.hs:186:Unsafe XML Parsing (XXE Risk)": {
+   "index": 89,
+   "kind": "flagged-after",
+   "parser": "STRUCTURAL",
+   "severity": "high",
+   "vuln": "Unsafe XML Parsing (XXE Risk)",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "A language-neutral text detector firing on Haskell source: a record pattern named String read as XML parsing, a client-side script inside an HTML quasi-quote, and the word allUsers inside a doc comment read as a cloud IAM binding. No such operation exists in the code."
+  },
+  "hlint:src/Parallel.hs:27:unsafe-boundary": {
+   "index": 90,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "hlint:src/Test/Annotations.hs:121:path-traversal": {
+   "index": 91,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "hlint:src/Test/InputOutput.hs:36:path-traversal": {
+   "index": 92,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "hlint:src/Test/InputOutput.hs:38:path-traversal": {
+   "index": 93,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "hlint:src/Timing.hs:26:unsafe-boundary": {
+   "index": 94,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "hlint:src/Timing.hs:30:unsafe-boundary": {
+   "index": 95,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "hlint:src/Timing.hs:34:unsafe-boundary": {
+   "index": 96,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "hlint:src/Timing.hs:38:unsafe-boundary": {
+   "index": 97,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "hlint:src/Util.hs:55:unsafe-boundary": {
+   "index": 98,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-hsx/direct/IHP/HSX/Markup.hs:85:unsafe-boundary": {
+   "index": 99,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-ide/exe/IHP/CLI/HashPassword.hs:18:Sensitive value written to a log or trace": {
+   "index": 100,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Sensitive value written to a log or trace",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-job-dashboard/IHP/Job/Dashboard.hs:151:jQuery DOM-based XSS Source": {
+   "index": 101,
+   "kind": "flagged-after",
+   "parser": "STRUCTURAL",
+   "severity": "high",
+   "vuln": "jQuery DOM-based XSS Source",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "A language-neutral text detector firing on Haskell source: a record pattern named String read as XML parsing, a client-side script inside an HTML quasi-quote, and the word allUsers inside a doc comment read as a cloud IAM binding. No such operation exists in the code."
+  },
+  "ihp:ihp-modal/IHP/Modal/Types.hs:33:unsafe-boundary": {
+   "index": 102,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-modal/IHP/Modal/ViewFunctions.hs:60:unsafe-boundary": {
+   "index": 103,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-openai/IHP/OpenAI.hs:284:TLS certificate validation is disabled": {
+   "index": 104,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "TLS certificate validation is disabled",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The streaming OpenAI client sets the TLS verification mode to VerifyNone for every request, so the API key and the conversation travel over a connection whose peer is never authenticated."
+  },
+  "ihp:ihp-pagehead/IHP/PageHead/Types.hs:49:unsafe-boundary": {
+   "index": 105,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-pagehead/IHP/PageHead/ViewFunctions.hs:81:unsafe-boundary": {
+   "index": 106,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-pagehead/IHP/PageHead/ViewFunctions.hs:232:unsafe-boundary": {
+   "index": 107,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-pagehead/IHP/PageHead/ViewFunctions.hs:262:unsafe-boundary": {
+   "index": 108,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-schema-compiler/IHP/SchemaCompiler.hs:360:path-traversal": {
+   "index": 109,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-schema-compiler/IHP/SchemaCompiler.hs:363:path-traversal": {
+   "index": 110,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-schema-compiler/IHP/SchemaCompiler/Cache.hs:45:path-traversal": {
+   "index": 111,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:143:unsafe-boundary": {
+   "index": 112,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:151:unsafe-boundary": {
+   "index": 113,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:155:unsafe-boundary": {
+   "index": 114,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:159:unsafe-boundary": {
+   "index": 115,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:163:unsafe-boundary": {
+   "index": 116,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/ActionType.hs:30:unsafe-boundary": {
+   "index": 117,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/Controller/Layout.hs:25:unsafe-boundary": {
+   "index": 118,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/Controller/Render.hs:43:path-traversal": {
+   "index": 119,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (file served from a request-chosen path)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp/IHP/Controller/Response.hs:56:unsafe-boundary": {
+   "index": 120,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/Controller/Session.hs:175:unsafe-boundary": {
+   "index": 121,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/Fetch.hs:70:GCP IAM binding includes allUsers — resource is publicly accessible": {
+   "index": 122,
+   "kind": "flagged-after",
+   "parser": "CLOUD-IAM",
+   "severity": "critical",
+   "vuln": "GCP IAM binding includes allUsers — resource is publicly accessible",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "A language-neutral text detector firing on Haskell source: a record pattern named String read as XML parsing, a client-side script inside an HTML quasi-quote, and the word allUsers inside a doc comment read as a cloud IAM binding. No such operation exists in the code."
+  },
+  "ihp:ihp/IHP/FileStorage/ControllerFunctions.hs:191:path-traversal": {
+   "index": 123,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp/IHP/FlashMessages.hs:60:unsafe-boundary": {
+   "index": 124,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/Prelude.hs:141:unsafe-boundary": {
+   "index": 125,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/Prelude.hs:146:unsafe-boundary": {
+   "index": 126,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/Prelude.hs:151:unsafe-boundary": {
+   "index": 127,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/QueryBuilder/Compiler.hs:47:GCP IAM binding includes allUsers — resource is publicly accessible": {
+   "index": 128,
+   "kind": "flagged-after",
+   "parser": "CLOUD-IAM",
+   "severity": "critical",
+   "vuln": "GCP IAM binding includes allUsers — resource is publicly accessible",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "A language-neutral text detector firing on Haskell source: a record pattern named String read as XML parsing, a client-side script inside an HTML quasi-quote, and the word allUsers inside a doc comment read as a cloud IAM binding. No such operation exists in the code."
+  },
+  "ihp:ihp/IHP/RequestVault/ModelContext.hs:21:unsafe-boundary": {
+   "index": 129,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/RouterSupport.hs:645:unsafe-boundary": {
+   "index": 130,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp/IHP/RouterSupport.hs:1269:unsafe-boundary": {
+   "index": 131,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:wai-asset-path/Network/Wai/Middleware/AssetPath.hs:38:unsafe-boundary": {
+   "index": 132,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:94:unsafe-boundary": {
+   "index": 133,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:100:unsafe-boundary": {
+   "index": 134,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:109:unsafe-boundary": {
+   "index": 135,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:115:unsafe-boundary": {
+   "index": 136,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:155:Request body read without a size limit": {
+   "index": 137,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The request-parameter middleware reads the whole body of a JSON or unknown-type request with strictRequestBody and no size check, before the application runs: a client chooses how much memory the server allocates."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:187:Request body read without a size limit": {
+   "index": 138,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The request-parameter middleware reads the whole body of a JSON or unknown-type request with strictRequestBody and no size check, before the application runs: a client chooses how much memory the server allocates."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:276:unsafe-boundary": {
+   "index": 139,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:276:path-traversal": {
+   "index": 140,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ormolu:src/Ormolu/Utils/Cabal.hs:104:unsafe-boundary": {
+   "index": 141,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ormolu",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ormolu:src/Ormolu/Utils/Fixity.hs:59:unsafe-boundary": {
+   "index": 142,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "project": "ormolu",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "scotty:Web/Scotty/Cookie.hs:106:Session cookie without HttpOnly or Secure": {
+   "index": 143,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "project": "scotty",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "scotty:Web/Scotty/Cookie.hs:125:Session cookie without HttpOnly or Secure": {
+   "index": 144,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "project": "scotty",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "scotty:Web/Scotty/Cookie.hs:132:Session cookie without HttpOnly or Secure": {
+   "index": 145,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "project": "scotty",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "scotty:Web/Scotty/Session.hs:180:Session cookie without HttpOnly or Secure": {
+   "index": 146,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "createUserSession sets the sess_id session cookie through setSimpleCookie, whose cookie has neither Secure nor HttpOnly, so the session id is sent over plain HTTP and readable by page scripts."
+  },
+  "scotty:Web/Scotty/Session.hs:187:Predictable random number generator used for a security value": {
+   "index": 147,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Predictable random number generator used for a security value",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "The session identifier is 32 letters drawn from the global non-cryptographic generator (randomRIO), predictable to an attacker who observes outputs."
+  },
+  "scotty:Web/Scotty/Util.hs:46:path-traversal": {
+   "index": 148,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (file served from a request-chosen path)",
+   "project": "scotty",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "scotty:examples/basic.hs:42:Cross-Site Scripting (HTML response from text)": {
+   "index": 149,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "A path or query parameter is concatenated into an HTML response (html $ mconcat [\"<h1>\", v, \"</h1>\"]) with no escaping: reflected cross-site scripting. 150 is the aggregate of the same flow."
+  },
+  "scotty:examples/basic.hs:42:Multi-Sink Taint Chain — scotty request parameter reaches 5 sinks": {
+   "index": 150,
+   "kind": "flagged-after",
+   "parser": "MULTI-SINK",
+   "severity": "high",
+   "vuln": "Multi-Sink Taint Chain — scotty request parameter reaches 5 sinks",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "A path or query parameter is concatenated into an HTML response (html $ mconcat [\"<h1>\", v, \"</h1>\"]) with no escaping: reflected cross-site scripting. 150 is the aggregate of the same flow."
+  },
+  "scotty:examples/basic.hs:47:Cross-Site Scripting (HTML response from text)": {
+   "index": 151,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "A path or query parameter is concatenated into an HTML response (html $ mconcat [\"<h1>\", v, \"</h1>\"]) with no escaping: reflected cross-site scripting. 150 is the aggregate of the same flow."
+  },
+  "scotty:examples/basic.hs:52:Cross-Site Scripting (HTML response from text)": {
+   "index": 152,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "A path or query parameter is concatenated into an HTML response (html $ mconcat [\"<h1>\", v, \"</h1>\"]) with no escaping: reflected cross-site scripting. 150 is the aggregate of the same flow."
+  },
+  "scotty:examples/basic.hs:78:Cross-Site Scripting (HTML response from text)": {
+   "index": 153,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "A path or query parameter is concatenated into an HTML response (html $ mconcat [\"<h1>\", v, \"</h1>\"]) with no escaping: reflected cross-site scripting. 150 is the aggregate of the same flow."
+  },
+  "scotty:examples/basic.hs:106:Request body read without a size limit": {
+   "index": 154,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "The handler reads the whole request body with body (no limit is applied anywhere in the example), so a client chooses the allocation. Low severity, labelled TP under the same rule as the middleware; a reviewer may call an example handler out of scope."
+  },
+  "scotty:examples/bodyecho.hs:19:Request body read without a size limit": {
+   "index": 155,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "The handler reads the whole request body with body (no limit is applied anywhere in the example), so a client chooses the allocation. Low severity, labelled TP under the same rule as the middleware; a reviewer may call an example handler out of scope."
+  },
+  "scotty:examples/middleware.hs:68:Request body read without a size limit": {
+   "index": 156,
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "The handler reads the whole request body with body (no limit is applied anywhere in the example), so a client chooses the allocation. Low severity, labelled TP under the same rule as the middleware; a reviewer may call an example handler out of scope."
+  },
+  "scotty:examples/nested.hs:38:Cross-Site Scripting (HTML response from text)": {
+   "index": 157,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "The not-found handler returns show (pathInfo r) as text/html. show escapes quotes and backslashes but not < or >, and the decoded path segments are attacker-chosen, so markup in the URL is reflected."
+  },
+  "scotty:examples/urlshortener.hs:65:Open Redirect": {
+   "index": 158,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "medium",
+   "vuln": "Open Redirect",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "The redirect target is a URL stored by earlier requests and returned for a hash chosen by the client, with no check of scheme or host: an open redirect (the intended feature of a URL shortener, but unvalidated attacker-supplied destinations)."
+  },
+  "summoner:summoner-cli/src/Summoner/Project.hs:284:path-traversal": {
+   "index": 159,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "summoner",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "summoner:summoner-cli/src/Summoner/Tree.hs:42:path-traversal": {
+   "index": 160,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "summoner",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall-bash/exec/Main.hs:85:Whole input read into memory without a size limit": {
+   "index": 161,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall-csv/csv-to-dhall/Main.hs:153:Whole input read into memory without a size limit": {
+   "index": 162,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall-csv/dhall-to-csv/Main.hs:100:Whole input read into memory without a size limit": {
+   "index": 163,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall-json/dhall-to-json/Main.hs:160:Whole input read into memory without a size limit": {
+   "index": 164,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall-json/json-to-dhall/Main.hs:154:Whole input read into memory without a size limit": {
+   "index": 165,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall-json/src/Dhall/DhallToYaml/Main.hs:115:Whole input read into memory without a size limit": {
+   "index": 166,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Backend/Prefix.hs:108:Partial function applied to caller-supplied text": {
+   "index": 167,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall-nix/exec/Main.hs:47:Whole input read into memory without a size limit": {
+   "index": 168,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall-nixpkgs/Main.hs:398:path-traversal": {
+   "index": 169,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall-toml/src/Dhall/Toml/Utils.hs:33:Whole input read into memory without a size limit": {
+   "index": 170,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall-toml/src/Dhall/TomlToDhall.hs:411:Whole input read into memory without a size limit": {
+   "index": 171,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall-yaml/yaml-to-dhall/Main.hs:151:Whole input read into memory without a size limit": {
+   "index": 172,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall/src/Dhall/Format.hs:74:Whole input read into memory without a size limit": {
+   "index": 173,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall/src/Dhall/Freeze.hs:314:Whole input read into memory without a size limit": {
+   "index": 174,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2021:path-traversal": {
+   "index": 175,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2045:path-traversal": {
+   "index": 176,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2049:path-traversal": {
+   "index": 177,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2053:path-traversal": {
+   "index": 178,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:1318:Whole input read into memory without a size limit": {
+   "index": 179,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:1385:Whole input read into memory without a size limit": {
+   "index": 180,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall/src/Dhall/Schemas.hs:71:Whole input read into memory without a size limit": {
+   "index": 181,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall/src/Dhall/Tags.hs:254:Whole input read into memory without a size limit": {
+   "index": 182,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "dhall-haskell:dhall/src/Dhall/Util.hs:140:Whole input read into memory without a size limit": {
+   "index": 183,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "hlint:cc/Engine.hs:65:Argument Injection (process arguments)": {
+   "index": 184,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "medium",
+   "vuln": "Argument Injection (process arguments)",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "hlint:src/CmdLine.hs:269:Whole input read into memory without a size limit": {
+   "index": 185,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "hlint:src/Test/All.hs:39:path-traversal": {
+   "index": 186,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "hlint:src/Util.hs:42:Whole input read into memory without a size limit": {
+   "index": 187,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "hlint",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "ihp:ihp-datasync/IHP/DataSync/LongPoll/Routes.hs:25:unsafe-boundary": {
+   "index": 188,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-ide/IHP/IDE/CodeGen/MigrationGenerator.hs:886:unsafe-boundary": {
+   "index": 189,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-ide/IHP/IDE/FileWatcher.hs:110:Whole input read into memory without a size limit": {
+   "index": 190,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "A command-line tool reading its own standard input, a file the operator names, or a child process pipe."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:72:Partial function applied to caller-supplied text": {
+   "index": 191,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "A request parameter (the table index of a schema-designer action) indexes a list with !!, so an out-of-range value raises an exception in the request handler. Low severity. Lost: the helper is called by the controller, and the controller's request accessor is a project function in this repository, so the flow is not tracked."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:75:Partial function applied to caller-supplied text": {
+   "index": 192,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "A request parameter (the table index of a schema-designer action) indexes a list with !!, so an out-of-range value raises an exception in the request handler. Low severity. Lost: the helper is called by the controller, and the controller's request accessor is a project function in this repository, so the flow is not tracked."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Migrations.hs:90:path-traversal": {
+   "index": 193,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Migrations.hs:118:path-traversal": {
+   "index": 194,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-ide/IHP/IDE/ToolServer/Helper/Controller.hs:42:OS Command Injection (shell string)": {
+   "index": 195,
+   "kind": "gone",
+   "parser": "IR-TAINT",
+   "severity": "critical",
+   "vuln": "OS Command Injection (shell string)",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "OpenEditorAction passes the request parameter path to openEditor, which runs Process.system on a shell string built from it: command injection from an HTTP request (to a localhost development tool). Lost: the helper became reachable, and in this repository (the framework itself) the request accessor is a project function the engine cannot know as a source."
+  },
+  "ihp:ihp-ide/IHP/IDE/ToolServer/Helper/Controller.hs:42:Multi-Sink Taint Chain — text parameter of an exported function (caller-controlled) reaches 2 sinks": {
+   "index": 196,
+   "kind": "gone",
+   "parser": "MULTI-SINK",
+   "severity": "critical",
+   "vuln": "Multi-Sink Taint Chain — text parameter of an exported function (caller-controlled) reaches 2 sinks",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "OpenEditorAction passes the request parameter path to openEditor, which runs Process.system on a shell string built from it: command injection from an HTTP request (to a localhost development tool). Lost: the helper became reachable, and in this repository (the framework itself) the request accessor is a project function the engine cannot know as a source."
+  },
+  "ihp:ihp-ide/IHP/IDE/WorkerSignal.hs:35:path-traversal": {
+   "index": 197,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-migrate/exe/Migrate.hs:63:path-traversal": {
+   "index": 198,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:332:path-traversal": {
+   "index": 199,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:345:path-traversal": {
+   "index": 200,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:346:path-traversal": {
+   "index": 201,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:363:path-traversal": {
+   "index": 202,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:588:path-traversal": {
+   "index": 203,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:589:path-traversal": {
+   "index": 204,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:590:path-traversal": {
+   "index": 205,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:591:path-traversal": {
+   "index": 206,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:597:path-traversal": {
+   "index": 207,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:919:path-traversal": {
+   "index": 208,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:986:path-traversal": {
+   "index": 209,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:992:path-traversal": {
+   "index": 210,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (file operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:1061:path-traversal": {
+   "index": 211,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:1063:path-traversal": {
+   "index": 212,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ormolu:ormolu-live/app/Pregen.hs:11:path-traversal": {
+   "index": 213,
+   "kind": "lowered",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ormolu",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "ormolu:src/Ormolu/Processing/Common.hs:26:Partial function applied to caller-supplied text": {
+   "index": 214,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ormolu",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged operation takes its path, value or type from the program's own configuration, command line, a file the operator names or an internal invariant, and no attacker-controlled data is shown to reach it."
+  },
+  "summoner:summoner-cli/src/Summoner/Project.hs:284:unsafe-boundary": {
+   "index": 215,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: function toString() { [native code] }",
+   "project": "summoner",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "summoner:summoner-cli/src/Summoner/Question.hs:279:unsafe-boundary": {
+   "index": 216,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: function toString() { [native code] }",
+   "project": "summoner",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "summoner:summoner-cli/src/Summoner/Template.hs:28:unsafe-boundary": {
+   "index": 217,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: function toString() { [native code] }",
+   "project": "summoner",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "summoner:summoner-cli/src/Summoner/Template/Cabal.hs:31:unsafe-boundary": {
+   "index": 218,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: function toString() { [native code] }",
+   "project": "summoner",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "summoner:summoner-cli/src/Summoner/Template/Haskell.hs:30:unsafe-boundary": {
+   "index": 219,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: function toString() { [native code] }",
+   "project": "summoner",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "summoner:summoner-cli/src/Summoner/Template/Stack.hs:27:unsafe-boundary": {
+   "index": 220,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: function toString() { [native code] }",
+   "project": "summoner",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "summoner:summoner-tui/src/Summoner/Tui/Form.hs:111:unsafe-boundary": {
+   "index": 221,
+   "kind": "gone",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Unsafe boundary: function toString() { [native code] }",
+   "project": "summoner",
+   "label": "FP",
+   "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  }
+ }
+}

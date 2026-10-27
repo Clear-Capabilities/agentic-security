@@ -1,0 +1,10 @@
+{
+  "note": "Sites that the scan after the fixes still flags but that were not in the seeded sample (the unsampled remainder of the path-traversal stratum). Labelled by reading the code AFTER the fixes, only so the census of flagged sites is complete; no earlier label was changed. Keyed project:file:line:stratum.",
+  "labels": {
+    "ghcup-hs:lib/GHCup/Download.hs:797:path-traversal": { "label": "FP", "reason": "The cache file name is the last segment of a download URI from release metadata, joined under the cache directory and only tested for existence." },
+    "ghcup-hs:lib/GHCup/Prelude/File/Search.hs:118:path-traversal": { "label": "FP", "reason": "A directory-listing helper that lists the directory its caller names; no request or untrusted data is shown to reach it." },
+    "gitit:src/Network/Gitit/Util.hs:53:path-traversal": { "label": "FP", "reason": "inDir changes into the directory its caller names to run an action; the callers pass repository paths from configuration." },
+    "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:83:path-traversal": { "label": "FP", "reason": "Reads the two files of a package the mirror client itself downloaded to a temporary location." },
+    "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:100:path-traversal": { "label": "FP", "reason": "Removes the two temporary files the client created for this upload." }
+  }
+}

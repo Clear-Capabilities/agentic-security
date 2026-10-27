@@ -239,10 +239,11 @@ cell('CAP-002', 'haskell', () => {
   assert.equal(readFileSync(join(dir, 'src', 'Main.hs'), 'utf8'), before, 'undo restores the file byte for byte');
   const sql = fam(j, 'sql-injection')[0];
   const fixedSql = cli(dir, ['fix', '--finding', sql.id, '--preview', '--root', dir]);
-  // The example uses sqlite-simple; the SQL rewrite names postgresql-simple, so it is refused rather than offered as a verified fix
-  // (the accepted case, a file already on postgresql-simple, is pinned in language-parity-haskell.test.js).
-  assert.equal(fixedSql.status, 4, fixedSql.text); assert.match(fixedSql.err, /refused rather than guessed/);
-  assert.equal(readFileSync(join(dir, 'src', 'Main.hs'), 'utf8'), before, 'a refused fix writes nothing');
+  // The example uses sqlite-simple: the rewrite takes the driver from the file's own imports and offers a parameterised query
+  // (a file on a driver the rewrite is not written for is refused; pinned in language-parity-haskell.test.js).
+  assert.equal(fixedSql.status, 0, fixedSql.text); assert.match(fixedSql.out, /query conn "SELECT status FROM orders WHERE ref = \?" \(Only ref\)/);
+  assert.match(fixedSql.out, /Verified \(syntax, rescan/);
+  assert.equal(readFileSync(join(dir, 'src', 'Main.hs'), 'utf8'), before, 'a preview writes nothing');
   const cmd = fam(j, 'command-injection')[0];
   const refused = cli(dir, ['fix', '--finding', cmd.id, '--preview', '--root', dir]);
   assert.equal(refused.status, 4); assert.match(refused.err, /No verified fix/, 'a rewrite a gate refuses is reported, never applied');

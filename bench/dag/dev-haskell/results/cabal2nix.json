@@ -1,0 +1,69 @@
+{
+ "id": "cabal2nix",
+ "ms": 2065,
+ "totalFindings": 2,
+ "haskell": [
+  {
+   "id": "ir-taint:hackage-db/src/Distribution/Hackage/DB/Path.hs:72:hs-sink-system.directory.doesfileexist.cwe-22.0:ebec034e",
+   "stableId": "57076e077b109597",
+   "file": "hackage-db/src/Distribution/Hackage/DB/Path.hs",
+   "line": 72,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "hackage-db/src/Distribution/Hackage/DB/Path.hs",
+    "line": 66,
+    "label": "interproc-return:Distribution.Hackage.DB.Path.hackageTarballDir"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "hackage-db/src/Distribution/Hackage/DB/Path.hs",
+    "line": 72,
+    "label": "hs-sink-system.directory.doesfileexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:hackage-db/src/Distribution/Hackage/DB/Path.hs:74:hs-sink-system.directory.doesfileexist.cwe-22.0:ebebff0d",
+   "stableId": "539bdfb48b781269",
+   "file": "hackage-db/src/Distribution/Hackage/DB/Path.hs",
+   "line": 74,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "hackage-db/src/Distribution/Hackage/DB/Path.hs",
+    "line": 66,
+    "label": "interproc-return:Distribution.Hackage.DB.Path.hackageTarballDir"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "hackage-db/src/Distribution/Hackage/DB/Path.hs",
+    "line": 74,
+    "label": "hs-sink-system.directory.doesfileexist.cwe-22.0"
+   }
+  }
+ ]
+}

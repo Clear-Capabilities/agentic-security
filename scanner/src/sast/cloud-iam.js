@@ -363,7 +363,9 @@ export function scanCloudIam(fp, raw) {
   if (!raw || raw.length > 500_000) return [];
   const out = [];
   const seen = new Set();
-  const isJson = /\.json$/i.test(fp) || raw.trimStart().startsWith('{');
+  // A file is JSON by its extension or because it OPENS like a JSON object: a brace, then a quoted key or a closing brace. A bare leading `{` is not
+  // enough: a Haskell module that starts with a `{-# LANGUAGE ... #-}` pragma (or a `{- ... -}` comment) begins with one too, and its prose was read as policy.
+  const isJson = /\.json$/i.test(fp) || /^\s*\{\s*(?:"|\})/.test(raw.slice(0, 4096));
   const isYaml = /\.(?:yaml|yml)$/i.test(fp);
   const isBicep = /\.bicep$/i.test(fp);
   const isTf = /\.tf$/i.test(fp);

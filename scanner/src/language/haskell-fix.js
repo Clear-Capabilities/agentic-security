@@ -124,7 +124,19 @@ function findCall(lineText, names) {
   return m ? { prefix: m[1], name: m[2], index: m.index, after: m.index + m[0].length } : null;
 }
 
+// The database driver whose `execute`/`query`/`Only` the rewrite uses is the one the FILE already imports: a hard-coded driver would add an
+// import of a library the project may not depend on, and a patch that compiles against nothing is not a fix. Only the two drivers whose
+// `execute_`/`query_`/`execute`/`query`/`Only` API is identical are rewritten; any other (mysql-simple, HDBC, persistent) or two at once is refused.
+const SQL_DRIVERS = Object.freeze(['Database.PostgreSQL.Simple', 'Database.SQLite.Simple']);
+const OTHER_SQL = /^import\s+(?:qualified\s+)?Database\.(?:MySQL|HDBC|Persist|Beam|Opaleye|Selda|Esqueleto|SQLite3|PostgreSQL\.LibPQ)/m;
+export function sqlDriverOf(text) {
+  const used = SQL_DRIVERS.filter((m) => importInfo(text, m));
+  return used.length === 1 && !OTHER_SQL.test(text) ? used[0] : null;
+}
+
 function fixSql(text, f) {
+  const driver = sqlDriverOf(text);
+  if (!driver) return null;
   const lb = lineBounds(text, f.line);
   const call = findCall(lb.text, ['execute_', 'query_']);
   if (!call) return null;
@@ -144,7 +156,7 @@ function fixSql(text, f) {
     if (q) { sql = sql.slice(0, -1); parts[i + 1] = { lit: after.lit.slice(1) }; }
     sql += '?'; params.push(p.var);
   }
-  const imp = ensureImport(text, 'Database.PostgreSQL.Simple', ['execute', 'query', 'Only']);
+  const imp = ensureImport(text, driver, ['execute', 'query', 'Only']);
   if (!imp) return null;
   const only = `${call.prefix || imp.prefix}Only`;
   const tuple = params.length === 1 ? `(${only} ${params[0]})` : `(${params.join(', ')})`;
@@ -214,6 +226,9 @@ function fixProcess(text, f) {
 }
 
 function fixHtml(text, f) {
+  // `preEscapedToHtml` and `toHtml` are blaze-html's pair (Yesod and the shakespeare packages re-export them); another library's raw-markup call has a
+  // different name and a different escaping function, so a file that does not import blaze or one of its re-exporters is not rewritten.
+  if (!/^import\s+(?:qualified\s+)?(?:Text\.Blaze|Yesod|Text\.Hamlet)/m.test(text)) return null;
   const lb = lineBounds(text, f.line);
   const m = /(?<![\w'.])((?:[A-Z][\w']*\.)?)preEscapedToHtml(?![\w'])/.exec(lb.text);
   if (!m) return null;
@@ -227,10 +242,96 @@ function fixWeakHash(text, f) {
   const lb = lineBounds(text, f.line);
   const re = /(?<![\w'.])(MD5|SHA1)(?![\w'.])/g;
   if (!re.test(lb.text)) return null;
+  // The algorithm is often a TYPE as well (`Digest MD5` in a signature, an annotation on another line): replacing it on one line only leaves a
+  // type error behind. Any other mention outside the import list means the rewrite is not provably the same program, so it is not made.
+  const elsewhere = text.split('\n').some((l, i) => i !== f.line - 1 && !/^import\s/.test(l) && /(?<![\w'.])(MD5|SHA1)(?![\w'.])/.test(l));
+  if (elsewhere) return null;
   const imp = ensureImport(text, 'Crypto.Hash', ['SHA256(..)']); if (!imp) return null;
   const repl = lb.text.replace(/(?<![\w'.])(MD5|SHA1)(?![\w'.])/g, 'SHA256');
   const next = applyImportDelta(text, imp.text, splice(text, lb.start, lb.end, repl));
   return { ruleId: 'hs-hash-sha256', label: 'FULL', text: next, explanation: 'MD5/SHA-1 replaced by SHA-256. Digests change: anything that stored or compares old digests must be migrated.', behavior: { kind: 'hash', from: ['MD5', 'SHA1'], to: 'SHA256' } };
+}
+
+
+// ── path traversal ───────────────────────────────────────────────────────────
+// `readFile ("/srv/data/" ++ name)` -> `readFile ("/srv/data/" ++ takeFileName name)` when `name` is a String/FilePath PARAMETER of the enclosing function.
+// The rewrite is a mitigation, not an equivalence: a name that carried directories now keeps only its last segment, and `.` / `..` survive
+// `takeFileName`, which is why directory operations are not rewritten (only operations on a file). Every other shape is a proposal.
+const PATH_FILE_OPS = ['readFile', 'writeFile', 'appendFile', 'removeFile', 'doesFileExist', 'openFile', 'withFile', 'openBinaryFile', 'withBinaryFile', 'getFileSize', 'getModificationTime'];
+
+/** Splits `a ++ b </> c` at its top-level `++` / `<>` / `</>` operators, keeping the operator text: [part, op, part, ...] or null. */
+function splitOperators(expr) {
+  const out = []; let depth = 0; let start = 0;
+  for (let i = 0; i < expr.length; i++) {
+    const c = expr[i];
+    if (c === '"') { const e = atomEnd(expr, i); if (e < 0) return null; i = e - 1; continue; }
+    if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') depth--;
+    else if (depth === 0) {
+      const m = /^\s*(\+\+|<>|<\/>)\s*/.exec(expr.slice(i));
+      if (m && (i === start || /\s/.test(expr[i]) || true)) { out.push(expr.slice(start, i), m[0]); i += m[0].length - 1; start = i + 1; }
+    }
+  }
+  out.push(expr.slice(start));
+  return out;
+}
+
+/** The declared types of the parameters of the top-level function containing `line`: { name -> type text }, from its signature and first clause. */
+function paramTypesAt(text, line) {
+  const lines = text.split('\n');
+  let clause = -1;
+  for (let i = Math.min(line - 1, lines.length - 1); i >= 0; i--) if (/^[a-z_][\w']*\b[^:\n]*=/.test(lines[i]) && !/^[a-z_][\w']*\s*::/.test(lines[i])) { clause = i; break; }
+  if (clause < 0) return null;
+  const m = /^([a-z_][\w']*)([^=]*)=/.exec(lines[clause]);
+  if (!m) return null;
+  const name = m[1]; const params = m[2].trim() ? m[2].trim().split(/\s+/) : [];
+  if (params.some((p) => !/^[a-z_][\w']*$/.test(p))) return null;      // a pattern, not a plain name: not judged
+  const sigLine = lines.findIndex((l) => new RegExp(`^${name}\\s*::`).test(l));
+  if (sigLine < 0) return null;
+  let sig = lines[sigLine].replace(/^[^:]*::/, '');
+  for (let j = sigLine + 1; j < lines.length && /^\s+\S/.test(lines[j]) && !/^[a-z_][\w']*\s*(::|=)/.test(lines[j]); j++) sig += ` ${lines[j].trim()}`;
+  sig = sig.replace(/^.*=>/, '');
+  const types = []; let depth = 0; let cur = '';
+  for (let i = 0; i < sig.length; i++) {
+    const c = sig[i];
+    if (c === '(' || c === '[') depth++; else if (c === ')' || c === ']') depth--;
+    if (depth === 0 && sig.startsWith('->', i)) { types.push(cur.trim()); cur = ''; i++; continue; }
+    cur += c;
+  }
+  types.push(cur.trim());
+  const out = {};
+  params.forEach((p, i) => { if (types[i] !== undefined) out[p] = types[i]; });
+  return out;
+}
+
+function fixPath(text, f) {
+  const lb = lineBounds(text, f.line);
+  const call = findCall(lb.text, PATH_FILE_OPS);
+  if (!call) return null;
+  let aStart = call.after; while (lb.text[aStart] === ' ') aStart++;
+  let aEnd;
+  if (lb.text[aStart] === '$') { aStart++; while (lb.text[aStart] === ' ') aStart++; aEnd = lb.text.length; }
+  else aEnd = atomEnd(lb.text, aStart);
+  if (aEnd < 0) return null;
+  const arg = lb.text.slice(aStart, aEnd);
+  const inner = trimParens(arg);
+  const parts = splitOperators(inner);
+  if (!parts || parts.length < 3) return null;
+  const operands = parts.filter((_, i) => i % 2 === 0).map((x) => trimParens(x));
+  if (!operands.some((o) => STRING.test(o))) return null;                       // no fixed part: a pass-through, not a construction
+  const vars = operands.filter((o) => !STRING.test(o));
+  if (!vars.length || vars.some((v) => !IDENT.test(v))) return null;
+  const types = paramTypesAt(text, f.line);
+  if (!types || vars.some((v) => !/^(?:String|FilePath)$/.test(types[v] || ''))) return null;   // takeFileName takes a String: any other type would not compile
+  if (new RegExp(`(?<![\\w'.])takeFileName\\s+(?:${vars.join('|')})(?![\\w'])`).test(lb.text)) return null;
+  const imp = ensureImport(text, 'System.FilePath', ['takeFileName']); if (!imp) return null;
+  const fn = `${imp.prefix}takeFileName`;
+  let rebuilt = '';
+  parts.forEach((part, i) => { rebuilt += i % 2 === 1 ? part : (vars.includes(trimParens(part)) ? part.replace(trimParens(part), `${fn} ${trimParens(part)}`) : part); });
+  const wrapped = arg.startsWith('(') && atomEnd(arg, 0) === arg.length ? `(${rebuilt})` : rebuilt;
+  const replaced = lb.text.slice(0, aStart) + wrapped + lb.text.slice(aEnd);
+  const next = applyImportDelta(text, imp.text, splice(text, lb.start, lb.end, replaced));
+  return { ruleId: 'hs-path-takefilename', label: 'MITIGATION', text: next, explanation: `Applied takeFileName to ${vars.join(', ')} so only its last path segment is used under the fixed directory. A value that carried subdirectories now names a file directly inside it; "." and ".." survive takeFileName, so this is not applied to directory operations.`, behavior: { kind: 'path', sanitizer: 'takeFileName', vars } };
 }
 
 const LOG_CALLS = ['putStrLn', 'putStr', 'hPutStrLn', 'hPutStr', 'print', 'trace', 'traceShow', 'traceShowId', 'logInfoN', 'logDebugN', 'logWarnN', 'logErrorN', 'logInfo', 'logDebug', 'logWarn', 'logError'];
@@ -256,6 +357,7 @@ const FIXERS = [
   { id: 'hs-html-escape', applies: (f) => f.cwe === 'CWE-79', run: fixHtml },
   { id: 'hs-hash-sha256', applies: (f) => f.cwe === 'CWE-328' || f.rule === 'hs-weak-hash', run: fixWeakHash },
   { id: 'hs-log-redact', applies: (f) => f.cwe === 'CWE-532' || f.rule === 'hs-sensitive-logging', run: fixLogging },
+  { id: 'hs-path-takefilename', applies: (f) => f.cwe === 'CWE-22', run: fixPath },
 ];
 export const SUPPORTED_FIX_IDS = Object.freeze(FIXERS.map((x) => x.id));
 
@@ -300,8 +402,22 @@ export function planHaskellFix(finding, files) {
       if (r && r.text && r.text !== before) return { ok: true, ruleId: r.ruleId, label: r.label, file: finding.file, before, after: r.text, explanation: r.explanation, behavior: r.behavior, ...(line !== finding.line ? { fixedAtLine: line } : {}) };
     }
   }
-  return { ok: false, reason: 'no deterministic fix is supported for this exact shape', proposal: 'model-assisted' };
+  return { ok: false, reason: CLASS_REASONS[finding.cwe] || 'no deterministic fix is supported for this exact shape', proposal: 'model-assisted' };
 }
+
+// Classes whose repair needs a choice the code does not contain (a policy, a library, a limit). The scanner reports them; it does not guess.
+const CLASS_REASONS = Object.freeze({
+  'CWE-918': 'server-side request forgery is fixed by an allow-list of hosts or a resolved-address policy, which is a decision about this service, not a rewrite of this line',
+  'CWE-88': 'argument injection is fixed by validating the value against what the program accepts; inserting "--" only helps programs that honour it, so no patch is made',
+  'CWE-916': 'password hashing needs a memory-hard or iterated KDF (Argon2id, scrypt, bcrypt, PBKDF2) from a library the project may not depend on, and existing stored hashes must be migrated',
+  'CWE-338': 'a predictable generator is replaced by the operating system CSPRNG (Crypto.Random), whose result type differs from System.Random: the surrounding code must change with it',
+  'CWE-1004': 'cookie attributes live in different places for each framework (a record field, a header string, a helper); the rewrite is not provably the same program',
+  'CWE-306': 'a missing authentication check needs a policy (which credential, which rejection); the scanner reports the handler and does not invent the guard',
+  'CWE-770': 'a resource limit is a number only the operator can choose (how many bytes, how many requests)',
+  'CWE-295': 'enabling certificate validation can break connections the project depends on; the trust store to use is a deployment decision',
+  'CWE-798': 'a hard-coded secret must be rotated and moved to a secret store; rewriting the line would leave the leaked value valid',
+  'CWE-611': 'XML entity handling depends on the parser configuration in use',
+});
 
 // ── gates ────────────────────────────────────────────────────────────────────
 const key = (f) => `${f.file}|${f.cwe || ""}`;
