@@ -10,8 +10,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { STATE_DIR_NAME } from '../posture/state-dir.js';
 import { isLanguageSource, isLanguageManifest, isLanguageExcludedPath, buildImportGraph, importClosure } from './discovery.js';
-import { planHaskellFix, validateHaskellFix, unifiedDiff as hsDiff } from './haskell-fix.js';
-import { planNixFix, validateNixFix, planNixUpgrade } from './nix-fix.js';
+import { planHaskellFix, validateHaskellFix, verifyHaskellProposal, unifiedDiff as hsDiff } from './haskell-fix.js';
+import { planNixFix, validateNixFix, verifyNixProposal, planNixUpgrade } from './nix-fix.js';
 import { planHaskellUpgrade, unifiedDiff as _hsDiff } from './haskell-fix.js';
 import { writeWithBackup } from './fix-lifecycle.js';
 import { recordExternalFix } from '../posture/fix-history.js';
@@ -98,12 +98,16 @@ export function addedDatabaseImports(plan) {
 /**
  * A READ-ONLY fix preview for a Haskell/Nix finding: the planned patch, its tier, and what the verification gates say.
  * Never writes. `files` is the project's language sources (see loadLanguageProject).
+ *
+ * For Haskell the compile gate is requested (`compile: true`) unless the caller passes `compile: false`: GHC type-checks the patched file
+ * against the original (a host without GHC, or without the project's packages, records the gate as not-run, never as a pass).
+ * `witness: true` additionally runs the controlled Haskell fix witness where one can honestly be built (see witness.js `haskellFixWitness`).
  */
-export async function languageFixPreview(finding, files, { apply = false, root = null } = {}) {
+export async function languageFixPreview(finding, files, { apply = false, root = null, compile = true, witness = false } = {}) {
   const lang = languageOfFinding(finding);
   if (!lang) return { ok: false, status: 'unsupported', reason: 'not a Haskell or Nix finding' };
   const plan = lang === 'haskell' ? planHaskellFix(finding, files) : planNixFix(finding, files);
-  if (!plan || plan.ok === false) return { ok: false, status: (plan && plan.status) || 'unsupported', tier: (plan && plan.tier) || null, reason: (plan && plan.reason) || 'no deterministic fix', proposal: (plan && plan.proposal) || null };
+  if (!plan || plan.ok === false) return { ok: false, status: (plan && plan.status) || 'unsupported', tier: (plan && plan.tier) || null, reason: (plan && plan.reason) || 'no deterministic fix', decision: (plan && plan.decision) || null, proposal: (plan && plan.proposal) || null };
   if (lang === 'haskell') {
     // A static rescan cannot see a wrong library, so this is decided here, before any gate can call the patch verified.
     const added = addedDatabaseImports(plan);
@@ -112,7 +116,13 @@ export async function languageFixPreview(finding, files, { apply = false, root =
     }
   }
   let res;
-  try { res = lang === 'haskell' ? await validateHaskellFix(finding, { files, apply, root }) : await validateNixFix(finding, { files, apply, root }); } catch (e) { res = { status: 'blocked', reason: `verification failed: ${String((e && e.message) || e)}` }; }
+  try {
+    if (lang === 'haskell') {
+      let witnessHook;
+      if (witness) { const w = await import('./witness.js'); witnessHook = w.haskellFixWitness(finding); }
+      res = await validateHaskellFix(finding, { files, apply, root, compile: compile !== false, witness: witnessHook });
+    } else res = await validateNixFix(finding, { files, apply, root });
+  } catch (e) { res = { status: 'blocked', reason: `verification failed: ${String((e && e.message) || e)}` }; }
   return {
     ok: res.status === 'verified' || res.status === 'applied',
     status: res.status, applied: res.applied === true, backup: res.backup || null,
@@ -124,6 +134,23 @@ export async function languageFixPreview(finding, files, { apply = false, root =
     gates: res.gates || null, reason: (res.status === 'verified' || res.status === 'applied') ? null : (res.reason || null),
     explanation: plan.explanation || null, consequences: res.consequences || plan.consequences || [],
   };
+}
+
+/**
+ * Runs a patch SUPPLIED BY SOMEONE ELSE (a person, a model) through the same gates as a deterministic fix, for one Haskell or Nix finding:
+ * syntax, a rescan in which the original finding is gone and nothing new appears at medium or above, and (Haskell) a GHC type-check against the
+ * original. `proposal` is the full new text of `file`. Never writes. This is what `agentic-security fix <id> --proposal <file>` calls.
+ */
+export async function languageProposalPreview(finding, files, { file, proposal, compile = true }) {
+  const lang = languageOfFinding(finding);
+  if (!lang) return { ok: false, status: 'unsupported', reason: 'not a Haskell or Nix finding' };
+  if (!file || typeof proposal !== 'string') return { ok: false, status: 'blocked', reason: 'a proposal needs the file it replaces and its full new text' };
+  if (typeof files[file] !== 'string') return { ok: false, status: 'blocked', reason: `${file} is not in the project tree` };
+  let res;
+  try { res = lang === 'haskell' ? await verifyHaskellProposal(finding, { files, file, proposal, compile: compile !== false }) : await verifyNixProposal(finding, { files, file, proposal }); }
+  catch (e) { res = { status: 'blocked', reason: `verification failed: ${String((e && e.message) || e)}` }; }
+  const ok = res.status === 'verified';
+  return { ok, status: res.status, applied: false, label: 'WORKAROUND', tier: ok ? 'proposal-verified' : 'blocked', file, before: files[file], after: proposal, diff: res.preview || hsDiff(file, files[file], proposal), gates: res.gates || null, reason: ok ? null : (res.reason || null), explanation: 'A patch supplied by someone else, run through the same gates as a deterministic fix; it is not a rewrite this tool derived.', consequences: ['Not derived by the scanner: its consequences are the author\'s to state.'] };
 }
 
 /** A minimal line-range text edit turning `before` into `after` (for an LSP/editor workspace edit). */

@@ -313,11 +313,18 @@ agentic-security fix --finding <id> --apply       # written only after every gat
 agentic-security undo                             # restores the file byte for byte
 ```
 
-A deterministic fix exists for six shapes (`hs-sql-parameterize`, `hs-process-argv`, `hs-html-escape`,
-`hs-hash-sha256`, `hs-log-redact`, `hs-path-takefilename`). Each is labelled **FULL**, **MITIGATION** or **WORKAROUND** by
-what it really changes, and runs the same gates: path inside the project, syntax, the rescan (the original finding is
-gone and no new medium-or-higher finding appears), and an optional compile check that runs only when asked and only when
-a `ghc` exists. A fix outside those shapes, or one a gate refuses, is reported as such; nothing is invented.
+A deterministic fix exists for ten shapes (`hs-sql-parameterize`, `hs-process-argv`, `hs-html-escape`,
+`hs-hash-sha256`, `hs-log-redact`, `hs-path-takefilename`, `hs-tls-validate`, `hs-cookie-attributes`,
+`hs-random-os-entropy`, `hs-request-body-bound`). Each plan carries a **tier** (`full-source-edit`, or `guidance-only`
+for a refusal), a **consequences** list that states what the patch changes for the running program, and a label,
+**FULL**, **MITIGATION** or **WORKAROUND**, by what it really changes. Every plan runs the same gates: path inside the
+project, syntax, the rescan (the original finding is gone and no new medium-or-higher finding appears), the
+**effective-change** check for the attribute fixes (the value is read back from the patched file with a reader that is
+independent of the editor; a rescan that goes quiet because a cookie was renamed does not pass it), and a **compile**
+check. The preview, the MCP `synthesize_fix` and the LSP request the compile check: GHC type-checks the patched file
+against the original, and a host with no GHC, a project whose packages are not installed here, or a patch that imports a
+module this host lacks records the gate as **not-run**, never as a pass. A fix outside those shapes, or one a gate
+refuses, is reported as such; nothing is invented.
 
 | Class | CWE | Result |
 | --- | --- | --- |
@@ -327,15 +334,23 @@ a `ghc` exists. A fix outside those shapes, or one a gate refuses, is reported a
 | MD5 / SHA-1 | CWE-328 | SHA-256 when the algorithm is named on one line only; refused when a type elsewhere in the file names it |
 | Sensitive value in a log | CWE-532 | redacted (a mitigation) |
 | Parameter under a fixed directory | CWE-22 | `takeFileName` on a `String` or `FilePath` parameter (a mitigation: a name with subdirectories keeps its last segment; directory operations are not rewritten because `..` survives `takeFileName`) |
-| Fast password hash | CWE-916 | refused: needs a key-derivation library and a migration of stored hashes |
-| Predictable generator | CWE-338 | refused: the CSPRNG's result type differs, so the code around it changes |
-| Server-side request forgery | CWE-918 | refused: an allow-list is a decision about the service |
-| Argument injection | CWE-88 | refused: `--` helps only programs that honour it |
-| Cookie attributes, missing authentication, resource limits, certificate validation, hard-coded secrets | CWE-1004, CWE-306, CWE-770, CWE-295, CWE-798 | refused with a class-level reason |
+| Certificate validation off | CWE-295 | the literal `True` of `settingDisableCertificateValidation` (positional or record form of the `connection` package's `TLSSettingsSimple`) becomes `False`. Consequence: connections to a self-signed, expired or privately issued certificate fail until the authority is in the system trust store. An OpenSSL `VerifyNone` is refused: `VerifyPeer` verifies nothing until a CA bundle is loaded and does not check the host name |
+| Cookie without `Secure` / `HttpOnly` | CWE-1004 | four recognised shapes: a `Set-Cookie` header string literal, a `Web.Cookie` `SetCookie` record update, servant-auth `cookieIsSecure = NotSecure`, scotty `setSimpleCookie` / `makeSimpleCookie` (written out as the record update they are). Consequence: the cookie is no longer sent over plain HTTP and page scripts cannot read it. `SameSite` is not changed. Anything else, or a flag set from an expression, is refused |
+| Predictable generator | CWE-338 | only a one-line action `name :: IO <fixed-width integer>`, `name = randomIO`, in a file that already imports `System.Entropy`: it reads `getEntropy` bytes and decodes them big-endian. Everything else is refused (a range, a wider or non-integer type, no entropy import): the CSPRNG's result type differs, so the code around it changes, and the token's type and size are a decision |
+| Request body without a limit | CWE-770 | a mitigation, only for wai `strictRequestBody <request variable>` in a file importing `Network.Wai` and `Data.ByteString.Lazy`: it becomes `boundedRequestBody`, defined in the same file, which throws past `requestBodyLimitBytes`. The limit (1 MiB) is a **declared default, not a measured need**; larger bodies now raise an `IOException`. Every other resource limit is refused |
+| Fast password hash | CWE-916 | refused, always: it needs a password KDF from a library the project may not declare, and every stored hash was produced by the old function, so a swap makes every existing password fail to verify. The decision is which KDF and cost, and the migration (verify the old hash once, re-hash at the next successful login, or force a reset) |
+| Server-side request forgery | CWE-918 | refused: the decision is which hosts or address ranges the service may call (checked after name resolution and on every redirect) |
+| Argument injection | CWE-88 | refused: `--` helps only programs that honour it; the decision is the permitted values for the argument |
+| Missing authentication, hard-coded secrets | CWE-306, CWE-798 | refused: the decision is which credential authenticates the route and what an unauthenticated caller receives; for a secret, where it is read from at run time and rotating the exposed value |
 
-A refused class can still be repaired by a reviewed patch: a patch supplied by a person or a model goes through the same
-gates (`verifyHaskellProposal`). Compile verification of the library-dependent rewrites above was done in this repository
-against hand-written stubs of the documented API, not against the real packages.
+Every class-level refusal ends with `The decision needed:` and the question the operator has to answer. A refused class can still be
+repaired by a reviewed patch: a patch supplied by a person or a model goes through the same gates with
+`agentic-security fix --finding <id> --proposal <file>` (`verifyHaskellProposal`; it only verifies and never writes). For a
+command-injection fix, `languageFixPreview(..., { witness: true })` also runs the original and the patched file under GHC's
+interpreter in the confinement sandbox and reports whether the payload ran in the original and not in the patch; every
+other class has no witness a program GHC runs alone could produce, and says why. Compile verification of the
+library-dependent rewrites above was done in this repository against hand-written stubs of the documented API, not against
+the real packages.
 
 The SQL shape is offered only where it does not have to guess the database library. The rewrite takes the driver the
 file already imports (`postgresql-simple` or `sqlite-simple`), and a patch that would add an import of a database library
@@ -346,12 +361,15 @@ this `sqlite-simple` example, and is regenerated at the next build.
 <!-- generated:fix-hs-sql:start -->
 ```text
 $ agentic-security fix --finding <id> --preview     # exit 0
-FULL: Moved 1 interpolated value(s) out of the SQL text into query parameters.
+FULL (full-source-edit): Moved 1 interpolated value(s) out of the SQL text into query parameters.
 --- a/src/Main.hs
 +++ b/src/Main.hs
 @@ -13,1 +13,1 @@
 -lookupOrder conn ref = query_ conn (fromString ("SELECT status FROM orders WHERE ref = '" ++ ref ++ "'"))
 +lookupOrder conn ref = query conn "SELECT status FROM orders WHERE ref = ?" (Only ref)
+  note: Interpolated values are now bound parameters. A splice that is not a value (a table or column name, an operator, a keyword) cannot be a parameter and needs an allow-list instead.
+
+  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling
 ```
 <!-- generated:fix-hs-sql:end -->
 
@@ -361,12 +379,15 @@ loses that detail:
 <!-- generated:fix-hs-logging:start -->
 ```text
 $ agentic-security fix --finding <id> --preview     # exit 0
-MITIGATION: Replaced 2 sensitive log argument(s) with "[REDACTED]". The value is no longer logged; the log line loses that detail.
+MITIGATION (full-source-edit): Replaced 2 sensitive log argument(s) with "[REDACTED]". The value is no longer logged; the log line loses that detail.
 --- a/src/Main.hs
 +++ b/src/Main.hs
 @@ -24,1 +24,1 @@
 -logLogin user password = putStrLn ("login " ++ user ++ " password=" ++ password)
 +logLogin user password = putStrLn ("login " ++ user ++ " "[REDACTED]"=" ++ "[REDACTED]")
+  note: The redacted value no longer appears in the log; the line loses that detail.
+
+  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling
 ```
 <!-- generated:fix-hs-logging:end -->
 
@@ -378,7 +399,7 @@ The scanner reports that and leaves the file alone; adding a `--` or validating 
 <!-- generated:fix-hs-cmd:start -->
 ```text
 $ agentic-security fix --finding <id> --preview     # exit 4
-No verified fix for this finding (blocked): the patch introduces 1 new medium-or-higher finding(s)
+No verified fix for this finding (blocked, blocked): the patch introduces 1 new medium-or-higher finding(s)
 ```
 <!-- generated:fix-hs-cmd:end -->
 

@@ -1219,7 +1219,7 @@ export const synthesize_fix = {
           if (lc.languageOfFinding(f)) {
             const proj = lc.loadLanguageProject(ctx.sessionRoot);
             const prev = await lc.languageFixPreview(f, proj.files);
-            languageFix = { status: prev.status, ok: prev.ok, label: prev.label || null, tier: prev.tier || null, reason: prev.reason || null, diff: prev.diff || null, explanation: prev.explanation || null, consequences: prev.consequences || [] };
+            languageFix = { status: prev.status, ok: prev.ok, label: prev.label || null, tier: prev.tier || null, reason: prev.reason || null, decision: prev.decision || null, diff: prev.diff || null, explanation: prev.explanation || null, consequences: prev.consequences || [] };
             // A fix that spans several files is applied with apply_fix + plan_digest (atomic, one history group); see _applyMultiFilePlan.
             if (prev.ok && prev.edits) {
               languageFix.multiFile = prev.edits.map((e) => e.file);

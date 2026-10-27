@@ -500,6 +500,8 @@ FULL (full-source-edit): services.openssh.settings.PermitRootLogin = "yes" -> "n
 -    settings.PermitRootLogin = "yes";
 +    settings.PermitRootLogin = "no";
   note: Root can no longer log in over SSH. Make sure a non-root account with an authorized key and sudo access exists BEFORE deploying, or you can lock yourself out.
+
+  compile was not run: not requested (default static scans never start a compiler or evaluator)
 ```
 <!-- generated:fix-nix-ssh:end -->
 
@@ -510,7 +512,7 @@ The rewrite the fixer proposes would introduce a new finding, so nothing is writ
 <!-- generated:fix-hs-cmd:start -->
 ```text
 $ agentic-security fix --finding <id> --preview     # exit 4
-No verified fix for this finding (blocked): the patch introduces 1 new medium-or-higher finding(s)
+No verified fix for this finding (blocked, blocked): the patch introduces 1 new medium-or-higher finding(s)
 ```
 <!-- generated:fix-hs-cmd:end -->
 

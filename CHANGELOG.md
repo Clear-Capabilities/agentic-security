@@ -9,6 +9,15 @@
 > make the history less accurate, not more.
 
 
+## 0.190.0 - Haskell remediation: four more verified fixers, and refusals that name the decision
+
+- **Four new fixers (ten in total).** TLS validation (`connection` `TLSSettingsSimple` literal `True` to `False`), cookie attributes (a `Set-Cookie` header literal, a `Web.Cookie` record update, servant-auth `NotSecure`, scotty simple cookies), predictable randomness (`randomIO` replaced by OS entropy, only for a fixed-width integer in a file that already imports `System.Entropy`) and an unbounded request body (a mitigation: a bounded reader with a 1 MiB limit that is a declared default, not a measured need). Each has a paired refusal case and is checked by a rescan, an independent effective-change check and a compile against declared stubs of the package API. The randomness, cookie-header and request-body fixes are also run against benign and hostile inputs under GHC.
+- **Refusals name the decision.** Password hashing (the missing KDF dependency and the migration of stored hashes), SSRF, argument injection, missing authentication and hard-coded secrets still refuse, and each reason now ends with the decision the operator has to make.
+- **Compile in the preview.** `fix` previews type-check the patched file by default and report `not-run` when GHC is missing or the original does not type-check on the host; that is never shown as a pass. A fix witness (ghc -e, original versus patched) exists for command-injection fixes in files that import only boot packages.
+- **Verifying someone else's patch.** `fix --finding <id> --proposal <file>` runs a supplied patch through the same gates and never writes.
+- **Real vulnerabilities, per finding.** Patched: one cookie finding in scotty's session example and two request-body reads in IHP's middleware. Refused with a named decision: gitit and hackage-server password hashing and tokens, scotty's session id, IHP's disabled certificate verification, dhall's path handling, and the example XSS, redirect and body-read findings. No patch to a real project was compile-checked, because the originals do not type-check on the machine used; the compile evidence is against stubs, which shows coherence with the documented API, not a build against the real package.
+- **Limits.** The cookie-header fixer handles single-line tuples only and never touches SameSite. The new `entropy` and `bytestring` requirements and the request-body limit are stated in each plan's consequences but not checked against a cabal file.
+
 ## 0.189.0 - Caller-aware reachability, and a precision measurement that can catch a regression
 
 - **Project reachability for Haskell.** Each function now gets one of four verdicts: `entrypoint-reachable`, `unreachable-in-project`, `external-api` or `unknown`. A negative verdict needs a complete scan, a hole-free call graph, a real entry point, a known exposed-module list and a function that is not an instance method; anything less is `unknown`, never "unreachable". Template Haskell, `foreign export`, the function cap, unresolved names and withheld code are holes. The verdict is a separate record from the trust-boundary verdict.

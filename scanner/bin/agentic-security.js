@@ -3662,6 +3662,18 @@ async function cmdFix(args) {
         return 4;
       }
       const proj = loadLanguageProject(scanRoot);
+      // --proposal <file>: verify a patch someone else wrote (a person, a model) for this finding's file through the same gates as a
+      // deterministic fix (syntax, rescan, compile). It never writes.
+      if (args.flags.proposal) {
+        if (isApply) { console.error('--proposal only verifies a patch; it never writes. Apply the patch yourself once it verifies.'); return 4; }
+        let proposalText;
+        try { proposalText = fs.readFileSync(path.resolve(String(args.flags.proposal)), 'utf8'); } catch (e) { console.error(`Cannot read --proposal file: ${e.message}`); return 4; }
+        const { languageProposalPreview } = await import('../src/language/context.js');
+        const pv = await languageProposalPreview(f, proj.files, { file: f.file, proposal: proposalText });
+        console.log(pv.diff);
+        console.log(`\nProposal ${pv.ok ? 'verified' : 'NOT verified'} (${pv.status}): ${Object.entries(pv.gates || {}).map(([k, v]) => `${k}=${v && v.ok === false ? 'FAILED' : (v && v.ran === false ? 'not-run' : 'ok')}`).join(' ')}${pv.reason ? `\n  ${pv.reason}` : ''}`);
+        return pv.ok ? 0 : 4;
+      }
       // --require-proof applies to a Haskell fix exactly as to any other: the verified patch is previewed first, the exploit is
       // confirmed against the original and blocked against the patch, and only then is the same patch written.
       let provenFiles = null;
@@ -3682,7 +3694,12 @@ async function cmdFix(args) {
       console.log(res.diff);
       for (const c of res.consequences || []) console.log(`  note: ${c}`);
       if (isApply) { console.log(`\nApplied. Verified: ${Object.entries(res.gates || {}).map(([k, v]) => `${k}=${v && v.ok === false ? 'FAILED' : (v && v.ran === false ? 'not-run' : 'ok')}`).join(' ')}. Revert with \`agentic-security undo\`.`); }
-      else console.log('\nVerified (syntax, rescan: the finding is gone and nothing new appears). Run with --apply to write this change. Use `agentic-security undo` to revert.');
+      else {
+        const g = res.gates || {};
+        const compile = g.compile && g.compile.ran ? (g.compile.ok ? 'passed' : 'FAILED') : 'not-run';
+        console.log(`\nVerified (syntax, rescan: the finding is gone and nothing new appears${g.effective && g.effective.ran ? '; effective-change: the intended attribute reads back changed' : ''}; compile: ${compile}). Run with --apply to write this change. Use \`agentic-security undo\` to revert.`);
+        if (compile === 'not-run') console.log(`  compile was not run: ${(g.compile && g.compile.detail) || 'not requested'}`);
+      }
       return 0;
     }
   }
