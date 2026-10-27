@@ -83,9 +83,9 @@ const strLit = (e) => { e = unparen(e); return e && e.t === 'lit' && e.kind === 
 
 // ── analysis context ─────────────────────────────────────────────────────────
 class Ctx {
-  constructor(files) {
+  constructor(files, reachability) {
     this.files = files;
-    this.ir = buildHaskellIR(files);
+    this.ir = buildHaskellIR(files, reachability || {});
     this.project = this.ir.project;
     this.modules = [...this.ir.modules.values()];
     this.fnByQid = new Map();
@@ -837,7 +837,7 @@ export function analyzeHaskellWeb(files, opts = {}) {
   for (const [f, t] of Object.entries(files || {})) if (/\.hs$/i.test(f) && typeof t === 'string') hs[f] = t;
   const result = { routes: [], findings: [], middleware: [], frameworks: [], coverage: {}, gaps: [], modelVersion: HS_WEB_MODEL_VERSION, rulesetVersion: HS_WEB_RULES_VERSION, versionStatus: {} };
   if (!Object.keys(hs).length) return result;
-  const ctx = new Ctx(hs);
+  const ctx = new Ctx(hs, opts.reachability);
   const pending = [];
   const add = (r) => pending.push(r);
 

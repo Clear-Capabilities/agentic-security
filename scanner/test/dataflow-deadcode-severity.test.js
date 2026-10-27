@@ -87,3 +87,37 @@ cp.exec(secret);
   assert.equal(f._inDeadCode, undefined, '<module>-scoped code has no caller by construction — it must not be marked dead code');
   assert.equal(f.severity, 'critical', `severity must not be demoted for module-scope code, got ${f.severity}`);
 });
+
+test('the dead-code demotion records the severity the finding would have had (a demotion nobody can see is indistinguishable from a finding that was never that serious)', async () => {
+  const dir = mkTmp({
+    'app.js': `
+const cp = require('child_process');
+function trulyUnusedHelper() {
+  const secret = process.env.SECRET_CMD;
+  cp.exec(secret);
+}
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const f = (scan.findings || []).filter((x) => x.parser === 'IR-TAINT')[0];
+  assert.ok(f, 'an IR-TAINT finding');
+  assert.equal(f._inDeadCode, true);
+  assert.equal(f.severity, 'high', 'one notch down from critical');
+  assert.equal(f.originalSeverity, 'critical', 'the severity before the demotion is kept');
+  // a finding that is NOT demoted records nothing
+  const live = mkTmp({ 'app.js': "const cp = require('child_process');\nfunction run() { cp.exec(process.env.SECRET_CMD); }\nfunction go() { run(); }\ngo();\n" });
+  const g = ((await runScan(live, { deep: true, deepInCi: true })).scan.findings || []).filter((x) => x.parser === 'IR-TAINT')[0];
+  assert.ok(g);
+  assert.equal(g.originalSeverity, undefined);
+});
+
+test('the Haskell carve-out stays: an exported Haskell function with no caller is not demoted by the neutral dead-code pass', async () => {
+  const dir = mkTmp({
+    'Svc.hs': 'module Svc (unpackIt) where\n\nimport System.Process\n\nunpackIt :: String -> IO ()\nunpackIt name = callCommand ("tar xf " ++ name ++ " -C /srv/data")\n',
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const f = (scan.findings || []).filter((x) => x.parser === 'IR-TAINT' && /\.hs$/.test(x.file || ''))[0];
+  assert.ok(f, 'a Haskell IR-TAINT finding');
+  assert.equal(f._inDeadCode, undefined, 'an exported function is reachable from outside the analysed files');
+  assert.equal(f.severity, 'critical');
+});

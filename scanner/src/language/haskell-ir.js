@@ -25,7 +25,8 @@
 
 import { createHash } from 'node:crypto';
 import { parseSyntax, groupDecls, patternVars } from './haskell-syntax.js';
-import { preprocessForSyntax } from './haskell-parser.js';
+import { preprocessForSyntaxInfo } from './haskell-parser.js';
+import { exposedModuleIndex } from './haskell-manifests.js';
 import { deriveCppContext } from './haskell-cpp.js';
 import { isKnownApi, isSourceApi, qualifyAmbiguous, handlerFrameworkOf } from './haskell-models.js';
 
@@ -168,11 +169,13 @@ function servantEndpointParams(mod, fn, sig, exported) {
 
 // ── module table ─────────────────────────────────────────────────────────────
 function buildModuleInfo(file, src, cpp) {
-  const parse = parseSyntax(preprocessForSyntax(src, { file, cpp }));
+  const pp = preprocessForSyntaxInfo(src, { file, cpp });
+  const parse = parseSyntax(pp.text);
   const groups = groupDecls(parse.decls);
   const name = parse.module && parse.module.name ? parse.module.name : 'Main';
   const mod = {
     name, file, parse, groups, exports: parse.module ? parse.module.exports : null, imports: parse.imports,
+    opaque: pp.opaque,   // false: no compile-time-generated code; true / null: a splice or quasi-quote the analysis cannot see through
     defs: new Map(), cons: new Map(), classes: new Map(), sigs: new Map(),
   };
   for (const [n, s] of groups.sigs) mod.sigs.set(n, sigInfo(parse.tokens, s));
@@ -498,7 +501,7 @@ class FnLowerer {
 
   // ── expression lowering ────────────────────────────────────────────────────
   lowerExpr(e, line) {
-    if (++this.depth > HS_IR_LIMITS.maxExprDepth) { this.depth--; return unknownExpr({ capped: 'expression-depth' }); }
+    if (++this.depth > HS_IR_LIMITS.maxExprDepth) { this.depth--; this.diagnostics.push({ kind: 'lowering-gap', detail: 'expression-depth' }); return unknownExpr({ capped: 'expression-depth' }); }
     try { return this.lowerInner(e, line || 0); } finally { this.depth--; }
   }
 
@@ -550,7 +553,7 @@ class FnLowerer {
         for (const r of refs) this.noteRef(r, 'section', ln);
         return { kind: 'array', elements: [this.lowerExpr(e.e, ln)], hs: { section: e.op, partial: { remaining: 1 } } };
       }
-      default: return unknownExpr({ ast: e.t || 'unknown' });
+      default: this.diagnostics.push({ kind: 'lowering-gap', detail: e.t || 'unknown' }); return unknownExpr({ ast: e.t || 'unknown' });
     }
   }
 
@@ -1330,6 +1333,18 @@ class Project {
   instancesOf(cls, method) { return [...(this.instanceIndex.get(`${cls}.${method}`) || [])]; }
 }
 
+// A function whose declared result is a web framework's handler type (Scotty ActionM, Yesod Handler, Servant Handler / `Server Api`, WAI
+// Application), in a module that imports that framework: the framework calls it from a route table, a generated dispatcher or a configuration file
+// the analysed files may not contain. Read from the signature and the imports only.
+function entryHandlerOf(mod, sig) {
+  if (!sig || !sig.resultText) return null;
+  const mods = mod.imports.map((i) => i.module);
+  const h = handlerFrameworkOf(mods, sig.resultText);
+  if (h) return h.framework;
+  if (/^\s*(?:Server|ServerT)\s+[A-Z]/.test(sig.resultText) && mods.some((m) => /^Servant(?:\.|$)/.test(m))) return 'servant';
+  return null;
+}
+
 function lowerTopFunction(proj, mod, fun, def) {
   const info = { qid: def.qid, name: `${mod.name}.${fun.name}`, line: fun.line, parentName: `${mod.name}.${fun.name}` };
   const L = new FnLowerer(proj, mod, info, []);
@@ -1337,7 +1352,7 @@ function lowerTopFunction(proj, mod, fun, def) {
   const sig = def.sig;
   const kind = def.arity > 0 ? 'function' : (sig && sig.returnsIO) || fun.name === 'main' ? 'io-action' : 'value';
   const exported = !mod.exports || mod.exports.some((x) => x.kind === 'var' && x.name === fun.name || x.kind === 'module' && x.name === mod.name);
-  const fn = L.finishFn({ kind, arity: def.arity, effect: sig ? (sig.returnsIO ? 'io' : 'pure') : (L.sawIO ? 'io' : 'unknown'), sig: sig ? sig.text : null, exported });
+  const fn = L.finishFn({ kind, arity: def.arity, effect: sig ? (sig.returnsIO ? 'io' : 'pure') : (L.sawIO ? 'io' : 'unknown'), sig: sig ? sig.text : null, exported, entryHandler: entryHandlerOf(mod, sig) });
   const ann = callerControlledParams(fn, sig, exported, mod.imports.map((i) => i.module));
   for (const a of servantEndpointParams(mod, fn, sig, exported)) if (!ann.some((x) => x.name === a.name)) ann.push(a);
   fn.hs.textParams = ann.map((a) => a.name);
@@ -1382,15 +1397,44 @@ function irKey(files) {
   return h.digest('hex');
 }
 
-export function buildHaskellIR(fileContents) {
+// What the reachability verdict depends on besides the sources: the manifests, whether the file set is the whole project, and the scan's own
+// gaps. The BUILD stays keyed by the sources alone (several passes ask for the same IR and must share it); the verdict is recomputed in place,
+// cheaply, whenever a caller states a different context, and a caller that states none gets the default one (everything `unknown`).
+function reachContext(opts) {
+  const o = opts || {};
+  return { manifests: o.manifests && typeof o.manifests === 'object' ? o.manifests : null, completeScan: o.completeScan === true, scanHoles: Array.isArray(o.scanHoles) ? [...new Set(o.scanHoles.map(String))].sort() : [] };
+}
+// Two contexts are the same when this string is: the flag, the holes, and every manifest's path and text (manifests are a few kilobytes each, so the
+// text itself is compared rather than a digest of it).
+function reachContextKey(ctx) {
+  return JSON.stringify([ctx.completeScan, ctx.scanHoles, Object.keys(ctx.manifests || {}).sort().map((k) => [k, String(ctx.manifests[k])])]);
+}
+
+/**
+ * @param {Record<string,string>} fileContents
+ * @param {{manifests?:Record<string,string>, completeScan?:boolean, scanHoles?:string[]}} [opts] `manifests`: cabal / package.yaml text by path (decides
+ *   which modules the package exposes); `completeScan`: `fileContents` is the whole project (a changed-file, pull-request, subdirectory or caller-supplied
+ *   scan is not); `scanHoles`: gaps the scan itself knows about (`policy-excluded`, `size-skipped`). Without them every reachability verdict is `unknown`.
+ */
+export function buildHaskellIR(fileContents, opts = {}) {
   const names = Object.keys(fileContents || {}).filter((f) => /\.hs$/i.test(f)).sort();
   const keyed = Object.assign(names.slice(), { __src: fileContents });
   const key = irKey(keyed);
   const hit = IR_CACHE.find((e) => e.key === key);
-  if (hit) return hit.ir;
-  const ir = buildHaskellIRUncached(fileContents);
-  IR_CACHE.unshift({ key, ir });
-  if (IR_CACHE.length > 2) IR_CACHE.length = 2;
+  let ir;
+  if (hit) ir = hit.ir;
+  else {
+    ir = buildHaskellIRUncached(fileContents);
+    IR_CACHE.unshift({ key, ir });
+    if (IR_CACHE.length > 2) IR_CACHE.length = 2;
+  }
+  const ctx = reachContext(opts);
+  const sig = reachContextKey(ctx);
+  if (ir._reachSig !== sig) {
+    ir.haskellReachability = projectReachability(ir.project, ir.callGraph, ctx);
+    ir.callGraph.haskellReachability = ir.haskellReachability;
+    ir._reachSig = sig;
+  }
   return ir;
 }
 
@@ -1459,16 +1503,24 @@ function buildHaskellIRUncached(fileContents) {
   // follows per call context; treating the parameter as caller-controlled as well would flag a helper that is only ever
   // called with constants. Only a function nothing in the project reaches is an entry point whose callers are external.
   const reached = new Set();
-  for (const e of callGraph.edges || []) if (e && e.callee) reached.add(e.callee);
-  for (const fn of callGraph.functions.values()) for (const r of (fn.hs && fn.hs.refs) || []) if (r && r.target) reached.add(r.target);
+  const byCall = new Set();
+  const byRef = new Set();
+  for (const e of callGraph.edges || []) if (e && e.callee) { reached.add(e.callee); (e.kind === 'reference' ? byRef : byCall).add(e.callee); }
+  for (const fn of callGraph.functions.values()) for (const r of (fn.hs && fn.hs.refs) || []) if (r && r.target) { reached.add(r.target); byRef.add(r.target); }
   assignEntryRoles(proj, callGraph);
   for (const fn of callGraph.functions.values()) {
     // `reached`: something in the analysed code calls or references this function, so its parameters take their values from THOSE callers
     // (which the taint engine follows) and not from an unknown outside one. Rules that reason about "caller-supplied" text read it.
-    if (fn.hs) fn.hs.reached = reached.has(fn.qid);
+    if (fn.hs) {
+      fn.hs.reached = reached.has(fn.qid);
+      // HOW it was reached, and what its parameters were before the removal below, stay on the record. The removal itself is unchanged: the
+      // taint source set (`paramAnnotations`) is byte-identical to what it was, so no recall decision hides in this bookkeeping.
+      fn.hs.reachedBy = byCall.has(fn.qid) ? 'call' : (byRef.has(fn.qid) ? 'reference' : null);
+      if (fn.paramAnnotations) fn.hs.paramEntry = fn.paramAnnotations.map((a) => ({ name: a.name, decorator: a.decorator, reach: !fn.hs.reached ? 'entry' : (fn.hs.reachedBy === 'call' ? 'called-in-project' : 'referenced-only') }));
+    }
     if (reached.has(fn.qid)) { if (fn.paramAnnotations) delete fn.paramAnnotations; if (fn.hs && fn.hs.recordParams) fn.hs.recordParams = []; }
   }
-  return { perFile, callGraph, modules: proj.modules, diagnostics: proj.diagnostics, project: proj };
+  return { perFile, callGraph, modules: proj.modules, diagnostics: proj.diagnostics, project: proj, haskellReachability: null, _reachSig: null };
 }
 
 function incomplete(proj, mod, f, err) {
@@ -1489,11 +1541,18 @@ function incomplete(proj, mod, f, err) {
 // A function no `main` reaches is `library`: its callers are unknown. The call graph is incomplete (an unresolved call ends a path), so a
 // function the walk does not reach is `library`, never `cli`.
 const SERVER_IMPORT = /^(?:Network\.Wai|Web\.Scotty|Servant|Yesod|Snap|Happstack\.Server|Web\.Spock)(?:\.|$)|^Network\.(?:Socket|Simple\.TCP|Run\.TCP|HTTP\.Server)$/;
+// Every `Main.main` (and any module's `main`, which also covers `Setup.hs` and test-suite mains: an over-approximation, and therefore the safe
+// direction for a reachability verdict). One list, shared by the entry roles below and by the reachability roots.
+export function mainFunctions(callGraph) {
+  const mains = [];
+  for (const fn of callGraph.functions.values()) if (fn.hs && fn.hs.module && fn.name === `${fn.hs.module}.main`) mains.push(fn);
+  return mains;
+}
+
 export function assignEntryRoles(proj, callGraph) {
   const out = new Map();
   for (const e of callGraph.edges || []) if (e && e.callee && e.caller) { if (!out.has(e.caller)) out.set(e.caller, []); out.get(e.caller).push(e.callee); }
-  const mains = [];
-  for (const fn of callGraph.functions.values()) if (fn.hs && fn.hs.module && fn.name === `${fn.hs.module}.main`) mains.push(fn);
+  const mains = mainFunctions(callGraph);
   const cli = new Set(); const service = new Set();
   for (const m of mains) {
     const seen = new Set([m.qid]);
@@ -1509,6 +1568,242 @@ export function assignEntryRoles(proj, callGraph) {
     if (!fn.hs) continue;
     fn.hs.entryRole = service.has(fn.qid) ? 'service' : (cli.has(fn.qid) ? 'cli' : 'library');
   }
+}
+
+// ── project reachability ─────────────────────────────────────────────────────
+// "Can anything call this function?" asked of the whole project, from its entry points. A negative answer (`unreachable-in-project`) is a claim
+// about a call graph in a language where typeclass dispatch, re-exports, point-free aliasing and Template Haskell routinely defeat call graphs, so it
+// is made ONLY when every one of these holds, and degrades to `unknown` (with the reason named) when any fails:
+//
+//   completeScan && graphComplete && entrypointCount > 0 && exposedModules !== null
+//     && the function's module is not exposed && the function is not an instance method && nothing reachable from a root reaches it
+//
+// `completeScan` is the production safety net: under a changed-file, pull-request or subdirectory scan every exported function looks uncalled. A pure
+// library (no `main`, or no manifest) never gets a negative verdict: an unused library function is a real finding for whoever imports it. Nothing here
+// reads a comment, a name or a path: the inputs are the call graph, the manifests and the code's structure.
+//
+// What makes the graph incomplete, and how each gap is bounded (a gap that can be bounded to the code that could have been affected is bounded to it,
+// so a single unreadable declaration does not silence a whole project, and one that cannot be bounded is global):
+//   * Template Haskell / quasi-quotes the allow-lists did not accept, a foreign export, a build step that generates modules, a source format the IR does
+//     not read, the function cap: GLOBAL (`opaque-boundary`, `function-cap`). Generated code can call anything.
+//   * a declaration the parser withheld, an expression the lowering could not read, a file that failed to lower (`parse-failure`): the withheld code can
+//     call only what its own module can see, so the module's own functions and the exported functions of every module it imports (with the re-export
+//     closure) become roots of kind `withheld-caller`. Over-approximate, and sound for the code outside that neighbourhood.
+//   * a call through a function VALUE (a parameter, a local binding, a record field, a computed expression, an ambiguous import) is not a gap: the value
+//     can only be a function whose name was mentioned in value position somewhere, and every such mention is a recorded reference that the walk follows.
+//   * a call to a name nothing resolves (`unbound-name`, `unknown-qualifier`, ...) means a definition the IR did not see. If a project function has that
+//     bare name the call is assumed to reach it (over-approximate). Otherwise it is a GLOBAL `unresolved-call` hole, unless the caller's module can see a
+//     module with withheld code (that module's neighbourhood is already roots).
+//   * a class's default method bodies are not lowered at all, so a module that declares one is treated like a module with withheld code.
+const TOP_KINDS = new Set(['function', 'value', 'io-action']);
+const ROOT_ORDER = ['main', 'framework-handler', 'foreign-export', 'exposed-api', 'instance-method', 'withheld-caller'];
+const HOLE_PRIORITY = ['partial-scan', 'policy-excluded', 'size-skipped', 'no-entrypoint', 'no-manifest', 'parse-failure', 'function-cap', 'opaque-boundary', 'unresolved-call'];
+const GRAPH_HOLES = new Set(['function-cap', 'opaque-boundary', 'unresolved-call']);
+// An unknown call edge that names a definition the IR could not link. Every other unknown edge is a call through a function VALUE (a parameter, a local
+// binding, a record field, a computed expression, an ambiguous import whose candidates are referenced), a method with no visible instance, or a call out
+// of the project, and its callee set is bounded by the references the walk follows.
+const UNLINKED_UNKNOWN = new Set(['unbound-name', 'unknown-qualifier', 'resolution-depth-cap', 'reexport-cycle']);
+const bareName = (n) => String(n || '').replace(/^(?:[A-Z][A-Za-z0-9_']*\.)+(?=.)/, '');
+
+// The modules a module can name things from: those it imports, and any module those re-export (an `import X; module A (module X)`, or an export of a
+// name A does not define). Over-approximate: a re-exporting module counts every project module it imports, because naming exactly which names flow
+// through is the resolver's job and a miss here is the unsafe direction.
+function reexportClosure(proj, start) {
+  const out = new Set();
+  const todo = [];
+  for (const m of start) if (proj.modules.has(m) && !out.has(m)) { out.add(m); todo.push(m); }
+  while (todo.length) {
+    const mod = proj.modules.get(todo.pop());
+    if (!mod || !Array.isArray(mod.exports)) continue;
+    const reexports = mod.exports.some((ex) => (ex.kind === 'module' && ex.name !== mod.name) || (ex.kind === 'var' && (ex.qual || !mod.defs.has(ex.name))));
+    if (!reexports) continue;
+    for (const imp of mod.imports || []) if (proj.modules.has(imp.module) && !out.has(imp.module)) { out.add(imp.module); todo.push(imp.module); }
+  }
+  return out;
+}
+const effectiveExposedModules = reexportClosure;
+
+function isExportedTop(modByFile, fn) {
+  const hs = fn.hs;
+  if (!hs || !TOP_KINDS.has(hs.kind)) return false;
+  if (hs.exported === true) return true;
+  if (hs.exported === false || !Array.isArray(hs.patbind)) return false;
+  const mod = modByFile.get(fn.file);
+  return !!mod && (!mod.exports || mod.exports.some((x) => (x.kind === 'var' && hs.patbind.includes(x.name)) || (x.kind === 'module' && x.name === mod.name)));
+}
+
+// Modules in which the IR may have lost code: a declaration it could not parse, an expression it could not lower, a file that failed to lower, a
+// function past the cap. Keyed by module name.
+function withheldCodeModules(proj, callGraph) {
+  const out = new Set();
+  const byFile = new Map();
+  for (const [name, m] of proj.modules) byFile.set(m.file, name);
+  for (const [name, m] of proj.modules) if (m.parse && m.parse.errors && m.parse.errors.length) out.add(name);
+  // A class's default method bodies are never lowered (only the signatures become definitions), and a body can call any function its module can see.
+  for (const [name, m] of proj.modules) if (m.parse && (m.parse.classes || []).some((c) => (c.decls || []).some((d) => d.t === 'clause' || d.t === 'patbind'))) out.add(name);
+  for (const d of proj.diagnostics) if (d && d.file && (d.kind === 'ir-parse-failure' || d.kind === 'ir-lowering-failure') && byFile.has(d.file)) out.add(byFile.get(d.file));
+  for (const fn of callGraph.functions.values()) {
+    const hs = fn.hs;
+    if (hs && (hs.incomplete || (hs.diagnostics || []).some((d) => d && d.kind === 'lowering-gap')) && byFile.has(fn.file)) out.add(byFile.get(fn.file));
+  }
+  return out;
+}
+
+/**
+ * The functions that start the project's execution from outside: every `main`, every function typed as a web framework handler (a route registered
+ * in a file the IR never sees, such as Yesod's `config/routes`, still calls it), every function named by a `foreign export`, every instance method
+ * (dispatch is by type, from anywhere that can see the type), every exported function of a module the package exposes (`opts.exposedModules`, from the
+ * manifests), and the neighbourhood of any module with withheld code (see above). The exposed-module roots are load-bearing: without them an internal
+ * helper reached only through a public function would look uncalled.
+ * @returns {{roots: Map<string,string>, entrypointCount: number, exposed: Set<string>|null, withheld: Set<string>}} root qid -> kind
+ */
+export function haskellEntryRoots(proj, callGraph, opts = {}) {
+  const roots = new Map();
+  const add = (q, kind) => { if (q && callGraph.functions.has(q) && !roots.has(q)) roots.set(q, kind); };
+  const mains = mainFunctions(callGraph);
+  for (const m of mains) add(m.qid, 'main');
+  const modByFile = new Map();
+  for (const m of proj.modules.values()) modByFile.set(m.file, m);
+  const exposed = opts.exposedModules ? effectiveExposedModules(proj, opts.exposedModules) : null;
+  const withheld = withheldCodeModules(proj, callGraph);
+  // modules whose functions withheld code may call: the withheld module itself, and everything it can name
+  const neighbourhood = new Set();
+  const ownOnly = new Set();
+  for (const name of withheld) {
+    const mod = proj.modules.get(name);
+    if (!mod) continue;
+    ownOnly.add(name);
+    for (const m of reexportClosure(proj, (mod.imports || []).map((i) => i.module))) neighbourhood.add(m);
+  }
+  for (const fn of callGraph.functions.values()) {
+    const hs = fn.hs;
+    if (!hs) continue;
+    if (hs.entryHandler && TOP_KINDS.has(hs.kind)) add(fn.qid, 'framework-handler');
+    if (hs.kind === 'instance-method') add(fn.qid, 'instance-method');
+    if (exposed && exposed.has(hs.module) && isExportedTop(modByFile, fn)) add(fn.qid, 'exposed-api');
+    if (TOP_KINDS.has(hs.kind) && (ownOnly.has(hs.module) || (neighbourhood.has(hs.module) && isExportedTop(modByFile, fn)))) add(fn.qid, 'withheld-caller');
+  }
+  for (const mod of proj.modules.values()) {
+    for (const b of (mod.parse && mod.parse.boundaries) || []) {
+      if (b && b.kind === 'ffi' && b.direction === 'export' && b.name) { const d = mod.defs.get(b.name); if (d) add(d.qid, 'foreign-export'); }
+    }
+  }
+  return { roots, entrypointCount: mains.length, exposed, withheld };
+}
+
+const MANIFEST_HOLE = (reason) => (reason === 'no-manifest' || reason === 'hpack-library-exposes-all-modules' ? 'no-manifest' : (/^manifest-/.test(reason) ? 'parse-failure' : 'opaque-boundary'));
+
+/**
+ * Walk the call graph from the roots and stamp `fn.hs.reachability = {status, rootKind, holeReason}` on every function (idempotent: recomputed
+ * wholesale for each context). `ctx`: `{manifests, completeScan, scanHoles}`. The returned summary is `ir.haskellReachability`.
+ */
+export function projectReachability(proj, callGraph, ctx = {}) {
+  const idx = ctx.manifests ? exposedModuleIndex(ctx.manifests) : { modules: null, reason: 'no-manifest' };
+  const { roots, entrypointCount, exposed, withheld } = haskellEntryRoots(proj, callGraph, { exposedModules: idx.modules });
+  const fns = callGraph.functions;
+
+  const out = new Map();
+  const unknownEdges = [];
+  let defsByName = null;   // bare name -> qids of the project's top-level functions of that name (built once, on first use)
+  for (const e of callGraph.edges || []) {
+    if (!e || !e.caller) continue;
+    if (e.callee) { if (!out.has(e.caller)) out.set(e.caller, []); out.get(e.caller).push(e.callee); }
+    else if (e.status === 'unknown') {
+      // A name the IR could not link: if a project function has that bare name, assume the call reaches it (over-approximate, the safe direction);
+      // if none does, nothing in the project can be the callee and the edge is judged below.
+      if (UNLINKED_UNKNOWN.has(e.reason)) {
+        if (!defsByName) {
+          defsByName = new Map();
+          for (const m of proj.modules.values()) for (const d of m.defs.values()) if (d.kind === 'fun') { if (!defsByName.has(d.name)) defsByName.set(d.name, []); defsByName.get(d.name).push(d.qid); }
+        }
+        const hit = defsByName.get(bareName(e.calleeName));
+        if (hit) { if (!out.has(e.caller)) out.set(e.caller, []); out.get(e.caller).push(...hit); continue; }
+      }
+      unknownEdges.push(e);
+    }
+  }
+  // a closure or local function runs when its parent does: the call into it is not always an edge, and what it calls must count as called
+  for (const fn of fns.values()) {
+    const p = fn.hs && fn.hs.parent;
+    if (p && fns.has(p)) { if (!out.has(p)) out.set(p, []); out.get(p).push(fn.qid); }
+  }
+  const unknownFrom = new Map();
+  for (const e of unknownEdges) { if (!unknownFrom.has(e.caller)) unknownFrom.set(e.caller, []); unknownFrom.get(e.caller).push(e); }
+
+  const reachKind = new Map();
+  for (const kind of ROOT_ORDER) {
+    const queue = [];
+    for (const [q, k] of roots) if (k === kind && !reachKind.has(q)) { reachKind.set(q, kind); queue.push(q); }
+    while (queue.length) {
+      const q = queue.pop();
+      for (const t of out.get(q) || []) if (!reachKind.has(t) && fns.has(t)) { reachKind.set(t, kind); queue.push(t); }
+    }
+  }
+
+  // an unresolved name on a reached path, whose caller's module cannot see a module with withheld code, is a definition the IR never saw
+  const modByFile = new Map();
+  for (const m of proj.modules.values()) modByFile.set(m.file, m);
+  const visibleFrom = new Map();
+  const seesWithheld = (modName) => {
+    if (!withheld.size) return false;
+    if (!visibleFrom.has(modName)) {
+      const mod = proj.modules.get(modName);
+      const vis = reexportClosure(proj, [modName, ...((mod && mod.imports) || []).map((i) => i.module)]);
+      visibleFrom.set(modName, [...vis].some((m) => withheld.has(m)));
+    }
+    return visibleFrom.get(modName);
+  };
+  let unresolvedReached = 0;
+  for (const [q, edges] of unknownFrom) {
+    if (!reachKind.has(q)) continue;
+    const f = fns.get(q);
+    const modName = f && f.hs && f.hs.module;
+    for (const e of edges) {
+      if (!UNLINKED_UNKNOWN.has(e.reason)) continue;
+      if (modName && seesWithheld(modName)) continue;
+      unresolvedReached++;
+    }
+  }
+
+  const holes = [];
+  const hole = (reason, detail, count) => holes.push({ reason, ...(detail ? { detail } : {}), ...(count ? { count } : {}) });
+  if (ctx.completeScan !== true) hole('partial-scan', 'the file set is a subset of the project (changed-file, pull-request, subdirectory or caller-supplied scan), so absence of a caller proves nothing');
+  for (const h of ctx.scanHoles || []) hole(h, h === 'policy-excluded' ? 'Haskell sources kept out of the scan by the default path policy could hold callers' : (h === 'size-skipped' ? 'Haskell sources too large to read could hold callers' : 'a source format the IR does not read could hold callers'));
+  if (!entrypointCount) hole('no-entrypoint', 'no `main` in the analysed files');
+  if (idx.modules === null) hole(MANIFEST_HOLE(idx.reason || 'no-manifest'), idx.reason || 'no-manifest');
+  const capped = proj.diagnostics.filter((d) => d.kind === 'function-cap').length;
+  if (capped) hole('function-cap', 'functions past the per-file cap are not in the graph', capped);
+  const opaqueMods = [...proj.modules.values()].filter((m) => m.opaque !== false).length;
+  const foreignExports = [...roots.values()].filter((k) => k === 'foreign-export').length;
+  if (opaqueMods || foreignExports) hole('opaque-boundary', 'Template Haskell or quasi-quoted code, or a foreign export, can call functions the graph does not show', opaqueMods + foreignExports);
+  if (unresolvedReached) hole('unresolved-call', 'a function reachable from an entry point calls a name the IR could not resolve to any definition', unresolvedReached);
+  holes.sort((a, b) => HOLE_PRIORITY.indexOf(a.reason) - HOLE_PRIORITY.indexOf(b.reason));
+  const graphComplete = !holes.some((h) => GRAPH_HOLES.has(h.reason));
+  const blocking = holes.length ? holes[0].reason : null;
+  // bounded, not blocking: recorded so the summary says where code was withheld
+  const bounded = withheld.size ? [{ reason: 'parse-failure', detail: 'code the parser withheld can call only what its module can see; those functions are roots of kind withheld-caller', modules: withheld.size }] : [];
+
+  const topOf = (fn) => { let f = fn; for (let i = 0; i < 32 && f.hs && f.hs.parent && fns.has(f.hs.parent); i++) f = fns.get(f.hs.parent); return f; };
+  const counts = { 'entrypoint-reachable': 0, 'unreachable-in-project': 0, 'external-api': 0, unknown: 0 };
+  for (const fn of fns.values()) {
+    if (!fn.hs || fn.hs.kind === 'module-init') continue;
+    const t = topOf(fn);
+    let status; let rootKind = null; let holeReason = null;
+    if (exposed && t.hs && exposed.has(t.hs.module) && isExportedTop(modByFile, t)) { status = 'external-api'; rootKind = 'exposed-api'; }
+    else if (t.hs && t.hs.kind === 'instance-method') { status = 'unknown'; holeReason = blocking || 'instance-method'; }
+    else if (reachKind.has(fn.qid) || reachKind.has(t.qid)) { status = 'entrypoint-reachable'; rootKind = reachKind.get(fn.qid) || reachKind.get(t.qid); }
+    else if (blocking) { status = 'unknown'; holeReason = blocking; }
+    else { status = 'unreachable-in-project'; }
+    fn.hs.reachability = { status, rootKind, holeReason };
+    counts[status]++;
+  }
+
+  const rootKinds = {};
+  for (const k of roots.values()) rootKinds[k] = (rootKinds[k] || 0) + 1;
+  return {
+    roots: [...roots.keys()].sort(), rootKinds, entrypointCount, graphComplete, holes, bounded, completeScan: ctx.completeScan === true,
+    exposedModules: idx.modules ? [...idx.modules].sort() : null, exposedModulesReason: idx.modules ? null : (idx.reason || null), statusCounts: counts,
+  };
 }
 
 // ── call graph ───────────────────────────────────────────────────────────────

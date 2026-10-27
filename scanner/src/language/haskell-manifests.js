@@ -371,7 +371,17 @@ function detectGenerated(text) {
 }
 
 function newStanza(kind, name, line, scope) {
-  return { kind, name, scope, line, deps: [], imports: [], surfaces: [], flagRefs: [], fields: {} };
+  return { kind, name, scope, line, deps: [], imports: [], surfaces: [], flagRefs: [], fields: {}, exposedModules: [], otherModules: [], opaque: [] };
+}
+
+// What a `ghc-options` value says about the build that the module graph cannot see: a different entry point, a source preprocessor, a compiler plugin.
+// Read from the field text, never from a comment (comment lines are dropped by the line lexer before a field is read).
+function ghcOpaqueKinds(text) {
+  const out = [];
+  if (/(?:^|\s)-main-is\b/.test(text)) out.push('main-is');
+  if (/(?:^|\s)-(?:F|pgmF)\b/.test(text)) out.push('preprocessor');
+  if (/(?:^|\s)-f?plugin(?:-package(?:-id)?)?\b/.test(text)) out.push('plugin');
+  return out;
 }
 
 function handleCabalField(st, name, node, conds, file) {
@@ -397,7 +407,17 @@ function handleCabalField(st, name, node, conds, file) {
     case 'import':
       for (const w of splitWords(val.text)) st.imports.push({ name: w.text, line: locate(val, w.offset).line });
       break;
+    case 'exposed-modules':
+      for (const w of splitWords(val.text)) st.exposedModules.push(w.text);
+      break;
+    case 'other-modules':
+      for (const w of splitWords(val.text)) st.otherModules.push(w.text);
+      break;
+    case 'signatures':
+      st.opaque.push('backpack-signatures');
+      break;
     case 'ghc-options': case 'ghc-prof-options': case 'ghc-shared-options':
+      for (const k of ghcOpaqueKinds(val.text)) if (!st.opaque.includes(k)) st.opaque.push(k);
       scanGhcOptions(val.text, null, (kind, detail, idx) => {
         const loc = locate(val, idx);
         st.surfaces.push({ kind, detail, file, line: loc.line, column: loc.column });
@@ -511,6 +531,7 @@ export function parseCabalFile(text, opts = {}) {
       for (const d of c.deps) into.deps.push({ ...d, via: `common:${imp.name}` });
       for (const s of c.surfaces) into.surfaces.push({ ...s, via: `common:${imp.name}` });
       for (const r of c.flagRefs) into.flagRefs.push(r);
+      for (const k of c.opaque) if (!into.opaque.includes(k)) into.opaque.push(k);
       expand(c, into, nextSeen, via);
     }
   };
@@ -518,7 +539,7 @@ export function parseCabalFile(text, opts = {}) {
   const declared = new Set(flags.map((f) => f.name));
   const unknownFlags = [];
   const components = stanzas.map((st) => {
-    const own = { deps: st.deps.slice(), surfaces: st.surfaces.slice(), flagRefs: st.flagRefs.slice() };
+    const own = { deps: st.deps.slice(), surfaces: st.surfaces.slice(), flagRefs: st.flagRefs.slice(), opaque: [] };
     expand(st, own, new Set(), null);
     for (const r of own.flagRefs) {
       if (!declared.has(r.flag)) {
@@ -535,6 +556,9 @@ export function parseCabalFile(text, opts = {}) {
       line: st.line,
       imports: st.imports,
       fields: st.fields,
+      exposedModules: st.exposedModules,
+      otherModules: st.otherModules,
+      opaque: [...new Set([...st.opaque, ...own.opaque])],
       dependencies: own.deps.map((d) => ({ ...d, scope: d.scopeOverride || st.scope, scopeOverride: undefined })),
       surfaces: own.surfaces,
     };
@@ -639,8 +663,16 @@ export function parseHpackFile(text, opts = {}) {
         if (scopeOverride === 'build-tool') surfaces.push({ kind: 'build-tool-depends', detail: `${e.name} ${e.rangeText}`.trim(), file, line, column: d.column, component: st.name });
       }
     }
+    for (const key of ['exposed-modules', 'other-modules']) {
+      if (!(key in sec)) continue;
+      const v = Array.isArray(sec[key]) ? sec[key] : [sec[key]];
+      for (const m of v) if (typeof m === 'string') (key === 'exposed-modules' ? st.exposedModules : st.otherModules).push(m.trim());
+      if (key === 'exposed-modules') st.exposedDeclared = true;
+    }
+    if ('generated-exposed-modules' in sec || 'generated-other-modules' in sec) st.opaque.push('hpack-generated-modules');
     if ('ghc-options' in sec) {
       const opt = Array.isArray(sec['ghc-options']) ? sec['ghc-options'].join(' ') : String(sec['ghc-options']);
+      for (const k of ghcOpaqueKinds(opt)) if (!st.opaque.includes(k)) st.opaque.push(k);
       let li = findLine(lines, new RegExp(`^${ind}(?:-\\s+)?ghc-options\\s*:`), start);
       if (li < 0) li = start;
       scanGhcOptions(opt, null, (kind, detail) => surfaces.push({ kind, detail, file, line: li + 1, column: 0, component: st.name }));
@@ -662,7 +694,7 @@ export function parseHpackFile(text, opts = {}) {
     }
   };
 
-  const mkStanza = (kind, name, scope) => ({ kind, name, scope, deps: [], flagRefs: [] });
+  const mkStanza = (kind, name, scope) => ({ kind, name, scope, deps: [], flagRefs: [], exposedModules: [], otherModules: [], opaque: [], exposedDeclared: false });
   const finish = (st, line) => {
     for (const r of st.flagRefs) {
       if (!(doc.flags && isObj(doc.flags) && r.flag in doc.flags)) {
@@ -670,17 +702,19 @@ export function parseHpackFile(text, opts = {}) {
         diagnostics.push(diag('unknown_flag', `condition references flag '${r.flag}' that package.yaml never declares`, file, r.line, 'warning', { flag: r.flag }));
       }
     }
-    return { kind: st.kind, name: st.name, scope: st.scope, file, line, dependencies: st.deps.map((d) => ({ ...d, scope: d.scopeOverride || st.scope, scopeOverride: undefined })) };
+    return { kind: st.kind, name: st.name, scope: st.scope, file, line, exposedModules: st.exposedModules, otherModules: st.otherModules, exposedDeclared: st.exposedDeclared, opaque: st.opaque, buildTools: st.deps.filter((d) => d.scopeOverride === 'build-tool').map((d) => d.name), dependencies: st.deps.map((d) => ({ ...d, scope: d.scopeOverride || st.scope, scopeOverride: undefined })) };
   };
 
   const components = [];
   let packageDependencies = [];
+  let topOpaque = [];
   try {
     const top = mkStanza('package', pkg.name, 'package');
     collect(doc, top, [], 0, 0);
     // top-level `when` and deps apply to every component
     const topLoc = finish(top, 1);
     packageDependencies = topLoc.dependencies;
+    topOpaque = topLoc.opaque;
 
     const section = (key, kind, scope, single) => {
       if (!(key in doc)) return;
@@ -735,7 +769,7 @@ export function parseHpackFile(text, opts = {}) {
   return {
     kind: 'hpack', file, package: pkg, provenance: { generatedBy: null, source: 'hand-written' },
     components, packageDependencies, flags: flagList, unknownFlags, sourceRepositories,
-    surfaces, incomplete, diagnostics,
+    surfaces, incomplete, diagnostics, topOpaque,
   };
 }
 
@@ -1256,6 +1290,55 @@ export function analyzeHaskellManifests(files, opts = {}) {
   }
 
   return redactUrlsDeep(out);
+}
+
+// ---------------------------------------------------------------------------
+// Exposed modules (who can import this package from outside)
+// ---------------------------------------------------------------------------
+
+/** Work counter for the exposed-module index: one parse per cabal / package.yaml, never per function or per module. Read by the scaling test. */
+export const EXPOSED_INDEX_WORK = { manifestParses: 0, builds: 0 };
+
+/**
+ * The set of modules a package's manifests EXPOSE to other packages, over every `.cabal` file (and every `package.yaml` that has no `.cabal` beside
+ * it) in `manifests` (path -> text). Returns `{ modules, reason, packages, libraries }`: `modules` is a Set of module names, or `null` when the
+ * manifests cannot say (none present, one failed to parse or hit a budget, an hpack library that exposes every module by default, a build that uses an
+ * entry-point override, a source preprocessor, a plugin, Backpack signatures, a foreign library, or a build tool that generates code outside the
+ * analysed files). `null` is "unknown", never "nothing exposed": an executable-only package yields an EMPTY set, which is a real answer.
+ * Conditional stanzas are unioned (a module exposed under any flag setting is exposed). Nothing here reads a comment, a name or a path.
+ */
+export function exposedModuleIndex(manifests, opts = {}) {
+  EXPOSED_INDEX_WORK.builds++;
+  const budgets = budgetsOf(opts);
+  const entries = Object.entries(manifests || {}).map(([p, text]) => [String(p).replace(/\\/g, '/'), typeof text === 'string' ? text : '']).filter(([p]) => { const k = classifyManifest(p); return k === 'cabal' || k === 'hpack'; }).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  if (!entries.length) return { modules: null, reason: 'no-manifest', packages: 0, libraries: 0 };
+  const cabalDirs = new Set(entries.filter(([p]) => classifyManifest(p) === 'cabal').map(([p]) => path.posix.dirname(p)));
+  const modules = new Set();
+  let packages = 0; let libraries = 0; let unknown = null;
+  const fail = (why) => { if (!unknown) unknown = why; };
+  for (const [p, text] of entries) {
+    const kind = classifyManifest(p);
+    if (kind === 'hpack' && cabalDirs.has(path.posix.dirname(p))) continue;   // the generated .cabal beside it is what the build reads
+    EXPOSED_INDEX_WORK.manifestParses++;
+    let r;
+    try { r = kind === 'cabal' ? parseCabalFile(text, { file: p, budgets }) : parseHpackFile(text, { file: p, budgets }); } catch { fail('manifest-parse-failure'); continue; }
+    if (r.incomplete) { fail('manifest-incomplete'); continue; }
+    if ((r.diagnostics || []).some((d) => d.code === 'budget_exceeded' || d.kind === 'budget_exceeded')) { fail('manifest-budget'); continue; }
+    packages++;
+    if ((r.topOpaque || []).length) fail(`build-${r.topOpaque[0]}`);
+    for (const c of r.components) {
+      if (c.kind === 'foreign-library') fail('foreign-library');
+      if ((c.opaque || []).length) fail(`build-${c.opaque[0]}`);
+      const generates = (c.surfaces || []).some((s) => s.kind === 'build-tool-depends') || (c.buildTools || []).length > 0;
+      if (generates && c.kind !== 'test-suite' && c.kind !== 'benchmark') fail('build-tool-generated-sources');
+      if (c.kind !== 'library') continue;
+      libraries++;
+      if (kind === 'hpack' && !c.exposedDeclared) fail('hpack-library-exposes-all-modules');
+      for (const m of c.exposedModules || []) modules.add(m);
+    }
+  }
+  if (unknown) return { modules: null, reason: unknown, packages, libraries };
+  return { modules, reason: null, packages, libraries };
 }
 
 const WALK_SKIP = new Set(['node_modules', '.git', '.hg', '.svn']);

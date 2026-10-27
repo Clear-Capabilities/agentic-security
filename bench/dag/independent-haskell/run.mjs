@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { digestOf, wilson } from './lib.mjs';
+import { digestOf, wilson, validatePanel, agreementReport } from './lib.mjs';
 import { flagAll } from './flag.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -53,6 +53,34 @@ const results = {
   all: finAll(groups.all), perProject: finAll(groups.perProject), perSourceKind: finAll(groups.perSourceKind), perClass: finAll(groups.perClass),
   staleLabels: stale.length,
 };
+// The two-labeler panel is optional and additive (see build-labels.mjs --panel). When labels-panel.json exists it must be valid, independent and built on
+// exactly these labels; then the agreement and the precision under the ADJUDICATED verdicts are reported BESIDE the single-labeler figures above, which
+// are unchanged. With no panel file nothing below runs and results.json has exactly the shape it always had.
+const panelFile = path.join(HERE, 'labels-panel.json');
+let panelMd = '';
+if (fs.existsSync(panelFile)) {
+  const panel = JSON.parse(fs.readFileSync(panelFile, 'utf8'));
+  const v = validatePanel(panel, doc.labels);
+  if (!v.ok || panel.baseLabelsDigest !== doc.labelsDigest) {
+    console.error(`FAIL: labels-panel.json is not valid for these labels:\n  ${v.errors.concat(panel.baseLabelsDigest !== doc.labelsDigest ? ['baseLabelsDigest differs from labels.json'] : []).join('\n  ')}`);
+    process.exit(1);
+  }
+  const finalById = new Map(panel.sites.map((s) => [s.id, s.final]));
+  const t = { flagged: 0, tp: 0, fp: 0, ambiguous: 0, unlabeled: 0 };
+  for (const s of flagged) {
+    const l = labelByKey.get(key(s));
+    const fin = l ? finalById.get(l.id) : null;
+    t.flagged++;
+    if (!fin) t.unlabeled++; else t[fin]++;
+  }
+  const n = t.tp + t.fp; const ci = wilson(t.tp, n);
+  results.panel = { agreement: agreementReport(panel), adjudicatedPrecision: { ...t, labeledDenominator: n, precision: n ? +(t.tp / n).toFixed(4) : null, wilson95: ci ? ci.map(x => +x.toFixed(4)) : null } };
+  const a = results.panel.agreement;
+  panelMd = `\n## Two-labeler panel\n\nLabelers: ${a.labelers.map((l) => `${l.labelerId} (${l.model})`).join(', ')}; adjudicator: ${a.adjudicator ? `${a.adjudicator.labelerId} (${a.adjudicator.model})` : 'none'}.\n\n` +
+    a.pairs.map((p) => `- ${p.labelers.join(' and ')}: percent agreement ${p.threeWay.percentAgreement == null ? 'n/a' : (100 * p.threeWay.percentAgreement).toFixed(1) + '%'}, Cohen kappa ${p.threeWay.kappa == null ? 'undefined' : p.threeWay.kappa.toFixed(3)} (${p.decidedOnly.sites} sites decided by both, kappa ${p.decidedOnly.kappa == null ? 'undefined' : p.decidedOnly.kappa.toFixed(3)})`).join('\n') +
+    `\n- sites: agreed ${a.statusCounts.agreed}, disagreed ${a.statusCounts.disagreed}, one labeler unsure ${a.statusCounts['one-unsure']}, all unsure ${a.statusCounts['all-unsure']}; adjudicated ${a.adjudicated}, still ambiguous ${a.unsettledAfterAdjudication}\n` +
+    `- precision under the adjudicated verdicts: ${t.tp}/${n} = ${n ? (100 * t.tp / n).toFixed(1) + '%' : 'n/a'}${ci ? ` (95% Wilson ${(100 * ci[0]).toFixed(1)}% to ${(100 * ci[1]).toFixed(1)}%)` : ''}; ambiguous ${t.ambiguous}, unlabeled ${t.unlabeled}\n`;
+}
 fs.writeFileSync(path.join(HERE, 'results.json'), JSON.stringify(results, null, 1) + '\n');
 
 const pct = (x) => x === null ? 'n/a' : (100 * x).toFixed(1) + '%';
@@ -94,7 +122,7 @@ ${Object.entries(results.perClass).filter(([, v]) => v.tp + v.fp + v.ambiguous >
 - Recall cannot be measured here: there is no ground-truth list of the vulnerabilities in these projects, and a flag list says nothing about what was missed.
 - Intervals treat the sample as simple random. Sites cluster by file and rule (for example ten sampled sites are one Dockerfile rule across sibling build images, and twelve are unsafePerformIO global-state idioms), so the true uncertainty is wider.
 - Stale labels (labeled sites no longer flagged): ${results.staleLabels}.
-
+${panelMd}
 ## Limitations
 
 - One LLM labeler reading source; not a human audit, no second labeler, so labeler disagreement is unmeasured.

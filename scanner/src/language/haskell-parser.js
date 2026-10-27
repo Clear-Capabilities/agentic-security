@@ -1142,10 +1142,24 @@ const IR_PREPROCESS_GUARD = /^[ \t]*#\s*(?:if|ifdef|ifndef|elif|else|endif|defin
  * Returns the input unchanged when it has nothing to preprocess or cannot be parsed.
  */
 export function preprocessForSyntax(source, opts = {}) {
-  if (typeof source !== 'string' || !IR_PREPROCESS_GUARD.test(source)) return source;
+  return preprocessForSyntaxInfo(source, opts).text;
+}
+
+/**
+ * The same preprocessing, plus what it learned about the file's opaque boundaries: `opaque` is `false` when the file has none (including every
+ * Template Haskell splice and quasi-quote the closed allow-lists accepted), `true` when a splice, quasi-quote or TH quotation remains whose expansion
+ * is generated at compile time (code the analysis never sees, which can call any function), and `null` when the file mentions Template Haskell but
+ * could not be parsed to find out. Decided from tokens and extensions, never from comment text (the guard only decides whether to look).
+ */
+export function preprocessForSyntaxInfo(source, opts = {}) {
+  const none = { text: source, opaque: false };
+  if (typeof source !== 'string') return none;
+  const thQuotesOnly = /\bTemplateHaskellQuotes\b/.test(source);
+  if (!IR_PREPROCESS_GUARD.test(source)) return thQuotesOnly ? { text: source, opaque: null } : none;
   let r;
-  try { r = parseHaskell(source, { file: opts.file, cpp: opts.cpp }); } catch { return source; }
-  if (!r || !r.ok || typeof r._preprocessed !== 'string' || r._preprocessed.length !== source.length) return source;
+  try { r = parseHaskell(source, { file: opts.file, cpp: opts.cpp }); } catch { return { text: source, opaque: null }; }
+  if (!r || !r.ok || typeof r._preprocessed !== 'string' || r._preprocessed.length !== source.length) return { text: source, opaque: /\b(?:TemplateHaskell|TemplateHaskellQuotes|QuasiQuotes)\b/.test(source) ? null : false };
+  const opaque = (r.boundaries || []).some((b) => b && typeof b.kind === 'string' && (b.kind.startsWith('th-') && b.kind !== 'th-safe-splice' || b.kind === 'quasiquote'));
   let out = r._preprocessed;
   for (const b of r.blankRanges || []) {
     const seg = out.slice(b.startOffset, b.endOffset);
@@ -1153,5 +1167,5 @@ export function preprocessForSyntax(source, opts = {}) {
     if (b.kind === 'quasiquote-inert' && repl.length >= 2) repl = `"${repl.slice(1, -1)}"`;
     out = out.slice(0, b.startOffset) + repl + out.slice(b.endOffset);
   }
-  return out;
+  return { text: out, opaque };
 }

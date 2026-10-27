@@ -3086,7 +3086,8 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     if (fn.hs && (fn.hs.exported || /\.main$/.test(fn.name || ''))) continue;
     f._inDeadCode = true;
     const dg = { critical: 'high', high: 'medium', medium: 'low', low: 'info' };
-    if (dg[f.severity]) f.severity = dg[f.severity];
+    // The severity the finding would have had is kept (a demotion nobody can see is indistinguishable from a finding that was never that serious).
+    if (dg[f.severity]) { f.originalSeverity = f.originalSeverity || f.severity; f.severity = dg[f.severity]; }
   }
   Object.defineProperty(all, '_summaryCache', { value: summaryCache, enumerable: false });
   if (summaryCache._budgetHits) _noteIncomplete('summary-budget', `${summaryCache._budgetHits} summary requests after ${summaryCache._maxIter} computations`);

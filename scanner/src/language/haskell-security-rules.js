@@ -162,6 +162,26 @@ function snippetOf(text, line) {
 // socket or connection handle is filled by the peer. A read of standard input is the operator's in a program's own control flow, and
 // the caller's only in an entry point nothing in the analysed code calls (a library function handing back whatever its caller pipes in).
 const NETWORK_HANDLE_CALL = /(?:^|\.)(?:socketToHandle|connectTo|accept|acceptOn|openTCPConnection)$/;
+
+/**
+ * Are this function's callers outside the analysed code? With no project-reachability verdict, or an `unknown` one, the answer is exactly what it
+ * has always been (nothing in the analysed code calls or references it). A function no caller can reach (`unreachable-in-project`) has none. One
+ * reached from an entry point takes its parameters from that path, EXCEPT a root nothing in the analysed code calls (a framework handler, a foreign
+ * export, code the parser withheld): its caller is outside.
+ *
+ * A function of an exposed module (`external-api`) is DELIBERATELY answered as today: the plan for this change said "a public API's callers are
+ * external, so true", but for an exposed function that something in the project also calls that turns on the partial-function and unbounded-read
+ * rules for every such function, and on the development set it added seven flagged sites and no true positive (precision 35.7% -> 23.8%). The
+ * status is still recorded and still keeps the taint finding at full severity; it just does not widen these two rules. Flipping it is the one line
+ * below, with that measurement as the cost.
+ */
+export function callersUnknown(fn) {
+  const hs = (fn && fn.hs) || {};
+  const r = hs.reachability || null;
+  if (!r || r.status === 'unknown' || r.status === 'external-api') return !hs.reached;
+  if (r.status === 'entrypoint-reachable') return !hs.reached && r.rootKind !== 'main';
+  return false;
+}
 function readsOutsideInput(fn, callee, args, importsNetwork) {
   const h = args && args[0];
   const isStdin = !!h && h.kind === 'ident' && /(?:^|\.)stdin$/.test(h.name || '');
@@ -169,7 +189,7 @@ function readsOutsideInput(fn, callee, args, importsNetwork) {
   // the networking packages are not all in the model registry, so a call keeps its bare name; the module imports say which library it is
   if (handleRead) return !!importsNetwork && (fn.calls || []).some((x) => typeof x.callee === 'string' && NETWORK_HANDLE_CALL.test(x.callee));
   const hs = fn.hs || {};
-  return !hs.reached && !/(?:^|\.)main$/.test(fn.name || '');
+  return callersUnknown(fn) && !/(?:^|\.)main$/.test(fn.name || '');
 }
 
 const EQUALITY_OPS = new Set(['==', '/=', '!=']);
@@ -244,7 +264,7 @@ export function analyzeHaskellRules(files, opts = {}) {
   const notes = [];
   if (!Object.keys(hs).length) return { findings, controls, notes };
 
-  const ir = buildHaskellIR(hs);
+  const ir = buildHaskellIR(hs, opts.reachability || {});
 
   // project-level facts
   let requestLimit = null;
@@ -291,7 +311,7 @@ export function analyzeHaskellRules(files, opts = {}) {
       // calls cannot say the text comes from outside.
       const fnHs = fn.hs || {};
       const strongParam = new Set((fnHs.paramSources || []).filter((p) => /^hs:handler-param:/.test(p.decorator || '')).map((p) => p.name));
-      const entryLike = !fnHs.reached;
+      const entryLike = callersUnknown(fn);
       const derivedText = new Set([...(fnHs.textParams || []).filter((n) => strongParam.has(n) || entryLike), ...(entryLike ? (fnHs.inputParams || []) : [])]);
       if (derivedText.size) {
         for (let round = 0; round < 8; round++) {
