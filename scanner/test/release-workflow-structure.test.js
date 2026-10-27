@@ -201,6 +201,29 @@ const invariants = {
     return bad;
   },
 
+  githubReleaseStep(text) {
+    const doc = load(text);
+    const list = steps(doc.jobs?.publish);
+    const bad = [];
+    const rel = list.filter((s) => /gh release (create|edit)/.test(String(s.run ?? '')));
+    if (rel.length !== 1) return [`expected exactly one GitHub Release step in publish, found ${rel.length}`];
+    const [r] = rel;
+    const run = String(r.run);
+    const pubIdx = list.findIndex((s) => /npm publish/.test(String(s.run ?? '')));
+    if (list.indexOf(r) <= pubIdx) bad.push('the Release step must come after npm publish');
+    if (String(r.if).replace(/^\$\{\{\s*|\s*\}\}$/g, '') !== PUBLISH_GUARD) bad.push(`Release guard is "${r.if}"`);
+    if (doc.jobs?.publish?.permissions?.contents !== 'write') bad.push('publish needs contents: write to create a Release');
+    for (const { where, value } of allPermissions(doc)) {
+      if (where !== '$.jobs.publish.permissions' && value && typeof value === 'object' && value.contents === 'write') bad.push(`contents: write at ${where}`);
+    }
+    if (!/scripts\/release-notes\.mjs/.test(run)) bad.push('the Release body does not come from scripts/release-notes.mjs');
+    if (!/--verify-tag/.test(run)) bad.push('gh release create must pass --verify-tag so it can never mint a tag');
+    if (!/gh release view/.test(run) || !/gh release edit/.test(run)) bad.push('the Release step is not idempotent (view then edit)');
+    if (/git (tag|push)|--target/.test(run)) bad.push('the Release step must not create or move a tag');
+    if (r.env?.GH_TOKEN !== '${{ github.token }}') bad.push('the Release step lost its GH_TOKEN wiring');
+    return bad;
+  },
+
   legNamesAreSelf(text, tiers = realTiers()) {
     const doc = load(text);
     const self = new Set(tiers.self || []);
@@ -275,6 +298,22 @@ const mutations = [
   ['publishGuardAndCommand', (t) => mutate(t, '          npm pack --dry-run', '          true')],
   ['publishVerifiesTheArtifactBeforePublishing', (t) => mutate(t, ' --only bundle-integrity,package-contents', ' --only bundle-integrity')],
   ['publishVerifiesTheArtifactBeforePublishing', (t) => mutate(t, 'name: Ensure npm supports trusted publishing (OIDC)', 'name: Noop')],
+  ['githubReleaseStep', (t) => mutate(t, "inputs.dry_run != true\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |\n          node scripts/release-notes", "x\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |\n          node scripts/release-notes")],
+  ['githubReleaseStep', (t) => mutate(t, 'contents: write # create', 'contents: read # create')],
+  ['githubReleaseStep', (t) => mutate(t, 'permissions:\n  contents: read\n  checks: read', 'permissions:\n  contents: write\n  checks: read')],
+  ['githubReleaseStep', (t) => mutate(t, ' --verify-tag', '')],
+  ['githubReleaseStep', (t) => mutate(t, 'gh release edit', 'gh release view')],
+  ['githubReleaseStep', (t) => mutate(t, 'node scripts/release-notes.mjs', 'echo notes #')],
+  ['githubReleaseStep', (t) => {
+    // move the Release step ahead of npm publish
+    const i = t.indexOf('      # The GitHub Release page');
+    const j = t.indexOf('      - name: Dry run');
+    const block = t.slice(i, j);
+    const rest = t.slice(0, i) + t.slice(j);
+    const k = rest.indexOf('      # PUBLISHED VIA TRUSTED PUBLISHING');
+    assert.ok(i > 0 && k > 0);
+    return rest.slice(0, k) + block + rest.slice(k);
+  }],
   ['triggersAndDryRunDefault', (t) => mutate(t, 'default: true', 'default: false')],
   ['triggersAndDryRunDefault', (t) => mutate(t, "      - 'v*'", "      - '*'")],
 ];

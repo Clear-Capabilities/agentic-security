@@ -66,7 +66,7 @@ for (const cls of classes) {
   if (!sup.supported) { skipped.push({ class: cls, lang: reproducer.lang, reason: sup.reason }); continue; }
   // The haskell:9 image is wired (runner.js) but its toolchain layout for a non-root user has not been run against a real engine, so the
   // container leg does not claim it until someone sets AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL=1 and the leg passes.
-  if (REQUIRE_CONTAINER && reproducer.lang === 'haskell' && process.env.AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL !== '1') { skipped.push({ class: cls, lang: reproducer.lang, reason: 'the haskell:9 image has not been verified against a real container engine; set AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL=1 to include it' }); continue; }
+  if (REQUIRE_CONTAINER && reproducer.lang === 'haskell' && process.env.AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL !== '1') { skipped.push({ class: cls, lang: reproducer.lang, reason: 'the haskell:9 image path (runner.js, container.js CONTAINER_PATH includes /opt/ghc/bin) has never been run against a real container engine, so the non-root toolchain layout (PATH, HOME, writable ghc/cabal dirs under --read-only) is unconfirmed; set AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL=1 with the image present locally (docker pull haskell:9) to include it' }); continue; }
   if (reproducer.network === 'callback' && (REQUIRE_CONTAINER || detectBackend() !== 'userspace')) { skipped.push({ class: cls, lang: reproducer.lang, reason: REQUIRE_CONTAINER ? 'a container has no network, so a reproducer that needs the loopback callback listener cannot run in one' : `mediated network is unsupported on the ${detectBackend()} backend` }); continue; }
   for (let r = 0; r < ROUNDS; r++) {
     for (const side of ['vulnerable', 'mitigated']) {
