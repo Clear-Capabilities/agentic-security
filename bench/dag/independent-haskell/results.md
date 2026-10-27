@@ -1,7 +1,7 @@
 # Independent Haskell precision results
 
 Date: 2026-10-27
-Scanner version: 0.187.0
+Scanner version: 0.188.0
 Labels digest: c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b
 
 MEASUREMENT ONLY. See README.md and USE-LOG.md.

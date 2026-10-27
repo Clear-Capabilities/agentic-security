@@ -478,6 +478,22 @@ The measured status of each capability, with its denominators, is in [Haskell an
   the program's own state, because the scan does not follow files from a write to a later read.
 - A function that is exported and called nowhere in the analysed code keeps a path finding for a parameter it names directly
   (`withFile name WriteMode`): that shape is indistinguishable from a real vulnerable one without knowing the callers.
+  Whether a caller can exist is now judged from the project's entry points (`reachability` on the finding: `entrypoint-reachable`,
+  `external-api`, `unreachable-in-project` or `unknown`), and only the last of those, only when the finding rests on nothing but the
+  assumption that a caller supplies the parameter, lowers it to `info` (the severity it would have had is kept). The verdict is
+  `unreachable-in-project` only when ALL of these hold: the scan covered the whole project (not a changed-file, pull-request,
+  subdirectory or caller-supplied scan, and no Haskell source was kept out by the path policy or the size limit); there is at least
+  one `main`; a `.cabal` or `package.yaml` says which modules the package exposes and the function's module is not one of them (or
+  re-exported by one); the function is not an instance method; the IR has no gap it cannot bound (Template Haskell or a
+  quasi-quote it does not accept, a foreign export, a build step that generates modules, an entry-point override, a call to a name
+  nothing defines); and nothing reachable from a `main`, a framework handler, an exposed function or an instance method calls or
+  references it. Anything less is `unknown` with the reason named (`holeReason`), and the finding is untouched. A library project
+  (no `main`, or no manifest) therefore keeps every finding, and a partial scan changes nothing. Code the parser could not read is
+  assumed to call anything its own module can see. A project with Template Haskell in any module gets no verdict at all, by design.
+  This is an inference over a call graph that typeclass dispatch, re-exports and point-free code can defeat, which is why a finding
+  that rests on a real read (an environment, file or request read) is never lowered by it: it may only rank lower. It has not been
+  shown to improve precision on real code: on the labelled development and fresh sets it changed no finding's severity (see
+  `bench/dag/dev-haskell/results/README.md`).
 - Precision on real projects was measured on a development set of eight projects (see `bench/dag/dev-haskell/README.md`)
   and one reader's labels; the numbers there describe those projects, not Haskell code in general.
 - The live advisory feed (`AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1`) has been tested against a stand-in server that serves the real

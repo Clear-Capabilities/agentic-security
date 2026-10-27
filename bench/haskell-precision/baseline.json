@@ -1,0 +1,307 @@
+{
+ "schema": "agentic-security/haskell-precision-baseline@1",
+ "comparison": "equality: a regression fails, and so does an improvement that was not recorded here",
+ "engineVersion": "0.188.0",
+ "labelsDigests": {
+  "development-tuning": "f599e1edc2e1e8b68756b4d25c238daf0f0f04b34ea30983a16a793615e40395",
+  "development-verification": "39b0c5bf5cd20298a8e7ab608e5d7b938c4725a8f8d51e5b22a4ba011f1d0870",
+  "development-remainder": "cbd0e3a60f3419444b3d0caa71d9c993ceaa112c2caa4283818a1be5ab7a3463",
+  "fresh": "d4cf3853939888491e1b30aad368c09ca72b893e00debfc1ec2000c0e5fbd3d7"
+ },
+ "aggregates": {
+  "development-tuning": {
+   "labelled": 64,
+   "reported": 30,
+   "notReported": 34,
+   "flagged": 10,
+   "loweredToInfo": 20,
+   "tp": 4,
+   "fp": 6,
+   "tpNotFlagged": 0,
+   "byStatus": {
+    "entrypoint-reachable": {
+     "TP": 0,
+     "FP": 11
+    },
+    "external-api": {
+     "TP": 0,
+     "FP": 6
+    },
+    "unknown": {
+     "TP": 0,
+     "FP": 0
+    },
+    "unreachable-in-project": {
+     "TP": 0,
+     "FP": 0
+    },
+    "no-verdict": {
+     "TP": 4,
+     "FP": 9
+    }
+   },
+   "precision": 0.4,
+   "wilson95": [
+    0.1682,
+    0.6873
+   ]
+  },
+  "development-verification": {
+   "labelled": 54,
+   "reported": 30,
+   "notReported": 24,
+   "flagged": 4,
+   "loweredToInfo": 26,
+   "tp": 1,
+   "fp": 3,
+   "tpNotFlagged": 0,
+   "byStatus": {
+    "entrypoint-reachable": {
+     "TP": 0,
+     "FP": 10
+    },
+    "external-api": {
+     "TP": 0,
+     "FP": 13
+    },
+    "unknown": {
+     "TP": 0,
+     "FP": 0
+    },
+    "unreachable-in-project": {
+     "TP": 0,
+     "FP": 0
+    },
+    "no-verdict": {
+     "TP": 1,
+     "FP": 6
+    }
+   },
+   "precision": 0.25,
+   "wilson95": [
+    0.0456,
+    0.6994
+   ]
+  },
+  "development-remainder": {
+   "labelled": 5,
+   "reported": 5,
+   "notReported": 0,
+   "flagged": 5,
+   "loweredToInfo": 0,
+   "tp": 0,
+   "fp": 5,
+   "tpNotFlagged": 0,
+   "byStatus": {
+    "entrypoint-reachable": {
+     "TP": 0,
+     "FP": 0
+    },
+    "external-api": {
+     "TP": 0,
+     "FP": 5
+    },
+    "unknown": {
+     "TP": 0,
+     "FP": 0
+    },
+    "unreachable-in-project": {
+     "TP": 0,
+     "FP": 0
+    },
+    "no-verdict": {
+     "TP": 0,
+     "FP": 0
+    }
+   },
+   "precision": 0,
+   "wilson95": [
+    0,
+    0.4345
+   ]
+  },
+  "fresh": {
+   "labelled": 222,
+   "reported": 183,
+   "notReported": 39,
+   "flagged": 45,
+   "loweredToInfo": 138,
+   "tp": 17,
+   "fp": 28,
+   "tpNotFlagged": 4,
+   "byStatus": {
+    "entrypoint-reachable": {
+     "TP": 8,
+     "FP": 37
+    },
+    "external-api": {
+     "TP": 0,
+     "FP": 11
+    },
+    "unknown": {
+     "TP": 0,
+     "FP": 2
+    },
+    "unreachable-in-project": {
+     "TP": 0,
+     "FP": 0
+    },
+    "no-verdict": {
+     "TP": 9,
+     "FP": 116
+    }
+   },
+   "precision": 0.3778,
+   "wilson95": [
+    0.2511,
+    0.5237
+   ]
+  },
+  "census": {
+   "dev": {
+    "cabal2nix": {
+     "rows": 2,
+     "flagged": 0,
+     "loweredToInfo": 2,
+     "byStatus": {
+      "external-api": 2
+     }
+    },
+    "ghcup-hs": {
+     "rows": 38,
+     "flagged": 5,
+     "loweredToInfo": 33,
+     "byStatus": {
+      "no-verdict": 2,
+      "external-api": 33,
+      "entrypoint-reachable": 3
+     }
+    },
+    "gitit": {
+     "rows": 8,
+     "flagged": 5,
+     "loweredToInfo": 3,
+     "byStatus": {
+      "entrypoint-reachable": 1,
+      "no-verdict": 6,
+      "external-api": 1
+     }
+    },
+    "hackage-server": {
+     "rows": 43,
+     "flagged": 6,
+     "loweredToInfo": 37,
+     "byStatus": {
+      "entrypoint-reachable": 34,
+      "external-api": 5,
+      "no-verdict": 4
+     }
+    },
+    "pandoc": {
+     "rows": 7,
+     "flagged": 0,
+     "loweredToInfo": 7,
+     "byStatus": {
+      "no-verdict": 7
+     }
+    },
+    "stack": {
+     "rows": 2,
+     "flagged": 0,
+     "loweredToInfo": 2,
+     "byStatus": {
+      "entrypoint-reachable": 2
+     }
+    },
+    "stackage-server": {
+     "rows": 1,
+     "flagged": 1,
+     "loweredToInfo": 0,
+     "byStatus": {
+      "entrypoint-reachable": 1
+     }
+    },
+    "xmonad-contrib": {
+     "rows": 2,
+     "flagged": 2,
+     "loweredToInfo": 0,
+     "byStatus": {
+      "external-api": 1,
+      "no-verdict": 1
+     }
+    }
+   },
+   "fresh": {
+    "dhall-haskell": {
+     "rows": 91,
+     "flagged": 14,
+     "loweredToInfo": 77,
+     "byStatus": {
+      "no-verdict": 72,
+      "entrypoint-reachable": 15,
+      "external-api": 4
+     }
+    },
+    "hlint": {
+     "rows": 14,
+     "flagged": 3,
+     "loweredToInfo": 11,
+     "byStatus": {
+      "entrypoint-reachable": 5,
+      "no-verdict": 9
+     }
+    },
+    "ihp": {
+     "rows": 57,
+     "flagged": 10,
+     "loweredToInfo": 47,
+     "byStatus": {
+      "no-verdict": 33,
+      "unknown": 2,
+      "entrypoint-reachable": 17,
+      "external-api": 5
+     }
+    },
+    "ormolu": {
+     "rows": 3,
+     "flagged": 0,
+     "loweredToInfo": 3,
+     "byStatus": {
+      "entrypoint-reachable": 1,
+      "no-verdict": 2
+     }
+    },
+    "scotty": {
+     "rows": 16,
+     "flagged": 16,
+     "loweredToInfo": 0,
+     "byStatus": {
+      "no-verdict": 9,
+      "entrypoint-reachable": 7
+     }
+    },
+    "summoner": {
+     "rows": 2,
+     "flagged": 2,
+     "loweredToInfo": 0,
+     "byStatus": {
+      "external-api": 2
+     }
+    }
+   }
+  }
+ },
+ "sealed": {
+  "labelsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
+  "resultsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
+  "scannerVersion": "0.188.0",
+  "all": {
+   "flagged": 73,
+   "tp": 1,
+   "fp": 34,
+   "ambiguous": 11,
+   "unlabeled": 27,
+   "precision": 0.0286
+  }
+ }
+}

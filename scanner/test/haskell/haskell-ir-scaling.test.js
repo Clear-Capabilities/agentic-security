@@ -9,6 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildHaskellIR, _internals } from '../../src/language/haskell-ir.js';
+import { EXPOSED_INDEX_WORK } from '../../src/language/haskell-manifests.js';
 
 // M modules. Module i imports module i+1 and uses its constructor, its record field and a function of it, so every
 // function lowering needs the cross-module lookups.
@@ -95,4 +96,27 @@ test('Haskell IR: record parameters, constructors and definitions found through 
   assert.equal(ir.project.findCon('Nope'), null);
   assert.equal(ir.project.defByQid(fn.qid).name, 'runIt');
   assert.equal(ir.project.defByQid('no-such-qid'), null);
+});
+
+// The manifests behind the project-reachability verdict are read once per context, not once per module, function or call. Counted by a work counter
+// (`EXPOSED_INDEX_WORK`), never a clock: the parse count must equal the number of manifests at two project sizes, and asking again with the same
+// context must not parse again.
+test('Haskell IR: the exposed-module index parses each manifest once, however large the project', () => {
+  const cabalFor = (n) => `name: pkg${n}\nlibrary\n  exposed-modules: Mod0\n  hs-source-dirs: src\n  build-depends: base\n`;
+  const manifests = { 'a/pkg1.cabal': cabalFor(1), 'b/pkg2.cabal': cabalFor(2), 'c/pkg3.cabal': cabalFor(3) };
+  const run = (m) => {
+    const before = EXPOSED_INDEX_WORK.manifestParses;
+    const files = project(m);
+    const ir = buildHaskellIR(files, { manifests, completeScan: true });
+    const after = EXPOSED_INDEX_WORK.manifestParses;
+    buildHaskellIR(files, { manifests, completeScan: true });   // same sources, same context: nothing recomputed
+    return { parses: after - before, repeat: EXPOSED_INDEX_WORK.manifestParses - after, ir };
+  };
+  const small = run(20);
+  const large = run(60);
+  assert.equal(small.parses, 3, 'one parse per manifest');
+  assert.equal(large.parses, 3, 'the same at three times the size');
+  assert.equal(small.repeat, 0);
+  assert.equal(large.repeat, 0);
+  assert.deepEqual(small.ir.haskellReachability.exposedModules, ['Mod0']);
 });

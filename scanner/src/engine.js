@@ -321,6 +321,7 @@ import { annotateHaskellLlm, analyzeHaskellLlmRules } from './language/haskell-l
 import { languagePragmaOnLine as _languagePragmaOnLine, languagePragmaSuppresses as _languagePragmaSuppresses } from './language/pragma.js';
 import { applyHaskellGuards, consolidateFlowSinks } from './language/haskell-guards.js';
 import { applyTrustBoundary } from './language/haskell-trust.js';
+import { applyHaskellReachability } from './language/haskell-reachability.js';
 import { annotateUnresolvedTargets, attachEvidenceChains } from './language/haskell-disclosure.js';
 import { analyzeHaskellRules } from './language/haskell-security-rules.js';
 import { scanLanguageSecretConcat, scanDependencyUrlCredentials, providerInfo as _secretProvider } from './language/secrets.js';
@@ -9522,12 +9523,31 @@ function _deterministicFileTimings(timings) {
   const _hasJava = Object.keys(fc || {}).some(f => /\.java$/i.test(f));
   // DAG-05: with the cross-scan cache on, an unchanged JavaScript/TypeScript file is read back from the IR cache
   // instead of parsed again (dataflow/ir-cache.js; the content is the same, only the cost differs).
+  // What the Haskell project-reachability verdict needs besides the sources (language/haskell-ir.js `projectReachability`): the manifests that say
+  // which modules the package exposes, whether this file set is the whole project, and every gap the scan itself knows about. A Haskell source that
+  // was offered to the scan and is not in the IR input (path policy, size, density, or a format the IR does not read) could hold a caller, so
+  // each is a named hole and a verdict that needs a complete picture degrades to `unknown`.
+  const _hsReachCtx = () => {
+    const manifests = {};
+    for (const [p, t] of Object.entries(depFileContents || {})) if (/\.cabal$|(?:^|\/)package\.yaml$/i.test(p) && typeof t === 'string') manifests[p] = t;
+    const hsSrc = /\.(?:hs|lhs|hs-boot|lhs-boot|hsc|hsig)$/i;
+    const holes = new Set();
+    if ((policyExcluded || []).some((p) => hsSrc.test(String(p)))) holes.add('policy-excluded');
+    if ((sizeSkipped || []).some((s) => hsSrc.test(String((s && s.file) || s)))) holes.add('size-skipped');
+    for (const f of Object.keys(fileContents || {})) {
+      if (!hsSrc.test(f)) continue;
+      if (!/\.hs$/i.test(f)) holes.add('opaque-boundary');   // literate, hsc and boot files: the IR reads `.hs` only, so their calls are not in the graph
+      else if (!(f in fc)) holes.add(typeof fileContents[f] === 'string' && fileContents[f].length > 500000 ? 'size-skipped' : 'policy-excluded');
+    }
+    return { manifests, completeScan: completeScan === true, scanHoles: [...holes] };
+  };
   const _buildIR = async () => {
     let irCache = null;
     if (process.env.AGENTIC_SECURITY_INCREMENTAL === '1' && scanRoot) {
       try { irCache = openIrCache(scanRoot); } catch { irCache = null; }
     }
-    return _hasJava ? await buildProjectIRAsync(fc, { irCache }) : buildProjectIR(fc, { irCache });
+    const haskell = _hsReachCtx();
+    return _hasJava ? await buildProjectIRAsync(fc, { irCache, haskell }) : buildProjectIR(fc, { irCache, haskell });
   };
   const _irStatsTarget = irStatsTarget();
   if (_irStatsTarget) {
@@ -9620,7 +9640,7 @@ function _deterministicFileTimings(timings) {
         f.unvalidated = true;
         f.validator_verdict = 'unvalidated';
       }
-      try { applyHaskellGuards(irFindings, perFile); applyTrustBoundary(irFindings, perFile); consolidateFlowSinks(irFindings, perFile); annotateUnresolvedTargets(irFindings, perFile); attachEvidenceChains(irFindings, perFile); annotateHaskellFindings(irFindings, fc); annotateHaskellLlm(irFindings, fc); } catch (_) { /* metadata only; the finding stands without it */ }
+      try { applyHaskellGuards(irFindings, perFile); applyTrustBoundary(irFindings, perFile); try { applyHaskellReachability(irFindings, perFile); } catch (_) { /* the verdict is metadata; the finding stands without it */ } consolidateFlowSinks(irFindings, perFile); annotateUnresolvedTargets(irFindings, perFile); attachEvidenceChains(irFindings, perFile); annotateHaskellFindings(irFindings, fc); annotateHaskellLlm(irFindings, fc); } catch (_) { /* metadata only; the finding stands without it */ }
       aF.push(...irFindings);
     } catch (e) {
       // Deep mode is best-effort. A parser blowup in one file shouldn't kill
@@ -9831,12 +9851,12 @@ function _deterministicFileTimings(timings) {
   // An `unsafePerformIO` / `unsafeCoerce` / `unsafeInterleaveIO` boundary note says (in its own text) that it claims no vulnerability class: it marks where the
   // type system is stepped around. In a scan it is information, not a finding that gates a release; the rules module keeps emitting it at `low` (its contract),
   // and the severity is lowered here with the original kept.
-  try{aF.push(...analyzeHaskellRules(fc).findings.map((f)=>f&&f.rule==='hs-unsafe-io-boundary'?{...f,originalSeverity:f.severity,severity:'info'}:f));}catch(_){}
+  try{aF.push(...analyzeHaskellRules(fc,{reachability:_hsReachCtx()}).findings.map((f)=>f&&f.rule==='hs-unsafe-io-boundary'?{...f,originalSeverity:f.severity,severity:'info'}:f));}catch(_){}
   try{aF.push(...analyzeHaskellLlmRules(fc));}catch(_){}
   try{const{analyzeLanguageFindings}=await import('./language/engine-pass.js');aF.push(...analyzeLanguageFindings(allFileContents).findings);}catch(_){}
   let _languageBridges=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$/i.test(f))){const{analyzePolyglotBridges}=await import('./language/bridges.js');_languageBridges=analyzePolyglotBridges(allFileContents);}}catch(_){}
   try{for(const[_p,_t]of Object.entries(allFileContents))if(typeof _t==='string')aF.push(...scanDependencyUrlCredentials(_p,_t));}catch(_){}
-  try{const _hw=analyzeHaskellWeb(fc);aF.push(..._hw.findings);aR.push(...toEngineRoutes(_hw));}catch(_){}
+  try{const _hw=analyzeHaskellWeb(fc,{reachability:_hsReachCtx()});aF.push(..._hw.findings);aR.push(...toEngineRoutes(_hw));}catch(_){}
   let finalFindings;try{finalFindings=dedupeFindingsWithEvidence(aF);}catch(_){finalFindings=dd(aF,f=>f.id);}
   // Inline `agentic-security-ignore` pragmas, pass 1 of 2. This covers every
   // finding that exists BY THIS POINT — the pattern detectors, the cross-file

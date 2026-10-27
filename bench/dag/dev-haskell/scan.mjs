@@ -28,7 +28,7 @@ for (const f of scan.findings) {
   rows.push({
     id: f.id, stableId: f.stableId, file, line: Number.isInteger(f.line) ? f.line : null, severity: f.severity, vuln: f.vuln, cwe: f.cwe,
     parser: f.parser, family: f.family, rule: f.rule || f.ruleId || null, confidence: f.confidence, description: (f.description || '').slice(0, 300),
-    origin: f.source || f.taintSource || null, trust: f.trustBoundary || null, sinkInfo: f.sink || null, extra: process.env.DEV_HS_RAW ? f : undefined,
+    origin: f.source || f.taintSource || null, trust: f.trustBoundary || null, reachability: f.reachability || null, originalSeverity: f.originalSeverity || null, sinkInfo: f.sink || null, extra: process.env.DEV_HS_RAW ? f : undefined,
   });
 }
 rows.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : (a.line || 0) - (b.line || 0) || (a.id < b.id ? -1 : 1)));

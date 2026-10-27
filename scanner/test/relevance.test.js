@@ -237,3 +237,51 @@ test('scoreRelevance: pure scorer returns tier + factors without mutating', () =
   assert.ok(Array.isArray(r.factors) && r.factors.length > 0);
   assert.equal(JSON.stringify(f), snapshot);
 });
+
+// ── a language-supplied call-graph verdict (Haskell `f.reachability`) ───────────
+// It outranks the file-level import graph, which has no Haskell extraction, and it re-ranks only: severity is never touched.
+
+const verdict = (status, extra = {}) => ({ status, reason: 'x', premise: null, roots: [], holeReason: status === 'unknown' ? 'no-entrypoint' : null, ...extra });
+
+test('a language call-graph verdict maps to its tier and leaves severity alone; unknown falls through to the file-level logic', () => {
+  const run = (reachability) => {
+    const f = mkFinding(ORPHAN_FILE, 2, reachability ? { reachability } : {});
+    annotateRelevance([f], ctx());
+    return f;
+  };
+  const none = run(null);
+  const unknown = run(verdict('unknown'));
+  assert.equal(unknown.relevanceTier, none.relevanceTier, 'unknown changes nothing');
+  assert.equal(unknown.relevance, none.relevance);
+  assert.equal(unknown.entrypointReachable, none.entrypointReachable);
+  for (const [status, tier, reachable] of [['unreachable-in-project', 'unreachable', false], ['entrypoint-reachable', 'indirect', true], ['external-api', 'indirect', true]]) {
+    const f = run(verdict(status));
+    assert.equal(f.relevanceTier, tier, status);
+    assert.equal(f.entrypointReachable, reachable, status);
+    assert.equal(f.severity, 'high', `${status}: severity untouched`);
+  }
+  // the demotion has the same floor as every other: rank, never visibility
+  const dead = run(verdict('unreachable-in-project'));
+  assert.ok(dead.exploitability >= 0.05 && dead.exploitability < 0.6);
+  assert.ok(dead.relevance <= 0.3);
+});
+
+test('a language verdict outranks an import graph that says the opposite, and only a positive verdict does', () => {
+  // the route file is a direct entry point by the file-level graph; a language verdict of unreachable still re-ranks it, a reachable one does not raise 'direct'
+  const f = mkFinding(ROUTE_FILE, 3, { reachability: verdict('unreachable-in-project') });
+  annotateRelevance([f], ctx());
+  assert.equal(f.relevanceTier, 'unreachable');
+  const g = mkFinding(ROUTE_FILE, 3, { reachability: verdict('entrypoint-reachable') });
+  annotateRelevance([g], ctx());
+  assert.equal(g.relevanceTier, 'direct', 'a positive verdict never lowers a finding the file-level graph already calls direct');
+});
+
+test('a finding whose reachability is not a call-graph verdict (a dependency finding\'s import / function reachability) is scored exactly as before', () => {
+  const sca = { import: 'imported', function: 'reachable', symbols: [] };
+  const a = mkFinding(ORPHAN_FILE, 2);
+  const b = mkFinding(ORPHAN_FILE, 2, { reachability: sca });
+  annotateRelevance([a, b], ctx());
+  assert.equal(b.relevanceTier, a.relevanceTier);
+  assert.equal(b.relevance, a.relevance);
+  assert.equal(b.entrypointReachable, a.entrypointReachable);
+});

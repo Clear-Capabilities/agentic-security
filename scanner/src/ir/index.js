@@ -202,7 +202,7 @@ export function buildProjectIR(fileContents, opts = {}) {
   // the CFGs (SSA numbering included), since PHP's `include` genuinely
   // executes in the caller's variable namespace. See php-include-merge.js's
   // module header for the full rationale and scope.
-  const hsCg = mergeHaskellIR(perFile, hsFiles);
+  const hsCg = mergeHaskellIR(perFile, hsFiles, opts && opts.haskell);
   try { mergePhpIncludes(perFile); } catch {}
   if (isSSAEnabled()) {
     for (const ir of Object.values(perFile)) {
@@ -225,10 +225,11 @@ export function buildProjectIR(fileContents, opts = {}) {
 // Haskell is lowered as one project (module resolution crosses files), then its
 // per-file IR joins the same perFile map every consumer already reads. Its call graph
 // keeps its richer edge statuses and is merged into the shared one below.
-function mergeHaskellIR(perFile, hsFiles) {
+function mergeHaskellIR(perFile, hsFiles, hsContext) {
   if (!Object.keys(hsFiles).length) return null;
   try {
-    const hs = buildHaskellIR(hsFiles);
+    // `hsContext` ({manifests, completeScan, scanHoles}) is what the project-reachability verdict needs besides the sources; without it every verdict is `unknown`.
+    const hs = buildHaskellIR(hsFiles, hsContext || {});
     for (const [file, ir] of Object.entries(hs.perFile)) perFile[file] = ir;
     for (const d of hs.diagnostics) _noteParseFailure(d.file, new Error(`haskell ${d.kind}: ${d.detail}`));
     return hs.callGraph;
@@ -247,7 +248,7 @@ function withHaskellCallGraph(cg, hsCg) {
   const isHs = (f) => typeof f === 'string' && /\.hs$/i.test(f);
   const resolve = (name, callerFile) => (isHs(callerFile) ? hsCg.resolve(name) : cg.resolve(name, callerFile));
   const resolveKnownCallee = (name, callerFile) => (isHs(callerFile) ? hsCg.resolveKnownCallee(name) : cg.resolveKnownCallee(name, callerFile));
-  return { ...cg, functions, edges, callersOf, resolve, resolveKnownCallee, haskell: hsCg };
+  return { ...cg, functions, edges, callersOf, resolve, resolveKnownCallee, haskell: hsCg, haskellReachability: hsCg.haskellReachability || null };
 }
 
 // Async variant — includes Java IR via java-parser.
@@ -306,7 +307,7 @@ export async function buildProjectIRAsync(fileContents, opts = {}) {
   // the CFGs (SSA numbering included), since PHP's `include` genuinely
   // executes in the caller's variable namespace. See php-include-merge.js's
   // module header for the full rationale and scope.
-  const hsCg = mergeHaskellIR(perFile, hsFiles);
+  const hsCg = mergeHaskellIR(perFile, hsFiles, opts && opts.haskell);
   try { mergePhpIncludes(perFile); } catch {}
   if (isSSAEnabled()) {
     for (const ir of Object.values(perFile)) {

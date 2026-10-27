@@ -3,7 +3,7 @@
 // effective neutralisation), BEFORE any scanner change, and are keyed by the sample index of the seeded
 // sample (sample.json). TP = a real weakness at that site; FP = not a vulnerability.
 // A label is never edited after seeing scanner output except to correct a clear mistake, logged in
-// LABEL-CHANGES.md.
+// LABEL-CHANGES.md (next to this file; it did not exist until the precision gate made the promise enforceable, and it says what can and cannot be established).
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';

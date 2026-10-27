@@ -342,7 +342,8 @@ test('[QA-001.AC04] no document claims NIST SARD provides Haskell or Nix cases',
   const repo = path.resolve(ROOT, '..');
   const docs = [path.join(repo, 'README.md'), path.join(HERE, 'README.md'),
     ...['docs', 'bench'].flatMap((d) => (fs.existsSync(path.join(repo, d)) ? walk(path.join(repo, d)) : []))]
-    .filter((f) => f.endsWith('.md') && !/node_modules|\/(pre|post)\//.test(f));
+    // INVENTORY.md is a generated list of directory names (bench/haskell-precision beside bench/sard-juliet-java), not a statement about either.
+    .filter((f) => f.endsWith('.md') && !/node_modules|\/(pre|post)\/|engineering-excellence\/INVENTORY\.md$/.test(f));
   const claim = [];
   const negated = /\b(no|not|never|none|without|neither|nor|does not|do not|cannot|unless|absent|n't)\b/i;
   for (const f of docs) {

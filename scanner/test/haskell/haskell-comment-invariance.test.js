@@ -37,7 +37,7 @@ async function scanFiles(files) {
   const r = await runScan(dir, { deep: true });
   return [...(r.scan.findings || [])]
     .filter((f) => /\.(hs|lhs)$/.test(f.file || ''))
-    .map((f) => [f.file, f.line, f.parser, f.rule || '', f.cwe || '', f.family || '', f.vuln || '', f.severity, f.trustBoundary ? f.trustBoundary.verdict : '', (f.proof && f.proof.verdict) || '', f.snippet || '', f.stableId || ''].join('|'))
+    .map((f) => [f.file, f.line, f.parser, f.rule || '', f.cwe || '', f.family || '', f.vuln || '', f.severity, f.trustBoundary ? f.trustBoundary.verdict : '', (f.proof && f.proof.verdict) || '', f.snippet || '', f.stableId || '', f.reachability ? `${f.reachability.status}/${f.reachability.holeReason || ''}/${f.reachability.premise || ''}` : '', f.originalSeverity || ''].join('|'))
     .sort();
 }
 
@@ -123,6 +123,42 @@ test('comments that lie in both directions do not move a verdict: the command in
   assert.deepEqual(await run(lieAboutComments(MIXED, 'safe, sanitized')), asWritten);
   assert.deepEqual(await run(lieAboutComments(MIXED, 'vulnerable')), asWritten);
 });
+
+// The project-reachability verdict reads the call graph and the manifests, never a comment: the same project is scanned as written, with every comment
+// blanked (Haskell and cabal), and with comments that lie in both directions, including a commented-out `exposed-modules` line and a comment that
+// claims the function is called. The verdict, the severity and the identity of every finding must not move.
+const REACH_SVC = 'module Svc (unpackIt) where\n\n-- | SAFE and called from main (it is neither).\nimport System.Process\n\nunpackIt :: String -> IO ()\nunpackIt name = callCommand ("tar xf " ++ name ++ " -C /srv/data") -- sanitized upstream, safe\n';
+const REACH_MAIN = 'module Main (main) where\n\nimport Svc ()\n\n-- main calls unpackIt below (it does not)\nmain :: IO ()\nmain = putStrLn "ready"\n';
+const reachCabal = (exposed) => `cabal-version: 2.4
+name: p
+version: 0.1.0.0
+-- exposed-modules: Svc   (a comment, not a declaration)
+library
+  -- the library exposes Svc to the world
+  exposed-modules: ${exposed}
+  other-modules: Svc
+  hs-source-dirs: src
+  build-depends: base, process
+executable p
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends: base, p
+`;
+const blankCabalComments = (t) => t.split('\n').map((l) => (l.trim().startsWith('--') ? '' : l)).join('\n');
+const lieInCabal = (t) => t.split('\n').map((l) => (l.trim().startsWith('--') ? '-- exposed-modules: Svc, Svc.Internal  (everything here is public and called from main)' : l)).join('\n');
+
+for (const exposed of ['Other', 'Svc']) {
+  test(`comment invariance: the reachability verdict (exposed-modules: ${exposed}) does not read a comment`, async () => {
+    const base = { 'src/Svc.hs': REACH_SVC, 'src/Other.hs': 'module Other (other) where\n\nother :: Int\nother = 1\n', 'app/Main.hs': REACH_MAIN, 'p.cabal': reachCabal(exposed) };
+    const mapAll = (hsFn, cabalFn) => Object.fromEntries(Object.entries(base).map(([f, t]) => [f, /\.hs$/.test(f) ? hsFn(t) : cabalFn(t)]));
+    const asWritten = await scanFiles(base);
+    assert.ok(asWritten.some((x) => x.includes('|CWE-78|')), `the command injection is reported: ${JSON.stringify(asWritten)}`);
+    assert.ok(asWritten.some((x) => x.includes(exposed === 'Svc' ? 'external-api/' : 'unreachable-in-project/')), `the verdict follows the declaration: ${JSON.stringify(asWritten)}`);
+    assert.deepEqual(await scanFiles(mapAll(stripComments, blankCabalComments)), asWritten, 'blanking the comments changed the findings');
+    assert.deepEqual(await scanFiles(mapAll((t) => lieAboutComments(t, 'safe, sanitized'), lieInCabal)), asWritten, 'comments that claim the code is safe or exposed changed the findings');
+    assert.deepEqual(await scanFiles(mapAll((t) => lieAboutComments(t, 'vulnerable'), lieInCabal)), asWritten, 'comments that claim the code is vulnerable changed the findings');
+  });
+}
 
 test('a finding snippet is the code of its line, never a comment on it (so its identity and its clone shape cannot depend on one)', () => {
   assert.equal(codeOfLine('  callCommand cmd -- safe, sanitized'), 'callCommand cmd');

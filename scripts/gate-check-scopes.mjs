@@ -51,6 +51,7 @@ const SCOPES = {
   'protection-verdict-gate': { include: ['bench/protection-verdict/', 'bench/_lib/'], usesHistory: false, writesRepo: false },
   'provenance-accuracy-gate': { include: ['bench/provenance-accuracy/', 'bench/_lib/', 'bench/family-producers/', 'scanner/test/helpers/'], usesHistory: false, writesRepo: false },
   'layer-recall-gate': { include: ['bench/layer-recall/', 'bench/cve-replay/', 'bench/_lib/', 'bench/family-producers/', 'docs/METRICS.md'], usesHistory: true, cleanState: ['bench/cve-replay/'] },
+  'haskell-precision-gate': { scoped: false, all: true, usesHistory: true },
   'language-support-gate': { include: ['bench/language-support/', 'bench/_lib/', 'scanner/test/language/', 'docs/language-support.json', 'docs/language-support.md', 'docs/language-toolchain.json'], usesHistory: false, writesRepo: false },
 };
 

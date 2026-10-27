@@ -229,6 +229,16 @@ export const CHECKS = [
       '(bench/language-support/promote.mjs); never edit docs/language-support.json by hand.',
   },
   {
+    // Real-code Haskell precision (bench/haskell-precision). Nothing ran the real-code sets before, so a precision regression on real Haskell was
+    // invisible. The stored-measurement half is instant and runs everywhere; the live half (a default scan of the 14 pinned projects, about a minute)
+    // runs only where the pinned clones exist, and says so when it does not. Compared for equality: an unrecorded improvement fails too.
+    id: 'haskell-precision-gate',
+    title: 'Haskell real-code precision matches its recorded baseline',
+    npmScript: 'bench:haskell-precision:check',
+    remedy: 'Run `npm run bench:haskell-precision:check` in scanner/ and read which labelled site changed. If the change is deliberate and reviewed, ' +
+      're-record with `npm run bench:haskell-precision:update`; never edit bench/haskell-precision/baseline.json by hand.',
+  },
+  {
     // X-208: the STATIC half of the oracle conformance contract (class scope, budgets, negative controls, evidence logic,
     // pinned fixtures). Measured well under a second and it executes nothing, so it fits the pre-push budget; the execution
     // half (~19s, needs the trust boundary) runs in the release gate.

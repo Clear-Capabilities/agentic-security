@@ -1,0 +1,138 @@
+{
+ "devDir": "after-dev",
+ "freshDir": "after-fresh",
+ "sets": {
+  "development, tuning half": {
+   "entrypoint-reachable": {
+    "TP": 0,
+    "FP": 11
+   },
+   "external-api": {
+    "TP": 0,
+    "FP": 6
+   },
+   "unknown": {
+    "TP": 0,
+    "FP": 0
+   },
+   "unreachable-in-project": {
+    "TP": 0,
+    "FP": 0
+   },
+   "no-verdict": {
+    "TP": 4,
+    "FP": 9
+   },
+   "not-reported": {
+    "TP": 0,
+    "FP": 34
+   }
+  },
+  "development, verification half": {
+   "entrypoint-reachable": {
+    "TP": 0,
+    "FP": 10
+   },
+   "external-api": {
+    "TP": 0,
+    "FP": 13
+   },
+   "unknown": {
+    "TP": 0,
+    "FP": 0
+   },
+   "unreachable-in-project": {
+    "TP": 0,
+    "FP": 0
+   },
+   "no-verdict": {
+    "TP": 1,
+    "FP": 6
+   },
+   "not-reported": {
+    "TP": 0,
+    "FP": 24
+   }
+  },
+  "development, remainder": {
+   "entrypoint-reachable": {
+    "TP": 0,
+    "FP": 0
+   },
+   "external-api": {
+    "TP": 0,
+    "FP": 5
+   },
+   "unknown": {
+    "TP": 0,
+    "FP": 0
+   },
+   "unreachable-in-project": {
+    "TP": 0,
+    "FP": 0
+   },
+   "no-verdict": {
+    "TP": 0,
+    "FP": 0
+   },
+   "not-reported": {
+    "TP": 0,
+    "FP": 0
+   }
+  },
+  "fresh": {
+   "entrypoint-reachable": {
+    "TP": 8,
+    "FP": 37
+   },
+   "external-api": {
+    "TP": 0,
+    "FP": 11
+   },
+   "unknown": {
+    "TP": 0,
+    "FP": 2
+   },
+   "unreachable-in-project": {
+    "TP": 0,
+    "FP": 0
+   },
+   "no-verdict": {
+    "TP": 9,
+    "FP": 116
+   },
+   "not-reported": {
+    "TP": 4,
+    "FP": 35
+   }
+  }
+ },
+ "total": {
+  "entrypoint-reachable": {
+   "TP": 8,
+   "FP": 58
+  },
+  "external-api": {
+   "TP": 0,
+   "FP": 35
+  },
+  "unknown": {
+   "TP": 0,
+   "FP": 2
+  },
+  "unreachable-in-project": {
+   "TP": 0,
+   "FP": 0
+  },
+  "no-verdict": {
+   "TP": 14,
+   "FP": 131
+  },
+  "not-reported": {
+   "TP": 4,
+   "FP": 93
+  }
+ },
+ "unreachableSites": [],
+ "tpInUnreachable": []
+}

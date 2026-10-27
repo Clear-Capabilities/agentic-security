@@ -1,5 +1,5 @@
 {
- "scannerVersion": "0.187.0",
+ "scannerVersion": "0.188.0",
  "labelsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
  "definition": "precision = tp / (tp + fp); ambiguous and unlabeled excluded from the denominator; 95% Wilson interval",
  "all": {

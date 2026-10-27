@@ -840,7 +840,8 @@ export function parseSyntax(src, opts = {}) {
           // `foreign import ccall unsafe "string.h strlen" c_strlen :: ...` names the Haskell-side function.
           let fname = null;
           for (let q = a; q < b; q++) if (isRop(T[q], '::')) { if (q > a && T[q - 1].t === 'var') fname = T[q - 1].v; break; }
-          res.boundaries.push({ kind: 'ffi', line: t0.line, detail: 'foreign declaration; the foreign code is not analyzed', ...(fname ? { name: fname } : {}) });
+          const dir = T[a + 1] && (T[a + 1].v === 'import' || T[a + 1].v === 'export') ? T[a + 1].v : null;
+          res.boundaries.push({ kind: 'ffi', line: t0.line, detail: 'foreign declaration; the foreign code is not analyzed', ...(dir ? { direction: dir } : {}), ...(fname ? { name: fname } : {}) });
           continue;
         }
         if (t0.v === 'class' || t0.v === 'instance') {

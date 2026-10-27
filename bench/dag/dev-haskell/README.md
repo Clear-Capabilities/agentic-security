@@ -74,7 +74,12 @@ repository, is not a known source).
 | `scan.mjs`, `scan-all.mjs`, `quick.mjs` | scan a project / every project / any directory |
 | `sample.mjs`, `show.mjs`, `build-labels.mjs`, `labels.json`, `labels-remainder.json`, `score.mjs`, `remaining.mjs` | the development-set protocol |
 | `fresh-*.mjs`, `fresh-labels.json` | the fresh set |
-| `comment-invariance.mjs` | scans a project as written, with comments blanked and with lying comments; any difference is an engine bug |
+| `comment-invariance.mjs` | scans a project as written, with comments blanked and with lying comments; any difference (now including the reachability verdict) is an engine bug |
+| `reach-crosstab.mjs` | cross-tabulates `finding.reachability.status` against every label; exits 1 if a true positive is in `unreachable-in-project`. Its committed output and what it showed are in `results/README.md` |
+| `LABEL-CHANGES.md` | the log of label corrections (empty, and what that does and does not establish) |
 | `compare-splits.mjs` | before/after of the synthetic development splits |
 | `fix-real.mjs` | the fix preview over the real-code true positives |
 | `irdebug.mjs`, `irdump.mjs`, `reach.mjs` | IR and reachability diagnostics |
+
+The real-code numbers are also a gate: `bench/haskell-precision` (`npm run bench:haskell-precision:check`) compares them for equality against a recorded
+baseline, and fails on a label edit.

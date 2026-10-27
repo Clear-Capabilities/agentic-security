@@ -218,6 +218,28 @@ function findCallsTo(fn, target) {
 }
 
 /**
+ * Lower a finding to `info` and say why, without dropping it: the severity it would have had is kept (`originalSeverity`), a control records the
+ * reason (`controls`), and `guardNote` is set (with `keepNote`, only when no earlier pass set one). Idempotent per `guard` (a finding is lowered once by each reason), and two
+ * reasons compose: the second finds the severity already `info`, keeps the original severity the first recorded, and adds its own control.
+ * Used by the trust-boundary pass (`_trustLowered`) and the reachability pass (`_reachLowered`).
+ */
+export function lowerFinding(f, { kind, reason, controlKind, guard, keepNote = false }) {
+  if (!f || !guard || f[guard]) return false;
+  f[guard] = true;
+  f.originalSeverity = f.originalSeverity || f.severity;
+  f.severity = 'info';
+  f.controls = [...(f.controls || []), { kind: controlKind, evidenceKind: 'source' }];
+  if (!keepNote || !f.guardNote) f.guardNote = { kind, reason };
+  return true;
+}
+
+/** The classes of origin a finding's recorded roots fall in (`operator`, `external`, `data`, `weak-param`, `other`), and the roots themselves. */
+export function originClasses(f) {
+  const roots = rootsOf(f);
+  return { roots, classes: new Set(roots.map(classOf)) };
+}
+
+/**
  * Stamps `trustBoundary` on every Haskell IR-TAINT finding and lowers to `info` the verdicts that name no boundary crossed
  * (`operator-controlled`, `api-contract`). Mutates the findings; returns counts.
  */
@@ -256,12 +278,8 @@ export function applyTrustBoundary(findings, perFile) {
     f.trustBoundary = { verdict, reason, role, ...(inferred ? { inferred: true } : {}), roots: roots.slice(0, 5) };
     const key = verdict.replace(/-(\w)/g, (_, c) => c.toUpperCase());
     stats[key] = (stats[key] || 0) + 1;
-    if ((verdict === 'operator-controlled' || verdict === 'api-contract') && !f._trustLowered) {
-      f._trustLowered = true;
-      f.originalSeverity = f.originalSeverity || f.severity;
-      f.severity = 'info';
-      f.controls = [...(f.controls || []), { kind: verdict === 'operator-controlled' ? 'operator-controlled-input' : 'api-contract-wrapper', evidenceKind: 'source' }];
-      f.guardNote = { kind: verdict, reason };
+    if (verdict === 'operator-controlled' || verdict === 'api-contract') {
+      lowerFinding(f, { kind: verdict, reason, controlKind: verdict === 'operator-controlled' ? 'operator-controlled-input' : 'api-contract-wrapper', guard: '_trustLowered' });
     }
   }
   return stats;

@@ -140,6 +140,16 @@ test('wrapper: a function that hands its parameters whole to a process is a thin
 test('wrapper: a path operation on a caller-named file is kept (the vulnerable synthetic shape), because only the shell/process wrappers are judged pass-through', async () => {
   const fs = await scanAll({ 'Svc.hs': mod(['import System.IO'], 'saveUpload :: String -> String -> IO ()\nsaveUpload name content = withFile name WriteMode (\\h -> hPutStr h content)', 'module Svc (saveUpload) where') });
   assert.equal(flagged(fs, 'CWE-22').length, 1);
+  // Why it stays, pinned at the right place: this fixture is one module with no `main` and no manifest, so the project-reachability verdict is
+  // `unknown` on two independent clauses (no entry point; no manifest saying which modules are exposed) and nothing may lower the finding. A change
+  // that made it `unreachable-in-project` would fail here, loudly, instead of silently dropping the vulnerable synthetic shape.
+  const f = flagged(fs, 'CWE-22')[0];
+  assert.equal(f.reachability.status, 'unknown');
+  assert.equal(f.reachability.holeReason, 'no-entrypoint');
+  assert.equal(f._reachLowered, undefined, 'the reachability pass did not lower it');
+  assert.equal(f._trustLowered, undefined, 'the trust-boundary pass did not lower it');
+  assert.equal(f.originalSeverity, undefined, 'no pass changed its severity');
+  assert.notEqual(f.severity, 'info');
 });
 
 // ── 4. platform variants ─────────────────────────────────────────────────────

@@ -36,7 +36,7 @@ async function findingsOf(map) {
   const dir = copyWith(map);
   try {
     const { scan } = await runScan(dir);
-    return new Set(scan.findings.filter((f) => /\.hs$/.test(f.file || '')).map((f) => [f.file, f.line, f.parser, f.rule || '', f.cwe || '', f.vuln || '', f.severity, f.trustBoundary ? f.trustBoundary.verdict : ''].join('|')));
+    return new Set(scan.findings.filter((f) => /\.hs$/.test(f.file || '')).map((f) => [f.file, f.line, f.parser, f.rule || '', f.cwe || '', f.vuln || '', f.severity, f.trustBoundary ? f.trustBoundary.verdict : '', f.reachability ? `${f.reachability.status}/${f.reachability.holeReason || ''}` : '', f.originalSeverity || ''].join('|')));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 const base = await findingsOf((t) => t);

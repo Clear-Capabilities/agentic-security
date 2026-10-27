@@ -11,8 +11,19 @@
 // The container is named, and removed (`rm -f`) on every exit path including timeout and cancellation, because killing the `docker`
 // client does not by itself stop the container.
 //
-// HONEST LIMIT: this has been exercised against a fake engine that records the arguments and runs the command locally, which proves
-// the plumbing and the flags. It has not been run against a real Docker or Podman daemon in this repository's test environment.
+// WHAT HAS AND HAS NOT BEEN RUN. The arguments are pinned flag by flag against a fake engine that records them. Against a REAL engine it has
+// run: bench/proof-fabric/RESULT-linux-container.json records 72 container runs (36 vulnerable reproducers confirmed, 0 false confirmations, the
+// timeouts degraded as designed) on Docker 28.0.4 on a Linux x64 runner, over the gcc, eclipse-temurin:21, node:24-slim and python:3-slim images
+// (the Temurin run is what found the `javac: not found` PATH problem above), and the `proof-container` CI job runs it on every change. The
+// residual limits, none of them closed by that run:
+//   * ONE engine and ONE version on ONE host class. Other Docker versions, rootless Docker and other kernels are unmeasured.
+//   * Podman is not probed: it is a supported engine name, and no run against it exists.
+//   * macOS is unmeasured. Docker Desktop runs containers in a VM, so bind mounts, uids and file ownership behave differently from the Linux
+//     measurement; no macOS container run has been recorded.
+//   * The haskell:9 image is wired (CONTAINER_TOOLS, CONTAINER_PATH) but its toolchain layout for a non-root user was never run against a real
+//     engine; the measurement skips Haskell unless AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL=1 (bench/proof-fabric/measure.mjs). The result file
+//     names no .NET image either, so the dotnet SDK image is unverified in the same way.
+//   * A reproducer that needs the loopback callback listener (SSRF) cannot run with `--network none` and is skipped, not measured.
 import { spawnSync } from 'node:child_process';
 import { superviseSpawn } from '../../sandbox/supervise.js';
 import { scrubEnv } from '../../sandbox/trust-domains.js';

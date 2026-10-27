@@ -257,6 +257,24 @@ export const CHECKS = [
       '(bench/language-support/promote.mjs); never edit docs/language-support.json by hand.',
   },
   {
+    // Real-code Haskell precision against its recorded baseline (compared for equality, so an unrecorded improvement fails too). The live half
+    // scans the 14 pinned projects when their clones are present; the stored-measurement half runs anywhere.
+    id: 'haskell-precision-gate',
+    title: 'Haskell real-code precision matches its recorded baseline',
+    slow: true,
+    remedy: 'Run `npm run bench:haskell-precision:check` in scanner/ and read which labelled site changed. If the change is deliberate and reviewed, ' +
+      're-record with `npm run bench:haskell-precision:update`.',
+  },
+  {
+    // The same gate with the sealed independent set required: it fails until the once-per-release measurement of that set has been run (and logged
+    // in its USE-LOG.md) and recorded. It never scans the sealed set; it checks the committed result of the deliberate run.
+    id: 'haskell-precision-sealed-gate',
+    title: 'The sealed independent Haskell set has a recorded result that matches its baseline',
+    slow: true,
+    remedy: 'Run `node bench/dag/independent-haskell/run.mjs --check` ONCE for this release (log it in bench/dag/independent-haskell/USE-LOG.md with the aggregate output only), ' +
+      'then `node bench/haskell-precision/runner.mjs --update-sealed-baseline`.',
+  },
+  {
     // FR-906 (assurance-hardening PRD): the performance half of "add
     // performance, memory, determinism, and fault-injection gates." The
     // measurement (bench/ttff/runner.mjs, PRD F11.2) already existed and
@@ -1131,6 +1149,8 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   evaluate('fix-verification-gate', () => runNpmGate('bench:fix-verify:check'));
   evaluate('layer-recall-gate', () => runNpmGate('bench:layer-recall:check'));
   evaluate('language-support-gate', () => runNpmGate('bench:language-support:check'));
+  evaluate('haskell-precision-gate', () => runNpmGate('bench:haskell-precision:check'));
+  evaluate('haskell-precision-sealed-gate', () => runNpmGate('bench:haskell-precision:release'));
   evaluate('ttff-gate', () => runNpmGate('bench:ttff:check'));
   evaluate('memory-gate', () => runNpmGate('bench:memory:check'));
   evaluate('provenance-gate', () => runNpmGate('bench:provenance:check'));

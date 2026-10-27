@@ -6,6 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { wilson as sharedWilson } from '../../_lib/wilson.mjs';
 
 const H = path.dirname(fileURLToPath(import.meta.url));
 const arg = process.argv.slice(2).find((a) => !a.startsWith('--'));
@@ -28,11 +29,7 @@ for (const f of fs.readdirSync(dir).sort()) {
   }
 }
 // sampled population strata sizes (before) for extrapolation
-const wilson = (k, n) => {
-  if (!n) return [null, null];
-  const z = 1.959964, p = k / n, d = 1 + z * z / n, c = p + z * z / (2 * n), m = z * Math.sqrt((p * (1 - p) + z * z / (4 * n)) / n);
-  return [(c - m) / d, (c + m) / d];
-};
+const wilson = (k, n) => sharedWilson(k, n) || [null, null];
 const out = { dir: path.relative(process.cwd(), dir), populationFlagged: populationNow.length, infoLowered, halves: {}, byStratum: {} };
 const labelled = new Set();
 for (const half of ['tuning', 'verification', 'all']) {

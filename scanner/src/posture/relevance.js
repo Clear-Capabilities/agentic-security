@@ -262,6 +262,21 @@ function _threatBonus(f, threatModel, factors) {
   return bonus;
 }
 
+// A language that reasons about its own call graph (Haskell: `language/haskell-reachability.js`) states `f.reachability = {status, reason, premise,
+// roots, holeReason}`. That verdict is a statement about the FUNCTION, from the project's entry points, so it outranks this module's file-level
+// import graph, which has no Haskell extraction. Only a POSITIVE verdict moves the tier; `unknown` (and any finding without one) falls through
+// to the file-level logic unchanged. It re-ranks only: severity is never touched here (a lowering, where one is justified, is the language
+// pass's own decision and is recorded on the finding).
+const LANGUAGE_STATUSES = new Set(['entrypoint-reachable', 'unreachable-in-project', 'external-api', 'unknown']);
+function languageVerdict(f) {
+  const r = f && f.reachability;
+  if (!r || typeof r !== 'object' || !LANGUAGE_STATUSES.has(r.status) || !Object.hasOwn(r, 'holeReason')) return null;
+  if (r.status === 'unreachable-in-project') return { tier: 'unreachable', reachable: false, factor: `no call path from any entry point of the project (${r.reason || 'call graph complete'})` };
+  if (r.status === 'entrypoint-reachable') return { tier: 'indirect', reachable: true, factor: 'reachable from a project entry point through the call graph' };
+  if (r.status === 'external-api') return { tier: 'indirect', reachable: true, factor: 'part of the package\'s exposed API: its callers are outside the analysed code' };
+  return null;
+}
+
 /**
  * Pure scorer. Does NOT mutate the finding.
  *
@@ -280,7 +295,12 @@ function scoreRelevance(f, graph, threatModel) {
 
   let tier;
   let reachable;
-  if (!file || entryFiles.size === 0) {
+  const lang = languageVerdict(f);
+  if (lang && !(lang.tier === 'indirect' && file && entryFiles.has(file))) {
+    tier = lang.tier;
+    reachable = lang.reachable;
+    factors.push(lang.factor);
+  } else if (!file || entryFiles.size === 0) {
     tier = 'unknown';
     reachable = null;
     factors.push(entryFiles.size === 0
