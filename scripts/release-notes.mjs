@@ -12,8 +12,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { changelogSection } from './release-check.mjs';
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const DEFAULT_CHANGELOG = path.resolve(HERE, '..', 'CHANGELOG.md');
+export const DEFAULT_CHANGELOG = fileURLToPath(new URL('../CHANGELOG.md', import.meta.url));
 
 /** The section body without its heading line, or '' when the version has no section. */
 export function releaseNotes(text, version) {
@@ -21,7 +20,10 @@ export function releaseNotes(text, version) {
   if (!section) return '';
   const nl = section.indexOf('\n');
   const body = nl === -1 ? '' : section.slice(nl + 1);
-  return body.replace(/^(?:[ \t]*\n)+/, '').trimEnd();
+  // Drop leading blank lines without a nested-quantifier regex: the first line that has content starts the body.
+  const lines = body.split('\n');
+  const first = lines.findIndex((l) => l.trim() !== '');
+  return first === -1 ? '' : lines.slice(first).join('\n').trimEnd();
 }
 
 function main(argv) {
