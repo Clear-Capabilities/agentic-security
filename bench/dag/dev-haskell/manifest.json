@@ -1,0 +1,44 @@
+{
+  "projects": [
+    {
+      "id": "gitit",
+      "url": "https://github.com/jgm/gitit",
+      "commit": "0af81d2c909a90bc41281d85e1f4d697f21ccad2"
+    },
+    {
+      "id": "hackage-server",
+      "url": "https://github.com/haskell/hackage-server",
+      "commit": "1fef7aa9cbb29d492d0f841cbdca6365afac9588"
+    },
+    {
+      "id": "stackage-server",
+      "url": "https://github.com/commercialhaskell/stackage-server",
+      "commit": "948ca5c9ef66a8d19591f93d8d51b71447ea6b7e"
+    },
+    {
+      "id": "ghcup-hs",
+      "url": "https://github.com/haskell/ghcup-hs",
+      "commit": "e24077bc3640f55171735b11dffc0223dacfc7fe"
+    },
+    {
+      "id": "cabal2nix",
+      "url": "https://github.com/NixOS/cabal2nix",
+      "commit": "b9ef7e13a1eebdf9cb56518b5010befa1ca505af"
+    },
+    {
+      "id": "stack",
+      "url": "https://github.com/commercialhaskell/stack",
+      "commit": "11a148f7b871e90ef96daab0b3d933d51449e5b0"
+    },
+    {
+      "id": "xmonad-contrib",
+      "url": "https://github.com/xmonad/xmonad-contrib",
+      "commit": "acb3cc6d561be51ff3ebb301dc55aeb8efa8c6c9"
+    },
+    {
+      "id": "pandoc",
+      "url": "https://github.com/jgm/pandoc",
+      "commit": "e8b83b9ffe57e0c21994930c7b5fd1c9dfb1046c"
+    }
+  ]
+}

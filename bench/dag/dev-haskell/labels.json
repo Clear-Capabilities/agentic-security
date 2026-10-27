@@ -1,0 +1,1185 @@
+{
+ "note": "Hand labels by code behaviour, one labeller (a stated limit).",
+ "labels": {
+  "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:154:ir-taint:lib/GHCup/Prelude/Process/Windows.hs:154:hs-sink-system.process.proc.cwe-88.1:d66a47b5": {
+   "index": 0,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 154,
+   "vuln": "Argument Injection (process arguments)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Generic process-spawning wrapper whose executable and arguments are its own parameters; nothing in the module takes them from a request, socket or other external input, and callers pass fixed tool names."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:176:ir-taint:lib/GHCup/Prelude/Process/Windows.hs:176:hs-sink-system.process.proc.cwe-88.1:d66a47b5": {
+   "index": 1,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 176,
+   "vuln": "Argument Injection (process arguments)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Generic process-spawning wrapper whose executable and arguments are its own parameters; nothing in the module takes them from a request, socket or other external input, and callers pass fixed tool names."
+  },
+  "stackage-server:src/Data/WebsiteContent.hs:86:ir-taint:src/Data/WebsiteContent.hs:86:hs-sink-text.blaze.html.preescapedtohtml.cwe-79.0:5c65755": {
+   "index": 2,
+   "project": "stackage-server",
+   "file": "src/Data/WebsiteContent.hs",
+   "line": 86,
+   "vuln": "Cross-Site Scripting (unescaped HTML)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Renders markdown files read from the application's own content checkout, an operator-controlled repository, not request data."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:268:multi-sink:text parameter of an exported function (caller-controlled):12": {
+   "index": 3,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 268,
+   "vuln": "Multi-Sink Taint Chain — text parameter of an exported function (caller-controlled) reaches 12 sinks",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Generic process-spawning wrapper whose executable and arguments are its own parameters; nothing in the module takes them from a request, socket or other external input, and callers pass fixed tool names."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:176:ir-taint:lib/GHCup/Prelude/Process/Windows.hs:176:hs-sink-system.process.proc.cwe-78.0:926dd9ea": {
+   "index": 4,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 176,
+   "vuln": "OS Command Injection (attacker-chosen executable)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Generic process-spawning wrapper whose executable and arguments are its own parameters; nothing in the module takes them from a request, socket or other external input, and callers pass fixed tool names."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:254:ir-taint:lib/GHCup/Prelude/Process/Windows.hs:254:hs-sink-system.process.proc.cwe-78.0:926dd9ea": {
+   "index": 5,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 254,
+   "vuln": "OS Command Injection (attacker-chosen executable)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Generic process-spawning wrapper whose executable and arguments are its own parameters; nothing in the module takes them from a request, socket or other external input, and callers pass fixed tool names."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:220:ir-taint:lib/GHCup/Prelude/Process/Windows.hs:220:hs-sink-system.process.proc.cwe-78.0:926dd9ea": {
+   "index": 6,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 220,
+   "vuln": "OS Command Injection (attacker-chosen executable)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Generic process-spawning wrapper whose executable and arguments are its own parameters; nothing in the module takes them from a request, socket or other external input, and callers pass fixed tool names."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:154:ir-taint:lib/GHCup/Prelude/Process/Windows.hs:154:hs-sink-system.process.proc.cwe-78.0:f83afab5": {
+   "index": 7,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 154,
+   "vuln": "OS Command Injection (attacker-chosen executable)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Generic process-spawning wrapper whose executable and arguments are its own parameters; nothing in the module takes them from a request, socket or other external input, and callers pass fixed tool names."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:268:ir-taint:lib/GHCup/Prelude/Process/Windows.hs:268:hs-sink-system.process.shell.cwe-78.0:92439c7c": {
+   "index": 8,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 268,
+   "vuln": "OS Command Injection (shell command spec)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Generic process-spawning wrapper whose executable and arguments are its own parameters; nothing in the module takes them from a request, socket or other external input, and callers pass fixed tool names."
+  },
+  "pandoc:src/Text/Pandoc/Writers/Shared.hs:904:hs-rule:hs-partial-function-on-input:src/Text/Pandoc/Writers/Shared.hs:904": {
+   "index": 9,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Writers/Shared.hs",
+   "line": 904,
+   "vuln": "Partial function applied to caller-supplied text",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "T.last is guarded by the not-null test on the same expression."
+  },
+  "hackage-server:src/Data/StringTable.hs:78:hs-rule:hs-partial-function-on-input:src/Data/StringTable.hs:78": {
+   "index": 10,
+   "project": "hackage-server",
+   "file": "src/Data/StringTable.hs",
+   "line": 78,
+   "vuln": "Partial function applied to caller-supplied text",
+   "half": "verification",
+   "label": "FP",
+   "reason": "head applies to the groups of List.group, which are never empty."
+  },
+  "ghcup-hs:lib/GHCup/Input/Parsers.hs:199:hs-rule:hs-partial-function-on-input:lib/GHCup/Input/Parsers.hs:199": {
+   "index": 11,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Input/Parsers.hs",
+   "line": 199,
+   "vuln": "Partial function applied to caller-supplied text",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "tail applies to a text that starts with the comma breakOn found (an empty remainder is rejected first); the input is the operator's own command line."
+  },
+  "hackage-server:src/Distribution/Server/Features/HaskellPlatform/Acid.hs:22:hs-rule:hs-partial-function-on-input:src/Distribution/Server/Features/HaskellPlatform/Acid.hs:22": {
+   "index": 12,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Features/HaskellPlatform/Acid.hs",
+   "line": 22,
+   "vuln": "Partial function applied to caller-supplied text",
+   "half": "verification",
+   "label": "FP",
+   "reason": "findMax over sets read from the server's own state; no external input reaches it."
+  },
+  "xmonad-contrib:XMonad/Util/Loggers.hs:504:hs-rule:hs-partial-function-on-input:XMonad/Util/Loggers.hs:504": {
+   "index": 13,
+   "project": "xmonad-contrib",
+   "file": "XMonad/Util/Loggers.hs",
+   "line": 504,
+   "vuln": "Partial function applied to caller-supplied text",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "cycle of a string from the operator's own bar configuration, consumed lazily by take."
+  },
+  "pandoc:src/Text/Pandoc/Class/PandocMonad.hs:452:hs-rule:hs-partial-function-on-input:src/Text/Pandoc/Class/PandocMonad.hs:452": {
+   "index": 14,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Class/PandocMonad.hs",
+   "line": 452,
+   "vuln": "Partial function applied to caller-supplied text",
+   "half": "verification",
+   "label": "FP",
+   "reason": "init/last are guarded by the length > 1 test on the same list."
+  },
+  "pandoc:src/Text/Pandoc/Class/PandocMonad.hs:450:hs-rule:hs-partial-function-on-input:src/Text/Pandoc/Class/PandocMonad.hs:450": {
+   "index": 15,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Class/PandocMonad.hs",
+   "line": 450,
+   "vuln": "Partial function applied to caller-supplied text",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "init/last are guarded by the length > 1 test on the same list."
+  },
+  "gitit:src/Network/Gitit/State.hs:62:hs-rule:hs-fast-password-hash:src/Network/Gitit/State.hs:62": {
+   "index": 16,
+   "project": "gitit",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 62,
+   "vuln": "Password hashed with a fast general-purpose hash",
+   "half": "tuning",
+   "label": "TP",
+   "reason": "Account password hashed with one round of salted SHA-512 (a fast hash, not a password KDF) and compared with ==; stolen hashes can be brute-forced quickly. Three sites of one weakness (hash call, definition, comparison)."
+  },
+  "gitit:src/Network/Gitit/State.hs:69:hs-rule:hs-fast-password-hash:src/Network/Gitit/State.hs:69": {
+   "index": 17,
+   "project": "gitit",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 69,
+   "vuln": "Password hashed with a fast general-purpose hash",
+   "half": "verification",
+   "label": "TP",
+   "reason": "Account password hashed with one round of salted SHA-512 (a fast hash, not a password KDF) and compared with ==; stolen hashes can be brute-forced quickly. Three sites of one weakness (hash call, definition, comparison)."
+  },
+  "gitit:src/Network/Gitit/State.hs:78:hs-rule:hs-fast-password-hash:src/Network/Gitit/State.hs:78": {
+   "index": 18,
+   "project": "gitit",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 78,
+   "vuln": "Password hashed with a fast general-purpose hash",
+   "half": "tuning",
+   "label": "TP",
+   "reason": "Account password hashed with one round of salted SHA-512 (a fast hash, not a password KDF) and compared with ==; stolen hashes can be brute-forced quickly. Three sites of one weakness (hash call, definition, comparison)."
+  },
+  "gitit:src/Network/Gitit/State.hs:124:hs-rule:hs-predictable-random:src/Network/Gitit/State.hs:124": {
+   "index": 19,
+   "project": "gitit",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 124,
+   "vuln": "Predictable random number generator used for a security value",
+   "half": "tuning",
+   "label": "TP",
+   "reason": "Session identifier drawn from the global non-cryptographic generator over a 30-bit range; a session key must be unguessable."
+  },
+  "gitit:src/Network/Gitit/State.hs:66:hs-rule:hs-predictable-random:src/Network/Gitit/State.hs:66": {
+   "index": 20,
+   "project": "gitit",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 66,
+   "vuln": "Predictable random number generator used for a security value",
+   "half": "verification",
+   "label": "FP",
+   "reason": "A password salt needs uniqueness, not secrecy or unpredictability; the generator choice has no security consequence here."
+  },
+  "hackage-server:src/Distribution/Server/Framework/Auth.hs:445:hs-rule:hs-predictable-random:src/Distribution/Server/Framework/Auth.hs:445": {
+   "index": 21,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Framework/Auth.hs",
+   "line": 445,
+   "vuln": "Predictable random number generator used for a security value",
+   "half": "tuning",
+   "label": "TP",
+   "reason": "HTTP Digest challenge nonce drawn from a non-cryptographic generator (newStdGen), predictable to an attacker who has seen outputs."
+  },
+  "gitit:expireGititCache.hs:60:ir-taint:expireGititCache.hs:60:hs-sink-network.http.simplehttp.cwe-918.0:bc458073": {
+   "index": 22,
+   "project": "gitit",
+   "file": "expireGititCache.hs",
+   "line": 60,
+   "vuln": "Server-Side Request Forgery",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Command-line maintenance script; the URI is an argument the operator types."
+  },
+  "hackage-server:src/Distribution/Server/Features/Users.hs:468:hs-rule:hs-insecure-cookie:src/Distribution/Server/Features/Users.hs:468": {
+   "index": 23,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Features/Users.hs",
+   "line": 468,
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "The cookie written is the literal value 0 that clears a login on auth failure; it carries no credential."
+  },
+  "pandoc:src/Text/Pandoc/Readers/RTF.hs:1196:hs-rule:hs-weak-hash:src/Text/Pandoc/Readers/RTF.hs:1196": {
+   "index": 24,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/RTF.hs",
+   "line": 1196,
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "SHA-1/MD5 used to derive a file name, bookmark name, cache key, document ID or a documented hash helper; no authentication, signature or password decision depends on its collision or preimage resistance."
+  },
+  "pandoc:src/Text/Pandoc/SelfContained.hs:220:hs-rule:hs-weak-hash:src/Text/Pandoc/SelfContained.hs:220": {
+   "index": 25,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/SelfContained.hs",
+   "line": 220,
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "SHA-1/MD5 used to derive a file name, bookmark name, cache key, document ID or a documented hash helper; no authentication, signature or password decision depends on its collision or preimage resistance."
+  },
+  "pandoc:pandoc-lua-engine/src/Text/Pandoc/Lua/Module/Utils.hs:333:hs-rule:hs-weak-hash:pandoc-lua-engine/src/Text/Pandoc/Lua/Module/Utils.hs:333": {
+   "index": 26,
+   "project": "pandoc",
+   "file": "pandoc-lua-engine/src/Text/Pandoc/Lua/Module/Utils.hs",
+   "line": 333,
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "SHA-1/MD5 used to derive a file name, bookmark name, cache key, document ID or a documented hash helper; no authentication, signature or password decision depends on its collision or preimage resistance."
+  },
+  "pandoc:src/Text/Pandoc/PDF.hs:262:hs-rule:hs-weak-hash:src/Text/Pandoc/PDF.hs:262": {
+   "index": 27,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/PDF.hs",
+   "line": 262,
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "SHA-1/MD5 used to derive a file name, bookmark name, cache key, document ID or a documented hash helper; no authentication, signature or password decision depends on its collision or preimage resistance."
+  },
+  "pandoc:src/Text/Pandoc/Writers/Docx/OpenXML.hs:1324:hs-rule:hs-weak-hash:src/Text/Pandoc/Writers/Docx/OpenXML.hs:1324": {
+   "index": 28,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Writers/Docx/OpenXML.hs",
+   "line": 1324,
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "SHA-1/MD5 used to derive a file name, bookmark name, cache key, document ID or a documented hash helper; no authentication, signature or password decision depends on its collision or preimage resistance."
+  },
+  "pandoc:src/Text/Pandoc/Writers/LaTeX.hs:195:hs-rule:hs-weak-hash:src/Text/Pandoc/Writers/LaTeX.hs:195": {
+   "index": 29,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Writers/LaTeX.hs",
+   "line": 195,
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "SHA-1/MD5 used to derive a file name, bookmark name, cache key, document ID or a documented hash helper; no authentication, signature or password decision depends on its collision or preimage resistance."
+  },
+  "pandoc:src/Text/Pandoc/Readers/Ipynb.hs:194:hs-rule:hs-weak-hash:src/Text/Pandoc/Readers/Ipynb.hs:194": {
+   "index": 30,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/Ipynb.hs",
+   "line": 194,
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "SHA-1/MD5 used to derive a file name, bookmark name, cache key, document ID or a documented hash helper; no authentication, signature or password decision depends on its collision or preimage resistance."
+  },
+  "hackage-server:src/Distribution/Server/Features/HoogleData.hs:214:hs-rule:hs-unbounded-input-read:src/Distribution/Server/Features/HoogleData.hs:214": {
+   "index": 31,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Features/HoogleData.hs",
+   "line": 214,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "hackage-server:exes/BuildClient.hs:443:hs-rule:hs-unbounded-input-read:exes/BuildClient.hs:443": {
+   "index": 32,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 443,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "cabal2nix:cabal2nix/src/Distribution/Nixpkgs/Fetch.hs:263:hs-rule:hs-unbounded-input-read:cabal2nix/src/Distribution/Nixpkgs/Fetch.hs:263": {
+   "index": 33,
+   "project": "cabal2nix",
+   "file": "cabal2nix/src/Distribution/Nixpkgs/Fetch.hs",
+   "line": 263,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "hackage-server:src/Distribution/Client.hs:133:hs-rule:hs-unbounded-input-read:src/Distribution/Client.hs:133": {
+   "index": 34,
+   "project": "hackage-server",
+   "file": "src/Distribution/Client.hs",
+   "line": 133,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "hackage-server:src/Distribution/Server/Features/DownloadCount/State.hs:226:hs-rule:hs-unbounded-input-read:src/Distribution/Server/Features/DownloadCount/State.hs:226": {
+   "index": 35,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Features/DownloadCount/State.hs",
+   "line": 226,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:79:hs-rule:hs-unbounded-input-read:lib/GHCup/Prelude/Process/Windows.hs:79": {
+   "index": 36,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 79,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "pandoc:src/Text/Pandoc/Class/IO.hs:126:hs-rule:hs-unbounded-input-read:src/Text/Pandoc/Class/IO.hs:126": {
+   "index": 37,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Class/IO.hs",
+   "line": 126,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "pandoc:src/Text/Pandoc/UTF8.hs:94:hs-rule:hs-unbounded-input-read:src/Text/Pandoc/UTF8.hs:94": {
+   "index": 38,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/UTF8.hs",
+   "line": 94,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:78:hs-rule:hs-unbounded-input-read:lib/GHCup/Prelude/Process/Windows.hs:78": {
+   "index": 39,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 78,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "cabal2nix:distribution-nixpkgs/src/Distribution/Nixpkgs/PackageMap.hs:57:hs-rule:hs-unbounded-input-read:distribution-nixpkgs/src/Distribution/Nixpkgs/PackageMap.hs:57": {
+   "index": 40,
+   "project": "cabal2nix",
+   "file": "distribution-nixpkgs/src/Distribution/Nixpkgs/PackageMap.hs",
+   "line": 57,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "hackage-server:src/Distribution/Server/Framework/BlobStorage.hs:165:hs-rule:hs-unbounded-input-read:src/Distribution/Server/Framework/BlobStorage.hs:165": {
+   "index": 41,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Framework/BlobStorage.hs",
+   "line": 165,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "hackage-server:src/Distribution/Client/Mirror/Repo/Util.hs:36:hs-rule:hs-unbounded-input-read:src/Distribution/Client/Mirror/Repo/Util.hs:36": {
+   "index": 42,
+   "project": "hackage-server",
+   "file": "src/Distribution/Client/Mirror/Repo/Util.hs",
+   "line": 36,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "pandoc:src/Text/Pandoc/Process.hs:66:hs-rule:hs-unbounded-input-read:src/Text/Pandoc/Process.hs:66": {
+   "index": 43,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Process.hs",
+   "line": 66,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "ghcup-hs:lib-opt/GHCup/OptParse/Generate.hs:185:hs-rule:hs-unbounded-input-read:lib-opt/GHCup/OptParse/Generate.hs:185": {
+   "index": 44,
+   "project": "ghcup-hs",
+   "file": "lib-opt/GHCup/OptParse/Generate.hs",
+   "line": 185,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "hackage-server:src/Distribution/Server/Features/HoogleData.hs:296:hs-rule:hs-unbounded-input-read:src/Distribution/Server/Features/HoogleData.hs:296": {
+   "index": 45,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Features/HoogleData.hs",
+   "line": 296,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "hackage-server:src/Distribution/Server/Features/Security.hs:236:hs-rule:hs-unbounded-input-read:src/Distribution/Server/Features/Security.hs:236": {
+   "index": 46,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Features/Security.hs",
+   "line": 236,
+   "vuln": "Whole input read into memory without a size limit",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Reads a local file, a child process's pipe, or the operator's own stdin; the amount is not controlled by a remote party across a trust boundary (and lazy hGetContents consumers stream)."
+  },
+  "hackage-server:src/Distribution/Server/Features/DownloadCount/State.hs:223:ir-taint:src/Distribution/Server/Features/DownloadCount/State.hs:223:hs-sink-system.io.withfile.cwe-22.0:56fefc0a": {
+   "index": 47,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Features/DownloadCount/State.hs",
+   "line": 223,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:670:ir-taint:exes/BuildClient.hs:670:hs-sink-system.io.openfile.cwe-22.0:8465cca": {
+   "index": 48,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 670,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "gitit:src/Network/Gitit/Page.hs:164:ir-taint:src/Network/Gitit/Page.hs:164:hs-sink-system.io.withfile.cwe-22.0:c24f0f8e": {
+   "index": 49,
+   "project": "gitit",
+   "file": "src/Network/Gitit/Page.hs",
+   "line": 164,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:628:ir-taint:exes/BuildClient.hs:628:hs-sink-system.directory.renamefile.cwe-22.all:c48a6e67": {
+   "index": 50,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 628,
+   "vuln": "Path Traversal (copy/rename)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:src/Distribution/Server/Features/DownloadCount/State.hs:250:ir-taint:src/Distribution/Server/Features/DownloadCount/State.hs:250:hs-sink-prelude.writefile.cwe-22.0:bafac4c4": {
+   "index": 51,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Features/DownloadCount/State.hs",
+   "line": 250,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Query/DB.hs:204:ir-taint:lib/GHCup/Query/DB.hs:204:hs-sink-prelude.readfile.cwe-22.0:c24f0f8e": {
+   "index": 52,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Query/DB.hs",
+   "line": 204,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "stack:etc/scripts/build-stack-installer.hs:20:ir-taint:etc/scripts/build-stack-installer.hs:20:hs-sink-prelude.writefile.cwe-22.0:1840b2c9": {
+   "index": 53,
+   "project": "stack",
+   "file": "etc/scripts/build-stack-installer.hs",
+   "line": 20,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Command/Set.hs:135:ir-taint:lib/GHCup/Command/Set.hs:135:hs-sink-system.directory.doesdirectoryexist.cwe-22.0:5dbcbc8d": {
+   "index": 54,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Command/Set.hs",
+   "line": 135,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/File/Posix.hs:259:ir-taint:lib/GHCup/Prelude/File/Posix.hs:259:hs-sink-system.directory.removefile.cwe-22.0:e2185c5c": {
+   "index": 55,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/File/Posix.hs",
+   "line": 259,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:589:ir-taint:exes/BuildClient.hs:589:hs-sink-prelude.readfile.cwe-22.0:6571dc8b": {
+   "index": 56,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 589,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/File/Windows.hs:42:ir-taint:lib/GHCup/Prelude/File/Windows.hs:42:hs-sink-prelude.readfile.cwe-22.0:9cb3c24b": {
+   "index": 57,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/File/Windows.hs",
+   "line": 42,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:924:ir-taint:exes/BuildClient.hs:924:hs-sink-prelude.readfile.cwe-22.0:fe90c56a": {
+   "index": 58,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 924,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:860:ir-taint:exes/BuildClient.hs:860:hs-sink-prelude.writefile.cwe-22.0:53bd63f7": {
+   "index": 59,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 860,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/CabalConfig.hs:35:ir-taint:lib/GHCup/CabalConfig.hs:35:hs-sink-data.bytestring.readfile.cwe-22.0:c3241de": {
+   "index": 60,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/CabalConfig.hs",
+   "line": 35,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Download/IOStreams.hs:59:ir-taint:lib/GHCup/Download/IOStreams.hs:59:hs-sink-data.bytestring.writefile.cwe-22.0:e1abffd8": {
+   "index": 61,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Download/IOStreams.hs",
+   "line": 59,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Query/GHCupDirs.hs:539:ir-taint:lib/GHCup/Query/GHCupDirs.hs:539:hs-sink-system.directory.listdirectory.cwe-22.0:c3241de": {
+   "index": 62,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Query/GHCupDirs.hs",
+   "line": 539,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:781:ir-taint:exes/BuildClient.hs:781:hs-sink-system.directory.renamefile.cwe-22.all:30147849": {
+   "index": 63,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 781,
+   "vuln": "Path Traversal (copy/rename)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Command/Rm.hs:164:ir-taint:lib/GHCup/Command/Rm.hs:164:hs-sink-system.directory.doesdirectoryexist.cwe-22.0:9253bf07": {
+   "index": 64,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Command/Rm.hs",
+   "line": 164,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:207:ir-taint:exes/BuildClient.hs:207:hs-sink-prelude.writefile.cwe-22.0:153cc9b6": {
+   "index": 65,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 207,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:922:ir-taint:exes/BuildClient.hs:922:hs-sink-prelude.readfile.cwe-22.0:453ad004": {
+   "index": 66,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 922,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:src/Distribution/Server/Util/ServeTarball.hs:162:ir-taint:src/Distribution/Server/Util/ServeTarball.hs:162:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:e173b8a8": {
+   "index": 67,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Util/ServeTarball.hs",
+   "line": 162,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Unpack.hs:129:ir-taint:lib/GHCup/Unpack.hs:129:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f": {
+   "index": 68,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 129,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:644:ir-taint:exes/BuildClient.hs:644:hs-sink-system.io.openfile.cwe-22.0:392ac3d4": {
+   "index": 69,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 644,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Unpack.hs:76:ir-taint:lib/GHCup/Unpack.hs:76:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f": {
+   "index": 70,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 76,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "xmonad-contrib:XMonad/Util/Loggers.hs:159:ir-taint:XMonad/Util/Loggers.hs:159:hs-sink-system.directory.getdirectorycontents.cwe-22.0:c24f070c": {
+   "index": 71,
+   "project": "xmonad-contrib",
+   "file": "XMonad/Util/Loggers.hs",
+   "line": 159,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:798:ir-taint:exes/BuildClient.hs:798:hs-sink-data.bytestring.lazy.writefile.cwe-22.0:89b903f2": {
+   "index": 72,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 798,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:683:ir-taint:exes/BuildClient.hs:683:hs-sink-system.directory.renamefile.cwe-22.all:8465cca": {
+   "index": 73,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 683,
+   "vuln": "Path Traversal (copy/rename)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Legacy/HLS.hs:259:ir-taint:lib/GHCup/Legacy/HLS.hs:259:hs-sink-system.directory.listdirectory.cwe-22.0:dadc9b6e": {
+   "index": 74,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Legacy/HLS.hs",
+   "line": 259,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Legacy/Cabal.hs:72:ir-taint:lib/GHCup/Legacy/Cabal.hs:72:hs-sink-system.directory.doesfileexist.cwe-22.0:9ec3ea1e": {
+   "index": 75,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Legacy/Cabal.hs",
+   "line": 72,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:932:ir-taint:exes/BuildClient.hs:932:hs-sink-prelude.readfile.cwe-22.0:1ad3000f": {
+   "index": 76,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 932,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:243:ir-taint:exes/BuildClient.hs:243:hs-sink-prelude.writefile.cwe-22.0:237c47a8": {
+   "index": 77,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 243,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Unpack.hs:74:ir-taint:lib/GHCup/Unpack.hs:74:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f": {
+   "index": 78,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 74,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "stack:etc/scripts/install-many-stack-releases.hs:66:ir-taint:etc/scripts/install-many-stack-releases.hs:66:hs-sink-system.directory.doesdirectoryexist.cwe-22.0:9253bf07": {
+   "index": 79,
+   "project": "stack",
+   "file": "etc/scripts/install-many-stack-releases.hs",
+   "line": 66,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Download/IOStreams.hs:58:ir-taint:lib/GHCup/Download/IOStreams.hs:58:hs-sink-data.bytestring.appendfile.cwe-22.0:e1abffd8": {
+   "index": 80,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Download/IOStreams.hs",
+   "line": 58,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Download.hs:851:ir-taint:lib/GHCup/Download.hs:851:hs-sink-system.directory.getfilesize.cwe-22.0:e173b8a8": {
+   "index": 81,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Download.hs",
+   "line": 851,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:211:ir-taint:exes/BuildClient.hs:211:hs-sink-prelude.readfile.cwe-22.0:153cc9b6": {
+   "index": 82,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 211,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/File/Posix.hs:73:ir-taint:lib/GHCup/Prelude/File/Posix.hs:73:hs-sink-system.posix.files.setfilemode.cwe-22.0:c3241de": {
+   "index": 83,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/File/Posix.hs",
+   "line": 73,
+   "vuln": "Path Traversal (file operation)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:exes/BuildClient.hs:437:ir-taint:exes/BuildClient.hs:437:hs-sink-system.io.openfile.cwe-22.0:436847a5": {
+   "index": 84,
+   "project": "hackage-server",
+   "file": "exes/BuildClient.hs",
+   "line": 437,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/File/Windows.hs:56:ir-taint:lib/GHCup/Prelude/File/Windows.hs:56:hs-sink-system.directory.setpermissions.cwe-22.0:c3241de": {
+   "index": 85,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/File/Windows.hs",
+   "line": 56,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Query/DB.hs:72:ir-taint:lib/GHCup/Query/DB.hs:72:hs-sink-data.bytestring.readfile.cwe-22.0:c24f0f8e": {
+   "index": 86,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Query/DB.hs",
+   "line": 72,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "ghcup-hs:lib/GHCup/Prelude/File.hs:321:ir-taint:lib/GHCup/Prelude/File.hs:321:hs-sink-system.directory.removefile.cwe-22.0:c3241de": {
+   "index": 87,
+   "project": "ghcup-hs",
+   "file": "lib/GHCup/Prelude/File.hs",
+   "line": 321,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:101:ir-taint:src/Distribution/Client/Mirror/Repo/Hackage2.hs:101:hs-sink-system.directory.removefile.cwe-22.0:4ea0ac7b": {
+   "index": 88,
+   "project": "hackage-server",
+   "file": "src/Distribution/Client/Mirror/Repo/Hackage2.hs",
+   "line": 101,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "gitit:src/Network/Gitit/Cache.hs:45:ir-taint:src/Network/Gitit/Cache.hs:45:hs-sink-system.directory.removefile.cwe-22.0:9f5401af": {
+   "index": 89,
+   "project": "gitit",
+   "file": "src/Network/Gitit/Cache.hs",
+   "line": 45,
+   "vuln": "Path Traversal (filesystem operation)",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:82:ir-taint:src/Distribution/Client/Mirror/Repo/Hackage2.hs:82:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:4d695b8c": {
+   "index": 90,
+   "project": "hackage-server",
+   "file": "src/Distribution/Client/Mirror/Repo/Hackage2.hs",
+   "line": 82,
+   "vuln": "Path Traversal",
+   "half": "verification",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "hackage-server:src/Distribution/Server/Features/DownloadCount/State.hs:246:ir-taint:src/Distribution/Server/Features/DownloadCount/State.hs:246:hs-sink-prelude.appendfile.cwe-22.0:bafac4c4": {
+   "index": 91,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Features/DownloadCount/State.hs",
+   "line": 246,
+   "vuln": "Path Traversal",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "File path is operator configuration, a command-line argument, a state directory, a temp file or a value the program derived itself; no request, network or untrusted-archive data reaches it (the one request-derived path, the cache expiry, is first validated by a page-name predicate that rejects \"..\" and a leading underscore)."
+  },
+  "pandoc:src/Text/Pandoc/Readers/HTML.hs:982:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/HTML.hs:982": {
+   "index": 92,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/HTML.hs",
+   "line": 982,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter (a plain constructor argument), not an unsafe boundary."
+  },
+  "gitit:src/Network/Gitit/Authentication.hs:546:hs-rule:hs-unsafe-io-boundary:src/Network/Gitit/Authentication.hs:546": {
+   "index": 93,
+   "project": "gitit",
+   "file": "src/Network/Gitit/Authentication.hs",
+   "line": 546,
+   "vuln": "Unsafe boundary: function toString() { [native code] }",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Not a vulnerability: toString is a ByteString-to-string conversion of a header."
+  },
+  "pandoc:src/Text/Pandoc/Readers/Markdown.hs:1922:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/Markdown.hs:1922": {
+   "index": 94,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/Markdown.hs",
+   "line": 1922,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter (a plain constructor argument), not an unsafe boundary."
+  },
+  "stack:src/Stack/Package.hs:270:hs-rule:hs-unsafe-io-boundary:src/Stack/Package.hs:270": {
+   "index": 95,
+   "project": "stack",
+   "file": "src/Stack/Package.hs",
+   "line": 270,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter (a plain constructor argument), not an unsafe boundary."
+  },
+  "stack:src/Stack/Types/Cache.hs:80:hs-rule:hs-unsafe-io-boundary:src/Stack/Types/Cache.hs:80": {
+   "index": 96,
+   "project": "stack",
+   "file": "src/Stack/Types/Cache.hs",
+   "line": 80,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter (a plain constructor argument), not an unsafe boundary."
+  },
+  "pandoc:src/Text/Pandoc/Readers/DocBook.hs:1457:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/DocBook.hs:1457": {
+   "index": 97,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/DocBook.hs",
+   "line": 1457,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter (a plain constructor argument), not an unsafe boundary."
+  },
+  "pandoc:src/Text/Pandoc/Readers/Markdown.hs:2026:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/Markdown.hs:2026": {
+   "index": 98,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/Markdown.hs",
+   "line": 2026,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter (a plain constructor argument), not an unsafe boundary."
+  },
+  "pandoc:src/Text/Pandoc/Writers/LaTeX.hs:82:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Writers/LaTeX.hs:82": {
+   "index": 99,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Writers/LaTeX.hs",
+   "line": 82,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter (a plain constructor argument), not an unsafe boundary."
+  },
+  "pandoc:src/Text/Pandoc/Readers/ODT/ContentReader.hs:457:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/ODT/ContentReader.hs:457": {
+   "index": 100,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/ODT/ContentReader.hs",
+   "line": 457,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter (a plain constructor argument), not an unsafe boundary."
+  },
+  "pandoc:src/Text/Pandoc/Readers/JATS.hs:750:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/JATS.hs:750": {
+   "index": 101,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/JATS.hs",
+   "line": 750,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter (a plain constructor argument), not an unsafe boundary."
+  },
+  "pandoc:src/Text/Pandoc/Readers/Markdown.hs:1980:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/Markdown.hs:1980": {
+   "index": 102,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/Markdown.hs",
+   "line": 1980,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter (a plain constructor argument), not an unsafe boundary."
+  },
+  "gitit:src/Network/Gitit/Plugins.hs:77:hs-rule:hs-unsafe-io-boundary:src/Network/Gitit/Plugins.hs:77": {
+   "index": 103,
+   "project": "gitit",
+   "file": "src/Network/Gitit/Plugins.hs",
+   "line": 77,
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "half": "verification",
+   "label": "FP",
+   "reason": "unsafeCoerce after compileExpr of a plugin the operator configured; a type-cast idiom with no attacker-reachable input."
+  },
+  "hackage-server:src/Distribution/Server/Features/DownloadCount/State.hs:214:hs-rule:hs-unsafe-io-boundary:src/Distribution/Server/Features/DownloadCount/State.hs:214": {
+   "index": 104,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Features/DownloadCount/State.hs",
+   "line": 214,
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "unsafeInterleaveIO defers a local read or lookup; no external data or security consequence."
+  },
+  "ghcup-hs:app/ghcup/Main.hs:192:hs-rule:hs-unsafe-io-boundary:app/ghcup/Main.hs:192": {
+   "index": 105,
+   "project": "ghcup-hs",
+   "file": "app/ghcup/Main.hs",
+   "line": 192,
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "half": "verification",
+   "label": "FP",
+   "reason": "unsafeInterleaveIO defers a local read or lookup; no external data or security consequence."
+  },
+  "pandoc:src/Text/Pandoc/Writers/LaTeX.hs:85:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Writers/LaTeX.hs:85": {
+   "index": 106,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Writers/LaTeX.hs",
+   "line": 85,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter, not an unsafe boundary."
+  },
+  "gitit:src/Network/Gitit/Authentication/Github.hs:36:hs-rule:hs-unsafe-io-boundary:src/Network/Gitit/Authentication/Github.hs:36": {
+   "index": 107,
+   "project": "gitit",
+   "file": "src/Network/Gitit/Authentication/Github.hs",
+   "line": 36,
+   "vuln": "Unsafe boundary: function toString() { [native code] }",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Not a vulnerability: toString is the UUID-to-string function."
+  },
+  "pandoc:src/Text/Pandoc/Readers/LaTeX/Macro.hs:31:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/LaTeX/Macro.hs:31": {
+   "index": 108,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/LaTeX/Macro.hs",
+   "line": 31,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter, not an unsafe boundary."
+  },
+  "pandoc:src/Text/Pandoc/Readers/Markdown.hs:2030:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/Markdown.hs:2030": {
+   "index": 109,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/Markdown.hs",
+   "line": 2030,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter, not an unsafe boundary."
+  },
+  "gitit:src/Network/Gitit/State.hs:40:hs-rule:hs-unsafe-io-boundary:src/Network/Gitit/State.hs:40": {
+   "index": 110,
+   "project": "gitit",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 40,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "unsafePerformIO for a global IORef or pure FFI call; no external input."
+  },
+  "hackage-server:src/Distribution/Server/Framework/BackupDump.hs:114:hs-rule:hs-unsafe-io-boundary:src/Distribution/Server/Framework/BackupDump.hs:114": {
+   "index": 111,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Framework/BackupDump.hs",
+   "line": 114,
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "half": "verification",
+   "label": "FP",
+   "reason": "unsafeInterleaveIO / unsafePerformIO for a lazily read channel or global reference; no external input."
+  },
+  "ghcup-hs:lib-tui/GHCup/Brick/Actions.hs:691:hs-rule:hs-unsafe-io-boundary:lib-tui/GHCup/Brick/Actions.hs:691": {
+   "index": 112,
+   "project": "ghcup-hs",
+   "file": "lib-tui/GHCup/Brick/Actions.hs",
+   "line": 691,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "unsafeInterleaveIO / unsafePerformIO for a lazily read channel or global reference; no external input."
+  },
+  "pandoc:src/Text/Pandoc/Readers/HTML.hs:975:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/HTML.hs:975": {
+   "index": 113,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/HTML.hs",
+   "line": 975,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter, not an unsafe boundary."
+  },
+  "pandoc:src/Text/Pandoc/Readers/HTML.hs:289:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/HTML.hs:289": {
+   "index": 114,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/HTML.hs",
+   "line": 289,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter, not an unsafe boundary."
+  },
+  "pandoc:src/Text/Pandoc/Readers/JATS.hs:761:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/JATS.hs:761": {
+   "index": 115,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/JATS.hs",
+   "line": 761,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a local function parameter, not an unsafe boundary."
+  },
+  "hackage-server:src/Distribution/Server/Util/NLP/Snowball.hs:25:hs-rule:hs-unsafe-io-boundary:src/Distribution/Server/Util/NLP/Snowball.hs:25": {
+   "index": 116,
+   "project": "hackage-server",
+   "file": "src/Distribution/Server/Util/NLP/Snowball.hs",
+   "line": 25,
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "half": "tuning",
+   "label": "FP",
+   "reason": "unsafePerformIO around a pure stemming library call."
+  },
+  "pandoc:src/Text/Pandoc/Readers/LaTeX.hs:1435:hs-rule:hs-unsafe-io-boundary:src/Text/Pandoc/Readers/LaTeX.hs:1435": {
+   "index": 117,
+   "project": "pandoc",
+   "file": "src/Text/Pandoc/Readers/LaTeX.hs",
+   "line": 1435,
+   "vuln": "Unsafe boundary: function Object() { [native code] }",
+   "half": "verification",
+   "label": "FP",
+   "reason": "Not a vulnerability: the flagged identifier is a let-bound local function, not an unsafe boundary."
+  }
+ }
+}

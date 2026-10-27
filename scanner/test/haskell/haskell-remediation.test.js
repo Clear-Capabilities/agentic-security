@@ -171,7 +171,9 @@ test('[HS-010.AC02] every fix carries exactly one FULL/MITIGATION/WORKAROUND lab
   const labels = Object.keys(SRC).map((k) => planHaskellFix(fin(k), filesOf(k)).label);
   for (const l of labels) assert.ok(LABELS.includes(l));
   assert.ok(labels.includes('FULL') && labels.includes('MITIGATION'));
-  assert.equal(SUPPORTED_FIX_IDS.length, 5);
+  // the five original fixers plus hs-path-takefilename (added with the real-code precision work; pinned in haskell-remediation-classes.test.js)
+  assert.equal(SUPPORTED_FIX_IDS.length, 6);
+  for (const id of ['hs-sql-parameterize', 'hs-process-argv', 'hs-html-escape', 'hs-hash-sha256', 'hs-log-redact']) assert.ok(SUPPORTED_FIX_IDS.includes(id), id);
 });
 
 const CABAL = 'name: a\nversion: 0.1\nbuild-type: Simple\nflag fast\n  default: False\n\nlibrary\n  build-depends: base >=4.14 && <5, xml-conduit >=1.8 && <2\n  if flag(fast)\n    build-depends: aeson ==2.0.0.0\ntest-suite t\n  type: exitcode-stdio-1.0\n  main-is: T.hs\n  build-depends: base, xml-conduit == 1.9.0.0\n';

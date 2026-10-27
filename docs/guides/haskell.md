@@ -72,6 +72,43 @@ Scan-health conditions:
 Disclosed limits: `license-data-unavailable`, `unmodeled-imports`.
 <!-- generated:ex-hs-fixed:end -->
 
+## Who controls the input: trust boundaries
+
+A flow from a source to a sink is a vulnerability only when the party that controls the source is not the party the
+program runs for. Every taint finding in a Haskell file carries a `trustBoundary` verdict and the origins the engine
+recorded (`sourceRoots`; a value derived from a source, returned from a function or passed through several calls keeps its
+origin):
+
+| Verdict | What supplies the value | What the scan does |
+| --- | --- | --- |
+| `attacker-reachable` | a request parameter, body, header or cookie, a socket, a remote HTTP response | reported at its normal severity |
+| `operator-controlled` | command-line arguments or environment variables; in a command-line program also the files it is pointed at | lowered to `info`, the severity it would have had is kept in `originalSeverity` |
+| `api-contract` | a parameter of an exported function nothing calls, handed whole to a process (`exec exe args = callProcess exe args`) | lowered to `info`: a thin wrapper, the caller chose what to run |
+| `entry-parameter` | a parameter of such a function used inside a command or path the function builds | reported |
+| `data-input` | standard input, or file content in a service or library | reported |
+| `unattributed` | no origin recorded | reported |
+
+A *command-line program* is code reached only from `main` functions whose reachable modules import no server framework
+or socket library; a *service* is code reachable from a `main` that does. Code no `main` reaches is a library whose callers
+are unknown. This is a fact about the call graph, not about names or paths. A command-line program whose taint carries no
+recorded origin at all is treated as operator-controlled and the finding says it was inferred. Standard input stays
+reported everywhere: it is data the program processes, and a flow from it to a command is still a finding.
+
+A lowered finding is not deleted. It appears at `info` with the reason, so an auditor still sees it, and it never
+counts toward a severity gate. Two things this does **not** do: it does not read comments or names (a test enforces that
+comments change nothing), and it does not decide that a library function is safe. A path operation on a caller-named
+file (`saveUpload name content = withFile name WriteMode ...`) is still reported, because the scanner cannot see the
+callers of an exported function; once something in the analysed code calls the function, its parameters take the values
+those callers pass.
+
+Other rules read the function around a call for the same reason. A weak hash (MD5, SHA-1) is a finding where a visible use
+depends on it (the digest is compared with another value, a secret is hashed, the result is a credential) and an `info`
+note where it only names a file or keys a cache. A generator used for a salt is not reported (a salt must be unique, not
+unpredictable). A cookie whose whole value is a constant (a cleared login) is not a credential. An unbounded read is
+reported for a socket handle or for an uncalled entry point that slurps standard input, not for a local file or a child
+process's pipe. A partial function (`head`) on a parameter is reported for a framework handler or an uncalled function,
+not inside a helper the program itself calls.
+
 ## Sources, sinks and sanitizers
 
 The taint engine follows a value from a source to a sink through your functions (including across modules and through
@@ -87,7 +124,7 @@ after the session). When one flaw reaches two nested sinks on a line (`readCreat
 (`strictRequestBody`) is CWE-770, the same class as the other unbounded-read rules.
 
 <!-- generated:hs-models:start -->
-The model registry (`scanner/src/language/haskell-models.js`) holds 185 sources, 283 sinks and 27 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
+The model registry (`scanner/src/language/haskell-models.js`) holds 195 sources, 283 sinks and 27 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
 | Sink family | CWE | APIs modelled | Examples |
 | --- | --- | --- | --- |
@@ -101,7 +138,7 @@ The model registry (`scanner/src/language/haskell-models.js`) holds 185 sources,
 | `url` | CWE-918 | 59 | `Network.HTTP.Client.Conduit.http`, `Network.HTTP.Client.Conduit.httpLbs`, `Network.HTTP.Client.Conduit.httpNoBody`, ... |
 | `xss` | CWE-79 | 35 | `Data.Text.IO.putStr`, `Data.Text.IO.putStrLn`, `Lucid.Base.toHtmlRaw`, ... |
 
-Source provenances: cli (1), cookie (2), env (3), file-read (8), header (13), http-body (51), network (7), stdin (22), url-param (78).
+Source provenances: cli (1), cookie (2), env (3), file-read (17), header (13), http-body (51), network (7), stdin (13), url-param (88).
 
 Sanitizer effects: * (10), other (1), path (4), xss (12).
 <!-- generated:hs-models:end -->
@@ -276,15 +313,35 @@ agentic-security fix --finding <id> --apply       # written only after every gat
 agentic-security undo                             # restores the file byte for byte
 ```
 
-A deterministic fix exists for five shapes (`hs-sql-parameterize`, `hs-process-argv`, `hs-html-escape`,
-`hs-hash-sha256`, `hs-log-redact`). Each is labelled **FULL**, **MITIGATION** or **WORKAROUND** by what it really
-changes, and runs the same gates: path inside the project, syntax, the rescan (the original finding is gone and no new
-medium-or-higher finding appears), and an optional compile check that runs only when asked and only when a `ghc` exists.
-A fix outside those shapes, or one a gate refuses, is reported as such; nothing is invented.
+A deterministic fix exists for six shapes (`hs-sql-parameterize`, `hs-process-argv`, `hs-html-escape`,
+`hs-hash-sha256`, `hs-log-redact`, `hs-path-takefilename`). Each is labelled **FULL**, **MITIGATION** or **WORKAROUND** by
+what it really changes, and runs the same gates: path inside the project, syntax, the rescan (the original finding is
+gone and no new medium-or-higher finding appears), and an optional compile check that runs only when asked and only when
+a `ghc` exists. A fix outside those shapes, or one a gate refuses, is reported as such; nothing is invented.
 
-The SQL shape is offered only where it does not have to guess the database library. Its rewrite is written for
-`postgresql-simple`; when it would add an import of a database library the file does not already use, as in this
-`sqlite-simple` example, the fix is refused and the reason is stated, because a rescan cannot see a wrong library.
+| Class | CWE | Result |
+| --- | --- | --- |
+| SQL built by concatenation | CWE-89 | parameterized, using the database library the file already imports (`postgresql-simple` or `sqlite-simple`); any other, or two at once, is refused |
+| Shell command string | CWE-78 | a direct `callProcess` with an argument list; refused when a leading option could still be read as one |
+| Raw markup from a value | CWE-79 | `preEscapedToHtml` becomes `toHtml`, only in a file that imports blaze-html or a package that re-exports it |
+| MD5 / SHA-1 | CWE-328 | SHA-256 when the algorithm is named on one line only; refused when a type elsewhere in the file names it |
+| Sensitive value in a log | CWE-532 | redacted (a mitigation) |
+| Parameter under a fixed directory | CWE-22 | `takeFileName` on a `String` or `FilePath` parameter (a mitigation: a name with subdirectories keeps its last segment; directory operations are not rewritten because `..` survives `takeFileName`) |
+| Fast password hash | CWE-916 | refused: needs a key-derivation library and a migration of stored hashes |
+| Predictable generator | CWE-338 | refused: the CSPRNG's result type differs, so the code around it changes |
+| Server-side request forgery | CWE-918 | refused: an allow-list is a decision about the service |
+| Argument injection | CWE-88 | refused: `--` helps only programs that honour it |
+| Cookie attributes, missing authentication, resource limits, certificate validation, hard-coded secrets | CWE-1004, CWE-306, CWE-770, CWE-295, CWE-798 | refused with a class-level reason |
+
+A refused class can still be repaired by a reviewed patch: a patch supplied by a person or a model goes through the same
+gates (`verifyHaskellProposal`). Compile verification of the library-dependent rewrites above was done in this repository
+against hand-written stubs of the documented API, not against the real packages.
+
+The SQL shape is offered only where it does not have to guess the database library. The rewrite takes the driver the
+file already imports (`postgresql-simple` or `sqlite-simple`), and a patch that would add an import of a database library
+the file does not use is still blocked at the preview, because a rescan cannot see a wrong library. The block below was
+captured from a bundle built before the rewrite learned to read the file's own import: it shows the earlier refusal for
+this `sqlite-simple` example, and is regenerated at the next build.
 
 <!-- generated:fix-hs-sql:start -->
 ```text
@@ -410,6 +467,14 @@ The measured status of each capability, with its denominators, is in [Haskell an
 - A CPP conditional is decided only from the file, a stated compiler and the project's dependency bounds; a macro set by a build flag or the environment is undecided and both branches are analysed. A `tested-with` decision is a project claim, not a pin, and is reported as an assumption: a branch dead under it was not analysed.
 - Foreign calls are boundaries: the foreign code is not analysed.
 - Weak-randomness detection keys on the function and time-source names; a rename of a security-shaped function can lose it.
+- The trust verdicts are inferences from the call graph. A program whose `main` the scan cannot reach, or whose calls are
+  higher-order enough that the walk stops, is a library as far as the scan can tell, and a library's uncalled functions keep
+  their findings. A file-based flow in a service (an upload directory, a shared state file) is reported even when the file is
+  the program's own state, because the scan does not follow files from a write to a later read.
+- A function that is exported and called nowhere in the analysed code keeps a path finding for a parameter it names directly
+  (`withFile name WriteMode`): that shape is indistinguishable from a real vulnerable one without knowing the callers.
+- Precision on real projects was measured on a development set of eight projects (see `bench/dag/dev-haskell/README.md`)
+  and one reader's labels; the numbers there describe those projects, not Haskell code in general.
 - The live advisory feed (`AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1`) has been tested against a stand-in server that serves the real
   pinned HSEC records, not against the live service on real projects. A package it could not cover is reported unknown.
 - A credential check written inside a route handler counts as a guard only for the shapes described above (a credential header read,

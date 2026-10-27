@@ -1,0 +1,180 @@
+{
+ "id": "gitit",
+ "ms": 7620,
+ "totalFindings": 27,
+ "haskell": [
+  {
+   "id": "ir-taint:expireGititCache.hs:60:hs-sink-network.http.simplehttp.cwe-918.0:bc458073",
+   "stableId": "e9f6ca43b679388e",
+   "file": "expireGititCache.hs",
+   "line": 60,
+   "severity": "info",
+   "vuln": "Server-Side Request Forgery",
+   "cwe": "CWE-918",
+   "parser": "IR-TAINT",
+   "family": "ssrf",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "expireGititCache.hs",
+    "line": 37,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "expireGititCache.hs",
+    "line": 60,
+    "label": "hs-sink-network.http.simplehttp.cwe-918.0"
+   }
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Network/Gitit/Plugins.hs:77",
+   "stableId": "f7e5acde09b3dfb7",
+   "file": "src/Network/Gitit/Plugins.hs",
+   "line": 77,
+   "severity": "info",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafeCoerce: Reinterprets a value as another type without a check. Modelled as a boundary only.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Network/Gitit/State.hs:40",
+   "stableId": "1423e458d3b8fd1d",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 40,
+   "severity": "info",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-fast-password-hash:src/Network/Gitit/State.hs:62",
+   "stableId": "38817e08c69ec603",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 62,
+   "severity": "high",
+   "vuln": "Password hashed with a fast general-purpose hash",
+   "cwe": "CWE-916",
+   "parser": "HS-RULES",
+   "family": "password-hashing",
+   "rule": "hs-fast-password-hash",
+   "confidence": 0.68,
+   "description": "Password hashed with a fast general-purpose hash: Data.Digest.Pure.SHA.sha512 applied to a password-shaped value",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-fast-password-hash:src/Network/Gitit/State.hs:69",
+   "stableId": "465cc39b1b42cf0d",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 69,
+   "severity": "high",
+   "vuln": "Password hashed with a fast general-purpose hash",
+   "cwe": "CWE-916",
+   "parser": "HS-RULES",
+   "family": "password-hashing",
+   "rule": "hs-fast-password-hash",
+   "confidence": 0.68,
+   "description": "Password hashed with a fast general-purpose hash: Data.Digest.Pure.SHA.sha512 applied to a password-shaped value",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-fast-password-hash:src/Network/Gitit/State.hs:78",
+   "stableId": "ad4146f6a054bcb5",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 78,
+   "severity": "high",
+   "vuln": "Password hashed with a fast general-purpose hash",
+   "cwe": "CWE-916",
+   "parser": "HS-RULES",
+   "family": "password-hashing",
+   "rule": "hs-fast-password-hash",
+   "confidence": 0.68,
+   "description": "Password hashed with a fast general-purpose hash: Data.Digest.Pure.SHA.sha512 applied to a password-shaped value",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-predictable-random:src/Network/Gitit/State.hs:124",
+   "stableId": "61e67f2e320d667f",
+   "file": "src/Network/Gitit/State.hs",
+   "line": 124,
+   "severity": "high",
+   "vuln": "Predictable random number generator used for a security value",
+   "cwe": "CWE-338",
+   "parser": "HS-RULES",
+   "family": "weak-randomness",
+   "rule": "hs-predictable-random",
+   "confidence": 0.68,
+   "description": "Predictable random number generator used for a security value: System.Random.randomRIO result bound to `key`",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "ir-taint:src/Network/Gitit/Util.hs:53:hs-sink-system.directory.setcurrentdirectory.cwe-22.0:c24f070c",
+   "stableId": "c7e98aa48e6587c8",
+   "file": "src/Network/Gitit/Util.hs",
+   "line": 53,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Network/Gitit/Util.hs",
+    "line": 51,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Network/Gitit/Util.hs",
+    "line": 53,
+    "label": "hs-sink-system.directory.setcurrentdirectory.cwe-22.0"
+   }
+  }
+ ]
+}

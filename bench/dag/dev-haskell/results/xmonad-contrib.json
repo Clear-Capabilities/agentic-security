@@ -1,0 +1,60 @@
+{
+ "id": "xmonad-contrib",
+ "ms": 8329,
+ "totalFindings": 8,
+ "haskell": [
+  {
+   "id": "ir-taint:XMonad/Util/Loggers.hs:159:hs-sink-system.directory.getdirectorycontents.cwe-22.0:c24f070c",
+   "stableId": "4f1cf068e2132d63",
+   "file": "XMonad/Util/Loggers.hs",
+   "line": 159,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "XMonad/Util/Loggers.hs",
+    "line": 173,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "XMonad/Util/Loggers.hs",
+    "line": 159,
+    "label": "hs-sink-system.directory.getdirectorycontents.cwe-22.0"
+   }
+  },
+  {
+   "id": "hs-rule:hs-partial-function-on-input:XMonad/Util/Loggers.hs:504",
+   "stableId": "8aa55ef6914e87a2",
+   "file": "XMonad/Util/Loggers.hs",
+   "line": 504,
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "cwe": "CWE-248",
+   "parser": "HS-RULES",
+   "family": "unhandled-exception",
+   "rule": "hs-partial-function-on-input",
+   "confidence": 0.68,
+   "description": "Partial function applied to caller-supplied text: cycle on caller-supplied input",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  }
+ ]
+}

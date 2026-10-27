@@ -1,0 +1,1701 @@
+{
+ "id": "hackage-server",
+ "ms": 13397,
+ "totalFindings": 57,
+ "haskell": [
+  {
+   "id": "ir-taint:exes/BuildClient.hs:171:hs-sink-system.directory.doesfileexist.cwe-22.0:4eac4481",
+   "stableId": "5bdc5d00529d59c1",
+   "file": "exes/BuildClient.hs",
+   "line": 171,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 163,
+    "label": "interproc-return:Main.parseRepositoryIndices.listDirectory"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli",
+      "file": "exes/BuildClient.hs",
+      "line": 104
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 171,
+    "label": "hs-sink-system.directory.doesfileexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:175:hs-sink-system.directory.doesfileexist.cwe-22.0:4eac4040",
+   "stableId": "d762d9ded1406312",
+   "file": "exes/BuildClient.hs",
+   "line": 175,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 163,
+    "label": "interproc-return:Main.parseRepositoryIndices.listDirectory"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli",
+      "file": "exes/BuildClient.hs",
+      "line": 104
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 175,
+    "label": "hs-sink-system.directory.doesfileexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:180:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:1ad3000f",
+   "stableId": "67ebbd3e35acadae",
+   "file": "exes/BuildClient.hs",
+   "line": 180,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 163,
+    "label": "interproc-return:Main.parseRepositoryIndices.listDirectory"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli",
+      "file": "exes/BuildClient.hs",
+      "line": 104
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 180,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:190:hs-sink-system.directory.getdirectorycontents.cwe-22.0:f83afab5",
+   "stableId": "0ec3d7b5466bc0e1",
+   "file": "exes/BuildClient.hs",
+   "line": 190,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 104,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 190,
+    "label": "hs-sink-system.directory.getdirectorycontents.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:207:hs-sink-prelude.writefile.cwe-22.0:153cc9b6",
+   "stableId": "c60b68adf3fb89ea",
+   "file": "exes/BuildClient.hs",
+   "line": 207,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 104,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 207,
+    "label": "hs-sink-prelude.writefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:211:hs-sink-prelude.readfile.cwe-22.0:153cc9b6",
+   "stableId": "9af77c810c8088d9",
+   "file": "exes/BuildClient.hs",
+   "line": 211,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 104,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 211,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:243:hs-sink-prelude.writefile.cwe-22.0:237c47a8",
+   "stableId": "72d6ddcec73f2246",
+   "file": "exes/BuildClient.hs",
+   "line": 243,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 104,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 243,
+    "label": "hs-sink-prelude.writefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:437:hs-sink-system.io.openfile.cwe-22.0:436847a5",
+   "stableId": "81105d19b06a7222",
+   "file": "exes/BuildClient.hs",
+   "line": 437,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 104,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli",
+      "file": "exes/BuildClient.hs",
+      "line": 104
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 437,
+    "label": "hs-sink-system.io.openfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:442:hs-sink-system.io.openfile.cwe-22.0:436847a5",
+   "stableId": "257825b84afd2dc7",
+   "file": "exes/BuildClient.hs",
+   "line": 442,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 104,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli",
+      "file": "exes/BuildClient.hs",
+      "line": 104
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 442,
+    "label": "hs-sink-system.io.openfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:495:hs-sink-system.directory.removedirectoryrecursive.cwe-22.0:4f623c0c",
+   "stableId": "c9a316ebb8207a77",
+   "file": "exes/BuildClient.hs",
+   "line": 495,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 104,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 495,
+    "label": "hs-sink-system.directory.removedirectoryrecursive.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:589:hs-sink-prelude.readfile.cwe-22.0:6571dc8b",
+   "stableId": "e76d7504b7d1d234",
+   "file": "exes/BuildClient.hs",
+   "line": 589,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 588,
+    "label": "interproc-return:Main.buildPackage"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 589,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:627:hs-sink-prelude.writefile.cwe-22.0:c48a6e67",
+   "stableId": "51d193fcb5037b08",
+   "file": "exes/BuildClient.hs",
+   "line": 627,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 588,
+    "label": "interproc-return:Main.buildPackage"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 589
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 627,
+    "label": "hs-sink-prelude.writefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:628:hs-sink-system.directory.renamefile.cwe-22.all:c48a6e67",
+   "stableId": "3bd301a9690f5844",
+   "file": "exes/BuildClient.hs",
+   "line": 628,
+   "severity": "info",
+   "vuln": "Path Traversal (copy/rename)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 588,
+    "label": "interproc-return:Main.buildPackage"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 589
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 628,
+    "label": "hs-sink-system.directory.renamefile.cwe-22.all"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:644:hs-sink-system.io.openfile.cwe-22.0:392ac3d4",
+   "stableId": "8adf4359fab0b22c",
+   "file": "exes/BuildClient.hs",
+   "line": 644,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 644,
+    "label": "hs-sink-system.io.openfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:670:hs-sink-system.io.openfile.cwe-22.0:8465cca",
+   "stableId": "227a108ef3637e13",
+   "file": "exes/BuildClient.hs",
+   "line": 670,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 670,
+    "label": "hs-sink-system.io.openfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:673:hs-sink-prelude.readfile.cwe-22.0:8465cca",
+   "stableId": "81ba22c6f9821700",
+   "file": "exes/BuildClient.hs",
+   "line": 673,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 673,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:683:hs-sink-system.directory.renamefile.cwe-22.all:8465cca",
+   "stableId": "ca801596131d3634",
+   "file": "exes/BuildClient.hs",
+   "line": 683,
+   "severity": "info",
+   "vuln": "Path Traversal (copy/rename)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 683,
+    "label": "hs-sink-system.directory.renamefile.cwe-22.all"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:773:hs-sink-system.io.openfile.cwe-22.0:78c3f749",
+   "stableId": "bcbacff3a3b49b5d",
+   "file": "exes/BuildClient.hs",
+   "line": 773,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 773,
+    "label": "hs-sink-system.io.openfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:781:hs-sink-system.directory.renamefile.cwe-22.all:30147849",
+   "stableId": "f10d2b4b5ddc5f61",
+   "file": "exes/BuildClient.hs",
+   "line": 781,
+   "severity": "info",
+   "vuln": "Path Traversal (copy/rename)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 781,
+    "label": "hs-sink-system.directory.renamefile.cwe-22.all"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:784:hs-sink-prelude.appendfile.cwe-22.0:1cae9003",
+   "stableId": "87f5d5a90378cdf3",
+   "file": "exes/BuildClient.hs",
+   "line": 784,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 784,
+    "label": "hs-sink-prelude.appendfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:786:hs-sink-prelude.appendfile.cwe-22.0:1cae9003",
+   "stableId": "87f5d5a90378cdf3",
+   "file": "exes/BuildClient.hs",
+   "line": 786,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 786,
+    "label": "hs-sink-prelude.appendfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:798:hs-sink-data.bytestring.lazy.writefile.cwe-22.0:89b903f2",
+   "stableId": "4d2188f61ad6cdb6",
+   "file": "exes/BuildClient.hs",
+   "line": 798,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 798,
+    "label": "hs-sink-data.bytestring.lazy.writefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:844:hs-sink-system.directory.getdirectorycontents.cwe-22.0:9253bf07",
+   "stableId": "a9eab2faa333da81",
+   "file": "exes/BuildClient.hs",
+   "line": 844,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 844,
+    "label": "hs-sink-system.directory.getdirectorycontents.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:860:hs-sink-prelude.writefile.cwe-22.0:53bd63f7",
+   "stableId": "898e1ed9685f4331",
+   "file": "exes/BuildClient.hs",
+   "line": 860,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 860,
+    "label": "hs-sink-prelude.writefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:861:hs-sink-prelude.readfile.cwe-22.0:53bd63f7",
+   "stableId": "08822607d3024c7c",
+   "file": "exes/BuildClient.hs",
+   "line": 861,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 861,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:907:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:eaa7aa33",
+   "stableId": "2b75cfb2d4443e75",
+   "file": "exes/BuildClient.hs",
+   "line": 907,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 589
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 907,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:922:hs-sink-prelude.readfile.cwe-22.0:453ad004",
+   "stableId": "e87c00230ae4666a",
+   "file": "exes/BuildClient.hs",
+   "line": 922,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 589
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 922,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:923:hs-sink-prelude.readfile.cwe-22.0:388be5ba",
+   "stableId": "0399446e6d2d895d",
+   "file": "exes/BuildClient.hs",
+   "line": 923,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 589
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 923,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:924:hs-sink-prelude.readfile.cwe-22.0:fe90c56a",
+   "stableId": "fb5fd0c3d8f2acb1",
+   "file": "exes/BuildClient.hs",
+   "line": 924,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 589
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 924,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:925:hs-sink-prelude.readfile.cwe-22.0:14921034",
+   "stableId": "09d0914208128c34",
+   "file": "exes/BuildClient.hs",
+   "line": 925,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 589
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 925,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:930:hs-sink-system.directory.doesfileexist.cwe-22.0:1ad3000f",
+   "stableId": "d17510bc6a4cf591",
+   "file": "exes/BuildClient.hs",
+   "line": 930,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 589
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 930,
+    "label": "hs-sink-system.directory.doesfileexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:exes/BuildClient.hs:932:hs-sink-prelude.readfile.cwe-22.0:1ad3000f",
+   "stableId": "7bd97ff895da98ab",
+   "file": "exes/BuildClient.hs",
+   "line": 932,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/BuildClient.hs",
+    "line": 504,
+    "label": "interproc-return:Main.getDocumentationStats"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 211
+     },
+     {
+      "label": "handle input",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 443
+     },
+     {
+      "label": "file content",
+      "provenance": "file-read",
+      "file": "exes/BuildClient.hs",
+      "line": 589
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/BuildClient.hs",
+    "line": 932,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:src/Distribution/Client/Mirror/Repo/Hackage2.hs:82:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:4d695b8c",
+   "stableId": "19f90dca375ad504",
+   "file": "src/Distribution/Client/Mirror/Repo/Hackage2.hs",
+   "line": 82,
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Distribution/Client/Mirror/Repo.hs",
+    "line": 166,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Distribution/Client/Mirror/Repo.hs",
+    "line": 82,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:src/Distribution/Client/Mirror/Repo/Hackage2.hs:83:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:4ea0ac7b",
+   "stableId": "2844a61af2b12274",
+   "file": "src/Distribution/Client/Mirror/Repo/Hackage2.hs",
+   "line": 83,
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Distribution/Client/Mirror/Repo.hs",
+    "line": 166,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Distribution/Client/Mirror/Repo.hs",
+    "line": 83,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:src/Distribution/Client/Mirror/Repo/Hackage2.hs:100:hs-sink-system.directory.removefile.cwe-22.0:4d695b8c",
+   "stableId": "27cf1bb523e0d8e1",
+   "file": "src/Distribution/Client/Mirror/Repo/Hackage2.hs",
+   "line": 100,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Distribution/Client/Mirror/Repo.hs",
+    "line": 166,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Distribution/Client/Mirror/Repo.hs",
+    "line": 100,
+    "label": "hs-sink-system.directory.removefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:src/Distribution/Client/Mirror/Repo/Hackage2.hs:101:hs-sink-system.directory.removefile.cwe-22.0:4ea0ac7b",
+   "stableId": "cb78d4c1dd270488",
+   "file": "src/Distribution/Client/Mirror/Repo/Hackage2.hs",
+   "line": 101,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Distribution/Client/Mirror/Repo.hs",
+    "line": 166,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Distribution/Client/Mirror/Repo.hs",
+    "line": 101,
+    "label": "hs-sink-system.directory.removefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:src/Distribution/Client/Mirror/State.hs:115:hs-sink-system.directory.doesfileexist.cwe-22.0:e173b8a8",
+   "stableId": "809e03b8a5311d25",
+   "file": "src/Distribution/Client/Mirror/State.hs",
+   "line": 115,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/MirrorClient.hs",
+    "line": 56,
+    "label": "interproc-return:Distribution.Client.Mirror.CmdLine.validateOpts"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli",
+      "file": "exes/MirrorClient.hs",
+      "line": 55
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/MirrorClient.hs",
+    "line": 115,
+    "label": "hs-sink-system.directory.doesfileexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:src/Distribution/Client/Mirror/State.hs:119:hs-sink-prelude.readfile.cwe-22.0:e173b8a8",
+   "stableId": "70458bb6f87823e0",
+   "file": "src/Distribution/Client/Mirror/State.hs",
+   "line": 119,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "exes/MirrorClient.hs",
+    "line": 56,
+    "label": "interproc-return:Distribution.Client.Mirror.CmdLine.validateOpts"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli",
+      "file": "exes/MirrorClient.hs",
+      "line": 55
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "exes/MirrorClient.hs",
+    "line": 119,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Distribution/Server/Features/DownloadCount/State.hs:214",
+   "stableId": "70a1fd1cec07baa2",
+   "file": "src/Distribution/Server/Features/DownloadCount/State.hs",
+   "line": 214,
+   "severity": "info",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafeInterleaveIO: Defers an IO action until demanded. Modelled as a boundary only.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-predictable-random:src/Distribution/Server/Framework/Auth.hs:445",
+   "stableId": "9ede636c8b2ae0ba",
+   "file": "src/Distribution/Server/Framework/Auth.hs",
+   "line": 445,
+   "severity": "high",
+   "vuln": "Predictable random number generator used for a security value",
+   "cwe": "CWE-338",
+   "parser": "HS-RULES",
+   "family": "weak-randomness",
+   "rule": "hs-predictable-random",
+   "confidence": 0.68,
+   "description": "Predictable random number generator used for a security value: System.Random.randomRs result bound to `generateNonce`",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Distribution/Server/Framework/BackupDump.hs:114",
+   "stableId": "1730360759fa8293",
+   "file": "src/Distribution/Server/Framework/BackupDump.hs",
+   "line": 114,
+   "severity": "info",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafeInterleaveIO: Defers an IO action until demanded. Modelled as a boundary only.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Distribution/Server/Util/NLP/Snowball.hs:25",
+   "stableId": "abb4b55f5994818b",
+   "file": "src/Distribution/Server/Util/NLP/Snowball.hs",
+   "line": 25,
+   "severity": "info",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "ir-taint:src/Distribution/Server/Util/ServeTarball.hs:162:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:e173b8a8",
+   "stableId": "2ec535307333d002",
+   "file": "src/Distribution/Server/Util/ServeTarball.hs",
+   "line": 162,
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Distribution/Server/Util/ServeTarball.hs",
+    "line": 161,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Distribution/Server/Util/ServeTarball.hs",
+    "line": 162,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  }
+ ]
+}

@@ -4,6 +4,7 @@
 // finding is distinguishable, filterable and compliance-mappable without a second finding schema.
 
 import { HS_MODEL_VERSION } from './haskell-models.js';
+import { codeOfLine } from './haskell-comments.js';
 
 const HS_FILE = /\.(?:hs|lhs|hsc)$/i;
 
@@ -32,7 +33,7 @@ export function annotateHaskellFindings(findings, fileContents = null) {
     if (!f || !isHaskellFile(f.file)) continue;
     if (!f.snippet && fileContents && typeof fileContents[f.file] === 'string' && Number.isInteger(f.line) && f.line >= 1) {
       const text = fileContents[f.file].split('\n')[f.line - 1];
-      if (typeof text === 'string') f.snippet = text.trim().slice(0, 240);
+      if (typeof text === 'string') f.snippet = codeOfLine(text).slice(0, 240);
     }
     f.language = 'haskell';
     f.capability = f.capability || 'taint';

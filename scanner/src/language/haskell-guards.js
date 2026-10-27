@@ -30,7 +30,7 @@ const FAMILY_BY_CWE = { 'CWE-22': 'path', 'CWE-918': 'url', 'CWE-78': 'cmd', 'CW
 
 const isStr = (e) => e && e.kind === 'literal' && typeof e.value === 'string';
 
-function identNames(e, out = new Set(), depth = 0) {
+export function identNames(e, out = new Set(), depth = 0) {
   if (!e || typeof e !== 'object' || depth > 30) return out;
   if (e.kind === 'ident' && e.name && !(e.hs && e.hs.functionRef)) out.add(e.name);
   for (const k of ['left', 'right', 'object', 'value', 'callee']) if (e[k] && typeof e[k] === 'object') identNames(e[k], out, depth + 1);
@@ -118,7 +118,7 @@ const exprChildren = (e) => {
 };
 
 // Find the sink call at `line` with callee `callee`; returns [{ nodeId, facts, call }].
-function findSites(fn, callee, line) {
+export function findSites(fn, callee, line) {
   const sites = [];
   const visit = (e, nodeId, facts, depth) => {
     if (!e || typeof e !== 'object' || depth > 60) return;

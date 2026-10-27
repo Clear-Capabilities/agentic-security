@@ -1,0 +1,63 @@
+{
+ "id": "cabal2nix",
+ "ms": 2193,
+ "totalFindings": 4,
+ "haskell": [
+  {
+   "id": "hs-rule:hs-unbounded-input-read:cabal2nix/src/Distribution/Nixpkgs/Fetch.hs:263",
+   "stableId": "4bec644dbcb8fa60",
+   "file": "cabal2nix/src/Distribution/Nixpkgs/Fetch.hs",
+   "line": 263,
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "cwe": "CWE-770",
+   "parser": "HS-RULES",
+   "family": "resource-exhaustion",
+   "rule": "hs-unbounded-input-read",
+   "confidence": 0.51,
+   "description": "Whole input read into memory without a size limit: Data.ByteString.Lazy.Char8.hGetContents reads everything"
+  },
+  {
+   "id": "hs-rule:hs-unbounded-input-read:distribution-nixpkgs/src/Distribution/Nixpkgs/PackageMap.hs:57",
+   "stableId": "bd2b5ad9e2070721",
+   "file": "distribution-nixpkgs/src/Distribution/Nixpkgs/PackageMap.hs",
+   "line": 57,
+   "severity": "medium",
+   "vuln": "Whole input read into memory without a size limit",
+   "cwe": "CWE-770",
+   "parser": "HS-RULES",
+   "family": "resource-exhaustion",
+   "rule": "hs-unbounded-input-read",
+   "confidence": 0.51,
+   "description": "Whole input read into memory without a size limit: Data.ByteString.Lazy.hGetContents reads everything"
+  },
+  {
+   "id": "ir-taint:hackage-db/src/Distribution/Hackage/DB/Path.hs:72:hs-sink-system.directory.doesfileexist.cwe-22.0:ebec034e",
+   "stableId": "dd45d62cf5248b6b",
+   "file": "hackage-db/src/Distribution/Hackage/DB/Path.hs",
+   "line": 72,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": ""
+  },
+  {
+   "id": "ir-taint:hackage-db/src/Distribution/Hackage/DB/Path.hs:74:hs-sink-system.directory.doesfileexist.cwe-22.0:ebebff0d",
+   "stableId": "feefc101c70d0b53",
+   "file": "hackage-db/src/Distribution/Hackage/DB/Path.hs",
+   "line": 74,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": ""
+  }
+ ]
+}

@@ -1,0 +1,433 @@
+{
+ "id": "scotty",
+ "ms": 2130,
+ "totalFindings": 18,
+ "haskell": [
+  {
+   "id": "hs-rule:hs-insecure-cookie:Web/Scotty/Cookie.hs:106",
+   "stableId": "5035a2863617be34",
+   "file": "Web/Scotty/Cookie.hs",
+   "line": 106,
+   "severity": "medium",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "cwe": "CWE-1004",
+   "parser": "HS-RULES",
+   "family": "cookie-attributes",
+   "rule": "hs-insecure-cookie",
+   "confidence": 0.68,
+   "description": "Session cookie without HttpOnly or Secure: HttpOnly missing, Secure missing",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-insecure-cookie:Web/Scotty/Cookie.hs:125",
+   "stableId": "a1823a5154ac6f21",
+   "file": "Web/Scotty/Cookie.hs",
+   "line": 125,
+   "severity": "medium",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "cwe": "CWE-1004",
+   "parser": "HS-RULES",
+   "family": "cookie-attributes",
+   "rule": "hs-insecure-cookie",
+   "confidence": 0.68,
+   "description": "Session cookie without HttpOnly or Secure: HttpOnly missing, Secure missing",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-insecure-cookie:Web/Scotty/Cookie.hs:132",
+   "stableId": "2237023532b986da",
+   "file": "Web/Scotty/Cookie.hs",
+   "line": 132,
+   "severity": "medium",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "cwe": "CWE-1004",
+   "parser": "HS-RULES",
+   "family": "cookie-attributes",
+   "rule": "hs-insecure-cookie",
+   "confidence": 0.68,
+   "description": "Session cookie without HttpOnly or Secure: HttpOnly missing, Secure missing",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-insecure-cookie:Web/Scotty/Session.hs:180",
+   "stableId": "8de90bf611cc1f57",
+   "file": "Web/Scotty/Session.hs",
+   "line": 180,
+   "severity": "medium",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "cwe": "CWE-1004",
+   "parser": "HS-RULES",
+   "family": "cookie-attributes",
+   "rule": "hs-insecure-cookie",
+   "confidence": 0.68,
+   "description": "Session cookie without HttpOnly or Secure: HttpOnly missing, Secure missing",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-predictable-random:Web/Scotty/Session.hs:187",
+   "stableId": "a1be709ca2a89827",
+   "file": "Web/Scotty/Session.hs",
+   "line": 187,
+   "severity": "high",
+   "vuln": "Predictable random number generator used for a security value",
+   "cwe": "CWE-338",
+   "parser": "HS-RULES",
+   "family": "weak-randomness",
+   "rule": "hs-predictable-random",
+   "confidence": 0.68,
+   "description": "Predictable random number generator used for a security value: System.Random.randomRIO result bound to `sId`",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "ir-taint:Web/Scotty/Util.hs:46:hs-sink-network.wai.responsefile.cwe-22.2:c24f0f8e",
+   "stableId": "2a56f62739992bbc",
+   "file": "Web/Scotty/Util.hs",
+   "line": 46,
+   "severity": "high",
+   "vuln": "Path Traversal (file served from a request-chosen path)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "Web/Scotty/Route.hs",
+    "line": 146,
+    "label": "interproc-return:Web.Scotty.Route.mkEnv"
+   },
+   "trust": {
+    "verdict": "attacker-reachable",
+    "reason": "a request, socket, header, cookie or remote response supplies the value",
+    "role": "service",
+    "roots": [
+     {
+      "label": "WAI request target",
+      "provenance": "url-param"
+     },
+     {
+      "label": "WAI request target",
+      "provenance": "url-param"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "Web/Scotty/Route.hs",
+    "line": 46,
+    "label": "hs-sink-network.wai.responsefile.cwe-22.2"
+   }
+  },
+  {
+   "id": "ir-taint:examples/basic.hs:42:hs-sink-web.scotty.html.cwe-79.0:128db2fd",
+   "stableId": "b9e67cc4e1e257d4",
+   "file": "examples/basic.hs",
+   "line": 42,
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "cwe": "CWE-79",
+   "parser": "IR-TAINT",
+   "family": "xss",
+   "rule": null,
+   "confidence": 0.319,
+   "description": "",
+   "origin": {
+    "file": "examples/basic.hs",
+    "line": 41,
+    "label": "scotty request parameter"
+   },
+   "trust": {
+    "verdict": "attacker-reachable",
+    "reason": "a request, socket, header, cookie or remote response supplies the value",
+    "role": "service",
+    "roots": [
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "examples/basic.hs",
+    "line": 42,
+    "label": "hs-sink-web.scotty.html.cwe-79.0"
+   }
+  },
+  {
+   "id": "multi-sink:scotty request parameter:5",
+   "stableId": "6011ff9c6e7609d8",
+   "file": "examples/basic.hs",
+   "line": 42,
+   "severity": "high",
+   "vuln": "Multi-Sink Taint Chain — scotty request parameter reaches 5 sinks",
+   "cwe": "CWE-20",
+   "parser": "MULTI-SINK",
+   "family": "multi-sink-taint-chain",
+   "rule": null,
+   "confidence": 0.85,
+   "description": "",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "ir-taint:examples/basic.hs:47:hs-sink-web.scotty.html.cwe-79.0:128db2fd",
+   "stableId": "b9e67cc4e1e257d4",
+   "file": "examples/basic.hs",
+   "line": 47,
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "cwe": "CWE-79",
+   "parser": "IR-TAINT",
+   "family": "xss",
+   "rule": null,
+   "confidence": 0.319,
+   "description": "",
+   "origin": {
+    "file": "examples/basic.hs",
+    "line": 41,
+    "label": "scotty request parameter"
+   },
+   "trust": {
+    "verdict": "attacker-reachable",
+    "reason": "a request, socket, header, cookie or remote response supplies the value",
+    "role": "service",
+    "roots": [
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     },
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "examples/basic.hs",
+    "line": 47,
+    "label": "hs-sink-web.scotty.html.cwe-79.0"
+   }
+  },
+  {
+   "id": "ir-taint:examples/basic.hs:52:hs-sink-web.scotty.html.cwe-79.0:128db2fd",
+   "stableId": "b9e67cc4e1e257d4",
+   "file": "examples/basic.hs",
+   "line": 52,
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "cwe": "CWE-79",
+   "parser": "IR-TAINT",
+   "family": "xss",
+   "rule": null,
+   "confidence": 0.319,
+   "description": "",
+   "origin": {
+    "file": "examples/basic.hs",
+    "line": 41,
+    "label": "scotty request parameter"
+   },
+   "trust": {
+    "verdict": "attacker-reachable",
+    "reason": "a request, socket, header, cookie or remote response supplies the value",
+    "role": "service",
+    "roots": [
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     },
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     },
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "examples/basic.hs",
+    "line": 52,
+    "label": "hs-sink-web.scotty.html.cwe-79.0"
+   }
+  },
+  {
+   "id": "ir-taint:examples/basic.hs:78:hs-sink-web.scotty.html.cwe-79.0:128db2fd",
+   "stableId": "b9e67cc4e1e257d4",
+   "file": "examples/basic.hs",
+   "line": 78,
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "cwe": "CWE-79",
+   "parser": "IR-TAINT",
+   "family": "xss",
+   "rule": null,
+   "confidence": 0.319,
+   "description": "",
+   "origin": {
+    "file": "examples/basic.hs",
+    "line": 41,
+    "label": "scotty request parameter"
+   },
+   "trust": {
+    "verdict": "attacker-reachable",
+    "reason": "a request, socket, header, cookie or remote response supplies the value",
+    "role": "service",
+    "roots": [
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     },
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     },
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     },
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "examples/basic.hs",
+    "line": 78,
+    "label": "hs-sink-web.scotty.html.cwe-79.0"
+   }
+  },
+  {
+   "id": "hs-rule:hs-unbounded-request-body:examples/basic.hs:106",
+   "stableId": "14901046b3a67b1f",
+   "file": "examples/basic.hs",
+   "line": 106,
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "cwe": "CWE-770",
+   "parser": "HS-RULES",
+   "family": "resource-exhaustion",
+   "rule": "hs-unbounded-request-body",
+   "confidence": 0.34,
+   "description": "Request body read without a size limit: Web.Scotty.body",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unbounded-request-body:examples/bodyecho.hs:19",
+   "stableId": "fcfac074ce8cb005",
+   "file": "examples/bodyecho.hs",
+   "line": 19,
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "cwe": "CWE-770",
+   "parser": "HS-RULES",
+   "family": "resource-exhaustion",
+   "rule": "hs-unbounded-request-body",
+   "confidence": 0.34,
+   "description": "Request body read without a size limit: Web.Scotty.body",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unbounded-request-body:examples/middleware.hs:68",
+   "stableId": "793ee8d572bc0722",
+   "file": "examples/middleware.hs",
+   "line": 68,
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "cwe": "CWE-770",
+   "parser": "HS-RULES",
+   "family": "resource-exhaustion",
+   "rule": "hs-unbounded-request-body",
+   "confidence": 0.34,
+   "description": "Request body read without a size limit: Web.Scotty.body",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "ir-taint:examples/nested.hs:38:hs-sink-web.scotty.html.cwe-79.0:a357a84b",
+   "stableId": "d9cfe7e19617676b",
+   "file": "examples/nested.hs",
+   "line": 38,
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "cwe": "CWE-79",
+   "parser": "IR-TAINT",
+   "family": "xss",
+   "rule": null,
+   "confidence": 0.319,
+   "description": "",
+   "origin": {
+    "file": "examples/nested.hs",
+    "line": 38,
+    "label": "WAI request target"
+   },
+   "trust": {
+    "verdict": "attacker-reachable",
+    "reason": "a request, socket, header, cookie or remote response supplies the value",
+    "role": "service",
+    "roots": [
+     {
+      "label": "WAI request target",
+      "provenance": "url-param"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "examples/nested.hs",
+    "line": 38,
+    "label": "hs-sink-web.scotty.html.cwe-79.0"
+   }
+  },
+  {
+   "id": "ir-taint:examples/urlshortener.hs:65:hs-sink-web.scotty.redirect.cwe-601.0:938c357b",
+   "stableId": "14ba37b2516636bb",
+   "file": "examples/urlshortener.hs",
+   "line": 65,
+   "severity": "medium",
+   "vuln": "Open Redirect",
+   "cwe": "CWE-601",
+   "parser": "IR-TAINT",
+   "family": "open-redirect",
+   "rule": null,
+   "confidence": 0.319,
+   "description": "",
+   "origin": {
+    "file": "examples/urlshortener.hs",
+    "line": 51,
+    "label": "scotty request parameter"
+   },
+   "trust": {
+    "verdict": "attacker-reachable",
+    "reason": "a request, socket, header, cookie or remote response supplies the value",
+    "role": "service",
+    "roots": [
+     {
+      "label": "scotty request parameter",
+      "provenance": "url-param"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "examples/urlshortener.hs",
+    "line": 65,
+    "label": "hs-sink-web.scotty.redirect.cwe-601.0"
+   }
+  }
+ ]
+}

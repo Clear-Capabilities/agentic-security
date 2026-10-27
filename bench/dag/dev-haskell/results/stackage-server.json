@@ -1,0 +1,42 @@
+{
+ "id": "stackage-server",
+ "ms": 3841,
+ "totalFindings": 6,
+ "haskell": [
+  {
+   "id": "ir-taint:src/Data/WebsiteContent.hs:86:hs-sink-text.blaze.html.preescapedtohtml.cwe-79.0:5c65755",
+   "stableId": "eeb5fa70c626ce8b",
+   "file": "src/Data/WebsiteContent.hs",
+   "line": 86,
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (unescaped HTML)",
+   "cwe": "CWE-79",
+   "parser": "IR-TAINT",
+   "family": "xss",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "src/Data/WebsiteContent.hs",
+    "line": 74,
+    "label": "file content"
+   },
+   "trust": {
+    "verdict": "data-input",
+    "reason": "standard input or file content supplies the value",
+    "role": "service",
+    "roots": [
+     {
+      "label": "file content",
+      "provenance": "file-read"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "src/Data/WebsiteContent.hs",
+    "line": 86,
+    "label": "hs-sink-text.blaze.html.preescapedtohtml.cwe-79.0"
+   }
+  }
+ ]
+}

@@ -551,6 +551,7 @@
           "HsOpenSSL": [],
           "wai-extra": [],
           "scotty-cookie": [],
+          "ihp": [],
           "http-types": [],
           "conduit-extra": [],
           "uri-parsing": [],

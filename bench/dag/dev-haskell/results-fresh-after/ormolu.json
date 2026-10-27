@@ -1,0 +1,76 @@
+{
+ "id": "ormolu",
+ "ms": 4864,
+ "totalFindings": 12,
+ "haskell": [
+  {
+   "id": "ir-taint:ormolu-live/app/Pregen.hs:11:hs-sink-data.bytestring.lazy.writefile.cwe-22.0:9e692a6c",
+   "stableId": "2533db4864899af4",
+   "file": "ormolu-live/app/Pregen.hs",
+   "line": 11,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "ormolu-live/app/Pregen.hs",
+    "line": 10,
+    "label": "command-line argument"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "command-line argument",
+      "provenance": "cli"
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "ormolu-live/app/Pregen.hs",
+    "line": 11,
+    "label": "hs-sink-data.bytestring.lazy.writefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Ormolu/Utils/Cabal.hs:104",
+   "stableId": "6cb96422ab00540e",
+   "file": "src/Ormolu/Utils/Cabal.hs",
+   "line": 104,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:src/Ormolu/Utils/Fixity.hs:59",
+   "stableId": "5feb48ac643d9a0d",
+   "file": "src/Ormolu/Utils/Fixity.hs",
+   "line": 59,
+   "severity": "low",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  }
+ ]
+}

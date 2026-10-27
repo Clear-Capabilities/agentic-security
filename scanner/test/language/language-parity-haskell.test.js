@@ -86,16 +86,21 @@ test('[parity] the SQL fix is refused when it would import a database library th
   try {
     for (const [d, label] of [[bad, 'sqlite'], [ok, 'postgres']]) { const r = scan(d); assert.equal(r.status, 3, r.stderr); assert.ok(label); }
     const sqlOf = (d) => JSON.parse(fs.readFileSync(path.join(d, '.agentic-security', 'last-scan.json'), 'utf8')).findings.find((x) => x.parser === 'IR-TAINT' && x.cwe === 'CWE-89');
+    // CHANGED DELIBERATELY (real-code precision work): the rewrite used to hard-code postgresql-simple, so a sqlite-simple file was refused by the
+    // preview. It now takes the driver the file already imports, so the sqlite-simple file is fixed WITH ITS OWN driver; the guarantee this test
+    // protects (no import of a database library the file did not use) holds, and a driver the rewrite is not written for is still refused.
     const pb = await languageFixPreview(sqlOf(bad), loadLanguageProject(bad).files);
-    assert.equal(pb.ok, false); assert.equal(pb.status, 'blocked');
-    assert.match(pb.reason, /Database\.PostgreSQL\.Simple/); assert.match(pb.reason, /refused rather than guessed/);
+    assert.equal(pb.ok, true, `a sqlite-simple file is fixed with sqlite-simple (${pb.reason})`);
+    assert.match(pb.after, /import Database\.SQLite\.Simple/); assert.doesNotMatch(pb.after, /Database\.PostgreSQL/);
+    const mysql = await languageFixPreview({ ...sqlOf(bad) }, { 'src/Main.hs': HS_SQLITE.replace(/Database\.SQLite\.Simple/g, 'Database.MySQL.Simple') });
+    assert.equal(mysql.ok, false, 'a driver the rewrite is not written for is refused');
     const po = await languageFixPreview(sqlOf(ok), loadLanguageProject(ok).files);
     assert.equal(po.ok, true, `a file already on postgresql-simple is still fixed (${po.reason})`);
     assert.doesNotMatch(po.after, /import Database\.SQLite/);
     // through MCP: no autofix patch with a foreign import reaches the agent
     const by = await mcp(bad, [call(1, 'synthesize_fix', { finding_id: sqlOf(bad).id })]);
     const sy = body(by, 1);
-    assert.equal(sy.autofix, null, 'no deterministic patch is offered'); assert.equal(sy.languageFix.status, 'blocked');
+    assert.ok(!sy.autofix || !/PostgreSQL/.test(JSON.stringify(sy.autofix)), 'no patch with a foreign import reaches the agent');
   } finally { rm(bad); rm(ok); }
   assert.deepEqual(addedDatabaseImports({ before: 'import Database.SQLite.Simple\n', after: 'import Database.SQLite.Simple\nimport Database.PostgreSQL.Simple (Only)\n' }), ['Database.PostgreSQL.Simple']);
   assert.deepEqual(addedDatabaseImports({ before: 'import Database.PostgreSQL.Simple (query_)\n', after: 'import Database.PostgreSQL.Simple (query_, query, Only)\n' }), [], 'extending an existing import is not a new library');

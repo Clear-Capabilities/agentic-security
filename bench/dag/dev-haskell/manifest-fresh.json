@@ -1,0 +1,34 @@
+{
+  "projects": [
+    {
+      "id": "ihp",
+      "url": "https://github.com/digitallyinduced/ihp",
+      "commit": "05a23ce2bdae3ec717cfc9cb51ae368d2f6303b8"
+    },
+    {
+      "id": "dhall-haskell",
+      "url": "https://github.com/dhall-lang/dhall-haskell",
+      "commit": "9e737ba67c1f9fa02b413bea3d163eca1ddb6f49"
+    },
+    {
+      "id": "hlint",
+      "url": "https://github.com/ndmitchell/hlint",
+      "commit": "7f5a30407968d5be857424c03139b1814f21af5b"
+    },
+    {
+      "id": "summoner",
+      "url": "https://github.com/kowainik/summoner",
+      "commit": "0c8c643b7313bae6c4ec6206dd83bbac05b7a06a"
+    },
+    {
+      "id": "scotty",
+      "url": "https://github.com/scotty-web/scotty",
+      "commit": "b5f4dfbdbd6c94f3d21492ac7925e699c3b54e87"
+    },
+    {
+      "id": "ormolu",
+      "url": "https://github.com/tweag/ormolu",
+      "commit": "56fd8afc3ca03d9b32fa33785cffc673d27d7e1f"
+    }
+  ]
+}

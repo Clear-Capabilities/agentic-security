@@ -1,0 +1,1216 @@
+{
+ "id": "ghcup-hs",
+ "ms": 9658,
+ "totalFindings": 47,
+ "haskell": [
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:app/ghcup/Main.hs:192",
+   "stableId": "23069b23f49976eb",
+   "file": "app/ghcup/Main.hs",
+   "line": 192,
+   "severity": "info",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafeInterleaveIO: Defers an IO action until demanded. Modelled as a boundary only.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "hs-rule:hs-unsafe-io-boundary:lib-tui/GHCup/Brick/Actions.hs:691",
+   "stableId": "5e50763852afa0d7",
+   "file": "lib-tui/GHCup/Brick/Actions.hs",
+   "line": 691,
+   "severity": "info",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "cwe": "CWE-676",
+   "parser": "HS-RULES",
+   "family": "unsafe-boundary",
+   "rule": "hs-unsafe-io-boundary",
+   "confidence": 0.425,
+   "description": "Unsafe boundary: unsafePerformIO: Runs an IO action as a pure value. Modelled as a code-quality/safety boundary only; no vulnerability class (including CWE-502) is claimed.",
+   "origin": null,
+   "trust": null,
+   "sinkInfo": null
+  },
+  {
+   "id": "ir-taint:lib/GHCup/CabalConfig.hs:35:hs-sink-data.bytestring.readfile.cwe-22.0:c3241de",
+   "stableId": "c47acfa13483c3d2",
+   "file": "lib/GHCup/CabalConfig.hs",
+   "line": 35,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/CabalConfig.hs",
+    "line": 34,
+    "label": "interproc-return:GHCup.CabalConfig.findConfig"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "environment variable",
+      "provenance": "env",
+      "file": "lib/GHCup/CabalConfig.hs",
+      "line": 45
+     },
+     {
+      "label": "environment variable",
+      "provenance": "env",
+      "file": "lib/GHCup/CabalConfig.hs",
+      "line": 55
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/CabalConfig.hs",
+    "line": 35,
+    "label": "hs-sink-data.bytestring.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Command/Compile/GHC.hs:401:hs-sink-system.directory.getfilesize.cwe-22.0:8083a6d5",
+   "stableId": "ed7e1f6340b9c6fc",
+   "file": "lib/GHCup/Command/Compile/GHC.hs",
+   "line": 401,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 401,
+    "label": "hs-sink-system.directory.getfilesize.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Command/Rm.hs:134:hs-sink-system.directory.listdirectory.cwe-22.0:9253bf07",
+   "stableId": "02d1c58c7360ebaa",
+   "file": "lib/GHCup/Command/Rm.hs",
+   "line": 134,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 163,
+    "label": "interproc-return:GHCup.Query.GHCupDirs.fromGHCupPath"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 134,
+    "label": "hs-sink-system.directory.listdirectory.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Command/Rm.hs:164:hs-sink-system.directory.doesdirectoryexist.cwe-22.0:9253bf07",
+   "stableId": "f67bf18f52915a81",
+   "file": "lib/GHCup/Command/Rm.hs",
+   "line": 164,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 163,
+    "label": "interproc-return:GHCup.Query.GHCupDirs.fromGHCupPath"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 164,
+    "label": "hs-sink-system.directory.doesdirectoryexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Command/Set.hs:135:hs-sink-system.directory.doesdirectoryexist.cwe-22.0:5dbcbc8d",
+   "stableId": "d30c17866efb1906",
+   "file": "lib/GHCup/Command/Set.hs",
+   "line": 135,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": null,
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 135,
+    "label": "hs-sink-system.directory.doesdirectoryexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Download.hs:797:hs-sink-system.directory.doesfileexist.cwe-22.0:f67c97b7",
+   "stableId": "34ce405a47e13a53",
+   "file": "lib/GHCup/Download.hs",
+   "line": 797,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Command/Prefetch.hs",
+    "line": 104,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Command/Prefetch.hs",
+    "line": 797,
+    "label": "hs-sink-system.directory.doesfileexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Download.hs:851:hs-sink-system.directory.getfilesize.cwe-22.0:e173b8a8",
+   "stableId": "8a7cecc60a26cf15",
+   "file": "lib/GHCup/Download.hs",
+   "line": 851,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Command/Prefetch.hs",
+    "line": 104,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Command/Prefetch.hs",
+    "line": 851,
+    "label": "hs-sink-system.directory.getfilesize.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Download.hs:917:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:e173b8a8",
+   "stableId": "2f1f5d020f94a54d",
+   "file": "lib/GHCup/Download.hs",
+   "line": 917,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 917,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Download/IOStreams.hs:58:hs-sink-data.bytestring.appendfile.cwe-22.0:e1abffd8",
+   "stableId": "9ac2b6fc6f133f92",
+   "file": "lib/GHCup/Download/IOStreams.hs",
+   "line": 58,
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Download/IOStreams.hs",
+    "line": 57,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Download/IOStreams.hs",
+    "line": 58,
+    "label": "hs-sink-data.bytestring.appendfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Download/IOStreams.hs:59:hs-sink-data.bytestring.writefile.cwe-22.0:e1abffd8",
+   "stableId": "2f93aabae27fba52",
+   "file": "lib/GHCup/Download/IOStreams.hs",
+   "line": 59,
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Download/IOStreams.hs",
+    "line": 57,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Download/IOStreams.hs",
+    "line": 59,
+    "label": "hs-sink-data.bytestring.writefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Legacy/Cabal.hs:72:hs-sink-system.directory.doesfileexist.cwe-22.0:9ec3ea1e",
+   "stableId": "4b88644e917e1ad7",
+   "file": "lib/GHCup/Legacy/Cabal.hs",
+   "line": 72,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": null,
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 72,
+    "label": "hs-sink-system.directory.doesfileexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Legacy/HLS.hs:259:hs-sink-system.directory.listdirectory.cwe-22.0:dadc9b6e",
+   "stableId": "c5727e06eba9e1d0",
+   "file": "lib/GHCup/Legacy/HLS.hs",
+   "line": 259,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 253,
+    "label": "interproc-return:GHCup.Query.GHCupDirs.fromGHCupPath"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 259,
+    "label": "hs-sink-system.directory.listdirectory.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Legacy/HLS.hs:264:hs-sink-system.directory.doesdirectoryexist.cwe-22.0:dadc9b6e",
+   "stableId": "b36d6d3e0fbec389",
+   "file": "lib/GHCup/Legacy/HLS.hs",
+   "line": 264,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 253,
+    "label": "interproc-return:GHCup.Query.GHCupDirs.fromGHCupPath"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 264,
+    "label": "hs-sink-system.directory.doesdirectoryexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Legacy/Stack.hs:73:hs-sink-system.directory.doesfileexist.cwe-22.0:9ec3ea1e",
+   "stableId": "22371f10537d8a4b",
+   "file": "lib/GHCup/Legacy/Stack.hs",
+   "line": 73,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": null,
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 73,
+    "label": "hs-sink-system.directory.doesfileexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Legacy/Utils.hs:228:hs-sink-system.directory.doesdirectoryexist.cwe-22.0:543f5cd0",
+   "stableId": "30d0a5a5f7e7215d",
+   "file": "lib/GHCup/Legacy/Utils.hs",
+   "line": 228,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 227,
+    "label": "interproc-return:GHCup.Query.GHCupDirs.ghcupGHCDir"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 228,
+    "label": "hs-sink-system.directory.doesdirectoryexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Prelude/File.hs:313:hs-sink-system.directory.doesdirectoryexist.cwe-22.0:c3241de",
+   "stableId": "104c0c09c9c9a8eb",
+   "file": "lib/GHCup/Prelude/File.hs",
+   "line": 313,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "app/ghcup/Main.hs",
+    "line": 211,
+    "label": "interproc-return:Main.toSettings"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "environment variable",
+      "provenance": "env",
+      "file": "app/ghcup/Main.hs",
+      "line": 210
+     },
+     {
+      "label": "command-line argument",
+      "provenance": "cli",
+      "file": "app/ghcup/Main.hs",
+      "line": 191
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "app/ghcup/Main.hs",
+    "line": 313,
+    "label": "hs-sink-system.directory.doesdirectoryexist.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Prelude/File.hs:321:hs-sink-system.directory.removefile.cwe-22.0:c3241de",
+   "stableId": "152e5048ba986eb1",
+   "file": "lib/GHCup/Prelude/File.hs",
+   "line": 321,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "app/ghcup/Main.hs",
+    "line": 211,
+    "label": "interproc-return:Main.toSettings"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed",
+    "role": "cli",
+    "roots": [
+     {
+      "label": "environment variable",
+      "provenance": "env",
+      "file": "app/ghcup/Main.hs",
+      "line": 210
+     },
+     {
+      "label": "command-line argument",
+      "provenance": "cli",
+      "file": "app/ghcup/Main.hs",
+      "line": 191
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "app/ghcup/Main.hs",
+    "line": 321,
+    "label": "hs-sink-system.directory.removefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Prelude/File.hs:330:hs-sink-system.directory.removefile.cwe-22.0:c3241de",
+   "stableId": "5526eed9dbfa0e2c",
+   "file": "lib/GHCup/Prelude/File.hs",
+   "line": 330,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 176,
+    "label": "interproc-return:GHCup.Legacy.Utils.hlsAllBinaries"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 330,
+    "label": "hs-sink-system.directory.removefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Prelude/File.hs:331:hs-sink-system.directory.removefile.cwe-22.0:c3241de",
+   "stableId": "9c7db4d140030f1b",
+   "file": "lib/GHCup/Prelude/File.hs",
+   "line": 331,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 176,
+    "label": "interproc-return:GHCup.Legacy.Utils.hlsAllBinaries"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 331,
+    "label": "hs-sink-system.directory.removefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Prelude/File.hs:411:hs-sink-prelude.writefile.cwe-22.0:ffb32d39",
+   "stableId": "12131ccaddc3c357",
+   "file": "lib/GHCup/Prelude/File.hs",
+   "line": 411,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 115,
+    "label": "interproc-return:GHCup.Legacy.Utils.binarySymLinkDestination"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 411,
+    "label": "hs-sink-prelude.writefile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Prelude/File/Search.hs:118:hs-sink-system.directory.listdirectory.cwe-22.0:f83afab5",
+   "stableId": "61496f4d04af2b33",
+   "file": "lib/GHCup/Prelude/File/Search.hs",
+   "line": 118,
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Legacy/HLS.hs",
+    "line": 70,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "entry-parameter",
+    "reason": "a parameter of an exported function that nothing in the analysed code calls",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Legacy/HLS.hs",
+    "line": 118,
+    "label": "hs-sink-system.directory.listdirectory.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Prelude/Process/Windows.hs:254:hs-sink-system.process.proc.cwe-78.0:926dd9ea",
+   "stableId": "b8d8d69c4c2a3314",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 254,
+   "severity": "info",
+   "vuln": "OS Command Injection (attacker-chosen executable)",
+   "cwe": "CWE-78",
+   "parser": "IR-TAINT",
+   "family": "command-injection",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Prelude/Process/Windows.hs",
+    "line": 253,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "api-contract",
+    "reason": "the function hands its parameter on whole (or as the root of a fixed tail) to a path or command operation: a thin wrapper, whose caller chose what to read or run",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Prelude/Process/Windows.hs",
+    "line": 254,
+    "label": "hs-sink-system.process.proc.cwe-78.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Prelude/Process/Windows.hs:268:hs-sink-system.process.shell.cwe-78.0:92439c7c",
+   "stableId": "8eb6968b9846e991",
+   "file": "lib/GHCup/Prelude/Process/Windows.hs",
+   "line": 268,
+   "severity": "info",
+   "vuln": "OS Command Injection (shell command spec)",
+   "cwe": "CWE-78",
+   "parser": "IR-TAINT",
+   "family": "command-injection",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Prelude/Process/Windows.hs",
+    "line": 266,
+    "label": "text parameter of an exported function (caller-controlled)",
+    "kind": "parameter"
+   },
+   "trust": {
+    "verdict": "api-contract",
+    "reason": "the function hands its parameter on whole (or as the root of a fixed tail) to a path or command operation: a thin wrapper, whose caller chose what to read or run",
+    "role": "library",
+    "roots": [
+     {
+      "label": "text parameter of an exported function (caller-controlled)",
+      "provenance": null
+     }
+    ]
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Prelude/Process/Windows.hs",
+    "line": 268,
+    "label": "hs-sink-system.process.shell.cwe-78.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Query/DB.hs:72:hs-sink-data.bytestring.readfile.cwe-22.0:c24f0f8e",
+   "stableId": "ef3d4367d1ee8583",
+   "file": "lib/GHCup/Query/DB.hs",
+   "line": 72,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "app/ghcup/Main.hs",
+    "line": 136,
+    "label": "interproc-return:GHCup.Query.DB.getAllInstalledTools"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "app/ghcup/Main.hs",
+    "line": 72,
+    "label": "hs-sink-data.bytestring.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Query/DB.hs:204:hs-sink-prelude.readfile.cwe-22.0:c24f0f8e",
+   "stableId": "282470094463432b",
+   "file": "lib/GHCup/Query/DB.hs",
+   "line": 204,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 202,
+    "label": "interproc-return:GHCup.Prelude.File.recordedInstallationFile"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 204,
+    "label": "hs-sink-prelude.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Query/GHCupDirs.hs:539:hs-sink-system.directory.listdirectory.cwe-22.0:c3241de",
+   "stableId": "e34e7277b158d309",
+   "file": "lib/GHCup/Query/GHCupDirs.hs",
+   "line": 539,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 645,
+    "label": "interproc-return:GHCup.Legacy.Utils.ghcInternalBinDir"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 539,
+    "label": "hs-sink-system.directory.listdirectory.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Query/GHCupDirs.hs:568:hs-sink-system.directory.removepathforcibly.cwe-22.0:c3241de",
+   "stableId": "4bee6cea0c58cc07",
+   "file": "lib/GHCup/Query/GHCupDirs.hs",
+   "line": 568,
+   "severity": "info",
+   "vuln": "Path Traversal (filesystem operation)",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 162,
+    "label": "interproc-return:GHCup.Query.GHCupDirs.ghcupGHCDir"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib/GHCup/Command/GC.hs",
+    "line": 568,
+    "label": "hs-sink-system.directory.removepathforcibly.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Unpack.hs:74:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f",
+   "stableId": "0ebca836aeb00358",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 74,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 74,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Unpack.hs:76:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f",
+   "stableId": "05ac3d12eeb7626b",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 76,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 76,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Unpack.hs:80:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f",
+   "stableId": "07f3bb845ec75f27",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 80,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 80,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Unpack.hs:81:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f",
+   "stableId": "081a76e145c1810e",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 81,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 81,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Unpack.hs:86:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f",
+   "stableId": "081a76e145c1810e",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 86,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 86,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Unpack.hs:123:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f",
+   "stableId": "8da3b99a6c150ffb",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 123,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 123,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Unpack.hs:125:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f",
+   "stableId": "05ac3d12eeb7626b",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 125,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 125,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Unpack.hs:129:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f",
+   "stableId": "e5e6800cc85a9c67",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 129,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 129,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  },
+  {
+   "id": "ir-taint:lib/GHCup/Unpack.hs:130:hs-sink-data.bytestring.lazy.readfile.cwe-22.0:c2f9d7f",
+   "stableId": "d51853ac207fa621",
+   "file": "lib/GHCup/Unpack.hs",
+   "line": 130,
+   "severity": "info",
+   "vuln": "Path Traversal",
+   "cwe": "CWE-22",
+   "parser": "IR-TAINT",
+   "family": "path-traversal",
+   "rule": null,
+   "confidence": 0.638,
+   "description": "",
+   "origin": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 365,
+    "label": "interproc-return:GHCup.Command.Compile.GHC.compileGHC.compileMakeBindist"
+   },
+   "trust": {
+    "verdict": "operator-controlled",
+    "reason": "no origin was recorded for the tainted value and the function belongs to a command-line program; no request, socket or remote-response read feeds it (inferred, not proven)",
+    "role": "cli",
+    "inferred": true,
+    "roots": []
+   },
+   "sinkInfo": {
+    "file": "lib-opt/GHCup/OptParse/Compile.hs",
+    "line": 130,
+    "label": "hs-sink-data.bytestring.lazy.readfile.cwe-22.0"
+   }
+  }
+ ]
+}

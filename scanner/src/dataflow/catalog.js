@@ -2743,5 +2743,19 @@ export function matchAnnotationParams(paramAnnotations, file) {
   return tainted;
 }
 
+// The same lookup as matchAnnotationParams, keeping what each matched source says about itself so the engine can record an origin for the
+// parameter (an evidence chain that begins at "parameter x of f, request input" instead of at the sink).
+export function matchAnnotationParamSources(paramAnnotations, file) {
+  const out = [];
+  if (!paramAnnotations || !paramAnnotations.length) return out;
+  for (const pa of paramAnnotations) {
+    const raw = ANNOTATION_INDEX.get(pa.decorator);
+    if (!raw) continue;
+    const hit = filterByProvenance(raw).filter(h => _languageAllowed(h, file)).find(h => h.kind === 'source');
+    if (hit) out.push({ name: pa.name, id: hit.id, label: hit.label || pa.decorator, provenance: hit.provenance || null });
+  }
+  return out;
+}
+
 // For tests and reflection.
 export function _catalogSize() { return CATALOG.length; }

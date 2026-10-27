@@ -263,12 +263,19 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // parameter reads, the raw body readers, Scotty cookies, the Yesod JSON-body and cookie readers, WAI's body parsers and conduit body stream), each as a call
   // form and a lineage twin, plus four annotation sources: a text parameter of an exported function that returns a Scotty, Yesod, Servant or WAI handler value
   // (`hs-src-handler-param-<framework>`, provenance url-param). Re-measured against the live catalog.
-  assert.equal(SOURCES.length, 652);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 476);
-  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 59);
+  // 652 -> 672 and 476 -> 496 modeled: IHP's request accessors (`param`, `paramText`, `paramOrNothing`, `paramOrDefault`, `paramList`) from
+  // IHP.ControllerPrelude and IHP.Controller.Param, each as a call form and a lineage twin, every one with a url-param provenance. Added with the
+  // real-code Haskell precision work, where an IHP controller's request value reaching a shell command was found only by an accident of call-graph
+  // ambiguity and stopped being found once that was fixed. Also 496 -> 514 modeled and 59 -> 41 partial: the nine Haskell handle readers
+  // (`hGetLine`, `hGetContents`, `hGetChar` and the Text/ByteString forms) read whatever handle they are given, so they are `file-read` sources
+  // (a modeled provenance), no longer `stdin` (which the lineage registry can only broaden to the generic user-input category: partial). Each is a
+  // call form and a lineage twin. Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 672);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 514);
+  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 41);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 117);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(476 + 59 + 117, SOURCES.length);
+  assert.equal(514 + 41 + 117, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
