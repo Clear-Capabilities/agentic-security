@@ -338,6 +338,8 @@ FULL (full-source-edit): services.openssh.settings.PermitRootLogin = "yes" -> "n
 -    settings.PermitRootLogin = "yes";
 +    settings.PermitRootLogin = "no";
   note: Root can no longer log in over SSH. Make sure a non-root account with an authorized key and sudo access exists BEFORE deploying, or you can lock yourself out.
+
+  compile was not run: not requested (default static scans never start a compiler or evaluator)
 ```
 <!-- generated:fix-nix-ssh:end -->
 

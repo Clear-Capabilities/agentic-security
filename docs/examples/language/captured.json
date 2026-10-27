@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "engineVersion": "0.189.0",
-  "bundleSha256": "f5b8304272ffd3846d405b461331e001a6209c349b48d83353c266eeb34b9460",
+  "engineVersion": "0.190.0",
+  "bundleSha256": "31c77828cee38ed79def22f8e0fb1260d494b05cdd00948438e85f1b89083aca",
   "examples": {
     "haskell-app/vulnerable": {
       "exitCode": 3,
@@ -109,43 +109,43 @@
           "family": "weak-randomness",
           "line": 21,
           "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported): a predictable generator is replaced by the operating system CSPRNG (Crypto.Random), whose result type differs from System.Random: the surrounding code must change with it"
+          "text": "No verified fix for this finding (unsupported, guidance-only): a predictable generator is replaced by the operating system CSPRNG (System.Entropy or Crypto.Random), whose result type is bytes, not System.Random's: the surrounding code must change with it. Only a one-line action of type IO <fixed-width integer> equal to randomIO, in a file that already imports System.Entropy, is rewritten. The decision needed: the token's type and size (a 30-bit integer cannot be made unguessable by changing the generator) and the entropy library the project declares."
         },
         {
           "family": "sensitive-logging",
           "line": 24,
           "exitCode": 0,
-          "text": "MITIGATION: Replaced 2 sensitive log argument(s) with \"[REDACTED]\". The value is no longer logged; the log line loses that detail.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -24,1 +24,1 @@\n-logLogin user password = putStrLn (\"login \" ++ user ++ \" password=\" ++ password)\n+logLogin user password = putStrLn (\"login \" ++ user ++ \" \"[REDACTED]\"=\" ++ \"[REDACTED]\")"
+          "text": "MITIGATION (full-source-edit): Replaced 2 sensitive log argument(s) with \"[REDACTED]\". The value is no longer logged; the log line loses that detail.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -24,1 +24,1 @@\n-logLogin user password = putStrLn (\"login \" ++ user ++ \" password=\" ++ password)\n+logLogin user password = putStrLn (\"login \" ++ user ++ \" \"[REDACTED]\"=\" ++ \"[REDACTED]\")\n  note: The redacted value no longer appears in the log; the line loses that detail.\n\n  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling"
         },
         {
           "family": "multi-sink-taint-chain",
           "line": 32,
           "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+          "text": "No verified fix for this finding (unsupported, guidance-only): no deterministic fix is supported for this exact shape. The decision needed: what correct handling of this value is for this code (validate it, encode it for the sink it reaches, or stop it reaching the sink); the scanner has no verified rewrite for this shape."
         },
         {
           "family": "sql-injection",
           "line": 32,
           "exitCode": 0,
-          "text": "FULL: Moved 1 interpolated value(s) out of the SQL text into query parameters.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -13,1 +13,1 @@\n-lookupOrder conn ref = query_ conn (fromString (\"SELECT status FROM orders WHERE ref = '\" ++ ref ++ \"'\"))\n+lookupOrder conn ref = query conn \"SELECT status FROM orders WHERE ref = ?\" (Only ref)"
+          "text": "FULL (full-source-edit): Moved 1 interpolated value(s) out of the SQL text into query parameters.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -13,1 +13,1 @@\n-lookupOrder conn ref = query_ conn (fromString (\"SELECT status FROM orders WHERE ref = '\" ++ ref ++ \"'\"))\n+lookupOrder conn ref = query conn \"SELECT status FROM orders WHERE ref = ?\" (Only ref)\n  note: Interpolated values are now bound parameters. A splice that is not a value (a table or column name, an operator, a keyword) cannot be a parameter and needs an allow-list instead.\n\n  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling"
         },
         {
           "family": "missing-authentication",
           "line": 34,
           "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported): a missing authentication check needs a policy (which credential, which rejection); the scanner reports the handler and does not invent the guard"
+          "text": "No verified fix for this finding (unsupported, guidance-only): a missing authentication check needs a policy; the scanner reports the handler and does not invent the guard. The decision needed: which credential authenticates this route (session, token, API key) and what an unauthenticated caller receives (401, a redirect to login)."
         },
         {
           "family": "command-injection",
           "line": 36,
           "exitCode": 4,
-          "text": "No verified fix for this finding (blocked): the patch introduces 1 new medium-or-higher finding(s)"
+          "text": "No verified fix for this finding (blocked, blocked): the patch introduces 1 new medium-or-higher finding(s)"
         },
         {
           "family": "missing-authentication",
           "line": 38,
           "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported): a missing authentication check needs a policy (which credential, which rejection); the scanner reports the handler and does not invent the guard"
+          "text": "No verified fix for this finding (unsupported, guidance-only): a missing authentication check needs a policy; the scanner reports the handler and does not invent the guard. The decision needed: which credential authenticates this route (session, token, API key) and what an unauthenticated caller receives (401, a redirect to login)."
         }
       ]
     },
@@ -383,19 +383,19 @@
           "family": "firewall-exposure",
           "line": 4,
           "exitCode": 0,
-          "text": "FULL (full-source-edit): networking.firewall.enable = false -> true at configuration.nix:4, the definition that wins by priority.\n--- a/configuration.nix\n+++ b/configuration.nix\n@@ -4,1 +4,1 @@\n-  networking.firewall.enable = false;\n+  networking.firewall.enable = true;\n  note: Every port not listed in networking.firewall.allowedTCPPorts/allowedUDPPorts becomes unreachable from the network. Open the ports your services need (and services.openssh.openFirewall for SSH) or you can lose remote access."
+          "text": "FULL (full-source-edit): networking.firewall.enable = false -> true at configuration.nix:4, the definition that wins by priority.\n--- a/configuration.nix\n+++ b/configuration.nix\n@@ -4,1 +4,1 @@\n-  networking.firewall.enable = false;\n+  networking.firewall.enable = true;\n  note: Every port not listed in networking.firewall.allowedTCPPorts/allowedUDPPorts becomes unreachable from the network. Open the ports your services need (and services.openssh.openFirewall for SSH) or you can lose remote access.\n\n  compile was not run: not requested (default static scans never start a compiler or evaluator)"
         },
         {
           "family": "ssh-access",
           "line": 8,
           "exitCode": 0,
-          "text": "FULL (full-source-edit): services.openssh.settings.PermitRootLogin = \"yes\" -> \"no\" at configuration.nix:8, the definition that wins by priority.\n--- a/configuration.nix\n+++ b/configuration.nix\n@@ -8,1 +8,1 @@\n-    settings.PermitRootLogin = \"yes\";\n+    settings.PermitRootLogin = \"no\";\n  note: Root can no longer log in over SSH. Make sure a non-root account with an authorized key and sudo access exists BEFORE deploying, or you can lock yourself out."
+          "text": "FULL (full-source-edit): services.openssh.settings.PermitRootLogin = \"yes\" -> \"no\" at configuration.nix:8, the definition that wins by priority.\n--- a/configuration.nix\n+++ b/configuration.nix\n@@ -8,1 +8,1 @@\n-    settings.PermitRootLogin = \"yes\";\n+    settings.PermitRootLogin = \"no\";\n  note: Root can no longer log in over SSH. Make sure a non-root account with an authorized key and sudo access exists BEFORE deploying, or you can lock yourself out.\n\n  compile was not run: not requested (default static scans never start a compiler or evaluator)"
         },
         {
           "family": "ssh-access",
           "line": 9,
           "exitCode": 0,
-          "text": "FULL (full-source-edit): services.openssh.settings.PasswordAuthentication = true -> false at configuration.nix:9, the definition that wins by priority.\n--- a/configuration.nix\n+++ b/configuration.nix\n@@ -9,1 +9,1 @@\n-    settings.PasswordAuthentication = true;\n+    settings.PasswordAuthentication = false;\n  note: Password logins stop working for every account. Each administrator needs an authorized SSH key first (users.users.<name>.openssh.authorizedKeys)."
+          "text": "FULL (full-source-edit): services.openssh.settings.PasswordAuthentication = true -> false at configuration.nix:9, the definition that wins by priority.\n--- a/configuration.nix\n+++ b/configuration.nix\n@@ -9,1 +9,1 @@\n-    settings.PasswordAuthentication = true;\n+    settings.PasswordAuthentication = false;\n  note: Password logins stop working for every account. Each administrator needs an authorized SSH key first (users.users.<name>.openssh.authorizedKeys).\n\n  compile was not run: not requested (default static scans never start a compiler or evaluator)"
         },
         {
           "family": "hardcoded-secret",
@@ -543,13 +543,13 @@
           "family": "path-traversal",
           "line": 14,
           "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+          "text": "No verified fix for this finding (unsupported, guidance-only): path traversal is repaired by confining the final path to a base directory. takeFileName is applied only to a String/FilePath parameter spliced under a fixed directory in a file operation; this shape (several segments, a base chosen at run time, a directory operation, a path handed through other functions) is not that. The decision needed: the directory the files must stay in, and whether a name containing separators or \"..\" is rejected or reduced to its last segment."
         },
         {
           "family": "command-injection",
           "line": 15,
           "exitCode": 0,
-          "text": "MITIGATION: Replaced a shell command string with a direct callProcess of \"pandoc\" and an argument list; no shell parses the value (a value fused into an argument is still passed as data). A value that starts with \"-\" can still be read as an option by the program: add \"--\" or validate it.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -5,5 +5,5 @@\n-import System.Process (callCommand)\n-\n--- | Export a note by name: the name goes straight into a shell command.\n-exportNote :: String -> IO ()\n-exportNote name = callCommand (\"pandoc notes/\" ++ name ++ \".md -o /srv/export/\" ++ name ++ \".pdf\")\n+import System.Process (callCommand, callProcess)\n+\n+-- | Export a note by name: the name goes straight into a shell command.\n+exportNote :: String -> IO ()\n+exportNote name = callProcess \"pandoc\" [(\"notes/\" ++ name ++ \".md\"), \"-o\", (\"/srv/export/\" ++ name ++ \".pdf\")]"
+          "text": "MITIGATION (full-source-edit): Replaced a shell command string with a direct callProcess of \"pandoc\" and an argument list; no shell parses the value (a value fused into an argument is still passed as data). A value that starts with \"-\" can still be read as an option by the program: add \"--\" or validate it.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -5,5 +5,5 @@\n-import System.Process (callCommand)\n-\n--- | Export a note by name: the name goes straight into a shell command.\n-exportNote :: String -> IO ()\n-exportNote name = callCommand (\"pandoc notes/\" ++ name ++ \".md -o /srv/export/\" ++ name ++ \".pdf\")\n+import System.Process (callCommand, callProcess)\n+\n+-- | Export a note by name: the name goes straight into a shell command.\n+exportNote :: String -> IO ()\n+exportNote name = callProcess \"pandoc\" [(\"notes/\" ++ name ++ \".md\"), \"-o\", (\"/srv/export/\" ++ name ++ \".pdf\")]\n  note: No shell parses the command any more: pipes, redirection, globbing, variable expansion and quoting in the old string no longer apply, and the program is found by name on PATH."
         }
       ]
     },

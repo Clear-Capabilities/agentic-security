@@ -2626,7 +2626,7 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony export */ });
 /* harmony import */ var _posture_proof_fabric_orchestrator_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3740);
 /* harmony import */ var _posture_proof_fabric_fix_proof_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(818);
-/* harmony import */ var _posture_proof_fabric_cli_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31602);
+/* harmony import */ var _posture_proof_fabric_cli_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(92066);
 /* harmony import */ var _posture_proof_fabric_store_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(62199);
 /* harmony import */ var _posture_proof_fabric_reproducer_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(37055);
 /* harmony import */ var _posture_proof_fabric_siblings_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(25099);
@@ -4328,7 +4328,7 @@ const synthesize_fix = {
           if (lc.languageOfFinding(f)) {
             const proj = lc.loadLanguageProject(ctx.sessionRoot);
             const prev = await lc.languageFixPreview(f, proj.files);
-            languageFix = { status: prev.status, ok: prev.ok, label: prev.label || null, tier: prev.tier || null, reason: prev.reason || null, diff: prev.diff || null, explanation: prev.explanation || null, consequences: prev.consequences || [] };
+            languageFix = { status: prev.status, ok: prev.ok, label: prev.label || null, tier: prev.tier || null, reason: prev.reason || null, decision: prev.decision || null, diff: prev.diff || null, explanation: prev.explanation || null, consequences: prev.consequences || [] };
             // A fix that spans several files is applied with apply_fix + plan_digest (atomic, one history group); see _applyMultiFilePlan.
             if (prev.ok && prev.edits) {
               languageFix.multiFile = prev.edits.map((e) => e.file);

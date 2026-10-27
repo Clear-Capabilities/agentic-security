@@ -361,12 +361,15 @@ this `sqlite-simple` example, and is regenerated at the next build.
 <!-- generated:fix-hs-sql:start -->
 ```text
 $ agentic-security fix --finding <id> --preview     # exit 0
-FULL: Moved 1 interpolated value(s) out of the SQL text into query parameters.
+FULL (full-source-edit): Moved 1 interpolated value(s) out of the SQL text into query parameters.
 --- a/src/Main.hs
 +++ b/src/Main.hs
 @@ -13,1 +13,1 @@
 -lookupOrder conn ref = query_ conn (fromString ("SELECT status FROM orders WHERE ref = '" ++ ref ++ "'"))
 +lookupOrder conn ref = query conn "SELECT status FROM orders WHERE ref = ?" (Only ref)
+  note: Interpolated values are now bound parameters. A splice that is not a value (a table or column name, an operator, a keyword) cannot be a parameter and needs an allow-list instead.
+
+  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling
 ```
 <!-- generated:fix-hs-sql:end -->
 
@@ -376,12 +379,15 @@ loses that detail:
 <!-- generated:fix-hs-logging:start -->
 ```text
 $ agentic-security fix --finding <id> --preview     # exit 0
-MITIGATION: Replaced 2 sensitive log argument(s) with "[REDACTED]". The value is no longer logged; the log line loses that detail.
+MITIGATION (full-source-edit): Replaced 2 sensitive log argument(s) with "[REDACTED]". The value is no longer logged; the log line loses that detail.
 --- a/src/Main.hs
 +++ b/src/Main.hs
 @@ -24,1 +24,1 @@
 -logLogin user password = putStrLn ("login " ++ user ++ " password=" ++ password)
 +logLogin user password = putStrLn ("login " ++ user ++ " "[REDACTED]"=" ++ "[REDACTED]")
+  note: The redacted value no longer appears in the log; the line loses that detail.
+
+  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling
 ```
 <!-- generated:fix-hs-logging:end -->
 
@@ -393,7 +399,7 @@ The scanner reports that and leaves the file alone; adding a `--` or validating 
 <!-- generated:fix-hs-cmd:start -->
 ```text
 $ agentic-security fix --finding <id> --preview     # exit 4
-No verified fix for this finding (blocked): the patch introduces 1 new medium-or-higher finding(s)
+No verified fix for this finding (blocked, blocked): the patch introduces 1 new medium-or-higher finding(s)
 ```
 <!-- generated:fix-hs-cmd:end -->
 
