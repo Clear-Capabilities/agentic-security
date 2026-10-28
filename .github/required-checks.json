@@ -57,6 +57,7 @@
     "test-shard (4/4)",
     "test-bundle",
     "corpus",
+    "bench-gates",
     "sandbox-linux",
     "determinism-compare",
     "determinism-attest (ubuntu-latest)",

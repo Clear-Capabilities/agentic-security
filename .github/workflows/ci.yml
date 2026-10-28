@@ -864,6 +864,33 @@ jobs:
           path: ${{ runner.temp }}/local-model.json
           if-no-files-found: warn
 
+  # The bench gates that used to run ONLY in the local pre-push gate and the tag-time release gate. They now also run on every pull
+  # request, in parallel with the test shards on a clean runner, so the local push does not have to repeat them: a precision, recall or
+  # self-scan regression is caught here, at the pull request, instead of an hour later at release. The same release-check entries, caching
+  # off, so what is blocked here is exactly what would block the release.
+  bench-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # self-scan and layer-recall inspect history
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        working-directory: scanner
+        timeout-minutes: 10
+      - name: Build the bundle
+        working-directory: scanner
+        run: npm run build
+        timeout-minutes: 10
+      - name: Bench gates (self-scan, mutation, fix verification, layer recall, Haskell precision)
+        working-directory: scanner
+        env:
+          AGENTIC_SECURITY_GATE_NO_CACHE: '1'
+        run: node ../scripts/release-check.mjs --no-cache --only self-scan-gate,mutation-gate,fix-verification-gate,layer-recall-gate,haskell-precision-gate
+
   corpus:
     runs-on: ubuntu-latest
     timeout-minutes: 45

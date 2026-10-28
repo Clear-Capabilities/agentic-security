@@ -248,6 +248,19 @@ function main(argv = process.argv.slice(2)) {
     return;
   }
 
+  // `--only-file <list>` runs just the listed test files (one scanner-relative path per line; unknown paths are an error, never ignored).
+  // This is the pre-push gate's affected-tests mode: it is a SUBSET run, so the extra steps (cpp-dataflow, fault injection, python) belong to
+  // the full run and are skipped, and the hosted pull-request CI still runs everything.
+  const oi = argv.indexOf('--only-file');
+  if (oi !== -1) {
+    if (!argv[oi + 1]) { process.stderr.write('run-unit-tests.mjs: --only-file needs a path\n'); process.exit(1); }
+    const wanted = fs.readFileSync(argv[oi + 1], 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
+    const known = new Set(files);
+    const unknown = wanted.filter((w) => !known.has(w));
+    if (unknown.length) { process.stderr.write(`run-unit-tests.mjs: --only-file names files that npm test does not run: ${unknown.slice(0, 5).join(', ')}\n`); process.exit(1); }
+    if (!wanted.length) { process.stderr.write('run-unit-tests.mjs: --only-file lists no files, refusing to report a vacuous pass.\n'); process.exit(1); }
+    files.splice(0, files.length, ...wanted);
+  }
   const shard = resolveShard(argv);
   const mine = shard ? assignShard(files, shard) : files;
   if (!mine.length) {
@@ -272,7 +285,7 @@ function main(argv = process.argv.slice(2)) {
   const r = spawnSync(process.execPath, ['--test', ...(conc ? [`--test-concurrency=${conc}`] : []), ...mine], { cwd: SCANNER, stdio: 'inherit', env });
   if (r.status !== 0) finish(r.status ?? 1);
 
-  for (const step of extraStepsForShard(shard)) {
+  for (const step of (oi !== -1 ? [] : extraStepsForShard(shard))) {
     const e = spawnSync('npm', ['run', step.script], { cwd: SCANNER, stdio: 'inherit', env });
     if (e.status !== 0) finish(e.status ?? 1);
   }
