@@ -667,4 +667,10 @@ test('flow: a registry that is slow to show the version leaves the release shipp
   assert.equal(ctx.state.data.npmPending, false);
   assert.match(ctx.state.data.phases.npm.detail, /is on npm/);
   assert.doesNotMatch(outcomeText(ctx.state, again), /NOT YET VERIFIED/);
+
+test('backfill: a created page never takes the Latest badge from the newest release', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const here = path.dirname(new URL(import.meta.url).pathname);
+  const r = spawnSync(process.execPath, [path.join(here, '../../scripts/backfill-github-releases.mjs'), 'v0.192.0'], { encoding: 'utf8' });
+  assert.match(r.stdout, /--latest=false/, r.stdout + r.stderr);
 });
