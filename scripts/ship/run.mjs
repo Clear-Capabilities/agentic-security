@@ -14,13 +14,13 @@ class Stop extends Error { constructor(phase, message) { super(message); this.ph
  * @param {object} [opts] { branch?, maxRetries, stuckMinutes, checksTimeoutMin, releaseTimeoutMin, npmTimeoutMin, allowMissing, dryRun, tmpdir }
  */
 export async function runShip(ctx, opts = {}) {
-  const o = { maxRetries: 2, stuckMinutes: 40, checksTimeoutMin: 90, releaseTimeoutMin: 60, npmTimeoutMin: 90, allowMissing: ['dependency-currency'], dryRun: false, ...opts };
+  const o = { maxRetries: 2, stuckMinutes: 40, checksTimeoutMin: 90, releaseTimeoutMin: 60, npmTimeoutMin: 90, npmSoftSeconds: 90, allowMissing: ['dependency-currency'], dryRun: false, ...opts };
   const { sh, state, log } = ctx;
   const git = (args) => { const r = sh('git', args); if (r.code !== 0) throw new Error(`git ${args.join(' ')}: ${r.err.trim().slice(0, 200)}`); return r.out; };
   const gh = (args) => sh('gh', args);
   const ghJson = (args) => { const r = gh(args); if (r.code !== 0) throw new Error(`gh ${args.slice(0, 3).join(' ')}: ${r.err.trim().slice(0, 200)}`); return JSON.parse(r.out || 'null'); };
   // Resuming: a phase already done is skipped (never re-merge, never re-tag), and the facts later phases need come back from the saved state.
-  const done = (name) => o.resume && state.data.phases && state.data.phases[name] && state.data.phases[name].state === 'done';
+  const done = (name) => o.resume && state.data.phases && state.data.phases[name] && state.data.phases[name].state === 'done' && !(name === 'npm' && state.data.npmPending);
   const phase = async (name, fn) => { if (done(name)) { log(`↷ ${name} (already done)`); return state.data.phases[name].detail; } state.begin(name); log(`▶ ${name}`); try { const detail = await fn(); state.finish(name, true, detail || null); log(`✓ ${name}${detail ? ': ' + detail : ''}`); return detail; } catch (e) { state.finish(name, false, String(e.message || e)); throw e; } };
 
   let branch, version, prNumber, prHead, releaseSha, tag, treeEquivalent = false;
@@ -86,7 +86,11 @@ export async function runShip(ctx, opts = {}) {
         prs = ghJson(['pr', 'list', '--head', branch, '--state', 'open', '--json', 'number,url,headRefOid']) || [];
       }
       if (!prs.length) throw new Stop('pr', 'no pull request found after creating one');
-      prNumber = prs[0].number; prHead = prs[0].headRefOid || head;
+      // The API can still report the PREVIOUS head for a second or two after a push. The branch on origin is the authority: when it is the commit just
+      // gated, that is the PR head. (A stale value made the early gate's verdict and the recorded pre-push pass refer to different commits, so the
+      // whole release gate ran a second time after the merge.)
+      const onOrigin = sh('git', ['ls-remote', 'origin', `refs/heads/${branch}`]).out.split('\t')[0];
+      prNumber = prs[0].number; prHead = onOrigin === head ? head : (prs[0].headRefOid || head);
       state.set({ pr: prNumber, prUrl: prs[0].url });
       return `#${prNumber}`;
     });
@@ -112,7 +116,9 @@ export async function runShip(ctx, opts = {}) {
 
     // ── blocking checks, with automatic recovery from a hung or infrastructure-failed job ───────────────────────
     await phase('checks', async () => {
-      const blocking = JSON.parse(ctx.readFile('.github/required-checks.json')).blocking;
+      const tiers = JSON.parse(ctx.readFile('.github/required-checks.json'));
+      const blocking = tiers.blocking;
+      const informational = tiers.informational || [];
       const retries = new Map();
       const r = await waitFor(async () => {
         const rows = parseChecks(gh(['pr', 'checks', String(prNumber)]).out);
@@ -122,7 +128,7 @@ export async function runShip(ctx, opts = {}) {
         const runs = ghJson(['run', 'list', '--branch', branch, '--limit', '12', '--json', 'databaseId,status,conclusion,workflowName']) || [];
         for (const run of runs.filter((x) => x.status === 'in_progress' || (x.status === 'completed' && x.conclusion === 'failure'))) {
           const jobs = (ghJson(['run', 'view', String(run.databaseId), '--json', 'jobs']) || { jobs: [] }).jobs;
-          const stuck = run.status === 'in_progress' ? findStuckJobs(jobs, ctx.now(), { maxMinutes: o.stuckMinutes }) : [];
+          const stuck = run.status === 'in_progress' ? findStuckJobs(jobs, ctx.now(), { maxMinutes: o.stuckMinutes, exempt: informational }) : [];
           const infra = run.status === 'completed' ? classifyReleaseFailure(jobs).kind === 'infra' : false;
           if (!stuck.length && !infra) continue;
           const used = retries.get(run.databaseId) || 0;
@@ -218,13 +224,22 @@ export async function runShip(ctx, opts = {}) {
     });
 
     // ── npm ──────────────────────────────────────────────────────────────────────────────────────────────────────
+    // The workflow's publish job already ran `npm publish --provenance` and reported success; what is left is the registry showing it, which can
+    // take minutes and is not something this machine can speed up. A short wait covers the usual case. If the registry is still behind after it,
+    // the release is reported as shipped with the npm check PENDING (never as verified), and `--resume` re-runs only this check.
     await phase('npm', async () => {
       let last = null;
-      const seen = await waitFor(async () => { try { last = npmFacts(await ctx.fetchJson(`https://registry.npmjs.org/${PKG.replace('/', '%2f')}`), version); } catch { return null; } return last && last.published ? last : null; },
-        { timeoutMs: o.npmTimeoutMin * 60000, intervalMs: 10000, maxIntervalMs: 30000, now: ctx.now, sleep: ctx.sleep, onTick: () => state.note('npm', 'published by the workflow, waiting for the registry to show it') });
+      const probe = async () => { try { last = npmFacts(await ctx.fetchJson(`https://registry.npmjs.org/${PKG.replace('/', '%2f')}`), version); } catch { return null; } return last && last.published ? last : null; };
+      const soft = o.resume ? { ok: false } : await waitFor(probe, { timeoutMs: o.npmSoftSeconds * 1000, intervalMs: 5000, now: ctx.now, sleep: ctx.sleep, onTick: () => state.note('npm', 'published by the workflow, waiting for the registry to show it') });
+      if (!soft.ok && !o.resume) {
+        state.set({ npmPending: true });
+        return `PENDING: ${version} is not yet visible on npm after ${o.npmSoftSeconds} s (the workflow reported a successful publish; the registry is behind). Not verified. Re-check with: node scripts/ship.mjs --resume`;
+      }
+      const seen = soft.ok ? soft : await waitFor(probe, { timeoutMs: o.npmTimeoutMin * 60000, intervalMs: 10000, maxIntervalMs: 30000, now: ctx.now, sleep: ctx.sleep, onTick: () => state.note('npm', 'published by the workflow, waiting for the registry to show it') });
       if (!seen.ok) throw new Stop('npm', `${version} did not appear on npm within ${o.npmTimeoutMin} min (the workflow reported a successful publish: this is registry propagation, not a failed release)`);
       const f = seen.value;
       if (!f.attested) throw new Stop('npm', `${version} is on npm WITHOUT a provenance attestation`);
+      state.set({ npmPending: false });
       return `${version} is on npm${f.isLatest ? ' as latest' : ` (latest is ${f.latest})`}, attested, description ${f.descriptionLength} chars, README ${f.readmeLength} chars`;
     });
 

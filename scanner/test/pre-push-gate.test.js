@@ -66,6 +66,16 @@ test('pre-push-gate — a brand-new branch (zero remote sha) is gated', () => {
   assert.equal(d.gated.length, 1);
 });
 
+test('pre-push-gate — a tag on a commit the remote already has is not gated; a tag on new code is', () => {
+  const tag = [{ localRef: 'refs/tags/v1', localSha: A, remoteRef: 'refs/tags/v1', remoteSha: ZERO }];
+  const known = decidePushScope(tag, () => true);
+  assert.equal(known.shouldRun, false, 'the commit was gated when its branch was pushed');
+  assert.equal(decidePushScope(tag, () => false).shouldRun, true, 'a tag on a commit the remote lacks carries new code');
+  assert.equal(decidePushScope(tag).shouldRun, true, 'without a way to ask the remote, gate');
+  const branch = [{ localRef: 'refs/heads/f', localSha: A, remoteRef: 'refs/heads/f', remoteSha: ZERO }];
+  assert.equal(decidePushScope(branch, () => true).shouldRun, true, 'the exemption is for tags only');
+});
+
 test('pre-push-gate — a delete (zero local sha) is not gated', () => {
   const d = decidePushScope([{ localRef: '(delete)', localSha: ZERO, remoteRef: 'refs/heads/old', remoteSha: A }]);
   assert.equal(d.shouldRun, false);

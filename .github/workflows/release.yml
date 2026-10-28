@@ -25,6 +25,14 @@
 # prove the release works somewhere other than the maintainer's laptop. Every
 # gate leg below always runs every check in its group for real.
 #
+# WHAT A TAG PUSH RUNS (0.193.0)
+# ------------------------------
+# On a tag push only the `rest` leg runs its checks (changelog, version, catalogs, dependency currency, and the hosted-CI check that
+# requires every blocking pull-request check to be green for this commit). The test shards, both bench groups and the closure leg are
+# `full_only`: they run in full on a workflow_dispatch dry run, and their work is done for the same tree by the pull request's blocking jobs.
+# This removes about six minutes from a release. What it gives up: a clean-runner re-run, with the cache off, of those legs at tag time. If a
+# tag is pushed for a commit that never went through a pull request, the hosted-CI check in `rest` is the only guard, so run the dry run first.
+#
 # THE SHAPE: A PARALLEL GATE, THEN A SMALL PUBLISH JOB
 # ----------------------------------------------------
 # The gate used to be one sequential step that took 25 minutes on v0.158.0
@@ -102,20 +110,29 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - { name: 'tests 1/4', group: tests, shard: '1/4' }
-          - { name: 'tests 2/4', group: tests, shard: '2/4' }
-          - { name: 'tests 3/4', group: tests, shard: '3/4' }
-          - { name: 'tests 4/4', group: tests, shard: '4/4' }
-          - { name: 'benches-a', group: benches-a, shard: '' }
-          - { name: 'benches-b', group: benches-b, shard: '' }
-          - { name: 'closure', group: closure, shard: '' }
+          - { name: 'tests 1/4', group: tests, shard: '1/4', full_only: true }
+          - { name: 'tests 2/4', group: tests, shard: '2/4', full_only: true }
+          - { name: 'tests 3/4', group: tests, shard: '3/4', full_only: true }
+          - { name: 'tests 4/4', group: tests, shard: '4/4', full_only: true }
+          - { name: 'benches-a', group: benches-a, shard: '', full_only: true }
+          - { name: 'benches-b', group: benches-b, shard: '', full_only: true }
+          - { name: 'closure', group: closure, shard: '', full_only: true }
           - { name: 'rest', group: rest, shard: '' }
     steps:
+      # A tag push publishes a commit whose pull request already passed the full suite, the benches and the blocking hosted checks on clean
+      # runners for the same tree (`rest` below reads those check runs and refuses to proceed unless they are green). The legs marked
+      # `full_only` therefore run for real only on a manual dry run (workflow_dispatch), which is the cheapest way to re-prove the whole gate.
+      - name: Heavy leg skipped on a tag push
+        if: ${{ matrix.full_only && github.event_name != 'workflow_dispatch' }}
+        run: echo "::notice::${{ matrix.name }} was proven on this commit's pull request; it runs here only on a manual dry run (workflow_dispatch)."
+
       - uses: actions/checkout@v7
+        if: ${{ !matrix.full_only || github.event_name == 'workflow_dispatch' }}
         with:
           fetch-depth: 0 # release-check inspects history and origin/main
 
       - uses: actions/setup-node@v7
+        if: ${{ !matrix.full_only || github.event_name == 'workflow_dispatch' }}
         with:
           node-version: 'lts/*'
           registry-url: 'https://registry.npmjs.org'
@@ -123,6 +140,7 @@ jobs:
       # The Nix script witnesses need a real confinement primitive, as in ci.yml's test job; hosted runners restrict unprivileged user
       # namespaces by default, so the same host policy relaxation is applied here for the gate's `npm test`.
       - name: Allow unprivileged user namespaces
+        if: ${{ !matrix.full_only || github.event_name == 'workflow_dispatch' }}
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
           sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
@@ -131,7 +149,7 @@ jobs:
       # Checked here as well as in `publish`, so a mismatched tag fails in
       # seconds instead of after the whole gate has run.
       - name: Tag must match the package version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: ${{ (startsWith(github.ref, 'refs/tags/v')) && (!matrix.full_only || github.event_name == 'workflow_dispatch') }}
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           PKG=$(node -p "require('./scanner/package.json').version")
@@ -142,6 +160,7 @@ jobs:
           fi
 
       - name: Install scanner dependencies
+        if: ${{ !matrix.full_only || github.event_name == 'workflow_dispatch' }}
         working-directory: scanner
         run: npm ci
         timeout-minutes: 10
@@ -153,15 +172,18 @@ jobs:
       # one — so it must be installed explicitly here or this check can never
       # pass on a clean runner.
       - name: Install NIST catalog rebuild dependency
+        if: ${{ !matrix.full_only || github.event_name == 'workflow_dispatch' }}
         run: pip3 install --quiet --retries 5 --timeout 30 openpyxl
         timeout-minutes: 5
 
       - name: Build the bundle
+        if: ${{ !matrix.full_only || github.event_name == 'workflow_dispatch' }}
         working-directory: scanner
         run: npm run build
         timeout-minutes: 10
 
       - name: Sync scanner changelog
+        if: ${{ !matrix.full_only || github.event_name == 'workflow_dispatch' }}
         run: node scripts/sync-scanner-changelog.mjs
 
       # This leg's slice of the gate, with caching disabled. A red check stops
@@ -171,6 +193,7 @@ jobs:
       # GATE_SHARD is empty for every leg except the test shards; the flag is
       # added only when it is set.
       - name: Release gate (${{ matrix.name }})
+        if: ${{ !matrix.full_only || github.event_name == 'workflow_dispatch' }}
         working-directory: scanner
         env:
           GH_TOKEN: ${{ github.token }}
