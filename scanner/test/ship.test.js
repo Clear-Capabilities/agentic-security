@@ -156,6 +156,7 @@ function world(overrides = {}) {
     if (cmd === 'node' && args[0] === 'scripts/gate-warm.mjs') return ok(w.warmOut || '');
     if (cmd === 'node' && args[0] === 'scripts/dependency-currency.mjs') { w.depCalls = (w.depCalls || 0) + 1; return w.depCode ? { code: 1, out: '  ✗ ide/vscode: 1 known vulnerability at moderate or above\n', err: '' } : ok('ok'); }
     if (cmd === 'node') w.gateEnv = (opts && opts.env) || {};
+    if (cmd === 'node' && /--only/.test(args.join(' ')) && !/head-pushed/.test(args.join(' '))) w.earlyEnv = (opts && opts.env) || {};
     if (cmd === 'node') return { code: w.releaseCheckCode, out: w.releaseCheckCode ? 'FAIL  Full test suite passes\n' : 'Release gate passed\n', err: '' };
     if (cmd === 'gh') {
       if (args[0] === 'auth') return ok();
@@ -200,6 +201,7 @@ test('flow: tree-equivalent merge releases the verified PR head, runs the gate o
   const gates = ran(w, /^node scripts\/release-check\.mjs/);
   assert.equal(gates.length, 2, 'the early gate on the PR head, then only the post-merge checks');
   assert.match(gates[0], /--only /); assert.doesNotMatch(gates[0], /head-pushed|remote-ci-green|test-suite|self-scan-gate/, 'the early gate omits the hosted-covered and post-merge checks');
+  assert.equal(w.earlyEnv && w.earlyEnv.AGENTIC_SECURITY_CLOSURE_JOBS, '3', 'the early gate runs the closure steps side by side');
   assert.match(gates[1], /--only head-pushed,remote-ci-green$/, 'after the merge only the checks that need it');
   assert.equal(ran(w, /--no-verify|--allow-unverified-ci|--force|-f /).length, 0, 'no gate is bypassed and nothing is force-pushed');
   assert.ok(ran(w, /^git -c credential\.helper=!gh auth git-credential push origin v1\.2\.3/).length === 1);

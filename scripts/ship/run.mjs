@@ -14,7 +14,7 @@ class Stop extends Error { constructor(phase, message) { super(message); this.ph
  * @param {object} [opts] { branch?, maxRetries, stuckMinutes, checksTimeoutMin, releaseTimeoutMin, npmTimeoutMin, allowMissing, dryRun, tmpdir }
  */
 export async function runShip(ctx, opts = {}) {
-  const o = { maxRetries: 2, stuckMinutes: 40, checksTimeoutMin: 90, releaseTimeoutMin: 60, npmTimeoutMin: 90, npmSoftSeconds: 90, allowMissing: ['dependency-currency'], dryRun: false, ...opts };
+  const o = { maxRetries: 2, stuckMinutes: 40, checksTimeoutMin: 90, releaseTimeoutMin: 60, npmTimeoutMin: 90, npmSoftSeconds: 90, closureJobs: 3, allowMissing: ['dependency-currency'], dryRun: false, ...opts };
   const { sh, state, log } = ctx;
   const git = (args) => { const r = sh('git', args); if (r.code !== 0) throw new Error(`git ${args.join(' ')}: ${r.err.trim().slice(0, 200)}`); return r.out; };
   const gh = (args) => sh('gh', args);
@@ -108,7 +108,7 @@ export async function runShip(ctx, opts = {}) {
         if (!tmp && ctx.makeTmpdir) { tmp = autoTmp = ctx.makeTmpdir(); state.set({ tmpdir: tmp }); }
         log(`  early release gate: ${plan.reason}`);
         const run = ctx.runNodeAsync || ((args, x) => Promise.resolve(sh('node', args, { ...x, stream: true })));
-        const r = await run(['scripts/release-check.mjs', ...plan.args], { timeoutMs: 90 * 60 * 1000, env: scratchEnv(tmp), logAs: 'verify' });
+        const r = await run(['scripts/release-check.mjs', ...plan.args], { timeoutMs: 90 * 60 * 1000, env: { ...scratchEnv(tmp), AGENTIC_SECURITY_CLOSURE_JOBS: String(o.closureJobs) }, logAs: 'verify' });
         return { ok: r.code === 0, head, failed: (r.out + r.err).split('\n').filter((l) => /^(FAIL|✗)/.test(l)).slice(0, 4).join(' | ') };
       })();
     };
