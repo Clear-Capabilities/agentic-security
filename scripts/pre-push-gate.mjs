@@ -898,7 +898,10 @@ export async function main(argv = []) {
   let changed = null;
   if (tier === 'fast') {
     const b = pushBase(scope.gated);
-    let base = b.measured ? b.base : null;
+    const bi = argv.indexOf('--base');
+    // `--base <ref>`: select against this commit instead of the push base (a re-push of an already-gated range, or a measurement). It can only
+    // narrow what runs LOCALLY; the hosted CI runs the whole suite on the pull request either way.
+    let base = bi !== -1 && argv[bi + 1] ? argv[bi + 1] : (b.measured ? b.base : null);
     if (!base) {
       const mb = run('git', ['merge-base', 'origin/main', 'HEAD'], { cwd: REPO, env: envWithoutGitContext() });
       if (mb.status === 0 && mb.stdout.trim()) base = mb.stdout.trim();
