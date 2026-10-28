@@ -389,8 +389,10 @@ test('through the stand-in engine an ARGUMENT INJECTION proof finds its stand-in
     }
     const calls = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((c) => c[0] === 'run');
     assert.ok(calls.length >= 4);
-    for (const c of calls) { assert.equal(c[c.indexOf('haskell:9') + 1] === 'ghc' || c[c.indexOf('haskell:9') + 1] === '/bin/chmod', true); assert.ok(c.includes('--read-only')); assert.equal(c[c.indexOf('--network') + 1], 'none'); }
+    // the command after the image, past the fixed wrapper that puts the versioned GHC directory on PATH
+    const cmdOf = (c) => { const rest = c.slice(c.indexOf('haskell:9') + 1); return rest[0] === 'sh' && rest[1] === '-c' ? rest.slice(4) : rest; };
+    for (const c of calls) { assert.equal(cmdOf(c)[0] === 'ghc' || cmdOf(c)[0] === '/bin/chmod', true); assert.ok(c.includes('--read-only')); assert.equal(c[c.indexOf('--network') + 1], 'none'); }
     assert.ok(calls.some((c) => c.includes('PATH=/work/bin:/opt/ghc/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin')));
-    assert.ok(calls.some((c) => c[c.indexOf('haskell:9') + 1] === '/bin/chmod'), 'the build step (chmod of the stand-in) goes through the engine, not the host');
+    assert.ok(calls.some((c) => cmdOf(c)[0] === '/bin/chmod'), 'the build step (chmod of the stand-in) goes through the engine, not the host');
   } finally { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
 });
