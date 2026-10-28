@@ -20,9 +20,10 @@
 //   * Podman is not probed: it is a supported engine name, and no run against it exists.
 //   * macOS is unmeasured. Docker Desktop runs containers in a VM, so bind mounts, uids and file ownership behave differently from the Linux
 //     measurement; no macOS container run has been recorded.
-//   * The haskell:9 image is wired (CONTAINER_TOOLS, CONTAINER_PATH) but its toolchain layout for a non-root user was never run against a real
-//     engine; the measurement skips Haskell unless AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL=1 (bench/proof-fabric/measure.mjs). The result file
-//     names no .NET image either, so the dotnet SDK image is unverified in the same way.
+//   * The haskell:9 image: its first real-engine run (0.194.0 pull request) failed with `ghc: not found`, because GHC lives in /opt/ghc/<version>/bin
+//     and not /opt/ghc/bin; `containerArgs` now resolves that directory inside the container. Whether the leg then passes is the `proof-container`
+//     job's result; the measurement still skips Haskell unless AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL=1 (bench/proof-fabric/measure.mjs). The
+//     result file names no .NET image either, so the dotnet SDK image is unverified in the same way.
 //   * A reproducer that needs the loopback callback listener (SSRF) cannot run with `--network none` and is skipped, not measured.
 import { spawnSync } from 'node:child_process';
 import { superviseSpawn } from '../../sandbox/supervise.js';
@@ -47,7 +48,11 @@ export function containerArgs({ image, name, hostRoot, argv, env = {}, limits, u
     '-e', 'HOME=/work', '-e', `PATH=${CONTAINER_PATH}`, '-e', 'CI=1',
   ];
   for (const [k, v] of Object.entries(env)) args.push('-e', `${k}=${v}`);
-  args.push(image, ...argv);
+  // The haskell image keeps GHC in a VERSIONED directory (/opt/ghc/<version>/bin, found by the first real-engine Haskell run: `ghc: not found` with an
+  // unversioned /opt/ghc/bin on PATH), and the version floats with the tag. The directory is resolved inside the container, after the environment
+  // (including a reproducer's own PATH) has been applied, so nothing here depends on which GHC the image carries.
+  const inner = /^haskell:/.test(image) ? ['sh', '-c', 'for d in /opt/ghc/*/bin; do PATH="$d:$PATH"; done; export PATH; exec "$@"', 'sh', ...argv] : argv;
+  args.push(image, ...inner);
   return args;
 }
 

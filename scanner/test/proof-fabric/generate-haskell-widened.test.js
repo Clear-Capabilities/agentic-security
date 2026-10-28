@@ -361,7 +361,12 @@ test('the container command line for a Haskell proof: fixed hardening flags, the
   assert.equal(val('--user'), '1000:1000'); assert.equal(val('--workdir'), '/work');
   assert.equal(args.filter((a) => a === '-v').length, 1); assert.equal(val('-v'), '/tmp/proof/root:/work:rw');
   assert.ok(!args.includes('--privileged'));
-  assert.deepEqual(args.slice(args.indexOf('haskell:9')), ['haskell:9', ...run], 'the image, then the image\'s own ghc and the argument vector, with no shell in between');
+  // GHC sits in /opt/ghc/<version>/bin and the version floats with the tag (the first real-engine run found `ghc: not found` with /opt/ghc/bin), so a
+  // fixed wrapper puts every /opt/ghc/*/bin on PATH inside the container and then runs the argument vector unchanged.
+  const tail = args.slice(args.indexOf('haskell:9'));
+  assert.deepEqual(tail.slice(0, 3), ['haskell:9', 'sh', '-c']);
+  assert.match(tail[3], /for d in \/opt\/ghc\/\*\/bin; do PATH="\$d:\$PATH"; done; export PATH; exec "\$@"$/);
+  assert.deepEqual(tail.slice(4), ['sh', ...run], 'the argument vector follows the wrapper unchanged, as separate arguments');
   // the reproducer's PATH comes after the default one, so it wins; it keeps the toolchain directory so ghc is still found
   const paths = args.filter((a, k) => args[k - 1] === '-e' && a.startsWith('PATH='));
   assert.equal(paths.length, 2); assert.match(paths[1], /^PATH=\/work\/bin:\/opt\/ghc\/bin:/);

@@ -187,7 +187,7 @@ function ctxFor(w) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ship-run-'));
   const files = {
     'scanner/package.json': JSON.stringify({ version: '1.2.3' }), 'CHANGELOG.md': '## 1.2.3 - x\n', 'CLAUDE.md': '1.2.3', 'README.md': '1.2.3', '.claude-plugin/plugin.json': '1.2.3', '.claude-plugin/marketplace.json': '1.2.3', 'gemini-extension.json': '1.2.3',
-    '.github/required-checks.json': JSON.stringify({ blocking: ['test', 'corpus', 'dependency-currency'] }),
+    '.github/required-checks.json': JSON.stringify({ blocking: ['test', 'corpus', 'dependency-currency'], informational: ['local-model'] }),
   };
   return { sh: w.sh, fetchJson: w.fetchJson, readFile: (p) => { if (!(p in files)) throw new Error(`no file ${p}`); return files[p]; }, now: () => w.now, sleep: async (ms) => { w.now += ms; }, log: () => {}, state: new ShipState(path.join(dir, 'state.json'), () => w.now), _dir: dir };
 }
@@ -239,6 +239,16 @@ test('flow: a failing blocking check stops before the merge; nothing is merged, 
   assert.equal(r.ok, false); assert.equal(r.phase, 'checks');
   assert.match(r.message, /test/);
   assert.equal(ran(w, /pr merge|tag -a|npm/).length, 0);
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
+});
+
+test('flow: a failing blocking check stops at once even while a slow informational job is still running', async () => {
+  const w = world({ checkState: 'fail', pending: 0, runList: [{ databaseId: 5, status: 'in_progress', conclusion: null, workflowName: 'ci' }], runJobs: [{ name: 'local-model', status: 'in_progress', startedAt: new Date(0).toISOString() }] });
+  const ctx = ctxFor(w);
+  const r = await runShip(ctx, { allowMissing: ['dependency-currency'] });
+  assert.equal(r.ok, false); assert.equal(r.phase, 'checks');
+  assert.ok(w.now < 120000, `it waited ${w.now} ms of virtual time for a job that cannot change the outcome`);
+  assert.equal(ran(w, /run (cancel|rerun)/).length, 0);
   fs.rmSync(ctx._dir, { recursive: true, force: true });
 });
 
