@@ -12,7 +12,7 @@ Agentic Security is an autonomous security assurance platform. It pairs **determ
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.191.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.192.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 > Built by **[Clear Capabilities](https://www.clearcapabilities.com/)**. Also known as an *agentic security harness* for Claude Code, Codex, Cursor and Gemini CLI.
