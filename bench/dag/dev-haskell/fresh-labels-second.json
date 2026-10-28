@@ -1,0 +1,903 @@
+{
+ "labeler": {
+  "id": "second-labeler",
+  "kind": "LLM (a different model from the first labeller), run as two blind sessions of 111 sites each",
+  "protocol": "Given only project, file, line and vulnerability class; asked to judge from the behaviour of the code only; forbidden to read labels, results, worklists or scanner output; labels TP, FP or UNSURE with one sentence. The first labeller's labels were not shown.",
+  "date": "2026-10-28",
+  "limits": [
+   "one pass, no adjudication yet",
+   "session A used 7 tool calls for 111 sites, so its reading depth is not established",
+   "the two labellers were not given an explicit rule on example and test-server code, which is where most disagreements are"
+  ]
+ },
+ "labels": {
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Backend/Dhall.hs:442:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Backend/Freezing.hs:106:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Backend/Freezing.hs:118:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Features.hs:506:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:1673:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/benchmark/evaluation/Bench/Common.hs:138:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall.hs:436:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Bounded.hs:95:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Bounded.hs:102:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:788:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:840:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:849:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:865:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:890:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1028:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1314:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1342:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1365:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1392:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2390:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2395:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2489:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2490:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2526:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2550:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2577:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2591:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2645:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2660:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2678:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2711:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2722:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2724:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2844:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2925:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:971:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:1412:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:1432:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TH.hs:112:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:153:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:171:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:283:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:295:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:308:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:316:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:330:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:358:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:438:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:1560:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Core.renote/normalizeLoaded is an internal phantom-type re-annotation of Void-noted expressions with no attacker-controlled data reaching an unsafe operation."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:213:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:666:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:680:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:687:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:689:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:691:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:720:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:515:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1120:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1121:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1161:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1210:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1226:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1524:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2306:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2332:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2474:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2634:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce here is an internal phantom-type coercion between structurally identical Expr representations, not an attacker-reachable memory-safety boundary."
+  },
+  "dhall-haskell:dhall-test-server/src/Dhall/Test/Server.hs:184:path-traversal": {
+   "label": "FP",
+   "reason": "Path comes from an HTTP request but this is dhall-test-server, local test infrastructure serving fixtures, not part of the shipped library or program."
+  },
+  "dhall-haskell:dhall-test-server/src/Dhall/Test/Server.hs:205:path-traversal": {
+   "label": "FP",
+   "reason": "doesFileExist in the dhall-test-server fixture server is test infrastructure, not shipped code."
+  },
+  "dhall-haskell:dhall-try/src/Callback.hs:18:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce wraps an IO action into a JS callback in the dhall-try GHCJS demo, a standard FFI idiom with no untrusted data."
+  },
+  "dhall-haskell:dhall-try/src/Main.hs:168:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Registers an internal interpret action as a JS callback; no attacker-controlled data reaches an unsafe operation."
+  },
+  "dhall-haskell:dhall-try/src/Main.hs:182:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Registers an internal callback action as a JS callback; no attacker-controlled data reaches an unsafe operation."
+  },
+  "dhall-haskell:dhall/ghcjs-src/Dhall/Crypto.hs:65:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO around a pure JS sha256 FFI call is a benign purity wrapper."
+  },
+  "dhall-haskell:dhall/src/Dhall/DirectoryTree/Types.hs:147:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce from Word32 to a newtype UserID on Windows is a representation-preserving coercion of decoded data."
+  },
+  "dhall-haskell:dhall/src/Dhall/Format.hs:70:path-traversal": {
+   "label": "FP",
+   "reason": "dhall format reads the file named by the invoking user on the CLI; no trust boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Freeze.hs:309:path-traversal": {
+   "label": "FP",
+   "reason": "dhall freeze reads the file named by the invoking user on the CLI; no trust boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1046:path-traversal": {
+   "label": "FP",
+   "reason": "Cache file path is derived from a SHA-256 hash under the cache directory, not attacker-controlled path components."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1047:path-traversal": {
+   "label": "FP",
+   "reason": "Cache file path is derived from a SHA-256 hash under the cache directory, not attacker-controlled path components."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1852:path-traversal": {
+   "label": "FP",
+   "reason": "Semisemantic cache path is derived from a SHA-256 digest, not attacker-controlled path components."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1853:path-traversal": {
+   "label": "FP",
+   "reason": "Semisemantic cache path is derived from a SHA-256 digest, not attacker-controlled path components."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1876:path-traversal": {
+   "label": "FP",
+   "reason": "Local Dhall imports read files by language design for user-supplied local expressions, and remote imports are barred from local imports by the referential sanity check."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1879:path-traversal": {
+   "label": "FP",
+   "reason": "Local Dhall imports read files by language design for user-supplied local expressions, and remote imports are barred from local imports by the referential sanity check."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1908:path-traversal": {
+   "label": "FP",
+   "reason": "Local Dhall imports read files by language design for user-supplied local expressions, and remote imports are barred from local imports by the referential sanity check."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:1910:path-traversal": {
+   "label": "FP",
+   "reason": "Local Dhall imports read files by language design for user-supplied local expressions, and remote imports are barred from local imports by the referential sanity check."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:1314:path-traversal": {
+   "label": "FP",
+   "reason": "CLI reads the input file named by the invoking user; no trust boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Tags.hs:93:path-traversal": {
+   "label": "FP",
+   "reason": "dhall tags reads files from paths the invoking user supplied on the CLI; no trust boundary."
+  },
+  "hlint:data/HLint_QuickCheck.hs:63:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO in the hlint data/ QuickCheck test harness is test support code, not an attacker-reachable boundary."
+  },
+  "hlint:data/HLint_QuickCheck.hs:86:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO in the hlint data/ QuickCheck test harness is test support code, not an attacker-reachable boundary."
+  },
+  "hlint:data/HLint_QuickCheck.hs:98:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO in the hlint data/ QuickCheck test harness is test support code, not an attacker-reachable boundary."
+  },
+  "hlint:src/Config/Yaml.hs:186:Unsafe XML Parsing (XXE Risk)": {
+   "label": "FP",
+   "reason": "This is YAML string field parsing; there is no XML parser or external entity resolution."
+  },
+  "hlint:src/Parallel.hs:27:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeInterleaveIO lazily sequences internal hlint work items; no untrusted data or unsafe boundary."
+  },
+  "hlint:src/Test/Annotations.hs:121:path-traversal": {
+   "label": "FP",
+   "reason": "hlint test runner reads its own test fixture files; test code with no trust boundary."
+  },
+  "hlint:src/Test/InputOutput.hs:36:path-traversal": {
+   "label": "FP",
+   "reason": "hlint test harness writes fixture files from its own test data; test code."
+  },
+  "hlint:src/Test/InputOutput.hs:38:path-traversal": {
+   "label": "FP",
+   "reason": "hlint test harness removes the fixture files it created; test code."
+  },
+  "hlint:src/Timing.hs:26:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Global IORef and timing via unsafePerformIO with NOINLINE is a benign idiom with no untrusted input."
+  },
+  "hlint:src/Timing.hs:30:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Global IORef and timing via unsafePerformIO with NOINLINE is a benign idiom with no untrusted input."
+  },
+  "hlint:src/Timing.hs:34:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Global IORef and timing via unsafePerformIO with NOINLINE is a benign idiom with no untrusted input."
+  },
+  "hlint:src/Timing.hs:38:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Global IORef and timing via unsafePerformIO with NOINLINE is a benign idiom with no untrusted input."
+  },
+  "hlint:src/Util.hs:55:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce is guarded by the toConstr equality check so both fields have identical types; no attacker-reachable unsafety."
+  },
+  "ihp:ihp-hsx/direct/IHP/HSX/Markup.hs:85:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce () supplies a never-inspected phantom value in the Markup monad; no untrusted data."
+  },
+  "ihp:ihp-ide/exe/IHP/CLI/HashPassword.hs:18:Sensitive value written to a log or trace": {
+   "label": "FP",
+   "reason": "The CLI tool prints the password hash it was asked to compute to the operator terminal, which is its intended output, not the plaintext."
+  },
+  "ihp:ihp-job-dashboard/IHP/Job/Dashboard.hs:151:jQuery DOM-based XSS Source": {
+   "label": "FP",
+   "reason": "Static constant jQuery initialization code; no attacker-controlled data reaches a DOM sink."
+  },
+  "ihp:ihp-modal/IHP/Modal/Types.hs:33:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard global-key idiom; no untrusted input."
+  },
+  "ihp:ihp-modal/IHP/Modal/ViewFunctions.hs:60:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Reads the per-request modal IORef via unsafePerformIO; a purity shortcut with no attacker-controlled unsafe operation."
+  },
+  "ihp:ihp-openai/IHP/OpenAI.hs:284:TLS certificate validation is disabled": {
+   "label": "TP",
+   "reason": "Every OpenAI streaming request sets SSL VerifyNone before sending the Bearer secret key, so a network MITM can steal the API key and tamper with responses."
+  },
+  "ihp:ihp-pagehead/IHP/PageHead/Types.hs:49:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard global-key idiom; no untrusted input."
+  },
+  "ihp:ihp-pagehead/IHP/PageHead/ViewFunctions.hs:81:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Reads the per-request page-head IORef via unsafePerformIO; values render through escaping hsx, so no attacker-reachable unsafe operation."
+  },
+  "ihp:ihp-pagehead/IHP/PageHead/ViewFunctions.hs:232:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Reads the per-request page-head IORef via unsafePerformIO; values render through escaping hsx, so no attacker-reachable unsafe operation."
+  },
+  "ihp:ihp-pagehead/IHP/PageHead/ViewFunctions.hs:262:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Reads the per-request page-head IORef via unsafePerformIO; values render through escaping hsx, so no attacker-reachable unsafe operation."
+  },
+  "ihp:ihp-schema-compiler/IHP/SchemaCompiler.hs:360:path-traversal": {
+   "label": "FP",
+   "reason": "Schema compiler reads generated-output paths chosen by the developer build tool, not untrusted input."
+  },
+  "ihp:ihp-schema-compiler/IHP/SchemaCompiler.hs:363:path-traversal": {
+   "label": "FP",
+   "reason": "Schema compiler writes generated code to developer-determined paths, not untrusted input."
+  },
+  "ihp:ihp-schema-compiler/IHP/SchemaCompiler/Cache.hs:45:path-traversal": {
+   "label": "FP",
+   "reason": "Paths come from the local schema-compiler cache file written by the tool itself at build time, not from an untrusted source."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:143:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Top-level unsafePerformIO newMVar global with NOINLINE, a standard safe idiom with no attacker-controlled data."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:151:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Top-level unsafePerformIO newMVar global with NOINLINE, a standard safe idiom with no attacker-controlled data."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:155:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Top-level unsafePerformIO newMVar global with NOINLINE, a standard safe idiom with no attacker-controlled data."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:159:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Top-level unsafePerformIO newMVar global with NOINLINE, a standard safe idiom with no attacker-controlled data."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:163:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Top-level unsafePerformIO newMVar global with NOINLINE, a standard safe idiom with no attacker-controlled data."
+  },
+  "ihp:ihp/IHP/ActionType.hs:30:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:ihp/IHP/Controller/Layout.hs:25:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:ihp/IHP/Controller/Render.hs:43:path-traversal": {
+   "label": "FP",
+   "reason": "renderFile is a library API whose path is supplied by the application developer, not by the request."
+  },
+  "ihp:ihp/IHP/Controller/Response.hs:56:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:ihp/IHP/Controller/Session.hs:175:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:ihp/IHP/Fetch.hs:70:GCP IAM binding includes allUsers — resource is publicly accessible": {
+   "label": "FP",
+   "reason": "Haddock comment about fetchVector in Haskell source; no cloud IAM binding exists."
+  },
+  "ihp:ihp/IHP/FileStorage/ControllerFunctions.hs:191:path-traversal": {
+   "label": "FP",
+   "reason": "storeFileFromPath reads a local path supplied by application code, not request input, by API design."
+  },
+  "ihp:ihp/IHP/FlashMessages.hs:60:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:ihp/IHP/Prelude.hs:141:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Pure UTF-8 OsPath encode/decode wrapped in unsafePerformIO has no side effects exploitable by an attacker."
+  },
+  "ihp:ihp/IHP/Prelude.hs:146:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Pure UTF-8 OsPath encode/decode wrapped in unsafePerformIO has no side effects exploitable by an attacker."
+  },
+  "ihp:ihp/IHP/Prelude.hs:151:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Pure UTF-8 OsPath encode/decode wrapped in unsafePerformIO has no side effects exploitable by an attacker."
+  },
+  "ihp:ihp/IHP/QueryBuilder/Compiler.hs:47:GCP IAM binding includes allUsers — resource is publicly accessible": {
+   "label": "FP",
+   "reason": "Haddock comment in the query builder; no cloud IAM binding exists."
+  },
+  "ihp:ihp/IHP/RequestVault/ModelContext.hs:21:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:ihp/IHP/RouterSupport.hs:645:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeCoerce in updateAction applies to a developer-supplied id at the type chosen by the developer, not to request data."
+  },
+  "ihp:ihp/IHP/RouterSupport.hs:1269:unsafe-boundary": {
+   "label": "TP",
+   "reason": "parseIntegerId parses an attacker-supplied URL query value as an unbounded Integer and unsafeCoerces it to the route id type, so a large value (bignum constructor) is reinterpreted as a different heap object, giving memory-unsafe behaviour reachable remotely."
+  },
+  "ihp:wai-asset-path/Network/Wai/Middleware/AssetPath.hs:38:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:94:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:100:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:109:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:115:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafePerformIO Vault.newKey with NOINLINE is the standard safe idiom for a global vault key; no attacker data involved."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:155:Request body read without a size limit": {
+   "label": "TP",
+   "reason": "JSON request bodies are read entirely with strictRequestBody with no size cap (the ParseRequestBodyOptions limits are not applied), letting a remote client exhaust memory."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:187:Request body read without a size limit": {
+   "label": "UNSURE",
+   "reason": "The unbounded strictRequestBody is deferred and only runs when the application calls readRawRequestBody, so exploitability depends on the application."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:276:unsafe-boundary": {
+   "label": "FP",
+   "reason": "unsafeInterleaveIO lazily reads a temp file the server itself created; no attacker control over the path."
+  },
+  "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:276:path-traversal": {
+   "label": "FP",
+   "reason": "The path read is the server-generated temporary upload file, not attacker-chosen."
+  },
+  "ormolu:src/Ormolu/Utils/Cabal.hs:104:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Global cache via unsafePerformIO newCache with NOINLINE in a local formatter CLI; no untrusted input."
+  },
+  "ormolu:src/Ormolu/Utils/Fixity.hs:59:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Global cache via unsafePerformIO newCache with NOINLINE in a local formatter CLI; no untrusted input."
+  },
+  "scotty:Web/Scotty/Cookie.hs:106:Session cookie without HttpOnly or Secure": {
+   "label": "FP",
+   "reason": "setSimpleCookie is a generic cookie helper; callers choose names/attributes and it is not a session cookie itself."
+  },
+  "scotty:Web/Scotty/Cookie.hs:125:Session cookie without HttpOnly or Secure": {
+   "label": "FP",
+   "reason": "deleteCookie only expires a cookie and carries no session secret."
+  },
+  "scotty:Web/Scotty/Cookie.hs:132:Session cookie without HttpOnly or Secure": {
+   "label": "FP",
+   "reason": "makeSimpleCookie is a generic constructor that callers can extend with HttpOnly/Secure; not a session cookie."
+  },
+  "scotty:Web/Scotty/Session.hs:180:Session cookie without HttpOnly or Secure": {
+   "label": "TP",
+   "reason": "createUserSession sets the sess_id session identifier cookie via makeSimpleCookie with no HttpOnly or Secure flag, so it is exposed to script and plaintext transport."
+  },
+  "scotty:Web/Scotty/Session.hs:187:Predictable random number generator used for a security value": {
+   "label": "TP",
+   "reason": "Session IDs are generated with randomRIO (non-cryptographic StdGen), making them predictable session tokens for a remote attacker."
+  },
+  "scotty:Web/Scotty/Util.hs:46:path-traversal": {
+   "label": "FP",
+   "reason": "responseFile serves a path set by application code via the file action, not taken from the request by the library."
+  },
+  "scotty:examples/basic.hs:42:Cross-Site Scripting (HTML response from text)": {
+   "label": "FP",
+   "reason": "Example program under examples/, not part of the shipped library."
+  },
+  "scotty:examples/basic.hs:42:Multi-Sink Taint Chain — scotty request parameter reaches 5 sinks": {
+   "label": "FP",
+   "reason": "Example program under examples/, not part of the shipped library."
+  },
+  "scotty:examples/basic.hs:47:Cross-Site Scripting (HTML response from text)": {
+   "label": "FP",
+   "reason": "Example program under examples/, not part of the shipped library."
+  },
+  "scotty:examples/basic.hs:52:Cross-Site Scripting (HTML response from text)": {
+   "label": "FP",
+   "reason": "Example program under examples/, not part of the shipped library."
+  },
+  "scotty:examples/basic.hs:78:Cross-Site Scripting (HTML response from text)": {
+   "label": "FP",
+   "reason": "Example program under examples/, not part of the shipped library."
+  },
+  "scotty:examples/basic.hs:106:Request body read without a size limit": {
+   "label": "FP",
+   "reason": "Example program under examples/, not part of the shipped library."
+  },
+  "scotty:examples/bodyecho.hs:19:Request body read without a size limit": {
+   "label": "FP",
+   "reason": "Example program under examples/, not part of the shipped library."
+  },
+  "scotty:examples/middleware.hs:68:Request body read without a size limit": {
+   "label": "FP",
+   "reason": "Example program under examples/, not part of the shipped library."
+  },
+  "scotty:examples/nested.hs:38:Cross-Site Scripting (HTML response from text)": {
+   "label": "FP",
+   "reason": "Example program under examples/, not part of the shipped library."
+  },
+  "scotty:examples/urlshortener.hs:65:Open Redirect": {
+   "label": "FP",
+   "reason": "Example program under examples/, not part of the shipped library."
+  },
+  "summoner:summoner-cli/src/Summoner/Project.hs:284:path-traversal": {
+   "label": "FP",
+   "reason": "Summoner is a local scaffolding CLI; the project directory name comes from the operator's own input."
+  },
+  "summoner:summoner-cli/src/Summoner/Tree.hs:42:path-traversal": {
+   "label": "FP",
+   "reason": "traverseTree writes files from a tree built from the local user's own settings in a scaffolding CLI."
+  },
+  "dhall-haskell:dhall-bash/exec/Main.hs:85:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall-csv/csv-to-dhall/Main.hs:153:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall-csv/dhall-to-csv/Main.hs:100:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall-json/dhall-to-json/Main.hs:160:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall-json/json-to-dhall/Main.hs:154:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall-json/src/Dhall/DhallToYaml/Main.hs:115:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Backend/Prefix.hs:108:Partial function applied to caller-supplied text": {
+   "label": "FP",
+   "reason": "Internal LSP helper indexing a context list by a prefix length computed from the same bindings; not attacker-reachable in a meaningful way."
+  },
+  "dhall-haskell:dhall-nix/exec/Main.hs:47:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall-nixpkgs/Main.hs:398:path-traversal": {
+   "label": "FP",
+   "reason": "dhall-nixpkgs is a local CLI resolving local imports of the user's own Dhall project."
+  },
+  "dhall-haskell:dhall-toml/src/Dhall/Toml/Utils.hs:33:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall-toml/src/Dhall/TomlToDhall.hs:411:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall-yaml/yaml-to-dhall/Main.hs:151:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Format.hs:74:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Freeze.hs:314:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2021:path-traversal": {
+   "label": "FP",
+   "reason": "Operations on the Dhall cache directory derived from XDG/HOME configuration, not from untrusted import data."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2045:path-traversal": {
+   "label": "FP",
+   "reason": "Operations on the Dhall cache directory derived from XDG/HOME configuration, not from untrusted import data."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2049:path-traversal": {
+   "label": "FP",
+   "reason": "Operations on the Dhall cache directory derived from XDG/HOME configuration, not from untrusted import data."
+  },
+  "dhall-haskell:dhall/src/Dhall/Import.hs:2053:path-traversal": {
+   "label": "FP",
+   "reason": "Operations on the Dhall cache directory derived from XDG/HOME configuration, not from untrusted import data."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:1318:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Main.hs:1385:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Schemas.hs:71:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Tags.hs:254:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "dhall-haskell:dhall/src/Dhall/Util.hs:140:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Local CLI reads the operator's own stdin or file into memory; no remote trust boundary."
+  },
+  "hlint:cc/Engine.hs:65:Argument Injection (process arguments)": {
+   "label": "FP",
+   "reason": "Code Climate engine passes operator-configured flags as an argv list (no shell) from the repository's own config, an intended configuration channel."
+  },
+  "hlint:src/CmdLine.hs:269:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "hlint CLI reads stdin supplied by the local operator."
+  },
+  "hlint:src/Test/All.hs:39:path-traversal": {
+   "label": "FP",
+   "reason": "Test harness code, not shipped functionality."
+  },
+  "hlint:src/Util.hs:42:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "hlint CLI reads stdin supplied by the local operator."
+  },
+  "ihp:ihp-datasync/IHP/DataSync/LongPoll/Routes.hs:25:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Route parser using parseUUID and literal matches; nothing unsafe applied to request data."
+  },
+  "ihp:ihp-ide/IHP/IDE/CodeGen/MigrationGenerator.hs:886:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Pure SQL AST normalization in a dev-time migration generator; no unsafe boundary with untrusted input."
+  },
+  "ihp:ihp-ide/IHP/IDE/FileWatcher.hs:110:Whole input read into memory without a size limit": {
+   "label": "FP",
+   "reason": "Reads the output of a local git subprocess in a dev file watcher; no untrusted input."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:72:Partial function applied to caller-supplied text": {
+   "label": "FP",
+   "reason": "Partial (!!) in the local dev IDE schema designer only crashes a single request handler, no security impact."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:75:Partial function applied to caller-supplied text": {
+   "label": "FP",
+   "reason": "Partial (!!) in the local dev IDE schema designer only crashes a single request handler, no security impact."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Migrations.hs:90:path-traversal": {
+   "label": "FP",
+   "reason": "Migration path is derived from an existing migration looked up by integer revision, not from a request-supplied path."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Migrations.hs:118:path-traversal": {
+   "label": "FP",
+   "reason": "Reads a migration file whose path comes from the existing migrations list, not from request input."
+  },
+  "ihp:ihp-ide/IHP/IDE/ToolServer/Helper/Controller.hs:42:OS Command Injection (shell string)": {
+   "label": "TP",
+   "reason": "The dev ToolServer GET /OpenEditor passes the request 'path' parameter unescaped into a Process.system shell string, so any web page the developer visits can trigger command execution via a cross-site GET."
+  },
+  "ihp:ihp-ide/IHP/IDE/ToolServer/Helper/Controller.hs:42:Multi-Sink Taint Chain — text parameter of an exported function (caller-controlled) reaches 2 sinks": {
+   "label": "TP",
+   "reason": "Same flow: the HTTP 'path' parameter reaches the Process.system shell command in openEditor without neutralisation."
+  },
+  "ihp:ihp-ide/IHP/IDE/WorkerSignal.hs:35:path-traversal": {
+   "label": "FP",
+   "reason": "Unix socket path is configured by the dev server itself, not attacker-supplied."
+  },
+  "ihp:ihp-migrate/exe/Migrate.hs:63:path-traversal": {
+   "label": "FP",
+   "reason": "Migration CLI reads a schema path given by the operator on the command line."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:332:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:345:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:346:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:363:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:588:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:589:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:590:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:591:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:597:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:919:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:986:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:992:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:1061:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:1063:path-traversal": {
+   "label": "FP",
+   "reason": "Compile-time typed-SQL helper operating on developer environment variables and self-created state directories; no untrusted input."
+  },
+  "ormolu:ormolu-live/app/Pregen.hs:11:path-traversal": {
+   "label": "FP",
+   "reason": "Build-time pregeneration script writing to paths given on its own command line."
+  },
+  "ormolu:src/Ormolu/Processing/Common.hs:26:Partial function applied to caller-supplied text": {
+   "label": "FP",
+   "reason": "minimum on lines of source being formatted locally by the operator; at worst a local crash with no trust boundary."
+  },
+  "summoner:summoner-cli/src/Summoner/Project.hs:284:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Local scaffolding CLI/TUI code whose inputs are the operator's own settings; no trust boundary."
+  },
+  "summoner:summoner-cli/src/Summoner/Question.hs:279:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Local scaffolding CLI/TUI code whose inputs are the operator's own settings; no trust boundary."
+  },
+  "summoner:summoner-cli/src/Summoner/Template.hs:28:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Local scaffolding CLI/TUI code whose inputs are the operator's own settings; no trust boundary."
+  },
+  "summoner:summoner-cli/src/Summoner/Template/Cabal.hs:31:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Local scaffolding CLI/TUI code whose inputs are the operator's own settings; no trust boundary."
+  },
+  "summoner:summoner-cli/src/Summoner/Template/Haskell.hs:30:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Local scaffolding CLI/TUI code whose inputs are the operator's own settings; no trust boundary."
+  },
+  "summoner:summoner-cli/src/Summoner/Template/Stack.hs:27:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Local scaffolding CLI/TUI code whose inputs are the operator's own settings; no trust boundary."
+  },
+  "summoner:summoner-tui/src/Summoner/Tui/Form.hs:111:unsafe-boundary": {
+   "label": "FP",
+   "reason": "Local scaffolding CLI/TUI code whose inputs are the operator's own settings; no trust boundary."
+  }
+ }
+}
