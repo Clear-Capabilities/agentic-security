@@ -158,9 +158,14 @@ export async function runAttempt(reproducer, opts = {}) {
   const errs = validateReproducer(reproducer);
   if (errs.length) return done({ status: 'invalid', reasons: errs });
   const tools = opts.tools ?? hostTools();
-  const sup = languageSupport(reproducer.lang, tools);
-  if (!sup.supported) return done({ status: 'unsupported', reasons: [sup.reason] });
   const env = opts.environment ?? selectEnvironment({ lang: reproducer.lang, requireContainer: opts.requireContainer, preferContainer: opts.preferContainer ?? true, force: opts.force });
+  // Which toolchain must exist depends on WHERE the program runs. Inside a container it is the image's (CONTAINER_TOOLS), so the host's toolchain is
+  // irrelevant: judging a container run by the host's tools made every Haskell proof `unsupported` on a runner without GHC, however good the image
+  // (found by the first hosted container run of the Haskell leg; a developer machine with GHC installed hid it).
+  if (env.mode !== 'container') {
+    const sup = languageSupport(reproducer.lang, tools);
+    if (!sup.supported) return done({ status: 'unsupported', environment: env, reasons: [sup.reason] });
+  }
   if (env.mode === 'unavailable') return done({ status: 'blocked', environment: env, reasons: [env.reason] });
   const inContainer = env.mode === 'container';
   if (inContainer && reproducer.network === 'callback') {
