@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.192.0",
-    "bundleSha256": "db9286d24373ee45c3c32ebe3fa313a7d283bbd88926d641b794c79c02bef44a",
-    "commit": "aafd01d869ab73739a9a85adf7cc287a3c997cf0",
+    "engineVersion": "0.193.0",
+    "bundleSha256": "5d8fb492821f3d892794686f94fddc357697b3e888607cdc87d4cb3aaf6a8563",
+    "commit": "058438b4f0fc1c3650671e7dbf6aa9b75fd5879d",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-28T02:48:29.616Z",
+    "generatedAt": "2026-10-28T13:40:18.771Z",
     "corpusVersion": "5481d819acf1dd3481359a19e49e5a5b798fae1507b55173b53c8015b08214f6",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -947,7 +947,7 @@
         }
       },
       "scripts": {
-        "total": 115,
+        "total": 112,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -972,7 +972,6 @@
           "engineering-excellence/regression-report.mjs": 2,
           "engineering-excellence/runtime-audit.mjs": 2,
           "eval-lab/import-independent.mjs": 1,
-          "gate-select.mjs": 1,
           "gate-verdict-cache.mjs": 1,
           "llm-cost-ceiling.py": 1,
           "loop-engineering/lib/claude.mjs": 1,
@@ -985,8 +984,8 @@
           "rotate-key-auto.py": 1,
           "run-unit-tests.mjs": 1,
           "self-test-runner.mjs": 2,
-          "ship.mjs": 3,
-          "ship/run.mjs": 3,
+          "ship.mjs": 2,
+          "ship/run.mjs": 2,
           "synthesize-detector.mjs": 7,
           "verification-replay-example.mjs": 2
         }
@@ -999,8 +998,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 377,
-    "d": 574
+    "n": 402,
+    "d": 572
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2230,9 +2229,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.192.0",
-    "commit": "aafd01d869ab73739a9a85adf7cc287a3c997cf0",
-    "bundleSha256": "db9286d24373ee45c3c32ebe3fa313a7d283bbd88926d641b794c79c02bef44a",
+    "engineVersion": "0.193.0",
+    "commit": "058438b4f0fc1c3650671e7dbf6aa9b75fd5879d",
+    "bundleSha256": "5d8fb492821f3d892794686f94fddc357697b3e888607cdc87d4cb3aaf6a8563",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",
