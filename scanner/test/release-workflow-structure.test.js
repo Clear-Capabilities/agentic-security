@@ -144,6 +144,22 @@ const invariants = {
     return bad;
   },
 
+  fullOnlyLegsAreSkippedOnATagPush(text) {
+    const doc = load(text);
+    const legs = asList(doc.jobs?.gate?.strategy?.matrix?.include);
+    const bad = [];
+    const rest = legs.find((l) => l.group === 'rest');
+    if (!rest) return ['no rest leg'];
+    if (rest.full_only) bad.push('the rest leg must always run: it is the hosted-CI guard on a tag push');
+    for (const l of legs) if (l.group !== 'rest' && l.full_only !== true) bad.push(`leg ${l.name} is not marked full_only`);
+    const guard = '!matrix.full_only || github.event_name == \'workflow_dispatch\'';
+    for (const st of steps(doc.jobs?.gate)) {
+      if (/^Heavy leg skipped/.test(String(st.name ?? ''))) continue;
+      if (!String(st.if ?? '').includes(guard)) bad.push(`gate step "${st.name ?? st.uses}" is not guarded by full_only`);
+    }
+    return bad;
+  },
+
   failFast(text) {
     const doc = load(text);
     return doc.jobs?.gate?.strategy?.['fail-fast'] === true ? [] : ['gate strategy.fail-fast is not true'];
@@ -279,7 +295,7 @@ const mutations = [
   ['gateLegsAreReadOnly', (t) => mutate(t, '    permissions:\n      contents: read\n      checks: read\n    strategy:',
     '    permissions:\n      contents: write\n      checks: read\n    strategy:')],
   ['shardsAreExactlyOneToN', (t) => mutate(t, "shard: '3/4'", "shard: '3/5'")],
-  ['shardsAreExactlyOneToN', (t) => mutate(t, "          - { name: 'tests 2/4', group: tests, shard: '2/4' }\n", '')],
+  ['shardsAreExactlyOneToN', (t) => mutate(t, "          - { name: 'tests 2/4', group: tests, shard: '2/4', full_only: true }\n", '')],
   ['shardsAreExactlyOneToN', (t) => mutate(t, "name: 'tests 4/4', group: tests, shard: '4/4'", "name: 'tests 4/4', group: tests, shard: '1/4'")],
   ['nonTestLegsAreNotSharded', (t) => mutate(t, "{ name: 'rest', group: rest, shard: '' }", "{ name: 'rest', group: rest, shard: '1/4' }")],
   ['legsCoverEveryGroup', (t) => mutate(t, "          - { name: 'rest', group: rest, shard: '' }\n", '')],
@@ -287,6 +303,9 @@ const mutations = [
   ['everyGateLegPassesNoCacheAndItsGroup', (t) => mutate(t, 'release-check.mjs --no-cache --group', 'release-check.mjs --group')],
   ['everyGateLegPassesNoCacheAndItsGroup', (t) => mutate(t, "GATE_GROUP: ${{ matrix.group }}", "GATE_GROUP: rest")],
   ['everyReleaseCheckInvocationPassesNoCache', (t) => mutate(t, 'release-check.mjs --no-cache --only', 'release-check.mjs --only')],
+  ['fullOnlyLegsAreSkippedOnATagPush', (t) => mutate(t, "{ name: 'rest', group: rest, shard: '' }", "{ name: 'rest', group: rest, shard: '', full_only: true }")],
+  ['fullOnlyLegsAreSkippedOnATagPush', (t) => mutate(t, "group: closure, shard: '', full_only: true", "group: closure, shard: ''")],
+  ['fullOnlyLegsAreSkippedOnATagPush', (t) => mutate(t, "        if: ${{ !matrix.full_only || github.event_name == 'workflow_dispatch' }}\n        working-directory: scanner\n        env:", "        working-directory: scanner\n        env:")],
   ['failFast', (t) => mutate(t, 'fail-fast: true', 'fail-fast: false')],
   ['noAllowUnverifiedCi', (t) => mutate(t, '--no-cache --group', '--no-cache --allow-unverified-ci --group')],
   ['noAllowUnverifiedCi', (t) => mutate(t, '--no-cache --only', '--no-cache --allow-unverified-ci --only')],

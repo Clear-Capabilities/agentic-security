@@ -61,8 +61,11 @@ export function classifyChecks(rows, blocking, { allowMissing = [] } = {}) {
  * Jobs that have been running far longer than any healthy run: a hung download (a 55-minute Neovim fetch once held a PR for an hour) looks
  * like "pending" forever. A stuck job is cancelled and re-run, bounded by the caller.
  */
-export function findStuckJobs(jobs, now, { maxMinutes = 40 } = {}) {
-  return (jobs || []).filter((j) => j && j.status === 'in_progress' && j.startedAt && (now - Date.parse(j.startedAt)) / 60000 > maxMinutes)
+export function findStuckJobs(jobs, now, { maxMinutes = 40, exempt = [] } = {}) {
+  // `exempt`: jobs that do not gate the release (the informational tier). Cancelling and re-running a whole workflow run because a
+  // non-blocking job is slow throws away every blocking job's progress in that run (a 40 minute informational job cost a release 40 minutes).
+  const skip = new Set(exempt);
+  return (jobs || []).filter((j) => j && !skip.has(j.name) && j.status === 'in_progress' && j.startedAt && (now - Date.parse(j.startedAt)) / 60000 > maxMinutes)
     .map((j) => ({ name: j.name, minutes: Math.round((now - Date.parse(j.startedAt)) / 60000) }));
 }
 
@@ -209,7 +212,7 @@ export class ShipState {
   static load(path, now) { const s = new ShipState(path, now); try { s.data = JSON.parse(readFileSync(path, 'utf8')); } catch { /* a fresh run */ } return s; }
   save() { mkdirSync(dirname(this.path), { recursive: true }); const tmp = `${this.path}.${process.pid}.tmp`; writeFileSync(tmp, JSON.stringify(this.data, null, 1)); renameSync(tmp, this.path); }
   // Only the facts the flow records, so a stray or hostile key (a `__proto__`, say) can never be merged into the state.
-  static KEYS = ['earlyPassedFor', 'branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prePushPassed', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed', 'tmpdir', 'tmpdirGiven', 'dryRun', 'remoteAttestation'];
+  static KEYS = ['npmPending', 'earlyPassedFor', 'branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prePushPassed', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed', 'tmpdir', 'tmpdirGiven', 'dryRun', 'remoteAttestation'];
   set(patch) {
     for (const k of Object.keys(patch || {})) if (ShipState.KEYS.includes(k)) this.data[k] = patch[k];
     this.data.updated = this.now(); this.save();
@@ -281,7 +284,7 @@ export function statusText(state) {
 export function outcomeText(state, result, { logDir = '.agentic-security/ship/logs', now = Date.now() } = {}) {
   const total = Math.round((now - state.data.started) / 1000);
   const verdict = result.ok
-    ? `shipped in ${Math.floor(total / 60)} min ${total % 60} s`
+    ? `shipped in ${Math.floor(total / 60)} min ${total % 60} s${state.data.npmPending ? '\nNOT YET VERIFIED: npm did not show this version within the short wait. Re-check with: node scripts/ship.mjs --resume' : ''}`
     : `STOPPED in ${result.phase}: ${result.message}\nfull logs: ${logDir}/\nresume with: ${resumeCommand(state.data)}`;
   return `\n${state.summary()}\n${state.timingsLine()}\n\n${verdict}\n`;
 }

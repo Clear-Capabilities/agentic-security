@@ -53,6 +53,12 @@ test('stuck jobs: only an in-progress job older than the limit', () => {
   assert.deepEqual(findStuckJobs(jobs, now, { maxMinutes: 90 }), []);
 });
 
+test('stuck jobs: an informational job is never a reason to cancel the whole run', () => {
+  const now = Date.parse('2026-10-08T12:00:00Z');
+  const jobs = [{ name: 'local-model', status: 'in_progress', startedAt: '2026-10-08T10:50:00Z' }, { name: 'nvim-plugin', status: 'in_progress', startedAt: '2026-10-08T10:50:00Z' }];
+  assert.deepEqual(findStuckJobs(jobs, now, { maxMinutes: 40, exempt: ['local-model'] }).map((j) => j.name), ['nvim-plugin']);
+});
+
 test('release failure: a real gate failure is never retried, even when its siblings were cancelled by fail-fast', () => {
   const infra = classifyReleaseFailure([{ name: 'gate', conclusion: 'failure', steps: [{ name: 'Set up job', conclusion: 'failure' }] }]);
   assert.equal(infra.kind, 'infra');
@@ -142,7 +148,7 @@ function world(overrides = {}) {
       if (args[0] === 'rev-parse' && args[1] === 'HEAD') return ok(`${w.head}\n`);
       if (args[0] === 'rev-parse' && /\^\{tree\}$/.test(args[1])) return ok(`${w.trees[args[1].replace('^{tree}', '')]}\n`);
       if (args[0] === 'rev-parse' && args[1] === '-q') return { code: 1, out: '', err: '' };
-      if (args[0] === 'ls-remote') return ok('');
+      if (args[0] === 'ls-remote') return ok(w.remoteHead ? `${w.remoteHead}\trefs/heads/x\n` : '');
       if (args.includes('push') && args.includes('-u')) return { code: 0, out: '', err: w.prePushOut || '' };
       if (args[0] === 'log') return ok('release: 1.2.3\n');
       return ok();
@@ -153,7 +159,7 @@ function world(overrides = {}) {
     if (cmd === 'node') return { code: w.releaseCheckCode, out: w.releaseCheckCode ? 'FAIL  Full test suite passes\n' : 'Release gate passed\n', err: '' };
     if (cmd === 'gh') {
       if (args[0] === 'auth') return ok();
-      if (args[0] === 'pr' && args[1] === 'list') return ok(JSON.stringify(w.created ? [{ number: 7, url: 'u', headRefOid: HEAD }] : []));
+      if (args[0] === 'pr' && args[1] === 'list') return ok(JSON.stringify(w.created ? [{ number: 7, url: 'u', headRefOid: w.prHeadOid || HEAD }] : []));
       if (args[0] === 'pr' && args[1] === 'create') { w.created = true; return ok('https://x/pull/7'); }
       if (args[0] === 'pr' && args[1] === 'checks') { if (w.pending-- > 0) return ok('test\tpending\t0\tu\ncorpus\tpass\t1m\tu\n'); return ok(`test\t${w.checkState}\t1m\tu\ncorpus\tpass\t1m\tu\n`); }
       if (args[0] === 'pr' && args[1] === 'merge') return ok();
@@ -634,4 +640,31 @@ test('an early gate that fails stops the run before the merge, and a pass is rec
   assert.equal(ctx.state.data.earlyPassedFor, undefined);
   assert.equal(ran(w, /pr merge/).length, 0);
   fs.rmSync(ctx._dir, { recursive: true, force: true });
+});
+
+test('flow: the PR head is the commit on origin, not a stale value the API still reports right after the push', async () => {
+  const STALE = 'c'.repeat(40);
+  const w = world({ remoteHead: null, prHeadOid: STALE }); const ctx = ctxFor(w);
+  // after the push the branch on origin is HEAD; the pull request API still says the previous head
+  const sh = w.sh; let pushed = false;
+  w.sh = (cmd, args, opts) => { if (cmd === 'git' && args.includes('push') && args.includes('-u')) pushed = true; if (cmd === 'git' && args[0] === 'ls-remote' && pushed) return { code: 0, out: `${HEAD}\trefs/heads/x\n`, err: '' }; return sh(cmd, args, opts); };
+  ctx.sh = w.sh;
+  const r = await runShip(ctx, { maxRetries: 2 });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(ctx.state.data.earlyPassedFor, HEAD, 'the early gate is recorded for the commit it really ran on');
+});
+
+test('flow: a registry that is slow to show the version leaves the release shipped with the npm check PENDING, and --resume completes it', async () => {
+  const w = world({ npmAfter: 1000 }); const ctx = ctxFor(w);
+  const r = await runShip(ctx, { maxRetries: 2, npmSoftSeconds: 30 });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(ctx.state.data.npmPending, true);
+  assert.match(ctx.state.data.phases.npm.detail, /^PENDING/);
+  assert.match(outcomeText(ctx.state, r), /NOT YET VERIFIED/);
+  w.npmAfter = w.npmCalls + 1;
+  const again = await runShip(ctx, { maxRetries: 2, resume: true });
+  assert.equal(again.ok, true, JSON.stringify(again));
+  assert.equal(ctx.state.data.npmPending, false);
+  assert.match(ctx.state.data.phases.npm.detail, /is on npm/);
+  assert.doesNotMatch(outcomeText(ctx.state, again), /NOT YET VERIFIED/);
 });

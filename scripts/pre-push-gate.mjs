@@ -447,10 +447,12 @@ export function parsePushRefs(stdin) {
  * Not gated:
  *   - an all-zero LOCAL sha: the ref is being deleted, no code is uploaded;
  *   - local sha == remote sha: the remote already has this exact commit.
+ *   - a TAG whose commit the remote already has (`onRemote(sha)` says so): a tag adds a name, not code, and the commit it names
+ *     was gated when it was pushed on its branch.
  * Gated:
  *   - an all-zero REMOTE sha: a brand-new branch — every commit is new.
  */
-export function decidePushScope(refs) {
+export function decidePushScope(refs, onRemote = null) {
   const list = Array.isArray(refs) ? refs : [];
   if (list.length === 0) {
     return { shouldRun: false, gated: [], reason: 'nothing to push — git supplied no refs' };
@@ -466,6 +468,10 @@ export function decidePushScope(refs) {
     }
     if (local === remote) {
       skipped.push({ ref: r.localRef, why: 'no new commits' });
+      continue;
+    }
+    if (/^refs\/tags\//.test(String(r.remoteRef || '')) && typeof onRemote === 'function' && onRemote(local)) {
+      skipped.push({ ref: r.remoteRef, why: 'no new commits' });
       continue;
     }
     gated.push(r);
@@ -777,6 +783,14 @@ function pushBase(gatedRefs) {
 }
 
 /** Count tracked files deleted between `base` and `head`, and the base's size. */
+/** True when the commit a pushed ref names is already contained in a remote-tracking branch (so pushing a tag for it uploads no code). */
+function commitIsOnRemote(sha) {
+  const c = run('git', ['rev-parse', '--verify', '-q', `${sha}^{commit}`], { cwd: REPO, env: envWithoutGitContext() });
+  if (c.status !== 0) return false;
+  const r = run('git', ['branch', '-r', '--contains', String(c.stdout).trim()], { cwd: REPO, env: envWithoutGitContext() });
+  return r.status === 0 && String(r.stdout).trim().length > 0;
+}
+
 function deletionStats(base, head) {
   const changed = run('git', ['diff', '--name-status', `${base}..${head}`], { cwd: REPO, env: envWithoutGitContext() });
   if (changed.status !== 0) return null;
@@ -855,7 +869,7 @@ export async function main(argv = []) {
     ? { shouldRun: true, gated: [], reason: '--force: gating regardless of refs' }
     : (malformed.length > 0
       ? { shouldRun: true, gated: [], reason: 'unparseable ref input — gating defensively' }
-      : decidePushScope(refs));
+      : decidePushScope(refs, commitIsOnRemote));
 
   if (!scope.shouldRun) {
     out.write(`pre-push gate: nothing to verify (${scope.reason}). Push proceeds.\n`);
