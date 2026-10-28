@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.194.0 - The release closure runs side by side, and the Haskell container image goes into the container leg
+
+What the 0.193.0 ship measured: 53 minutes end to end (cold push 1040 s, hosted checks 743 s, the early gate about 29 minutes of which the closure is most, merge 6 s, post-merge verify 2 s, tag 2 s, release workflow 316 s, npm check 90 s and reported PENDING until `--resume`, which then confirmed it). The post-merge verify and the tag are now seconds; the early gate and a cold push are what is left.
+
+- **The closure's steps run three at a time.** `scripts/release-closure.mjs --run --jobs N` (or `AGENTIC_SECURITY_CLOSURE_JOBS`) runs the steps side by side, each in its own process group, with the step that rebuilds `dist` in place (`bundle-source`) first and alone, and records the steps in plan order, so the record, its digest and its verification are the same as a serial run's. `ship` sets three for the early gate. Measured once, in a separate worktree on an idle machine: 394 s, against 1062 s serial in the 0.192.0 run. In that worktree the `bundle-source` step failed and the tree was reported dirty (stray build chunks in the worktree), so that figure is a timing of the steps, not a passing closure; the real-checkout measurement is the next `TIMINGS` line. The serial path is unchanged and is the default.
+- **`test:loop` runs three files at once** instead of one. It is the longest closure step (567 s serial). One run of the whole suite passed 225 of 225 in 298 s. It contains real-time heartbeat and staleness tests, so a run on a loaded machine could flake; that has been run once, not characterised.
+- **The backfill script no longer moves the "Latest" badge.** Pages it creates are for old versions and are created with `--latest=false`; before, each one took the badge from the newest release and it had to be put back by hand.
+- **The `haskell:9` image is pulled in the `proof-container` job and the Haskell leg is switched on there** (`AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL=1`), so that job is the first real-engine run of the Haskell container path. Whether it passes is that job's result on this pull request, not a claim here. The skip in `bench/proof-fabric/measure.mjs` stays until it has passed.
+
+Not done: a cold push still runs the whole local suite when a gate script changes (17 minutes in 0.193.0); the duplicate closure steps (`compat-corpus`, `compat-layer-recall`) still run locally as well as in hosted CI; per-test line coverage for test selection is unbuilt.
+
 ## 0.193.0 - A shorter release: no gate on a tag push, one early gate instead of two, a lighter tag-time workflow
 
 The 0.192.0 release took 64 minutes end to end (push 55 s, hosted checks 895 s, release gate 1350 s, tag 700 s, release workflow 592 s, npm 267 s). This release removes the parts of that which repeated work or waited without a reason. None of it was measured end to end at the time of writing: the next `TIMINGS` line is the measurement, and this entry does not quote a number it has not seen.
