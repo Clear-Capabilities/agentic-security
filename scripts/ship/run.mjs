@@ -1,7 +1,7 @@
 // The release flow, as a state machine over an injected context (scripts/ship.mjs wires the real one; the tests wire a scripted one).
 // Each phase starts the moment the previous one finishes: no human or agent polling sits between a green check and the next step.
 
-import { PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm } from './lib.mjs';
+import { PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm, earlyGateArgs, lateGateArgs } from './lib.mjs';
 
 const PKG = '@clear-capabilities/agentic-security-scanner';
 const CRED = ['-c', "credential.helper=!gh auth git-credential"];
@@ -41,6 +41,11 @@ export async function runShip(ctx, opts = {}) {
       let npmLatest = null; try { npmLatest = (await ctx.fetchJson(`https://registry.npmjs.org/${PKG.replace('/', '%2f')}`))['dist-tags'].latest; } catch { /* offline: the registry check is skipped, and said so */ }
       const problems = preflightProblems({ version, files, changelog: ctx.readFile('CHANGELOG.md'), npmLatest, branch, dirty });
       if (gh(['auth', 'status']).code !== 0) problems.push('gh is not authenticated');
+      // A newly published advisory or a newly outdated dependency fails the hosted check an hour in; this is the same check, run before anything is pushed.
+      if (!o.skipDependencyCheck) {
+        const dc = sh('node', ['scripts/dependency-currency.mjs'], { timeoutMs: 5 * 60 * 1000 });
+        if (dc.code !== 0) problems.push(`dependency currency fails (the hosted check would fail the same way): ${(dc.out + dc.err).split('\n').filter((l) => /^\s*✗/.test(l)).slice(0, 2).map((l) => l.trim().slice(0, 160)).join(' | ') || 'run node scripts/dependency-currency.mjs'}`);
+      }
       if (problems.length) throw new Stop('preflight', problems.join('; '));
       state.set({ branch, version, tag });
       return `${tag} from ${branch}${npmLatest ? ` (npm has ${npmLatest})` : ' (npm unreachable: not compared)'}`;
@@ -86,6 +91,25 @@ export async function runShip(ctx, opts = {}) {
       return `#${prNumber}`;
     });
 
+    // ── the early release gate: runs on the PR head WHILE the hosted checks run, so the two waits overlap ──────────────────────────────────
+    // It is the local half of the release gate that the hosted checks do not cover (see earlyGateArgs). The merge waits for it, and so does the tag.
+    const startEarlyGate = () => {
+      const head = prHead;
+      if (state.data.earlyPassedFor === head) return Promise.resolve({ ok: true, reused: true });
+      return (async () => {
+        const { plannedCheckIds } = await import('../release-check.mjs');
+        const plan = earlyGateArgs({ allIds: plannedCheckIds(), prePushPassed: state.data.prePushPassed, prHead: head });
+        if (!plan.args) return { ok: true, nothing: true };
+        let tmp = o.tmpdir;
+        if (!tmp && ctx.makeTmpdir) { tmp = autoTmp = ctx.makeTmpdir(); state.set({ tmpdir: tmp }); }
+        log(`  early release gate: ${plan.reason}`);
+        const run = ctx.shAsync || ((c, a, x) => Promise.resolve(sh(c, a, { ...x, stream: true })));
+        const r = await run('node', ['scripts/release-check.mjs', ...plan.args], { timeoutMs: 90 * 60 * 1000, env: tmp ? { TMPDIR: tmp, TMP: tmp, TEMP: tmp } : {}, logAs: 'verify' });
+        return { ok: r.code === 0, head, failed: (r.out + r.err).split('\n').filter((l) => /^(FAIL|✗)/.test(l)).slice(0, 4).join(' | ') };
+      })();
+    };
+    const early = o.resume && done('checks') ? Promise.resolve({ ok: true, skipped: true }) : startEarlyGate();
+
     // ── blocking checks, with automatic recovery from a hung or infrastructure-failed job ───────────────────────
     await phase('checks', async () => {
       const blocking = JSON.parse(ctx.readFile('.github/required-checks.json')).blocking;
@@ -121,6 +145,10 @@ export async function runShip(ctx, opts = {}) {
       return 'all blocking checks green';
     });
 
+    const earlyResult = await early;
+    sh('git', ['checkout', '--', 'bench/memory/history.jsonl', 'bench/provenance/history.jsonl', 'bench/ttff/history.jsonl']);
+    if (!earlyResult.ok) throw new Stop('verify', `the early release gate failed before the merge: ${earlyResult.failed || 'see .agentic-security/ship/logs/verify.log'}`);
+    if (!earlyResult.skipped && !earlyResult.nothing && !earlyResult.reused) state.set({ earlyPassedFor: earlyResult.head });
     if (o.dryRun) { log('dry run: stopping before the merge'); return { ok: true, dryRun: true, state: state.data }; }
 
     // ── merge, then decide what to release ──────────────────────────────────────────────────────────────────────
@@ -149,10 +177,11 @@ export async function runShip(ctx, opts = {}) {
       }
       git(['checkout', '--detach', releaseSha]);
       // The gate gets an EMPTY temp directory unless the operator named one: leftover temp files from earlier runs slow the suite.
-      let tmp = o.tmpdir;
+      let tmp = o.tmpdir || autoTmp;
       if (!tmp && ctx.makeTmpdir) { tmp = autoTmp = ctx.makeTmpdir(); state.set({ tmpdir: tmp }); log(`  release gate TMPDIR: ${tmp} (fresh and empty)`); }
       const { plannedCheckIds } = await import('../release-check.mjs');
-      const plan = verifyArgs({ allIds: plannedCheckIds(), treeEquivalent, prePushPassed: state.data.prePushPassed, prHead });
+      const late = lateGateArgs({ allIds: plannedCheckIds(), earlyPassedFor: state.data.earlyPassedFor, releaseSha, treeEquivalent });
+      const plan = late || verifyArgs({ allIds: plannedCheckIds(), treeEquivalent, prePushPassed: state.data.prePushPassed, prHead });
       log(`  release gate: ${plan.reason}`);
       const r = sh('node', ['scripts/release-check.mjs', ...plan.args], { stream: true, timeoutMs: 90 * 60 * 1000, env: tmp ? { TMPDIR: tmp, TMP: tmp, TEMP: tmp } : {} });
       sh('git', ['checkout', '--', 'bench/memory/history.jsonl', 'bench/provenance/history.jsonl', 'bench/ttff/history.jsonl']);

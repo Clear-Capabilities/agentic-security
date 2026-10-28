@@ -253,12 +253,12 @@ function main(argv = process.argv.slice(2)) {
   // the full run and are skipped, and the hosted pull-request CI still runs everything.
   const oi = argv.indexOf('--only-file');
   if (oi !== -1) {
-    if (!argv[oi + 1]) { process.stderr.write('run-unit-tests.mjs: --only-file needs a path\n'); process.exit(1); }
+    if (!argv[oi + 1]) throw new Error('--only-file needs a path');
     const wanted = fs.readFileSync(argv[oi + 1], 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
     const known = new Set(files);
     const unknown = wanted.filter((w) => !known.has(w));
-    if (unknown.length) { process.stderr.write(`run-unit-tests.mjs: --only-file names files that npm test does not run: ${unknown.slice(0, 5).join(', ')}\n`); process.exit(1); }
-    if (!wanted.length) { process.stderr.write('run-unit-tests.mjs: --only-file lists no files, refusing to report a vacuous pass.\n'); process.exit(1); }
+    if (unknown.length) throw new Error(`--only-file names files that npm test does not run: ${unknown.slice(0, 5).join(', ')}`);
+    if (!wanted.length) throw new Error('--only-file lists no files, refusing to report a vacuous pass');
     files.splice(0, files.length, ...wanted);
   }
   const shard = resolveShard(argv);

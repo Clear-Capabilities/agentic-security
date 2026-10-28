@@ -143,6 +143,42 @@ export function verifyArgs({ allIds, treeEquivalent, prePushPassed, prHead }) {
 }
 
 /**
+ * Release-gate checks the hosted pull-request CI runs on a clean runner for the PR head and that BLOCK the merge (the sharded test suite and the
+ * corpus job, and the `bench-gates` job: self-scan, mutation, fix verification, layer recall, Haskell precision). Once the blocking checks are
+ * green and the merge commit's tree is the PR head's, these have a hosted verdict for exactly this tree, so the local release gate does not
+ * repeat them. Keep this list equal to what .github/workflows/ci.yml really runs; scanner/test/ship.test.js pins it against the workflow.
+ */
+export const CI_COVERED = Object.freeze([
+  'test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'fix-verification-gate', 'layer-recall-gate', 'haskell-precision-gate',
+]);
+
+/** Release-gate checks that can only be judged after the merge: they look at origin/main and at the hosted run for the released commit. */
+export const AFTER_MERGE_ONLY = Object.freeze(['head-pushed', 'remote-ci-green']);
+
+/**
+ * The early release gate: everything that can already be judged on the PR head, run while the hosted checks are still running, so the two waits
+ * overlap instead of adding up (the release closure alone was 18 of the last 22 minutes of `verify`). It omits what the hosted CI covers
+ * (`CI_COVERED`), what only exists after the merge (`AFTER_MERGE_ONLY`), and, when the pre-push gate is recorded as passed for this exact head, what
+ * that already proved. Nothing is tagged on its word alone: `verify` still requires it to have passed for the commit being released.
+ */
+export function earlyGateArgs({ allIds, prePushPassed, prHead }) {
+  const skip = new Set([...CI_COVERED, ...AFTER_MERGE_ONLY, ...(prHead && prePushPassed === prHead ? PROVEN_BY_PRE_PUSH : [])]);
+  const ids = (allIds || []).filter((id) => !skip.has(id));
+  if (!ids.length) return { args: null, ids: [], reason: 'nothing left to run early' };
+  return { args: ['--only', ids.join(',')], ids, reason: `${ids.length} checks on the PR head while the hosted checks run (omitted: hosted-covered, post-merge and pre-push-proven checks)` };
+}
+
+/**
+ * What `verify` runs after the merge when the early gate passed for the commit being released: only the checks that need the merge. Any other
+ * state (the early gate failed, was for another head, or the merge commit has a different tree) falls back to `verifyArgs`, the previous behavior.
+ */
+export function lateGateArgs({ allIds, earlyPassedFor, releaseSha, treeEquivalent }) {
+  if (!treeEquivalent || !earlyPassedFor || earlyPassedFor !== releaseSha) return null;
+  const ids = AFTER_MERGE_ONLY.filter((id) => (allIds || []).includes(id));
+  return ids.length ? { args: ['--only', ids.join(',')], reason: `the early gate passed for ${releaseSha.slice(0, 8)}; only the ${ids.length} post-merge checks remain (${ids.join(', ')})` } : null;
+}
+
+/**
  * The background gate's verdict for HEAD, from `gate-warm.mjs --wait --json` output, or null when there is none to read (the script is
  * absent, printed something else, or the state is unknown). Null means "no information": the push runs the gate as it always did.
  */
@@ -168,7 +204,7 @@ export class ShipState {
   static load(path, now) { const s = new ShipState(path, now); try { s.data = JSON.parse(readFileSync(path, 'utf8')); } catch { /* a fresh run */ } return s; }
   save() { mkdirSync(dirname(this.path), { recursive: true }); const tmp = `${this.path}.${process.pid}.tmp`; writeFileSync(tmp, JSON.stringify(this.data, null, 1)); renameSync(tmp, this.path); }
   // Only the facts the flow records, so a stray or hostile key (a `__proto__`, say) can never be merged into the state.
-  static KEYS = ['branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prePushPassed', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed', 'tmpdir', 'tmpdirGiven', 'dryRun', 'remoteAttestation'];
+  static KEYS = ['earlyPassedFor', 'branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prePushPassed', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed', 'tmpdir', 'tmpdirGiven', 'dryRun', 'remoteAttestation'];
   set(patch) {
     for (const k of Object.keys(patch || {})) if (ShipState.KEYS.includes(k)) this.data[k] = patch[k];
     this.data.updated = this.now(); this.save();

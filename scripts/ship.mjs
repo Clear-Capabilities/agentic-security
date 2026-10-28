@@ -16,7 +16,7 @@
 // Progress is written to .agentic-security/ship/state.json (git-ignored) for a dashboard, and every long command's full output goes to
 // .agentic-security/ship/logs/<phase>.log. See scripts/ship/lib.mjs for what it will and will not do (it never bypasses a gate).
 
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { readFileSync, mkdirSync, openSync, closeSync, appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,6 +60,25 @@ const ctx = {
     let tail = '';
     if (logPath) { try { const b = readFileSync(logPath, 'utf8'); tail = b.slice(-6000); } catch { tail = ''; } }
     return { code: r.status ?? 1, out: r.stdout || tail, err: r.stderr || tail || (r.error ? String(r.error.message) : '') };
+  },
+  // The same command as `sh`, but not blocking the event loop: the early release gate runs this while the hosted checks are polled.
+  // Output goes to the named phase log; the resolved value has the same shape as `sh`'s.
+  shAsync(cmd, args, { timeoutMs = 120000, env = {}, logAs = state.data.current } = {}) {
+    return new Promise((resolve) => {
+      const logPath = phaseLog(logAs);
+      const fd = openSync(logPath, 'a');
+      const child = spawn(cmd, args, { cwd: ROOT, env: { ...process.env, ...env }, stdio: ['ignore', fd, fd] });
+      const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
+      const done = (code, error) => {
+        clearTimeout(timer);
+        try { closeSync(fd); } catch { /* already closed */ }
+        let tail = '';
+        try { tail = readFileSync(logPath, 'utf8').slice(-6000); } catch { tail = ''; }
+        resolve({ code: code ?? 1, out: tail, err: tail || (error ? String(error.message) : '') });
+      };
+      child.on('error', (e) => done(1, e));
+      child.on('close', (code) => done(code));
+    });
   },
 };
 
