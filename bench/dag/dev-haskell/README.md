@@ -83,3 +83,12 @@ repository, is not a known source).
 
 The real-code numbers are also a gate: `bench/haskell-precision` (`npm run bench:haskell-precision:check`) compares them for equality against a recorded
 baseline, and fails on a label edit.
+
+## Second labeller (fresh set, 2026-10-28)
+
+The fresh set's 222 sites were labelled a second time by a different LLM, in two blind sessions of 111 sites, given only project, file, line and vulnerability class (`fresh-labels-second.json`; `second-labeler-score.mjs` reproduces the numbers below). The first labeller's labels were not shown to it.
+
+- Agreement 206 of 222 (92.8%); Cohen's kappa 0.40 on true positive against anything else. The sites are 94% false positives, so percent agreement flatters; kappa is the honest figure and it is moderate, not high.
+- Of the 16 disagreements, 12 are one policy question: the first labeller called a site a true positive when the code is an example program (`scotty/examples/`) or a test server (`dhall-test-server`); the second did not count code that is not part of the shipped library or program. Under the second labeller's reading, the fresh set has 7 true positives rather than 21, so the engine's recorded fresh precision (17 of 45) would be about 7 of 45 if it were scored by that policy. Which policy is right is a product decision (an example that teaches an unsafe pattern is not nothing), and it has not been made here.
+- The other 4 disagreements are readings of the code: one unbounded integer parse in IHP (second labeller: true positive, first: false positive), one deferred body read (first: true positive, second: unsure), and two partial-function sites in IHP's local development IDE (first: true positive, second: false positive).
+- Limits: one pass, no adjudication; the first session used 7 tool calls for 111 sites, so how deeply it read is not established; neither labeller was given a rule on example code. The sealed independent set was not touched. These numbers are not a claim that the engine's precision improved or regressed, only that the recorded fresh precision depends on a scope policy that was never written down.

@@ -14,7 +14,7 @@ class Stop extends Error { constructor(phase, message) { super(message); this.ph
  * @param {object} [opts] { branch?, maxRetries, stuckMinutes, checksTimeoutMin, releaseTimeoutMin, npmTimeoutMin, allowMissing, dryRun, tmpdir }
  */
 export async function runShip(ctx, opts = {}) {
-  const o = { maxRetries: 2, stuckMinutes: 40, checksTimeoutMin: 90, releaseTimeoutMin: 60, npmTimeoutMin: 90, npmSoftSeconds: 90, allowMissing: ['dependency-currency'], dryRun: false, ...opts };
+  const o = { maxRetries: 2, stuckMinutes: 40, checksTimeoutMin: 90, releaseTimeoutMin: 60, npmTimeoutMin: 90, npmSoftSeconds: 90, closureJobs: 3, allowMissing: ['dependency-currency'], dryRun: false, ...opts };
   const { sh, state, log } = ctx;
   const git = (args) => { const r = sh('git', args); if (r.code !== 0) throw new Error(`git ${args.join(' ')}: ${r.err.trim().slice(0, 200)}`); return r.out; };
   const gh = (args) => sh('gh', args);
@@ -108,7 +108,7 @@ export async function runShip(ctx, opts = {}) {
         if (!tmp && ctx.makeTmpdir) { tmp = autoTmp = ctx.makeTmpdir(); state.set({ tmpdir: tmp }); }
         log(`  early release gate: ${plan.reason}`);
         const run = ctx.runNodeAsync || ((args, x) => Promise.resolve(sh('node', args, { ...x, stream: true })));
-        const r = await run(['scripts/release-check.mjs', ...plan.args], { timeoutMs: 90 * 60 * 1000, env: scratchEnv(tmp), logAs: 'verify' });
+        const r = await run(['scripts/release-check.mjs', ...plan.args], { timeoutMs: 90 * 60 * 1000, env: { ...scratchEnv(tmp), AGENTIC_SECURITY_CLOSURE_JOBS: String(o.closureJobs) }, logAs: 'verify' });
         return { ok: r.code === 0, head, failed: (r.out + r.err).split('\n').filter((l) => /^(FAIL|✗)/.test(l)).slice(0, 4).join(' | ') };
       })();
     };
@@ -125,6 +125,7 @@ export async function runShip(ctx, opts = {}) {
         const c = classifyChecks(rows, blocking, { allowMissing: o.allowMissing });
         state.note('checks', `${rows.filter((x) => x.state === 'pass').length} pass, ${c.pending.length} blocking pending${c.failing.length ? `, FAILING: ${c.failing.join(', ')}` : ''}`);
         if (c.green) return { green: true };
+        let rerunThisTick = false;
         const runs = ghJson(['run', 'list', '--branch', branch, '--limit', '12', '--json', 'databaseId,status,conclusion,workflowName']) || [];
         for (const run of runs.filter((x) => x.status === 'in_progress' || (x.status === 'completed' && x.conclusion === 'failure'))) {
           const jobs = (ghJson(['run', 'view', String(run.databaseId), '--json', 'jobs']) || { jobs: [] }).jobs;
@@ -134,16 +135,16 @@ export async function runShip(ctx, opts = {}) {
           const used = retries.get(run.databaseId) || 0;
           if (used >= o.maxRetries) throw new Stop('checks', `run ${run.databaseId} (${run.workflowName}) needed more than ${o.maxRetries} automatic re-runs`);
           retries.set(run.databaseId, used + 1);
+          rerunThisTick = true;
           ctx.log(`  ${stuck.length ? `stuck: ${stuck.map((s) => `${s.name} ${s.minutes} min`).join(', ')}` : 'infrastructure failure'}: re-running ${run.workflowName} (attempt ${used + 2})`);
           state.event(`re-ran ${run.workflowName} (${stuck.length ? 'stuck job' : 'infra failure'})`);
           if (run.status === 'in_progress') { gh(['run', 'cancel', String(run.databaseId)]); await waitFor(() => (ghJson(['run', 'view', String(run.databaseId), '--json', 'status']) || {}).status === 'completed', { timeoutMs: 120000, intervalMs: 3000, now: ctx.now, sleep: ctx.sleep }); }
           gh(['run', 'rerun', String(run.databaseId), '--failed']);
         }
         if (c.failing.length) {
-          // a failing blocking check that is not an infrastructure failure is a real failure: stop and say which
-          const runs2 = ghJson(['run', 'list', '--branch', branch, '--limit', '12', '--json', 'databaseId,status,conclusion']) || [];
-          const stillRunning = runs2.some((x) => x.status !== 'completed');
-          if (!stillRunning) throw new Stop('checks', `blocking checks failed: ${c.failing.join(', ')}`);
+          // A failing blocking check that is not an infrastructure failure is a real failure: stop and say which. Stop as soon as no BLOCKING check is
+          // still pending (and nothing was just re-run): an informational job that is still running (the 40 minute local-model job) cannot turn it green.
+          if (!rerunThisTick && c.pending.length === 0) throw new Stop('checks', `blocking checks failed: ${c.failing.join(', ')}`);
         }
         return null;
       }, { timeoutMs: o.checksTimeoutMin * 60000, intervalMs: 15000, now: ctx.now, sleep: ctx.sleep });

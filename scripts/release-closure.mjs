@@ -31,7 +31,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { attestFromCi, describeAttestation, explainAttestation, realGh } from './release-attest.mjs';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { digestOf } from '../scanner/src/posture/assurance/identity.js';
 import { SCOPES as UNIT_TEST_SCOPES } from './run-unit-tests.mjs';
 
@@ -90,7 +90,7 @@ export const CLOSURE_STEPS = Object.freeze([
   // test:loop is deliberately outside `npm test` (scripts/run-unit-tests.mjs excludes it), so the closure is where the full test run meets it.
   { id: 'controller', title: 'Implementation controller suite', area: 'controller', covers: ['LOOP-001', 'LOOP-004'], ...npm('test:loop'), timeoutSec: 1800, outsideTestSuite: true },
   { id: 'smoke', title: 'Smoke tests', area: 'smoke', covers: [], ...npm('test:smoke'), timeoutSec: 600 },
-  { id: 'bundle-source', title: 'Committed bundle equals a fresh build of the source (runs the build)', area: 'bundle-source', covers: [], ...npm('check:bundle-source'), timeoutSec: 1200 },
+  { id: 'bundle-source', title: 'Committed bundle equals a fresh build of the source (runs the build)', area: 'bundle-source', covers: [], ...npm('check:bundle-source'), timeoutSec: 1200, serial: true },
   { id: 'doc-drift', title: 'Documentation drift and links', area: 'documentation', covers: [], ...npm('check-doc-drift'), timeoutSec: 600 },
   { id: 'doc-language', title: 'Generated language documentation is current', area: 'documentation', covers: [], ...npm('docs:check-language'), timeoutSec: 600 },
   { id: 'scorecard', title: 'Committed scorecard describes this version', area: 'scorecard', covers: [], ...npm('scorecard:check'), timeoutSec: 300 },
@@ -294,6 +294,18 @@ export function defaultExec(cmd, args, { cwd, timeoutMs, env }) {
   return { status: timedOut ? null : r.status, signal: r.signal, timedOut, error: r.error && r.error.code !== 'ETIMEDOUT' ? String(r.error.message) : null, stdout: r.stdout || Buffer.alloc(0), stderr: r.stderr || Buffer.alloc(0) };
 }
 
+/** `defaultExec` without blocking the event loop, for steps that run side by side. Same process-group runner, same result shape. */
+export function defaultExecAsync(cmd, args, { cwd, timeoutMs, env }) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, ['--input-type=module', '-e', GROUP_RUNNER, String(timeoutMs), cmd, ...args], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const out = []; const err = [];
+    child.stdout.on('data', (d) => out.push(d)); child.stderr.on('data', (d) => err.push(d));
+    const backstop = setTimeout(() => child.kill('SIGKILL'), timeoutMs + 60_000);
+    child.on('error', (e) => { clearTimeout(backstop); resolve({ status: null, signal: null, timedOut: false, error: String(e.message), stdout: Buffer.concat(out), stderr: Buffer.concat(err) }); });
+    child.on('close', (code, signal) => { clearTimeout(backstop); const timedOut = code === 124; resolve({ status: timedOut ? null : code, signal, timedOut, error: null, stdout: Buffer.concat(out), stderr: Buffer.concat(err) }); });
+  });
+}
+
 /** Tracked files the bench runners append to; modified copies of exactly these do not count as a dirty tree. */
 export const GENERATED_OUTPUTS = Object.freeze(['bench/memory/history.jsonl', 'bench/provenance/history.jsonl', 'bench/ttff/history.jsonl']);
 
@@ -324,7 +336,7 @@ function defaultEnv(repoRoot, exec = defaultExec) {
  * Run the plan against the current commit. Writes one log per step and the record under `outDir`.
  * Returns the record (also written). Nothing here edits the tracked tree.
  */
-export function runClosure({ repoRoot = REPO, steps = CLOSURE_STEPS, outDir, only = null, exec = defaultExec, env = null, now = () => new Date().toISOString(), log = () => {} } = {}) {
+function closureSession({ repoRoot = REPO, steps = CLOSURE_STEPS, outDir, only = null, exec = defaultExec, env = null, now = () => new Date().toISOString(), log = () => {} } = {}) {
   const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'scanner', 'package.json'), 'utf8'));
   const e = env || defaultEnv(repoRoot, exec);
   const before = gitFacts(repoRoot, exec);
@@ -333,18 +345,21 @@ export function runClosure({ repoRoot = REPO, steps = CLOSURE_STEPS, outDir, onl
   fs.mkdirSync(logDir, { recursive: true });
   const selected = only ? steps.filter((s) => only.includes(s.id)) : steps;
   const results = [];
-  for (const step of selected) {
+  const begin = (step) => {
     const version = suiteVersionOf(step, { pkg, repoRoot });
     const app = applicability(step, e);
     const entry = { id: step.id, area: step.area, remote: step.remote ? { job: step.remote.job } : null, suiteVersion: version, startedAt: now() };
     if (!app.applicable) {
       results.push({ ...entry, state: 'unsupported', reason: app.reason, command: null, exitCode: null, counts: null, log: null, endedAt: now() });
       log(`UNSUPPORTED ${step.id}: ${app.reason}${step.remote ? ` (only hosted CI job '${step.remote.job}' can satisfy this; not counted as passing)` : ''}\n`);
-      continue;
+      return { skip: true };
     }
     const argv = step.run.type === 'npm' ? ['npm', ['run', step.run.script]] : [process.execPath, ['--test', ...step.run.files]];
     log(`RUN         ${step.id}\n`);
-    const r = exec(argv[0], argv[1], { cwd: path.join(repoRoot, 'scanner'), timeoutMs: step.timeoutSec * 1000, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } });
+    return { skip: false, entry, argv, opts: { cwd: path.join(repoRoot, 'scanner'), timeoutMs: step.timeoutSec * 1000, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } } };
+  };
+  const settle = (step, b, r) => {
+    const { entry } = b;
     const out = Buffer.concat([r.stdout, r.stderr.length ? Buffer.from(`\n--- stderr ---\n`) : Buffer.alloc(0), r.stderr]);
     const logPath = path.join(logDir, `${step.id}.log`);
     fs.writeFileSync(logPath, out);
@@ -361,7 +376,11 @@ export function runClosure({ repoRoot = REPO, steps = CLOSURE_STEPS, outDir, onl
       const failing = text.filter((l) => /^\s*(✖|not ok)\s/.test(l)).slice(0, 12);
       log(`  --- ${step.id}: ${failing.length ? `first ${failing.length} failing test line(s)` : 'last lines of its output'} ---\n${(failing.length ? failing : text.slice(-25)).map((l) => `  | ${l.slice(0, 220)}`).join('\n')}\n`);
     }
-  }
+  };
+  const finish = () => {
+  // steps that finished out of order are put back in plan order, so the record reads the same however it was run
+  const order = new Map(selected.map((st, ix) => [st.id, ix]));
+  results.sort((a, b) => order.get(a.id) - order.get(b.id));
   const after = gitFacts(repoRoot, exec);
   const record = {
     schema: CLOSURE_SCHEMA,
@@ -377,6 +396,35 @@ export function runClosure({ repoRoot = REPO, steps = CLOSURE_STEPS, outDir, onl
   };
   fs.writeFileSync(path.join(base, `${(before.commit || 'unknown').slice(0, 12)}.json`), `${JSON.stringify(record, null, 2)}\n`);
   return { record, base };
+  };
+  return { selected, results, begin, settle, finish, exec };
+}
+
+export function runClosure(opts = {}) {
+  const S = closureSession(opts);
+  for (const step of S.selected) {
+    const b = S.begin(step);
+    if (b.skip) continue;
+    S.settle(step, b, S.exec(b.argv[0], b.argv[1], b.opts));
+  }
+  return S.finish();
+}
+
+/** The same closure with up to `jobs` steps running at once (each in its own process group). Results keep plan order. A step marked `serial` runs alone, first. */
+export async function runClosureParallel(opts = {}, { jobs = 3, execAsync = defaultExecAsync } = {}) {
+  const S = closureSession(opts);
+  const queue = S.selected;
+  const serialFirst = queue.filter((st) => st.serial);
+  const parallel = queue.filter((st) => !st.serial);
+  const runOne = async (step) => {
+    const b = S.begin(step);
+    if (b.skip) return;
+    S.settle(step, b, await execAsync(b.argv[0], b.argv[1], b.opts));
+  };
+  for (const st of serialFirst) await runOne(st);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, parallel.length)) }, async () => { while (next < parallel.length) await runOne(parallel[next++]); }));
+  return S.finish();
 }
 
 export function readLogFor(base) {
@@ -428,13 +476,15 @@ export async function main(argv, { out = process.stderr, gh = realGh } = {}) {
   if (has('--run')) {
     const only = val('--only') ? val('--only').split(',').map((x) => x.trim()).filter(Boolean) : null;
     const outDir = val('--out') ? path.resolve(val('--out')) : null;
-    const { record, base } = runClosure({ outDir, only, log: (m) => out.write(`  ${m}`) });
+    const jobs = Math.max(1, Number(val('--jobs') || process.env.AGENTIC_SECURITY_CLOSURE_JOBS || 1) || 1);
+    const opts = { outDir, only, log: (m) => out.write(`  ${m}`) };
+    const { record, base } = jobs > 1 ? await runClosureParallel(opts, { jobs }) : runClosure(opts);
     if (record.partial) { out.write('PARTIAL closure (--only): never publishable and never the release gate.\n'); }
     const v = evaluateClosureRecord(record, gitFacts(REPO), { pkg, readLog: readLogFor(base) });
     out.write(`record: ${path.join(base, `${record.commit.slice(0, 12)}.json`)}\n`);
     return record.partial ? 1 : report(v, out);
   }
-  out.write('usage: release-closure.mjs --static | --run [--out dir] [--only ids] | --verify <record> [--attest-from-ci] | --attest-from-ci [--commit sha] | --list\n');
+  out.write('usage: release-closure.mjs --static | --run [--out dir] [--only ids] [--jobs N] | --verify <record> [--attest-from-ci] | --attest-from-ci [--commit sha] | --list\n');
   return 2;
 }
 

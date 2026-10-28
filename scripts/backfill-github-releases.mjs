@@ -24,7 +24,8 @@ for (const tag of tags) {
   if (!/^v\d+\.\d+\.\d+$/.test(tag)) { process.stdout.write(`${tag}: skipped, not a vX.Y.Z tag\n`); failed++; continue; }
   const body = releaseNotes(changelog, tag.slice(1));
   if (!body) { process.stdout.write(`${tag}: skipped, no changelog section\n`); failed++; continue; }
-  const cmd = ['release', 'create', tag, '--verify-tag', '--title', tag, '--notes-file', '-'];
+  const cmd = ['release', 'create', tag, '--verify-tag', '--title', tag, '--notes-file', '-', '--latest=false'];
+  // a backfilled page is for an OLD version: without this each created page took the "Latest" badge from the newest release
   if (!apply) { process.stdout.write(`${tag}: would run gh ${cmd.join(' ')} (${body.length} chars of notes), unless a Release already exists\n`); continue; }
   const exists = gh(['release', 'view', tag]);
   if (exists.status === 0) { process.stdout.write(`${tag}: Release already exists, left alone\n`); continue; }

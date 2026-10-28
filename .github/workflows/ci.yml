@@ -692,7 +692,7 @@ jobs:
       # the proof runner never pulls an image (nothing is fetched during a proof), so the job pulls them first
       - name: Pull the proof images
         run: |
-          for image in node:24-slim python:3-slim eclipse-temurin:21 gcc:latest; do
+          for image in node:24-slim python:3-slim eclipse-temurin:21 gcc:latest haskell:9; do
             for attempt in 1 2 3; do
               if timeout 300 docker pull "$image"; then break; fi
               if [ "$attempt" = 3 ]; then echo "could not pull $image"; exit 1; fi
@@ -704,6 +704,8 @@ jobs:
         run: docker version
         timeout-minutes: 2
       - name: Measure exploit proof in a real container (fails if any run was not in a container)
+        env:
+          AGENTIC_SECURITY_PROOF_CONTAINER_HASKELL: '1'
         run: node bench/proof-fabric/measure.mjs --require-container --out "$RUNNER_TEMP/proof-container.json"
       # the proof gate bench also confines the fix's own tests, which needs the same relaxation `sandbox-linux` makes
       - name: Relax the unprivileged user-namespace restriction for this job

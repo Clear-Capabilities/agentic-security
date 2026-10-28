@@ -253,7 +253,23 @@ test('through the stand-in container engine a Haskell proof is labelled `contain
     assert.equal(r.oracle.fired, true);
     const calls = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     const run = calls.find((c) => c[0] === 'run');
-    assert.ok(run.includes('haskell:9')); assert.equal(run[run.indexOf('haskell:9') + 1], 'ghc', 'the image\'s own ghc, not the host path');
+    assert.ok(run.includes('haskell:9'));
+    // the versioned GHC directory is put on PATH by a fixed wrapper, then the image's own ghc (not the host path) is run unchanged
+    const after = run.slice(run.indexOf('haskell:9') + 1);
+    assert.deepEqual(after.slice(0, 2), ['sh', '-c']); assert.equal(after[4], 'ghc', 'the image\'s own ghc, not the host path');
     assert.ok(run.includes('--network') && run[run.indexOf('--network') + 1] === 'none');
   } finally { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
+});
+
+test('a container run is judged by the image\'s toolchain, not the host\'s: a host with no GHC does not make a Haskell proof unsupported', async () => {
+  const vuln = fixture('command-injection-haskell', 'vulnerable');
+  const rep = { schema: 'agentic-security/reproducer', version: 1, findingId: 'c', lang: 'haskell', files: { 'Main.hs': vuln }, run: ['{{GHC}}', '-ignore-dot-ghci', '-e', ':main "x"', 'Main.hs'], oracle: { type: 'command_execution', params: { canary: 'command' } }, network: 'none' };
+  const noGhc = { node: process.execPath, python: null, java: null, javac: null, cc: null, dotnet: null, ghc: null, runghc: null };
+  // a runtime that does not exist: the run fails, but it must get as far as trying the container
+  const r = await runAttempt(rep, { tools: noGhc, environment: { mode: 'container', assurance: 'high', runtime: '/nonexistent/docker', image: 'haskell:9' } });
+  assert.notEqual(r.status, 'unsupported', `${r.status}: ${r.reasons}`);
+  // and on the host the same missing GHC IS unsupported
+  const local = await runAttempt(rep, { tools: noGhc, environment: { mode: 'local-confined', assurance: 'lower', backend: 'userspace' } });
+  assert.equal(local.status, 'unsupported');
+  assert.match(String(local.reasons), /missing toolchain: ghc/);
 });

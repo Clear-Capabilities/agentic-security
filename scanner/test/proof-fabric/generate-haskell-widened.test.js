@@ -361,7 +361,12 @@ test('the container command line for a Haskell proof: fixed hardening flags, the
   assert.equal(val('--user'), '1000:1000'); assert.equal(val('--workdir'), '/work');
   assert.equal(args.filter((a) => a === '-v').length, 1); assert.equal(val('-v'), '/tmp/proof/root:/work:rw');
   assert.ok(!args.includes('--privileged'));
-  assert.deepEqual(args.slice(args.indexOf('haskell:9')), ['haskell:9', ...run], 'the image, then the image\'s own ghc and the argument vector, with no shell in between');
+  // GHC sits in /opt/ghc/<version>/bin and the version floats with the tag (the first real-engine run found `ghc: not found` with /opt/ghc/bin), so a
+  // fixed wrapper puts every /opt/ghc/*/bin on PATH inside the container and then runs the argument vector unchanged.
+  const tail = args.slice(args.indexOf('haskell:9'));
+  assert.deepEqual(tail.slice(0, 3), ['haskell:9', 'sh', '-c']);
+  assert.match(tail[3], /for d in \/opt\/ghc\/\*\/bin; do PATH="\$d:\$PATH"; done; export PATH; exec "\$@"$/);
+  assert.deepEqual(tail.slice(4), ['sh', ...run], 'the argument vector follows the wrapper unchanged, as separate arguments');
   // the reproducer's PATH comes after the default one, so it wins; it keeps the toolchain directory so ghc is still found
   const paths = args.filter((a, k) => args[k - 1] === '-e' && a.startsWith('PATH='));
   assert.equal(paths.length, 2); assert.match(paths[1], /^PATH=\/work\/bin:\/opt\/ghc\/bin:/);
@@ -384,8 +389,10 @@ test('through the stand-in engine an ARGUMENT INJECTION proof finds its stand-in
     }
     const calls = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((c) => c[0] === 'run');
     assert.ok(calls.length >= 4);
-    for (const c of calls) { assert.equal(c[c.indexOf('haskell:9') + 1] === 'ghc' || c[c.indexOf('haskell:9') + 1] === '/bin/chmod', true); assert.ok(c.includes('--read-only')); assert.equal(c[c.indexOf('--network') + 1], 'none'); }
+    // the command after the image, past the fixed wrapper that puts the versioned GHC directory on PATH
+    const cmdOf = (c) => { const rest = c.slice(c.indexOf('haskell:9') + 1); return rest[0] === 'sh' && rest[1] === '-c' ? rest.slice(4) : rest; };
+    for (const c of calls) { assert.equal(cmdOf(c)[0] === 'ghc' || cmdOf(c)[0] === '/bin/chmod', true); assert.ok(c.includes('--read-only')); assert.equal(c[c.indexOf('--network') + 1], 'none'); }
     assert.ok(calls.some((c) => c.includes('PATH=/work/bin:/opt/ghc/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin')));
-    assert.ok(calls.some((c) => c[c.indexOf('haskell:9') + 1] === '/bin/chmod'), 'the build step (chmod of the stand-in) goes through the engine, not the host');
+    assert.ok(calls.some((c) => cmdOf(c)[0] === '/bin/chmod'), 'the build step (chmod of the stand-in) goes through the engine, not the host');
   } finally { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
 });
