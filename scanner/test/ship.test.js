@@ -148,6 +148,7 @@ function world(overrides = {}) {
       return ok();
     }
     if (cmd === 'node' && args[0] === 'scripts/gate-warm.mjs') return ok(w.warmOut || '');
+    if (cmd === 'node' && args[0] === 'scripts/dependency-currency.mjs') { w.depCalls = (w.depCalls || 0) + 1; return w.depCode ? { code: 1, out: '  ✗ ide/vscode: 1 known vulnerability at moderate or above\n', err: '' } : ok('ok'); }
     if (cmd === 'node') w.gateEnv = (opts && opts.env) || {};
     if (cmd === 'node') return { code: w.releaseCheckCode, out: w.releaseCheckCode ? 'FAIL  Full test suite passes\n' : 'Release gate passed\n', err: '' };
     if (cmd === 'gh') {
@@ -190,11 +191,17 @@ test('flow: tree-equivalent merge releases the verified PR head, runs the gate o
   const r = await runShip(ctx, { maxRetries: 2 });
   assert.equal(r.ok, true, JSON.stringify(r));
   assert.deepEqual(ran(w, /^git (-c \S+ )?tag -a/), [`git tag -a v1.2.3 -m 1.2.3 ${HEAD}`], 'the verified PR head is tagged, not the merge commit');
-  assert.equal(ran(w, /^node scripts\/release-check\.mjs/).length, 1);
+  const gates = ran(w, /^node scripts\/release-check\.mjs/);
+  assert.equal(gates.length, 2, 'the early gate on the PR head, then only the post-merge checks');
+  assert.match(gates[0], /--only /); assert.doesNotMatch(gates[0], /head-pushed|remote-ci-green|test-suite|self-scan-gate/, 'the early gate omits the hosted-covered and post-merge checks');
+  assert.match(gates[1], /--only head-pushed,remote-ci-green$/, 'after the merge only the checks that need it');
   assert.equal(ran(w, /--no-verify|--allow-unverified-ci|--force|-f /).length, 0, 'no gate is bypassed and nothing is force-pushed');
   assert.ok(ran(w, /^git -c credential\.helper=!gh auth git-credential push origin v1\.2\.3/).length === 1);
-  const order = ['push -u origin', 'pr create', 'pr merge', 'release-check', 'tag -a', 'push origin v1.2.3'].map((p) => w.calls.findIndex((c) => c.includes(p)));
-  assert.deepEqual([...order].sort((a, b) => a - b), order, 'phases run in order');
+  const at = (p, from = 0) => w.calls.findIndex((c, i) => i >= from && c.includes(p));
+  const iMerge = at('pr merge');
+  const order = [at('push -u origin'), at('pr create'), at('release-check'), iMerge, at('release-check', iMerge), at('tag -a'), at('push origin v1.2.3')];
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'push, PR, early gate (before the merge), merge, post-merge checks, tag, tag push');
+  assert.ok(order.every((i) => i >= 0));
   assert.equal(ctx.state.data.phases.npm.state, 'done');
   assert.equal(ran(w, /--commit/).length, 0, 'no second CI wait for an equivalent tree');
   fs.rmSync(ctx._dir, { recursive: true, force: true });
@@ -213,7 +220,8 @@ test('flow: a different tree whose CI failed is never released', async () => {
   const w = world({ trees: { [HEAD]: T('1'), [MERGE]: T('2') }, ciOnMerge: 'failure' }); const ctx = ctxFor(w);
   const r = await runShip(ctx, {});
   assert.equal(r.ok, false); assert.equal(r.phase, 'verify');
-  assert.equal(ran(w, /tag -a|release-check/).length, 0);
+  assert.equal(ran(w, /tag -a/).length, 0);
+  assert.equal(ran(w, /release-check/).length, 1, 'only the early gate on the PR head ran; no post-merge gate for a tree whose CI failed');
   fs.rmSync(ctx._dir, { recursive: true, force: true });
 });
 
@@ -407,9 +415,10 @@ test('stopping prints the exact resume command and the phase timings', async () 
   const r = await runShip(ctx, { tmpdir: '/var/t/gate' });
   assert.equal(r.ok, false);
   const text = outcomeText(ctx.state, r, { now: w.now });
-  assert.match(text, /STOPPED in verify: /);
+  assert.match(text, /STOPPED in verify: the early release gate failed before the merge/, 'a failing gate now stops BEFORE the merge');
   assert.match(text, /resume with: node scripts\/ship\.mjs --resume --tmpdir \/var\/t\/gate\n/);
-  assert.match(text, /\nTIMINGS preflight=0s .*verify=7s .*total=\d+s\n/);
+  assert.match(text, /\nTIMINGS preflight=\d+s .*checks=\d+s .*total=\d+s\n/);
+  assert.equal(ran(w, /pr merge/).length, 0, 'nothing is merged when the early gate fails');
   fs.rmSync(ctx._dir, { recursive: true, force: true });
 });
 
@@ -558,15 +567,71 @@ test('flow: with a recorded pre-push pass for the released head the local gate r
   const r = await runShip(ctx, { maxRetries: 2 });
   assert.equal(r.ok, true, JSON.stringify(r));
   const gate = ran(w, /^node scripts\/release-check\.mjs/);
-  assert.equal(gate.length, 1);
+  assert.equal(gate.length, 2, 'the early gate, then the post-merge checks');
   assert.match(gate[0], /--only /);
-  assert.doesNotMatch(gate[0], /test-suite|corpus-gate/);
+  assert.doesNotMatch(gate[0], /test-suite|corpus-gate|protection-verdict-gate|head-pushed/);
   assert.match(gate[0], /changelog-entry/);
+  assert.match(gate[1], /--only head-pushed,remote-ci-green$/);
   fs.rmSync(ctx._dir, { recursive: true, force: true });
 
   const w2 = world(); const ctx2 = ctxFor(w2);
   const r2 = await runShip(ctx2, { maxRetries: 2 });
   assert.equal(r2.ok, true, JSON.stringify(r2));
-  assert.equal(ran(w2, /^node scripts\/release-check\.mjs$/).length, 1, 'no evidence of a gated push: the whole gate');
+  const gate2 = ran(w2, /^node scripts\/release-check\.mjs/);
+  assert.equal(gate2.length, 2);
+  assert.match(gate2[0], /protection-verdict-gate/, 'no evidence of a gated push: the checks the pre-push gate would have proven are run too');
+  assert.doesNotMatch(gate2[0], /test-suite|corpus-gate|self-scan-gate/, 'the hosted-covered checks are never run twice');
   fs.rmSync(ctx2._dir, { recursive: true, force: true });
+});
+
+// ── the early release gate and the dependency preflight ─────────────────────────────────────────────────────────────────────────────
+
+import { earlyGateArgs, lateGateArgs, CI_COVERED, AFTER_MERGE_ONLY } from '../../scripts/ship/lib.mjs';
+
+test('preflight: a dependency advisory stops the run before anything is pushed, with the check named', async () => {
+  const w = world({ depCode: 1 }); const ctx = ctxFor(w);
+  const r = await runShip(ctx, {});
+  assert.equal(r.ok, false); assert.equal(r.phase, 'preflight');
+  assert.match(r.message, /dependency currency fails/);
+  assert.equal(ran(w, /push -u origin|pr create/).length, 0, 'nothing was pushed');
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
+});
+
+test('earlyGateArgs: omits the hosted-covered and post-merge checks always, and the pre-push-proven ones only with a recorded pass for this head', () => {
+  const all = plannedCheckIds();
+  const none = earlyGateArgs({ allIds: all, prePushPassed: null, prHead: 'h' });
+  for (const id of [...CI_COVERED, ...AFTER_MERGE_ONLY]) assert.ok(!none.ids.includes(id), `${id} is not run early`);
+  assert.ok(none.ids.includes('release-closure-gate') && none.ids.includes('changelog-entry'), 'the closure and the publish blockers are the point of the early gate');
+  const proven = earlyGateArgs({ allIds: all, prePushPassed: 'h', prHead: 'h' });
+  assert.ok(none.ids.length > proven.ids.length && !proven.ids.includes('protection-verdict-gate'));
+  const other = earlyGateArgs({ allIds: all, prePushPassed: 'other', prHead: 'h' });
+  assert.deepEqual(other.ids, none.ids, 'a pass recorded for another head proves nothing about this one');
+  for (const id of CI_COVERED) assert.ok(all.includes(id), `${id} is a release-check id`);
+});
+
+test('lateGateArgs: only for the same commit with an equal tree; anything else falls back to the earlier, larger gate', () => {
+  const all = plannedCheckIds();
+  assert.deepEqual(lateGateArgs({ allIds: all, earlyPassedFor: 'a', releaseSha: 'a', treeEquivalent: true }).args, ['--only', 'head-pushed,remote-ci-green']);
+  assert.equal(lateGateArgs({ allIds: all, earlyPassedFor: 'a', releaseSha: 'b', treeEquivalent: true }), null, 'the early pass was for another commit');
+  assert.equal(lateGateArgs({ allIds: all, earlyPassedFor: 'a', releaseSha: 'a', treeEquivalent: false }), null, 'a different tree was never verified');
+  assert.equal(lateGateArgs({ allIds: all, earlyPassedFor: null, releaseSha: 'a', treeEquivalent: true }), null, 'no early pass recorded');
+});
+
+test('CI_COVERED matches what the pull-request workflow really runs: every id has a hosted counterpart', () => {
+  const ci = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', '.github', 'workflows', 'ci.yml'), 'utf8');
+  const m = /--only ([a-z,-]+)/.exec(ci.slice(ci.indexOf('bench-gates:')));
+  assert.ok(m, 'the bench-gates job names its checks');
+  const hosted = new Set(m[1].split(','));
+  for (const id of CI_COVERED.filter((x) => x !== 'test-suite' && x !== 'corpus-gate')) assert.ok(hosted.has(id), `${id} runs in the hosted bench-gates job`);
+  assert.match(ci, /npm run bench:cve-replay:check/, 'the corpus job exists');
+  assert.match(ci, /test-shard/, 'the sharded suite exists');
+});
+
+test('an early gate that fails stops the run before the merge, and a pass is recorded only for the head it ran on', async () => {
+  const w = world({ releaseCheckCode: 1 }); const ctx = ctxFor(w);
+  const r = await runShip(ctx, {});
+  assert.equal(r.ok, false); assert.equal(r.phase, 'verify');
+  assert.equal(ctx.state.data.earlyPassedFor, undefined);
+  assert.equal(ran(w, /pr merge/).length, 0);
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
 });

@@ -52,6 +52,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
+import * as os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync, spawn } from 'node:child_process';
 import { runPackageContentsCheck } from './package-contents-check.mjs';
@@ -63,6 +64,7 @@ import {
 } from './gate-verdict-cache.mjs';
 import { scopeFor } from './gate-check-scopes.mjs';
 import { executeChecks } from './gate-run-checks.mjs';
+import { selectForPush, changedFiles } from './gate-select.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -258,6 +260,50 @@ export const CHECKS = [
     remedy: 'Run `npm run release:closure:static` in scanner/ and fix the problem it names (scripts/release-closure.mjs holds the plan).',
   },
 ];
+
+/**
+ * THE TWO TIERS. The default ("fast") is what a push runs; "full" is everything, as it always was (`--full`, or AGENTIC_SECURITY_PUSH_GATE=full).
+ *
+ * Fast drops only work that the hosted pull-request CI repeats on a clean runner and that blocks the merge (the full test suite in shards, the
+ * CVE-replay corpus, and the bench-gates job: self-scan, mutation, fix verification, layer recall, Haskell precision), so a regression there turns
+ * the pull request red instead of the push. What stays local is everything cheap and everything that decides whether the push is sensible at all
+ * (worktree and blast radius, bundle, package contents, CI parity, the generated-artifact and static checks), plus the unit-test files that can
+ * see the change (scripts/gate-select.mjs). The Haskell precision check is the one bench that measures LIVE against clones only a developer machine
+ * has, so it still runs here whenever the change touches code that decides its result.
+ *
+ * Every dropped check is printed with its reason in the summary; a dropped check is never reported as passed.
+ */
+export const HOSTED_COVERS = Object.freeze({
+  'corpus-gate': 'hosted CI job "corpus"',
+  'layer-recall-gate': 'hosted CI job "bench-gates"',
+});
+/** Self-scan measures this repository's own scripts, hooks and engine source, so it runs locally whenever a change touches any of them (a hosted failure costs a 35 minute round trip; the local run costs about two minutes). */
+export const SELF_SCAN_RELEVANT = /^(scripts\/|hooks\/|scanner\/src\/|scanner\/bin\/|bench\/self-scan\/)/;
+export const HASKELL_RELEVANT = /^(scanner\/src\/(language|dataflow|ir|posture\/relevance)\/|scanner\/src\/engine\.js|bench\/haskell-precision\/|bench\/dag\/(dev-haskell|independent-haskell)\/|examples\/haskell-app\/)/;
+
+export function planChecks({ checks, tier = 'fast', selection = null, changed = null }) {
+  if (tier === 'full') return { checks: checks.slice(), skipped: [] };
+  const skipped = [];
+  const out = [];
+  for (const c of checks) {
+    if (HOSTED_COVERS[c.id]) { skipped.push({ id: c.id, title: c.title, reason: `not run locally: ${HOSTED_COVERS[c.id]} runs it on the pull request and blocks the merge` }); continue; }
+    if (c.id === 'self-scan-gate' && Array.isArray(changed) && !changed.some((f) => SELF_SCAN_RELEVANT.test(f))) {
+      skipped.push({ id: c.id, title: c.title, reason: 'not run locally: nothing this change touches is scanned by it (the hosted "bench-gates" job runs it on the pull request)' });
+      continue;
+    }
+    if (c.id === 'haskell-precision-gate' && Array.isArray(changed) && !changed.some((f) => HASKELL_RELEVANT.test(f))) {
+      skipped.push({ id: c.id, title: c.title, reason: 'not run locally: nothing this change touches decides its result (the hosted "bench-gates" job checks the stored result on the pull request)' });
+      continue;
+    }
+    if (c.id === 'test-suite' && selection && selection.mode === 'subset') {
+      out.push({ ...c, id: `test-suite-affected-${crypto.createHash('sha256').update(selection.files.join('\n')).digest('hex').slice(0, 8)}`, title: `Affected unit tests pass (${selection.files.length} of ${selection.total} test files can see this change)`, onlyFiles: selection.files, npmScript: undefined });
+      skipped.push({ id: 'test-suite', title: c.title, reason: `only the affected files ran locally (${selection.reason}); the full suite runs in hosted CI and blocks the merge` });
+      continue;
+    }
+    out.push(c);
+  }
+  return { checks: out, skipped };
+}
 
 /** Ids in execution order — cheapest first. */
 export function orderedCheckIds() {
@@ -585,6 +631,18 @@ export function envWithoutGitContext(source = process.env) {
   return env;
 }
 
+/** Run just the listed unit-test files (scanner-relative paths) through the same runner `npm test` uses. */
+function runAffectedTests(files) {
+  const label = `affected unit tests (${files.length} files)`;
+  process.stderr.write(`  running ${label} …\n`);
+  const list = path.join(os.tmpdir(), `affected-tests-${process.pid}.txt`);
+  fs.writeFileSync(list, `${files.map((f) => f.replace(/^scanner\//, '')).join('\n')}\n`);
+  try {
+    const r = run(process.execPath, [path.join(REPO, 'scripts', 'run-unit-tests.mjs'), '--only-file', list], { cwd: SCANNER, stdio: 'inherit', env: envWithoutGitContext() });
+    return evaluateCheckOutcome({ label, exitCode: r.status });
+  } finally { try { fs.unlinkSync(list); } catch { /* best effort */ } }
+}
+
 function runNpmGate(script) {
   const label = `npm run ${script}`;
   process.stderr.write(`  running ${label} …\n`);
@@ -838,8 +896,33 @@ export async function main(argv = []) {
     }, { signer: cacheSigner }),
   } : null;
 
+  // Tier and selection. Any doubt selects more, never less: no base commit, an unreadable diff, or a change the selector cannot bound runs the
+  // full suite, and `--full` / AGENTIC_SECURITY_PUSH_GATE=full runs every check exactly as before.
+  const tier = (argv.includes('--full') || process.env.AGENTIC_SECURITY_PUSH_GATE === 'full') ? 'full' : 'fast';
+  let selection = null;
+  let changed = null;
+  if (tier === 'fast') {
+    const b = pushBase(scope.gated);
+    const bi = argv.indexOf('--base');
+    // `--base <ref>`: select against this commit instead of the push base (a re-push of an already-gated range, or a measurement). It can only
+    // narrow what runs LOCALLY; the hosted CI runs the whole suite on the pull request either way.
+    let base = bi !== -1 && argv[bi + 1] ? argv[bi + 1] : (b.measured ? b.base : null);
+    if (!base) {
+      const mb = run('git', ['merge-base', 'origin/main', 'HEAD'], { cwd: REPO, env: envWithoutGitContext() });
+      if (mb.status === 0 && mb.stdout.trim()) base = mb.stdout.trim();
+    }
+    if (base) {
+      changed = changedFiles(REPO, base);
+      selection = await selectForPush({ repo: REPO, base });
+    }
+  }
+  const plan = planChecks({ checks: CHECKS, tier, selection, changed });
+  out.write(`  tier: ${tier}${selection ? ` — ${selection.mode === 'subset' ? 'affected tests only' : 'full test suite'}: ${selection.reason}` : ''}\n`);
+  for (const sk of plan.skipped) out.write(`  - ${sk.title}: ${sk.reason}\n`);
+  const RUN = plan.checks;
+
   const entries = await executeChecks({
-    checks: CHECKS,
+    checks: RUN,
     scoped: scopedCtx,
     legacy,
     log: (line) => out.write(`${line}\n`),
@@ -864,13 +947,14 @@ export async function main(argv = []) {
       }
       if (check.id === 'bundle-integrity') return evaluateBundleIntegrity(bundleHashes());
       if (check.id === 'package-contents') return runPackageContentsCheck(REPO);
+      if (check.onlyFiles) return runAffectedTests(check.onlyFiles);
       return parallel ? runNpmGateAsync(check.npmScript) : runNpmGate(check.npmScript);
     },
   });
   // Any check we never reached is reported, so the summary is never mistaken
   // for "everything passed".
   const ranIds = new Set(entries.map(e => e.id));
-  const notRun = CHECKS.filter(c => !ranIds.has(c.id));
+  const notRun = RUN.filter(c => !ranIds.has(c.id));
 
   const summary = summarize(entries);
   const elapsed = ((Date.now() - started) / 1000).toFixed(0);
@@ -897,8 +981,9 @@ export async function main(argv = []) {
       `${summary.failed.map(f => f.id).join(', ')}\n`);
     return 1;
   }
-  out.write(`\npre-push gate PASSED in ${elapsed}s — verified: ` +
-    `${CHECKS.map(c => c.id).join(', ')}. ` +
+  out.write(`\npre-push gate PASSED in ${elapsed}s (tier ${tier}) — verified: ` +
+    `${RUN.map(c => c.id).join(', ')}. ` +
+    (plan.skipped.length ? `Not run locally: ${plan.skipped.map(x => x.id).join(', ')} (see above; hosted CI runs them). ` : '') +
     '(Network checks — dependency currency, hosted CI — run at publish time via ' +
     '`npm run release:check`.)\n');
   return 0;
