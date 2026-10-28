@@ -878,6 +878,13 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      # The fix-verification bench replays patches in the confinement sandbox, which needs unprivileged user namespaces; without
+      # this policy relaxation (as in release.yml's gate legs) the sandbox is unavailable and a dodging patch is accepted.
+      - name: Allow unprivileged user namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
       - run: npm ci
         working-directory: scanner
         timeout-minutes: 10
