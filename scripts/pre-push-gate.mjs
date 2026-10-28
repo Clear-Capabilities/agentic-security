@@ -275,9 +275,10 @@ export const CHECKS = [
  */
 export const HOSTED_COVERS = Object.freeze({
   'corpus-gate': 'hosted CI job "corpus"',
-  'self-scan-gate': 'hosted CI job "bench-gates"',
   'layer-recall-gate': 'hosted CI job "bench-gates"',
 });
+/** Self-scan measures this repository's own scripts, hooks and engine source, so it runs locally whenever a change touches any of them (a hosted failure costs a 35 minute round trip; the local run costs about two minutes). */
+export const SELF_SCAN_RELEVANT = /^(scripts\/|hooks\/|scanner\/src\/|scanner\/bin\/|bench\/self-scan\/)/;
 export const HASKELL_RELEVANT = /^(scanner\/src\/(language|dataflow|ir|posture\/relevance)\/|scanner\/src\/engine\.js|bench\/haskell-precision\/|bench\/dag\/(dev-haskell|independent-haskell)\/|examples\/haskell-app\/)/;
 
 export function planChecks({ checks, tier = 'fast', selection = null, changed = null }) {
@@ -286,6 +287,10 @@ export function planChecks({ checks, tier = 'fast', selection = null, changed = 
   const out = [];
   for (const c of checks) {
     if (HOSTED_COVERS[c.id]) { skipped.push({ id: c.id, title: c.title, reason: `not run locally: ${HOSTED_COVERS[c.id]} runs it on the pull request and blocks the merge` }); continue; }
+    if (c.id === 'self-scan-gate' && Array.isArray(changed) && !changed.some((f) => SELF_SCAN_RELEVANT.test(f))) {
+      skipped.push({ id: c.id, title: c.title, reason: 'not run locally: nothing this change touches is scanned by it (the hosted "bench-gates" job runs it on the pull request)' });
+      continue;
+    }
     if (c.id === 'haskell-precision-gate' && Array.isArray(changed) && !changed.some((f) => HASKELL_RELEVANT.test(f))) {
       skipped.push({ id: c.id, title: c.title, reason: 'not run locally: nothing this change touches decides its result (the hosted "bench-gates" job checks the stored result on the pull request)' });
       continue;

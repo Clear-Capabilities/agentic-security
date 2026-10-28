@@ -142,6 +142,11 @@ export function verifyArgs({ allIds, treeEquivalent, prePushPassed, prHead }) {
   return { args: ['--only', ids.join(',')], reason: `the ${ids.length} checks the pre-push gate did not already prove for this tree (omitted: ${[...skip].filter((x) => (allIds || []).includes(x)).join(', ')})` };
 }
 
+/** The environment that points a gate run at its private scratch directory (empty when none was made). */
+export function scratchEnv(dir) {
+  return dir ? { TMPDIR: dir, TMP: dir, TEMP: dir } : {};
+}
+
 /**
  * Release-gate checks the hosted pull-request CI runs on a clean runner for the PR head and that BLOCK the merge (the sharded test suite and the
  * corpus job, and the `bench-gates` job: self-scan, mutation, fix verification, layer recall, Haskell precision). Once the blocking checks are

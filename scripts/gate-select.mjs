@@ -28,17 +28,11 @@ const FULL_TRIGGERS = [/^scripts\/run-unit-tests\.mjs$/, /^scripts\/gate-/, /^sc
 
 const IMPORT_RE = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"](\.{1,2}\/[^'"\n]+)['"]/g;
 
-function walk(dir, out = []) {
-  let entries;
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
-  for (const e of entries) {
-    const p = path.join(dir, e.name);
-    const rel = p.split(path.sep).join('/');
-    if (SKIP_DIR.test(rel)) continue;
-    if (e.isDirectory()) walk(p, out);
-    else if (/\.(m?js|cjs)$/.test(e.name)) out.push(p);
-  }
-  return out;
+/** The tracked JavaScript files under the graph roots, from git (the gate tests the committed tree, so untracked files are not part of it). */
+function trackedScripts(repo) {
+  const r = spawnSync('git', ['ls-files', '-z', '--', ...GRAPH_ROOTS], { cwd: repo, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+  if (r.status !== 0) throw new Error('git ls-files failed');
+  return r.stdout.split('\0').filter((f) => /\.(m?js|cjs)$/.test(f) && !SKIP_DIR.test(f)).map((f) => path.join(repo, f));
 }
 
 function resolveImport(fromFile, spec, exists) {
@@ -48,16 +42,18 @@ function resolveImport(fromFile, spec, exists) {
 }
 
 /** Reverse import graph and file texts for the roots. `read` and `list` are injectable for tests. */
-export function buildGraph({ repo, list = null, read = null }) {
-  const rd = read || ((rel) => fs.readFileSync(path.join(repo, rel), 'utf8'));
-  const files = (list || GRAPH_ROOTS.flatMap((r) => walk(path.join(repo, r)))).map((p) => path.relative(repo, p).split(path.sep).join('/'));
+export async function buildGraph({ repo, list = null, read = null }) {
+  const rd = read || ((rel) => fs.promises.readFile(path.join(repo, rel), 'utf8'));
+  const files = (list || trackedScripts(repo)).map((p) => path.relative(repo, p).split(path.sep).join('/'));
   const set = new Set(files);
   const exists = (c) => set.has(c);
   const importers = new Map(); // file -> Set of files that import it
   const text = new Map();
-  for (const f of files) {
-    let src = '';
-    try { src = rd(f); } catch { continue; }
+  const read1 = async (f) => { try { return await rd(f); } catch { return null; } };
+  const sources = await Promise.all(files.map(read1));
+  for (const [i, f] of files.entries()) {
+    const src = sources[i];
+    if (src === null) continue;
     text.set(f, src);
     for (const m of src.matchAll(IMPORT_RE)) {
       const to = resolveImport(f, m[1], exists);
@@ -139,7 +135,7 @@ export function changedFiles(repo, base) {
 /** The test files `npm test` runs, as repo-relative paths. */
 export async function candidateTests(repo) {
   const mod = await import(path.join(repo, 'scripts/run-unit-tests.mjs'));
-  const pkg = JSON.parse(fs.readFileSync(path.join(repo, 'scanner/package.json'), 'utf8'));
+  const pkg = JSON.parse(await fs.promises.readFile(path.join(repo, 'scanner/package.json'), 'utf8'));
   return mod.unionFiles(pkg).map((f) => `scanner/${f}`);
 }
 
@@ -149,7 +145,7 @@ export async function selectForPush({ repo, base, maxFraction = 0.6 }) {
     const tests = await candidateTests(repo);
     const changed = changedFiles(repo, base);
     if (!changed) return { mode: 'full', files: tests, total: tests.length, reason: 'git could not list the changed files' };
-    const graph = buildGraph({ repo });
+    const graph = await buildGraph({ repo });
     return selectTests({ changed, tests, graph, versionOnly: onlyVersionLineChanged(repo, base), maxFraction });
   } catch (e) {
     return { mode: 'full', files: [], total: 0, reason: `selection failed (${String(e.message || e).slice(0, 120)}), so the full suite runs` };

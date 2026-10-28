@@ -1,7 +1,7 @@
 // The release flow, as a state machine over an injected context (scripts/ship.mjs wires the real one; the tests wire a scripted one).
 // Each phase starts the moment the previous one finishes: no human or agent polling sits between a green check and the next step.
 
-import { PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm, earlyGateArgs, lateGateArgs } from './lib.mjs';
+import { PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm, earlyGateArgs, lateGateArgs, scratchEnv } from './lib.mjs';
 
 const PKG = '@clear-capabilities/agentic-security-scanner';
 const CRED = ['-c', "credential.helper=!gh auth git-credential"];
@@ -103,8 +103,8 @@ export async function runShip(ctx, opts = {}) {
         let tmp = o.tmpdir;
         if (!tmp && ctx.makeTmpdir) { tmp = autoTmp = ctx.makeTmpdir(); state.set({ tmpdir: tmp }); }
         log(`  early release gate: ${plan.reason}`);
-        const run = ctx.shAsync || ((c, a, x) => Promise.resolve(sh(c, a, { ...x, stream: true })));
-        const r = await run('node', ['scripts/release-check.mjs', ...plan.args], { timeoutMs: 90 * 60 * 1000, env: tmp ? { TMPDIR: tmp, TMP: tmp, TEMP: tmp } : {}, logAs: 'verify' });
+        const run = ctx.runNodeAsync || ((args, x) => Promise.resolve(sh('node', args, { ...x, stream: true })));
+        const r = await run(['scripts/release-check.mjs', ...plan.args], { timeoutMs: 90 * 60 * 1000, env: scratchEnv(tmp), logAs: 'verify' });
         return { ok: r.code === 0, head, failed: (r.out + r.err).split('\n').filter((l) => /^(FAIL|✗)/.test(l)).slice(0, 4).join(' | ') };
       })();
     };

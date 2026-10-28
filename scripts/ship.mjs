@@ -16,7 +16,7 @@
 // Progress is written to .agentic-security/ship/state.json (git-ignored) for a dashboard, and every long command's full output goes to
 // .agentic-security/ship/logs/<phase>.log. See scripts/ship/lib.mjs for what it will and will not do (it never bypasses a gate).
 
-import { spawnSync, spawn } from 'node:child_process';
+import { spawnSync, fork } from 'node:child_process';
 import { readFileSync, mkdirSync, openSync, closeSync, appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,13 +61,13 @@ const ctx = {
     if (logPath) { try { const b = readFileSync(logPath, 'utf8'); tail = b.slice(-6000); } catch { tail = ''; } }
     return { code: r.status ?? 1, out: r.stdout || tail, err: r.stderr || tail || (r.error ? String(r.error.message) : '') };
   },
-  // The same command as `sh`, but not blocking the event loop: the early release gate runs this while the hosted checks are polled.
-  // Output goes to the named phase log; the resolved value has the same shape as `sh`'s.
-  shAsync(cmd, args, { timeoutMs = 120000, env = {}, logAs = state.data.current } = {}) {
+  // Runs `node <args>` without blocking the event loop: the early release gate runs this while the hosted checks are polled. The program is
+  // always this Node binary running a script of this repository (`fork`), never a caller-supplied command. Output goes to the named phase log; the resolved value has the same shape as `sh`'s.
+  runNodeAsync(args, { timeoutMs = 120000, env = {}, logAs = state.data.current } = {}) {
     return new Promise((resolve) => {
       const logPath = phaseLog(logAs);
       const fd = openSync(logPath, 'a');
-      const child = spawn(cmd, args, { cwd: ROOT, env: { ...process.env, ...env }, stdio: ['ignore', fd, fd] });
+      const child = fork(args[0], args.slice(1), { cwd: ROOT, env: { ...process.env, ...env }, stdio: ['ignore', fd, fd, 'ipc'] });
       const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
       const done = (code, error) => {
         clearTimeout(timer);

@@ -16,10 +16,10 @@ const FILES = {
   'scanner/test/no-orphan-tests.test.js': 'walks everything',
 };
 const TESTS = Object.keys(FILES).filter((f) => f.endsWith('.test.js'));
-const graph = () => buildGraph({ repo: '/x', list: Object.keys(FILES).map((f) => `/x/${f}`), read: (rel) => FILES[rel] });
+const graph = async () => buildGraph({ repo: '/x', list: Object.keys(FILES).map((f) => `/x/${f}`), read: (rel) => FILES[rel] });
 
-test('a change to a module selects the tests that import it, directly or through another module, and no others', () => {
-  const g = graph();
+test('a change to a module selects the tests that import it, directly or through another module, and no others', async () => {
+  const g = await graph();
   assert.deepEqual([...transitiveImporters(g.importers, ['scanner/src/b.js'])].sort(), ['scanner/src/a.js', 'scanner/src/b.js', 'scanner/test/a.test.js']);
   const sel = selectTests({ changed: ['scanner/src/b.js'], tests: TESTS, graph: g, maxFraction: 1 });
   assert.equal(sel.mode, 'subset');
@@ -28,14 +28,14 @@ test('a change to a module selects the tests that import it, directly or through
   assert.deepEqual(sel2.files, ['scanner/test/c.test.js', 'scanner/test/no-orphan-tests.test.js']);
 });
 
-test('a test that names a changed file by path is selected even though it imports nothing from it', () => {
-  const sel = selectTests({ changed: ['docs/guides/haskell.md'], tests: TESTS, graph: graph(), maxFraction: 1 });
+test('a test that names a changed file by path is selected even though it imports nothing from it', async () => {
+  const sel = selectTests({ changed: ['docs/guides/haskell.md'], tests: TESTS, graph: await graph(), maxFraction: 1 });
   assert.ok(sel.files.includes('scanner/test/doc.test.js'));
   assert.ok(!sel.files.includes('scanner/test/other.test.js'));
 });
 
-test('a selection over the fraction, an empty change list, and a change that decides how every test runs all select the full suite', () => {
-  const g = graph();
+test('a selection over the fraction, an empty change list, and a change that decides how every test runs all select the full suite', async () => {
+  const g = await graph();
   assert.equal(selectTests({ changed: ['scanner/src/b.js'], tests: TESTS, graph: g, maxFraction: 0.1 }).mode, 'full', 'running most of the suite costs the same as running it');
   assert.equal(selectTests({ changed: [], tests: TESTS, graph: g }).mode, 'full', 'unknown change: exclude nothing');
   assert.equal(selectTests({ changed: null, tests: TESTS, graph: g }).mode, 'full');
@@ -43,8 +43,8 @@ test('a selection over the fraction, an empty change list, and a change that dec
   assert.equal(selectTests({ changed: ['scanner/package.json'], tests: TESTS, graph: g }).mode, 'full', 'a manifest change beyond its version line');
 });
 
-test('a version-only manifest and lock change does not widen the selection; the same files changed otherwise do', () => {
-  const g = graph();
+test('a version-only manifest and lock change does not widen the selection; the same files changed otherwise do', async () => {
+  const g = await graph();
   const only = selectTests({ changed: ['scanner/package.json', 'scanner/package-lock.json', 'scanner/src/c.js'], tests: TESTS, graph: g, versionOnly: true, maxFraction: 1 });
   assert.equal(only.mode, 'subset');
   const other = selectTests({ changed: ['scanner/package.json', 'scanner/src/c.js'], tests: TESTS, graph: g, versionOnly: false, maxFraction: 1 });
@@ -70,6 +70,11 @@ test('planChecks: the full tier changes nothing; the fast tier drops exactly the
   assert.ok(fast.checks.some((c) => c.id === 'bundle-matches-source') && fast.checks.some((c) => c.id === 'ci-parity'), 'the cheap whole-repo checks stay');
   const docsOnly = planChecks({ checks: CHECKS, tier: 'fast', changed: ['docs/guides/haskell.md'] });
   assert.ok(!docsOnly.checks.some((c) => c.id === 'haskell-precision-gate'), 'a docs-only change does not run the live precision check');
+  assert.ok(!docsOnly.checks.some((c) => c.id === 'self-scan-gate'), 'a docs-only change is not scanned by self-scan');
+  for (const f of ['scripts/ship/run.mjs', 'hooks/x.js', 'scanner/src/engine.js']) {
+    assert.ok(planChecks({ checks: CHECKS, tier: 'fast', changed: [f] }).checks.some((c) => c.id === 'self-scan-gate'), `${f} is scanned by self-scan, so it runs locally`);
+  }
+  assert.ok(planChecks({ checks: CHECKS, tier: 'fast', changed: null }).checks.some((c) => c.id === 'self-scan-gate'), 'an unknown change list runs it');
 });
 
 test('planChecks: a subset selection replaces the suite with a differently named check, so a subset pass can never be cached as a full pass', () => {
