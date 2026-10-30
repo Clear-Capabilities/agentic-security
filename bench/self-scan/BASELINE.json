@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-26T14:43:14.894Z",
-  "commit": "a988ab710db9ad1e23ddfb7f50583452d712c01e",
+  "generatedAt": "2026-10-30T19:41:36.289Z",
+  "commit": "01305ad4c02a153961b7d77be88d9e3915dfcb06",
   "targets": {
     "hooks": {
       "total": 21,
@@ -18,7 +18,7 @@
       }
     },
     "scripts": {
-      "total": 112,
+      "total": 113,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -57,6 +57,7 @@
         "self-test-runner.mjs": 2,
         "ship.mjs": 2,
         "ship/run.mjs": 2,
+        "ship/run.mjs -> ship/lib.mjs": 1,
         "synthesize-detector.mjs": 7,
         "verification-replay-example.mjs": 2
       }
