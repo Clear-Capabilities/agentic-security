@@ -197,6 +197,12 @@ function mutate(text, from, to) {
   return out;
 }
 
+// The matrix literal as written in the real workflow, and a variant of it, so the mutations follow the shard count instead of naming one.
+const MATRIX = /shard: (\[[^\]]+\])/.exec(realText())[1];
+const LEGS = [...MATRIX.matchAll(/'(\d+)\/(\d+)'/g)].map((m) => [Number(m[1]), Number(m[2])]);
+const N = LEGS.length;
+const lit = (arr) => `[${arr.map((x) => `'${x}'`).join(', ')}]`;
+const without = (k) => lit(LEGS.filter((_, i) => i !== k).map(([i, n]) => `${i}/${n}`));
 const mutations = [
   ['aggregatorIsNamedTest', (t) => mutate(t, '\n  test:\n    needs:', '\n  gate-test:\n    needs:')],
   ['aggregatorIsNamedTest', (t) => mutate(t, '\n  test:\n    needs:', '\n  test:\n    name: tests\n    needs:')],
@@ -211,9 +217,9 @@ const mutations = [
   ['aggregatorFailsUnlessSuccess', (t) => mutate(t, '            exit 1\n          fi', '            true\n          fi')],
   ['aggregatorFailsUnlessSuccess', (t) => mutate(t, 'SHARDS_RESULT: ${{ needs.test-shard.result }}', 'SHARDS_RESULT: success')],
   ['aggregatorFailsUnlessSuccess', (t) => mutate(t, '      - name: Every shard and the bundle check must have succeeded\n', '      - name: Every shard and the bundle check must have succeeded\n        continue-on-error: true\n')],
-  ['shardMatrixIsOneToN', (t) => mutate(t, "['1/4', '2/4', '3/4', '4/4']", "['1/4', '2/4', '4/4']")],
-  ['shardMatrixIsOneToN', (t) => mutate(t, "['1/4', '2/4', '3/4', '4/4']", "['1/4', '2/4', '3/4', '4/5']")],
-  ['shardMatrixIsOneToN', (t) => mutate(t, "['1/4', '2/4', '3/4', '4/4']", "['1/4', '1/4', '3/4', '4/4']")],
+  ['shardMatrixIsOneToN', (t) => mutate(t, MATRIX, without(N - 2))],
+  ['shardMatrixIsOneToN', (t) => mutate(t, MATRIX, lit([...LEGS.slice(0, N - 1).map(([i, n]) => `${i}/${n}`), `${N}/${N + 1}`]))],
+  ['shardMatrixIsOneToN', (t) => mutate(t, MATRIX, lit(LEGS.map(([i, n], k) => `${k === 1 ? 1 : i}/${n}`)))],
   ['everyLegSetsTheShardAndRunsTheSuite', (t) => mutate(t, 'AGENTIC_SECURITY_TEST_SHARD: ${{ matrix.shard }}', 'AGENTIC_SECURITY_TEST_SHARD: 1/4')],
   ['everyLegSetsTheShardAndRunsTheSuite', (t) => mutate(t, '        env:\n          AGENTIC_SECURITY_TEST_SHARD: ${{ matrix.shard }}\n        run: npm test', '        run: npm test')],
   ['everyLegSetsTheShardAndRunsTheSuite', (t) => mutate(t, '        run: npm test\n', '        run: npm run test:smoke\n')],
@@ -223,7 +229,7 @@ const mutations = [
   ['bundleCheckRunsExactlyOnceAndBlocks', (t) => mutate(t, '      - name: Verify committed bundle matches source\n        run: git diff', '      - name: Verify committed bundle matches source\n        continue-on-error: true\n        run: git diff')],
   ['bundleCheckRunsExactlyOnceAndBlocks', (t) => mutate(t, '        run: npm test\n', '        run: npm test\n      - name: Verify committed bundle matches source\n        run: git diff --exit-code dist/agentic-security.mjs dist/agentic-security.mjs.sha256\n')],
   ['everyShardRelaxesUserNamespaces', (t) => mutate(t, 'kernel.apparmor_restrict_unprivileged_userns=0', 'kernel.something_else=0')],
-  ['namesAreClassified', (t) => mutate(t, "['1/4', '2/4', '3/4', '4/4']", "['1/4', '2/4', '3/4', '4/4', '5/4']")],
+  ['namesAreClassified', (t) => mutate(t, MATRIX, lit([...LEGS.map(([i, n]) => `${i}/${n}`), `${N + 1}/${N}`]))],
   ['namesAreClassified', (t) => mutate(t, 'name: test-shard (${{ matrix.shard }})', 'name: shard ${{ matrix.shard }}')],
 ];
 
@@ -237,10 +243,10 @@ for (const [name, fn] of mutations) {
 test('namesAreClassified notices a shard name missing from required-checks.json, and a stale one', () => {
   const tiers = realTiers();
   assert.deepEqual(invariants.namesAreClassified(realText(), tiers), []);
-  const missing = { ...tiers, blocking: tiers.blocking.filter((n) => n !== 'test-shard (3/4)') };
+  const missing = { ...tiers, blocking: tiers.blocking.filter((n) => n !== `test-shard (3/${N})`) };
   assert.ok(invariants.namesAreClassified(realText(), missing).length > 0);
   const noTest = { ...tiers, blocking: tiers.blocking.filter((n) => n !== 'test') };
   assert.ok(invariants.namesAreClassified(realText(), noTest).length > 0);
-  const stale = { ...tiers, blocking: [...tiers.blocking, 'test-shard (9/4)'] };
+  const stale = { ...tiers, blocking: [...tiers.blocking, `test-shard (${N + 1}/${N})`] };
   assert.ok(invariants.namesAreClassified(realText(), stale).length > 0);
 });

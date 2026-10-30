@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: ['1/4', '2/4', '3/4', '4/4']
+        shard: ['1/8', '2/8', '3/8', '4/8', '5/8', '6/8', '7/8', '8/8']
     defaults:
       run:
         working-directory: scanner
@@ -150,12 +150,72 @@ jobs:
       - name: Support registry is current (fails on any drift from the stored measurement)
         run: npm run bench:language-support:check
         timeout-minutes: 5
+
+  # CLI-driven language suites. Split out of language-suites so the slowest hosted check is the longest of these, not their sum.
+  language-slow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: scanner
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        timeout-minutes: 10
+      - name: Allow unprivileged user namespaces (the Nix script witnesses need a real confinement primitive)
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
       - name: CLI-driven language suites (capability matrix, packed tarball, example capture, scan modes)
         run: npm run test:language-slow
         timeout-minutes: 40
+
+  # The mandatory benchmark gates for the language engines. Split out of language-suites so the slowest hosted check is the longest of these, not their sum.
+  language-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: scanner
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        timeout-minutes: 10
+      - name: Allow unprivileged user namespaces (the Nix script witnesses need a real confinement primitive)
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
       - name: The existing mandatory benchmark gates do not regress (QA-002.AC02)
         run: npm run test:language-gates
         timeout-minutes: 30
+
+  # Offline scale and memory stress. Split out of language-suites so the slowest hosted check is the longest of these, not their sum.
+  language-stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: scanner
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        timeout-minutes: 10
+      - name: Allow unprivileged user namespaces (the Nix script witnesses need a real confinement primitive)
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
       - name: Scale and memory stress (offline)
         run: npm run test:language-stress
         timeout-minutes: 20
@@ -179,6 +239,17 @@ jobs:
           cabal-version: '3.10.2.1'
         timeout-minutes: 15
       - run: ghc --version && cabal --version
+        timeout-minutes: 5
+      # The package build below is most of this job's time. Restoring the cabal store and the default package environment makes the
+      # install a no-op on a hit. The key names the compiler, the cabal version and the index state, so a change to any of them rebuilds.
+      - name: Restore the cabal store
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal/packages
+            ~/.cabal/store
+            ~/.ghc
+          key: cabal-store-ghc9.4.8-cabal3.10.2.1-index2026-10-04-${{ hashFiles('scanner/test/language/**/*.cabal') }}
         timeout-minutes: 5
       - name: Provision the packages the route fixtures import (the compile criterion needs them installed)
         run: |
@@ -692,13 +763,18 @@ jobs:
       # the proof runner never pulls an image (nothing is fetched during a proof), so the job pulls them first
       - name: Pull the proof images
         run: |
-          for image in node:24-slim python:3-slim eclipse-temurin:21 gcc:latest haskell:9; do
+          pull() {
             for attempt in 1 2 3; do
-              if timeout 300 docker pull "$image"; then break; fi
-              if [ "$attempt" = 3 ]; then echo "could not pull $image"; exit 1; fi
+              if timeout 300 docker pull "$1"; then return 0; fi
               sleep 10
             done
+            echo "could not pull $1"; return 1
+          }
+          pids=""
+          for image in node:24-slim python:3-slim eclipse-temurin:21 gcc:latest haskell:9; do
+            pull "$image" & pids="$pids $!"
           done
+          rc=0; for pid in $pids; do wait "$pid" || rc=1; done; exit $rc
         timeout-minutes: 20
       - name: Container engine
         run: docker version
@@ -894,11 +970,42 @@ jobs:
         working-directory: scanner
         run: npm run build
         timeout-minutes: 10
-      - name: Bench gates (self-scan, mutation, fix verification, layer recall, Haskell precision)
+      - name: Bench gates (self-scan)
         working-directory: scanner
         env:
           AGENTIC_SECURITY_GATE_NO_CACHE: '1'
-        run: node ../scripts/release-check.mjs --no-cache --only self-scan-gate,mutation-gate,fix-verification-gate,layer-recall-gate,haskell-precision-gate
+        run: node ../scripts/release-check.mjs --no-cache --only self-scan-gate
+
+  # The rest of the bench gates, in a second job so the two run side by side (self-scan alone is about two minutes).
+  bench-gates-b:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # self-scan and layer-recall inspect history
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      # The fix-verification bench replays patches in the confinement sandbox, which needs unprivileged user namespaces; without
+      # this policy relaxation (as in release.yml's gate legs) the sandbox is unavailable and a dodging patch is accepted.
+      - name: Allow unprivileged user namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
+      - run: npm ci
+        working-directory: scanner
+        timeout-minutes: 10
+      - name: Build the bundle
+        working-directory: scanner
+        run: npm run build
+        timeout-minutes: 10
+      - name: Bench gates (mutation, fix verification, layer recall, Haskell precision)
+        working-directory: scanner
+        env:
+          AGENTIC_SECURITY_GATE_NO_CACHE: '1'
+        run: node ../scripts/release-check.mjs --no-cache --only mutation-gate,fix-verification-gate,layer-recall-gate,haskell-precision-gate
 
   corpus:
     runs-on: ubuntu-latest

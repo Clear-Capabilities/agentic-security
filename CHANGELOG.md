@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.195.1 - Hosted CI split so its slowest blocking job is about four minutes, not twelve
+
+Why: the requirement is a release in under 10 minutes once the code is committed. Measured on the 0.195.0 pull request, the slowest blocking hosted job was `language-suites` at 12.1 min, then `language-tools-ghc` 10 min, the test shards 6 to 8 min, `bench-gates` 6.4 min and `proof-container` 5.3 min, and the release workflow after the tag is about 4.8 min (75 s waiting for a runner, 145 s for the `rest` gate leg, 66 s to publish). CI then the release workflow in series cannot fit 10 minutes unless the longest CI job is cut to about 4.
+
+- **The test suite runs in eight shards instead of four** (`test-shard (1/8)` to `(8/8)`; the aggregator `test` keeps its name). A shard took 4.7 to 6.9 min of test time.
+- **`language-suites` is four jobs.** The CLI-driven suites (`language-slow`, 242 s), the benchmark gates (`language-gates`, 132 s) and the stress run (`language-stress`, 235 s) moved to their own jobs; `language-suites` keeps the Haskell, Nix, language and registry steps (about 100 s). All four are blocking.
+- **`bench-gates` is two jobs** (`bench-gates`: self-scan; `bench-gates-b`: mutation, fix verification, layer recall, Haskell precision).
+- **`language-tools-ghc` restores the cabal store** from `actions/cache` (the package build was 499 s of its 10 min). The first run on a given key is cold, and a cache saved on a pull request is not readable by other branches, so the first warm run is after this lands on `main`.
+- **`proof-container` pulls its five images side by side** instead of one after another (the pull step was 64 s).
+- **Not measured end to end at the time of writing.** The next two `TIMINGS` lines are the measurement: this release (cold cache) and the one after it (warm). Not changed: the release workflow, the npm registry's own delay before a new version is listed (about 5 min after a successful publish on 0.194.1 and 0.195.0), and the pre-push gate. Whether the whole path fits 10 minutes is a result of the next release, not a claim made here.
+
 ## 0.195.0 - A release is cut from one command, and a release-only ship
 
 Why: the 0.194.1 release (dependency bumps only) took 1 h 49 min end to end. A clean run is about 41 minutes (push 1062 s, hosted checks 963 s, release workflow 316 s, the rest seconds); the other 68 minutes were two failed attempts, each found 15 minutes in, because the hand-made version bump missed two generated files that record the version (`inventory.json`, `captured.json`). `scripts/release-prepare.mjs` already existed to regenerate them and was not used.
