@@ -1,7 +1,7 @@
 name: Scanner F1 benchmark
 
-# Internal regression gate. Runs on every PR that touches scanner source or
-# benchmark data, and on pushes to main. Fails if:
+# Internal regression trend. Runs on the daily schedule and on demand (not on pull
+# requests since 0.195.2, see below). Fails if:
 #  - synthetic F1 drops below baseline (or any per-family floor breached)
 #  - --strict-no-unknown surfaces a vuln string not mapped in _familyMap
 #  - any of the realworld benchmarks (Juice Shop / Snyk Goof / NodeGoat) drops
@@ -27,16 +27,16 @@ name: Scanner F1 benchmark
 # trigger: that is where a regression should be caught, and nothing is waiting
 # on a PR the way a publish waits on main.
 #
+# 0.195.2 REVERSES THE PULL REQUEST TRIGGER. A release has to fit in ten minutes, and these jobs ran 20 to 38 minutes on every pull
+# request while holding runner slots that the blocking jobs were queued behind (jobs waited up to 200 s for a runner). They are
+# informational, so nothing waited on their result; they only delayed the jobs that mattered. They now run on the daily schedule and
+# on demand, which is the cadence a trend signal needs. A detection regression still surfaces within a day, and the blocking
+# correctness gates (corpus, bench-gates, mutation) still run on every pull request in ci.yml.
+#
 # These jobs are listed as `informational` in .github/required-checks.json, so
 # even when they DO report on a commit, a failure warns loudly at publish time
 # rather than blocking. See scripts/release-check.mjs#evaluateRemoteCi.
 on:
-  pull_request:
-    paths:
-      - 'scanner/src/**'
-      - 'scanner/test/**'
-      - 'scanner/package.json'
-      - '.github/workflows/bench.yml'
   schedule:
     # 04:17 UTC daily. Off the hour on purpose — scheduled runs cluster on the
     # hour across GitHub and get queued behind everyone else's cron.

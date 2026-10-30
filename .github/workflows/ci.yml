@@ -421,6 +421,9 @@ jobs:
   # The Chrome rendering tests (PNG/PDF/SVG export) are quarantined from `npm test`: see scanner/test/helpers/chrome-gate.js. They run
   # here, deadlines unchanged, as their own job. INFORMATIONAL: their duration depends on Chrome and the runner, not on the code.
   chrome-exports:
+    # Trend/network-bound and informational: runs on main and nightly-style pushes, not on pull requests, so it cannot hold a runner slot
+    # that a blocking job is waiting for (the release has to fit in 10 minutes). It still reports on every push to main.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -543,6 +546,9 @@ jobs:
   # blocking assertion in test/ide-surfaces.test.js and runs offline in
   # milliseconds.
   jetbrains-plugin:
+    # Trend/network-bound and informational: runs on main and nightly-style pushes, not on pull requests, so it cannot hold a runner slot
+    # that a blocking job is waiting for (the release has to fit in 10 minutes). It still reports on every push to main.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     defaults:
@@ -900,6 +906,9 @@ jobs:
   # unusable answer is a named state, a candidate is a proposal the engine gates, and a non-loopback endpoint is refused. A model that
   # cannot be pulled fails the job rather than skipping it.
   local-model:
+    # Trend/network-bound and informational: runs on main and nightly-style pushes, not on pull requests, so it cannot hold a runner slot
+    # that a blocking job is waiting for (the release has to fit in 10 minutes). It still reports on every push to main.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
