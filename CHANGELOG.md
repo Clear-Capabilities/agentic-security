@@ -9,6 +9,11 @@
 > make the history less accurate, not more.
 
 
+## 0.194.1 - Dependencies brought current
+
+- **`@babel/core` 8.0.10, `z3-solver` 5.3.3, `@types/node` 26.6.6** (scanner), and **`@types/node` 26.6.6** (VS Code extension). Newly published versions made the `dependency-currency` release check fail on the 0.194.0 tree. The scanner bundle is rebuilt because `@babel/core` is embedded in it. No source change.
+- The pinned `express` versions in examples, fixtures and benchmarks are deliberately old and were left as they are.
+
 ## 0.194.0 - The release closure runs side by side, and the Haskell container image goes into the container leg
 
 What the 0.193.0 ship measured: 53 minutes end to end (cold push 1040 s, hosted checks 743 s, the early gate about 29 minutes of which the closure is most, merge 6 s, post-merge verify 2 s, tag 2 s, release workflow 316 s, npm check 90 s and reported PENDING until `--resume`, which then confirmed it). The post-merge verify and the tag are now seconds; the early gate and a cold push are what is left.
