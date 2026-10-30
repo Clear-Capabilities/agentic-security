@@ -637,9 +637,10 @@ test('lateGateArgs: only for the same commit with an equal tree; anything else f
 
 test('CI_COVERED matches what the pull-request workflow really runs: every id has a hosted counterpart', () => {
   const ci = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', '.github', 'workflows', 'ci.yml'), 'utf8');
-  const m = /--only ([a-z,-]+)/.exec(ci.slice(ci.indexOf('bench-gates:')));
-  assert.ok(m, 'the bench-gates job names its checks');
-  const hosted = new Set(m[1].split(','));
+  // the bench gates run in two side-by-side jobs (bench-gates and bench-gates-b): the hosted set is the union of what they name
+  const lists = [...ci.slice(ci.indexOf('bench-gates:')).matchAll(/--only ([a-z,-]+)/g)].map((x) => x[1]);
+  assert.ok(lists.length >= 2, 'the bench-gates jobs name their checks');
+  const hosted = new Set(lists.flatMap((l) => l.split(',')));
   for (const id of CI_COVERED.filter((x) => x !== 'test-suite' && x !== 'corpus-gate')) assert.ok(hosted.has(id), `${id} runs in the hosted bench-gates job`);
   assert.match(ci, /npm run bench:cve-replay:check/, 'the corpus job exists');
   assert.match(ci, /test-shard/, 'the sharded suite exists');

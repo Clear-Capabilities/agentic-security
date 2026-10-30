@@ -1,6 +1,6 @@
 {
   "$comment": [
-    "test (the required check) is an AGGREGATOR over test-shard (1/4..4/4) and test-bundle, see .github/workflows/ci.yml. The shard and bundle checks are real check runs and are BLOCKING too: a failed one already fails test, so listing them adds no new way to be red, and an unlisted run would be treated as blocking anyway with a warning. scanner/test/ci-test-shards.test.js keeps the shard names here equal to the workflow's matrix.",
+    "test (the required check) is an AGGREGATOR over test-shard (1/8..8/8) and test-bundle, see .github/workflows/ci.yml. The shard and bundle checks are real check runs and are BLOCKING too: a failed one already fails test, so listing them adds no new way to be red, and an unlisted run would be treated as blocking anyway with a warning. scanner/test/ci-test-shards.test.js keeps the shard names here equal to the workflow's matrix.",
     "Which hosted CI checks BLOCK a release, and which are informational. PRD R2.",
     "",
     "Defined once, here, so the release gate and GitHub branch protection cannot",
@@ -51,10 +51,14 @@
   ],
   "blocking": [
     "test",
-    "test-shard (1/4)",
-    "test-shard (2/4)",
-    "test-shard (3/4)",
-    "test-shard (4/4)",
+    "test-shard (1/8)",
+    "test-shard (2/8)",
+    "test-shard (3/8)",
+    "test-shard (4/8)",
+    "test-shard (5/8)",
+    "test-shard (6/8)",
+    "test-shard (7/8)",
+    "test-shard (8/8)",
     "test-bundle",
     "corpus",
     "bench-gates",
@@ -71,7 +75,11 @@
     "proof-linux",
     "proof-container",
     "artifact-real",
-    "telemetry-capture"
+    "telemetry-capture",
+    "language-slow",
+    "language-gates",
+    "language-stress",
+    "bench-gates-b"
   ],
   "informational": [
     "realworld-bench",

@@ -2,7 +2,7 @@
 
 Autonomous Security Assurance Platform for the AI Software Era (a Claude Code plugin and CLI; also described as an agentic security harness). Full ASPM + LLMSecOps. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.195.0  
+**Version:** 0.195.1  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -106,7 +106,7 @@ After any change to `scanner/src/` or `scanner/bin/`, run `npm run build` before
 
 **Cutting a release quickly (since 0.195.0).** Three pieces, in the order you use them:
 
-- `node scripts/release-prepare.mjs --bump patch|minor|major` (write the `## <version>` changelog entry first, or run it twice) moves the version in every file that carries it, then regenerates every artifact that records it (bundle, language docs and captured examples, scorecard, inventory, evidence contracts, regression and final reports) and runs the cheap suites that fail late when one is stale. A hand-edited bump misses the generated files: the 0.195.0 release failed twice, 15 minutes apart, on `inventory.json` and `captured.json`. `ship` preflight now names a generated file that records another version before anything is pushed.
+- `node scripts/release-prepare.mjs --bump patch|minor|major` (write the `## <version>` changelog entry first, or run it twice) moves the version in every file that carries it, then regenerates every artifact that records it (bundle, language docs and captured examples, scorecard, inventory, evidence contracts, regression and final reports) and runs the cheap suites that fail late when one is stale. A hand-edited bump misses the generated files: the 0.194.1 release failed twice, 15 minutes apart, on `inventory.json` and `captured.json`. `ship` preflight now names a generated file that records another version before anything is pushed.
 - The pre-push gate's test selection treats a dependency moving to another version (`"name": "^1.2.3"` pairs, lock `version`/`resolved`/`integrity` lines) like a version-only change: it no longer forces the whole local suite. The hosted pull request runs the full suite as a blocking check, so a miss is a red pull request, never a bad release. A dependency added or removed still runs everything.
 - `node scripts/ship.mjs --release-only` releases `main` as it is: no push, pull request, checks or merge. It requires `HEAD == origin/main` and a green hosted `ci` run on that commit, runs only the eight publish blockers locally, then tags and waits for the hosted release workflow (which still runs the full gate with the cache off). Use it after the change has landed through its own pull request; a release-only ship is about the length of the hosted release workflow (5 to 6 minutes), measured in the changelog entry that introduced it only if a run is recorded there.
 
