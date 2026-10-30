@@ -9,9 +9,9 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.194.1 |
-| Bundle SHA-256 | `af17d28e5d8db4702ba886d64b7b5683ce5cbbcb851ef7ce700e3252b3849172` |
-| Commit | `8a612615bbd9c3ef0e66bb65e2ba4c2006bb65ba` |
+| Engine version | 0.195.0 |
+| Bundle SHA-256 | `6d63fe08ca5ae035293acc99d93b848d5f8cf08bc330bb5e99250174a43a9402` |
+| Commit | `0b6d938f8850578d71af41b1335f91f87dc180e4` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -19,7 +19,7 @@ that produced them.
 | Corpus entries | 228 (228 scored) |
 | Corpus version | `5481d819acf1dd3481359a19e49e5a5b798fae1507b55173b53c8015b08214f6` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-10-30T13:35:05.784Z |
+| Generated (UTC) | 2026-10-30T19:09:51.221Z |
 
 ## What these numbers are, and what they are not
 
@@ -212,7 +212,7 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 21 |
-| `scripts` | 112 |
+| `scripts` | 113 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
@@ -236,7 +236,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 371/572 (64.9%) |
+| 384/573 (67.0%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -378,7 +378,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.194.1), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.195.0), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both

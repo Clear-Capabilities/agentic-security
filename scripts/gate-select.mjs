@@ -10,7 +10,7 @@
 //   1. it imports (transitively, through relative imports) a changed code file;
 //   2. its text names a changed file by repo-relative path, by scanner-relative path, by a distinctive file name, or by a containing directory;
 //   3. it is a structural test that reads the whole tree (the orphan, drift, ledger, gate and release tests) and always runs.
-// A change this module cannot reason about (the test runner itself, the package manifest beyond its version line, an unreadable diff)
+// A change this module cannot reason about (the test runner itself, the package manifest beyond version and dependency-version lines, an unreadable diff)
 // selects the FULL suite, as does a selection larger than `maxFraction` of it.
 //
 // WHAT IT IS NOT. It is not a proof that the unselected tests pass. It never says "safe"; it says which tests to run now.
@@ -126,6 +126,27 @@ export function onlyVersionLineChanged(repo, base) {
   return lines.every((l) => /^[+-]\s*"version"\s*:/.test(l) || /^[+-]\s*"[^"]+"\s*:\s*"(node|npm|ncc|bash|sh|cd|cp|rm|mkdir|AGENTIC_SECURITY_\w+=)/.test(l));
 }
 
+/**
+ * True when every change to the scanner manifest and lock between base and HEAD is a version line, a script line, or a dependency moving
+ * to another version (a `"name": "^1.2.3"` pair in the manifest; version, resolved and integrity lines in the lock). Such a change adds no
+ * dependency and removes none, so it cannot change which tests exist; whether the new version breaks something is what the hosted pull
+ * request's full suite (a blocking check) answers, and a miss costs a red pull request, never a bad release.
+ */
+export function onlyVersionOrDependencyBumps(repo, base) {
+  if (onlyVersionLineChanged(repo, base)) return true;
+  const r = git(repo, ['diff', '-U0', base, 'HEAD', '--', 'scanner/package.json', 'scanner/package-lock.json']);
+  if (r.status !== 0) return false;
+  const lines = r.stdout.split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
+  const bump = /^[+-]\s*"[^"]+"\s*:\s*"[~^]?\d+\.\d+\.\d+(-[\w.]+)?",?\s*$/;
+  const lockMeta = /^[+-]\s*"(resolved|integrity)"\s*:\s*"[^"]+",?\s*$/;
+  const script = /^[+-]\s*"[^"]+"\s*:\s*"(node|npm|ncc|bash|sh|cd|cp|rm|mkdir|AGENTIC_SECURITY_\w+=)/;
+  if (lines.length === 0 || !lines.every((l) => bump.test(l) || lockMeta.test(l) || script.test(l))) return false;
+  // A bump removes a `"name": "<old>"` line and adds `"name": "<new>"`. A key that only appears on one side is a dependency added or removed.
+  const balance = new Map();
+  for (const l of lines.filter((x) => bump.test(x))) balance.set(l.match(/"([^"]+)"/)[1], (balance.get(l.match(/"([^"]+)"/)[1]) || 0) + (l[0] === '+' ? 1 : -1));
+  return [...balance.values()].every((n) => n === 0);
+}
+
 /** The files changed between `base` and HEAD (committed), or null when git cannot say. */
 export function changedFiles(repo, base) {
   const r = git(repo, ['diff', '--name-only', base, 'HEAD']);
@@ -146,7 +167,7 @@ export async function selectForPush({ repo, base, maxFraction = 0.6 }) {
     const changed = changedFiles(repo, base);
     if (!changed) return { mode: 'full', files: tests, total: tests.length, reason: 'git could not list the changed files' };
     const graph = await buildGraph({ repo });
-    return selectTests({ changed, tests, graph, versionOnly: onlyVersionLineChanged(repo, base), maxFraction });
+    return selectTests({ changed, tests, graph, versionOnly: onlyVersionOrDependencyBumps(repo, base), maxFraction });
   } catch (e) {
     return { mode: 'full', files: [], total: 0, reason: `selection failed (${String(e.message || e).slice(0, 120)}), so the full suite runs` };
   }

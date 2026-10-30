@@ -3,6 +3,8 @@
 //
 //   node scripts/ship.mjs                    ship the current branch end to end
 //   node scripts/ship.mjs --dry-run          everything up to (not including) the merge
+//   node scripts/ship.mjs --release-only     release main as it is (tag, hosted release, npm), skipping push, pull request, checks and merge. Only
+//                                            when HEAD is origin/main and the hosted ci workflow already passed on it: about 6 minutes
 //   node scripts/ship.mjs --resume           continue a run that stopped (a closed laptop, a crash): finished phases are not repeated
 //   node scripts/ship.mjs --status           print the last run's phases and exit (read-only; a FAILED line only for a run that ended failed)
 //   node scripts/ship.mjs --tmpdir <dir>     TMPDIR for the release gate. Default: a fresh EMPTY directory made inside the OS temp folder for this
@@ -83,7 +85,7 @@ const ctx = {
 };
 
 if (opt('tmpdir')) prepareTmpdir(opt('tmpdir'));   // a named directory is created if missing, and never emptied
-const result = await runShip(ctx,{ dryRun: flag('dry-run'), resume: flag('resume'), tmpdir: opt('tmpdir'), branch: opt('branch') });
+const result = await runShip(ctx,{ dryRun: flag('dry-run'), resume: flag('resume'), tmpdir: opt('tmpdir'), branch: opt('branch'), releaseOnly: flag('release-only') });
 ctx.log(state.timingsLine());
 process.stdout.write(outcomeText(state, result, { logDir: path.relative(ROOT, LOG_DIR) }));
 process.exit(result.ok ? 0 : 1);

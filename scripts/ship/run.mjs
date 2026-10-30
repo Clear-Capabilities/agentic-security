@@ -1,7 +1,7 @@
 // The release flow, as a state machine over an injected context (scripts/ship.mjs wires the real one; the tests wire a scripted one).
 // Each phase starts the moment the previous one finishes: no human or agent polling sits between a green check and the next step.
 
-import { PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm, earlyGateArgs, lateGateArgs, scratchEnv } from './lib.mjs';
+import { staleVersionArtifacts, PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm, earlyGateArgs, lateGateArgs, scratchEnv } from './lib.mjs';
 
 const PKG = '@clear-capabilities/agentic-security-scanner';
 const CRED = ['-c', "credential.helper=!gh auth git-credential"];
@@ -11,7 +11,7 @@ class Stop extends Error { constructor(phase, message) { super(message); this.ph
 
 /**
  * @param {object} ctx  sh(cmd,args,opts)->{code,out,err}; fetchJson(url); readFile(path); now(); sleep(ms); log(line); state: ShipState
- * @param {object} [opts] { branch?, maxRetries, stuckMinutes, checksTimeoutMin, releaseTimeoutMin, npmTimeoutMin, allowMissing, dryRun, tmpdir }
+ * @param {object} [opts] { branch?, maxRetries, stuckMinutes, checksTimeoutMin, releaseTimeoutMin, npmTimeoutMin, allowMissing, dryRun, tmpdir, releaseOnly }
  */
 export async function runShip(ctx, opts = {}) {
   const o = { maxRetries: 2, stuckMinutes: 40, checksTimeoutMin: 90, releaseTimeoutMin: 60, npmTimeoutMin: 90, npmSoftSeconds: 90, closureJobs: 3, allowMissing: ['dependency-currency'], dryRun: false, ...opts };
@@ -39,7 +39,17 @@ export async function runShip(ctx, opts = {}) {
       const files = {}; for (const f of VERSION_FILES) { try { files[f] = ctx.readFile(f); } catch { /* an optional file */ } }
       const dirty = git(['status', '--porcelain']).split('\n').filter((l) => l && !l.startsWith('??')).length;
       let npmLatest = null; try { npmLatest = (await ctx.fetchJson(`https://registry.npmjs.org/${PKG.replace('/', '%2f')}`))['dist-tags'].latest; } catch { /* offline: the registry check is skipped, and said so */ }
-      const problems = preflightProblems({ version, files, changelog: ctx.readFile('CHANGELOG.md'), npmLatest, branch, dirty });
+      const problems = preflightProblems({ version, files, changelog: ctx.readFile('CHANGELOG.md'), npmLatest, branch, dirty, releaseOnly: o.releaseOnly });
+      problems.push(...staleVersionArtifacts({ version, readFile: ctx.readFile }));
+      if (o.releaseOnly) {
+        // Release-only: the change was already pushed, reviewed and merged through its own pull request, so the work here is the tag and the hosted
+        // release. That is only sound when main is exactly what origin has AND the hosted CI already passed on that commit.
+        git(['fetch', 'origin', 'main']);
+        const head = git(['rev-parse', 'HEAD']).trim();
+        if (head !== git(['rev-parse', 'origin/main']).trim()) problems.push('release-only: HEAD is not origin/main (pull, or push your commits through a pull request first)');
+        const ci = ghJson(['run', 'list', '--commit', head, '--workflow', 'ci', '--json', 'status,conclusion']) || [];
+        if (!ci.length || !ci.every((x) => x.status === 'completed' && x.conclusion === 'success')) problems.push(`release-only: the hosted ci workflow has no green run for ${head.slice(0, 8)}; it must have passed before a release-only ship`);
+      }
       if (gh(['auth', 'status']).code !== 0) problems.push('gh is not authenticated');
       // A newly published advisory or a newly outdated dependency fails the hosted check an hour in; this is the same check, run before anything is pushed.
       if (!o.skipDependencyCheck) {
@@ -53,6 +63,7 @@ export async function runShip(ctx, opts = {}) {
 
     // ── push (the pre-push gate runs here; it is a control, never bypassed) ──────────────────────────────────────
     await phase('push', async () => {
+      if (o.releaseOnly) return 'skipped (release-only: already on origin/main)';
       const head = git(['rev-parse', 'HEAD']).trim();
       const remote = sh('git', ['ls-remote', 'origin', `refs/heads/${branch}`]).out.split('\t')[0];
       if (remote === head) return 'already on origin';
@@ -76,6 +87,7 @@ export async function runShip(ctx, opts = {}) {
 
     // ── pull request ─────────────────────────────────────────────────────────────────────────────────────────────
     await phase('pr', async () => {
+      if (o.releaseOnly) return 'skipped (release-only: merged through its own pull request)';
       const head = git(['rev-parse', 'HEAD']).trim();
       let prs = ghJson(['pr', 'list', '--head', branch, '--state', 'open', '--json', 'number,url,headRefOid']) || [];
       if (!prs.length) {
@@ -99,6 +111,7 @@ export async function runShip(ctx, opts = {}) {
     // It is the local half of the release gate that the hosted checks do not cover (see earlyGateArgs). The merge waits for it, and so does the tag.
     const startEarlyGate = () => {
       const head = prHead;
+      if (o.releaseOnly) return Promise.resolve({ ok: true, nothing: true });
       if (state.data.earlyPassedFor === head) return Promise.resolve({ ok: true, reused: true });
       return (async () => {
         const { plannedCheckIds } = await import('../release-check.mjs');
@@ -116,6 +129,7 @@ export async function runShip(ctx, opts = {}) {
 
     // ── blocking checks, with automatic recovery from a hung or infrastructure-failed job ───────────────────────
     await phase('checks', async () => {
+      if (o.releaseOnly) return 'skipped (release-only: hosted ci already green on this commit)';
       const tiers = JSON.parse(ctx.readFile('.github/required-checks.json'));
       const blocking = tiers.blocking;
       const informational = tiers.informational || [];
@@ -161,6 +175,11 @@ export async function runShip(ctx, opts = {}) {
     // ── merge, then decide what to release ──────────────────────────────────────────────────────────────────────
     let mergeSha = state.data.mergeSha;
     await phase('merge', async () => {
+      if (o.releaseOnly) {
+        mergeSha = prHead = releaseSha = git(['rev-parse', 'HEAD']).trim(); treeEquivalent = true;
+        state.set({ releaseSha, mergeSha, prHead, treeEquivalent });
+        return `skipped (release-only): releasing main at ${releaseSha.slice(0, 8)}`;
+      }
       const m = gh(['pr', 'merge', String(prNumber), '--merge']);
       if (m.code !== 0) throw new Stop('merge', `could not merge: ${m.err.trim().slice(0, 200)}`);
       const v = ghJson(['pr', 'view', String(prNumber), '--json', 'mergeCommit,headRefOid,state']);
@@ -187,6 +206,14 @@ export async function runShip(ctx, opts = {}) {
       let tmp = o.tmpdir || autoTmp;
       if (!tmp && ctx.makeTmpdir) { tmp = autoTmp = ctx.makeTmpdir(); state.set({ tmpdir: tmp }); log(`  release gate TMPDIR: ${tmp} (fresh and empty)`); }
       const { plannedCheckIds } = await import('../release-check.mjs');
+      if (o.releaseOnly) {
+        // The hosted release workflow re-runs every check with the cache off and its publish job needs all of them, so this local step is only
+        // the publish blockers that can be answered here in seconds.
+        const only = ['head-pushed', 'remote-ci-green', 'changelog-entry', 'version-consistency', 'scorecard-freshness', 'bundle-integrity', 'package-contents', 'dependency-currency'];
+        const q = sh('node', ['scripts/release-check.mjs', '--only', only.join(',')], { stream: true, timeoutMs: 20 * 60 * 1000 });
+        if (q.code !== 0) throw new Stop('verify', `the release-only checks failed: ${(q.out + q.err).split('\n').filter((l) => /^(FAIL|✗)/.test(l)).slice(0, 4).join(' | ')}`);
+        return `release-only checks passed on ${releaseSha.slice(0, 8)} (${only.length} publish blockers; the hosted release workflow runs the full gate)`;
+      }
       const late = lateGateArgs({ allIds: plannedCheckIds(), earlyPassedFor: state.data.earlyPassedFor, releaseSha, treeEquivalent });
       const plan = late || verifyArgs({ allIds: plannedCheckIds(), treeEquivalent, prePushPassed: state.data.prePushPassed, prHead });
       log(`  release gate: ${plan.reason}`);

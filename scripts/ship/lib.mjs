@@ -105,15 +105,34 @@ export function npmFacts(packument, version) {
 // ── preflight ──────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Problems that would fail a release late, found before anything is pushed. Pure: the caller supplies the file texts. */
-export function preflightProblems({ version, files, changelog, npmLatest, branch, dirty }) {
+export function preflightProblems({ version, files, changelog, npmLatest, branch, dirty, releaseOnly = false }) {
   const problems = [];
   if (!/^\d+\.\d+\.\d+$/.test(version || '')) problems.push(`the package version "${version}" is not X.Y.Z`);
-  if (branch === 'main') problems.push('run this from a feature branch, not main: a release goes through a pull request');
+  if (branch === 'main' && !releaseOnly) problems.push('run this from a feature branch, not main: a release goes through a pull request (or pass --release-only for a commit already merged and green)');
+  if (releaseOnly && branch !== 'main') problems.push('--release-only releases main: check it out first');
   if (dirty) problems.push(`the working tree has ${dirty} uncommitted change(s)`);
   if (npmLatest && version && cmpVersions(version, npmLatest) <= 0) problems.push(`version ${version} is not greater than the published ${npmLatest}`);
   for (const [path, text] of Object.entries(files || {})) if (version && !String(text).includes(version)) problems.push(`${path} does not mention version ${version}`);
   if (version && !new RegExp(`^## ${version.replace(/\./g, '\\.')}\\b`, 'm').test(changelog || '')) problems.push(`CHANGELOG.md has no "## ${version}" entry`);
   return problems;
+}
+
+/**
+ * Generated files that record the engine version and are compared with it by a test (the hosted language-suites job, the pre-push suite). A
+ * version bump that does not regenerate them fails 15 minutes into the push, so the same check runs before anything is pushed.
+ * `readFile` throws for a missing file; a missing file is not reported (it may not exist in a given checkout).
+ */
+export function staleVersionArtifacts({ version, readFile }) {
+  const out = [];
+  const read = (p) => { try { return JSON.parse(readFile(p)); } catch { return null; } };
+  const captured = read('docs/examples/language/captured.json');
+  if (captured && captured.engineVersion !== version) out.push(`docs/examples/language/captured.json records ${captured.engineVersion}, not ${version} (run: node scripts/release-prepare.mjs)`);
+  const inv = read('docs/engineering-excellence/inventory.json');
+  if (inv && inv.facts && inv.facts.version !== version) out.push(`docs/engineering-excellence/inventory.json records ${inv.facts.version}, not ${version} (run: node scripts/release-prepare.mjs)`);
+  const sc = read('docs/scorecard.json');
+  const scv = sc && sc.provenance && sc.provenance.engineVersion;
+  if (sc && scv !== version) out.push(`docs/scorecard.json records ${scv}, not ${version} (run: node scripts/release-prepare.mjs)`);
+  return out;
 }
 
 // ── what the local release gate need not repeat ─────────────────────────────────────────────────────────────
