@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.194.1",
-    "bundleSha256": "af17d28e5d8db4702ba886d64b7b5683ce5cbbcb851ef7ce700e3252b3849172",
-    "commit": "8a612615bbd9c3ef0e66bb65e2ba4c2006bb65ba",
+    "engineVersion": "0.195.0",
+    "bundleSha256": "6d63fe08ca5ae035293acc99d93b848d5f8cf08bc330bb5e99250174a43a9402",
+    "commit": "0b6d938f8850578d71af41b1335f91f87dc180e4",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-30T13:35:05.784Z",
+    "generatedAt": "2026-10-30T19:09:51.221Z",
     "corpusVersion": "5481d819acf1dd3481359a19e49e5a5b798fae1507b55173b53c8015b08214f6",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -947,7 +947,7 @@
         }
       },
       "scripts": {
-        "total": 112,
+        "total": 113,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -986,6 +986,7 @@
           "self-test-runner.mjs": 2,
           "ship.mjs": 2,
           "ship/run.mjs": 2,
+          "ship/run.mjs -> ship/lib.mjs": 1,
           "synthesize-detector.mjs": 7,
           "verification-replay-example.mjs": 2
         }
@@ -998,8 +999,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 371,
-    "d": 572
+    "n": 384,
+    "d": 573
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2229,9 +2230,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.194.1",
-    "commit": "8a612615bbd9c3ef0e66bb65e2ba4c2006bb65ba",
-    "bundleSha256": "af17d28e5d8db4702ba886d64b7b5683ce5cbbcb851ef7ce700e3252b3849172",
+    "engineVersion": "0.195.0",
+    "commit": "0b6d938f8850578d71af41b1335f91f87dc180e4",
+    "bundleSha256": "6d63fe08ca5ae035293acc99d93b848d5f8cf08bc330bb5e99250174a43a9402",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",

@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.195.0 - A release is cut from one command, and a release-only ship
+
+Why: the 0.194.1 release (dependency bumps only) took 1 h 49 min end to end. A clean run is about 41 minutes (push 1062 s, hosted checks 963 s, release workflow 316 s, the rest seconds); the other 68 minutes were two failed attempts, each found 15 minutes in, because the hand-made version bump missed two generated files that record the version (`inventory.json`, `captured.json`). `scripts/release-prepare.mjs` already existed to regenerate them and was not used.
+
+- **`release-prepare.mjs --bump patch|minor|major`** computes the next version, so one command bumps and regenerates. Covered by `nextVersion` tests.
+- **`ship` preflight names a stale generated file.** `captured.json`, `inventory.json` and `scorecard.json` must record the version being shipped, or the run stops before the push with the file and the command that fixes it (`staleVersionArtifacts`).
+- **A dependency version bump no longer forces the whole local suite on push.** `onlyVersionOrDependencyBumps` accepts a dependency moving to another version (and its lock lines) as a version-only change; adding or removing a dependency still runs everything. The full suite is a blocking hosted check, so a miss is a red pull request.
+- **`ship --release-only`** releases `main` without pushing, opening a pull request, waiting for checks or merging. It refuses unless `HEAD` is `origin/main` and the hosted `ci` workflow is green on it, runs eight publish blockers locally and leaves the full gate to the hosted release workflow. Not measured end to end at the time of writing: the next `TIMINGS` line is the measurement.
+
+Not done: the 5 to 10 minute target needs the change itself to have landed through a pull request already; a release that must also push and verify its own change is still bounded by the hosted checks (about 16 minutes) plus the release workflow (about 5).
+
 ## 0.194.1 - Dependencies brought current
 
 - **`@babel/core` 8.0.10, `z3-solver` 5.3.3, `@types/node` 26.6.6** (scanner), and **`@types/node` 26.6.6** (VS Code extension). Newly published versions made the `dependency-currency` release check fail on the 0.194.0 tree. The scanner bundle is rebuilt because `@babel/core` is embedded in it. No source change.

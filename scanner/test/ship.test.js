@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, cmpVersions, ShipState, waitFor, resumeCommand, statusText, outcomeText, prepareTmpdir, removeFreshTmpdir } from '../../scripts/ship/lib.mjs';
+import { chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, staleVersionArtifacts, cmpVersions, ShipState, waitFor, resumeCommand, statusText, outcomeText, prepareTmpdir, removeFreshTmpdir } from '../../scripts/ship/lib.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runShip } from '../../scripts/ship/run.mjs';
@@ -686,4 +686,17 @@ test('backfill: a created page never takes the Latest badge from the newest rele
   const here = path.dirname(new URL(import.meta.url).pathname);
   const r = spawnSync(process.execPath, [path.join(here, '../../scripts/backfill-github-releases.mjs'), 'v0.192.0'], { encoding: 'utf8' });
   assert.match(r.stdout, /--latest=false/, r.stdout + r.stderr);
+});
+
+test('release-only: main is allowed (and a feature branch is not); a generated file that records another version is named before anything is pushed', () => {
+  const good = { version: '1.2.4', files: { 'README.md': 'v1.2.4' }, changelog: '## 1.2.4 - x', npmLatest: '1.2.3', branch: 'main', dirty: 0 };
+  assert.match(preflightProblems(good).join(), /not main/, 'a normal ship still refuses main');
+  assert.deepEqual(preflightProblems({ ...good, releaseOnly: true }), []);
+  assert.match(preflightProblems({ ...good, releaseOnly: true, branch: 'feat/x' }).join(), /release-only releases main/);
+  const files = { 'docs/examples/language/captured.json': { engineVersion: '1.2.3' }, 'docs/engineering-excellence/inventory.json': { facts: { version: '1.2.4' } }, 'docs/scorecard.json': { provenance: { engineVersion: '1.2.4' } } };
+  const readFile = (p) => { if (!(p in files)) throw new Error('missing'); return JSON.stringify(files[p]); };
+  const stale = staleVersionArtifacts({ version: '1.2.4', readFile });
+  assert.equal(stale.length, 1);
+  assert.match(stale[0], /captured\.json records 1\.2\.3, not 1\.2\.4/);
+  assert.deepEqual(staleVersionArtifacts({ version: '1.2.4', readFile: () => { throw new Error('missing'); } }), [], 'a file that is not in this checkout is not a problem');
 });

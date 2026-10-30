@@ -2,7 +2,11 @@
 // Every case is a pair that differs in one fact, so a selector that always says "full" or always says "nothing" fails one half.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildGraph, selectTests, transitiveImporters, mentionTokens } from '../../scripts/gate-select.mjs';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { buildGraph, selectTests, transitiveImporters, mentionTokens, onlyVersionOrDependencyBumps } from '../../scripts/gate-select.mjs';
 import { planChecks, CHECKS, HOSTED_COVERS } from '../../scripts/pre-push-gate.mjs';
 
 const FILES = {
@@ -88,4 +92,23 @@ test('planChecks: a subset selection replaces the suite with a differently named
   assert.notEqual(p2.checks.find((c) => /^test-suite-affected/.test(c.id)).id, aff.id, 'a different selection is a different cache key');
   const full = planChecks({ checks: CHECKS, tier: 'fast', selection: { mode: 'full', files: [], total: 100, reason: 'x' }, changed: ['scanner/src/b.js'] });
   assert.ok(full.checks.some((c) => c.id === 'test-suite'), 'a full selection keeps the full suite');
+});
+
+test('a dependency moving to another version is not a manifest change beyond its version line; adding or removing one is', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-select-'));
+  const run = (...a) => execFileSync('git', a, { cwd: repo, stdio: 'ignore' });
+  const write = (deps) => {
+    fs.mkdirSync(path.join(repo, 'scanner'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'scanner/package.json'), JSON.stringify({ name: 'x', version: '1.0.0', dependencies: deps }, null, 2) + '\n');
+  };
+  try {
+    run('init', '-q'); run('config', 'user.email', 't@t'); run('config', 'user.name', 't');
+    write({ a: '^1.0.0', b: '^2.0.0' }); run('add', '-A'); run('commit', '-qm', 'base');
+    write({ a: '^1.0.1', b: '^2.0.0' }); run('commit', '-qam', 'bump');
+    assert.equal(onlyVersionOrDependencyBumps(repo, 'HEAD~1'), true, 'a version bump of an existing dependency');
+    write({ a: '^1.0.1', b: '^2.0.0', c: '^3.0.0' }); run('commit', '-qam', 'add');
+    assert.equal(onlyVersionOrDependencyBumps(repo, 'HEAD~1'), false, 'a new dependency changes what is installed and tested');
+    write({ a: '^1.0.1' }); run('commit', '-qam', 'remove');
+    assert.equal(onlyVersionOrDependencyBumps(repo, 'HEAD~1'), false, 'a removed dependency too');
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
 });

@@ -6,6 +6,7 @@
 //
 //   node scripts/release-prepare.mjs                       regenerate artifacts, then run the verification suites
 //   node scripts/release-prepare.mjs --version 0.176.0     first replace the current version string in the release files
+//   node scripts/release-prepare.mjs --bump patch         same, with the next patch (or minor, or major) version computed from scanner/package.json
 //   node scripts/release-prepare.mjs --no-tests            regenerate only
 //
 // It writes files and runs tests. It never commits, pushes or publishes: review `git status`, commit, then `node scripts/ship.mjs`.
@@ -38,6 +39,17 @@ export function bumpVersion(root, from, to, files = VERSION_FILES) {
 }
 
 /** The ordered steps. `cwd` is relative to the repository root. */
+/** The next version after `current` for a `patch`, `minor` or `major` bump. */
+export function nextVersion(current, kind) {
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(current);
+  if (!m) throw new Error(`version must be X.Y.Z (got ${current})`);
+  const [a, b, c] = m.slice(1).map(Number);
+  if (kind === 'major') return `${a + 1}.0.0`;
+  if (kind === 'minor') return `${a}.${b + 1}.0`;
+  if (kind === 'patch') return `${a}.${b}.${c + 1}`;
+  throw new Error(`--bump takes patch, minor or major (got ${kind})`);
+}
+
 export function planSteps({ tests = true } = {}) {
   const npm = (script) => ({ cmd: 'npm', args: ['run', '--silent', script], cwd: 'scanner' });
   const node = (script, ...args) => ({ cmd: process.execPath, args: [script, ...args], cwd: '.' });
@@ -73,8 +85,10 @@ function currentVersion() {
 function main(argv) {
   const out = (s) => process.stdout.write(`${s}\n`);
   const vi = argv.indexOf('--version');
-  if (vi !== -1) {
-    const to = argv[vi + 1];
+  const bi = argv.indexOf('--bump');
+  if (vi !== -1 || bi !== -1) {
+    let to;
+    try { to = vi !== -1 ? argv[vi + 1] : nextVersion(currentVersion(), argv[bi + 1]); } catch (e) { out(`release-prepare: ${e.message}`); return 2; }
     const from = currentVersion();
     if (!to) { out('release-prepare: --version needs X.Y.Z'); return 2; }
     if (to === from) { out(`release-prepare: already at ${to}`); } else {
