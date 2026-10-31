@@ -9,6 +9,14 @@
 > make the history less accurate, not more.
 
 
+## 0.195.3 - The VS Code extension's build tool no longer pulls in a vulnerable minimatch
+
+Why: the 0.195.2 release workflow stopped at its dependency check. A new advisory (GHSA-g3hv-75wg-m249, moderate, denial of service in minimatch before 11.0.1) reached `ide/vscode` through `@vscode/vsce`, which asks for `minimatch ^10.2.6`. The check passed on the same tree 16 minutes earlier, so the advisory was published during the release. Nothing was published to npm for 0.195.2; its tag exists and points at a commit that failed the gate, so the fix ships as 0.195.3.
+
+- **`ide/vscode` overrides `minimatch` to `^11.0.1`** (the only fixed line). `npm audit` reports 0 vulnerabilities; the extension still builds and type-checks. The override can be dropped when `@vscode/vsce` raises its own range.
+- **Carries everything in 0.195.2:** trend jobs off pull requests, the cabal-store-only cache fix.
+- **Measured for the 0.195.2 attempt (not a release):** push 313 s, hosted checks 702 s (cold cabal cache under the new key, plus one timing check re-run), release workflow 162 s to the failed gate.
+
 ## 0.195.2 - Trend jobs no longer take runner slots from the blocking jobs on a pull request
 
 Why: the release requirement is under 10 minutes. On the 0.195.1 pull request the `ci` workflow started about 33 jobs at once and blocking jobs waited up to 200 s for a runner, while five informational jobs that nothing waits on held slots for 20 to 44 minutes (`local-model`, `realworld-bench`, `synthetic-bench`, `jetbrains-plugin`, `chrome-exports`). They only delayed the jobs that decide whether the change can merge.
