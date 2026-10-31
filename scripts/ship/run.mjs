@@ -164,7 +164,7 @@ export async function runShip(ctx, opts = {}) {
           if (!rerunThisTick && c.pending.length === 0) throw new Stop('checks', `blocking checks failed: ${c.failing.join(', ')}`);
         }
         return null;
-      }, { timeoutMs: o.checksTimeoutMin * 60000, intervalMs: 15000, now: ctx.now, sleep: ctx.sleep });
+      }, { timeoutMs: o.checksTimeoutMin * 60000, intervalMs: 5000, now: ctx.now, sleep: ctx.sleep });
       if (!r.ok) throw new Stop('checks', `blocking checks were not green after ${o.checksTimeoutMin} min`);
       return 'all blocking checks green';
     });
