@@ -108,16 +108,13 @@ jobs:
       checks: read
     strategy:
       fail-fast: true
+      # On a tag push only the `rest` leg is scheduled (0.195.6). The `full_only` legs used to be scheduled and exit at once, but each still took
+      # a runner slot ahead of `rest`, which waited 3 minutes for one on the 0.195.5 release (06:05:24 to 06:08:28) and then ran for 2. A manual
+      # dry run (workflow_dispatch) schedules every leg. Both lists are literal because `strategy` cannot read `env`;
+      # scanner/test/release-workflow-structure.test.js reads them out of this expression: the dispatch list must cover every group and the
+      # tag-push list must be exactly `rest`.
       matrix:
-        include:
-          - { name: 'tests 1/4', group: tests, shard: '1/4', full_only: true }
-          - { name: 'tests 2/4', group: tests, shard: '2/4', full_only: true }
-          - { name: 'tests 3/4', group: tests, shard: '3/4', full_only: true }
-          - { name: 'tests 4/4', group: tests, shard: '4/4', full_only: true }
-          - { name: 'benches-a', group: benches-a, shard: '', full_only: true }
-          - { name: 'benches-b', group: benches-b, shard: '', full_only: true }
-          - { name: 'closure', group: closure, shard: '', full_only: true }
-          - { name: 'rest', group: rest, shard: '' }
+        include: ${{ github.event_name == 'workflow_dispatch' && fromJSON('[{"name":"tests 1/4","group":"tests","shard":"1/4","full_only":true},{"name":"tests 2/4","group":"tests","shard":"2/4","full_only":true},{"name":"tests 3/4","group":"tests","shard":"3/4","full_only":true},{"name":"tests 4/4","group":"tests","shard":"4/4","full_only":true},{"name":"benches-a","group":"benches-a","shard":"","full_only":true},{"name":"benches-b","group":"benches-b","shard":"","full_only":true},{"name":"closure","group":"closure","shard":"","full_only":true},{"name":"rest","group":"rest","shard":""}]') || fromJSON('[{"name":"rest","group":"rest","shard":""}]') }}
     steps:
       # A tag push publishes a commit whose pull request already passed the full suite, the benches and the blocking hosted checks on clean
       # runners for the same tree (`rest` below reads those check runs and refuses to proceed unless they are green). The legs marked

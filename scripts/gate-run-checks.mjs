@@ -38,7 +38,11 @@ export async function executeChecks({ checks, runCheck, scoped = null, legacy = 
 
     // 1. Resolve cache hits up front (cheap), leaving only what must run.
     const planned = group.map((check) => {
-      const cacheable = Boolean(check.npmScript);
+      // An affected-tests check (`onlyFiles`, no npm script) is cacheable too: its id embeds a hash of the selected file list, so a different
+      // selection is a different record and a subset pass is never read as another selection's (or the full suite's) pass. Before 0.195.6 only
+      // npm-script checks were, so the heaviest check of the fast tier ran twice on every push, once in the background warm-up and again in the
+      // push itself (10 + 13 minutes on 0.195.5).
+      const cacheable = Boolean(check.npmScript || check.onlyFiles);
       let keyInfo = null;
       if (cacheable && scoped && (!scoped.eligible || scoped.eligible(check))) {
         keyInfo = scoped.keyFor(check);
@@ -79,7 +83,7 @@ export async function executeChecks({ checks, runCheck, scoped = null, legacy = 
     for (const o of outcomes) {
       const { check, keyInfo } = o.p;
       entries.push({ ...check, result: o.result, ...(o.cached ? { cached: o.cached } : {}), ...(o.ran ? { ms: o.ms } : {}) });
-      if (!o.ran || !o.result.ok || !check.npmScript) continue;
+      if (!o.ran || !o.result.ok || !(check.npmScript || check.onlyFiles)) continue;
       if (scoped && keyInfo) {
         const after = scoped.keyFor(check);
         if (after && after.key === keyInfo.key) scoped.record(check, keyInfo, o.ms);

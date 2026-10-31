@@ -285,6 +285,16 @@ export function planChecks({ checks, tier = 'fast', selection = null, changed = 
   if (tier === 'full') return { checks: checks.slice(), skipped: [] };
   const skipped = [];
   const out = [];
+  if (tier === 'hosted') {
+    // The hosted tier (0.195.6; what `ship` pushes with): only the in-process guards run here, in seconds. Every suite and bench is skipped, each
+    // with its reason printed, because the pull request's blocking jobs run them before anything can merge and the hosted release workflow runs
+    // the whole gate with the cache off before anything can publish. A miss is a red pull request minutes later, never a bad release.
+    for (const c of checks) {
+      if (c.npmScript) skipped.push({ id: c.id, title: c.title, reason: "not run locally (tier hosted): the pull request's blocking checks and the hosted release workflow run it before anything merges or publishes" });
+      else out.push(c);
+    }
+    return { checks: out, skipped };
+  }
   for (const c of checks) {
     if (HOSTED_COVERS[c.id]) { skipped.push({ id: c.id, title: c.title, reason: `not run locally: ${HOSTED_COVERS[c.id]} runs it on the pull request and blocks the merge` }); continue; }
     if (c.id === 'self-scan-gate' && Array.isArray(changed) && !changed.some((f) => SELF_SCAN_RELEVANT.test(f))) {
@@ -912,7 +922,8 @@ export async function main(argv = []) {
 
   // Tier and selection. Any doubt selects more, never less: no base commit, an unreadable diff, or a change the selector cannot bound runs the
   // full suite, and `--full` / AGENTIC_SECURITY_PUSH_GATE=full runs every check exactly as before.
-  const tier = (argv.includes('--full') || process.env.AGENTIC_SECURITY_PUSH_GATE === 'full') ? 'full' : 'fast';
+  const tier = (argv.includes('--full') || process.env.AGENTIC_SECURITY_PUSH_GATE === 'full') ? 'full'
+    : (argv.includes('--hosted') || process.env.AGENTIC_SECURITY_PUSH_GATE === 'hosted') ? 'hosted' : 'fast';
   let selection = null;
   let changed = null;
   if (tier === 'fast') {

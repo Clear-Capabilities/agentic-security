@@ -36,6 +36,18 @@ const realTiers = () => JSON.parse(fs.readFileSync(TIERS, 'utf8'));
 
 const asList = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]);
 const steps = (job) => asList(job?.steps);
+/**
+ * The gate's matrix legs. Since 0.195.6 `include` is an expression carrying two fromJSON literals: the full list (every leg, scheduled on a
+ * workflow_dispatch dry run) and the tag-push list (what a `v*` tag schedules). The structure rules apply to the full list; the tag-push list
+ * has its own rule. A plain YAML list (the pre-0.195.6 shape) is both.
+ */
+function includeLists(gate) {
+  const inc = gate?.strategy?.matrix?.include;
+  if (Array.isArray(inc)) return { full: inc, tagPush: inc };
+  const lits = [...String(inc ?? '').matchAll(/fromJSON\('((?:[^'\\]|\\.)*)'\)/g)].map((m) => { try { return JSON.parse(m[1]); } catch { return null; } });
+  if (lits.length !== 2 || !lits.every(Array.isArray)) return { full: [], tagPush: [] };
+  return { full: lits[0], tagPush: lits[1] };
+}
 const runsOf = (job) => steps(job).map((s) => String(s.run ?? ''));
 
 /** Every `permissions` mapping in the document, with the path it sits at. */
@@ -56,12 +68,21 @@ function allPermissions(doc) {
 function legNames(doc) {
   const gate = doc.jobs?.gate;
   const template = String(gate?.name ?? 'gate');
-  return asList(gate?.strategy?.matrix?.include).map((leg) =>
+  return includeLists(gate).full.map((leg) =>
     template.replace(/\$\{\{\s*matrix\.(\w+)\s*\}\}/g, (_, key) => String(leg[key] ?? '')));
 }
 
 // ---------------------------------------------------------------- invariants
 const invariants = {
+  /** A tag push schedules exactly the `rest` leg: a heavy leg queued there takes a runner slot ahead of it (3 minutes on 0.195.5), and no leg at all would publish unguarded. */
+  tagPushSchedulesOnlyRest(text) {
+    const { full, tagPush } = includeLists(load(text).jobs?.gate);
+    const bad = [];
+    if (tagPush.length !== 1 || tagPush[0]?.group !== 'rest' || tagPush[0]?.full_only) bad.push(`a tag push must schedule exactly the rest leg, not ${JSON.stringify(tagPush)}`);
+    if (!full.some((l) => l.group === 'rest')) bad.push('the dispatch list lost the rest leg');
+    return bad;
+  },
+
   publishNeedsGate(text) {
     const doc = load(text);
     return asList(doc.jobs?.publish?.needs).includes('gate') ? [] : ['publish does not `needs: gate`'];
@@ -90,7 +111,7 @@ const invariants = {
 
   shardsAreExactlyOneToN(text) {
     const doc = load(text);
-    const legs = asList(doc.jobs?.gate?.strategy?.matrix?.include).filter((l) => l.group === 'tests');
+    const legs = includeLists(doc.jobs?.gate).full.filter((l) => l.group === 'tests');
     if (!legs.length) return ['no test-shard legs'];
     const specs = legs.map((l) => /^(\d+)\/(\d+)$/.exec(String(l.shard)));
     if (specs.some((m) => !m)) return ['a test leg has a malformed shard'];
@@ -104,14 +125,14 @@ const invariants = {
 
   nonTestLegsAreNotSharded(text) {
     const doc = load(text);
-    return asList(doc.jobs?.gate?.strategy?.matrix?.include)
+    return includeLists(doc.jobs?.gate).full
       .filter((l) => l.group !== 'tests' && l.shard)
       .map((l) => `leg ${l.name} passes a shard but is not a test leg`);
   },
 
   legsCoverEveryGroup(text) {
     const doc = load(text);
-    const have = new Set(asList(doc.jobs?.gate?.strategy?.matrix?.include).map((l) => l.group));
+    const have = new Set(includeLists(doc.jobs?.gate).full.map((l) => l.group));
     const bad = [];
     for (const g of groupNames()) if (!have.has(g)) bad.push(`no gate leg runs group "${g}"`);
     for (const g of have) if (!groupNames().includes(g)) bad.push(`a leg runs unknown group "${g}"`);
@@ -146,7 +167,7 @@ const invariants = {
 
   fullOnlyLegsAreSkippedOnATagPush(text) {
     const doc = load(text);
-    const legs = asList(doc.jobs?.gate?.strategy?.matrix?.include);
+    const legs = includeLists(doc.jobs?.gate).full;
     const bad = [];
     const rest = legs.find((l) => l.group === 'rest');
     if (!rest) return ['no rest leg'];
@@ -272,7 +293,7 @@ for (const [name, check] of Object.entries(invariants)) {
 
 test('the shard count N is one value shared by every leg, and legs list matches 1..N', () => {
   const doc = load(realText());
-  const shards = asList(doc.jobs.gate.strategy.matrix.include).filter((l) => l.group === 'tests').map((l) => l.shard);
+  const shards = includeLists(doc.jobs.gate).full.filter((l) => l.group === 'tests').map((l) => l.shard);
   const n = Number(shards[0].split('/')[1]);
   assert.deepEqual(shards, Array.from({ length: n }, (_, i) => `${i + 1}/${n}`));
 });
@@ -286,6 +307,8 @@ function mutate(text, from, to) {
 }
 
 const mutations = [
+  ['tagPushSchedulesOnlyRest', (t) => mutate(t, `|| fromJSON('[{"name":"rest"`, `|| fromJSON('[{"name":"tests 1/4","group":"tests","shard":"1/4","full_only":true},{"name":"rest"`)],
+  ['tagPushSchedulesOnlyRest', (t) => mutate(t, `|| fromJSON('[{"name":"rest","group":"rest","shard":""}]')`, `|| fromJSON('[]')`)],
   ['publishNeedsGate', (t) => mutate(t, 'needs: [gate]', 'needs: []')],
   ['publishNeedsGate', (t) => mutate(t, 'needs: [gate]', 'needs: [rest]')],
   ['idTokenOnlyOnPublish', (t) => mutate(t, '    permissions:\n      contents: read\n      checks: read\n    strategy:',
@@ -294,17 +317,17 @@ const mutations = [
   ['idTokenOnlyOnPublish', (t) => mutate(t, '      id-token: write # required', '      id-token: none # required')],
   ['gateLegsAreReadOnly', (t) => mutate(t, '    permissions:\n      contents: read\n      checks: read\n    strategy:',
     '    permissions:\n      contents: write\n      checks: read\n    strategy:')],
-  ['shardsAreExactlyOneToN', (t) => mutate(t, "shard: '3/4'", "shard: '3/5'")],
-  ['shardsAreExactlyOneToN', (t) => mutate(t, "          - { name: 'tests 2/4', group: tests, shard: '2/4', full_only: true }\n", '')],
-  ['shardsAreExactlyOneToN', (t) => mutate(t, "name: 'tests 4/4', group: tests, shard: '4/4'", "name: 'tests 4/4', group: tests, shard: '1/4'")],
-  ['nonTestLegsAreNotSharded', (t) => mutate(t, "{ name: 'rest', group: rest, shard: '' }", "{ name: 'rest', group: rest, shard: '1/4' }")],
-  ['legsCoverEveryGroup', (t) => mutate(t, "          - { name: 'rest', group: rest, shard: '' }\n", '')],
-  ['legsCoverEveryGroup', (t) => mutate(t, "group: benches-b, shard: ''", "group: benches-c, shard: ''")],
+  ['shardsAreExactlyOneToN', (t) => mutate(t, '"shard":"3/4"', '"shard":"3/5"')],
+  ['shardsAreExactlyOneToN', (t) => mutate(t, '{"name":"tests 2/4","group":"tests","shard":"2/4","full_only":true},', '')],
+  ['shardsAreExactlyOneToN', (t) => mutate(t, '"name":"tests 4/4","group":"tests","shard":"4/4"', '"name":"tests 4/4","group":"tests","shard":"1/4"')],
+  ['nonTestLegsAreNotSharded', (t) => mutate(t, '{"name":"rest","group":"rest","shard":""}', '{"name":"rest","group":"rest","shard":"1/4"}')],
+  ['legsCoverEveryGroup', (t) => mutate(t, ',{"name":"rest","group":"rest","shard":""}]', ']')],
+  ['legsCoverEveryGroup', (t) => mutate(t, '"group":"benches-b","shard":""', '"group":"benches-c","shard":""')],
   ['everyGateLegPassesNoCacheAndItsGroup', (t) => mutate(t, 'release-check.mjs --no-cache --group', 'release-check.mjs --group')],
   ['everyGateLegPassesNoCacheAndItsGroup', (t) => mutate(t, "GATE_GROUP: ${{ matrix.group }}", "GATE_GROUP: rest")],
   ['everyReleaseCheckInvocationPassesNoCache', (t) => mutate(t, 'release-check.mjs --no-cache --only', 'release-check.mjs --only')],
-  ['fullOnlyLegsAreSkippedOnATagPush', (t) => mutate(t, "{ name: 'rest', group: rest, shard: '' }", "{ name: 'rest', group: rest, shard: '', full_only: true }")],
-  ['fullOnlyLegsAreSkippedOnATagPush', (t) => mutate(t, "group: closure, shard: '', full_only: true", "group: closure, shard: ''")],
+  ['fullOnlyLegsAreSkippedOnATagPush', (t) => mutate(t, '{"name":"rest","group":"rest","shard":""}', '{"name":"rest","group":"rest","shard":"","full_only":true}')],
+  ['fullOnlyLegsAreSkippedOnATagPush', (t) => mutate(t, '"group":"closure","shard":"","full_only":true', '"group":"closure","shard":""')],
   ['fullOnlyLegsAreSkippedOnATagPush', (t) => mutate(t, "        if: ${{ !matrix.full_only || github.event_name == 'workflow_dispatch' }}\n        working-directory: scanner\n        env:", "        working-directory: scanner\n        env:")],
   ['failFast', (t) => mutate(t, 'fail-fast: true', 'fail-fast: false')],
   ['noAllowUnverifiedCi', (t) => mutate(t, '--no-cache --group', '--no-cache --allow-unverified-ci --group')],
@@ -352,7 +375,7 @@ test('legNamesAreSelf notices a leg missing from required-checks.json, and a mis
   const withoutPublish = { ...tiers, self: tiers.self.filter((n) => n !== 'publish') };
   assert.ok(invariants.legNamesAreSelf(realText(), withoutPublish).length > 0);
   // A renamed leg (the matrix name changed, the tier file did not) is caught too.
-  const renamed = mutate(realText(), "name: 'rest'", "name: 'misc'");
+  const renamed = mutate(realText(), '"name":"rest"', '"name":"misc"');
   assert.ok(invariants.legNamesAreSelf(renamed, tiers).length > 0);
 });
 

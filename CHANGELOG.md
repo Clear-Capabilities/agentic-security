@@ -9,6 +9,21 @@
 > make the history less accurate, not more.
 
 
+## 0.195.6 - A release has to fit in ten minutes: the push no longer waits for the local suites, a tag push schedules one release leg, and the affected-tests check is cached
+
+Why, for the first two: the requirement is a release in under 10 minutes from the commit. On 0.195.5 the path was 35 minutes: push 1401 s (the local gate), hosted checks 332 s, merge to publish 268 s, and the release workflow spent 3 of its 4.2 minutes waiting for a runner behind seven legs that each ran for 2 seconds and exited.
+
+- **`ship` pushes under the gate's new hosted tier.** `AGENTIC_SECURITY_PUSH_GATE=hosted` runs only the in-process guards (worktree matches the push, blast radius, bundle sidecar, package contents) and skips every suite and bench with its reason printed. The pull request's blocking checks are the merge gate and the hosted release workflow runs the whole gate with the cache off before the publish, so a miss is a red pull request, never a bad release. The background gate the post-commit hook starts still runs: a failure it has recorded stops `ship` before the push, and one it records while the hosted checks run stops `ship` before the merge. `--local-gate` restores the previous push (await the background run, reuse its verdicts) together with the early release gate. A hosted-tier pass is never recorded as a pre-push pass.
+- **A tag push schedules only the `rest` leg of the release workflow.** The matrix `include` is now an expression: every leg on `workflow_dispatch`, `rest` alone on a tag. `scanner/test/release-workflow-structure.test.js` reads both lists out of it; a heavy leg added to the tag list, or an empty tag list, fails the test (two new mutations). The step-level `full_only` guards stay.
+- **The first push of this release was stopped by the hosted checks at 345 s**, not by anything local: `test/release-closure/closure-plan.test.js` read the matrix in its YAML spelling (`group: closure,`) and the expression spells it `"group":"closure"`. It now accepts either. That is the hosted tier working as described: a red pull request, nothing tagged or published.
+- **Expected, not measured:** push about 10 s, hosted checks about 5.5 min (`language-stress` at 309 s is the long pole), merge to publish about 4 min. The next `TIMINGS` line is the measurement, and the registry's own listing delay after the publish is outside it.
+
+Why, for the cache: the 0.195.5 push phase took 23 min 21 s. The post-commit background gate had already passed in 608 s, and the push still ran its own gate for another 790 s. Reading the push log and the verdict cache showed why: every check was reused from the background run (`self-scan-gate`, `ci-parity`, `mutation-gate` and the rest, all `cached (inputs unchanged ...)`) except `test-suite-affected-992dff56`, the affected-tests run (367 of 1029 test files), which has no npm script and was excluded from the cache in both directions by `cacheable = Boolean(check.npmScript)` in `scripts/gate-run-checks.mjs`. It was never looked up and never recorded, so the heaviest check of the fast tier ran twice on every push.
+
+- **An affected-tests check is cached like the full suite.** It is recorded on a pass and reused when the whole-tree key is unchanged. Its id embeds a hash of the selected file list, so a different selection is a different record: a subset pass is never read as another selection's pass, or as the full suite's. A failure is never recorded. Proven both ways: the new test fails on the old executor and passes on the new one.
+- **Expected effect, not yet measured:** the push should take about as long as the background run (about 10 minutes for a change like 0.195.5's) instead of that plus 13 more. The next `TIMINGS` line is the measurement.
+- **Not changed:** the gate's contents, the limits, the test selection or the test concurrency. The background run itself, the 9 minutes of affected tests it executes, is still the floor for a change that touches `scripts/`.
+
 ## 0.195.5 - The open release-path items are closed: version bumps keep history, the VS Code types match their floor, and the time-to-first-finding gate is classified and stable
 
 Why: three items were left open after 0.195.4.

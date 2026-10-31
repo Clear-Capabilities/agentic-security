@@ -608,7 +608,7 @@ test('verify args: every omitted id is a real release check, and nothing the pub
 });
 
 test('flow: with a recorded pre-push pass for the released head the local gate runs only the unproven checks; without one it runs the whole gate', async () => {
-  const w = world({ prePushOut: 'PASS  Full test suite passes\n\npre-push gate PASSED in 900s: verified: x\n' }); const ctx = ctxFor(w);
+  const w = world({ prePushOut: 'PASS  Full test suite passes\n\npre-push gate PASSED in 900s (tier fast) — verified: x\n' }); const ctx = ctxFor(w);
   const r = await runShip(ctx, { maxRetries: 2 });
   assert.equal(r.ok, true, JSON.stringify(r));
   const gate = ran(w, /^node scripts\/release-check\.mjs/);
@@ -727,4 +727,47 @@ test('release-only: main is allowed (and a feature branch is not); a generated f
   assert.equal(stale.length, 1);
   assert.match(stale[0], /captured\.json records 1\.2\.3, not 1\.2\.4/);
   assert.deepEqual(staleVersionArtifacts({ version: '1.2.4', readFile: () => { throw new Error('missing'); } }), [], 'a file that is not in this checkout is not a problem');
+});
+
+// 0.195.6: by default the push does not wait for the background gate. It pushes under the gate's hosted tier (the in-process guards), the
+// pull request's blocking checks gate the merge, and a background failure recorded meanwhile stops the run before the merge.
+test('flow: by default the push does not await the background gate, pushes under the hosted tier, and a hosted-tier pass is not recorded as a pre-push pass', async () => {
+  const w = world({ warmOut: '{"state":"running"}\n' }); const ctx = ctxFor(w);
+  w.prePushOut = 'pre-push gate PASSED in 3s (tier hosted) — verified: worktree-matches-push, push-blast-radius, bundle-integrity, package-contents.\n';
+  const orig = w.sh; let pushEnv = null;
+  ctx.sh = (cmd, args, opts) => { if (cmd === 'git' && args.includes('push') && args.includes('-u')) pushEnv = (opts && opts.env) || {}; return orig(cmd, args, opts); };
+  const r = await runShipDefault(ctx, { maxRetries: 2 });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.ok(ran(w, /gate-warm\.mjs --status --json/).length >= 1, 'the warm state is read');
+  assert.equal(ran(w, /gate-warm\.mjs --wait/).length, 0, 'and never awaited');
+  assert.equal(pushEnv && pushEnv.AGENTIC_SECURITY_PUSH_GATE, 'hosted', 'the push tells the hook to run the hosted tier');
+  assert.equal(ctx.state.data.prePushPassed, undefined, 'a hosted-tier pass proves nothing about the suites, so it is not recorded');
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
+});
+
+test('a background gate failure recorded while the hosted checks ran stops the default run before the merge', async () => {
+  const w = world({ warmOut: '{"state":"running"}\n' }); const ctx = ctxFor(w);
+  const orig = w.sh; let reads = 0;
+  ctx.sh = (cmd, args, opts) => {
+    if (cmd === 'node' && args[0] === 'scripts/gate-warm.mjs') { reads += 1; return { code: 0, out: reads === 1 ? '{"state":"running"}\n' : '{"state":"failed","failed":["Self-scan precision baseline holds"]}\n', err: '' }; }
+    return orig(cmd, args, opts);
+  };
+  const r = await runShipDefault(ctx, { maxRetries: 2 });
+  assert.equal(r.ok, false);
+  assert.equal(ran(w, /^git .*push -u origin/).length, 1, 'the push went ahead (the failure was not known yet)');
+  assert.equal(ran(w, /pr merge/).length, 0, 'nothing is merged');
+  assert.equal(ran(w, /tag -a/).length, 0, 'nothing is tagged');
+  assert.match(ctx.state.data.failed && ctx.state.data.failed.phase, /merge/);
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
+});
+
+test('--local-gate keeps the previous push: the background gate is awaited and the hook runs its default tier', async () => {
+  const w = world({ warmOut: '{"state":"passed"}\n' }); const ctx = ctxFor(w);
+  const orig = w.sh; let pushEnv = null;
+  ctx.sh = (cmd, args, opts) => { if (cmd === 'git' && args.includes('push') && args.includes('-u')) pushEnv = (opts && opts.env) || {}; return orig(cmd, args, opts); };
+  const r = await runShip(ctx, { maxRetries: 2 });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.ok(ran(w, /gate-warm\.mjs --wait --json/).length >= 1, 'awaited');
+  assert.equal(pushEnv && pushEnv.AGENTIC_SECURITY_PUSH_GATE, undefined, 'no tier override');
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
 });

@@ -799,3 +799,27 @@ test('summarize shows how long a check that actually ran took, and stays quiet f
   assert.ok(s.lines.includes('PASS  Quick check'));
   assert.ok(s.lines.includes('PASS  Reused check'));
 });
+
+// 0.195.6: the affected-tests check has no npm script, so it was never cached. The background warm-up ran it for ten minutes and the push ran it
+// again. Its id embeds a hash of the selected files, so the whole-tree cache can hold it without ever serving one selection's pass to another.
+test('cache: an affected-tests check is recorded on a pass and hit on the next run, but only for the same selection id', async () => {
+  const store = new Map();
+  const legacy = {
+    hit: (c) => (store.has(c.id) ? { recordedAt: '2026-10-31T13:48:00.000Z', commitSha: 'abc' } : null),
+    record: (c) => store.set(c.id, true),
+  };
+  const mk = (id) => ({ id, title: 'Affected unit tests pass', onlyFiles: ['scanner/test/a.test.js'] });
+  const run = async (check, outcome = PASS) => {
+    const calls = [];
+    const entries = await executeChecks({ checks: [check], legacy, log: () => {}, runCheck: async (c) => { calls.push(c.id); return outcome; } });
+    return { calls, entries };
+  };
+  assert.deepEqual((await run(mk('test-suite-affected-aaaa1111'))).calls, ['test-suite-affected-aaaa1111'], 'the first run executes it');
+  const again = await run(mk('test-suite-affected-aaaa1111'));
+  assert.deepEqual(again.calls, [], 'the same selection is a hit and does not run again');
+  assert.ok(again.entries[0].cached, 'and the hit is announced');
+  assert.deepEqual((await run(mk('test-suite-affected-bbbb2222'))).calls, ['test-suite-affected-bbbb2222'], 'a different selection is NOT served from the first one');
+  store.clear();
+  await run(mk('test-suite-affected-cccc3333'), { ok: false, errors: ['x'], warnings: [] });
+  assert.equal(store.size, 0, 'a failure is never recorded');
+});
