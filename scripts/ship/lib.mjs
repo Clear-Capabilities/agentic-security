@@ -259,7 +259,11 @@ export class ShipState {
   timingsLine() {
     const parts = []; let total = 0;
     for (const p of PHASES) { const x = this.data.phases[p]; if (x && Number.isFinite(x.seconds)) { parts.push(`${p}=${x.seconds}s`); total += x.seconds; } }
-    return `TIMINGS ${parts.length ? parts.join(' ') : '(no phase finished)'} total=${total}s`;
+    // The release clock: from a merged, green main to a successful hosted publish (merge, verify, tag, release). It is the figure the 10 minute
+    // requirement is measured on; the npm registry's own listing delay and the pre-merge push/checks work happen outside it.
+    const clock = ['merge', 'verify', 'tag', 'release'].map((p) => this.data.phases[p]);
+    const clockPart = clock.every((x) => x && x.state === 'done' && Number.isFinite(x.seconds)) ? ` release-clock=${clock.reduce((a, x) => a + x.seconds, 0)}s` : '';
+    return `TIMINGS ${parts.length ? parts.join(' ') : '(no phase finished)'} total=${total}s${clockPart}`;
   }
   summary() {
     return PHASES.map((p) => { const x = this.data.phases[p]; return `${p.padEnd(10)} ${x ? `${x.state}${x.seconds != null ? ` ${x.seconds}s` : ''}` : '-'}`; }).join('\n');

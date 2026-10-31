@@ -9,7 +9,10 @@ import path from 'node:path';
 import { chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, staleVersionArtifacts, cmpVersions, ShipState, waitFor, resumeCommand, statusText, outcomeText, prepareTmpdir, removeFreshTmpdir } from '../../scripts/ship/lib.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { runShip } from '../../scripts/ship/run.mjs';
+import { runShip as runShipDefault } from '../../scripts/ship/run.mjs';
+// The local early release gate is opt-in since 0.195.4 (`--local-gate`); the flow tests below that exercise it ask for it explicitly. The tests that
+// call runShipDefault test the default.
+const runShip = (ctx, o = {}) => runShipDefault(ctx, { localGate: true, ...o });
 import { parseWarm, verifyArgs, PROVEN_BY_PRE_PUSH } from '../../scripts/ship/lib.mjs';
 import { CHECKS, plannedCheckIds } from '../../scripts/release-check.mjs';
 
@@ -192,6 +195,30 @@ function ctxFor(w) {
   return { sh: w.sh, fetchJson: w.fetchJson, readFile: (p) => { if (!(p in files)) throw new Error(`no file ${p}`); return files[p]; }, now: () => w.now, sleep: async (ms) => { w.now += ms; }, log: () => {}, state: new ShipState(path.join(dir, 'state.json'), () => w.now), _dir: dir };
 }
 const ran = (w, re) => w.calls.filter((c) => re.test(c));
+
+test('flow: by default the local early release gate does not run; only the publish blockers do, after the merge, and the release clock is reported', async () => {
+  const w = world(); const ctx = ctxFor(w);
+  const r = await runShipDefault(ctx, { maxRetries: 2 });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const gates = ran(w, /^node scripts\/release-check\.mjs/);
+  assert.equal(gates.length, 1, 'one local check run, after the merge: no early gate on the PR head');
+  assert.match(gates[0], /--only head-pushed,remote-ci-green,changelog-entry,version-consistency,scorecard-freshness,bundle-integrity,package-contents,dependency-currency$/);
+  assert.equal(w.earlyEnv, undefined, 'no early gate (and so no closure run) happened');
+  const at = (p, from = 0) => w.calls.findIndex((c, i) => i >= from && c.includes(p));
+  assert.ok(at('release-check') > at('pr merge'), 'nothing local runs before the merge');
+  assert.ok(at('tag -a') > at('release-check'), 'the publish blockers still pass before the tag');
+  assert.match(ctx.state.timingsLine(), / release-clock=\d+s$/, 'the release clock (merge to publish) is in the TIMINGS line');
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
+});
+
+test('flow: a publish blocker failing stops the default run before the tag', async () => {
+  const w = world(); const ctx = ctxFor(w);
+  const orig = w.sh; ctx.sh = (cmd, args, opts) => (cmd === 'node' && /changelog-entry/.test(args.join(' ')) ? { code: 1, out: 'FAIL  Changelog has an entry\n', err: '' } : orig(cmd, args, opts));
+  const r = await runShipDefault(ctx, { maxRetries: 2 });
+  assert.equal(r.ok, false);
+  assert.equal(ran(w, /tag -a/).length, 0, 'nothing is tagged when a publish blocker fails');
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
+});
 
 test('flow: tree-equivalent merge releases the verified PR head, runs the gate once, tags, watches the release and npm, and never bypasses anything', async () => {
   const w = world(); const ctx = ctxFor(w);

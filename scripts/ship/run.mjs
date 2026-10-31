@@ -14,7 +14,7 @@ class Stop extends Error { constructor(phase, message) { super(message); this.ph
  * @param {object} [opts] { branch?, maxRetries, stuckMinutes, checksTimeoutMin, releaseTimeoutMin, npmTimeoutMin, allowMissing, dryRun, tmpdir, releaseOnly }
  */
 export async function runShip(ctx, opts = {}) {
-  const o = { maxRetries: 2, stuckMinutes: 40, checksTimeoutMin: 90, releaseTimeoutMin: 60, npmTimeoutMin: 90, npmSoftSeconds: 90, closureJobs: 3, allowMissing: ['dependency-currency'], dryRun: false, ...opts };
+  const o = { maxRetries: 2, stuckMinutes: 40, checksTimeoutMin: 90, releaseTimeoutMin: 60, npmTimeoutMin: 90, npmSoftSeconds: 90, closureJobs: 3, localGate: false, allowMissing: ['dependency-currency'], dryRun: false, ...opts };
   const { sh, state, log } = ctx;
   const git = (args) => { const r = sh('git', args); if (r.code !== 0) throw new Error(`git ${args.join(' ')}: ${r.err.trim().slice(0, 200)}`); return r.out; };
   const gh = (args) => sh('gh', args);
@@ -111,7 +111,7 @@ export async function runShip(ctx, opts = {}) {
     // It is the local half of the release gate that the hosted checks do not cover (see earlyGateArgs). The merge waits for it, and so does the tag.
     const startEarlyGate = () => {
       const head = prHead;
-      if (o.releaseOnly) return Promise.resolve({ ok: true, nothing: true });
+      if (o.releaseOnly || !o.localGate) return Promise.resolve({ ok: true, nothing: true });
       if (state.data.earlyPassedFor === head) return Promise.resolve({ ok: true, reused: true });
       return (async () => {
         const { plannedCheckIds } = await import('../release-check.mjs');
@@ -206,13 +206,13 @@ export async function runShip(ctx, opts = {}) {
       let tmp = o.tmpdir || autoTmp;
       if (!tmp && ctx.makeTmpdir) { tmp = autoTmp = ctx.makeTmpdir(); state.set({ tmpdir: tmp }); log(`  release gate TMPDIR: ${tmp} (fresh and empty)`); }
       const { plannedCheckIds } = await import('../release-check.mjs');
-      if (o.releaseOnly) {
+      if (o.releaseOnly || !o.localGate) {
         // The hosted release workflow re-runs every check with the cache off and its publish job needs all of them, so this local step is only
         // the publish blockers that can be answered here in seconds.
         const only = ['head-pushed', 'remote-ci-green', 'changelog-entry', 'version-consistency', 'scorecard-freshness', 'bundle-integrity', 'package-contents', 'dependency-currency'];
         const q = sh('node', ['scripts/release-check.mjs', '--only', only.join(',')], { stream: true, timeoutMs: 20 * 60 * 1000 });
-        if (q.code !== 0) throw new Stop('verify', `the release-only checks failed: ${(q.out + q.err).split('\n').filter((l) => /^(FAIL|✗)/.test(l)).slice(0, 4).join(' | ')}`);
-        return `release-only checks passed on ${releaseSha.slice(0, 8)} (${only.length} publish blockers; the hosted release workflow runs the full gate)`;
+        if (q.code !== 0) throw new Stop('verify', `the ${o.releaseOnly ? 'release-only' : 'publish-blocker'} checks failed: ${(q.out + q.err).split('\n').filter((l) => /^(FAIL|✗)/.test(l)).slice(0, 4).join(' | ')}`);
+        return `${o.releaseOnly ? 'release-only' : 'publish-blocker'} checks passed on ${releaseSha.slice(0, 8)} (${only.length} publish blockers; hosted CI and the hosted release workflow run the full gate; --local-gate adds the local one)`;
       }
       const late = lateGateArgs({ allIds: plannedCheckIds(), earlyPassedFor: state.data.earlyPassedFor, releaseSha, treeEquivalent });
       const plan = late || verifyArgs({ allIds: plannedCheckIds(), treeEquivalent, prePushPassed: state.data.prePushPassed, prHead });

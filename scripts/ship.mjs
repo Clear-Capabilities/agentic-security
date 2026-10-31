@@ -3,6 +3,7 @@
 //
 //   node scripts/ship.mjs                    ship the current branch end to end
 //   node scripts/ship.mjs --dry-run          everything up to (not including) the merge
+//   node scripts/ship.mjs --local-gate      also run the local early release gate (the release closure) on the PR head while the hosted checks run; off by default
 //   node scripts/ship.mjs --release-only     release main as it is (tag, hosted release, npm), skipping push, pull request, checks and merge. Only
 //                                            when HEAD is origin/main and the hosted ci workflow already passed on it: about 6 minutes
 //   node scripts/ship.mjs --resume           continue a run that stopped (a closed laptop, a crash): finished phases are not repeated
@@ -85,7 +86,7 @@ const ctx = {
 };
 
 if (opt('tmpdir')) prepareTmpdir(opt('tmpdir'));   // a named directory is created if missing, and never emptied
-const result = await runShip(ctx,{ dryRun: flag('dry-run'), resume: flag('resume'), tmpdir: opt('tmpdir'), branch: opt('branch'), releaseOnly: flag('release-only') });
+const result = await runShip(ctx,{ dryRun: flag('dry-run'), resume: flag('resume'), tmpdir: opt('tmpdir'), branch: opt('branch'), releaseOnly: flag('release-only'), localGate: flag('local-gate') });
 ctx.log(state.timingsLine());
 process.stdout.write(outcomeText(state, result, { logDir: path.relative(ROOT, LOG_DIR) }));
 process.exit(result.ok ? 0 : 1);
