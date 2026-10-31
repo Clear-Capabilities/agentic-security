@@ -25,15 +25,37 @@ export const VERSION_FILES = [
   'scanner/package.json', 'scanner/package-lock.json',
 ];
 
-/** Replace every occurrence of `from` with `to` in the given files. Returns the count per file; a file with none is reported, never skipped silently. */
+const esc = (v) => v.replace(/\./g, '\\.');
+/**
+ * Where the release version lives in each release file. Replacing every occurrence of the old version rewrote history: a note such as
+ * "(since 0.195.0)" in CLAUDE.md became the NEW version on the next bump and had to be repaired by hand each time. A file listed here has
+ * only its version-bearing position replaced; a file not listed (a test's scratch file, say) still gets every occurrence replaced.
+ */
+const POSITIONS = {
+  'CLAUDE.md': (from) => new RegExp(`(\\*\\*Version:\\*\\*\\s+)${esc(from)}(?![\\d.])`, 'g'),
+  'README.md': (from) => new RegExp(`(badge/version-)${esc(from)}(?![\\d.])`, 'g'),
+  '.claude-plugin/marketplace.json': (from) => new RegExp(`("version":\\s*")${esc(from)}(")`, 'g'),
+  '.claude-plugin/plugin.json': (from) => new RegExp(`("version":\\s*")${esc(from)}(")`, 'g'),
+  'gemini-extension.json': (from) => new RegExp(`("version":\\s*")${esc(from)}(")`, 'g'),
+  'scanner/package.json': (from) => new RegExp(`("version":\\s*")${esc(from)}(")`, 'g'),
+  'scanner/package-lock.json': (from) => new RegExp(`("version":\\s*")${esc(from)}(")`, 'g'),
+};
+
+/** Replace `from` with `to` in the given files, at the version-bearing position where the file is known. Returns the count per file; a file with none is reported, never skipped silently. */
 export function bumpVersion(root, from, to, files = VERSION_FILES) {
   if (!/^\d+\.\d+\.\d+$/.test(from) || !/^\d+\.\d+\.\d+$/.test(to)) throw new Error(`versions must be X.Y.Z (got ${from} -> ${to})`);
   const counts = {};
   for (const f of files) {
     const p = join(root, f);
     const text = readFileSync(p, 'utf8');
-    counts[f] = text.split(from).length - 1;
-    if (counts[f] > 0) writeFileSync(p, text.split(from).join(to));
+    if (POSITIONS[f]) {
+      const re = POSITIONS[f](from);
+      counts[f] = (text.match(re) || []).length;
+      if (counts[f] > 0) writeFileSync(p, text.replace(re, (_m, a, b) => `${a}${to}${typeof b === 'string' ? b : ''}`));
+    } else {
+      counts[f] = text.split(from).length - 1;
+      if (counts[f] > 0) writeFileSync(p, text.split(from).join(to));
+    }
   }
   return counts;
 }

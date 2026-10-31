@@ -34,3 +34,18 @@ test('the plan regenerates before it verifies, and --no-tests drops only the sui
 test('the version files are the ones the release check compares', () => {
   assert.ok(VERSION_FILES.includes('scanner/package.json') && VERSION_FILES.includes('scanner/package-lock.json'));
 });
+
+test('bumpVersion leaves historical version text alone in the files that carry prose', () => {
+  const dir = mkTestTmp('release-prepare-');
+  writeFileSync(join(dir, 'CLAUDE.md'), '**Version:** 1.2.3  \n\nA note (since 1.2.3) and "the 1.2.3 release failed" stay as written.\n');
+  writeFileSync(join(dir, 'README.md'), '[![Version](https://img.shields.io/badge/version-1.2.3-blue)]()\nSince 1.2.3 this works.\n');
+  mkdirSync(join(dir, 'scanner'), { recursive: true });
+  writeFileSync(join(dir, 'scanner/package-lock.json'), '{"version": "1.2.3", "packages": {"": {"version": "1.2.3"}, "node_modules/x": {"version": "1.2.30"}}}');
+  const counts = bumpVersion(dir, '1.2.3', '1.2.4', ['CLAUDE.md', 'README.md', 'scanner/package-lock.json']);
+  assert.deepEqual(counts, { 'CLAUDE.md': 1, 'README.md': 1, 'scanner/package-lock.json': 2 });
+  const claude = readFileSync(join(dir, 'CLAUDE.md'), 'utf8');
+  assert.match(claude, /\*\*Version:\*\* 1\.2\.4/);
+  assert.match(claude, /\(since 1\.2\.3\)/); assert.match(claude, /the 1\.2\.3 release failed/);
+  assert.match(readFileSync(join(dir, 'README.md'), 'utf8'), /badge\/version-1\.2\.4-blue[\s\S]*Since 1\.2\.3 this works/);
+  assert.match(readFileSync(join(dir, 'scanner/package-lock.json'), 'utf8'), /"1\.2\.30"/, 'a longer version that merely starts with the old one is not touched');
+});
