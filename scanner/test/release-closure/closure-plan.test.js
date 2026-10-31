@@ -95,7 +95,9 @@ test('[REL-001.AC01] the release gate, its parallel group, the workflow leg and 
   assert.ok(Object.values(RELEASE_GROUPS).flat().includes('release-closure-gate'), 'named in a release group so it is not left to `rest`');
   const group = Object.entries(RELEASE_GROUPS).find(([, ids]) => ids.includes('release-closure-gate'))[0];
   const wf = fs.readFileSync(path.join(REPO, '.github', 'workflows', 'release.yml'), 'utf8');
-  assert.match(wf, new RegExp(`group: ${group},`), `release.yml has a matrix leg for group ${group}`);
+  // The matrix is an expression holding JSON leg literals since 0.195.6 (`"group":"closure"`); the YAML spelling (`group: closure,`) is accepted
+  // too, so the assertion survives either shape and only a missing leg fails it.
+  assert.match(wf, new RegExp(`(?:group: ${group},|"group":"${group}")`), `release.yml has a matrix leg for group ${group}`);
   assert.equal(PKG.scripts['release:closure:check'], 'node ../scripts/release-closure.mjs --run');
   assert.equal(PKG.scripts['release:closure:static'], 'node ../scripts/release-closure.mjs --static');
   const pre = PREPUSH_CHECKS.find((c) => c.id === 'release-closure-static');
