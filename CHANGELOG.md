@@ -15,6 +15,7 @@ Why: the release requirement is under 10 minutes. On the 0.195.1 pull request th
 
 - **`local-model`, `jetbrains-plugin` and `chrome-exports` run on pushes to `main`, not on pull requests** (`if: github.event_name != 'pull_request'`). A skipped job counts as passing in the hosted-CI check, and each still reports on every merge.
 - **`bench.yml` (synthetic, real-world and SARD smoke trends) runs on its daily schedule and on demand, not on pull requests.** This reverses the pull request trigger its header had kept on purpose; the header now says why. The blocking correctness gates (`corpus`, `bench-gates`, `bench-gates-b`, mutation) still run on every pull request.
+- **`language-tools-ghc` caches the cabal store only, under a new key.** 0.195.1 also cached `~/.ghc`; once that cache became readable, `cabal install --lib` refused to overwrite the packages the restored environment already listed and the job failed on the 0.195.2 pull request. The environment file is rebuilt from the store in seconds.
 - **Unchanged on purpose:** `nixos-runtime` still runs on pull requests, because the release closure attests it for the commit being tagged.
 - **Measurement:** the next `TIMINGS` line is the result for this change; it is not claimed here. Releasing a commit already merged through its own pull request is `ship --release-only`, which waits only for the hosted release workflow.
 

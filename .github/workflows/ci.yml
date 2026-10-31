@@ -240,16 +240,15 @@ jobs:
         timeout-minutes: 15
       - run: ghc --version && cabal --version
         timeout-minutes: 5
-      # The package build below is most of this job's time. Restoring the cabal store and the default package environment makes the
-      # install a no-op on a hit. The key names the compiler, the cabal version and the index state, so a change to any of them rebuilds.
+      # The package build below is most of this job's time. Restoring the cabal store makes the install fast on a hit. The default package
+      # environment (~/.ghc) is NOT cached: a restored one makes `cabal install --lib` refuse to overwrite packages it already lists (0.195.2). The key names the compiler, the cabal version and the index state, so a change to any of them rebuilds.
       - name: Restore the cabal store
         uses: actions/cache@v4
         with:
           path: |
             ~/.cabal/packages
             ~/.cabal/store
-            ~/.ghc
-          key: cabal-store-ghc9.4.8-cabal3.10.2.1-index2026-10-04-${{ hashFiles('scanner/test/language/**/*.cabal') }}
+          key: cabal-store2-ghc9.4.8-cabal3.10.2.1-index2026-10-04-${{ hashFiles('scanner/test/language/**/*.cabal') }}
         timeout-minutes: 5
       - name: Provision the packages the route fixtures import (the compile criterion needs them installed)
         run: |
