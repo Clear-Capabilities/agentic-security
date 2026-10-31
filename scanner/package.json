@@ -1,6 +1,6 @@
 {
   "name": "@clear-capabilities/agentic-security-scanner",
-  "version": "0.195.6",
+  "version": "0.195.7",
   "description": "Scanner engine for the agentic-security Claude Code plugin: SAST, SCA with reachability and CISA KEV, secrets, IaC, Haskell and Nix/NixOS, prompt-injection, MCP/agent-tool audit, authZ analysis, SBOM, compliance attestation, and more.",
   "type": "module",
   "main": "src/index.js",
@@ -299,6 +299,8 @@
     "test:nixos-host": "node --test test/nix/nixos-host-runtime.test.js",
     "test:language-gates": "node --test --test-concurrency=1 test/language/language-benchmark-gates.test.js",
     "test:language-slow": "node --test --test-concurrency=1 test/language/language-doc-examples-metrics.test.js test/language/language-end-to-end.test.js test/language/language-package-ci.test.js test/language/language-scan-modes.test.js",
+    "test:language-slow:a": "node --test --test-concurrency=1 test/language/language-doc-examples-metrics.test.js test/language/language-end-to-end.test.js",
+    "test:language-slow:b": "node --test --test-concurrency=1 test/language/language-package-ci.test.js test/language/language-scan-modes.test.js",
     "test:chrome": "AGENTIC_SECURITY_CHROME_TESTS=1 node --test test/export-image.test.js test/server/cmd-dataflow-export.test.js",
     "ee:parse-reuse": "node ../scripts/engineering-excellence/parse-reuse-measure.mjs",
     "ee:analysis-cache": "node ../scripts/engineering-excellence/analysis-cache-measure.mjs",

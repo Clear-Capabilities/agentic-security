@@ -468,7 +468,10 @@ export const HOSTED_CLOSURE_NOTE = 'hosted runner: only the static closure (plan
 export const RELEASE_GROUPS = {
   tests: ['test-suite'],
   'benches-a': ['provenance-gate', 'corpus-gate', 'ttff-gate', 'sca-replay-gate'],
-  'benches-b': ['self-scan-gate', 'layer-recall-gate', 'memory-gate', 'verification-conformance-gate'],
+  // mutation, fix-verification, haskell-precision and contract-conformance moved here from `rest` in 0.195.7: the pull request's bench-gates-b
+  // job runs exactly these on the same tree (its --only list), so on a tag push they were run a second time inside the one leg the tag
+  // schedules (113 s of its 126 s on 0.195.6). A workflow_dispatch dry run still runs them here.
+  'benches-b': ['self-scan-gate', 'layer-recall-gate', 'memory-gate', 'verification-conformance-gate', 'mutation-gate', 'fix-verification-gate', 'haskell-precision-gate', 'contract-conformance'],
   closure: ['release-closure-gate'],
 };
 

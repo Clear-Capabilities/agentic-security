@@ -9,6 +9,15 @@
 > make the history less accurate, not more.
 
 
+## 0.195.7 - The two remaining release-path costs: the tag push stops repeating four pull-request checks, and language-slow is two jobs
+
+Why: 0.195.6 measured 11 min 32 s from the commit to the published GitHub release (push 8 s, hosted checks 391 s, merge to tag 17 s, release workflow 284 s). Two things held it over 10 minutes, and both are the same shape: work done twice.
+
+- **The release workflow's `rest` leg no longer runs `mutation-gate`, `fix-verification-gate`, `haskell-precision-gate` or `contract-conformance`.** They are in the `benches-b` group now, which a tag push does not schedule, because the pull request's `bench-gates-b` job runs exactly that list on the same tree (`contract-conformance`, 64 s, is added to that job). On 0.195.6 those four were 113 s of the leg's 126 s. A `workflow_dispatch` dry run still runs them.
+- **`language-slow` is two hosted jobs** (`language-slow`, `language-slow-b`), each running two of its four CLI-driven suites; the single job ran them one after another for 355 s and was the slowest blocking check. `npm run test:language-slow` is unchanged for local runs. Both jobs are blocking.
+- **`ship` polls the hosted checks every 5 s instead of 15.**
+- **Expected, not measured:** release workflow about 3 minutes, hosted checks about 5.5 minutes (`language-stress` and the slowest test shard are now the long poles), under 10 minutes from the commit to the published release. The next `TIMINGS` line is the measurement.
+
 ## 0.195.6 - A release has to fit in ten minutes: the push no longer waits for the local suites, a tag push schedules one release leg, and the affected-tests check is cached
 
 Why, for the first two: the requirement is a release in under 10 minutes from the commit. On 0.195.5 the path was 35 minutes: push 1401 s (the local gate), hosted checks 332 s, merge to publish 268 s, and the release workflow spent 3 of its 4.2 minutes waiting for a runner behind seven legs that each ran for 2 seconds and exited.
