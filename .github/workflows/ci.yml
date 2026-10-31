@@ -240,16 +240,15 @@ jobs:
         timeout-minutes: 15
       - run: ghc --version && cabal --version
         timeout-minutes: 5
-      # The package build below is most of this job's time. Restoring the cabal store and the default package environment makes the
-      # install a no-op on a hit. The key names the compiler, the cabal version and the index state, so a change to any of them rebuilds.
+      # The package build below is most of this job's time. Restoring the cabal store makes the install fast on a hit. The default package
+      # environment (~/.ghc) is NOT cached: a restored one makes `cabal install --lib` refuse to overwrite packages it already lists (0.195.2). The key names the compiler, the cabal version and the index state, so a change to any of them rebuilds.
       - name: Restore the cabal store
         uses: actions/cache@v4
         with:
           path: |
             ~/.cabal/packages
             ~/.cabal/store
-            ~/.ghc
-          key: cabal-store-ghc9.4.8-cabal3.10.2.1-index2026-10-04-${{ hashFiles('scanner/test/language/**/*.cabal') }}
+          key: cabal-store2-ghc9.4.8-cabal3.10.2.1-index2026-10-04-${{ hashFiles('scanner/test/language/**/*.cabal') }}
         timeout-minutes: 5
       - name: Provision the packages the route fixtures import (the compile criterion needs them installed)
         run: |
@@ -421,6 +420,9 @@ jobs:
   # The Chrome rendering tests (PNG/PDF/SVG export) are quarantined from `npm test`: see scanner/test/helpers/chrome-gate.js. They run
   # here, deadlines unchanged, as their own job. INFORMATIONAL: their duration depends on Chrome and the runner, not on the code.
   chrome-exports:
+    # Trend/network-bound and informational: runs on main and nightly-style pushes, not on pull requests, so it cannot hold a runner slot
+    # that a blocking job is waiting for (the release has to fit in 10 minutes). It still reports on every push to main.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -543,6 +545,9 @@ jobs:
   # blocking assertion in test/ide-surfaces.test.js and runs offline in
   # milliseconds.
   jetbrains-plugin:
+    # Trend/network-bound and informational: runs on main and nightly-style pushes, not on pull requests, so it cannot hold a runner slot
+    # that a blocking job is waiting for (the release has to fit in 10 minutes). It still reports on every push to main.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     defaults:
@@ -900,6 +905,9 @@ jobs:
   # unusable answer is a named state, a candidate is a proposal the engine gates, and a non-loopback endpoint is refused. A model that
   # cannot be pulled fails the job rather than skipping it.
   local-model:
+    # Trend/network-bound and informational: runs on main and nightly-style pushes, not on pull requests, so it cannot hold a runner slot
+    # that a blocking job is waiting for (the release has to fit in 10 minutes). It still reports on every push to main.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:

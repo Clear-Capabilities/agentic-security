@@ -9,6 +9,16 @@
 > make the history less accurate, not more.
 
 
+## 0.195.2 - Trend jobs no longer take runner slots from the blocking jobs on a pull request
+
+Why: the release requirement is under 10 minutes. On the 0.195.1 pull request the `ci` workflow started about 33 jobs at once and blocking jobs waited up to 200 s for a runner, while five informational jobs that nothing waits on held slots for 20 to 44 minutes (`local-model`, `realworld-bench`, `synthetic-bench`, `jetbrains-plugin`, `chrome-exports`). They only delayed the jobs that decide whether the change can merge.
+
+- **`local-model`, `jetbrains-plugin` and `chrome-exports` run on pushes to `main`, not on pull requests** (`if: github.event_name != 'pull_request'`). A skipped job counts as passing in the hosted-CI check, and each still reports on every merge.
+- **`bench.yml` (synthetic, real-world and SARD smoke trends) runs on its daily schedule and on demand, not on pull requests.** This reverses the pull request trigger its header had kept on purpose; the header now says why. The blocking correctness gates (`corpus`, `bench-gates`, `bench-gates-b`, mutation) still run on every pull request.
+- **`language-tools-ghc` caches the cabal store only, under a new key.** 0.195.1 also cached `~/.ghc`; once that cache became readable, `cabal install --lib` refused to overwrite the packages the restored environment already listed and the job failed on the 0.195.2 pull request. The environment file is rebuilt from the store in seconds.
+- **Unchanged on purpose:** `nixos-runtime` still runs on pull requests, because the release closure attests it for the commit being tagged.
+- **Measurement:** the next `TIMINGS` line is the result for this change; it is not claimed here. Releasing a commit already merged through its own pull request is `ship --release-only`, which waits only for the hosted release workflow.
+
 ## 0.195.1 - Hosted CI split so its slowest blocking job is about four minutes, not twelve
 
 Why: the requirement is a release in under 10 minutes once the code is committed. Measured on the 0.195.0 pull request, the slowest blocking hosted job was `language-suites` at 12.1 min, then `language-tools-ghc` 10 min, the test shards 6 to 8 min, `bench-gates` 6.4 min and `proof-container` 5.3 min, and the release workflow after the tag is about 4.8 min (75 s waiting for a runner, 145 s for the `rest` gate leg, 66 s to publish). CI then the release workflow in series cannot fit 10 minutes unless the longest CI job is cut to about 4.
