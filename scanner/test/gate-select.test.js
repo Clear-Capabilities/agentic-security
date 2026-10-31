@@ -112,3 +112,12 @@ test('a dependency moving to another version is not a manifest change beyond its
     assert.equal(onlyVersionOrDependencyBumps(repo, 'HEAD~1'), false, 'a removed dependency too');
   } finally { fs.rmSync(repo, { recursive: true, force: true }); }
 });
+
+test('planChecks: the hosted tier (what ship pushes with) runs only the in-process guards and skips every suite with its reason', () => {
+  const { checks, skipped } = planChecks({ checks: CHECKS, tier: 'hosted' });
+  assert.deepEqual(checks.map((c) => c.id), CHECKS.filter((c) => !c.npmScript).map((c) => c.id), 'exactly the checks with no npm script run');
+  for (const id of ['worktree-matches-push', 'push-blast-radius', 'bundle-integrity', 'package-contents']) assert.ok(checks.some((c) => c.id === id), `${id} still runs`);
+  assert.equal(skipped.length, CHECKS.filter((c) => c.npmScript).length, 'every npm-script check is skipped, none silently');
+  for (const id of ['test-suite', 'self-scan-gate', 'corpus-gate', 'mutation-gate']) assert.ok(skipped.some((x) => x.id === id), `${id} is listed as skipped`);
+  assert.ok(skipped.every((x) => /tier hosted/.test(x.reason) && /pull request|release workflow/.test(x.reason)), 'each skip names the tier and where the check runs instead');
+});

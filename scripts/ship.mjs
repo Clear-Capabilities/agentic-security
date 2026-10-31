@@ -3,7 +3,10 @@
 //
 //   node scripts/ship.mjs                    ship the current branch end to end
 //   node scripts/ship.mjs --dry-run          everything up to (not including) the merge
-//   node scripts/ship.mjs --local-gate      also run the local early release gate (the release closure) on the PR head while the hosted checks run; off by default
+//   node scripts/ship.mjs --local-gate       also run the local gates: the push waits for the background fast-tier gate (or runs it) instead of
+//                                            the hosted tier, and the early release gate (the release closure) runs on the PR head while the
+//                                            hosted checks run. Off by default since 0.195.6: the hosted checks gate the merge and the hosted
+//                                            release workflow gates the publish, and a release has to fit in 10 minutes
 //   node scripts/ship.mjs --release-only     release main as it is (tag, hosted release, npm), skipping push, pull request, checks and merge. Only
 //                                            when HEAD is origin/main and the hosted ci workflow already passed on it: about 6 minutes
 //   node scripts/ship.mjs --resume           continue a run that stopped (a closed laptop, a crash): finished phases are not repeated

@@ -67,12 +67,14 @@ export async function runShip(ctx, opts = {}) {
       const head = git(['rev-parse', 'HEAD']).trim();
       const remote = sh('git', ['ls-remote', 'origin', `refs/heads/${branch}`]).out.split('\t')[0];
       if (remote === head) return 'already on origin';
-      // The post-commit hook may already be running (or have finished) the gate for this commit in the background. Wait for it rather than start
-      // a second run, and stop at once if it already failed: the push would only repeat that failure after the same wait.
-      const warm = parseWarm(sh('node', ['scripts/gate-warm.mjs', '--wait', '--json'], { timeoutMs: 95 * 60 * 1000 }).out);
+      // The post-commit hook may be running (or have finished) the fast-tier gate for this commit in the background. With --local-gate the push
+      // waits for it and reuses its verdicts. By default (0.195.6) it does not wait: the push runs the gate's hosted tier (the in-process guards,
+      // seconds) and the pull request's blocking checks are the gate. A background failure already recorded stops the run here; one recorded
+      // while the hosted checks run stops it before the merge (see below). Nothing is bypassed: the hook still runs, at the tier it is told.
+      const warm = parseWarm(sh('node', ['scripts/gate-warm.mjs', o.localGate ? '--wait' : '--status', '--json'], { timeoutMs: 95 * 60 * 1000 }).out);
       if (warm && warm.state === 'failed') throw new Stop('push', `the background gate already failed for this commit: ${(warm.failed || []).join('; ') || 'see .agentic-security/gate-warm/gate.log'}`);
-      if (warm) log(`  background gate for this commit: ${warm.state}${warm.state === 'passed' ? ' (the push reuses its cached verdicts)' : ''}`);
-      const r = sh('git', [...CRED, 'push', '-u', 'origin', branch], { timeoutMs: 60 * 60 * 1000, stream: true });
+      if (warm) log(`  background gate for this commit: ${warm.state}${warm.state === 'passed' ? ' (the push reuses its cached verdicts)' : o.localGate ? '' : ' (not awaited: the hosted checks gate the merge)'}`);
+      const r = sh('git', [...CRED, 'push', '-u', 'origin', branch], { timeoutMs: 60 * 60 * 1000, stream: true, env: o.localGate ? {} : { AGENTIC_SECURITY_PUSH_GATE: 'hosted' } });
       if (r.code !== 0) {
         const text = `${r.err}\n${r.out}`;
         // the gate prints one `FAIL  <check>` line per failed check: name them, not just the last lines of noise
@@ -80,8 +82,9 @@ export async function runShip(ctx, opts = {}) {
         const why = failed.length ? `failed checks: ${failed.join('; ')}` : text.trim().split('\n').slice(-6).join(' | ');
         throw new Stop('push', `git push failed (the pre-push gate or the remote refused): ${why.slice(0, 400)}`);
       }
-      // the gate prints exactly this line when every check passed; it is the only evidence that this head was gated
-      if (/pre-push gate PASSED/.test(`${r.err}\n${r.out}`)) state.set({ prePushPassed: head });
+      // the gate prints exactly this line when every check passed; only a fast or full tier pass is evidence that the ten pre-push checks ran
+      // for this head (the hosted tier runs the guards alone and proves nothing about the suites)
+      if (/pre-push gate PASSED in \d+s \(tier (?:fast|full)\)/.test(`${r.err}\n${r.out}`)) state.set({ prePushPassed: head });
       return `pushed ${head.slice(0, 8)}`;
     });
 
@@ -171,6 +174,14 @@ export async function runShip(ctx, opts = {}) {
     if (!earlyResult.ok) throw new Stop('verify', `the early release gate failed before the merge: ${earlyResult.failed || 'see .agentic-security/ship/logs/verify.log'}`);
     if (!earlyResult.skipped && !earlyResult.nothing && !earlyResult.reused) state.set({ earlyPassedFor: earlyResult.head });
     if (o.dryRun) { log('dry run: stopping before the merge'); return { ok: true, dryRun: true, state: state.data }; }
+
+    // The background gate may have finished while the hosted checks ran. Its failure is read here, not awaited: a recorded failure stops the
+    // run before the merge; a run still going is left to finish on its own (the hosted checks already proved the tree).
+    if (!o.localGate && !o.releaseOnly) {
+      const late = parseWarm(sh('node', ['scripts/gate-warm.mjs', '--status', '--json']).out);
+      if (late && late.state === 'failed') throw new Stop('merge', `the background gate failed for the pushed commit: ${(late.failed || []).join('; ') || 'see .agentic-security/gate-warm/gate.log'}`);
+      if (late) log(`  background gate before the merge: ${late.state}${late.state === 'running' ? ' (not awaited)' : ''}`);
+    }
 
     // ── merge, then decide what to release ──────────────────────────────────────────────────────────────────────
     let mergeSha = state.data.mergeSha;
