@@ -9,6 +9,15 @@
 > make the history less accurate, not more.
 
 
+## 0.195.5 - The open release-path items are closed: version bumps keep history, the VS Code types match their floor, and the time-to-first-finding gate is classified and stable
+
+Why: three items were left open after 0.195.4.
+
+- **`release-prepare --bump` replaces the version only where it is the version.** It used to replace every occurrence of the old version in `CLAUDE.md` and `README.md`, so a note such as "(since 0.195.0)" became the new version on the next bump and had to be repaired by hand (it happened on 0.195.1). It now rewrites the `**Version:**` line, the README badge and the `"version"` keys of the JSON files, and nothing else. A test caught a bug in the first draft of this change (a single capture group made the replacement callback append the match offset: `1.2.435`).
+- **`@types/vscode` is pinned exactly at the declared floor, 1.95.0.** The types (`^1.125.0`) were ahead of `engines.vscode` (`^1.95.0`), which made `vsce package` refuse to run, and a caret range would still have resolved to 1.125.0 in the lockfile. The extension builds, type-checks against the 1.95.0 API, packages and audits clean. The supported VS Code range is unchanged. The hold in `.dependency-holds.json` is updated to say it is resolved and why the pin is exact.
+- **`ttff` is classified blocking, and a single slow sample no longer fails it.** The publish gate already treated it as blocking, but it was unlisted, so `ship` ignored it and the 0.195.2 release stopped at verify on one 15.6 s sample against a 15.0 s limit (green on a re-run of the same tree). The limit is unchanged. A miss is now re-measured in two fresh processes (an in-process repeat would be warm) and fails only when the best of three is still over. Checked both ways: a normal run exits 0; against a deliberately impossible baseline it takes three samples and exits 1.
+- **Not changed:** nothing about the release clock, the gates or the hosted workflows.
+
 ## 0.195.4 - `ship` stops running the local early release gate by default, and reports the release clock
 
 Why: on 0.195.3 the hosted checks were green after 6.6 minutes, but the merge waited another 5 minutes for the local early release gate (the release closure on the PR head), which the hosted release workflow's full gate then repeats with the cache off. The release requirement is under 10 minutes from a merged, green `main` to a successful publish.
