@@ -9,6 +9,14 @@
 > make the history less accurate, not more.
 
 
+## 0.195.4 - `ship` stops running the local early release gate by default, and reports the release clock
+
+Why: on 0.195.3 the hosted checks were green after 6.6 minutes, but the merge waited another 5 minutes for the local early release gate (the release closure on the PR head), which the hosted release workflow's full gate then repeats with the cache off. The release requirement is under 10 minutes from a merged, green `main` to a successful publish.
+
+- **The local early release gate is opt-in (`ship --local-gate`).** By default `ship` runs only the eight publish blockers locally after the merge, requires the hosted blocking checks to be green, and leaves the full gate to the hosted release workflow, whose `publish` job needs every leg. What is given up: a local run of the execution half of the release closure before the tag. Nothing is bypassed and no gate was removed from the hosted path.
+- **`TIMINGS` ends with `release-clock=Ns`** (merge, verify, tag and release) when all four phases finished. This is the figure the 10 minute requirement is measured on; the registry's listing delay and the pre-merge work are outside it.
+- **Measurement:** not claimed here. The next `TIMINGS` line from a default `ship` is the first.
+
 ## 0.195.3 - The VS Code extension's build tool no longer pulls in a vulnerable minimatch
 
 Why: the 0.195.2 release workflow stopped at its dependency check. A new advisory (GHSA-g3hv-75wg-m249, moderate, denial of service in minimatch before 11.0.1) reached `ide/vscode` through `@vscode/vsce`, which asks for `minimatch ^10.2.6`. The check passed on the same tree 16 minutes earlier, so the advisory was published during the release. Nothing was published to npm for 0.195.2; its tag exists and points at a commit that failed the gate, so the fix ships as 0.195.3.

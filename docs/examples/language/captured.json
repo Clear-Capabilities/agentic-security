@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "engineVersion": "0.195.3",
-  "bundleSha256": "e8cc38af9d175f86b35c3f255a99b8c5ed2e4bb87deea37576abc8ad38fc355b",
+  "engineVersion": "0.195.4",
+  "bundleSha256": "f936a130a54de47ab421f284c77ed39648a86eb0af3f8924e88aed4a9ff90aad",
   "examples": {
     "haskell-app/vulnerable": {
       "exitCode": 3,
