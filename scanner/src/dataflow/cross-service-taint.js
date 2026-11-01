@@ -228,7 +228,7 @@ function _escapeRegex(s) {
 // 'http-body' for req.body) that mean "this value arrived over an
 // incoming HTTP request" — the signal used to correlate a finding with a
 // declared `via: 'http'` cross-service edge.
-const HTTP_PROVENANCE = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie']);
+const HTTP_PROVENANCE = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie', 'upload']);
 
 // Every provenance value attached anywhere on a finding: the primary
 // source (`f.sourceProvenance`) plus every step in its source chain
