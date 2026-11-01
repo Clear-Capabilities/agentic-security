@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../../scanner/src/runScan.js';
 import { disableStateWrites } from '../_lib/tree-integrity.mjs';
+import { loadFrozen } from './corpora/frozen-split.mjs';
 
 // Every scan here is of a scratch directory, and a measurement must never leave state in what it measured.
 await disableStateWrites();
@@ -24,16 +25,22 @@ export const unseenSource = (eco, id, rel) => read(path.join(DATA, 'sources-unse
 export const shapeDevSource = (eco, id, rel) => read(path.join(DATA, 'sources-shape-dev', eco, id, rel));
 /** The shape-dev-2 set (the former unseen-v2, also used to change the engine). */
 export const shapeDev2Source = (eco, id, rel) => read(path.join(DATA, 'sources-shape-dev-2', eco, id, rel));
-/** The unseen-v4 split (bench/language-support/corpora/unseen-v4, MEASUREMENT ONLY): own directory, own digest, checked on every load. */
-export const V4 = path.join(HERE, 'corpora', 'unseen-v4');
-export function unseenV4Cases() {
-  const cases = JSON.parse(read(path.join(V4, 'labels.json')));
-  const m = JSON.parse(read(path.join(V4, 'manifest.json')));
-  const per = [...cases].sort((a, b) => a.id.localeCompare(b.id)).map((c) => `${c.id}:${sha(read(path.join(V4, 'sources', 'haskell', c.id, c.path)))}`).join('\n');
-  if (sha(per) !== m.sourcesSha256 || sha(JSON.stringify(cases)) !== m.labelsSha256) throw new Error('unseen-v4 digest mismatch: the frozen split was modified after freezing (see corpora/unseen-v4/USE-LOG.md)');
-  return cases;
-}
-export const unseenV4Source = (eco, id, rel) => read(path.join(V4, 'sources', eco, id, rel));
+/**
+ * The frozen Haskell splits (bench/language-support/corpora/unseen-v4, unseen-v5, ...): each in its own directory with its own digest,
+ * checked on every load (corpora/frozen-split.mjs). A split is a generalisation measure until its manifest records `role: development`
+ * (see each split's USE-LOG.md); measure.mjs reads the role from the manifest and stores it with the result.
+ */
+export const FROZEN_SPLITS = {
+  'unseen-v4': path.join(HERE, 'corpora', 'unseen-v4'),
+  'unseen-v5': path.join(HERE, 'corpora', 'unseen-v5'),
+};
+export const isFrozenSplit = (split) => Object.hasOwn(FROZEN_SPLITS, split);
+export function frozenCases(split) { return loadFrozen({ dir: FROZEN_SPLITS[split], split }); }
+export const frozenSource = (split) => (eco, id, rel) => read(path.join(FROZEN_SPLITS[split], 'sources', eco, id, rel));
+export const frozenManifest = (split) => JSON.parse(read(path.join(FROZEN_SPLITS[split], 'manifest.json')));
+export const V4 = FROZEN_SPLITS['unseen-v4'];
+export const unseenV4Cases = () => frozenCases('unseen-v4');
+export const unseenV4Source = frozenSource('unseen-v4');
 
 // Which layer is RESPONSIBLE for a family: declared here, never derived from engine output (see measure.mjs README).
 export const TAINT_FAMILIES = {

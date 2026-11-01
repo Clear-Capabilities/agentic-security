@@ -40,7 +40,38 @@ export const DEFAULT_PARSE_BUDGETS = Object.freeze({
 
 // Boundaries that are disclosed but do not make a file incomplete: the content was either parsed (cpp, ffi) or matched
 // by a closed, sound pattern and stated as an assumption (see haskell-boundaries.js).
-export const NON_OPAQUE_BOUNDARIES = new Set(['cpp', 'ffi', 'th-safe-splice', 'quasiquote-inert']);
+export const NON_OPAQUE_BOUNDARIES = new Set(['cpp', 'ffi', 'th-safe-splice', 'quasiquote-inert', 'quasiquote-hamlet']);
+
+// Shakespeare's HTML template quoters: the interpolations are Haskell expressions of the enclosing scope (see absorbSafeBoundaries).
+const HAMLET_QUOTERS = new Set(['hamlet', 'whamlet', 'shamlet', 'xhamlet', 'ihamlet', 'xshamlet']);
+
+/**
+ * The interpolations of a hamlet body, in order: `#{e}` (escaped value), `^{e}` (embedded template or widget), `@{r}` / `@?{r}` (route) and `_{m}`
+ * (message). Braces nest (a record or a lambda inside), and a string literal may contain `}`. Returns offsets into the segment: the opener's
+ * first character, the expression's first character, and the closing brace.
+ */
+export function hamletInterpolations(seg, from, to) {
+  const out = [];
+  for (let i = from; i < to; i++) {
+    const ch = seg[i];
+    if (!(ch === '#' || ch === '^' || ch === '@' || ch === '_')) continue;
+    let j = i + 1;
+    if (ch === '@' && seg[j] === '?') j++;
+    if (seg[j] !== '{') continue;
+    let depth = 1, k = j + 1, inStr = false;
+    for (; k < to && depth > 0; k++) {
+      const c = seg[k];
+      if (inStr) { if (c === '\\') k++; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) break; }
+    }
+    if (depth !== 0 || k >= to) continue;
+    if (k > j + 1) out.push({ open: i, exprStart: j + 1, close: k });
+    i = k;
+  }
+  return out;
+}
 
 class BudgetError extends Error {
   constructor(budget, limit) {
@@ -1078,6 +1109,36 @@ function analyze(source, file, dialect, ctx, res) {
       b.assumption = 'upstream-quoter';
       res.blankRanges.push({ kind: 'quasiquote-inert', startOffset: b.span.startOffset, endOffset: b.span.endOffset });
     }
+    // Shakespeare's HTML quoters (`[whamlet|<p>#{name}|]`): the template text is inert, and each `#{e}` / `^{e}` / `@{e}` / `_{e}` interpolation is an
+    // ordinary Haskell expression evaluated in the enclosing scope. The quasi-quote is rewritten IN PLACE, same length, same newlines, as an
+    // application of an unknown function to the interpolated expressions, each kept at its original offset (`(hamletQ   (preEscapedToHtml body))`),
+    // so a sink inside an interpolation (`preEscapedToHtml`) and the request value it is handed stay visible to the IR, with their original spans.
+    // Hamlet escapes a plain `#{e}` itself, so the wrapper is not a sink; the template's own text (tags, attributes, `$forall`) is not modelled.
+    // Only with a Shakespeare/Yesod import, so a project quoter that borrows the name stays opaque.
+    const shakespeare = res.imports.some((im) => /^(?:Yesod|Text\.Hamlet|Text\.Shakespeare|Text\.Blaze)(?:\.|$)/.test(im.module || ''));
+    for (const b of res.boundaries) {
+      if (b.kind !== 'quasiquote' || !shakespeare || !HAMLET_QUOTERS.has(b.quoter)) continue;
+      const seg = source.slice(b.span.startOffset, b.span.endOffset);
+      const bar = seg.indexOf('|');
+      if (bar < 0 || !seg.endsWith('|]')) continue;
+      const interps = hamletInterpolations(seg, bar + 1, seg.length - 2);
+      if (!interps.length) continue;
+      const chars = seg.split('').map((ch) => (ch === '\n' || ch === '\r' ? ch : ' '));
+      const put = (at, s) => { for (let i = 0; i < s.length; i++) if (chars[at + i] !== '\n' && chars[at + i] !== '\r') chars[at + i] = s[i]; };
+      put(0, ('(hamletQ').slice(0, bar + 1).padEnd(bar + 1));
+      for (const it of interps) {
+        put(it.open, ' ('.slice(-(it.exprStart - it.open)).padStart(it.exprStart - it.open));   // the `#{` / `^{` / `@?{` opener becomes spaces and one `(`
+        put(it.exprStart, seg.slice(it.exprStart, it.close));
+        put(it.close, ')');
+      }
+      put(interps[interps.length - 1].close + 1, ')');   // closes the application; the char after the last `}` is template text or the `|` of `|]`
+      const text = chars.join('');
+      if (text.length !== seg.length) continue;
+      b.kind = 'quasiquote-hamlet';
+      b.detail = `quasi-quote [${b.quoter}|...|] with ${interps.length} interpolation(s): the interpolated expressions are analysed in the enclosing scope; the template text is not modelled; ASSUMED to be the Shakespeare quoter`;
+      b.assumption = 'upstream-quoter';
+      res.blankRanges.push({ kind: 'quasiquote-hamlet', startOffset: b.span.startOffset, endOffset: b.span.endOffset, text });
+    }
   }
 
   // ── errors → withheld calls ──
@@ -1165,6 +1226,7 @@ export function preprocessForSyntaxInfo(source, opts = {}) {
     const seg = out.slice(b.startOffset, b.endOffset);
     let repl = blank(seg);
     if (b.kind === 'quasiquote-inert' && repl.length >= 2) repl = `"${repl.slice(1, -1)}"`;
+    if (b.kind === 'quasiquote-hamlet' && typeof b.text === 'string' && b.text.length === seg.length) repl = b.text;   // the interpolations, at their offsets
     out = out.slice(0, b.startOffset) + repl + out.slice(b.endOffset);
   }
   return { text: out, opaque };

@@ -14,7 +14,7 @@
 // Nothing here executes code, evaluates a type, or reads a path outside the files it is handed.
 
 import { buildHaskellIR } from './haskell-ir.js';
-import { HS_LOG_SINKS, HS_MODEL_VERSION } from './haskell-models.js';
+import { HS_LOG_SINKS, HS_MODEL_VERSION, sourceInfo } from './haskell-models.js';
 import { codeOfLine } from './haskell-comments.js';
 
 export const HS_RULES_VERSION = 'haskell-security-rules/1';
@@ -77,6 +77,11 @@ const SECURITY_WORDS = new Set(['pin', 'password', 'passwd', 'credential', 'cred
 const SECURITY_FN = { test: (name) => SECURITY_FN_SUBSTR.test(name) || String(name).replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some((w) => SECURITY_WORDS.has(w)) };
 const INPUT_READS = new Set(['Prelude.getContents', 'System.IO.getContents', 'System.IO.hGetContents', 'Data.ByteString.getContents', 'Data.ByteString.hGetContents', 'Data.ByteString.Char8.getContents', 'Data.ByteString.Char8.hGetContents', 'Data.ByteString.Lazy.getContents', 'Data.ByteString.Lazy.hGetContents', 'Data.ByteString.Lazy.Char8.getContents', 'Data.ByteString.Lazy.Char8.hGetContents', 'Data.Text.IO.getContents', 'Data.Text.IO.hGetContents', 'Data.Text.Lazy.IO.getContents', 'Data.Text.Lazy.IO.hGetContents']);
 const BOUNDING = /(?:^|\.)(?:take|takeE|isolate|hGetSome|hGet|splitAt|limit|limitedRead)$/;
+// Source provenances (haskell-models.js) that mean "the HTTP client supplied this text": a read with one of these inside a function makes the
+// value caller-supplied for the partial-function, allocation and bounding rules, whatever the function's own parameters are.
+const REQUEST_PROVENANCE = new Set(['url-param', 'path-param', 'http-body', 'header', 'cookie', 'upload']);
+// wai-extra's `requestSizeCheck (Just n) req` wraps the request so the body read after it fails past n bytes: a bound on every body read of the function.
+const WAI_SIZE_CHECK = /(?:^|\.)requestSizeCheck$/;
 // `replicateM n getLine` reads n lines: the count is an allocation (and an input loop) sized by whoever supplied n.
 const ALLOCATORS = new Set(['replicate', 'Prelude.replicate', 'Data.List.replicate', 'Data.ByteString.replicate', 'Data.ByteString.Char8.replicate', 'Data.ByteString.Lazy.replicate', 'Data.Text.replicate', 'Data.Vector.replicate', 'Control.Monad.replicateM', 'Control.Monad.replicateM_', 'Data.Vector.replicateM', 'Data.List.genericReplicate']);
 const CLAMPS = /^(?:(?:Prelude|Data\.Ord)\.)?(?:min|clamp)$/;
@@ -89,6 +94,8 @@ const PARTIALS = new Set([...PARTIAL_NAMES, ...PARTIAL_NAMES.flatMap((n) => PART
   ...['Data.Map', 'Data.Map.Strict'].flatMap((m) => ['findMin', 'findMax', 'deleteFindMin', 'elemAt'].map((n) => `${m}.${n}`)), 'Data.Set.findMin', 'Data.Set.findMax', 'Data.Set.elemAt']);
 // A call that tests whether a container is empty, a key is present or a value is available: the partial call beside it is conditional on that test.
 const EMPTINESS_CHECK = /(?:^|\.)(?:null|notNull|isEmpty|length|size|isJust|isNothing|member|notMember|lookup|elem|notElem|nonEmpty|<match>)$/;
+// A call whose result has a different shape from its argument (pieces of it, or a parse of it): a test of the argument says nothing about the result.
+const SPLITTER = /(?:^|\.)(?:words|lines|splitOn|split|splitWhen|chunksOf|breakOn|decode|decodeStrict|eitherDecode|decodeEither|parseMaybe|parseEither|parse|readMaybe|readEither|reads)$/;
 const SESSION_COOKIE = /(?:sess|sid|token|tok|auth|jwt|csrf|login|remember|secret)/i;
 
 // What makes a bound variable security-shaped, and what makes a value sensitive for logging.
@@ -312,45 +319,89 @@ export function analyzeHaskellRules(files, opts = {}) {
       const fnHs = fn.hs || {};
       const strongParam = new Set((fnHs.paramSources || []).filter((p) => /^hs:handler-param:/.test(p.decorator || '')).map((p) => p.name));
       const entryLike = callersUnknown(fn);
-      const derivedText = new Set([...(fnHs.textParams || []).filter((n) => strongParam.has(n) || entryLike), ...(entryLike ? (fnHs.inputParams || []) : [])]);
-      if (derivedText.size) {
-        for (let round = 0; round < 8; round++) {
-          let grew = false;
-          for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source && !derivedText.has(n.target) && [...names(n.source)].some((x) => derivedText.has(x))) { derivedText.add(n.target); grew = true; }
-          if (!grew) break;
-        }
-      }
-      const mentionsText = (e) => [...names(e)].some((x) => derivedText.has(x));
       const callsIn = (e) => { const out = []; for (const x of walk(e)) if (x.kind === 'call' && typeof x.callee === 'string') out.push(x); return out; };
+      // A value READ from the request inside the function (`raw <- param "page"`, `body <- strictRequestBody req`, `lookup h (requestHeaders req)`)
+      // is caller-supplied text wherever the function sits: the framework's own read says who supplied it, so no parameter label is needed.
+      const requestRead = (c) => { const s = sourceInfo(c.callee); return !!s && REQUEST_PROVENANCE.has(s.provenance); };
+      const derivedText = new Set([...(fnHs.textParams || []).filter((n) => strongParam.has(n) || entryLike), ...(entryLike ? (fnHs.inputParams || []) : [])]);
+      const fromRequest = new Set();
+      for (let round = 0; round < 8; round++) {
+        let grew = false;
+        for (const n of fnNodes(fn)) {
+          if (n.kind !== 'assign' || !n.target || !n.source) continue;
+          const nm = [...names(n.source)];
+          const reads = callsIn(n.source).some(requestRead);
+          if (!derivedText.has(n.target) && (reads || nm.some((x) => derivedText.has(x)))) { derivedText.add(n.target); grew = true; }
+          if (!fromRequest.has(n.target) && (reads || nm.some((x) => fromRequest.has(x)))) { fromRequest.add(n.target); grew = true; }
+        }
+        if (!grew) break;
+      }
+      const mentionsText = (e) => [...names(e)].some((x) => derivedText.has(x)) || callsIn(e).some(requestRead);
+      const mentionsRequest = (e) => [...names(e)].some((x) => fromRequest.has(x)) || callsIn(e).some(requestRead);
       const fnReturns = fnNodes(fn).filter((n) => n.kind === 'return' && n.value);
       const bounded = fnNodes(fn).some((n) => [n.value, n.source, ...(n.args || [])].some((e) => e && callsIn(e).some((c) => BOUNDING.test(c.callee))));
 
       // Values a condition in this function tests for emptiness or presence (`null ws`, `M.member k t`, `xs /= []`, a pattern match on it) and,
       // transitively, the values they were built from: a partial call on one of them is the other branch of that test.
+      // A test covers a partial call only on the value it tested, not on a value SPLIT or PARSED from it afterwards: `maybe "" id (lookup h hs)`
+      // proves the header is present, not that `words auth !! 1` has a second word; `isJust (decode body)` does cover `fromJust (decode body)`
+      // (the same split, of the same value, is what was tested). Names are therefore followed through assignments but not into a splitting call.
+      const directNames = (e) => { const out = new Set(); const visit = (x, d) => { if (!x || typeof x !== 'object' || d > 60) return; if (x.kind === 'call' && typeof x.callee === 'string' && SPLITTER.test(x.callee)) return; if (x.kind === 'ident' && x.name && !(x.hs && x.hs.functionRef)) out.add(x.name); for (const c of kids(x)) visit(c, d + 1); }; visit(e, 0); return out; };
+      const splitsIn = (e) => callsIn(e).filter((x) => SPLITTER.test(x.callee)).map((x) => `${x.callee.replace(/^.*\./, '')}|${[...names(x)].sort().join(',')}`);
       const assignSources = new Map();
-      for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source) assignSources.set(n.target, [...(assignSources.get(n.target) || []), ...names(n.source)]);
+      for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source) assignSources.set(n.target, [...(assignSources.get(n.target) || []), ...directNames(n.source)]);
       const withOrigins = (seed) => { const out = new Set(seed); const queue = [...seed]; while (queue.length) { const v = queue.pop(); for (const o of assignSources.get(v) || []) if (!out.has(o)) { out.add(o); queue.push(o); } } return out; };
       const testedVars = new Set();
+      const testedSplits = new Set();
       for (const n of fnNodes(fn)) {
         if (n.kind !== 'if' || !n.cond) continue;
         for (const x of walk(n.cond)) {
-          if (x.kind === 'call' && typeof x.callee === 'string' && EMPTINESS_CHECK.test(x.callee)) for (const nm of names(x)) testedVars.add(nm);
-          if (x.kind === 'binary' && ['==', '/=', '!='].includes(x.op) && [x.left, x.right].some((side) => side && side.kind === 'array' && side.elements.length === 0)) for (const nm of names(x)) testedVars.add(nm);
+          if (x.kind === 'call' && typeof x.callee === 'string' && EMPTINESS_CHECK.test(x.callee)) { for (const nm of directNames(x)) testedVars.add(nm); for (const s of splitsIn(x)) testedSplits.add(s); }
+          if (x.kind === 'binary' && ['==', '/=', '!='].includes(x.op) && [x.left, x.right].some((side) => side && side.kind === 'array' && side.elements.length === 0)) for (const nm of directNames(x)) testedVars.add(nm);
         }
       }
       const testedAll = withOrigins(testedVars);
-      const isTested = (args) => { const mine = withOrigins([...args.flatMap((a) => [...names(a)])]); for (const v of mine) if (testedAll.has(v) && derivedText.has(v)) return true; return false; };
+      const isTested = (args) => {
+        if (args.some((a) => splitsIn(a).some((s) => testedSplits.has(s)))) return true;
+        const mine = withOrigins([...args.flatMap((a) => [...directNames(a)])]);
+        for (const v of mine) if (testedAll.has(v) && derivedText.has(v)) return true;
+        return false;
+      };
 
       // A relational test against a number or a length (`total >= limit`, `size <= 65536`) in this function: the evidence that a read or a body is capped.
       const hasSizeTest = fnNodes(fn).some((n) => n.kind === 'if' && n.cond && [...walk(n.cond)].some((x) => x.kind === 'binary' && RELATIONAL.has(x.op)));
+      // The values a relational test in this function compares with something (`n > maxBatch`, `count <= 100`): a count one of them sizes is bounded
+      // by that test (the direction is not judged; a test that only rejects negatives still counts, which errs toward silence).
+      const sizeTestedVars = new Set();
+      for (const n of fnNodes(fn)) if (n.kind === 'if' && n.cond) for (const x of walk(n.cond)) if (x.kind === 'binary' && RELATIONAL.has(x.op)) for (const nm of names(x)) sizeTestedVars.add(nm);
       const readsRequestLength = fnNodes(fn).some((n) => [n.value, n.source, n.cond, ...(n.args || [])].some((ex) => ex && [...walk(ex)].some((x) => (x.kind === 'ident' && REQUEST_LENGTH.has(x.name)) || (x.kind === 'call' && REQUEST_LENGTH.has(x.callee)))));
-      const sizeChecked = hasSizeTest && readsRequestLength;
+      const waiSizeChecked = fnNodes(fn).some((n) => [n.value, n.source, n.cond, ...(n.args || [])].some((ex) => ex && callsIn(ex).some((x) => WAI_SIZE_CHECK.test(x.callee))));
+      const sizeChecked = (hasSizeTest && readsRequestLength) || waiSizeChecked;
       // One predictable-random finding per function: a clock reading that seeds a generator in a token-shaped function is a single flaw,
       // however many of its steps (the clock, the seed, the generator) the rule can see.
       let randomEmitted = false;
       const emitRandom = (line, extra) => { if (randomEmitted) return; randomEmitted = true; emit('hs-predictable-random', file, line, extra); };
 
       const seeds = (e) => { for (const n of names(e)) if (SENSITIVE.test(n.replace(/^\./, ''))) return n.replace(/^\./, ''); return null; };
+      // A parameter whose declared type is a record of this project with a credential or card field (`Card { cardNumber, cardCvv }`), written
+      // to a log WHOLE: `show card`, or the value spliced into the message. Handed to any other function (`masked card`) it is that function's
+      // result that is logged, which is judged by the names it carries, not here.
+      const sensitiveRecords = new Map((fnHs.recordParams || []).filter((r) => (r.fields || []).some((x) => SENSITIVE.test(x))).map((r) => [r.name, r]));
+      const FORMAT_WHOLE = /(?:^|\.)(?:show|tshow|showt|pack|unpack|encode|toJSON|encodeUtf8|decodeUtf8|fromStrict|toStrict|toLazyText|fromString|toString|displayShow|pShow|ppShow|textDisplay|toLogStr|logStr)$/;
+      const wholeRecord = (arg) => {
+        if (!sensitiveRecords.size) return null;
+        let found = null;
+        const visit = (e, d) => {
+          if (!e || typeof e !== 'object' || d > 40 || found) return;
+          if (e.kind === 'ident' && sensitiveRecords.has(e.name)) { const r = sensitiveRecords.get(e.name); found = { name: e.name, type: r.type, field: (r.fields || []).find((x) => SENSITIVE.test(x)) }; return; }
+          if (e.kind === 'binary') { visit(e.left, d + 1); visit(e.right, d + 1); return; }
+          if (e.kind === 'call' && typeof e.callee === 'string') { if (FORMAT_WHOLE.test(e.callee)) for (const a of e.args || []) visit(a, d + 1); return; }
+          if (e.kind === 'array') { for (const a of e.elements || []) visit(a, d + 1); return; }
+          if (e.hs && e.hs.inner) visit(e.hs.inner, d + 1);
+        };
+        visit(arg, 0);
+        return found;
+      };
 
       // pass over nodes in program order
       for (const node of fnNodes(fn)) {
@@ -472,7 +523,8 @@ export function analyzeHaskellRules(files, opts = {}) {
             if (TIME_SOURCES.has(c) && SECURITY_FN.test(fnBase)) emitRandom(line, { vuln: 'Clock value used as a security value', detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
             if (INPUT_READS.has(c) && !bounded && readsOutsideInput(fn, c, args, importsNetwork)) emit('hs-unbounded-input-read', file, line, { detail: `${c} reads everything`, confidence: 0.6 });
             // an allocation whose size is parsed caller text and is not clamped
-            if (ALLOCATORS.has(c) && args[0] && mentionsText(args[0]) && callsIn(args[0]).some((x) => /(?:^|\.)(?:read|readMaybe|readEither)$/.test(x.callee)) && !callsIn(args[0]).some((x) => CLAMPS.test(x.callee))) {
+            // (a number the framework parsed from the request, `n <- param "count" :: ActionM Int`, is parsed caller text too)
+            if (ALLOCATORS.has(c) && args[0] && mentionsText(args[0]) && (mentionsRequest(args[0]) || callsIn(args[0]).some((x) => /(?:^|\.)(?:read|readMaybe|readEither)$/.test(x.callee))) && !callsIn(args[0]).some((x) => CLAMPS.test(x.callee)) && ![...names(args[0])].some((v) => sizeTestedVars.has(v))) {
               emit('hs-unbounded-allocation', file, line, { detail: `${c} sized by parsed caller text`, evidence: { allocator: c } });
             }
             // a partial function applied to caller text: one malformed value raises an uncaught exception
@@ -532,7 +584,8 @@ export function analyzeHaskellRules(files, opts = {}) {
             if (!argList.length || argList.every((a) => !a)) continue;
             // a file append is a log only when its path says so (a log, audit or trace file)
             if (sink.channel === 'file') { const p = (e.args || [])[0]; if (!(p && p.kind === 'literal' && /(?:log|audit|trace|journal)/i.test(String(p.value)))) continue; }
-            const isRedacted = (a) => { for (const x of walk(a)) if (x.kind === 'call' && typeof x.callee === 'string' && (REDACTOR.test(x.callee) || STRONG_KDF.test(x.callee) || x.callee === 'const')) return true; return false; };
+            // (a project function the IR inlined into the argument, `masked card`, keeps its origin in `hs.inlinedFrom`: a redactor by name earns the same credit inlined as called)
+            const isRedacted = (a) => { for (const x of walk(a)) { if (x.kind === 'call' && typeof x.callee === 'string' && (REDACTOR.test(x.callee) || STRONG_KDF.test(x.callee) || x.callee === 'const')) return true; if (x.hs && typeof x.hs.inlinedFrom === 'string' && REDACTOR.test(x.hs.inlinedFrom.replace(/^.*::/, ''))) return true; } return false; };
             for (const arg of argList) {
               if (!arg) continue;
               let hit = null;
@@ -551,6 +604,7 @@ export function analyzeHaskellRules(files, opts = {}) {
                 else if (SENSITIVE.test(bare) && !/^[A-Z][A-Za-z0-9_.]*\./.test(n)) hit = { name: bare, low: LOW_ENTROPY.test(bare), hashed: false, var: n };
                 if (hit) break;
               }
+              if (!hit) { const rec = wholeRecord(arg); if (rec) hit = { name: `${rec.type}.${rec.field}`, low: LOW_ENTROPY.test(rec.field), hashed: false, var: rec.name }; }
               if (hit && !isRedacted(arg)) {
                 emit('hs-sensitive-logging', file, e.line || node.line, {
                   severity: hit.hashed ? 'low' : 'high',
@@ -562,6 +616,20 @@ export function analyzeHaskellRules(files, opts = {}) {
             }
           }
         }
+      }
+      // A security-shaped function (`generateApiKey`, `newResetCode`) whose RESULT is built from a System.Random value: the generator was bound
+      // to an ordinary name (`g <- newStdGen`, `let bytes = take 16 (randoms g)`), so neither the binding rule nor the "feeds the function" rule
+      // above saw it; the value reaching the function's return is what makes it the token.
+      if (!randomEmitted && SECURITY_FN.test(fnBase)) {
+        const hasRandom = (e) => { for (const x of walk(e)) if ((x.kind === 'call' && RANDOM_CALLS.has(x.callee)) || (x.kind === 'ident' && RANDOM_CALLS.has(x.name) && !(x.hs && x.hs.functionRef))) return true; return false; };
+        const carriers = new Set(); let seedLine = null;
+        for (let round = 0; round < 8; round++) {
+          let grew = false;
+          for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source && !carriers.has(n.target) && (hasRandom(n.source) || [...names(n.source)].some((x) => carriers.has(x)))) { carriers.add(n.target); if (seedLine === null || (Number.isFinite(n.line) && n.line < seedLine)) seedLine = n.line; grew = true; }
+          if (!grew) break;
+        }
+        const ret = fnReturns.find((n) => hasRandom(n.value) || [...names(n.value)].some((x) => carriers.has(x)));
+        if (ret) emitRandom(ret.line || seedLine || fn.line, { detail: `a System.Random value reaches the result of \`${fnBase}\``, evidence: { function: fnBase, via: [...carriers].slice(0, 4) } });
       }
     }
   }

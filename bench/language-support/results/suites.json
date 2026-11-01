@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/language-support-suites@1",
-  "ranAt": "2026-10-26",
+  "ranAt": "2026-11-01",
   "node": "v24.20.0",
   "tools": {
     "ghc": true,
@@ -107,11 +107,7 @@
       "fail": 0,
       "skipped": 0,
       "cancelled": 0,
-      "failing": [],
-      "carriedForward": {
-        "from": "2026-10-05",
-        "reason": "on the host that re-ran the other suites on 2026-10-26 the Haskell packages the route fixtures import (scotty, wai, servant, yesod) are not installed, so the one compile criterion (HS-006.AC01, route fixtures compile) could not run there; the other 18 tests of this file passed on that run. The fixtures under test/fixtures/haskell-web/ did not change, and compiling them does not depend on the scanner. Re-run `npm run test:language-tools` on a host with the packages and re-promote."
-      }
+      "failing": []
     },
     "language-aibom.test.js": {
       "name": "language-aibom.test.js",

@@ -1,7 +1,7 @@
 {
   "schema": "agentic-security/language-support@1",
   "version": "language-support/1",
-  "generatedAt": "2026-10-26",
+  "generatedAt": "2026-11-01",
   "node": "v24.20.0",
   "targets": {
     "precision": 0.9,
@@ -26,7 +26,7 @@
       },
       "measuredOn": {
         "split": "holdout",
-        "measuredAt": "2026-10-26",
+        "measuredAt": "2026-11-01",
         "corpusVersion": "qa001-v2",
         "hashes": {
           "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
@@ -410,8 +410,8 @@
             "metric": "fix-fixtures",
             "accepted": "20/20",
             "rejected": "10/10",
-            "advertised": "4/4",
-            "unsupportedShapes": 22,
+            "advertised": "8/8",
+            "unsupportedShapes": 18,
             "pairs": {
               "preserve": "17/17",
               "change": "9/9"
@@ -584,7 +584,7 @@
       },
       "measuredOn": {
         "split": "holdout",
-        "measuredAt": "2026-10-26",
+        "measuredAt": "2026-11-01",
         "corpusVersion": "qa001-v2",
         "hashes": {
           "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",

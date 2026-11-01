@@ -1,0 +1,715 @@
+@@@ resource-limits | vulnerable | src/UploadIngest.hs
+{-# LANGUAGE OverloadedStrings #-}
+module UploadIngest (ingestApp) where
+
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Data.Time (getCurrentTime)
+import Network.HTTP.Types (status200, status405)
+import Network.Wai
+
+data Upload = Upload { uploadName :: FilePath, uploadBytes :: BL.ByteString }
+
+ingestApp :: Application
+ingestApp req respond
+  | requestMethod req == "POST" = do
+      payload <- strictRequestBody req --@@
+      now <- getCurrentTime
+      let upload = Upload ("incoming/" <> show now <> ".bin") payload
+      BL.writeFile (uploadName upload) (uploadBytes upload)
+      respond (responseLBS status200 [] (BLC.pack ("stored " <> show (BL.length payload) <> " bytes")))
+  | otherwise =
+      respond (responseLBS status405 [] "POST only")
+
+@@@ resource-limits | vulnerable | src/ActivityFeed.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ActivityFeed (feedRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Web.Scotty
+
+data Event = Event { eventId :: Int, eventKind :: T.Text, eventActor :: T.Text }
+
+instance FromRow Event where
+  fromRow = Event <$> field <*> field <*> field
+
+feedRoutes :: Connection -> ScottyM ()
+feedRoutes conn =
+  get "/activity" $ do
+    requested <- param "limit" `rescue` (\_ -> pure 50)
+    events <- liftIO (fetchPage conn requested)
+    text (TL.pack (unlines (map describe events)))
+  where
+    describe e = show (eventId e) <> " " <> T.unpack (eventActor e) <> " " <> T.unpack (eventKind e)
+
+fetchPage :: Connection -> Int -> IO [Event]
+fetchPage conn pageSize =
+  query conn "SELECT id, kind, actor FROM events ORDER BY id DESC LIMIT ?" (Only pageSize) --@@
+
+@@@ resource-limits | vulnerable | src/ImportArchive.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module ImportArchive (ImportApi, importServer) where
+
+import Codec.Compression.GZip (decompress)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Servant
+
+type ImportApi = "imports" :> "archive" :> ReqBody '[OctetStream] BL.ByteString :> Post '[JSON] Int
+
+gzipMagic :: BL.ByteString -> Maybe BL.ByteString
+gzipMagic body
+  | BL.take 2 body == BL.pack [0x1f, 0x8b] = Just body
+  | otherwise = Nothing
+
+importServer :: Server ImportApi
+importServer body =
+  case gzipMagic body of
+    Nothing -> throwError err415 { errBody = "gzip archive expected" }
+    Just archive -> liftIO (storeRows (decompress archive)) --@@
+
+storeRows :: BL.ByteString -> IO Int
+storeRows expanded = do
+  let rows = BLC.lines expanded
+  BL.writeFile "imports/latest.csv" expanded
+  pure (length rows)
+
+@@@ resource-limits | safe | src/UploadReceive.hs
+{-# LANGUAGE OverloadedStrings #-}
+module UploadReceive (receiveApp) where
+
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Data.Time (getCurrentTime)
+import Network.HTTP.Types (status200, status405, status413)
+import Network.Wai
+
+maxUploadBytes :: Int
+maxUploadBytes = 5 * 1024 * 1024
+
+readBounded :: Request -> IO (Maybe BL.ByteString)
+readBounded req = go 0 []
+  where
+    go seen acc = do
+      chunk <- getRequestBodyChunk req
+      if BS.null chunk
+        then pure (Just (BL.fromChunks (reverse acc)))
+        else do
+          let seen' = seen + BS.length chunk
+          if seen' > maxUploadBytes then pure Nothing else go seen' (chunk : acc) --@@
+
+receiveApp :: Application
+receiveApp req respond
+  | requestMethod req == "POST" = do
+      payload <- readBounded req
+      case payload of
+        Nothing -> respond (responseLBS status413 [] "upload too large")
+        Just bytes -> do
+          now <- getCurrentTime
+          BL.writeFile ("incoming/" <> show now <> ".bin") bytes
+          respond (responseLBS status200 [] (BLC.pack ("stored " <> show (BL.length bytes) <> " bytes")))
+  | otherwise =
+      respond (responseLBS status405 [] "POST only")
+
+@@@ resource-limits | safe | src/ActivityStream.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ActivityStream (streamRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Web.Scotty
+
+data Event = Event { eventId :: Int, eventKind :: T.Text, eventActor :: T.Text }
+
+instance FromRow Event where
+  fromRow = Event <$> field <*> field <*> field
+
+maxPageSize :: Int
+maxPageSize = 100
+
+streamRoutes :: Connection -> ScottyM ()
+streamRoutes conn =
+  get "/activity" $ do
+    requested <- param "limit" `rescue` (\_ -> pure 50)
+    let pageSize = max 1 (min maxPageSize requested) --@@
+    events <- liftIO (fetchPage conn pageSize)
+    text (TL.pack (unlines (map describe events)))
+  where
+    describe e = show (eventId e) <> " " <> T.unpack (eventActor e) <> " " <> T.unpack (eventKind e)
+
+fetchPage :: Connection -> Int -> IO [Event]
+fetchPage conn pageSize =
+  query conn "SELECT id, kind, actor FROM events ORDER BY id DESC LIMIT ?" (Only pageSize)
+
+@@@ resource-limits | safe | src/ImportBundle.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module ImportBundle (BundleApi, bundleServer) where
+
+import Codec.Compression.GZip (decompress)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Data.Int (Int64)
+import Servant
+
+type BundleApi = "imports" :> "bundle" :> ReqBody '[OctetStream] BL.ByteString :> Post '[JSON] Int
+
+maxExpandedBytes :: Int64
+maxExpandedBytes = 32 * 1024 * 1024
+
+gzipMagic :: BL.ByteString -> Maybe BL.ByteString
+gzipMagic body
+  | BL.take 2 body == BL.pack [0x1f, 0x8b] = Just body
+  | otherwise = Nothing
+
+bundleServer :: Server BundleApi
+bundleServer body =
+  case gzipMagic body of
+    Nothing -> throwError err415 { errBody = "gzip archive expected" }
+    Just archive -> do
+      let expanded = BL.take (maxExpandedBytes + 1) (decompress archive) --@@
+      if BL.length expanded > maxExpandedBytes
+        then throwError err413 { errBody = "archive expands past the allowed size" }
+        else liftIO (storeRows expanded)
+
+storeRows :: BL.ByteString -> IO Int
+storeRows expanded = do
+  BL.writeFile "imports/latest.csv" expanded
+  pure (length (BLC.lines expanded))
+
+@@@ parser-safety | vulnerable | src/CatalogPaging.hs
+{-# LANGUAGE OverloadedStrings #-}
+module CatalogPaging (catalogRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import Database.SQLite.Simple
+import Web.Scotty
+
+pageSize :: Int
+pageSize = 24
+
+catalogRoutes :: Connection -> ScottyM ()
+catalogRoutes conn =
+  get "/catalog" $ do
+    pageText <- param "page" `rescue` (\_ -> pure "1")
+    let page = read (T.unpack pageText) :: Int --@@
+        offset = (page - 1) * pageSize
+    rows <- liftIO (query conn "SELECT title FROM products ORDER BY title LIMIT ? OFFSET ?" (pageSize, offset)) :: ActionM [Only T.Text]
+    text (TL.fromStrict (T.unlines (map fromOnly rows)))
+
+@@@ parser-safety | vulnerable | src/WebhookIntake.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, DeriveGeneric #-}
+module WebhookIntake (IntakeApi, intakeServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON, decode)
+import qualified Data.ByteString.Lazy as BL
+import Data.Maybe (fromJust)
+import Data.Text (Text)
+import qualified Data.Text.IO as TIO
+import GHC.Generics (Generic)
+import Servant
+
+data Event = Event { eventType :: Text, eventSubject :: Text }
+  deriving (Generic)
+
+instance FromJSON Event
+
+type IntakeApi = "webhooks" :> "intake" :> ReqBody '[OctetStream] BL.ByteString :> Post '[JSON] NoContent
+
+intakeServer :: Server IntakeApi
+intakeServer body = do
+  let event = parseEvent body
+  liftIO (TIO.appendFile "events.log" (eventType event <> " " <> eventSubject event <> "\n"))
+  pure NoContent
+
+parseEvent :: BL.ByteString -> Event
+parseEvent = fromJust . decode --@@
+
+@@@ parser-safety | vulnerable | src/ContactImport.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ContactImport (main) where
+
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import Database.SQLite.Simple
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+
+data Contact = Contact { contactName :: T.Text, contactEmail :: T.Text }
+
+main :: IO ()
+main = do
+  args <- getArgs
+  path <- case args of
+    [p] -> pure p
+    _   -> putStrLn "usage: contact-import FILE" >> exitFailure
+  contents <- TIO.readFile path
+  let contacts = map parseLine (filter (not . T.null) (T.lines contents))
+  conn <- open "crm.db"
+  mapM_ (\c -> execute conn "INSERT INTO contacts (name, email) VALUES (?, ?)" (contactName c, contactEmail c)) contacts
+  close conn
+  putStrLn ("imported " <> show (length contacts) <> " contacts")
+
+parseLine :: T.Text -> Contact
+parseLine line =
+  let [name, email] = T.splitOn "," line --@@
+  in Contact (T.strip name) (T.strip email)
+
+@@@ parser-safety | safe | src/CatalogPages.hs
+{-# LANGUAGE OverloadedStrings #-}
+module CatalogPages (catalogRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Maybe (fromMaybe)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import Database.SQLite.Simple
+import Text.Read (readMaybe)
+import Web.Scotty
+
+pageSize :: Int
+pageSize = 24
+
+catalogRoutes :: Connection -> ScottyM ()
+catalogRoutes conn =
+  get "/catalog" $ do
+    pageText <- param "page" `rescue` (\_ -> pure "1")
+    let page = max 1 (fromMaybe 1 (readMaybe (T.unpack pageText))) --@@
+        offset = (page - 1) * pageSize
+    rows <- liftIO (query conn "SELECT title FROM products ORDER BY title LIMIT ? OFFSET ?" (pageSize, offset)) :: ActionM [Only T.Text]
+    text (TL.fromStrict (T.unlines (map fromOnly rows)))
+
+@@@ parser-safety | safe | src/WebhookReceiver.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, DeriveGeneric #-}
+module WebhookReceiver (ReceiverApi, receiverServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON, eitherDecode)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Data.Text (Text)
+import qualified Data.Text.IO as TIO
+import GHC.Generics (Generic)
+import Servant
+
+data Event = Event { eventType :: Text, eventSubject :: Text }
+  deriving (Generic)
+
+instance FromJSON Event
+
+type ReceiverApi = "webhooks" :> "receive" :> ReqBody '[OctetStream] BL.ByteString :> Post '[JSON] NoContent
+
+receiverServer :: Server ReceiverApi
+receiverServer body =
+  case parseEvent body of
+    Left problem -> throwError err400 { errBody = BLC.pack problem }
+    Right event -> do
+      liftIO (TIO.appendFile "events.log" (eventType event <> " " <> eventSubject event <> "\n"))
+      pure NoContent
+
+parseEvent :: BL.ByteString -> Either String Event
+parseEvent = eitherDecode --@@
+
+@@@ parser-safety | safe | src/ContactLoader.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ContactLoader (main) where
+
+import Data.Maybe (mapMaybe)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import Database.SQLite.Simple
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+
+data Contact = Contact { contactName :: T.Text, contactEmail :: T.Text }
+
+main :: IO ()
+main = do
+  args <- getArgs
+  path <- case args of
+    [p] -> pure p
+    _   -> putStrLn "usage: contact-loader FILE" >> exitFailure
+  contents <- TIO.readFile path
+  let contacts = mapMaybe parseLine (T.lines contents)
+  conn <- open "crm.db"
+  mapM_ (\c -> execute conn "INSERT INTO contacts (name, email) VALUES (?, ?)" (contactName c, contactEmail c)) contacts
+  close conn
+  putStrLn ("imported " <> show (length contacts) <> " contacts")
+
+parseLine :: T.Text -> Maybe Contact
+parseLine line =
+  case T.splitOn "," line of --@@
+    [name, email] | not (T.null (T.strip email)) -> Just (Contact (T.strip name) (T.strip email))
+    _ -> Nothing
+
+@@@ route-authentication | vulnerable | src/UserAdmin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module UserAdmin (adminRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status404)
+import Web.Scotty
+
+adminRoutes :: Connection -> ScottyM ()
+adminRoutes conn = do
+  get "/admin/users" $ do
+    rows <- liftIO (query_ conn "SELECT id, email FROM users ORDER BY id" :: IO [(Int, TL.Text)])
+    text (TL.unlines [TL.pack (show i) <> " " <> e | (i, e) <- rows])
+  delete "/admin/users/:id" $ do
+    userId <- param "id"
+    removed <- liftIO (execute conn "DELETE FROM users WHERE id = ?" (Only (userId :: Int))) --@@
+    if removed == 0
+      then status status404 >> text "no such user"
+      else text ("removed user " <> TL.pack (show userId))
+
+@@@ route-authentication | vulnerable | src/TeamSettings.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module TeamSettings (SettingsApi, settingsServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import Servant
+
+data Settings = Settings { teamName :: Text, billingEmail :: Text, seatLimit :: Int }
+
+instance FromRow Settings where
+  fromRow = Settings <$> field <*> field <*> field
+
+type SettingsApi =
+       "teams" :> Capture "team" Int :> "settings" :> Get '[JSON] [Text]
+  :<|> "teams" :> Capture "team" Int :> "settings" :> "reset" :> Post '[JSON] NoContent
+
+settingsServer :: Connection -> Server SettingsApi
+settingsServer conn = showSettings :<|> resetSettings
+  where
+    showSettings team = do
+      rows <- liftIO (query conn "SELECT name, billing_email, seat_limit FROM team_settings WHERE team_id = ?" (Only team))
+      pure [teamName s | s <- rows]
+    resetSettings team = do
+      _ <- liftIO (execute conn "UPDATE team_settings SET billing_email = '', seat_limit = 5 WHERE team_id = ?" (Only team)) --@@
+      pure NoContent
+
+@@@ route-authentication | vulnerable | src/CustomerExport.hs
+{-# LANGUAGE OverloadedStrings #-}
+module CustomerExport (exportSite) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as B
+import Database.SQLite.Simple
+import Snap.Core
+
+exportSite :: Connection -> Snap ()
+exportSite conn = route
+  [ ("/customers/export.csv", method GET (exportHandler conn))
+  , ("/ping", writeBS "pong")
+  ]
+
+exportHandler :: Connection -> Snap ()
+exportHandler conn = do
+  modifyResponse (setContentType "text/csv")
+  modifyResponse (setHeader "Content-Disposition" "attachment; filename=customers.csv")
+  csv <- liftIO (customerCsv conn)
+  writeBS csv
+
+customerCsv :: Connection -> IO B.ByteString
+customerCsv conn = do
+  rows <- query_ conn "SELECT name, email, phone FROM customers ORDER BY name" :: IO [(String, String, String)] --@@
+  pure (B.pack (unlines ("name,email,phone" : [n <> "," <> e <> "," <> p | (n, e, p) <- rows])))
+
+@@@ route-authentication | safe | src/UserManagement.hs
+{-# LANGUAGE OverloadedStrings #-}
+module UserManagement (managementRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status401, status404)
+import Web.Scotty
+
+requireAdmin :: Connection -> ActionM ()
+requireAdmin conn = do
+  token <- header "Authorization"
+  rows <- case token of
+    Nothing -> pure []
+    Just t  -> liftIO (query conn "SELECT id FROM admins WHERE api_token = ? AND revoked_at IS NULL" (Only (TL.toStrict t)) :: IO [Only Int])
+  case rows of
+    (_:_) -> pure ()
+    []    -> status status401 >> text "administrator token required" >> finish
+
+managementRoutes :: Connection -> ScottyM ()
+managementRoutes conn = do
+  get "/admin/users" $ do
+    requireAdmin conn
+    rows <- liftIO (query_ conn "SELECT id, email FROM users ORDER BY id" :: IO [(Int, TL.Text)])
+    text (TL.unlines [TL.pack (show i) <> " " <> e | (i, e) <- rows])
+  delete "/admin/users/:id" $ do
+    requireAdmin conn
+    userId <- param "id"
+    removed <- liftIO (execute conn "DELETE FROM users WHERE id = ?" (Only (userId :: Int))) --@@
+    if removed == 0
+      then status status404 >> text "no such user"
+      else text ("removed user " <> TL.pack (show userId))
+
+@@@ route-authentication | safe | src/TeamConfig.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module TeamConfig (ConfigApi, configServer, configContext) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import Servant
+
+newtype Operator = Operator { operatorName :: Text }
+
+type ConfigApi = BasicAuth "operators" Operator :>
+  (    "teams" :> Capture "team" Int :> "settings" :> Get '[JSON] [Text]
+  :<|> "teams" :> Capture "team" Int :> "settings" :> "reset" :> Post '[JSON] NoContent
+  )
+
+configContext :: Connection -> Context '[BasicAuthCheck Operator]
+configContext conn = BasicAuthCheck check :. EmptyContext
+  where
+    check (BasicAuthData user secretBytes) = do
+      rows <- query conn "SELECT name FROM operators WHERE name = ? AND api_key = ?" (user, secretBytes) :: IO [Only Text]
+      pure (case rows of { (Only n : _) -> Authorized (Operator n); [] -> Unauthorized })
+
+configServer :: Connection -> Server ConfigApi
+configServer conn operator = showSettings :<|> resetSettings
+  where
+    showSettings team = do
+      rows <- liftIO (query conn "SELECT name FROM team_settings WHERE team_id = ?" (Only team))
+      pure [n | Only n <- rows]
+    resetSettings team = do
+      _ <- liftIO (execute conn "UPDATE team_settings SET billing_email = '', seat_limit = 5, reset_by = ? WHERE team_id = ?" (operatorName operator, team)) --@@
+      pure NoContent
+
+@@@ route-authentication | safe | src/HealthCheck.hs
+{-# LANGUAGE OverloadedStrings #-}
+module HealthCheck (healthSite) where
+
+import Control.Exception (SomeException, try)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as B
+import Database.SQLite.Simple
+import Snap.Core
+
+healthSite :: Connection -> Snap ()
+healthSite conn = route
+  [ ("/healthz", method GET (healthHandler conn))
+  , ("/version", writeBS "northwind-api 4.12.0")
+  ]
+
+healthHandler :: Connection -> Snap ()
+healthHandler conn = do
+  reachable <- liftIO (databaseReachable conn)
+  modifyResponse (setContentType "text/plain")
+  if reachable
+    then writeBS "ok" --@@
+    else modifyResponse (setResponseStatus 503 "database unreachable") >> writeBS "degraded"
+
+databaseReachable :: Connection -> IO Bool
+databaseReachable conn = do
+  outcome <- try (query_ conn "SELECT 1" :: IO [Only Int]) :: IO (Either SomeException [Only Int])
+  pure (either (const False) (not . null) outcome)
+
+@@@ object-authorization | vulnerable | src/InvoiceView.hs
+{-# LANGUAGE OverloadedStrings #-}
+module InvoiceView (invoiceRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status401, status404)
+import Web.Scotty
+
+data Invoice = Invoice { invoiceNumber :: T.Text, invoiceTotal :: Double, invoicePdf :: T.Text }
+
+instance FromRow Invoice where
+  fromRow = Invoice <$> field <*> field <*> field
+
+currentUser :: Connection -> ActionM Int
+currentUser conn = do
+  token <- header "X-Session"
+  rows <- maybe (pure []) (\t -> liftIO (query conn "SELECT user_id FROM sessions WHERE token = ?" (Only (TL.toStrict t)))) token
+  case rows of
+    (Only uid : _) -> pure uid
+    []             -> status status401 >> text "sign in first" >> finish
+
+invoiceRoutes :: Connection -> ScottyM ()
+invoiceRoutes conn =
+  get "/invoices/:id" $ do
+    _ <- currentUser conn
+    invoiceId <- param "id"
+    rows <- liftIO (query conn "SELECT number, total, pdf_url FROM invoices WHERE id = ?" (Only (invoiceId :: Int))) --@@
+    case rows of
+      (inv : _) -> text (TL.fromStrict (invoiceNumber inv <> " " <> invoicePdf inv))
+      []        -> status status404 >> text "no such invoice"
+
+@@@ object-authorization | vulnerable | src/DocumentDelete.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, TypeFamilies #-}
+module DocumentDelete (DeleteApi, deleteServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Int (Int64)
+import Database.Persist
+import Database.Persist.Sql (ConnectionPool, runSqlPool, toSqlKey)
+import Servant
+import Servant.Server.Experimental.Auth (AuthServerData)
+import Model
+
+type instance AuthServerData (AuthProtect "session") = UserId
+
+type DeleteApi = AuthProtect "session" :> "documents" :> Capture "document" Int64 :> Delete '[JSON] NoContent
+
+deleteServer :: ConnectionPool -> Server DeleteApi
+deleteServer pool requester documentId = do
+  removed <- liftIO (removeDocument pool requester (toSqlKey documentId))
+  if removed then pure NoContent else throwError err404
+
+removeDocument :: ConnectionPool -> UserId -> DocumentId -> IO Bool
+removeDocument pool _requester key = flip runSqlPool pool $ do
+  existing <- get key
+  case existing of
+    Nothing -> pure False
+    Just _  -> delete key >> pure True --@@
+
+@@@ object-authorization | vulnerable | src/AddressUpdate.hs
+{-# LANGUAGE OverloadedStrings, TypeFamilies #-}
+module AddressUpdate (postAddressUpdateR) where
+
+import Data.Text (Text)
+import Yesod
+import Yesod.Auth (requireAuthId)
+import Foundation
+import Model
+
+data AddressInput = AddressInput
+  { inputAddressId :: AddressId
+  , inputLine1     :: Text
+  , inputCity      :: Text
+  , inputPostcode  :: Text
+  }
+
+addressForm :: FormInput Handler AddressInput
+addressForm = AddressInput
+  <$> ireq (checkMMap (pure . Right . toSqlKey) fromSqlKey intField) "address"
+  <*> ireq textField "line1"
+  <*> ireq textField "city"
+  <*> ireq textField "postcode"
+
+postAddressUpdateR :: Handler Value
+postAddressUpdateR = do
+  _ <- requireAuthId
+  input <- runInputPost addressForm
+  runDB (update (inputAddressId input) [AddressLine1 =. inputLine1 input, AddressCity =. inputCity input, AddressPostcode =. inputPostcode input]) --@@
+  returnJson (object ["updated" .= True])
+
+@@@ object-authorization | safe | src/InvoiceDetail.hs
+{-# LANGUAGE OverloadedStrings #-}
+module InvoiceDetail (invoiceRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status401, status404)
+import Web.Scotty
+
+data Invoice = Invoice { invoiceNumber :: T.Text, invoiceTotal :: Double, invoicePdf :: T.Text }
+
+instance FromRow Invoice where
+  fromRow = Invoice <$> field <*> field <*> field
+
+currentUser :: Connection -> ActionM Int
+currentUser conn = do
+  token <- header "X-Session"
+  rows <- maybe (pure []) (\t -> liftIO (query conn "SELECT user_id FROM sessions WHERE token = ?" (Only (TL.toStrict t)))) token
+  case rows of
+    (Only uid : _) -> pure uid
+    []             -> status status401 >> text "sign in first" >> finish
+
+invoiceRoutes :: Connection -> ScottyM ()
+invoiceRoutes conn =
+  get "/invoices/:id" $ do
+    uid <- currentUser conn
+    invoiceId <- param "id"
+    rows <- liftIO (query conn "SELECT number, total, pdf_url FROM invoices WHERE id = ? AND owner_id = ?" (invoiceId :: Int, uid)) --@@
+    case rows of
+      (inv : _) -> text (TL.fromStrict (invoiceNumber inv <> " " <> invoicePdf inv))
+      []        -> status status404 >> text "no such invoice"
+
+@@@ object-authorization | safe | src/DocumentRemove.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, TypeFamilies #-}
+module DocumentRemove (RemoveApi, removeServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Int (Int64)
+import Database.Persist
+import Database.Persist.Sql (ConnectionPool, runSqlPool, toSqlKey)
+import Servant
+import Servant.Server.Experimental.Auth (AuthServerData)
+import Model
+
+type instance AuthServerData (AuthProtect "session") = UserId
+
+type RemoveApi = AuthProtect "session" :> "documents" :> Capture "document" Int64 :> Delete '[JSON] NoContent
+
+removeServer :: ConnectionPool -> Server RemoveApi
+removeServer pool requester documentId = do
+  removed <- liftIO (removeDocument pool requester (toSqlKey documentId))
+  if removed then pure NoContent else throwError err404
+
+removeDocument :: ConnectionPool -> UserId -> DocumentId -> IO Bool
+removeDocument pool requester key = flip runSqlPool pool $ do
+  owned <- selectFirst [DocumentId ==. key, DocumentOwner ==. requester] [] --@@
+  case owned of
+    Nothing -> pure False
+    Just (Entity k _) -> delete k >> pure True
+
+@@@ object-authorization | safe | src/AddressEdit.hs
+{-# LANGUAGE OverloadedStrings, TypeFamilies #-}
+module AddressEdit (postAddressEditR) where
+
+import Control.Monad (when)
+import Data.Text (Text)
+import Yesod
+import Yesod.Auth (requireAuthId)
+import Foundation
+import Model
+
+data AddressInput = AddressInput
+  { inputAddressId :: AddressId
+  , inputLine1     :: Text
+  , inputCity      :: Text
+  , inputPostcode  :: Text
+  }
+
+addressForm :: FormInput Handler AddressInput
+addressForm = AddressInput
+  <$> ireq (checkMMap (pure . Right . toSqlKey) fromSqlKey intField) "address"
+  <*> ireq textField "line1"
+  <*> ireq textField "city"
+  <*> ireq textField "postcode"
+
+postAddressEditR :: Handler Value
+postAddressEditR = do
+  uid <- requireAuthId
+  input <- runInputPost addressForm
+  address <- runDB (get404 (inputAddressId input))
+  when (addressOwner address /= uid) (permissionDenied "this address belongs to another account")
+  runDB (update (inputAddressId input) [AddressLine1 =. inputLine1 input, AddressCity =. inputCity input, AddressPostcode =. inputPostcode input]) --@@
+  returnJson (object ["updated" .= True])

@@ -1,0 +1,415 @@
+{
+  "schema": "agentic-security/language-support-measurement@2",
+  "split": "unseen-v5",
+  "measuredAt": "2026-11-01",
+  "corpusVersion": "qa001-v2",
+  "ecosystems": {
+    "haskell": {
+      "detection": {
+        "cases": 78,
+        "scored": 78,
+        "advisoryFindingsNotScored": 6,
+        "layers": {
+          "sast": {
+            "cases": 48,
+            "tp": 12,
+            "fp": 4,
+            "fn": 12,
+            "tn": 17,
+            "precision": 0.75,
+            "recall": 0.5,
+            "f1": 0.6,
+            "measured": true,
+            "families": {
+              "weak-password-hash": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "route-authentication": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "resource-limits": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "session-cookie": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "object-authorization": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 3,
+                "precision": null,
+                "recall": 0,
+                "f1": null,
+                "measured": false
+              },
+              "sensitive-logging": {
+                "tp": 2,
+                "fp": 2,
+                "fn": 1,
+                "precision": 0.5,
+                "recall": 0.6666666666666666,
+                "f1": 0.5714285714285715,
+                "measured": true
+              },
+              "parser-safety": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "weak-randomness": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              }
+            },
+            "misses": [
+              {
+                "case": "hs-v5-3908719259",
+                "label": {
+                  "cwe": "CWE-770"
+                }
+              },
+              {
+                "case": "hs-v5-5ec0c5185c",
+                "label": {
+                  "cwe": "CWE-916"
+                }
+              },
+              {
+                "case": "hs-v5-60214a585f",
+                "label": {
+                  "cwe": "CWE-639"
+                }
+              },
+              {
+                "case": "hs-v5-7010f3562d",
+                "label": {
+                  "cwe": "CWE-532"
+                }
+              },
+              {
+                "case": "hs-v5-804e1549b9",
+                "label": {
+                  "cwe": "CWE-639"
+                }
+              },
+              {
+                "case": "hs-v5-8828c4e8e8",
+                "label": {
+                  "cwe": "CWE-248"
+                }
+              },
+              {
+                "case": "hs-v5-9b189c0d8a",
+                "label": {
+                  "cwe": "CWE-338"
+                }
+              },
+              {
+                "case": "hs-v5-d5b7580779",
+                "label": {
+                  "cwe": "CWE-770"
+                }
+              },
+              {
+                "case": "hs-v5-f454a21bbf",
+                "label": {
+                  "cwe": "CWE-1004"
+                }
+              },
+              {
+                "case": "hs-v5-fbbf8f6628",
+                "label": {
+                  "cwe": "CWE-639"
+                }
+              },
+              {
+                "case": "hs-v5-fe96f716bb",
+                "label": {
+                  "cwe": "CWE-338"
+                }
+              },
+              {
+                "case": "hs-v5-ff586b9040",
+                "label": {
+                  "cwe": "CWE-306"
+                }
+              }
+            ],
+            "strays": [
+              {
+                "file": "hs-v5-2fb5e2a400/src/UserAdmin.hs",
+                "line": 12,
+                "cwe": "CWE-306"
+              },
+              {
+                "file": "hs-v5-35225a6120/src/LoginEvents.hs",
+                "line": 21,
+                "cwe": "CWE-532"
+              },
+              {
+                "file": "hs-v5-9f7e22bfad/src/CheckoutEvents.hs",
+                "line": 26,
+                "cwe": "CWE-532"
+              },
+              {
+                "file": "hs-v5-ccaaf7e5fe/src/MemberLogin.hs",
+                "line": 31,
+                "cwe": "CWE-916"
+              }
+            ],
+            "crossFamilyFindingsNotScored": 12,
+            "strict": {
+              "fp": 16,
+              "precision": 0.42857142857142855,
+              "f1": 0.4615384615384615
+            }
+          },
+          "taint": {
+            "cases": 30,
+            "tp": 11,
+            "fp": 4,
+            "fn": 4,
+            "tn": 10,
+            "precision": 0.7333333333333333,
+            "recall": 0.7333333333333333,
+            "f1": 0.7333333333333333,
+            "measured": true,
+            "families": {
+              "ssrf": {
+                "tp": 2,
+                "fp": 2,
+                "fn": 1,
+                "precision": 0.5,
+                "recall": 0.6666666666666666,
+                "f1": 0.5714285714285715,
+                "measured": true
+              },
+              "path-traversal": {
+                "tp": 3,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0.75,
+                "recall": 1,
+                "f1": 0.8571428571428571,
+                "measured": true
+              },
+              "sql-injection": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "html-injection": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "command-injection": {
+                "tp": 3,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              }
+            },
+            "misses": [
+              {
+                "case": "hs-v5-427c11c29e",
+                "label": {
+                  "cwe": "CWE-89"
+                }
+              },
+              {
+                "case": "hs-v5-883453f4e6",
+                "label": {
+                  "cwe": "CWE-79"
+                }
+              },
+              {
+                "case": "hs-v5-947c4e09bd",
+                "label": {
+                  "cwe": "CWE-89"
+                }
+              },
+              {
+                "case": "hs-v5-d04be9790e",
+                "label": {
+                  "cwe": "CWE-918"
+                }
+              }
+            ],
+            "strays": [
+              {
+                "file": "hs-v5-607b7d2a74/src/DraftArchive.hs",
+                "line": 28,
+                "cwe": "CWE-22"
+              },
+              {
+                "file": "hs-v5-9dea4e3efe/src/FeedSearch.hs",
+                "line": 18,
+                "cwe": "CWE-918"
+              },
+              {
+                "file": "hs-v5-e1e69b26c3/src/WelcomePage.hs",
+                "line": 19,
+                "cwe": "CWE-79"
+              },
+              {
+                "file": "hs-v5-e93d57a72a/src/WebhookReplay.hs",
+                "line": 23,
+                "cwe": "CWE-918"
+              }
+            ],
+            "crossFamilyFindingsNotScored": 1,
+            "strict": {
+              "fp": 5,
+              "precision": 0.6875,
+              "f1": 0.7096774193548386
+            }
+          }
+        },
+        "perFamilyCases": {
+          "command-injection": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "weak-password-hash": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "html-injection": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "route-authentication": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "ssrf": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "path-traversal": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "resource-limits": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "session-cookie": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "sql-injection": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "sensitive-logging": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "object-authorization": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "parser-safety": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "weak-randomness": {
+            "vulnerable": 3,
+            "safe": 3
+          }
+        },
+        "unknownOutcomes": {
+          "total": 0,
+          "disclosed": 0,
+          "withFinding": 0,
+          "silentClean": 0,
+          "requiredDisclosure": 0,
+          "requiredDisclosureMissing": 0
+        }
+      }
+    }
+  },
+  "splitRole": "generalisation",
+  "corpusTotals": {
+    "haskell": {
+      "security": {
+        "vulnerable": 260,
+        "safe": 260,
+        "unknown": 52,
+        "families": 13
+      },
+      "privacy": {
+        "positives": 100,
+        "negatives": 200
+      }
+    },
+    "nix": {
+      "security": {
+        "vulnerable": 240,
+        "safe": 240,
+        "unknown": 52,
+        "families": 12
+      },
+      "privacy": {
+        "positives": 100,
+        "negatives": 200
+      }
+    }
+  },
+  "hashes": {
+    "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
+    "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+    "shapeDev2Rollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+    "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+    "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
+    "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+    "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+    "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
+  }
+}

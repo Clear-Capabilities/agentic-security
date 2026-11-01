@@ -1,7 +1,7 @@
 {
  "schema": "agentic-security/haskell-precision-baseline@1",
  "comparison": "equality: a regression fails, and so does an improvement that was not recorded here",
- "engineVersion": "0.188.0",
+ "engineVersion": "0.195.7",
  "labelsDigests": {
   "development-tuning": "f599e1edc2e1e8b68756b4d25c238daf0f0f04b34ea30983a16a793615e40395",
   "development-verification": "39b0c5bf5cd20298a8e7ab608e5d7b938c4725a8f8d51e5b22a4ba011f1d0870",
@@ -233,12 +233,12 @@
    },
    "fresh": {
     "dhall-haskell": {
-     "rows": 91,
-     "flagged": 14,
-     "loweredToInfo": 77,
+     "rows": 93,
+     "flagged": 15,
+     "loweredToInfo": 78,
      "byStatus": {
       "no-verdict": 72,
-      "entrypoint-reachable": 15,
+      "entrypoint-reachable": 17,
       "external-api": 4
      }
     },
@@ -252,13 +252,13 @@
      }
     },
     "ihp": {
-     "rows": 57,
-     "flagged": 10,
+     "rows": 69,
+     "flagged": 22,
      "loweredToInfo": 47,
      "byStatus": {
-      "no-verdict": 33,
-      "unknown": 2,
-      "entrypoint-reachable": 17,
+      "no-verdict": 35,
+      "unknown": 9,
+      "entrypoint-reachable": 20,
       "external-api": 5
      }
     },
@@ -272,12 +272,13 @@
      }
     },
     "scotty": {
-     "rows": 16,
-     "flagged": 16,
+     "rows": 23,
+     "flagged": 23,
      "loweredToInfo": 0,
      "byStatus": {
-      "no-verdict": 9,
-      "entrypoint-reachable": 7
+      "external-api": 1,
+      "no-verdict": 11,
+      "entrypoint-reachable": 11
      }
     },
     "summoner": {

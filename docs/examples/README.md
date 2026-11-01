@@ -436,6 +436,7 @@ Captured from the built bundle on `examples/haskell-app/vulnerable`: exit code *
 | high | `missing-authentication` | CWE-306 | src/Main.hs:34 |
 | critical | `command-injection` | CWE-78 | src/Main.hs:36 |
 | high | `missing-authentication` | CWE-306 | src/Main.hs:38 |
+| high | `broken-object-authorization` | CWE-639 | src/Main.hs:40 |
 
 Scan-health conditions:
 - no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
