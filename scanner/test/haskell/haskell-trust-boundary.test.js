@@ -137,19 +137,45 @@ test('wrapper: a function that hands its parameters whole to a process is a thin
   assert.equal(flagged(element, 'CWE-88').length, 1, 'a fixed program with a caller-chosen argument is argument injection');
 });
 
-test('wrapper: a path operation on a caller-named file is kept (the vulnerable synthetic shape), because only the shell/process wrappers are judged pass-through', async () => {
+test('wrapper: a path operation on a file the caller names WHOLE is a thin wrapper (api-contract, since 0.195.9); a parameter under a fixed directory is kept', async () => {
+  // Until 0.195.8 this shape was kept because three synthetic development sets label it vulnerable. On the real-code sets every flagged site
+  // of this shape was a false positive (a framework's `renderFile path`, a library's `store path = readFile (cs path)`), so the whole-handoff
+  // rule the process wrappers already had now covers path operations too. The finding is lowered, never dropped: it is still here as `info`.
   const fs = await scanAll({ 'Svc.hs': mod(['import System.IO'], 'saveUpload :: String -> String -> IO ()\nsaveUpload name content = withFile name WriteMode (\\h -> hPutStr h content)', 'module Svc (saveUpload) where') });
-  assert.equal(flagged(fs, 'CWE-22').length, 1);
-  // Why it stays, pinned at the right place: this fixture is one module with no `main` and no manifest, so the project-reachability verdict is
-  // `unknown` on two independent clauses (no entry point; no manifest saying which modules are exposed) and nothing may lower the finding. A change
-  // that made it `unreachable-in-project` would fail here, loudly, instead of silently dropping the vulnerable synthetic shape.
-  const f = flagged(fs, 'CWE-22')[0];
+  assert.equal(flagged(fs, 'CWE-22').length, 0, JSON.stringify(flagged(fs, 'CWE-22').map((f) => [f.line, f.trustBoundary])));
+  const f = lowered(fs, 'CWE-22')[0];
+  assert.ok(f, 'the flow is still reported as information');
+  assert.equal(f.trustBoundary.verdict, 'api-contract');
+  // the reachability verdict is unchanged by this: one module, no main, no manifest
   assert.equal(f.reachability.status, 'unknown');
   assert.equal(f.reachability.holeReason, 'no-entrypoint');
-  assert.equal(f._reachLowered, undefined, 'the reachability pass did not lower it');
-  assert.equal(f._trustLowered, undefined, 'the trust-boundary pass did not lower it');
-  assert.equal(f.originalSeverity, undefined, 'no pass changed its severity');
-  assert.notEqual(f.severity, 'info');
+  assert.equal(f._reachLowered, undefined, 'the reachability pass did not lower it; the trust-boundary pass did');
+  assert.equal(f._trustLowered, true);
+  // a type conversion between the parameter and the operation does not make it the function's own construction
+  const cs = await scanAll({ 'Svc.hs': mod(['import qualified Data.ByteString.Lazy as LBS', 'import Data.String.Conversions (cs)', 'import Data.Text (Text)'], 'storeFrom :: Text -> IO LBS.ByteString\nstoreFrom path = LBS.readFile (cs path)', 'module Svc (storeFrom) where') });
+  assert.equal(flagged(cs, 'CWE-22').length, 0, JSON.stringify(flagged(cs, 'CWE-22').map((f) => [f.line, f.trustBoundary])));
+  assert.equal(lowered(cs, 'CWE-22')[0].trustBoundary.verdict, 'api-contract');
+  // the function that chose the directory and splices the caller's text under it is still a finding
+  const under = await scanAll({ 'Svc.hs': mod(['import System.IO'], 'load :: String -> IO String\nload name = readFile ("/srv/exports/" ++ name)', 'module Svc (load) where') });
+  assert.equal(flagged(under, 'CWE-22').length, 1);
+  assert.equal(flagged(under, 'CWE-22')[0].trustBoundary.verdict, 'entry-parameter');
+});
+
+test('operator: a command-line program that reads a FILE NAME from its standard input is the operator naming a file; a command from standard input, and the same read in a service, stay reported', async () => {
+  const cli = await scanAll({ 'Main.hs': mod(['import System.IO'], 'main :: IO ()\nmain = do\n  name <- getLine\n  readFile name >>= putStr', 'module Main (main) where') });
+  assert.equal(flagged(cli, 'CWE-22').length, 0, JSON.stringify(flagged(cli, 'CWE-22').map((f) => [f.line, f.trustBoundary])));
+  const low = lowered(cli, 'CWE-22')[0];
+  assert.ok(low, 'the flow is still reported as information');
+  assert.equal(low.trustBoundary.verdict, 'operator-controlled');
+  assert.match(low.trustBoundary.reason, /standard input/);
+  // the same origin reaching a shell is not covered (a deliberate, older decision, pinned above as well)
+  const cmd = await scanAll({ 'Main.hs': mod(['import System.Process'], 'main :: IO ()\nmain = getLine >>= callCommand', 'module Main (main) where') });
+  assert.equal(flagged(cmd, 'CWE-78').length, 1);
+  assert.equal(flagged(cmd, 'CWE-78')[0].trustBoundary.verdict, 'data-input');
+  // a web service that reads a file name from its standard input is not a command-line program
+  const svc = await scanAll({ 'Main.hs': mod(['import Web.Scotty', 'import Control.Monad.IO.Class (liftIO)', 'import qualified Data.Text.Lazy as TL'], 'main :: IO ()\nmain = do\n  name <- getLine\n  scotty 3000 $ get "/dump" $ do\n    body <- liftIO (readFile name)\n    text (TL.pack body)', 'module Main (main) where') });
+  assert.equal(flagged(svc, 'CWE-22').length, 1, JSON.stringify(svc.filter((f) => f.cwe === 'CWE-22').map((f) => [f.line, f.severity, f.trustBoundary])));
+  assert.equal(flagged(svc, 'CWE-22')[0].trustBoundary.verdict, 'data-input');
 });
 
 // ── 4. platform variants ─────────────────────────────────────────────────────

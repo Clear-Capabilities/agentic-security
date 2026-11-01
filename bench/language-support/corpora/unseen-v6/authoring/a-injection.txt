@@ -1,0 +1,859 @@
+@@@ sql-injection | vulnerable | src/Invoices.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Invoices (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.String (fromString)
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Web.Scotty
+
+type InvoiceRow = (Int, TL.Text, Double)
+
+main :: IO ()
+main = do
+  conn <- connectPostgreSQL "dbname=billing"
+  scotty 8080 $ do
+    get "/invoices" $ do
+      customer <- param "customer"
+      rows <- liftIO (query_ conn (fromString ("SELECT id, ref, total FROM invoices WHERE customer_ref = '" ++ TL.unpack customer ++ "' ORDER BY issued_at DESC"))) :: ActionM [InvoiceRow] --@@
+      json [ (i, r, t) | (i, r, t) <- rows ]
+    get "/invoices/count" $ do
+      [Only n] <- liftIO (query_ conn "SELECT count(*) FROM invoices") :: ActionM [Only Int]
+      json n
+
+@@@ sql-injection | vulnerable | src/TicketSearch.hs
+{-# LANGUAGE DataKinds, DeriveGeneric, OverloadedStrings, TypeOperators #-}
+module TicketSearch (app) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON, ToJSON)
+import Data.Text (Text)
+import Database.SQLite.Simple
+import GHC.Generics (Generic)
+import Servant
+
+data SearchRequest = SearchRequest { searchTerm :: Text, includeClosed :: Bool }
+  deriving (Show, Generic)
+instance FromJSON SearchRequest
+
+data Ticket = Ticket { ticketId :: Int, title :: Text } deriving (Show, Generic)
+instance ToJSON Ticket
+instance FromRow Ticket where
+  fromRow = Ticket <$> field <*> field
+
+type API = "tickets" :> "search" :> ReqBody '[JSON] SearchRequest :> Post '[JSON] [Ticket]
+
+findTickets :: Connection -> SearchRequest -> IO [Ticket]
+findTickets conn req = query_ conn (Query ("SELECT id, title FROM tickets WHERE title LIKE '%" <> searchTerm req <> "%'" <> closedClause)) --@@
+  where
+    closedClause = if includeClosed req then "" else " AND status <> 'closed'"
+
+server :: Connection -> Server API
+server conn req = liftIO (findTickets conn req)
+
+app :: Connection -> Application
+app conn = serve (Proxy :: Proxy API) (server conn)
+
+@@@ sql-injection | vulnerable | src/ReportExport.hs
+module ReportExport (main) where
+
+import Data.List (intercalate)
+import Data.String (fromString)
+import Database.MySQL.Simple
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
+import Text.Printf (printf)
+
+type DealRow = (Int, String, Double)
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [region] -> exportRegion region
+    _ -> hPutStrLn stderr "usage: report-export <region>" >> exitFailure
+
+exportRegion :: String -> IO ()
+exportRegion region = do
+  conn <- connect defaultConnectInfo { connectDatabase = "sales" }
+  let statement = printf "SELECT id, account, amount FROM deals WHERE region = '%s' ORDER BY amount DESC" region
+  rows <- query_ conn (fromString statement) :: IO [DealRow] --@@
+  putStr (unlines (map renderRow rows))
+  close conn
+
+renderRow :: DealRow -> String
+renderRow (i, account, amount) = intercalate "," [show i, account, show amount]
+
+@@@ sql-injection | safe | src/OrderLookup.hs
+{-# LANGUAGE OverloadedStrings #-}
+module OrderLookup (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status404)
+import Web.Spock
+import Web.Spock.Config
+
+type OrderRow = (Int, Text, Double)
+
+main :: IO ()
+main = do
+  conn <- connectPostgreSQL "dbname=shop"
+  cfg <- defaultSpockCfg () PCNoDatabase ()
+  runSpock 8080 $ spock cfg $ do
+    get ("orders" <//> var) $ \ref -> do
+      rows <- liftIO (query conn "SELECT id, ref, total FROM orders WHERE ref = ? AND cancelled = false" (Only (ref :: Text))) :: ActionCtxT () (WebStateM () () ()) [OrderRow] --@@
+      case rows of
+        [(i, r, t)] -> json (i, r, t)
+        _ -> setStatus status404 >> text "no such order"
+    get "orders" $ do
+      rows <- liftIO (query_ conn "SELECT id, ref, total FROM orders WHERE cancelled = false LIMIT 50") :: ActionCtxT () (WebStateM () () ()) [OrderRow]
+      json rows
+
+@@@ sql-injection | safe | src/MemberDirectory.hs
+{-# LANGUAGE OverloadedStrings, TypeApplications #-}
+module MemberDirectory (postDirectorySearchR) where
+
+import Data.Aeson (Value)
+import Data.Text (Text)
+import Database.Esqueleto.Experimental
+import Database.Persist.Sql (SqlPersistT)
+import Yesod.Core
+import Yesod.Form
+import Foundation (Handler, Member(..), EntityField(..))
+
+searchMembers :: Text -> SqlPersistT Handler [Entity Member]
+searchMembers term = select $ do
+  m <- from (table @Member)
+  where_ (m ^. MemberName `like` (%) ++. val term ++. (%)) --@@
+  orderBy [asc (m ^. MemberName)]
+  limit 25
+  pure m
+
+postDirectorySearchR :: Handler Value
+postDirectorySearchR = do
+  term <- runInputPost (ireq textField "q")
+  members <- runDB (searchMembers term)
+  returnJson [ memberName m | Entity _ m <- members ]
+
+@@@ sql-injection | safe | src/AuditIngest.hs
+{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
+module AuditIngest (main) where
+
+import Data.Aeson (FromJSON, decodeStrict)
+import Data.Functor.Contravariant ((>$<))
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import qualified Hasql.Connection as Connection
+import qualified Hasql.Decoders as D
+import qualified Hasql.Encoders as E
+import qualified Hasql.Session as Session
+import Hasql.Statement (Statement(..))
+import Kafka.Consumer
+
+data AuditEvent = AuditEvent { actor :: Text, action :: Text, subject :: Text }
+  deriving (Show, Generic)
+instance FromJSON AuditEvent
+
+insertEvent :: Statement AuditEvent ()
+insertEvent = Statement "INSERT INTO audit_log (actor, action, subject) VALUES ($1, $2, $3)" encoder D.noResult True
+  where
+    encoder = (actor >$< E.param (E.nonNullable E.text))
+           <> (action >$< E.param (E.nonNullable E.text))
+           <> (subject >$< E.param (E.nonNullable E.text))
+
+main :: IO ()
+main = do
+  acquired <- Connection.acquire "host=localhost dbname=audit"
+  created <- newConsumer (brokersList ["localhost:9092"] <> groupId "audit-ingest") (topics ["audit-events"])
+  case (acquired, created) of
+    (Right conn, Right consumer) -> loop conn consumer
+    _ -> putStrLn "could not start the audit consumer"
+  where
+    loop conn consumer = do
+      polled <- pollMessage consumer (Timeout 1000)
+      case polled of
+        Right record | Just event <- crValue record >>= decodeStrict -> do
+          _ <- Session.run (Session.statement event insertEvent) conn --@@
+          loop conn consumer
+        _ -> loop conn consumer
+
+@@@ command-injection | vulnerable | src/ImageResize.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ImageResize (main) where
+
+import Control.Monad (msum)
+import Control.Monad.IO.Class (liftIO)
+import Happstack.Server
+import System.Process (callCommand)
+
+main :: IO ()
+main = simpleHTTP nullConf { port = 8080 } $ msum
+  [ dir "resize" resizeHandler
+  , notFound (toResponse ("unknown route" :: String))
+  ]
+
+resizeHandler :: ServerPart Response
+resizeHandler = do
+  method POST
+  size <- look "size"
+  liftIO (callCommand ("convert uploads/latest.png -resize " ++ size ++ " thumbs/latest.png")) --@@
+  ok (toResponse ("resized to " ++ size))
+
+@@@ command-injection | vulnerable | src/RepoMirror.hs
+{-# LANGUAGE OverloadedStrings #-}
+module RepoMirror (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as B
+import Snap.Core
+import Snap.Http.Server (quickHttpServe)
+import System.Process.Typed (runProcess_, setWorkingDir, shell)
+
+main :: IO ()
+main = quickHttpServe $ route [("mirror", method POST mirrorHandler)]
+
+mirrorHandler :: Snap ()
+mirrorHandler = do
+  req <- getRequest
+  case getHeader "X-Repo-Url" req of
+    Nothing -> do
+      modifyResponse (setResponseStatus 400 "Bad Request")
+      writeBS "repo url header required"
+    Just url -> do
+      liftIO (cloneInto "/var/mirrors" (B.unpack url))
+      writeBS "mirror started"
+
+cloneInto :: FilePath -> String -> IO ()
+cloneInto base url = runProcess_ (setWorkingDir base (shell ("git clone --mirror " ++ url))) --@@
+
+@@@ command-injection | vulnerable | src/BuildConsole.hs
+{-# LANGUAGE OverloadedStrings #-}
+module BuildConsole (main) where
+
+import Control.Monad (forever)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Network.WebSockets as WS
+import Turtle (empty, shells)
+
+main :: IO ()
+main = WS.runServer "127.0.0.1" 9160 consoleApp
+
+consoleApp :: WS.ServerApp
+consoleApp pending = do
+  conn <- WS.acceptRequest pending
+  WS.withPingThread conn 30 (pure ()) $ forever $ do
+    msg <- WS.receiveData conn :: IO Text
+    let target = T.strip (T.drop (T.length "build ") msg)
+    if "build " `T.isPrefixOf` msg
+      then do
+        shells ("make -C /srv/project " <> target) empty --@@
+        WS.sendTextData conn ("started " <> target)
+      else WS.sendTextData conn ("unknown command" :: Text)
+
+@@@ command-injection | safe | src/ThumbnailService.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ThumbnailService (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Char (isDigit)
+import qualified Data.Text.Lazy as TL
+import Network.HTTP.Types.Status (status400)
+import System.Process (readProcess)
+import Web.Scotty
+
+main :: IO ()
+main = scotty 8080 $
+  post "/thumbnail" $ do
+    width <- param "width"
+    if validWidth width
+      then do
+        _ <- liftIO (readProcess "convert" ["uploads/latest.png", "-resize", TL.unpack width, "thumbs/latest.png"] "") --@@
+        text ("resized to " <> width)
+      else status status400 >> text "width must be a number of up to four digits"
+
+validWidth :: TL.Text -> Bool
+validWidth w = not (TL.null w) && TL.length w <= 4 && TL.all isDigit w
+
+@@@ command-injection | safe | src/DocumentStats.hs
+{-# LANGUAGE DataKinds, OverloadedStrings, TypeOperators #-}
+module DocumentStats (app) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.Map.Strict as Map
+import Data.Text (Text)
+import Servant
+import System.Process.Typed (proc, readProcessStdout_)
+
+type API = "documents" :> Capture "slug" Text :> "stats" :> Get '[JSON] Int
+
+catalogue :: Map.Map Text FilePath
+catalogue = Map.fromList
+  [ ("handbook", "/srv/docs/handbook.txt")
+  , ("policy", "/srv/docs/policy.txt")
+  , ("faq", "/srv/docs/faq.txt")
+  ]
+
+wordCount :: FilePath -> IO Int
+wordCount file = do
+  out <- readProcessStdout_ (proc "wc" ["-w", "--", file]) --@@
+  pure (maybe 0 fst (BL.readInt (BL.dropWhile (== ' ') out)))
+
+statsHandler :: Text -> Handler Int
+statsHandler slug = case Map.lookup slug catalogue of
+  Nothing -> throwError err404 { errBody = "unknown document" }
+  Just file -> liftIO (wordCount file)
+
+app :: Application
+app = serve (Proxy :: Proxy API) statsHandler
+
+@@@ command-injection | safe | src/DomainProbe.hs
+{-# LANGUAGE OverloadedStrings #-}
+module DomainProbe (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Char (isAlphaNum)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Network.HTTP.Types (status400, status404)
+import Network.Wai.Handler.Warp (run)
+import qualified Shelly as Sh
+import Web.Twain
+
+main :: IO ()
+main = run 8080 $ foldr ($) (notFound missing) [ post "/slack/probe" probe ]
+
+probe :: ResponderM a
+probe = do
+  domain <- param "text"
+  if validDomain domain
+    then do
+      answer <- liftIO (lookupAddress (T.strip domain))
+      send (text answer)
+    else send (status status400 (text "a domain may contain letters, digits, dots and dashes"))
+
+lookupAddress :: Text -> IO Text
+lookupAddress domain = Sh.shelly (Sh.silently (Sh.run "dig" ["+short", domain])) --@@
+
+validDomain :: Text -> Bool
+validDomain d = not (T.null d) && T.length d < 254 && T.all (\c -> isAlphaNum c || c == '.' || c == '-') (T.strip d)
+
+missing :: ResponderM a
+missing = send (status status404 (text "not found"))
+
+@@@ path-traversal | vulnerable | src/Avatars.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Avatars (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text.Lazy as TL
+import Web.Scotty
+
+avatarRoot :: FilePath
+avatarRoot = "/srv/uploads/avatars/"
+
+main :: IO ()
+main = scotty 8080 $ do
+  get "/avatars/:name" $ do
+    name <- param "name"
+    bytes <- liftIO (BL.readFile (avatarRoot ++ TL.unpack name)) --@@
+    setHeader "Content-Type" "image/png"
+    setHeader "Cache-Control" "public, max-age=3600"
+    raw bytes
+  get "/avatars" $
+    json ["default.png", "robot.png", "cat.png" :: TL.Text]
+
+@@@ path-traversal | vulnerable | src/ReportDownload.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ReportDownload (getReportDownloadR) where
+
+import Data.Text (Text)
+import qualified Data.Text as T
+import System.FilePath ((</>))
+import Yesod.Core
+import Foundation (Handler)
+
+reportRoot :: FilePath
+reportRoot = "/var/lib/reports"
+
+reportPath :: Text -> FilePath
+reportPath name = reportRoot </> T.unpack name
+
+getReportDownloadR :: Handler TypedContent
+getReportDownloadR = do
+  requested <- lookupGetParam "file"
+  case requested of
+    Nothing -> invalidArgs ["file"]
+    Just name -> do
+      addHeader "Cache-Control" "private, no-store"
+      sendFile "application/pdf" (reportPath name) --@@
+
+@@@ path-traversal | vulnerable | src/ExportJob.hs
+{-# LANGUAGE DeriveGeneric, OverloadedStrings, RecordWildCards #-}
+module ExportJob (main) where
+
+import Data.Aeson (FromJSON, decode)
+import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import GHC.Generics (Generic)
+import Network.AMQP
+
+data ExportRequest = ExportRequest { accountId :: Int, outputName :: Text, format :: Text }
+  deriving (Show, Generic)
+instance FromJSON ExportRequest
+
+exportRoot :: FilePath
+exportRoot = "/var/exports/"
+
+main :: IO ()
+main = do
+  conn <- openConnection "127.0.0.1" "/" "guest" "guest"
+  chan <- openChannel conn
+  _ <- declareQueue chan newQueue { queueName = "exports" }
+  _ <- consumeMsgs chan "exports" Ack onMessage
+  putStrLn "export worker ready"
+  where
+    onMessage (msg, env) = do
+      case decode (msgBody msg) of
+        Just req -> runExport req
+        Nothing -> putStrLn "discarding malformed export request"
+      ackEnv env
+
+runExport :: ExportRequest -> IO ()
+runExport ExportRequest{..} = do
+  rows <- renderRows accountId format
+  BL.writeFile (exportRoot ++ T.unpack outputName) rows --@@
+
+renderRows :: Int -> Text -> IO BL.ByteString
+renderRows account fmt = pure (BL.fromStrict (TE.encodeUtf8 (T.pack (show account) <> "," <> fmt)))
+
+@@@ path-traversal | safe | src/Attachments.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Attachments (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text.Lazy as TL
+import System.FilePath (takeFileName, (</>))
+import Web.Scotty
+
+attachmentRoot :: FilePath
+attachmentRoot = "/srv/uploads/attachments"
+
+main :: IO ()
+main = scotty 8080 $ do
+  get "/attachments/:name" $ do
+    name <- param "name"
+    let file = takeFileName (TL.unpack name)
+    bytes <- liftIO (BL.readFile (attachmentRoot </> file)) --@@
+    setHeader "Content-Type" "application/octet-stream"
+    setHeader "Cache-Control" "private, max-age=600"
+    raw bytes
+  get "/attachments" $
+    json ["invoice-march.pdf", "contract.pdf" :: TL.Text]
+
+@@@ path-traversal | safe | src/TemplatePreview.hs
+{-# LANGUAGE OverloadedStrings #-}
+module TemplatePreview (main) where
+
+import qualified Data.ByteString.Char8 as B
+import qualified Data.Map.Strict as Map
+import Snap.Core
+import Snap.Http.Server (quickHttpServe)
+
+templates :: Map.Map B.ByteString FilePath
+templates = Map.fromList
+  [ ("welcome", "/srv/templates/welcome.html")
+  , ("receipt", "/srv/templates/receipt.html")
+  , ("reminder", "/srv/templates/reminder.html")
+  ]
+
+main :: IO ()
+main = quickHttpServe $ route [("preview/:slug", method GET previewHandler)]
+
+previewHandler :: Snap ()
+previewHandler = do
+  slug <- getParam "slug"
+  maybe missing serveTemplate (slug >>= flip Map.lookup templates)
+
+serveTemplate :: FilePath -> Snap ()
+serveTemplate file = do
+  modifyResponse (setContentType "text/html; charset=utf-8")
+  sendFile file --@@
+
+missing :: Snap ()
+missing = do
+  modifyResponse (setResponseStatus 404 "Not Found")
+  writeBS "no such template"
+
+@@@ path-traversal | safe | src/LogViewer.hs
+{-# LANGUAGE DataKinds, OverloadedStrings, TypeOperators #-}
+module LogViewer (app) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy.Char8 as BL
+import Data.List (isPrefixOf)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import Servant
+import System.Directory (canonicalizePath)
+import System.FilePath (addTrailingPathSeparator, (</>))
+
+type API = "logs" :> QueryParam "file" Text :> Get '[PlainText] Text
+
+logRoot :: FilePath
+logRoot = "/var/log/app"
+
+resolveLog :: Text -> IO (Either String FilePath)
+resolveLog name = do
+  base <- addTrailingPathSeparator <$> canonicalizePath logRoot
+  full <- canonicalizePath (logRoot </> T.unpack name)
+  pure (if base `isPrefixOf` full then Right full else Left "outside the log directory")
+
+logHandler :: Maybe Text -> Handler Text
+logHandler Nothing = throwError err400 { errBody = "file parameter required" }
+logHandler (Just name) = do
+  resolved <- liftIO (resolveLog name)
+  case resolved of
+    Left reason -> throwError err403 { errBody = BL.pack reason }
+    Right file -> liftIO (TIO.readFile file) --@@
+
+app :: Application
+app = serve (Proxy :: Proxy API) logHandler
+
+@@@ ssrf | vulnerable | src/LinkPreview.hs
+{-# LANGUAGE OverloadedStrings #-}
+module LinkPreview (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text.Lazy as TL
+import Network.HTTP.Client
+import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Web.Scotty
+
+main :: IO ()
+main = do
+  manager <- newManager tlsManagerSettings
+  scotty 8080 $
+    get "/preview" $ do
+      url <- param "url"
+      request <- liftIO (parseRequest (TL.unpack url))
+      response <- liftIO (httpLbs request manager) --@@
+      let body = responseBody response
+      json (TL.pack (show (BL.length body)), TL.take 120 (TL.pack (show (BL.take 512 body))))
+
+@@@ ssrf | vulnerable | src/WebhookTester.hs
+{-# LANGUAGE DataKinds, DeriveGeneric, OverloadedStrings, TypeOperators #-}
+module WebhookTester (app) where
+
+import Control.Lens ((^.))
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON, ToJSON, object, (.=))
+import Data.Text (Text)
+import qualified Data.Text as T
+import GHC.Generics (Generic)
+import Network.Wreq (post, responseStatus, statusCode)
+import Servant
+
+data TestRequest = TestRequest { endpoint :: Text, sampleEvent :: Text }
+  deriving (Show, Generic)
+instance FromJSON TestRequest
+
+data TestResult = TestResult { deliveredTo :: Text, statusReturned :: Int }
+  deriving (Show, Generic)
+instance ToJSON TestResult
+
+type API = "webhooks" :> "test" :> ReqBody '[JSON] TestRequest :> Post '[JSON] TestResult
+
+deliverSample :: TestRequest -> IO TestResult
+deliverSample req = do
+  response <- post (T.unpack (endpoint req)) (object ["event" .= sampleEvent req, "sample" .= True]) --@@
+  pure (TestResult (endpoint req) (response ^. responseStatus . statusCode))
+
+testHandler :: TestRequest -> Handler TestResult
+testHandler = liftIO . deliverSample
+
+app :: Application
+app = serve (Proxy :: Proxy API) testHandler
+
+@@@ ssrf | vulnerable | src/CallbackRelay.hs
+{-# LANGUAGE OverloadedStrings #-}
+module CallbackRelay (main) where
+
+import qualified Data.ByteString.Char8 as B
+import Network.HTTP.Simple
+import Network.HTTP.Types (status200, status400)
+import Network.Wai
+import Network.Wai.Handler.Warp (run)
+
+main :: IO ()
+main = run 8080 relay
+
+relay :: Application
+relay req respond =
+  case lookup "X-Callback-Host" (requestHeaders req) of
+    Nothing -> respond (responseLBS status400 [] "callback host header required")
+    Just callbackHost -> do
+      let target = setRequestHost callbackHost
+                 $ setRequestPath "/relay/receive"
+                 $ setRequestMethod "POST"
+                 $ setRequestBodyLBS "ping" defaultRequest
+      upstream <- httpLBS target --@@
+      respond (responseLBS status200 [("Content-Type", "text/plain")] (getResponseBody upstream))
+
+@@@ ssrf | safe | src/WeatherProxy.hs
+{-# LANGUAGE OverloadedStrings #-}
+module WeatherProxy (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text.Lazy.Encoding as TLE
+import Network.HTTP.Client
+import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Web.Scotty
+
+main :: IO ()
+main = do
+  manager <- newManager tlsManagerSettings
+  base <- parseRequest "https://api.weather.example.com/v1/current"
+  scotty 8080 $
+    get "/weather" $ do
+      city <- param "city"
+      let request = setQueryString [("q", Just (BL.toStrict (TLE.encodeUtf8 city))), ("units", Just "metric")] base
+      response <- liftIO (httpLbs request manager) --@@
+      setHeader "Content-Type" "application/json"
+      raw (responseBody response)
+
+@@@ ssrf | safe | src/RegionStatus.hs
+{-# LANGUAGE DataKinds, OverloadedStrings, TypeOperators #-}
+module RegionStatus (app) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (Value)
+import qualified Data.Map.Strict as Map
+import Data.Text (Text)
+import Network.HTTP.Req
+import Servant
+
+type API = "regions" :> Capture "region" Text :> "status" :> Get '[JSON] Value
+
+regionHosts :: Map.Map Text Text
+regionHosts = Map.fromList
+  [ ("eu-west", "status-eu-west.internal.example.com")
+  , ("us-east", "status-us-east.internal.example.com")
+  , ("ap-south", "status-ap-south.internal.example.com")
+  ]
+
+fetchStatus :: Text -> IO Value
+fetchStatus host = runReq defaultHttpConfig $ do
+  response <- req GET (https host /: "api" /: "status") NoReqBody jsonResponse mempty --@@
+  pure (responseBody response)
+
+statusHandler :: Text -> Handler Value
+statusHandler region = case Map.lookup region regionHosts of
+  Nothing -> throwError err404 { errBody = "unknown region" }
+  Just host -> liftIO (fetchStatus host)
+
+app :: Application
+app = serve (Proxy :: Proxy API) statusHandler
+
+@@@ ssrf | safe | src/IssueLookup.hs
+{-# LANGUAGE OverloadedStrings #-}
+module IssueLookup (main) where
+
+import Control.Lens ((^.))
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
+import qualified Network.Wreq as Wreq
+import Text.Read (readMaybe)
+import Web.Spock
+import Web.Spock.Config
+
+trackerBase :: String
+trackerBase = "https://tracker.internal.example.com/api/issues/"
+
+main :: IO ()
+main = do
+  cfg <- defaultSpockCfg () PCNoDatabase ()
+  runSpock 8080 $ spock cfg $
+    post ("slack" <//> "issue") $ do
+      command <- param' "text"
+      case readMaybe (T.unpack (T.strip command)) :: Maybe Int of
+        Nothing -> text "usage: /issue <number>"
+        Just issueId -> do
+          summary <- liftIO (fetchIssue issueId)
+          setHeader "Content-Type" "application/json"
+          lazyBytes summary
+
+fetchIssue :: Int -> IO BL.ByteString
+fetchIssue issueId = do
+  response <- Wreq.get (trackerBase ++ show issueId) --@@
+  pure (response ^. Wreq.responseBody)
+
+@@@ html-injection | vulnerable | src/GuestBook.hs
+{-# LANGUAGE OverloadedStrings #-}
+module GuestBook (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.IORef
+import qualified Data.Text.Lazy as TL
+import Web.Scotty
+
+main :: IO ()
+main = do
+  entries <- newIORef ([] :: [TL.Text])
+  scotty 8080 $ do
+    get "/guestbook" $ do
+      count <- liftIO (length <$> readIORef entries)
+      html ("<html><body><h1>Guest book</h1><p>" <> TL.pack (show count) <> " entries so far</p>" <> form <> "</body></html>")
+    post "/guestbook" $ do
+      message <- param "message"
+      liftIO (modifyIORef entries (message :))
+      html ("<html><body><p>Your entry: " <> message <> "</p><a href=/guestbook>back</a></body></html>") --@@
+
+form :: TL.Text
+form = "<form method=post action=/guestbook><textarea name=message></textarea><button>Sign</button></form>"
+
+@@@ html-injection | vulnerable | src/CommentThread.hs
+{-# LANGUAGE OverloadedStrings #-}
+module CommentThread (main) where
+
+import Control.Monad (msum)
+import Data.Text (Text)
+import Happstack.Server
+import Text.Blaze.Html5 (Html, (!))
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
+
+main :: IO ()
+main = simpleHTTP nullConf $ msum
+  [ dir "comments" $ dir "preview" $ do
+      method GET
+      body <- lookText' "body"
+      author <- lookText' "author"
+      ok (toResponse (renderComment author body))
+  , notFound (toResponse ("no such page" :: String))
+  ]
+
+renderComment :: Text -> Text -> Html
+renderComment author body = H.docTypeHtml $ do
+  H.head (H.title "Comment preview")
+  H.body $ H.article ! A.class_ "comment" $ do
+    H.h2 (H.toHtml author)
+    H.p (H.preEscapedToHtml body) --@@
+
+@@@ html-injection | vulnerable | src/ProfileBanner.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ProfileBanner (main) where
+
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Lucid
+import Snap.Core
+import Snap.Http.Server (quickHttpServe)
+
+main :: IO ()
+main = quickHttpServe $ route [("banner", method GET bannerHandler)]
+
+bannerHandler :: Snap ()
+bannerHandler = do
+  cookie <- getCookie "display_name"
+  let displayName = maybe "Guest" (TE.decodeLatin1 . cookieValue) cookie
+  modifyResponse (setContentType "text/html; charset=utf-8")
+  writeLBS (renderBS (banner displayName))
+
+banner :: Text -> Html ()
+banner displayName = html_ $ body_ $ do
+  div_ [class_ "banner"] $ do
+    span_ "Welcome back, "
+    strong_ (toHtmlRaw displayName) --@@
+  p_ "Your dashboard is ready."
+
+@@@ html-injection | safe | src/VisitorBook.hs
+{-# LANGUAGE OverloadedStrings #-}
+module VisitorBook (main) where
+
+import qualified Data.Text.Lazy as TL
+import Web.Scotty
+
+main :: IO ()
+main = scotty 8080 $ do
+  get "/visitors/new" $ html form
+  post "/visitors" $ do
+    message <- param "message"
+    html ("<html><body><p>Your entry: " <> escape message <> "</p><a href=/visitors/new>back</a></body></html>") --@@
+
+form :: TL.Text
+form = "<html><body><form method=post action=/visitors><textarea name=message></textarea><button>Sign</button></form></body></html>"
+
+escape :: TL.Text -> TL.Text
+escape = TL.concatMap replace
+  where
+    replace '<' = "&lt;"
+    replace '>' = "&gt;"
+    replace '&' = "&amp;"
+    replace '"' = "&quot;"
+    replace '\'' = "&#39;"
+    replace c = TL.singleton c
+
+@@@ html-injection | safe | src/ProfileCard.hs
+{-# LANGUAGE DataKinds, OverloadedStrings, TypeOperators #-}
+module ProfileCard (app) where
+
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
+import Lucid
+import Servant
+import Servant.HTML.Lucid (HTML)
+
+type API = "profiles" :> Capture "handle" Text :> "card" :> QueryParam "tagline" Text :> Get '[HTML] (Html ())
+
+card :: Text -> Maybe Text -> Html ()
+card handle tagline = html_ $ body_ $
+  div_ [class_ "card"] $ do
+    h2_ (toHtml ("@" <> handle))
+    p_ [class_ "tagline"] (toHtml (fromMaybe "No tagline yet" tagline)) --@@
+    a_ [href_ "/profiles"] "All profiles"
+
+cardHandler :: Text -> Maybe Text -> Handler (Html ())
+cardHandler handle tagline = pure (card handle tagline)
+
+app :: Application
+app = serve (Proxy :: Proxy API) cardHandler
+
+@@@ html-injection | safe | src/TeamRoster.hs
+{-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell #-}
+module TeamRoster (getRosterR) where
+
+import Data.Text (Text)
+import Text.Blaze.Html (Html, toHtml)
+import Yesod.Core
+import Foundation (Handler)
+
+data Member = Member { memberName :: Text, memberRole :: Text }
+
+getRosterR :: Text -> Handler Html
+getRosterR teamName = do
+  highlight <- lookupGetParam "highlight"
+  let members = [Member "Ada" "lead", Member "Grace" "engineer", Member "Linus" "operator"]
+  defaultLayout $ do
+    setTitle (toHtml ("Roster for " <> teamName))
+    [whamlet|
+      <h1>Team #{teamName}
+      $maybe h <- highlight
+        <p .notice>Highlighting #{h} --@@
+      <ul>
+        $forall m <- members
+          <li>#{memberName m} (#{memberRole m})
+    |]

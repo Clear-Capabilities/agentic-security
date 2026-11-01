@@ -10,7 +10,11 @@
 //                         is lowered to `info`, never dropped
 //   api-contract          the value is a parameter of an exported function that nothing in the analysed code calls, and the function
 //                         hands it WHOLE (or as the root it appends fixed text to) to a path or command operation: a thin wrapper.
-//                         The caller chose what to read or run, and the wrapper has no fixed part to escape from. Lowered to `info`
+//                         The caller chose what to read or run, and the wrapper has no fixed part to escape from. Lowered to `info`.
+//                         Path operations joined this way since 0.195.9: `renderFile path = responseFile .. path` and
+//                         `store path = readFile (cs path)` were 2 of the 29 flagged path sites on the real-code sets and no true
+//                         positive had that shape; a parameter spliced UNDER a fixed directory (`"/srv/" ++ name`) is still kept,
+//                         because the function chose the directory and lets the caller leave it
 //   entry-parameter       a parameter of such a function used inside a larger value the function builds: its own construction, kept
 //   data-input            standard input or a file's content in a service or a library: data the program processes, kept
 //   unattributed          the engine recorded no origin: kept
@@ -30,10 +34,13 @@ const EXTERNAL = new Set(['http-body', 'url-param', 'path-param', 'header', 'coo
 const DATA = new Set(['stdin', 'file-read']);
 const WEAK_PARAM_LABEL = /\(caller-controlled\)$/;
 // CWE-918 is deliberately NOT a wrapper family: `fetch url = parseRequest url >>= httpNoBody` is pinned as a finding in
-// test/haskell/haskell-generalization.test.js (a URL the caller chooses is the SSRF shape of the development sets), the same way path
-// wrappers are kept. unseen-v4 labels that shape safe when the URL is configuration; that disagreement is recorded, not decided here.
-const WRAPPER_FAMILIES = new Set(['CWE-78', 'CWE-88']);
-const CONVERSIONS = /(?:^|\.)(?:pack|unpack|fromString|toString|show|encodeUtf8|decodeUtf8|toStrict|fromStrict|toText|unpackFS|fromText)$/;
+// test/haskell/haskell-generalization.test.js (a URL the caller chooses is the SSRF shape of the development sets). unseen-v4 labels
+// that shape safe when the URL is configuration; that disagreement is recorded, not decided here. CWE-22 joined the set in 0.195.9
+// (see the header): the synthetic development sets label `load name = readFile name` vulnerable, the real-code sets label every such
+// site a false positive, and the real code won; a parameter under a fixed directory is still `entry-parameter`.
+const WRAPPER_FAMILIES = new Set(['CWE-78', 'CWE-88', 'CWE-22']);
+// `cs`/`convertString` (string-conversions) and `toS` (protolude) change the type of a text value and nothing else
+const CONVERSIONS = /(?:^|\.)(?:pack|unpack|fromString|toString|show|encodeUtf8|decodeUtf8|toStrict|fromStrict|toText|unpackFS|fromText|cs|convertString|toS|toSL|toST)$/;
 const PATH_JOIN = /(?:^|\.)(?:<\/>|combine|joinPath|<\.>)$/;
 // list plumbing that only lays the parameters out as text (`unwords args`, `concatMap (' ':) args`): no fixed words are added
 const LIST_LAYOUT = /(?:^|\.)(?:unwords|unlines|intercalate|concatMap|concat|map|fmap)$/;
@@ -261,9 +268,14 @@ export function applyTrustBoundary(findings, perFile) {
     else if (roots.length && [...classes].every((c) => c === 'operator')) {
       verdict = 'operator-controlled';
       reason = 'only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed';
-    } else if (roots.length && role === 'cli' && roots.every((r) => r.provenance === 'file-read' || OPERATOR.has(r.provenance))) {
+    } else if (roots.length && role === 'cli' && roots.every((r) => r.provenance === 'file-read' || OPERATOR.has(r.provenance) || (f.cwe === 'CWE-22' && r.provenance === 'stdin'))) {
+      // Standard input counts here for a PATH operation only: a command-line program reading a file name from its own standard input
+      // is the person at the keyboard naming a file (14 of the 29 flagged path sites on the real-code sets, every one a false positive).
+      // A command built from standard input stays reported (`getLine >>= callCommand`, pinned in test/haskell/haskell-trust-boundary.test.js).
       verdict = 'operator-controlled';
-      reason = 'the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is not covered by this rule';
+      reason = f.cwe === 'CWE-22' && roots.some((r) => r.provenance === 'stdin')
+        ? 'the function belongs to a command-line program (reached from a main that imports no server framework) and the file it works on is named by the person running it: on its standard input, in files it was pointed at, or in its arguments and environment'
+        : 'the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is covered by this rule only for a path operation';
     } else if (classes.has('data')) { verdict = 'data-input'; reason = 'standard input or file content supplies the value'; }
     else if (classes.has('weak-param')) {
       verdict = 'entry-parameter';

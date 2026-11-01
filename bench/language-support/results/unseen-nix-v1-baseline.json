@@ -1,0 +1,399 @@
+{
+  "schema": "agentic-security/language-support-measurement@2",
+  "split": "unseen-nix-v1",
+  "measuredAt": "2026-11-01",
+  "corpusVersion": "qa001-v2",
+  "ecosystems": {
+    "nix": {
+      "detection": {
+        "cases": 72,
+        "scored": 72,
+        "advisoryFindingsNotScored": 0,
+        "layers": {
+          "sast": {
+            "cases": 66,
+            "tp": 20,
+            "fp": 4,
+            "fn": 13,
+            "tn": 29,
+            "precision": 0.8333333333333334,
+            "recall": 0.6060606060606061,
+            "f1": 0.7017543859649124,
+            "measured": true,
+            "families": {
+              "sandbox-trust": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "unpinned-source": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "trusted-users": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "ssh-access": {
+                "tp": 3,
+                "fp": 3,
+                "fn": 0,
+                "precision": 0.5,
+                "recall": 1,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "secret-in-store": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "tls-secret-runtime": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "firewall-exposure": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "binary-cache-trust": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "privilege-escalation-policy": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "native-eval": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "service-privilege": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              }
+            },
+            "misses": [
+              {
+                "case": "nx-v1-0068eba10c",
+                "label": {
+                  "families": [
+                    "nix-sandbox"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-160b89ad7d",
+                "label": {
+                  "families": [
+                    "nix-fetch-integrity",
+                    "nix-fetch-pin"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-3aa6ebd5af",
+                "label": {
+                  "families": [
+                    "tls-runtime"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-3e93f032e8",
+                "label": {
+                  "families": [
+                    "firewall-exposure"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-51ca123141",
+                "label": {
+                  "families": [
+                    "nix-eval-native"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-6daaa4e160",
+                "label": {
+                  "families": [
+                    "hardcoded-secret"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-7e66f6275f",
+                "label": {
+                  "families": [
+                    "privilege-escalation"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-8817ffed84",
+                "label": {
+                  "families": [
+                    "nix-cache-trust"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-88b210e7fc",
+                "label": {
+                  "families": [
+                    "nix-cache-trust"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-abdd11d040",
+                "label": {
+                  "families": [
+                    "nix-eval-native"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-b2ada6996e",
+                "label": {
+                  "families": [
+                    "service-identity",
+                    "systemd-privilege"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-e0eff17fe1",
+                "label": {
+                  "families": [
+                    "nix-privilege"
+                  ]
+                }
+              },
+              {
+                "case": "nx-v1-e7c7ff6fc2",
+                "label": {
+                  "families": [
+                    "tls-runtime"
+                  ]
+                }
+              }
+            ],
+            "strays": [
+              {
+                "file": "nx-v1-632af403ba/modules/remote-admin.nix",
+                "line": 1,
+                "cwe": "CWE-307"
+              },
+              {
+                "file": "nx-v1-b66b0b4035/hosts/jump-host.nix",
+                "line": 1,
+                "cwe": "CWE-307"
+              },
+              {
+                "file": "nx-v1-d271994db1/hosts/relay-gw.nix",
+                "line": 1,
+                "cwe": "CWE-307"
+              },
+              {
+                "file": "nx-v1-e800318980/hosts/session-cache.nix",
+                "line": 17,
+                "cwe": "CWE-668"
+              }
+            ],
+            "crossFamilyFindingsNotScored": 6,
+            "strict": {
+              "fp": 10,
+              "precision": 0.6666666666666666,
+              "f1": 0.6349206349206349
+            }
+          },
+          "taint": {
+            "cases": 6,
+            "tp": 2,
+            "fp": 0,
+            "fn": 1,
+            "tn": 3,
+            "precision": 1,
+            "recall": 0.6666666666666666,
+            "f1": 0.8,
+            "measured": true,
+            "families": {
+              "script-interpolation": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              }
+            },
+            "misses": [
+              {
+                "case": "nx-v1-69cb8fc80c",
+                "label": {
+                  "families": [
+                    "cmdi"
+                  ]
+                }
+              }
+            ],
+            "strays": [],
+            "crossFamilyFindingsNotScored": 0,
+            "strict": {
+              "fp": 0,
+              "precision": 1,
+              "f1": 0.8
+            }
+          }
+        },
+        "perFamilyCases": {
+          "sandbox-trust": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "privilege-escalation-policy": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "unpinned-source": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "service-privilege": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "native-eval": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "tls-secret-runtime": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "firewall-exposure": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "script-interpolation": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "trusted-users": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "binary-cache-trust": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "ssh-access": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "secret-in-store": {
+            "vulnerable": 3,
+            "safe": 3
+          }
+        },
+        "unknownOutcomes": {
+          "total": 0,
+          "disclosed": 0,
+          "withFinding": 0,
+          "silentClean": 0,
+          "requiredDisclosure": 0,
+          "requiredDisclosureMissing": 0
+        }
+      }
+    }
+  },
+  "splitRole": "generalisation",
+  "corpusTotals": {
+    "haskell": {
+      "security": {
+        "vulnerable": 260,
+        "safe": 260,
+        "unknown": 52,
+        "families": 13
+      },
+      "privacy": {
+        "positives": 100,
+        "negatives": 200
+      }
+    },
+    "nix": {
+      "security": {
+        "vulnerable": 240,
+        "safe": 240,
+        "unknown": 52,
+        "families": 12
+      },
+      "privacy": {
+        "positives": 100,
+        "negatives": 200
+      }
+    }
+  },
+  "hashes": {
+    "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
+    "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+    "shapeDev2Rollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+    "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+    "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
+    "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+    "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+    "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
+  }
+}

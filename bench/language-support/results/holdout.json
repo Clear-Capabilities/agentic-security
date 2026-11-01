@@ -8,7 +8,7 @@
       "detection": {
         "cases": 175,
         "scored": 156,
-        "advisoryFindingsNotScored": 2,
+        "advisoryFindingsNotScored": 20,
         "layers": {
           "sast": {
             "cases": 96,

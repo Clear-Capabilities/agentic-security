@@ -3,14 +3,16 @@
 // another. Family-scoped scoring (a finding of a different family in a case is counted separately, never as this family's false
 // positive) is reported next to the strict number.
 import { scoreLayer } from '../../../scanner/src/language/accuracy.js';
-import { readJson, isFrozenSplit, frozenCases, frozenSource, source, unseenSource, shapeDevSource, shapeDev2Source, scanFiles, TAINT_FAMILIES, NIX_FAMILY_ALIAS, layerPredicate } from '../lib.mjs';
+import { readJson, isFrozenSplit, frozenCases, frozenSource, frozenManifest, source, unseenSource, shapeDevSource, shapeDev2Source, scanFiles, actionable, TAINT_FAMILIES, NIX_FAMILY_ALIAS, layerPredicate } from '../lib.mjs';
+import { ecosystemOf } from '../corpora/frozen-split.mjs';
 
 const score = (cases, findings, inLayer, familyScoped) => scoreLayer(cases, findings, { layer: 'custom', inLayer, lineTolerance: 1e9, familyScoped });
 
 export async function runDetection({ split, eco, limit = 0 }) {
   const shapeSet = { unseen: ['labels/unseen.json', unseenSource], 'shape-dev': ['labels/shape-dev.json', shapeDevSource], 'shape-dev-2': ['labels/shape-dev-2.json', shapeDev2Source] }[split];
   const frozen = isFrozenSplit(split);
-  if (frozen && eco !== 'haskell') return { cases: 0, scored: 0, note: `${split} is Haskell only` };
+  const frozenEco = frozen ? ecosystemOf(frozenManifest(split)) : null;
+  if (frozen && frozenEco !== eco) return { cases: 0, scored: 0, note: `${split} is ${frozenEco} only` };
   let cs = (frozen ? frozenCases(split) : readJson(shapeSet ? shapeSet[0] : 'labels/cases.json')).filter((c) => c.ecosystem === eco && c.split === split);
   if (limit) cs = cs.slice(0, limit);
   const findings = []; const scored = []; const unknown = []; let advisory = 0;
@@ -19,8 +21,12 @@ export async function runDetection({ split, eco, limit = 0 }) {
     const text = sourceOf(eco, c.id, c.path);
     const r = await scanFiles({ [c.path]: text });
     const mine = r.findings.filter((f) => f.file === c.path || f.file === `./${c.path}`).map((f) => ({ ...f, file: `${c.id}/${c.path}` }));
-    // `info` is advisory, not an actionable finding: counted and reported, never scored as a detection.
-    const live = mine.filter((f) => f.severity !== 'info');
+    // `info` is advisory, not an actionable finding: counted and reported, never scored as a detection. Since 0.195.9 the same
+    // `actionable` rule the other benches use applies: a flow the engine PROVED clean or infeasible (a catalog sanitizer of the
+    // sink's family on the path, a dominating guard) is reported with its proof and demoted by the proof gate, and is not scored
+    // as a detection either. Before, `renderHtml (toHtml name)` into a Scotty `html` sink counted as a false positive although the
+    // engine had labelled it proven-clean.
+    const live = mine.filter(actionable);
     advisory += mine.length - live.length;
     findings.push(...live);
     const file = `${c.id}/${c.path}`;

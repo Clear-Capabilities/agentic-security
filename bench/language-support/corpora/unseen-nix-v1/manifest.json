@@ -1,0 +1,12 @@
+{
+ "split": "unseen-nix-v1",
+ "ecosystem": "nix",
+ "frozenOn": "2026-11-01",
+ "cases": 72,
+ "perFamily": 3,
+ "role": "generalisation",
+ "developmentSince": null,
+ "sourcesSha256": "b81afc6bac78c744d78a6da61cc44961ddadd239a6bdb115f4ee929291e9e5ec",
+ "labelsSha256": "db4175245cf113a7c0b9ea362b3509512ef03352e80e846e2788f99468901895",
+ "note": "sourcesSha256 = sha256 over \"id:sha256(source)\" lines in id order; labelsSha256 = sha256 of the exact JSON array of cases (canonical build order); role is generalisation until USE-LOG.md records a use that changed the engine"
+}

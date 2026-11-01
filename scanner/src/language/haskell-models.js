@@ -380,6 +380,8 @@ export const HS_LOG_SINKS = Object.freeze([
   ...E('Text.Printf', ['hPrintf']).map((e) => ({ ...e, argIndex: 1, argFrom: 1, channel: 'handle' })),
   ...E('Katip', ['logFM', 'logTM', 'logItem']).map((e) => ({ ...e, argIndex: 1, channel: 'logger' })),
   ...E('System.Log.Logger', ['debugM', 'infoM', 'noticeM', 'warningM', 'errorM', 'criticalM']).map((e) => ({ ...e, argIndex: 1, channel: 'logger' })),
+  // fast-logger: the logger set is argument 0, the message argument 1
+  ...E('System.Log.FastLogger', ['pushLogStr', 'pushLogStrLn']).map((e) => ({ ...e, argIndex: 1, channel: 'logger' })),
 ]);
 
 // Library surfaces the structural rules (haskell-security-rules.js) look for; registering them here makes
@@ -393,6 +395,9 @@ export const HS_RULE_APIS = Object.freeze([
   ...E('Crypto.Cipher.ChaChaPoly1305', ['nonce12', 'nonce8']),
   ...E('Crypto.KDF.PBKDF2', ['generate', 'fastPBKDF2_SHA1', 'fastPBKDF2_SHA256', 'fastPBKDF2_SHA512']),
   ...E('System.Random', ['randomRIO', 'randomIO', 'newStdGen', 'getStdGen', 'mkStdGen', 'randomR', 'random', 'randoms', 'randomRs', 'getStdRandom', 'uniformR', 'uniform', 'initStdGen']),
+  // mwc-random and splitmix are statistical generators, not CSPRNGs (createSystemRandom only seeds from the OS)
+  ...E('System.Random.MWC', ['uniformR', 'uniform', 'uniformRM', 'uniformM', 'createSystemRandom', 'create', 'initialize', 'withSystemRandom', 'withSystemRandomST']),
+  ...E('System.Random.SplitMix', ['nextWord64', 'nextInt', 'nextDouble', 'mkSMGen', 'newSMGen', 'initSMGen']),
   ...E('Crypto.Random', ['getRandomBytes']), ...E('System.Entropy', ['getEntropy']),
   ...E('Network.Wai', ['strictRequestBody', 'lazyRequestBody']),
   ...E('Data.Time.Clock.POSIX', ['getPOSIXTime']), ...E('Data.Time.Clock', ['getCurrentTime']), ...E('System.CPUTime', ['getCPUTime']),

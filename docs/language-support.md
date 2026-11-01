@@ -10,7 +10,7 @@ A row is **supported** only from passing evidence of its own metric kind. Read t
 |---|---|---|---|---|
 | parser | supported | 175/175 parsed; 0 crashed |  |  |
 | sast | supported | P 100.0% / R 100.0% / F1 100.0% (48 TP, 0 FP, 0 FN) [P 92.6%-100.0%, R 92.6%-100.0%]; strict P 85.7% | meets targets (development): P 100.0% / R 100.0% / F1 100.0% (48 TP, 0 FP, 0 FN) |  |
-| taint | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%]; strict P 100.0% | meets targets (development): P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |  |
+| taint | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%]; strict P 100.0% | meets targets (development): P 100.0% / R 93.3% / F1 96.6% (28 TP, 0 FP, 2 FN) |  |
 | privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%] |  |  |
 | auth | supported | P 100.0% / R 100.0% / F1 100.0% (12 TP, 0 FP, 0 FN) [P 73.5%-100.0%, R 73.5%-100.0%] |  |  |
 | sca | supported | manifests 48/48; advisory ranges 28/28 |  |  |
@@ -26,8 +26,8 @@ Metamorphic pairs: semantics-changing 100.0%, semantics-preserving 100.0% (this 
 | Capability | Status | Evidence on the frozen holdout (95% intervals) | Unseen-v3 shapes (DEVELOPMENT set since 2026-10-26, not a generalisation measure) | Why not supported |
 |---|---|---|---|---|
 | parser | supported | 161/161 parsed; 0 crashed |  |  |
-| config-sast | supported | P 100.0% / R 100.0% / F1 100.0% (66 TP, 0 FP, 0 FN) [P 94.6%-100.0%, R 94.6%-100.0%]; strict P 91.7% | meets targets (development): P 100.0% / R 87.9% / F1 93.5% (58 TP, 0 FP, 8 FN) |  |
-| config-taint | supported | P 100.0% / R 100.0% / F1 100.0% (6 TP, 0 FP, 0 FN) [P 54.1%-100.0%, R 54.1%-100.0%]; strict P 100.0% | BELOW TARGET (development): P 60.0% / R 100.0% / F1 75.0% (6 TP, 4 FP, 0 FN) |  |
+| config-sast | supported | P 100.0% / R 100.0% / F1 100.0% (66 TP, 0 FP, 0 FN) [P 94.6%-100.0%, R 94.6%-100.0%]; strict P 91.7% | meets targets (development): P 100.0% / R 100.0% / F1 100.0% (66 TP, 0 FP, 0 FN) |  |
+| config-taint | supported | P 100.0% / R 100.0% / F1 100.0% (6 TP, 0 FP, 0 FN) [P 54.1%-100.0%, R 54.1%-100.0%]; strict P 100.0% | meets targets (development): P 100.0% / R 100.0% / F1 100.0% (6 TP, 0 FP, 0 FN) |  |
 | privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%] |  |  |
 | sca | supported | manifests 48/48; advisory ranges 28/28 |  |  |
 | bom | supported |  |  |  |

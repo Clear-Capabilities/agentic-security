@@ -21,9 +21,9 @@
     ],
     "ghcup-hs:lib/GHCup/Download/IOStreams.hs:59:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -55,7 +55,7 @@
      [
       "info",
       "entrypoint-reachable",
-      "high",
+      "info",
       "IR-TAINT"
      ]
     ],
@@ -72,22 +72,6 @@
       "info",
       null,
       "low",
-      "HS-RULES"
-     ]
-    ],
-    "gitit:src/Network/Gitit/State.hs:62:Password hashed with a fast general-purpose hash": [
-     [
-      "high",
-      null,
-      null,
-      "HS-RULES"
-     ]
-    ],
-    "gitit:src/Network/Gitit/State.hs:78:Password hashed with a fast general-purpose hash": [
-     [
-      "high",
-      null,
-      null,
       "HS-RULES"
      ]
     ],
@@ -165,9 +149,9 @@
     ],
     "hackage-server:src/Distribution/Server/Util/ServeTarball.hs:162:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -229,9 +213,9 @@
     ],
     "xmonad-contrib:XMonad/Util/Loggers.hs:159:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -279,9 +263,9 @@
     ],
     "ghcup-hs:lib/GHCup/Download/IOStreams.hs:58:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -439,17 +423,17 @@
     ],
     "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:101:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:82:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -497,33 +481,33 @@
     ],
     "ghcup-hs:lib/GHCup/Prelude/File/Search.hs:118:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "gitit:src/Network/Gitit/Util.hs:53:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:100:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:83:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ]
@@ -723,17 +707,17 @@
     ],
     "dhall-haskell:dhall/src/Dhall/Format.hs:70:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Freeze.hs:309:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -747,17 +731,17 @@
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1046:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1047:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -843,49 +827,49 @@
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1852:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1853:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1876:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1879:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1908:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1910:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -1131,9 +1115,9 @@
     ],
     "dhall-haskell:dhall/src/Dhall/Main.hs:1314:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -1171,9 +1155,9 @@
     ],
     "dhall-haskell:dhall/src/Dhall/Tags.hs:93:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -1307,9 +1291,9 @@
     ],
     "hlint:src/Test/Annotations.hs:121:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -1399,14 +1383,6 @@
       "entrypoint-reachable",
       "high",
       "IR-TAINT"
-     ]
-    ],
-    "ihp:ihp-ide/exe/IHP/CLI/HashPassword.hs:18:Sensitive value written to a log or trace": [
-     [
-      "high",
-      null,
-      null,
-      "HS-RULES"
      ]
     ],
     "ihp:ihp-migrate/exe/Migrate.hs:63:path-traversal": [
@@ -1691,9 +1667,9 @@
     ],
     "ihp:ihp/IHP/FileStorage/ControllerFunctions.hs:191:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -1849,22 +1825,6 @@
       "HS-RULES"
      ]
     ],
-    "scotty:Web/Scotty/Cookie.hs:106:Session cookie without HttpOnly or Secure": [
-     [
-      "medium",
-      null,
-      null,
-      "HS-RULES"
-     ]
-    ],
-    "scotty:Web/Scotty/Cookie.hs:125:Session cookie without HttpOnly or Secure": [
-     [
-      "medium",
-      null,
-      null,
-      "HS-RULES"
-     ]
-    ],
     "scotty:Web/Scotty/Cookie.hs:132:Session cookie without HttpOnly or Secure": [
      [
       "medium",
@@ -1979,17 +1939,17 @@
     ],
     "summoner:summoner-cli/src/Summoner/Project.hs:284:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "summoner:summoner-cli/src/Summoner/Tree.hs:42:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ]
@@ -2007,8 +1967,8 @@
     },
     "ghcup-hs": {
      "rows": 38,
-     "flagged": 5,
-     "loweredToInfo": 33,
+     "flagged": 2,
+     "loweredToInfo": 36,
      "byStatus": {
       "no-verdict": 2,
       "external-api": 33,
@@ -2016,19 +1976,19 @@
      }
     },
     "gitit": {
-     "rows": 8,
-     "flagged": 5,
-     "loweredToInfo": 3,
+     "rows": 6,
+     "flagged": 2,
+     "loweredToInfo": 4,
      "byStatus": {
       "entrypoint-reachable": 1,
-      "no-verdict": 6,
+      "no-verdict": 4,
       "external-api": 1
      }
     },
     "hackage-server": {
      "rows": 43,
-     "flagged": 6,
-     "loweredToInfo": 37,
+     "flagged": 1,
+     "loweredToInfo": 42,
      "byStatus": {
       "entrypoint-reachable": 34,
       "external-api": 5,
@@ -2061,8 +2021,8 @@
     },
     "xmonad-contrib": {
      "rows": 2,
-     "flagged": 2,
-     "loweredToInfo": 0,
+     "flagged": 1,
+     "loweredToInfo": 1,
      "byStatus": {
       "external-api": 1,
       "no-verdict": 1
@@ -2072,8 +2032,8 @@
    "fresh": {
     "dhall-haskell": {
      "rows": 93,
-     "flagged": 15,
-     "loweredToInfo": 78,
+     "flagged": 3,
+     "loweredToInfo": 90,
      "byStatus": {
       "no-verdict": 72,
       "entrypoint-reachable": 17,
@@ -2082,19 +2042,19 @@
     },
     "hlint": {
      "rows": 14,
-     "flagged": 3,
-     "loweredToInfo": 11,
+     "flagged": 2,
+     "loweredToInfo": 12,
      "byStatus": {
       "entrypoint-reachable": 5,
       "no-verdict": 9
      }
     },
     "ihp": {
-     "rows": 69,
-     "flagged": 22,
-     "loweredToInfo": 47,
+     "rows": 68,
+     "flagged": 20,
+     "loweredToInfo": 48,
      "byStatus": {
-      "no-verdict": 35,
+      "no-verdict": 34,
       "unknown": 9,
       "entrypoint-reachable": 20,
       "external-api": 5
@@ -2110,19 +2070,19 @@
      }
     },
     "scotty": {
-     "rows": 23,
-     "flagged": 23,
+     "rows": 21,
+     "flagged": 21,
      "loweredToInfo": 0,
      "byStatus": {
       "external-api": 1,
-      "no-verdict": 11,
+      "no-verdict": 9,
       "entrypoint-reachable": 11
      }
     },
     "summoner": {
      "rows": 2,
-     "flagged": 2,
-     "loweredToInfo": 0,
+     "flagged": 0,
+     "loweredToInfo": 2,
      "byStatus": {
       "external-api": 2
      }

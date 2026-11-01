@@ -1,0 +1,426 @@
+{
+  "schema": "agentic-security/language-support-measurement@2",
+  "split": "unseen-v6",
+  "measuredAt": "2026-11-01",
+  "corpusVersion": "qa001-v2",
+  "ecosystems": {
+    "haskell": {
+      "detection": {
+        "cases": 78,
+        "scored": 78,
+        "advisoryFindingsNotScored": 5,
+        "layers": {
+          "sast": {
+            "cases": 48,
+            "tp": 14,
+            "fp": 7,
+            "fn": 10,
+            "tn": 20,
+            "precision": 0.6666666666666666,
+            "recall": 0.5833333333333334,
+            "f1": 0.6222222222222222,
+            "measured": true,
+            "families": {
+              "route-authentication": {
+                "tp": 1,
+                "fp": 1,
+                "fn": 2,
+                "precision": 0.5,
+                "recall": 0.3333333333333333,
+                "f1": 0.4,
+                "measured": true
+              },
+              "weak-password-hash": {
+                "tp": 3,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0.75,
+                "recall": 1,
+                "f1": 0.8571428571428571,
+                "measured": true
+              },
+              "parser-safety": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "weak-randomness": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "resource-limits": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "object-authorization": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "sensitive-logging": {
+                "tp": 2,
+                "fp": 3,
+                "fn": 1,
+                "precision": 0.4,
+                "recall": 0.6666666666666666,
+                "f1": 0.5,
+                "measured": true
+              },
+              "session-cookie": {
+                "tp": 3,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0.75,
+                "recall": 1,
+                "f1": 0.8571428571428571,
+                "measured": true
+              }
+            },
+            "misses": [
+              {
+                "case": "hs-v6-0392f44b7a",
+                "label": {
+                  "cwe": "CWE-306"
+                }
+              },
+              {
+                "case": "hs-v6-37ff754156",
+                "label": {
+                  "cwe": "CWE-306"
+                }
+              },
+              {
+                "case": "hs-v6-4e475ef03c",
+                "label": {
+                  "cwe": "CWE-338"
+                }
+              },
+              {
+                "case": "hs-v6-5f4d44831b",
+                "label": {
+                  "cwe": "CWE-338"
+                }
+              },
+              {
+                "case": "hs-v6-7b6e0f342d",
+                "label": {
+                  "cwe": "CWE-248"
+                }
+              },
+              {
+                "case": "hs-v6-7c7d4c95b8",
+                "label": {
+                  "cwe": "CWE-532"
+                }
+              },
+              {
+                "case": "hs-v6-9d2b7d3ad4",
+                "label": {
+                  "cwe": "CWE-770"
+                }
+              },
+              {
+                "case": "hs-v6-e53cfcf84f",
+                "label": {
+                  "cwe": "CWE-639"
+                }
+              },
+              {
+                "case": "hs-v6-e6dab18c9a",
+                "label": {
+                  "cwe": "CWE-248"
+                }
+              },
+              {
+                "case": "hs-v6-edf0e6fe2e",
+                "label": {
+                  "cwe": "CWE-770"
+                }
+              }
+            ],
+            "strays": [
+              {
+                "file": "hs-v6-47d1ac3a6a/src/UserAdmin.hs",
+                "line": 13,
+                "cwe": "CWE-306"
+              },
+              {
+                "file": "hs-v6-6c0cfaaaf4/src/Notebook.hs",
+                "line": 19,
+                "cwe": "CWE-639"
+              },
+              {
+                "file": "hs-v6-7b3b8923e6/src/PaymentCapture.hs",
+                "line": 27,
+                "cwe": "CWE-532"
+              },
+              {
+                "file": "hs-v6-8f61d6d769/src/CardVault.hs",
+                "line": 24,
+                "cwe": "CWE-532"
+              },
+              {
+                "file": "hs-v6-8f61d6d769/src/CardVault.hs",
+                "line": 28,
+                "cwe": "CWE-532"
+              },
+              {
+                "file": "hs-v6-93c6bb1842/src/AccountRegistration.hs",
+                "line": 27,
+                "cwe": "CWE-916"
+              },
+              {
+                "file": "hs-v6-9b7b77d448/src/KioskLogin.hs",
+                "line": 23,
+                "cwe": "CWE-1004"
+              }
+            ],
+            "crossFamilyFindingsNotScored": 6,
+            "strict": {
+              "fp": 13,
+              "precision": 0.5185185185185185,
+              "f1": 0.5490196078431373
+            }
+          },
+          "taint": {
+            "cases": 30,
+            "tp": 8,
+            "fp": 2,
+            "fn": 7,
+            "tn": 12,
+            "precision": 0.8,
+            "recall": 0.5333333333333333,
+            "f1": 0.64,
+            "measured": true,
+            "families": {
+              "command-injection": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "ssrf": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "path-traversal": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "sql-injection": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "html-injection": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              }
+            },
+            "misses": [
+              {
+                "case": "hs-v6-023c7028ba",
+                "label": {
+                  "cwe": "CWE-78"
+                }
+              },
+              {
+                "case": "hs-v6-056ea67881",
+                "label": {
+                  "cwe": "CWE-78"
+                }
+              },
+              {
+                "case": "hs-v6-3a70a33a82",
+                "label": {
+                  "cwe": "CWE-89"
+                }
+              },
+              {
+                "case": "hs-v6-5fc4bacabc",
+                "label": {
+                  "cwe": "CWE-918"
+                }
+              },
+              {
+                "case": "hs-v6-6db9d1cd4e",
+                "label": {
+                  "cwe": "CWE-79"
+                }
+              },
+              {
+                "case": "hs-v6-a8acc105fc",
+                "label": {
+                  "cwe": "CWE-22"
+                }
+              },
+              {
+                "case": "hs-v6-b9a21c7653",
+                "label": {
+                  "cwe": "CWE-89"
+                }
+              }
+            ],
+            "strays": [
+              {
+                "file": "hs-v6-7a7f5acd52/src/WeatherProxy.hs",
+                "line": 19,
+                "cwe": "CWE-918"
+              },
+              {
+                "file": "hs-v6-fdc102264b/src/TemplatePreview.hs",
+                "line": 27,
+                "cwe": "CWE-22"
+              }
+            ],
+            "crossFamilyFindingsNotScored": 1,
+            "strict": {
+              "fp": 3,
+              "precision": 0.7272727272727273,
+              "f1": 0.6153846153846153
+            }
+          }
+        },
+        "perFamilyCases": {
+          "command-injection": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "route-authentication": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "weak-password-hash": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "ssrf": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "parser-safety": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "resource-limits": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "object-authorization": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "html-injection": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "path-traversal": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "weak-randomness": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "sql-injection": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "sensitive-logging": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "session-cookie": {
+            "vulnerable": 3,
+            "safe": 3
+          }
+        },
+        "unknownOutcomes": {
+          "total": 0,
+          "disclosed": 0,
+          "withFinding": 0,
+          "silentClean": 0,
+          "requiredDisclosure": 0,
+          "requiredDisclosureMissing": 0
+        }
+      }
+    }
+  },
+  "splitRole": "generalisation",
+  "corpusTotals": {
+    "haskell": {
+      "security": {
+        "vulnerable": 260,
+        "safe": 260,
+        "unknown": 52,
+        "families": 13
+      },
+      "privacy": {
+        "positives": 100,
+        "negatives": 200
+      }
+    },
+    "nix": {
+      "security": {
+        "vulnerable": 240,
+        "safe": 240,
+        "unknown": 52,
+        "families": 12
+      },
+      "privacy": {
+        "positives": 100,
+        "negatives": 200
+      }
+    }
+  },
+  "hashes": {
+    "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
+    "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+    "shapeDev2Rollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+    "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+    "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
+    "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+    "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+    "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
+  }
+}
