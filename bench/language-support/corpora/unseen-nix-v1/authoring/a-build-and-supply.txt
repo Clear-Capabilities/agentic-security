@@ -1,0 +1,969 @@
+@@@ script-interpolation | vulnerable | modules/mirror-sync.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.mirror-sync;
+in
+{
+  options.services.mirror-sync = {
+    enable = lib.mkEnableOption "nightly package mirror pull";
+    source = lib.mkOption {
+      type = lib.types.str;
+      default = "rsync://mirror.example.net/pub/";
+      description = "Upstream rsync location the mirror is pulled from.";
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    systemd.services.mirror-sync = {
+      description = "Pull the package mirror";
+      startAt = "03:15";
+      path = [ pkgs.rsync ];
+      script = "rsync -a --delete ${cfg.source} /var/lib/mirror/"; #@@
+      serviceConfig.StateDirectory = "mirror";
+    };
+  };
+}
+
+@@@ script-interpolation | safe | modules/mirror-fetch.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.mirror-fetch;
+in
+{
+  options.services.mirror-fetch = {
+    enable = lib.mkEnableOption "nightly package mirror pull";
+    source = lib.mkOption {
+      type = lib.types.str;
+      default = "rsync://mirror.example.net/pub/";
+      description = "Upstream rsync location the mirror is pulled from.";
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    systemd.services.mirror-fetch = {
+      description = "Pull the package mirror";
+      startAt = "03:15";
+      path = [ pkgs.rsync ];
+      script = "rsync -a --delete ${lib.escapeShellArg cfg.source} /var/lib/mirror/"; #@@
+      serviceConfig.StateDirectory = "mirror";
+    };
+  };
+}
+
+@@@ script-interpolation | vulnerable | hosts/archive-box.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "archive-box";
+
+  services.nextcloud = {
+    enable = true;
+    package = pkgs.nextcloud29;
+    hostName = "files.example.org";
+    home = "/srv/nextcloud";
+    config.adminpassFile = "/run/secrets/nextcloud-admin";
+  };
+
+  services.cron = {
+    enable = true;
+    systemCronJobs = [
+      "30 2 * * * root ${pkgs.gnutar}/bin/tar czf /srv/dumps/nextcloud.tgz ${config.services.nextcloud.home}" #@@
+    ];
+  };
+}
+
+@@@ script-interpolation | safe | hosts/office-gw.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "office-gw";
+
+  services.unbound.enable = true;
+
+  systemd.services.blocklist-refresh = {
+    description = "Refresh the DNS blocklist";
+    startAt = "daily";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    preStart = "${pkgs.coreutils}/bin/mkdir -p /var/lib/blocklist"; #@@
+    script = ''
+      ${pkgs.curl}/bin/curl -fsSL -o /var/lib/blocklist/hosts.txt https://lists.example.org/hosts.txt
+      ${pkgs.systemd}/bin/systemctl reload unbound.service
+    '';
+    serviceConfig.Type = "oneshot";
+  };
+}
+
+@@@ script-interpolation | vulnerable | profiles/report-upload.nix
+{ config, lib, pkgs, ... }:
+with lib;
+let
+  cfg = config.services.report-upload;
+  uploader = pkgs.writeShellApplication {
+    name = "report-upload";
+    runtimeInputs = [ pkgs.curl ];
+    text = ''
+      curl -fsS -T /var/lib/reports/latest.json ${cfg.endpoint} #@@
+    '';
+  };
+in
+{
+  options.services.report-upload = {
+    enable = mkEnableOption "nightly report upload";
+    endpoint = mkOption {
+      type = types.str;
+      description = "Where the nightly report is posted.";
+    };
+  };
+
+  config = mkIf cfg.enable {
+    systemd.services.report-upload = {
+      startAt = "04:00";
+      serviceConfig = {
+        Type = "oneshot";
+        DynamicUser = true;
+        ExecStart = "${uploader}/bin/report-upload";
+      };
+    };
+  };
+}
+
+@@@ script-interpolation | safe | profiles/report-push.nix
+{ config, lib, pkgs, ... }:
+with lib;
+let
+  cfg = config.services.report-push;
+  uploader = pkgs.writeShellApplication {
+    name = "report-push";
+    runtimeInputs = [ pkgs.curl ];
+    text = ''
+      curl -fsS -T /var/lib/reports/latest.json ${escapeShellArg cfg.endpoint} #@@
+    '';
+  };
+in
+{
+  options.services.report-push = {
+    enable = mkEnableOption "nightly report upload";
+    endpoint = mkOption {
+      type = types.str;
+      description = "Where the nightly report is posted.";
+    };
+  };
+
+  config = mkIf cfg.enable {
+    systemd.services.report-push = {
+      startAt = "04:00";
+      serviceConfig = {
+        Type = "oneshot";
+        DynamicUser = true;
+        ExecStart = "${uploader}/bin/report-push";
+      };
+    };
+  };
+}
+
+@@@ secret-in-store | vulnerable | configuration.nix
+{ config, pkgs, ... }:
+{
+  imports = [ ./hardware-configuration.nix ];
+
+  networking.hostName = "field-laptop";
+  networking.wireless = {
+    enable = true;
+    networks."office-5g".psk = "Wint3r-Garden-2024"; #@@
+    networks."eduroam".auth = ''
+      key_mgmt=WPA-EAP
+      eap=PEAP
+      identity="rhall@example.edu"
+    '';
+  };
+
+  users.users.rhall = {
+    isNormalUser = true;
+    extraGroups = [ "networkmanager" "video" ];
+  };
+
+  system.stateVersion = "24.05";
+}
+
+@@@ secret-in-store | safe | configuration.nix
+{ config, pkgs, ... }:
+{
+  imports = [ ./hardware-configuration.nix ];
+
+  networking.hostName = "field-tablet";
+  networking.wireless = {
+    enable = true;
+    environmentFile = "/run/secrets/wireless.env"; #@@
+    networks."office-5g".pskRaw = "ext:OFFICE_PSK";
+    networks."eduroam".auth = ''
+      key_mgmt=WPA-EAP
+      eap=PEAP
+      identity="rhall@example.edu"
+    '';
+  };
+
+  users.users.rhall = {
+    isNormalUser = true;
+    extraGroups = [ "networkmanager" "video" ];
+  };
+
+  system.stateVersion = "24.05";
+}
+
+@@@ secret-in-store | vulnerable | modules/metrics-push.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.metrics-push;
+in
+{
+  options.services.metrics-push = {
+    enable = lib.mkEnableOption "push host metrics to the office InfluxDB";
+    bucket = lib.mkOption {
+      type = lib.types.str;
+      default = "hosts";
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    systemd.services.metrics-push = {
+      startAt = "*:0/5";
+      environment = {
+        INFLUX_URL = "https://metrics.example.internal:8086";
+        INFLUX_BUCKET = cfg.bucket;
+        INFLUX_TOKEN = "k9Qz2mX8vL4nR7wT1pB6yH3cJ0dF5gA2sE8uN4iO1kM="; #@@
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        DynamicUser = true;
+        ExecStart = "${pkgs.telegraf}/bin/telegraf --once --config /etc/telegraf/push.conf";
+      };
+    };
+  };
+}
+
+@@@ secret-in-store | safe | modules/metrics-relay.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.metrics-relay;
+in
+{
+  options.services.metrics-relay = {
+    enable = lib.mkEnableOption "push host metrics to the office InfluxDB";
+    bucket = lib.mkOption {
+      type = lib.types.str;
+      default = "hosts";
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    sops.secrets."metrics-relay/env" = { };
+
+    systemd.services.metrics-relay = {
+      startAt = "*:0/5";
+      environment = {
+        INFLUX_URL = "https://metrics.example.internal:8086";
+        INFLUX_BUCKET = cfg.bucket;
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        DynamicUser = true;
+        EnvironmentFile = config.sops.secrets."metrics-relay/env".path; #@@
+        ExecStart = "${pkgs.telegraf}/bin/telegraf --once --config /etc/telegraf/push.conf";
+      };
+    };
+  };
+}
+
+@@@ secret-in-store | vulnerable | hosts/ledger-db.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "ledger-db";
+
+  services.postgresql = {
+    enable = true;
+    package = pkgs.postgresql_16;
+    ensureDatabases = [ "ledger" ];
+    ensureUsers = [ { name = "ledger"; ensureDBOwnership = true; } ];
+    initialScript = pkgs.writeText "ledger-init.sql" ''
+      CREATE ROLE ledger_ro LOGIN;
+      ALTER ROLE ledger WITH PASSWORD 'Ledger!Spring#7781'; #@@
+      GRANT CONNECT ON DATABASE ledger TO ledger_ro;
+    '';
+  };
+
+  services.postgresqlBackup = {
+    enable = true;
+    databases = [ "ledger" ];
+    startAt = "*-*-* 01:30:00";
+  };
+}
+
+@@@ secret-in-store | safe | hosts/ledger-api.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "ledger-api";
+
+  age.secrets.gitea-db = {
+    file = ../secrets/gitea-db.age;
+    owner = "gitea";
+  };
+
+  services.gitea = {
+    enable = true;
+    appName = "Ledger source";
+    database = {
+      type = "postgres";
+      host = "ledger-db.example.internal";
+      name = "gitea";
+      user = "gitea";
+      passwordFile = config.age.secrets.gitea-db.path; #@@
+    };
+    settings.server = {
+      DOMAIN = "git.example.org";
+      ROOT_URL = "https://git.example.org/";
+    };
+  };
+}
+
+@@@ unpinned-source | vulnerable | hosts/edge-proxy.nix
+{ config, lib, pkgs, ... }:
+let
+  unstable = import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz") { }; #@@
+in
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "edge-proxy";
+
+  services.caddy = {
+    enable = true;
+    package = unstable.caddy;
+    virtualHosts."app.example.org".extraConfig = ''
+      reverse_proxy 10.20.0.14:8080
+    '';
+  };
+
+  networking.firewall.allowedTCPPorts = [ 80 443 ];
+}
+
+@@@ unpinned-source | safe | hosts/edge-cache.nix
+{ config, lib, pkgs, ... }:
+let
+  unstable = import (builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/3f0c6d1a9b2e8f7c4d5a6b7c8d9e0f1a2b3c4d5e.tar.gz";
+    sha256 = "1q2w3x4r5v6b7n8m9k0j1h2g3f4d5s6a7p8l9z0y1x2c3v4b5n6m"; #@@
+  }) { };
+in
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "edge-cache";
+
+  services.caddy = {
+    enable = true;
+    package = unstable.caddy;
+    virtualHosts."assets.example.org".extraConfig = ''
+      reverse_proxy 10.20.0.15:8080
+    '';
+  };
+
+  networking.firewall.allowedTCPPorts = [ 80 443 ];
+}
+
+@@@ unpinned-source | vulnerable | flake.nix
+{
+  description = "Office dashboards host";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+    panels.url = "git+https://git.example.com/ops/panels.git?ref=main"; #@@
+    panels.flake = false;
+  };
+
+  outputs = { self, nixpkgs, panels }: {
+    nixosConfigurations.dash-wall = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ({ pkgs, ... }: {
+          networking.hostName = "dash-wall";
+          services.grafana = {
+            enable = true;
+            settings.server.http_addr = "127.0.0.1";
+            provision.dashboards.settings.providers = [
+              { name = "office"; options.path = "${panels}/dashboards"; }
+            ];
+          };
+        })
+      ];
+    };
+  };
+}
+
+@@@ unpinned-source | safe | flake.nix
+{
+  description = "Office dashboards host";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+    panels.url = "git+https://git.example.com/ops/panels.git?rev=9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d"; #@@
+    panels.flake = false;
+  };
+
+  outputs = { self, nixpkgs, panels }: {
+    nixosConfigurations.dash-lobby = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ({ pkgs, ... }: {
+          networking.hostName = "dash-lobby";
+          services.grafana = {
+            enable = true;
+            settings.server.http_addr = "127.0.0.1";
+            provision.dashboards.settings.providers = [
+              { name = "office"; options.path = "${panels}/dashboards"; }
+            ];
+          };
+        })
+      ];
+    };
+  };
+}
+
+@@@ unpinned-source | vulnerable | modules/panels.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.panel-kiosk;
+in
+{
+  options.services.panel-kiosk.enable = lib.mkEnableOption "lobby panel kiosk";
+
+  config = lib.mkIf cfg.enable {
+    nixpkgs.overlays = [
+      (final: prev: {
+        panel-kiosk = prev.stdenv.mkDerivation {
+          pname = "panel-kiosk";
+          version = "0.4";
+          src = prev.fetchFromGitHub { owner = "example-ops"; repo = "panel-kiosk"; rev = "main"; hash = lib.fakeHash; }; #@@
+          installPhase = "mkdir -p $out/share/panel-kiosk && cp -r html $out/share/panel-kiosk/";
+        };
+      })
+    ];
+
+    systemd.services.panel-kiosk = {
+      wantedBy = [ "graphical.target" ];
+      serviceConfig = {
+        DynamicUser = true;
+        ExecStart = "${pkgs.python3}/bin/python3 -m http.server --bind 127.0.0.1 --directory ${pkgs.panel-kiosk}/share/panel-kiosk 8088";
+      };
+    };
+  };
+}
+
+@@@ unpinned-source | safe | modules/panel-kit.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.panel-board;
+in
+{
+  options.services.panel-board.enable = lib.mkEnableOption "lobby panel board";
+
+  config = lib.mkIf cfg.enable {
+    nixpkgs.overlays = [
+      (final: prev: {
+        panel-board = prev.stdenv.mkDerivation {
+          pname = "panel-board";
+          version = "0.4";
+          src = prev.fetchFromGitHub { owner = "example-ops"; repo = "panel-board"; rev = "3f0c6d1a9b2e8f7c4d5a6b7c8d9e0f1a2b3c4d5e"; hash = "sha256-5s3Fq1k9m0eF5h2R3t8Q7w9y1p0a2d4g6j8l0z2x4c6="; }; #@@
+          installPhase = "mkdir -p $out/share/panel-board && cp -r html $out/share/panel-board/";
+        };
+      })
+    ];
+
+    systemd.services.panel-board = {
+      wantedBy = [ "graphical.target" ];
+      serviceConfig = {
+        DynamicUser = true;
+        ExecStart = "${pkgs.python3}/bin/python3 -m http.server --bind 127.0.0.1 --directory ${pkgs.panel-board}/share/panel-board 8088";
+      };
+    };
+  };
+}
+
+@@@ binary-cache-trust | vulnerable | configuration.nix
+{ config, pkgs, ... }:
+{
+  imports = [ ./hardware-configuration.nix ];
+
+  networking.hostName = "dev-station";
+
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    substituters = [ "https://cache.nixos.org" "http://cache.internal.example:5000" ]; #@@
+    trusted-public-keys = [
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+      "cache.internal.example-1:d2luZCBvdmVyIHRoZSBoaWxscyBhdCBkYXduIGZhbGw="
+    ];
+  };
+
+  environment.systemPackages = with pkgs; [ git direnv ];
+
+  system.stateVersion = "24.05";
+}
+
+@@@ binary-cache-trust | safe | configuration.nix
+{ config, pkgs, ... }:
+{
+  imports = [ ./hardware-configuration.nix ];
+
+  networking.hostName = "dev-bench";
+
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    substituters = [ "https://cache.nixos.org" "https://cache.internal.example" ]; #@@
+    trusted-public-keys = [
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+      "cache.internal.example-1:d2luZCBvdmVyIHRoZSBoaWxscyBhdCBkYXduIGZhbGw="
+    ];
+  };
+
+  environment.systemPackages = with pkgs; [ git direnv ];
+
+  system.stateVersion = "24.05";
+}
+
+@@@ binary-cache-trust | vulnerable | modules/build-cache.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.build-cache;
+in
+{
+  options.profiles.build-cache = {
+    enable = lib.mkEnableOption "use the office build cache";
+    url = lib.mkOption {
+      type = lib.types.str;
+      default = "https://builds.example.internal";
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    nix.settings.substituters = [ cfg.url ];
+    nix.settings.trusted-public-keys = [ "builds.example.internal-1:Qm9yZWFsIHRyYWRlcyBpbiB0aGUgc3VtbWVyIG1pc3Q=" ];
+    nix.extraOptions = ''
+      require-sigs = false #@@
+      connect-timeout = 5
+      fallback = true
+    '';
+  };
+}
+
+@@@ binary-cache-trust | safe | modules/build-relay.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.build-relay;
+in
+{
+  options.profiles.build-relay = {
+    enable = lib.mkEnableOption "use the office build cache";
+    url = lib.mkOption {
+      type = lib.types.str;
+      default = "https://builds.example.internal";
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    nix.settings.substituters = [ cfg.url ];
+    nix.settings.trusted-public-keys = [ "builds.example.internal-1:Qm9yZWFsIHRyYWRlcyBpbiB0aGUgc3VtbWVyIG1pc3Q=" ];
+    nix.extraOptions = ''
+      require-sigs = true #@@
+      connect-timeout = 5
+      fallback = true
+    '';
+  };
+}
+
+@@@ binary-cache-trust | vulnerable | profiles/lab-builder.nix
+{ config, lib, pkgs, ... }:
+{
+  nix = {
+    package = pkgs.nixVersions.stable;
+    binaryCaches = [ "https://cache.nixos.org" "https://builds.lab.example" ]; #@@
+    binaryCachePublicKeys = [
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+    ];
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      options = "--delete-older-than 14d";
+    };
+  };
+
+  environment.systemPackages = with pkgs; [ nix-output-monitor nix-tree ];
+}
+
+@@@ binary-cache-trust | safe | profiles/lab-worker.nix
+{ config, lib, pkgs, ... }:
+{
+  nix = {
+    package = pkgs.nixVersions.stable;
+    binaryCaches = [ "https://cache.nixos.org" "https://builds.lab.example" ]; #@@
+    binaryCachePublicKeys = [
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+      "builds.lab.example-1:Qm9yZWFsIHRyYWRlcyBpbiB0aGUgc3VtbWVyIG1pc3Q="
+    ];
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      options = "--delete-older-than 14d";
+    };
+  };
+
+  environment.systemPackages = with pkgs; [ nix-output-monitor nix-tree ];
+}
+
+@@@ trusted-users | vulnerable | configuration.nix
+{ config, pkgs, ... }:
+{
+  imports = [ ./hardware-configuration.nix ];
+
+  networking.hostName = "shared-desk";
+
+  users.users.mara = { isNormalUser = true; extraGroups = [ "wheel" ]; };
+  users.users.tomas = { isNormalUser = true; extraGroups = [ "wheel" ]; };
+
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    auto-optimise-store = true;
+    trusted-users = [ "root" "@wheel" ]; #@@
+  };
+
+  system.stateVersion = "24.05";
+}
+
+@@@ trusted-users | safe | hosts/build-desk.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "build-desk";
+
+  users.users.mara = { isNormalUser = true; extraGroups = [ "wheel" ]; };
+  users.users.tomas = { isNormalUser = true; extraGroups = [ "wheel" ]; };
+
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    auto-optimise-store = true;
+    trusted-users = [ "root" ]; #@@
+    allowed-users = [ "@wheel" ];
+  };
+}
+
+@@@ trusted-users | vulnerable | modules/ci-agent.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.ci-agent;
+in
+{
+  options.services.ci-agent = {
+    enable = lib.mkEnableOption "the pipeline agent";
+    users = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "ci" "deploy" ];
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    users.users.ci = { isSystemUser = true; group = "ci"; };
+    users.users.deploy = { isSystemUser = true; group = "ci"; };
+    users.groups.ci = { };
+
+    nix.trustedUsers = [ "root" ] ++ cfg.users; #@@
+    nix.gc.automatic = true;
+  };
+}
+
+@@@ trusted-users | safe | modules/ci-agent-pool.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.ci-agent-pool;
+in
+{
+  options.services.ci-agent-pool = {
+    enable = lib.mkEnableOption "the pipeline agent pool";
+    users = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "ci" "deploy" ];
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    users.users.ci = { isSystemUser = true; group = "ci"; };
+    users.users.deploy = { isSystemUser = true; group = "ci"; };
+    users.groups.ci = { };
+
+    nix.allowedUsers = [ "root" ] ++ cfg.users; #@@
+    nix.gc.automatic = true;
+  };
+}
+
+@@@ trusted-users | vulnerable | hosts/dev-box.nix
+{ config, lib, pkgs, ... }:
+let
+  daemonLines = [
+    "max-jobs = auto"
+    "cores = 0"
+    "trusted-users = root @users" #@@
+    "keep-outputs = true"
+  ];
+in
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "dev-box";
+
+  nix.extraOptions = lib.concatStringsSep "\n" daemonLines;
+
+  users.users.ines = { isNormalUser = true; };
+  users.users.koen = { isNormalUser = true; };
+}
+
+@@@ trusted-users | safe | hosts/dev-desk.nix
+{ config, lib, pkgs, ... }:
+let
+  daemonLines = [
+    "max-jobs = auto"
+    "cores = 0"
+    "trusted-users = root" #@@
+    "allowed-users = @users"
+    "keep-outputs = true"
+  ];
+in
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "dev-desk";
+
+  nix.extraOptions = lib.concatStringsSep "\n" daemonLines;
+
+  users.users.ines = { isNormalUser = true; };
+  users.users.koen = { isNormalUser = true; };
+}
+
+@@@ native-eval | vulnerable | hosts/pkg-builder.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "pkg-builder";
+
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    max-jobs = 8;
+    allow-unsafe-native-code-during-evaluation = true; #@@
+  };
+
+  environment.systemPackages = with pkgs; [ nix-eval-jobs hydra-cli ];
+}
+
+@@@ native-eval | safe | configuration.nix
+{ config, pkgs, ... }:
+{
+  imports = [ ./hardware-configuration.nix ];
+
+  networking.hostName = "pkg-bench";
+
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    max-jobs = 8;
+    allow-unsafe-native-code-during-evaluation = false; #@@
+  };
+
+  environment.systemPackages = with pkgs; [ nix-eval-jobs hydra-cli ];
+
+  system.stateVersion = "24.05";
+}
+
+@@@ native-eval | vulnerable | modules/eval-plugins.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.eval-plugins;
+in
+{
+  options.profiles.eval-plugins.enable = lib.mkEnableOption "extra evaluator builtins";
+
+  config = lib.mkIf cfg.enable {
+    nix.extraOptions = ''
+      plugin-files = ${pkgs.nix-plugins}/lib/nix/plugins/libnix-extra-builtins.so #@@
+      warn-dirty = false
+    '';
+    environment.systemPackages = [ pkgs.nix-plugins ];
+  };
+}
+
+@@@ native-eval | safe | modules/eval-defaults.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.eval-defaults;
+in
+{
+  options.profiles.eval-defaults.enable = lib.mkEnableOption "shared evaluator defaults";
+
+  config = lib.mkIf cfg.enable {
+    nix.extraOptions = ''
+      plugin-files = #@@
+      warn-dirty = false
+    '';
+    environment.systemPackages = [ pkgs.nix-tree ];
+  };
+}
+
+@@@ native-eval | vulnerable | flake.nix
+{
+  description = "Pipeline runner";
+
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/3f0c6d1a9b2e8f7c4d5a6b7c8d9e0f1a2b3c4d5e";
+
+  outputs = { self, nixpkgs }: {
+    nixosConfigurations.ci-runner = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ({ pkgs, lib, ... }: {
+          networking.hostName = "ci-runner";
+          nix.settings = {
+            experimental-features = [ "nix-command" "flakes" ];
+            extra-plugin-files = [ "/var/lib/nix-plugins/libexpr-hooks.so" ]; #@@
+          };
+          services.buildbot-worker.enable = true;
+        })
+      ];
+    };
+  };
+}
+
+@@@ native-eval | safe | flake.nix
+{
+  description = "Pipeline runner";
+
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/3f0c6d1a9b2e8f7c4d5a6b7c8d9e0f1a2b3c4d5e";
+
+  outputs = { self, nixpkgs }: {
+    nixosConfigurations.ci-worker = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ({ pkgs, lib, ... }: {
+          networking.hostName = "ci-worker";
+          nix.settings = {
+            experimental-features = [ "nix-command" "flakes" ];
+            extra-plugin-files = [ ]; #@@
+          };
+          services.buildbot-worker.enable = true;
+        })
+      ];
+    };
+  };
+}
+
+@@@ sandbox-trust | vulnerable | hosts/build-farm.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "build-farm";
+
+  nix.settings = {
+    max-jobs = 16;
+    cores = 4;
+    sandbox = false; #@@
+    experimental-features = [ "nix-command" "flakes" ];
+  };
+
+  nix.gc.automatic = true;
+  services.hydra.enable = false;
+}
+
+@@@ sandbox-trust | safe | hosts/build-farm-b.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "build-farm-b";
+
+  nix.settings = {
+    max-jobs = 16;
+    cores = 4;
+    sandbox = true; #@@
+    experimental-features = [ "nix-command" "flakes" ];
+  };
+
+  nix.gc.automatic = true;
+  services.hydra.enable = false;
+}
+
+@@@ sandbox-trust | vulnerable | modules/build-slot.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.build-slot;
+in
+{
+  options.profiles.build-slot = {
+    enable = lib.mkEnableOption "a remote build slot";
+    jobs = lib.mkOption { type = lib.types.int; default = 4; };
+  };
+
+  config = lib.mkIf cfg.enable (lib.mkMerge [
+    {
+      nix.maxJobs = cfg.jobs;
+      nix.useSandbox = lib.mkForce "relaxed"; #@@
+    }
+    {
+      users.users.nixbld-remote = { isSystemUser = true; group = "nixbld"; };
+      services.openssh.enable = true;
+    }
+  ]);
+}
+
+@@@ sandbox-trust | safe | modules/build-lane.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.build-lane;
+in
+{
+  options.profiles.build-lane = {
+    enable = lib.mkEnableOption "a remote build lane";
+    jobs = lib.mkOption { type = lib.types.int; default = 4; };
+  };
+
+  config = lib.mkIf cfg.enable (lib.mkMerge [
+    {
+      nix.maxJobs = cfg.jobs;
+      nix.useSandbox = lib.mkForce true; #@@
+    }
+    {
+      users.users.nixbld-remote = { isSystemUser = true; group = "nixbld"; };
+      services.openssh.enable = true;
+    }
+  ]);
+}
+
+@@@ sandbox-trust | vulnerable | profiles/kernel-dev.nix
+{ config, lib, pkgs, ... }:
+with lib;
+{
+  nix.settings = {
+    sandbox = true;
+    extra-sandbox-paths = [ "/root/.ssh" ]; #@@
+    keep-derivations = true;
+    keep-outputs = true;
+  };
+
+  environment.systemPackages = with pkgs; [ gnumake gcc bc flex bison ncurses ];
+  boot.kernelPackages = pkgs.linuxPackages_latest;
+}
+
+@@@ sandbox-trust | safe | profiles/firmware-dev.nix
+{ config, lib, pkgs, ... }:
+with lib;
+{
+  nix.settings = {
+    sandbox = true;
+    extra-sandbox-paths = [ "/bin/sh=${pkgs.bash}/bin/sh" ]; #@@
+    keep-derivations = true;
+    keep-outputs = true;
+  };
+
+  environment.systemPackages = with pkgs; [ gnumake gcc bc flex bison ncurses ];
+  boot.kernelPackages = pkgs.linuxPackages_latest;
+}

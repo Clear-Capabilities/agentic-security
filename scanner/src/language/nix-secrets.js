@@ -275,6 +275,20 @@ class Walker {
       }
       return;
     }
+    // `passwordFile = pkgs.writeText "x" "literal"`: an option that expects a RUNTIME path to a secret is handed a file the evaluation
+    // writes into the store, with the secret's text written here. The option name says what the file holds; the writer says where it lands.
+    if (v && v.type === 'app' && PATHISH_TAIL.test(last) && SECRET_NAME.test(last.replace(PATHISH_TAIL, ''))) {
+      const { fn, args } = this.ev.flatten(v);
+      const c = this.ev.calleeOf(fn);
+      const idx = c.name ? WRITERS.get(c.name) : undefined;
+      const content = Number.isInteger(idx) && args[idx] ? unparen(args[idx]) : null;
+      if (content && content.type === 'string' && !content.interpolated && plausibleSecret(content.literal)) {
+        this.scriptKeys.add(`${file}:${content.start}`);
+        const option = full.filter(Boolean).join('.');
+        this.emit('nix-secret-plaintext', { ...this.at(file, bspan), file, severity: 'high', exposure: 'store', description: `${option} expects a runtime path to a secret but is given a file that ${c.name} writes into the world-readable Nix store, with the value written here as a literal (value redacted).`, source: { kind: 'literal', file, line: content.span ? content.span.startLine : (bspan ? bspan.startLine : 1) }, destination: { kind: 'store', label: `${c.name} file`, exposure: 'store' }, evidence: { ...redact(content.literal), option, writer: c.name }, originalLocation: bspan, chain: [hop(file, content.span, 'literal'), hop(file, bspan, `${c.name} into ${last}`)].filter(Boolean), origins: [mkOrigin('secret', `literal handed to ${c.name}`)] });
+        return;
+      }
+    }
     // evaluate the value for secret origins
     if (!v || v.type === 'attrset' || v.type === 'lambda' || v.type === 'list') return;
     if (this.isRuntimeRef(v, env)) { this.safe.push({ file, line: bspan && bspan.startLine, attr: full.filter(Boolean).join('.'), reason: 'runtime secret reference' }); return; }

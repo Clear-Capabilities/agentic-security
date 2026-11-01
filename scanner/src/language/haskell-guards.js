@@ -17,6 +17,9 @@
 // has the prefix. A weak guard is reported as a note on the finding and does not refute it.
 
 const CANON_CALLS = new Set(['System.Directory.canonicalizePath', 'System.Directory.makeAbsolute', 'System.FilePath.normalise']);
+import { HS_SANITIZERS } from './haskell-models.js';
+// the catalog's HTML escapers (blaze, lucid): the same list the taint catalog is generated from
+const CATALOG_HTML_ESCAPERS = new Set(HS_SANITIZERS.filter((s) => (s.appliesTo || []).includes('xss')).map((s) => `${s.module}.${s.name}`));
 const EXIT_CALLS = new Set(['Control.Exception.throwIO', 'Control.Exception.throw', 'System.Exit.die', 'System.Exit.exitFailure', 'System.Exit.exitWith', 'throwIO', 'throw', 'die', 'exitFailure', 'exitWith', 'error', 'fail', 'ioError', 'Control.Monad.Fail.fail']);
 const WHEN = new Set(['Control.Monad.when', 'when']);
 const UNLESS = new Set(['Control.Monad.unless', 'unless']);
@@ -336,10 +339,15 @@ export function judgeFinding(f, perFile) {
   const fam = FAMILY_BY_CWE[f.cwe];
   const ir = perFile && perFile[f.file];
   if (!fam || !ir || !f._funcQid || !f.callee) return { status: 'none' };
-  const fn = ir.functions.find((x) => x.qid === f._funcQid);
-  if (!fn) return { status: 'none' };
-  const sites = findSites(fn, f.callee, f.line);
-  if (!sites.length) return { status: 'none' };
+  // A finding found while analysing a CALLER (`_funcQid`) is located at the callee's line: the sink function is the one in the
+  // finding's file that has the call at that line (the caller first, then the others), the way haskell-trust.js locates it.
+  const direct = ir.functions.find((x) => x.qid === f._funcQid);
+  let fn = null; let sites = [];
+  for (const cand of [direct, ...ir.functions.filter((x) => x !== direct)].filter(Boolean)) {
+    const s = findSites(cand, f.callee, f.line);
+    if (s.length) { fn = cand; sites = s; break; }
+  }
+  if (!fn || !sites.length) return { status: 'none' };
   let weak = null;
   let first = null;
   for (const site of sites) {
@@ -354,7 +362,46 @@ export function judgeFinding(f, perFile) {
     const facts = [...site.facts, ...cfgBranchFacts(fn, site.nodeId), ...exitGuardFacts(fn, site.nodeId)];
     let refuted = null;
     if (fam === 'xss') {
-      const escapers = htmlEscapers(perFile);
+      // the project's own escapers plus the catalog's HTML escapers (blaze/lucid `toHtml`, `text`, ...): the taint walk records the latter on
+      // the path for the proof gate, but a sink argument built by a HELPER (`html (renderHtml (greeting name))`) is judged here, where the
+      // helper's body can be read: a helper that uses the parameter receiving the tainted value only under an escaper escapes it
+      const escapers = new Set([...htmlEscapers(perFile), ...CATALOG_HTML_ESCAPERS]);
+      const helperByName = (callee) => ir.functions.find((x) => x.name === callee || x.qid === callee || (x.qid || '').endsWith(`::${callee}`)) || null;
+      const paramEscaped = (helper, param, depth) => {
+        if (depth > 2) return false;
+        const under = (e, inEsc, d) => {
+          if (!e || typeof e !== 'object' || d > 40) return true;
+          if (e.kind === 'ident' && e.name === param) return inEsc;
+          if (e.kind === 'call' && typeof e.callee === 'string') {
+            if (escapers.has(e.callee)) return true;
+            const h = helperByName(e.callee);
+            if (h && Array.isArray(h.params)) {
+              // a nested helper: each argument that mentions the parameter must land on a parameter the nested helper escapes
+              return (e.args || []).every((a, i) => !identNames(a).has(param) || (h.params[i] && paramEscaped(h, h.params[i], depth + 1) && under(a, true, d + 1)));
+            }
+          }
+          for (const [, c] of exprChildren(e)) if (!under(c, inEsc, d + 1)) return false;
+          return true;
+        };
+        for (const n of nodeList(helper)) {
+          for (const k of ['source', 'value', 'cond']) if (n[k] && !under(n[k], false, 0)) return false;
+          if (Array.isArray(n.args)) for (const a of n.args) if (!under(a, false, 0)) return false;
+        }
+        return true;
+      };
+      const addHelperEscapers = (e, d) => {
+        if (!e || typeof e !== 'object' || d > 40) return;
+        if (e.kind === 'call' && typeof e.callee === 'string' && !escapers.has(e.callee)) {
+          const h = helperByName(e.callee);
+          if (h && Array.isArray(h.params) && (e.args || []).length) {
+            const taintedPositions = (e.args || []).map((a, i) => ([...identNames(a)].some((v) => vars.has(v) || derived.has(v)) ? i : -1)).filter((i) => i >= 0);
+            if (taintedPositions.length && taintedPositions.every((i) => h.params[i] && paramEscaped(h, h.params[i], 0))) escapers.add(e.callee);
+          }
+        }
+        for (const [, c] of exprChildren(e)) addHelperEscapers(c, d + 1);
+      };
+      addHelperEscapers(argExpr, 0);
+      for (const v of identNames(argExpr)) for (const n of nodeList(fn)) if (n.kind === 'assign' && n.target === v && n.source) addHelperEscapers(n.source, 0);
       const calls = [];
       const find = (e, d) => { if (!e || typeof e !== 'object' || d > 40) return; if (e.kind === 'call' && escapers.has(e.callee)) calls.push(e); for (const [, c] of exprChildren(e)) find(c, d + 1); };
       // the escaper may sit behind one or more local bindings (`page = ... path ...`, `path = escape (...)`): follow them, each once
@@ -507,6 +554,75 @@ export function waiHtmlContext(f, perFile) {
   return 'unknown';
 }
 
+// ── a request whose host is fixed ────────────────────────────────────────────
+// SSRF is the client choosing the HOST. A URL built as `fixedBase <> clientText` where the fixed part is a literal (or a constant bound to
+// one) that already names a scheme, a host and a "/" cannot reach another host: the client text lands in the path, query or fragment.
+// Likewise a request value built by http-conduit's modifiers (`setRequestQueryString q base`, `setRequestPath p base`, ...) over a fixed
+// base request keeps that base's host; the modifiers take the base as their LAST argument. A record update of such a value is judged by
+// its base unless it sets a field that names the host.
+const HOST_ANCHORED = /^[a-z][a-z0-9+.-]*:\/\/[^/@?#\s]+\/[^\s]*$/i;
+const REQUEST_BUILDERS = /(?:^|\.)(?:parseRequest|parseRequest_|parseUrlThrow|parseUrl|requestFromURI|requestFromURI_)$/;
+const REQUEST_MODIFIERS = /(?:^|\.)(?:setRequestQueryString|setRequestQuery|setQueryString|setRequestPath|setRequestBody|setRequestBodyLBS|setRequestBodyJSON|setRequestBodyURLEncoded|setRequestBodyFile|setRequestBodySource|setRequestHeader|setRequestHeaders|addRequestHeader|setRequestMethod|setRequestBasicAuth|setRequestBearerAuth|setRequestIgnoreStatus|setRequestResponseTimeout|setRequestCheckStatus|setRequestManager|urlEncodedBody|applyBasicAuth|applyBearerAuth)$/;
+const PEEL_WRAPPERS = /(?:^|\.)(?:liftIO|pure|return|unpack|pack|fromString|toStrict|fromStrict|encodeUtf8|decodeUtf8|toText|fromText)$/;
+const HOST_FIELD = /^(?:host|port|secure|url|uri|requestHost)$/i;
+
+function fixedHostRequest(f, perFile) {
+  if (!f || f.cwe !== 'CWE-918') return null;
+  const ir = perFile && perFile[f.file];
+  if (!ir || !f.callee) return null;
+  const direct = ir.functions.find((x) => x.qid === f._funcQid);
+  let fn = null; let sites = [];
+  for (const cand of [direct, ...ir.functions.filter((x) => x !== direct)].filter(Boolean)) {
+    const s = findSites(cand, f.callee, f.line);
+    if (s.length) { fn = cand; sites = s; break; }
+  }
+  if (!fn || !sites.length) return null;
+  const argIdx = Number.isInteger(f.argIndex) ? f.argIndex : 0;
+  // a local name bound once stands for its definition; a zero-parameter function of the module whose body is one literal is a constant
+  const localDef = (name) => { const defs = []; for (const n of nodeList(fn)) if (n.kind === 'assign' && n.target === name && n.source) defs.push(n.source); return defs.length === 1 ? defs[0] : null; };
+  const constDef = (name) => {
+    const bare = name.replace(/^.*\./, '');
+    const c = ir.functions.find((x) => (x.name === name || x.qid === name || (x.name || '').replace(/^.*\./, '') === bare) && (!Array.isArray(x.params) || x.params.length === 0));
+    if (!c) return null;
+    const rets = Object.values(c.cfg.nodes).filter((n) => n.kind === 'return' && n.value);
+    return rets.length === 1 ? rets[0].value : null;
+  };
+  let evidence = null;
+  const fixed = (e, seen, depth) => {
+    if (!e || typeof e !== 'object' || depth > 24) return false;
+    if (e.kind === 'literal') { const ok = typeof e.value === 'string' && HOST_ANCHORED.test(e.value); if (ok) evidence = e.value.replace(/^([a-z][a-z0-9+.-]*:\/\/[^/@?#\s]+\/).*$/i, '$1'); return ok; }
+    if (e.kind === 'ident') {
+      if (seen.has(e.name)) return false;
+      seen.add(e.name);
+      const d = localDef(e.name) || constDef(e.name);
+      return d ? fixed(d, seen, depth + 1) : false;
+    }
+    if (e.kind === 'union') return Array.isArray(e.branches) && e.branches.length > 0 && e.branches.every((b) => fixed(b, new Set(seen), depth + 1));
+    if (e.kind === 'object' && Array.isArray(e.props)) {
+      // a record update: `{ method = "POST" }` joined (as a union) with its base; a field that names the host makes it unknown
+      if (e.props.some((p) => HOST_FIELD.test(String(p.key || p.name || '')))) return false;
+      return e.object ? fixed(e.object, seen, depth + 1) : true;
+    }
+    if (e.kind === 'binary' && (e.op === '<>' || e.op === '++' || (e.hs && e.hs.concat))) return fixed(e.left, seen, depth + 1);
+    if (e.kind === 'call' && typeof e.callee === 'string') {
+      const args = e.args || [];
+      if (PEEL_WRAPPERS.test(e.callee) && args.length === 1) return fixed(args[0], seen, depth + 1);
+      if (REQUEST_BUILDERS.test(e.callee) && args.length >= 1) return fixed(args[args.length - 1], seen, depth + 1);
+      if (REQUEST_MODIFIERS.test(e.callee) && args.length >= 1) return fixed(args[args.length - 1], seen, depth + 1);
+      if (/(?:^|\.)(?:<\/>|combine|joinPath)$/.test(e.callee) && args.length === 2) return fixed(args[0], seen, depth + 1);
+    }
+    return false;
+  };
+  for (const site of sites) {
+    const arg = (site.call.args || [])[argIdx];
+    if (!arg) return null;
+    // a record update is a union of the base and the update: a union judged branch by branch above; an `object` branch with no base is the
+    // update alone, which is fixed when it names no host field, so the base branch decides
+    if (!fixed(arg, new Set(), 0)) return null;
+  }
+  return { kind: 'fixed-host-request', base: evidence };
+}
+
 export function applyHaskellGuards(findings, perFile) {
   const stats = { refuted: 0, weak: 0 };
   for (const f of findings || []) {
@@ -521,6 +637,16 @@ export function applyHaskellGuards(findings, perFile) {
         continue;
       }
       if (ctx === 'unknown' && !f._htmlContextUnknown) { f._htmlContextUnknown = true; f.uncertainty = [...(f.uncertainty || []), { kind: 'unread-content-type', detail: 'the response headers at this call are not literal text, so whether the body is served as HTML was not read' }]; }
+    } catch { /* judged below */ }
+    try {
+      const fh = fixedHostRequest(f, perFile);
+      if (fh && !f._fixedHost) {
+        f._fixedHost = true; f.severity = 'info';
+        f.controls = [...(f.controls || []), { kind: 'fixed-host-request', evidenceKind: 'source' }];
+        f.guardNote = { kind: 'fixed-host-request', reason: `the request's host is fixed by the literal${fh.base ? ` "${fh.base}"` : ''} the URL or base request starts from; the client's text can only choose the path, query or fragment, which is not a server-side request forgery (a path it chooses on that host is still worth a look)` };
+        stats.weak++;
+        continue;
+      }
     } catch { /* judged below */ }
     try { promoteShellInterpreter(f, perFile); } catch { /* judged as an argument-injection below */ }
     try {

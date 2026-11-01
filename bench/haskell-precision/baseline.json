@@ -1,7 +1,7 @@
 {
  "schema": "agentic-security/haskell-precision-baseline@1",
  "comparison": "equality: a regression fails, and so does an improvement that was not recorded here",
- "engineVersion": "0.195.7",
+ "engineVersion": "0.195.8",
  "labelsDigests": {
   "development-tuning": "f599e1edc2e1e8b68756b4d25c238daf0f0f04b34ea30983a16a793615e40395",
   "development-verification": "39b0c5bf5cd20298a8e7ab608e5d7b938c4725a8f8d51e5b22a4ba011f1d0870",
@@ -11,13 +11,13 @@
  "aggregates": {
   "development-tuning": {
    "labelled": 64,
-   "reported": 30,
-   "notReported": 34,
-   "flagged": 10,
-   "loweredToInfo": 20,
-   "tp": 4,
-   "fp": 6,
-   "tpNotFlagged": 0,
+   "reported": 28,
+   "notReported": 36,
+   "flagged": 5,
+   "loweredToInfo": 23,
+   "tp": 2,
+   "fp": 3,
+   "tpNotFlagged": 2,
    "byStatus": {
     "entrypoint-reachable": {
      "TP": 0,
@@ -36,24 +36,24 @@
      "FP": 0
     },
     "no-verdict": {
-     "TP": 4,
+     "TP": 2,
      "FP": 9
     }
    },
    "precision": 0.4,
    "wilson95": [
-    0.1682,
-    0.6873
+    0.1176,
+    0.7693
    ]
   },
   "development-verification": {
    "labelled": 54,
    "reported": 30,
    "notReported": 24,
-   "flagged": 4,
-   "loweredToInfo": 26,
+   "flagged": 1,
+   "loweredToInfo": 29,
    "tp": 1,
-   "fp": 3,
+   "fp": 0,
    "tpNotFlagged": 0,
    "byStatus": {
     "entrypoint-reachable": {
@@ -77,20 +77,20 @@
      "FP": 6
     }
    },
-   "precision": 0.25,
+   "precision": 1,
    "wilson95": [
-    0.0456,
-    0.6994
+    0.2065,
+    1
    ]
   },
   "development-remainder": {
    "labelled": 5,
    "reported": 5,
    "notReported": 0,
-   "flagged": 5,
-   "loweredToInfo": 0,
+   "flagged": 1,
+   "loweredToInfo": 4,
    "tp": 0,
-   "fp": 5,
+   "fp": 1,
    "tpNotFlagged": 0,
    "byStatus": {
     "entrypoint-reachable": {
@@ -117,17 +117,17 @@
    "precision": 0,
    "wilson95": [
     0,
-    0.4345
+    0.7935
    ]
   },
   "fresh": {
    "labelled": 222,
-   "reported": 183,
-   "notReported": 39,
-   "flagged": 45,
-   "loweredToInfo": 138,
+   "reported": 180,
+   "notReported": 42,
+   "flagged": 26,
+   "loweredToInfo": 154,
    "tp": 17,
-   "fp": 28,
+   "fp": 9,
    "tpNotFlagged": 4,
    "byStatus": {
     "entrypoint-reachable": {
@@ -148,13 +148,13 @@
     },
     "no-verdict": {
      "TP": 9,
-     "FP": 116
+     "FP": 113
     }
    },
-   "precision": 0.3778,
+   "precision": 0.6538,
    "wilson95": [
-    0.2511,
-    0.5237
+    0.4622,
+    0.8059
    ]
   },
   "census": {
@@ -169,8 +169,8 @@
     },
     "ghcup-hs": {
      "rows": 38,
-     "flagged": 5,
-     "loweredToInfo": 33,
+     "flagged": 2,
+     "loweredToInfo": 36,
      "byStatus": {
       "no-verdict": 2,
       "external-api": 33,
@@ -178,19 +178,19 @@
      }
     },
     "gitit": {
-     "rows": 8,
-     "flagged": 5,
-     "loweredToInfo": 3,
+     "rows": 6,
+     "flagged": 2,
+     "loweredToInfo": 4,
      "byStatus": {
       "entrypoint-reachable": 1,
-      "no-verdict": 6,
+      "no-verdict": 4,
       "external-api": 1
      }
     },
     "hackage-server": {
      "rows": 43,
-     "flagged": 6,
-     "loweredToInfo": 37,
+     "flagged": 1,
+     "loweredToInfo": 42,
      "byStatus": {
       "entrypoint-reachable": 34,
       "external-api": 5,
@@ -223,8 +223,8 @@
     },
     "xmonad-contrib": {
      "rows": 2,
-     "flagged": 2,
-     "loweredToInfo": 0,
+     "flagged": 1,
+     "loweredToInfo": 1,
      "byStatus": {
       "external-api": 1,
       "no-verdict": 1
@@ -234,8 +234,8 @@
    "fresh": {
     "dhall-haskell": {
      "rows": 93,
-     "flagged": 15,
-     "loweredToInfo": 78,
+     "flagged": 3,
+     "loweredToInfo": 90,
      "byStatus": {
       "no-verdict": 72,
       "entrypoint-reachable": 17,
@@ -244,19 +244,19 @@
     },
     "hlint": {
      "rows": 14,
-     "flagged": 3,
-     "loweredToInfo": 11,
+     "flagged": 2,
+     "loweredToInfo": 12,
      "byStatus": {
       "entrypoint-reachable": 5,
       "no-verdict": 9
      }
     },
     "ihp": {
-     "rows": 69,
-     "flagged": 22,
-     "loweredToInfo": 47,
+     "rows": 68,
+     "flagged": 20,
+     "loweredToInfo": 48,
      "byStatus": {
-      "no-verdict": 35,
+      "no-verdict": 34,
       "unknown": 9,
       "entrypoint-reachable": 20,
       "external-api": 5
@@ -272,19 +272,19 @@
      }
     },
     "scotty": {
-     "rows": 23,
-     "flagged": 23,
+     "rows": 21,
+     "flagged": 21,
      "loweredToInfo": 0,
      "byStatus": {
       "external-api": 1,
-      "no-verdict": 11,
+      "no-verdict": 9,
       "entrypoint-reachable": 11
      }
     },
     "summoner": {
      "rows": 2,
-     "flagged": 2,
-     "loweredToInfo": 0,
+     "flagged": 0,
+     "loweredToInfo": 2,
      "byStatus": {
       "external-api": 2
      }

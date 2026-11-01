@@ -818,8 +818,20 @@ export function analyzeNixScripts(opts = {}) {
       }
       const envMap = collectEnvironment(site, ev);
 
+      const emitted = new Map();
       const emit = (rule, o) => {
         const R = RULES[rule];
+        // One finding per rule, script line and origin class: `rsync ${cfg.source} ${cfg.destination}` is one unescaped command line
+        // with two configuration interpolations, not two findings. Origins of different classes on one line (an attacker value next
+        // to a configuration value) stay separate findings, as NIX-003.AC04 requires; the later same-class interpolations join the first.
+        const kinds = [...new Set((o.origins || []).map((x) => x.kind).filter((k) => k !== 'constant'))].sort().join('+');
+        const dupKey = `${rule}|${siteFile}|${o.line}|${kinds}`;
+        const prior = emitted.get(dupKey);
+        if (prior) {
+          for (const x of o.origins || []) if (!prior.origins.some((y) => y.kind === x.kind && y.detail === x.detail)) prior.origins.push({ kind: x.kind, detail: x.detail });
+          prior.alsoAt = [...(prior.alsoAt || []), { column: o.column }];
+          return prior;
+        }
         const f = {
           id: `NIX-SCRIPT-${rule}-${siteFile}:${o.line}:${o.column}`,
           severity: o.severity, file: siteFile, line: o.line, column: o.column, vuln: o.vuln || R.vuln, cwe: R.cwe,
@@ -832,6 +844,7 @@ export function analyzeNixScripts(opts = {}) {
           ...(o.uncertainty ? { uncertainty: o.uncertainty } : {}), ...(o.extra || {}),
         };
         findings.push(f);
+        emitted.set(dupKey, f);
         return f;
       };
 

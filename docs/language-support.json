@@ -275,22 +275,22 @@
             "role": "development",
             "shortfalls": [],
             "cases": 60,
-            "tp": 30,
+            "tp": 28,
             "fp": 0,
-            "fn": 0,
+            "fn": 2,
             "tn": 28,
             "precision": 1,
-            "recall": 1,
-            "f1": 1,
-            "strictPrecision": 0.9375,
+            "recall": 0.9333333333333333,
+            "f1": 0.9655172413793104,
+            "strictPrecision": 0.9333333333333333,
             "ci": {
               "precision": [
-                0.782,
+                0.7684,
                 1
               ],
               "recall": [
-                0.782,
-                1
+                0.6805,
+                0.9983
               ],
               "level": 0.95,
               "method": "Clopper-Pearson over shapes (2 near-identical cases per shape)"
@@ -757,22 +757,22 @@
             "role": "development",
             "shortfalls": [],
             "cases": 132,
-            "tp": 58,
+            "tp": 66,
             "fp": 0,
-            "fn": 8,
+            "fn": 0,
             "tn": 66,
             "precision": 1,
-            "recall": 0.8787878787878788,
-            "f1": 0.9354838709677419,
-            "strictPrecision": 0.9354838709677419,
+            "recall": 1,
+            "f1": 1,
+            "strictPrecision": 0.9428571428571428,
             "ci": {
               "precision": [
-                0.8806,
+                0.8942,
                 1
               ],
               "recall": [
-                0.718,
-                0.966
+                0.8942,
+                1
               ],
               "level": 0.95,
               "method": "Clopper-Pearson over shapes (2 near-identical cases per shape)"
@@ -820,25 +820,22 @@
             }
           },
           "generalization": {
-            "status": "below-target",
+            "status": "meets-targets",
             "role": "development",
-            "shortfalls": [
-              "precision 60.0% < 90.0%",
-              "F1 75.0% < 80.0%"
-            ],
+            "shortfalls": [],
             "cases": 12,
             "tp": 6,
-            "fp": 4,
+            "fp": 0,
             "fn": 0,
             "tn": 6,
-            "precision": 0.6,
+            "precision": 1,
             "recall": 1,
-            "f1": 0.7499999999999999,
-            "strictPrecision": 0.6,
+            "f1": 1,
+            "strictPrecision": 1,
             "ci": {
               "precision": [
-                0.1466,
-                0.9473
+                0.2924,
+                1
               ],
               "recall": [
                 0.2924,
@@ -983,9 +980,7 @@
         ],
         "dataOk": true
       },
-      "generalizationGaps": [
-        "config-taint: precision 60.0% < 90.0%, F1 75.0% < 80.0%"
-      ],
+      "generalizationGaps": [],
       "metamorphic": {
         "preserve": 1,
         "change": 1,
@@ -1020,7 +1015,7 @@
     "split": "unseen",
     "role": "development",
     "developmentSince": "2026-10-26",
-    "measuredAt": "2026-10-26",
+    "measuredAt": "2026-11-01",
     "corpusVersion": "qa001-v2",
     "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd"
   },

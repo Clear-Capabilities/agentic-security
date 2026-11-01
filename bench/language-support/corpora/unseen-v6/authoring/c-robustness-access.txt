@@ -1,0 +1,660 @@
+@@@ resource-limits | vulnerable | src/UploadIngest.hs
+{-# LANGUAGE OverloadedStrings #-}
+module UploadIngest (main) where
+
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Network.HTTP.Types (status200, status405)
+import Network.Wai
+import Network.Wai.Handler.Warp (run)
+import qualified Ingest
+
+main :: IO ()
+main = run 8080 app
+
+app :: Application
+app req respond
+  | requestMethod req == "POST" && pathInfo req == ["ingest"] = do
+      body <- strictRequestBody req --@@
+      count <- Ingest.storeRows (BLC.lines body)
+      respond (responseLBS status200 [("Content-Type", "text/plain")] (BLC.pack (show count ++ " rows stored")))
+  | otherwise = respond (responseLBS status405 [] "only POST /ingest is served")
+
+@@@ resource-limits | vulnerable | src/ReportPages.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ReportPages (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Web.Scotty
+
+main :: IO ()
+main = scotty 8080 $
+  get "/reports/sample" $ do
+    pages <- param "pages"
+    document <- liftIO (renderPages pages)
+    setHeader "Content-Type" "application/pdf"
+    raw document
+
+renderPages :: Int -> IO BL.ByteString
+renderPages count = BL.concat <$> mapM renderPage [1 .. count] --@@
+
+renderPage :: Int -> IO BL.ByteString
+renderPage n = pure (BLC.pack ("%PAGE " ++ show n ++ "\n") <> BL.replicate 65536 0x20)
+
+@@@ resource-limits | vulnerable | src/ArchiveImport.hs
+{-# LANGUAGE DataKinds, OverloadedStrings, TypeOperators #-}
+module ArchiveImport (app) where
+
+import Codec.Compression.GZip (decompress)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
+import Servant
+import qualified Catalog
+
+type API = "archives" :> "import" :> Header "X-Archive-Name" Text :> ReqBody '[OctetStream] BL.ByteString :> Post '[JSON] Int
+
+inflate :: BL.ByteString -> BL.ByteString
+inflate = decompress --@@
+
+importHandler :: Maybe Text -> BL.ByteString -> Handler Int
+importHandler name body = do
+  let label = fromMaybe "unnamed" name
+      contents = inflate body
+  liftIO (Catalog.loadEntries label contents)
+
+app :: Application
+app = serve (Proxy :: Proxy API) importHandler
+
+@@@ resource-limits | safe | src/UploadReceiver.hs
+{-# LANGUAGE OverloadedStrings #-}
+module UploadReceiver (main) where
+
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Network.HTTP.Types (status200, status405, status413)
+import Network.Wai
+import Network.Wai.Handler.Warp (run)
+import qualified Ingest
+
+maxBytes :: Integer
+maxBytes = 1024 * 1024
+
+main :: IO ()
+main = run 8080 app
+
+app :: Application
+app req respond
+  | requestMethod req == "POST" && pathInfo req == ["ingest"] =
+      case requestBodyLength req of
+        KnownLength n | fromIntegral n <= maxBytes -> do
+          body <- strictRequestBody req --@@
+          count <- Ingest.storeRows (BLC.lines body)
+          respond (responseLBS status200 [("Content-Type", "text/plain")] (BLC.pack (show count ++ " rows stored")))
+        _ -> respond (responseLBS status413 [] "body must declare a length of at most 1 MiB")
+  | otherwise = respond (responseLBS status405 [] "only POST /ingest is served")
+
+@@@ resource-limits | safe | src/EventFeed.hs
+{-# LANGUAGE OverloadedStrings #-}
+module EventFeed (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import Web.Scotty
+import qualified Store
+import Store (Event)
+
+main :: IO ()
+main = scotty 8080 $
+  get "/events" $ do
+    requested <- param "limit" `rescue` (\_ -> pure 20)
+    rows <- liftIO (fetchEvents (clamp requested))
+    json rows
+
+clamp :: Int -> Int
+clamp n = max 1 (min 100 n)
+
+fetchEvents :: Int -> IO [Event]
+fetchEvents n = take n <$> Store.recentEvents --@@
+
+@@@ resource-limits | safe | src/LiveTail.hs
+{-# LANGUAGE OverloadedStrings #-}
+module LiveTail (main) where
+
+import Control.Monad (forever)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Network.WebSockets as WS
+import Text.Read (readMaybe)
+import qualified Tail
+
+maxLines :: Int
+maxLines = 500
+
+main :: IO ()
+main = WS.runServer "127.0.0.1" 9170 tailApp
+
+tailApp :: WS.ServerApp
+tailApp pending = do
+  conn <- WS.acceptRequest pending
+  WS.withPingThread conn 30 (pure ()) $ forever $ do
+    msg <- WS.receiveData conn :: IO Text
+    case readMaybe (T.unpack (T.strip msg)) :: Maybe Int of
+      Nothing -> WS.sendTextData conn ("send the number of lines to tail" :: Text)
+      Just requested -> do
+        let wanted = min maxLines (max 1 requested)
+        recent <- Tail.lastLines wanted --@@
+        mapM_ (WS.sendTextData conn) recent
+
+@@@ parser-safety | vulnerable | src/Catalogue.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Catalogue (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import Web.Scotty
+import qualified Items
+
+main :: IO ()
+main = scotty 8080 $ do
+  get "/catalogue" $ do
+    pageText <- param "page"
+    let page = read (TL.unpack pageText) :: Int --@@
+    items <- liftIO (Items.pageOf page)
+    json items
+  get "/catalogue/featured" $ do
+    items <- liftIO Items.featured
+    json items
+
+@@@ parser-safety | vulnerable | src/MediaRange.hs
+{-# LANGUAGE DataKinds, OverloadedStrings, TypeOperators #-}
+module MediaRange (app) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
+import qualified Data.Text as T
+import Servant
+import qualified Media
+
+type API = "media" :> Capture "asset" Text :> Header "Range" Text :> Get '[OctetStream] BL.ByteString
+
+parseRange :: Text -> (Int, Int)
+parseRange header = let [lo, hi] = T.splitOn "-" (T.splitOn "=" header !! 1) in (read (T.unpack lo), read (T.unpack hi)) --@@
+
+mediaHandler :: Text -> Maybe Text -> Handler BL.ByteString
+mediaHandler asset Nothing = liftIO (Media.whole asset)
+mediaHandler asset (Just header) = do
+  let (lo, hi) = parseRange header
+  liftIO (Media.slice asset lo hi)
+
+app :: Application
+app = serve (Proxy :: Proxy API) mediaHandler
+
+@@@ parser-safety | vulnerable | src/OrderEvents.hs
+{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
+module OrderEvents (main) where
+
+import Data.Aeson (FromJSON, decode)
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Network.AMQP
+import qualified Fulfilment
+
+data OrderEvent = OrderEvent { orderId :: Int, sku :: Text, quantity :: Int }
+  deriving (Show, Generic)
+instance FromJSON OrderEvent
+
+main :: IO ()
+main = do
+  conn <- openConnection "127.0.0.1" "/" "guest" "guest"
+  chan <- openChannel conn
+  _ <- declareQueue chan newQueue { queueName = "orders" }
+  _ <- consumeMsgs chan "orders" Ack onEvent
+  putStrLn "order consumer ready"
+
+onEvent :: (Message, Envelope) -> IO ()
+onEvent (msg, env) = do
+  let Just order = decode (msgBody msg) :: Maybe OrderEvent --@@
+  Fulfilment.schedule (orderId order) (sku order) (quantity order)
+  ackEnv env
+
+@@@ parser-safety | safe | src/Listings.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Listings (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import Network.HTTP.Types.Status (status400)
+import Text.Read (readMaybe)
+import Web.Scotty
+import qualified Items
+
+main :: IO ()
+main = scotty 8080 $ do
+  get "/listings" $ do
+    pageText <- param "page"
+    case readMaybe (TL.unpack pageText) :: Maybe Int of --@@
+      Nothing -> status status400 >> text "page must be a whole number"
+      Just page -> liftIO (Items.pageOf page) >>= json
+  get "/listings/featured" $ do
+    items <- liftIO Items.featured
+    json items
+
+@@@ parser-safety | safe | src/StreamRange.hs
+{-# LANGUAGE DataKinds, OverloadedStrings, TypeOperators #-}
+module StreamRange (app) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Attoparsec.Text (Parser, char, decimal, endOfInput, parseOnly, string)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Data.Text (Text)
+import Servant
+import qualified Media
+
+type API = "stream" :> Capture "asset" Text :> Header "Range" Text :> Get '[OctetStream] BL.ByteString
+
+rangeParser :: Parser (Int, Int)
+rangeParser = do
+  _ <- string "bytes="
+  lo <- decimal
+  _ <- char '-'
+  hi <- decimal
+  endOfInput
+  pure (lo, hi)
+
+parseRange :: Text -> Either String (Int, Int)
+parseRange = parseOnly rangeParser --@@
+
+streamHandler :: Text -> Maybe Text -> Handler BL.ByteString
+streamHandler asset Nothing = liftIO (Media.whole asset)
+streamHandler asset (Just header) = case parseRange header of
+  Left reason -> throwError err416 { errBody = BLC.pack ("range not understood: " ++ reason) }
+  Right (lo, hi) -> liftIO (Media.slice asset lo hi)
+
+app :: Application
+app = serve (Proxy :: Proxy API) streamHandler
+
+@@@ parser-safety | safe | src/ImportRows.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ImportRows (main) where
+
+import qualified Data.ByteString.Lazy as BL
+import Data.Csv (HasHeader(..), decode)
+import Data.Text (Text)
+import qualified Data.Vector as V
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
+import qualified Inventory
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [path] -> importFile path
+    _ -> hPutStrLn stderr "usage: import-rows <file.csv>" >> exitFailure
+
+importFile :: FilePath -> IO ()
+importFile path = do
+  contents <- BL.readFile path
+  case decode HasHeader contents :: Either String (V.Vector (Text, Int)) of --@@
+    Left reason -> hPutStrLn stderr ("could not parse " ++ path ++ ": " ++ reason) >> exitFailure
+    Right rows -> do
+      mapM_ (uncurry Inventory.adjust) (V.toList rows)
+      putStrLn ("imported " ++ show (V.length rows) ++ " rows")
+
+@@@ route-authentication | vulnerable | src/UserAdmin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module UserAdmin (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (object, (.=))
+import Database.PostgreSQL.Simple
+import Web.Scotty
+
+main :: IO ()
+main = do
+  conn <- connectPostgreSQL "dbname=accounts"
+  scotty 8080 $ do
+    get "/admin/users" $ do
+      rows <- liftIO (query_ conn "SELECT id, email FROM users ORDER BY id") :: ActionM [(Int, String)]
+      json rows
+    delete "/admin/users/:id" $ do
+      uid <- param "id" :: ActionM Int
+      n <- liftIO (execute conn "DELETE FROM users WHERE id = ?" (Only uid)) --@@
+      json (object ["deleted" .= n])
+
+@@@ route-authentication | vulnerable | src/MailerConfig.hs
+{-# LANGUAGE DataKinds, DeriveGeneric, OverloadedStrings, TypeOperators #-}
+module MailerConfig (app) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import Data.IORef
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Servant
+import qualified Mailer
+
+data MailerSettings = MailerSettings
+  { smtpHost :: Text
+  , smtpPort :: Int
+  , smtpUser :: Text
+  , smtpPassword :: Text
+  , fromAddress :: Text
+  } deriving (Show, Generic)
+instance FromJSON MailerSettings
+
+type API = "settings" :> "mailer" :> ReqBody '[JSON] MailerSettings :> Put '[JSON] NoContent
+
+applySettings :: IORef MailerSettings -> MailerSettings -> IO ()
+applySettings ref settings = writeIORef ref settings >> Mailer.reconnect (smtpHost settings) (smtpPort settings) (smtpUser settings) (smtpPassword settings) --@@
+
+settingsHandler :: IORef MailerSettings -> MailerSettings -> Handler NoContent
+settingsHandler ref settings = do
+  liftIO (applySettings ref settings)
+  pure NoContent
+
+app :: IORef MailerSettings -> Application
+app ref = serve (Proxy :: Proxy API) (settingsHandler ref)
+
+@@@ route-authentication | vulnerable | src/CacheAdmin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module CacheAdmin (main) where
+
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Network.HTTP.Types (status200, status404)
+import Network.Wai
+import Network.Wai.Handler.Warp (run)
+import qualified Cache
+
+main :: IO ()
+main = run 8080 app
+
+app :: Application
+app req respond
+  | pathInfo req == ["admin", "flush-cache"] && requestMethod req == "POST" = do
+      cleared <- Cache.flushAll --@@
+      respond (responseLBS status200 [("Content-Type", "text/plain")] (BLC.pack (show cleared ++ " entries cleared")))
+  | pathInfo req == ["admin", "cache-stats"] = do
+      stats <- Cache.summary
+      respond (responseLBS status200 [("Content-Type", "text/plain")] (BLC.pack stats))
+  | otherwise = respond (responseLBS status404 [] "no such route")
+
+@@@ route-authentication | safe | src/UserManagement.hs
+{-# LANGUAGE OverloadedStrings #-}
+module UserManagement (main) where
+
+import Control.Monad (unless)
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (object, (.=))
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status401)
+import Web.Scotty
+import qualified Tokens
+
+main :: IO ()
+main = do
+  conn <- connectPostgreSQL "dbname=accounts"
+  store <- Tokens.load
+  scotty 8080 $ do
+    get "/admin/users" $ do
+      requireAdmin store
+      rows <- liftIO (query_ conn "SELECT id, email FROM users ORDER BY id") :: ActionM [(Int, String)]
+      json rows
+    delete "/admin/users/:id" $ do
+      requireAdmin store
+      uid <- param "id" :: ActionM Int
+      n <- liftIO (execute conn "DELETE FROM users WHERE id = ?" (Only uid)) --@@
+      json (object ["deleted" .= n])
+
+requireAdmin :: Tokens.Store -> ActionM ()
+requireAdmin store = do
+  auth <- header "Authorization"
+  admin <- liftIO (maybe (pure False) (Tokens.isAdmin store . TL.toStrict) auth)
+  unless admin $ do
+    status status401
+    text "administrator token required"
+    finish
+
+@@@ route-authentication | safe | src/MailerSettings.hs
+{-# LANGUAGE DataKinds, DeriveGeneric, OverloadedStrings, TypeOperators #-}
+module MailerSettings (app) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import Data.IORef
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Servant
+import qualified Mailer
+import qualified Operators
+import Operators (Operator)
+
+data MailerSettings = MailerSettings
+  { smtpHost :: Text
+  , smtpPort :: Int
+  , smtpUser :: Text
+  , smtpPassword :: Text
+  , fromAddress :: Text
+  } deriving (Show, Generic)
+instance FromJSON MailerSettings
+
+type API = BasicAuth "operators" Operator :> "settings" :> "mailer" :> ReqBody '[JSON] MailerSettings :> Put '[JSON] NoContent
+
+applySettings :: IORef MailerSettings -> MailerSettings -> IO ()
+applySettings ref settings = writeIORef ref settings >> Mailer.reconnect (smtpHost settings) (smtpPort settings) (smtpUser settings) (smtpPassword settings) --@@
+
+settingsHandler :: IORef MailerSettings -> Operator -> MailerSettings -> Handler NoContent
+settingsHandler ref _operator settings = do
+  liftIO (applySettings ref settings)
+  pure NoContent
+
+checkOperator :: BasicAuthCheck Operator
+checkOperator = BasicAuthCheck $ \(BasicAuthData user pw) ->
+  maybe Unauthorized Authorized <$> Operators.verify user pw
+
+app :: IORef MailerSettings -> Application
+app ref = serveWithContext (Proxy :: Proxy API) (checkOperator :. EmptyContext) (settingsHandler ref)
+
+@@@ route-authentication | safe | src/Heartbeat.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Heartbeat (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (encode, object, (.=))
+import Data.Text (Text)
+import Snap.Core
+import Snap.Http.Server (quickHttpServe)
+import qualified Status
+
+main :: IO ()
+main = quickHttpServe $ route
+  [ ("healthz", method GET healthHandler)
+  , ("version", method GET versionHandler)
+  ]
+
+healthHandler :: Snap ()
+healthHandler = do
+  reachable <- liftIO Status.databaseReachable
+  modifyResponse (setContentType "application/json")
+  writeLBS (encode (object ["status" .= (if reachable then "ok" else "degraded" :: Text)])) --@@
+
+versionHandler :: Snap ()
+versionHandler = do
+  modifyResponse (setContentType "text/plain")
+  writeBS "heartbeat 2.4.1"
+
+@@@ object-authorization | vulnerable | src/InvoiceView.hs
+{-# LANGUAGE OverloadedStrings #-}
+module InvoiceView (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (object, (.=))
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status401, status404)
+import Web.Scotty
+import qualified Sessions
+
+main :: IO ()
+main = do
+  conn <- connectPostgreSQL "dbname=billing"
+  scotty 8080 $
+    get "/invoices/:id" $ do
+      _user <- requireUser
+      invoiceId <- param "id" :: ActionM Int
+      rows <- liftIO (query conn "SELECT id, customer, total FROM invoices WHERE id = ?" (Only invoiceId)) :: ActionM [(Int, String, Double)] --@@
+      case rows of
+        [(i, c, t)] -> json (object ["id" .= i, "customer" .= c, "total" .= t])
+        _ -> status status404 >> text "no such invoice"
+
+requireUser :: ActionM Int
+requireUser = do
+  auth <- header "Authorization"
+  user <- liftIO (maybe (pure Nothing) (Sessions.userIdFor . TL.toStrict) auth)
+  maybe (status status401 >> text "sign in required" >> finish) pure user
+
+@@@ object-authorization | vulnerable | src/AddressBook.hs
+{-# LANGUAGE DataKinds, DeriveGeneric, OverloadedStrings, TypeOperators #-}
+module AddressBook (app) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import Data.Int (Int64)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import GHC.Generics (Generic)
+import Servant
+import qualified Accounts
+import Accounts (Account)
+
+data AddressUpdate = AddressUpdate { addressId :: Int, line1 :: Text, city :: Text }
+  deriving (Show, Generic)
+instance FromJSON AddressUpdate
+
+type API = BasicAuth "customers" Account :> "addresses" :> ReqBody '[JSON] AddressUpdate :> Put '[JSON] NoContent
+
+updateAddress :: Connection -> AddressUpdate -> IO Int64
+updateAddress conn upd = execute conn "UPDATE addresses SET line1 = ?, city = ? WHERE id = ?" (line1 upd, city upd, addressId upd) --@@
+
+updateHandler :: Connection -> Account -> AddressUpdate -> Handler NoContent
+updateHandler conn _account upd = do
+  _ <- liftIO (updateAddress conn upd)
+  pure NoContent
+
+app :: Connection -> Application
+app conn = serveWithContext (Proxy :: Proxy API) (Accounts.basicAuthCheck :. EmptyContext) (updateHandler conn)
+
+@@@ object-authorization | vulnerable | src/Notebook.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Notebook (deleteNoteR, getNoteR) where
+
+import Data.Aeson (Value, object, (.=))
+import Database.Persist (delete, get404)
+import Yesod.Auth (requireAuthId)
+import Yesod.Core
+import Foundation (Handler, Note(..), NoteId)
+
+getNoteR :: NoteId -> Handler Value
+getNoteR noteId = do
+  _uid <- requireAuthId
+  note <- runDB (get404 noteId)
+  returnJson (object ["title" .= noteTitle note, "body" .= noteBody note])
+
+deleteNoteR :: NoteId -> Handler Value
+deleteNoteR noteId = do
+  _uid <- requireAuthId
+  _ <- runDB (get404 noteId)
+  runDB (delete noteId) --@@
+  returnJson (object ["deleted" .= True])
+
+@@@ object-authorization | safe | src/ReceiptView.hs
+{-# LANGUAGE OverloadedStrings #-}
+module ReceiptView (main) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (object, (.=))
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status401, status404)
+import Web.Scotty
+import qualified Sessions
+
+main :: IO ()
+main = do
+  conn <- connectPostgreSQL "dbname=billing"
+  scotty 8080 $
+    get "/receipts/:id" $ do
+      user <- requireUser
+      receiptId <- param "id" :: ActionM Int
+      rows <- liftIO (query conn "SELECT id, merchant, total FROM receipts WHERE id = ? AND owner_id = ?" (receiptId, user)) :: ActionM [(Int, String, Double)] --@@
+      case rows of
+        [(i, m, t)] -> json (object ["id" .= i, "merchant" .= m, "total" .= t])
+        _ -> status status404 >> text "no such receipt"
+
+requireUser :: ActionM Int
+requireUser = do
+  auth <- header "Authorization"
+  user <- liftIO (maybe (pure Nothing) (Sessions.userIdFor . TL.toStrict) auth)
+  maybe (status status401 >> text "sign in required" >> finish) pure user
+
+@@@ object-authorization | safe | src/ContactBook.hs
+{-# LANGUAGE DataKinds, DeriveGeneric, OverloadedStrings, TypeOperators #-}
+module ContactBook (app) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import Data.Int (Int64)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import GHC.Generics (Generic)
+import Servant
+import qualified Accounts
+import Accounts (Account, accountId)
+
+data ContactUpdate = ContactUpdate { contactId :: Int, line1 :: Text, city :: Text }
+  deriving (Show, Generic)
+instance FromJSON ContactUpdate
+
+type API = BasicAuth "customers" Account :> "contacts" :> ReqBody '[JSON] ContactUpdate :> Put '[JSON] NoContent
+
+updateContact :: Connection -> Account -> ContactUpdate -> IO Int64
+updateContact conn account upd = execute conn "UPDATE contacts SET line1 = ?, city = ? WHERE id = ? AND account_id = ?" (line1 upd, city upd, contactId upd, accountId account) --@@
+
+updateHandler :: Connection -> Account -> ContactUpdate -> Handler NoContent
+updateHandler conn account upd = do
+  changed <- liftIO (updateContact conn account upd)
+  if changed == 1 then pure NoContent else throwError err404 { errBody = "no such contact" }
+
+app :: Connection -> Application
+app conn = serveWithContext (Proxy :: Proxy API) (Accounts.basicAuthCheck :. EmptyContext) (updateHandler conn)
+
+@@@ object-authorization | safe | src/Journal.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Journal (deleteEntryR, getEntryR) where
+
+import Control.Monad (unless)
+import Data.Aeson (Value, object, (.=))
+import Database.Persist (delete, get404)
+import Yesod.Auth (requireAuthId)
+import Yesod.Core
+import Foundation (Handler, Entry(..), EntryId)
+
+getEntryR :: EntryId -> Handler Value
+getEntryR entryId = do
+  uid <- requireAuthId
+  entry <- runDB (get404 entryId)
+  unless (entryOwner entry == uid) notFound
+  returnJson (object ["title" .= entryTitle entry, "body" .= entryBody entry])
+
+deleteEntryR :: EntryId -> Handler Value
+deleteEntryR entryId = do
+  uid <- requireAuthId
+  entry <- runDB (get404 entryId)
+  unless (entryOwner entry == uid) notFound
+  runDB (delete entryId) --@@
+  returnJson (object ["deleted" .= True])

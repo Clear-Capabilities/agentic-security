@@ -148,14 +148,20 @@ function servantEndpointParams(mod, fn, sig, exported) {
   };
   const body = slice.slice(eq + 1);
   if (split(body, ':<|>').filter((p) => p.length).length !== 1) return [];
+  const parts = split(body, ':>').filter((p) => p.length);
+  // The endpoint's values are the LAST parameters of the handler: `orderServer conn ref` for `QueryParam "ref" Text` takes `conn` from the
+  // closure. Pair from the end (the same rule haskell-web.js applies); a handler with fewer parameters than the API names is not paired.
+  const reads = parts.filter((p) => p[0] && p[0].t === 'con' && (SERVANT_PRINCIPAL.has(p[0].v) || SERVANT_READS.has(p[0].v))).length;
+  const offset = fn.params.length - reads;
+  if (offset < 0) return [];
   const out = [];
   let idx = 0;
-  for (const part of split(body, ':>').filter((p) => p.length)) {
+  for (const part of parts) {
     const head = part[0];
     if (!head || head.t !== 'con') continue;
     const isPrincipal = SERVANT_PRINCIPAL.has(head.v);
     if (!isPrincipal && !SERVANT_READS.has(head.v)) continue;
-    const name = fn.params[idx];
+    const name = fn.params[offset + idx];
     idx++;
     if (isPrincipal || !name) continue;
     // the carried type is what follows the name string (or the content-type list for a body): its text decides whether it is text
@@ -163,7 +169,7 @@ function servantEndpointParams(mod, fn, sig, exported) {
     let rest = part.slice(lastStr >= 0 ? lastStr + 1 : 1);
     if (/^ReqBody/.test(head.v)) { const close = rest.findIndex((t) => t.t === 'sp' && t.v === ']'); rest = close >= 0 ? rest.slice(close + 1) : rest; }
     const type = rest.map((t) => t.v).join(' ').trim();
-    if (type && TEXT_LIKE.test(type.replace(/^\[\s*(.*)\s*\]$/, '[ $1 ]').replace(/\s+/g, ' '))) out.push({ index: idx - 1, name, decorator: 'hs:handler-param:servant' });
+    if (type && TEXT_LIKE.test(type.replace(/^\[\s*(.*)\s*\]$/, '[ $1 ]').replace(/\s+/g, ' '))) out.push({ index: offset + idx - 1, name, decorator: 'hs:handler-param:servant' });
   }
   return out;
 }

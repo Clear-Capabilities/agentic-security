@@ -2,7 +2,7 @@
 // label-free sources, and scores with scanner/src/language/accuracy.js. The engine never sees a label, a case id or a split: each
 // case is written to an opaque scratch directory under its own source file name.
 //
-//   node bench/language-support/measure.mjs --split holdout|validation|train|unseen|shape-dev|shape-dev-2|unseen-v4|unseen-v5 [--eco haskell|nix] [--suites detection,privacy,pairs,fixes,supply,parser] [--out file]
+//   node bench/language-support/measure.mjs --split holdout|validation|train|unseen|shape-dev|shape-dev-2|unseen-v4|unseen-v5|unseen-v6|unseen-nix-v1 [--eco haskell|nix] [--suites detection,privacy,pairs,fixes,supply,parser] [--out file]
 //
 // Output carries `splitRole` (frozen-holdout | development | generalisation), confusion matrices per layer and per family, denominators, the unknown-case outcomes reported separately, and the
 // hashes of the label files and the frozen holdout, so a result can show it was measured on unchanged data.

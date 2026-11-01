@@ -226,8 +226,9 @@ test('naming a parameter source does not change the finding\'s stable id', async
   assert.equal(fs.length, 1);
   assert.equal(fs[0].source.kind, 'parameter');
   assert.equal(computeStableId(fs[0]), computeStableId({ ...fs[0], source: undefined }), 'the source label of a parameter is not part of the identity');
-  // a source read by a call still is (unchanged behaviour)
-  const read = live(await scan({ 'src/Svc.hs': mod(['import System.IO'], 'main :: IO ()\nmain = getLine >>= readFile >>= putStr', 'module Svc (main) where') }), 'CWE-22');
+  // a source read by a call still is (unchanged behaviour). The read happens in a service: since 0.195.9 a file name a COMMAND-LINE
+  // program reads from its standard input is operator-controlled (information), see haskell-trust-boundary.test.js.
+  const read = live(await scan({ 'src/Svc.hs': mod(['import Web.Scotty', 'import Control.Monad.IO.Class (liftIO)'], 'main :: IO ()\nmain = scotty 3000 $ get "/dump" $ do\n  name <- liftIO getLine\n  file name', 'module Svc (main) where') }), 'CWE-22');
   assert.equal(read.length, 1);
   assert.notEqual(read[0].source.kind, 'parameter');
   assert.notEqual(computeStableId(read[0]), computeStableId({ ...read[0], source: undefined }));

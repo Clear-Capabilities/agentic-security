@@ -1,0 +1,668 @@
+@@@ ssh-access | vulnerable | hosts/relay-gw.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "relay-gw";
+
+  services.openssh = {
+    enable = true;
+    ports = [ 22 ];
+    settings = {
+      PermitRootLogin = "yes"; #@@
+      X11Forwarding = false;
+      LogLevel = "VERBOSE";
+    };
+  };
+
+  users.users.root.openssh.authorizedKeys.keys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGk2c3F1YXJlZCByZWxheSBvcGVyYXRvciBrZXkgb25l ops@relay"
+  ];
+}
+
+@@@ ssh-access | safe | flake.nix
+{
+  description = "Relay edge host";
+
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/3f0c6d1a9b2e8f7c4d5a6b7c8d9e0f1a2b3c4d5e";
+
+  outputs = { self, nixpkgs }: {
+    nixosConfigurations.relay-edge = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ({ pkgs, ... }: {
+          networking.hostName = "relay-edge";
+          services.openssh = {
+            enable = true;
+            ports = [ 22 ];
+            settings = {
+              PermitRootLogin = "prohibit-password"; #@@
+              X11Forwarding = false;
+              LogLevel = "VERBOSE";
+            };
+          };
+          users.users.root.openssh.authorizedKeys.keys = [
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGk2c3F1YXJlZCByZWxheSBvcGVyYXRvciBrZXkgb25l ops@relay"
+          ];
+        })
+      ];
+    };
+  };
+}
+
+@@@ ssh-access | vulnerable | hosts/jump-box.nix
+{ config, lib, pkgs, ... }:
+lib.mkMerge [
+  {
+    imports = [ ../modules/base.nix ];
+    networking.hostName = "jump-box";
+    users.users.lena = { isNormalUser = true; extraGroups = [ "wheel" ]; };
+  }
+  {
+    services.openssh = {
+      enable = true;
+      extraConfig = ''
+        PasswordAuthentication yes #@@
+        ClientAliveInterval 120
+        MaxSessions 4
+      '';
+    };
+  }
+]
+
+@@@ ssh-access | safe | hosts/jump-host.nix
+{ config, lib, pkgs, ... }:
+lib.mkMerge [
+  {
+    imports = [ ../modules/base.nix ];
+    networking.hostName = "jump-host";
+    users.users.lena = { isNormalUser = true; extraGroups = [ "wheel" ]; };
+  }
+  {
+    services.openssh = {
+      enable = true;
+      extraConfig = ''
+        PasswordAuthentication no #@@
+        ClientAliveInterval 120
+        MaxSessions 4
+      '';
+    };
+  }
+]
+
+@@@ ssh-access | vulnerable | modules/remote-shell.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.remote-shell;
+in
+{
+  options.profiles.remote-shell = {
+    enable = lib.mkEnableOption "remote shell access for the support desk";
+    port = lib.mkOption { type = lib.types.port; default = 2222; };
+  };
+
+  config = lib.mkIf cfg.enable {
+    services.openssh = {
+      enable = true;
+      ports = [ cfg.port ];
+      permitRootLogin = "no";
+      kbdInteractiveAuthentication = true; #@@
+      openFirewall = true;
+    };
+    services.fail2ban.enable = true;
+  };
+}
+
+@@@ ssh-access | safe | modules/remote-admin.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.remote-admin;
+in
+{
+  options.profiles.remote-admin = {
+    enable = lib.mkEnableOption "remote shell access for the support desk";
+    port = lib.mkOption { type = lib.types.port; default = 2222; };
+  };
+
+  config = lib.mkIf cfg.enable {
+    services.openssh = {
+      enable = true;
+      ports = [ cfg.port ];
+      permitRootLogin = "no";
+      kbdInteractiveAuthentication = false; #@@
+      openFirewall = true;
+    };
+    services.fail2ban.enable = true;
+  };
+}
+
+@@@ service-privilege | vulnerable | hosts/media-box.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "media-box";
+
+  services.jellyfin.enable = true;
+
+  systemd.services.media-indexer = {
+    description = "Refresh the media library index";
+    startAt = "hourly";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root"; #@@
+      ExecStart = "${pkgs.jellyfin}/bin/jellyfin --nowebclient --datadir /var/lib/jellyfin --service";
+      ReadWritePaths = [ "/var/lib/jellyfin" ];
+    };
+  };
+}
+
+@@@ service-privilege | safe | hosts/media-hub.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "media-hub";
+
+  services.jellyfin.enable = true;
+
+  systemd.services.media-indexer = {
+    description = "Refresh the media library index";
+    startAt = "hourly";
+    serviceConfig = {
+      Type = "oneshot";
+      DynamicUser = true; #@@
+      ExecStart = "${pkgs.jellyfin}/bin/jellyfin --nowebclient --datadir /var/lib/jellyfin --service";
+      ReadWritePaths = [ "/var/lib/jellyfin" ];
+    };
+  };
+}
+
+@@@ service-privilege | vulnerable | modules/photo-sync.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.photo-sync;
+in
+{
+  options.services.photo-sync = {
+    enable = lib.mkEnableOption "mirror the family photo share";
+    target = lib.mkOption { type = lib.types.path; default = "/srv/photos"; };
+  };
+
+  config = lib.mkIf cfg.enable {
+    systemd.services.photo-sync = {
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        DynamicUser = true;
+        StateDirectory = "photo-sync";
+        AmbientCapabilities = [ "CAP_SYS_ADMIN" ]; #@@
+        ExecStart = "${pkgs.syncthing}/bin/syncthing serve --home=/var/lib/photo-sync --no-browser";
+        ReadWritePaths = [ cfg.target ];
+      };
+    };
+  };
+}
+
+@@@ service-privilege | safe | modules/photo-relay.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.photo-relay;
+in
+{
+  options.services.photo-relay = {
+    enable = lib.mkEnableOption "mirror the family photo share";
+    target = lib.mkOption { type = lib.types.path; default = "/srv/photos"; };
+  };
+
+  config = lib.mkIf cfg.enable {
+    systemd.services.photo-relay = {
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        DynamicUser = true;
+        StateDirectory = "photo-relay";
+        AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" ]; #@@
+        ExecStart = "${pkgs.syncthing}/bin/syncthing serve --home=/var/lib/photo-relay --no-browser";
+        ReadWritePaths = [ cfg.target ];
+      };
+    };
+  };
+}
+
+@@@ service-privilege | vulnerable | profiles/print-server.nix
+{ config, lib, pkgs, ... }:
+with lib;
+let
+  renderer = pkgs.writeShellScript "label-render" ''
+    ${pkgs.ghostscript}/bin/gs -q -dBATCH -dNOPAUSE -sDEVICE=png16m -o /var/lib/label-render/out.png /var/lib/label-render/in.ps
+  '';
+in
+{
+  services.printing = {
+    enable = true;
+    drivers = [ pkgs.gutenprint ];
+  };
+
+  systemd.services.label-render = {
+    description = "Render queued label jobs";
+    startAt = "*:0/2";
+    serviceConfig = mkMerge [
+      { Type = "oneshot"; DynamicUser = true; StateDirectory = "label-render"; }
+      { ProtectSystem = mkForce false; } #@@
+      { ExecStart = renderer; }
+    ];
+  };
+}
+
+@@@ service-privilege | safe | profiles/print-queue.nix
+{ config, lib, pkgs, ... }:
+with lib;
+let
+  renderer = pkgs.writeShellScript "label-queue" ''
+    ${pkgs.ghostscript}/bin/gs -q -dBATCH -dNOPAUSE -sDEVICE=png16m -o /var/lib/label-queue/out.png /var/lib/label-queue/in.ps
+  '';
+in
+{
+  services.printing = {
+    enable = true;
+    drivers = [ pkgs.gutenprint ];
+  };
+
+  systemd.services.label-queue = {
+    description = "Render queued label jobs";
+    startAt = "*:0/2";
+    serviceConfig = mkMerge [
+      { Type = "oneshot"; DynamicUser = true; StateDirectory = "label-queue"; }
+      { ProtectSystem = "strict"; NoNewPrivileges = true; } #@@
+      { ExecStart = renderer; }
+    ];
+  };
+}
+
+@@@ firewall-exposure | vulnerable | hosts/web-front.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "web-front";
+
+  networking.firewall.enable = false; #@@
+
+  services.caddy = {
+    enable = true;
+    virtualHosts."www.example.org".extraConfig = ''
+      root * /srv/www
+      file_server
+    '';
+  };
+
+  services.prometheus.exporters.node = {
+    enable = true;
+    listenAddress = "127.0.0.1";
+  };
+}
+
+@@@ firewall-exposure | safe | flake.nix
+{
+  description = "Public web edge";
+
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/3f0c6d1a9b2e8f7c4d5a6b7c8d9e0f1a2b3c4d5e";
+
+  outputs = { self, nixpkgs }: {
+    nixosConfigurations.web-edge = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ({ pkgs, ... }: {
+          networking.hostName = "web-edge";
+          networking.firewall.enable = true; #@@
+          networking.firewall.allowedTCPPorts = [ 80 443 ];
+          services.caddy = {
+            enable = true;
+            virtualHosts."www.example.org".extraConfig = ''
+              root * /srv/www
+              file_server
+            '';
+          };
+          services.prometheus.exporters.node = {
+            enable = true;
+            listenAddress = "127.0.0.1";
+          };
+        })
+      ];
+    };
+  };
+}
+
+@@@ firewall-exposure | vulnerable | hosts/session-cache.nix
+{ config, lib, pkgs, ... }:
+let
+  redisPort = 6379;
+in
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "session-cache";
+
+  services.redis.servers.sessions = {
+    enable = true;
+    port = redisPort;
+    bind = "0.0.0.0"; #@@
+    settings.maxmemory = "512mb";
+    settings.maxmemory-policy = "allkeys-lru";
+  };
+
+  networking.firewall.allowedTCPPorts = [ redisPort ];
+}
+
+@@@ firewall-exposure | safe | hosts/session-store.nix
+{ config, lib, pkgs, ... }:
+let
+  redisPort = 6379;
+in
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "session-store";
+
+  services.redis.servers.sessions = {
+    enable = true;
+    port = redisPort;
+    bind = "127.0.0.1"; #@@
+    settings.maxmemory = "512mb";
+    settings.maxmemory-policy = "allkeys-lru";
+  };
+
+  networking.firewall.interfaces.wg0.allowedTCPPorts = [ redisPort ];
+}
+
+@@@ firewall-exposure | vulnerable | modules/metrics-stack.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.metrics-stack;
+in
+{
+  options.profiles.metrics-stack.enable = lib.mkEnableOption "Prometheus and Grafana on this host";
+
+  config = lib.mkIf cfg.enable {
+    services.prometheus = {
+      enable = true;
+      port = 9090;
+      scrapeConfigs = [ { job_name = "node"; static_configs = [ { targets = [ "127.0.0.1:9100" ]; } ]; } ];
+    };
+    services.grafana = {
+      enable = true;
+      settings.server.http_port = 3000;
+    };
+    networking.firewall.allowedTCPPortRanges = [ { from = 1024; to = 65535; } ]; #@@
+  };
+}
+
+@@@ firewall-exposure | safe | modules/metrics-pane.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.metrics-pane;
+in
+{
+  options.profiles.metrics-pane.enable = lib.mkEnableOption "Prometheus and Grafana on this host";
+
+  config = lib.mkIf cfg.enable {
+    services.prometheus = {
+      enable = true;
+      port = 9090;
+      scrapeConfigs = [ { job_name = "node"; static_configs = [ { targets = [ "127.0.0.1:9100" ]; } ]; } ];
+    };
+    services.grafana = {
+      enable = true;
+      settings.server.http_port = 3000;
+      settings.server.http_addr = "127.0.0.1";
+    };
+    networking.firewall.interfaces.wg0.allowedTCPPorts = [ 3000 9090 ]; #@@
+  };
+}
+
+@@@ privilege-escalation-policy | vulnerable | hosts/office-desk.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "office-desk";
+
+  users.users.priya = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" "networkmanager" ];
+  };
+
+  security.sudo = {
+    enable = true;
+    wheelNeedsPassword = false; #@@
+    execWheelOnly = true;
+  };
+
+  services.printing.enable = true;
+}
+
+@@@ privilege-escalation-policy | safe | hosts/admin-desk.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "admin-desk";
+
+  users.users.priya = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" "networkmanager" ];
+  };
+
+  security.sudo = {
+    enable = true;
+    wheelNeedsPassword = true; #@@
+    execWheelOnly = true;
+  };
+
+  services.printing.enable = true;
+}
+
+@@@ privilege-escalation-policy | vulnerable | modules/ops-access.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.ops-access;
+in
+{
+  options.profiles.ops-access = {
+    enable = lib.mkEnableOption "the on-call operators group";
+    members = lib.mkOption { type = lib.types.listOf lib.types.str; default = [ "dana" "ravi" ]; };
+  };
+
+  config = lib.mkIf cfg.enable {
+    users.groups.ops.members = cfg.members;
+    security.sudo.extraRules = [
+      {
+        groups = [ "ops" ];
+        commands = [ { command = "ALL"; options = [ "NOPASSWD" ]; } ]; #@@
+      }
+    ];
+  };
+}
+
+@@@ privilege-escalation-policy | safe | modules/ops-restart.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.profiles.ops-restart;
+in
+{
+  options.profiles.ops-restart = {
+    enable = lib.mkEnableOption "the on-call operators group";
+    members = lib.mkOption { type = lib.types.listOf lib.types.str; default = [ "dana" "ravi" ]; };
+  };
+
+  config = lib.mkIf cfg.enable {
+    users.groups.ops.members = cfg.members;
+    security.sudo.extraRules = [
+      {
+        groups = [ "ops" ];
+        commands = [ { command = "/run/current-system/sw/bin/systemctl restart edge-proxy.service"; options = [ "NOPASSWD" ]; } ]; #@@
+      }
+    ];
+  };
+}
+
+@@@ privilege-escalation-policy | vulnerable | profiles/doas-desk.nix
+{ config, lib, pkgs, ... }:
+with lib;
+let
+  operators = [ "wheel" ];
+in
+{
+  security.sudo.enable = false;
+  security.doas = {
+    enable = true;
+    extraRules = map (g: { groups = [ g ]; noPass = true; keepEnv = true; }) operators; #@@
+  };
+
+  users.users.sven = { isNormalUser = true; extraGroups = [ "wheel" ]; };
+}
+
+@@@ privilege-escalation-policy | safe | profiles/doas-lab.nix
+{ config, lib, pkgs, ... }:
+with lib;
+let
+  operators = [ "wheel" ];
+in
+{
+  security.sudo.enable = false;
+  security.doas = {
+    enable = true;
+    extraRules = map (g: { groups = [ g ]; noPass = true; cmd = "/run/current-system/sw/bin/systemctl"; args = [ "restart" "gitea.service" ]; }) operators; #@@
+  };
+
+  users.users.sven = { isNormalUser = true; extraGroups = [ "wheel" ]; };
+}
+
+@@@ tls-secret-runtime | vulnerable | hosts/shop-front.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "shop-front";
+
+  services.nginx = {
+    enable = true;
+    recommendedProxySettings = true;
+    virtualHosts."shop.example.com" = {
+      forceSSL = false; #@@
+      root = "/srv/shop/public";
+      locations."/api/".proxyPass = "http://127.0.0.1:8081/";
+    };
+  };
+
+  networking.firewall.allowedTCPPorts = [ 80 443 ];
+}
+
+@@@ tls-secret-runtime | safe | hosts/shop-edge.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ../modules/base.nix ];
+  networking.hostName = "shop-edge";
+
+  security.acme.acceptTerms = true;
+  security.acme.defaults.email = "ops@example.com";
+
+  services.nginx = {
+    enable = true;
+    recommendedProxySettings = true;
+    virtualHosts."shop.example.com" = {
+      forceSSL = true; #@@
+      enableACME = true;
+      root = "/srv/shop/public";
+      locations."/api/".proxyPass = "http://127.0.0.1:8081/";
+    };
+  };
+
+  networking.firewall.allowedTCPPorts = [ 80 443 ];
+}
+
+@@@ tls-secret-runtime | vulnerable | modules/intranet-portal.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.intranet-portal;
+in
+{
+  options.services.intranet-portal = {
+    enable = lib.mkEnableOption "the staff portal";
+    domain = lib.mkOption { type = lib.types.str; default = "portal.example.internal"; };
+  };
+
+  config = lib.mkIf cfg.enable {
+    services.httpd = {
+      enable = true;
+      adminAddr = "ops@example.com";
+      virtualHosts.${cfg.domain} = {
+        documentRoot = "/srv/portal";
+        addSSL = true;
+        sslServerCert = ./certs/portal.crt;
+        sslServerKey = ./certs/portal.key; #@@
+      };
+    };
+    networking.firewall.allowedTCPPorts = [ 443 ];
+  };
+}
+
+@@@ tls-secret-runtime | safe | modules/intranet-site.nix
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.intranet-site;
+in
+{
+  options.services.intranet-site = {
+    enable = lib.mkEnableOption "the staff portal";
+    domain = lib.mkOption { type = lib.types.str; default = "portal.example.internal"; };
+  };
+
+  config = lib.mkIf cfg.enable {
+    services.httpd = {
+      enable = true;
+      adminAddr = "ops@example.com";
+      virtualHosts.${cfg.domain} = {
+        documentRoot = "/srv/portal";
+        addSSL = true;
+        sslServerCert = "/var/lib/acme/${cfg.domain}/fullchain.pem";
+        sslServerKey = "/var/lib/acme/${cfg.domain}/key.pem"; #@@
+      };
+    };
+    networking.firewall.allowedTCPPorts = [ 443 ];
+  };
+}
+
+@@@ tls-secret-runtime | vulnerable | profiles/mail-edge.nix
+{ config, lib, pkgs, ... }:
+let
+  fqdn = "mail-edge.example.org";
+in
+{
+  services.postfix = {
+    enable = true;
+    hostname = fqdn;
+    domain = "example.org";
+    sslCert = "/var/lib/acme/${fqdn}/fullchain.pem";
+    sslKey = "/var/lib/acme/${fqdn}/key.pem";
+    config = {
+      smtpd_tls_security_level = "may";
+      smtpd_tls_mandatory_protocols = "TLSv1"; #@@
+      smtpd_tls_loglevel = "1";
+    };
+  };
+
+  networking.firewall.allowedTCPPorts = [ 25 587 ];
+}
+
+@@@ tls-secret-runtime | safe | profiles/mail-gw.nix
+{ config, lib, pkgs, ... }:
+let
+  fqdn = "mail-gw.example.org";
+in
+{
+  services.postfix = {
+    enable = true;
+    hostname = fqdn;
+    domain = "example.org";
+    sslCert = "/var/lib/acme/${fqdn}/fullchain.pem";
+    sslKey = "/var/lib/acme/${fqdn}/key.pem";
+    config = {
+      smtpd_tls_security_level = "may";
+      smtpd_tls_mandatory_protocols = ">=TLSv1.2"; #@@
+      smtpd_tls_loglevel = "1";
+    };
+  };
+
+  networking.firewall.allowedTCPPorts = [ 25 587 ];
+}

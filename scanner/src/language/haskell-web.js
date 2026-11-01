@@ -38,8 +38,12 @@ const SCOTTY_METHODS = { get: 'GET', post: 'POST', put: 'PUT', delete: 'DELETE',
 const SENSITIVE_PREFIX = ['Database.', 'System.Process.', 'System.Directory.', 'Prelude.readFile', 'Prelude.writeFile', 'Prelude.appendFile', 'System.IO.', 'Network.HTTP.Simple.', 'Network.HTTP.Client.'];
 const PERSIST_FNS = new Set(['get', 'getBy', 'selectFirst', 'selectList', 'insert', 'insert_', 'update', 'updateWhere', 'delete', 'deleteWhere', 'replace', 'runDB', 'getJust', 'upsert']);
 const GUARD_PRIMITIVES = new Set(['Yesod.Core.requireAuthId', 'Yesod.Core.requireAuth', 'Yesod.Auth.requireAuthId', 'Yesod.Auth.requireAuth', 'Yesod.requireAuthId', 'Yesod.requireAuth', 'Network.Wai.Middleware.HttpAuth.basicAuth']);
-const CREDENTIAL_HEADER = /^(?:authorization|cookie|x-api-key|x-auth-token|x-access-token)$/i;
+// a header that carries the caller's credential: the standard two, and the custom names projects give a token or session header
+const CREDENTIAL_HEADER = /^(?:authorization|cookie|x-api-key|x-api-token|x-auth-token|x-auth|x-access-token|x-session(?:-(?:id|token|key))?|x-token|x-user-token|x-csrf-token|x-xsrf-token)$/i;
 const ADMIN_PATH = /(?:^|\/)(?:admin|internal|manage|superuser)(?:\/|$|:)/i;
+// an authentication endpoint (sign-in, registration, password reset, logout, an OAuth callback) is public by construction
+const AUTH_ENDPOINT_PATH = /(?:^|\/)(?:login|log-in|sign-?in|sign-?up|signup|register|registration|logout|log-out|sign-?out|password\/(?:reset|forgot)|reset-password|forgot-password|password-reset|oauth|callback|token|auth|authenticate|session)(?:\/|$|:|\.)/i;
+const AUTH_ENDPOINT_NAME = /(?:login|signin|signup|register|logout|signout|resetpassword|passwordreset|forgotpassword|authenticate)/i;
 const ROLE_CALL = /(?:^|\.)(?:isAdmin|hasRole|requireAdmin|checkRole|hasPermission|requireRole|requirePermission|isSuperuser)$/i;
 const OWNER_CALL = /(?:^|\.)(?:checkOwner|ownedBy|belongsTo|isOwner|requireOwner|authorizeOwner)$/i;
 const CSRF_CALL = /csrf|xsrf/i;
@@ -1160,8 +1164,11 @@ function emitFindings(ctx, result, yesodAuthz) {
     if (!R.handler || R.handler.kind === 'unknown') continue;
     const writes = WRITE_METHODS.has(R.method) || R.method === 'ANY';
     const privileged = ADMIN_PATH.test(R.path) || /admin/i.test(R.handler.name || '');
+    // An authentication endpoint is public by construction: the request that signs in, registers or starts a password reset carries no
+    // session yet. Its own flaws (a weak hash, a predictable code) are other families' findings; a missing-auth finding on it is noise.
+    const authEndpoint = AUTH_ENDPOINT_PATH.test(R.path || '') || AUTH_ENDPOINT_NAME.test(R.handler.name || '');
     if (R.auth.status === 'late') emit('hs-route-late-auth', R, { detail: R.auth.evidence[0].order === 'unknown' ? `the rejection ${R.auth.evidence[0].callee} cannot be shown to run before the first sensitive operation (${R.auth.evidence[0].reason})` : `guard ${R.auth.evidence[0].callee} runs after the first sensitive operation`, evidence: R.auth.evidence });
-    else if (R.auth.status === 'none' && (writes || privileged) && !(R.framework === 'yesod' && R.yesodExplicitPublic && !writes)) {
+    else if (R.auth.status === 'none' && (writes || privileged) && !authEndpoint && !(R.framework === 'yesod' && R.yesodExplicitPublic && !writes)) {
       const how = R.method === 'ANY' ? 'any method' : writes ? 'state-changing method' : 'privileged path';
       if (R.sensitive !== false) emit('hs-route-missing-auth', R, { severity: writes ? 'high' : 'medium', detail: how });
       // No database, file or process call is visible, but the handler calls something the engine cannot see into (a project function, a

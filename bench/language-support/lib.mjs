@@ -33,6 +33,8 @@ export const shapeDev2Source = (eco, id, rel) => read(path.join(DATA, 'sources-s
 export const FROZEN_SPLITS = {
   'unseen-v4': path.join(HERE, 'corpora', 'unseen-v4'),
   'unseen-v5': path.join(HERE, 'corpora', 'unseen-v5'),
+  'unseen-v6': path.join(HERE, 'corpora', 'unseen-v6'),
+  'unseen-nix-v1': path.join(HERE, 'corpora', 'unseen-nix-v1'),
 };
 export const isFrozenSplit = (split) => Object.hasOwn(FROZEN_SPLITS, split);
 export function frozenCases(split) { return loadFrozen({ dir: FROZEN_SPLITS[split], split }); }

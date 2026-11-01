@@ -53,7 +53,11 @@ const ANY_HASH_CALLS = new Set([...WEAK_HASH_CALLS, 'Crypto.Hash.hash', 'Crypto.
 const WEAK_CIPHER_MODULES = new Set(['Crypto.Cipher.DES', 'Crypto.Cipher.RC4', 'Crypto.Cipher.RC2', 'Crypto.Cipher.Blowfish']);
 const ECB_CALLS = new Set(['Crypto.Cipher.Types.ecbEncrypt', 'Crypto.Cipher.Types.ecbDecrypt']);
 const IV_CALLS = new Set(['Crypto.Cipher.Types.makeIV', 'Crypto.Cipher.ChaChaPoly1305.nonce12', 'Crypto.Cipher.ChaChaPoly1305.nonce8']);
-const RANDOM_CALLS = new Set(['System.Random.randomRIO', 'System.Random.randomIO', 'System.Random.newStdGen', 'System.Random.getStdGen', 'System.Random.mkStdGen', 'System.Random.randomR', 'System.Random.random', 'System.Random.randoms', 'System.Random.randomRs', 'System.Random.getStdRandom', 'System.Random.uniformR', 'System.Random.uniform', 'System.Random.initStdGen']);
+const RANDOM_CALLS = new Set(['System.Random.randomRIO', 'System.Random.randomIO', 'System.Random.newStdGen', 'System.Random.getStdGen', 'System.Random.mkStdGen', 'System.Random.randomR', 'System.Random.random', 'System.Random.randoms', 'System.Random.randomRs', 'System.Random.getStdRandom', 'System.Random.uniformR', 'System.Random.uniform', 'System.Random.initStdGen',
+  // mwc-random is a statistical generator (multiply-with-carry); `createSystemRandom` only seeds it from the OS, its output is not a CSPRNG
+  'System.Random.MWC.uniformR', 'System.Random.MWC.uniform', 'System.Random.MWC.uniformRM', 'System.Random.MWC.uniformM', 'System.Random.MWC.createSystemRandom', 'System.Random.MWC.create', 'System.Random.MWC.initialize', 'System.Random.MWC.withSystemRandom', 'System.Random.MWC.withSystemRandomST',
+  // splitmix is the pure generator behind random
+  'System.Random.SplitMix.nextWord64', 'System.Random.SplitMix.nextInt', 'System.Random.SplitMix.nextDouble', 'System.Random.SplitMix.mkSMGen', 'System.Random.SplitMix.newSMGen', 'System.Random.SplitMix.initSMGen']);
 const BODY_CALLS = new Set(['Network.Wai.strictRequestBody', 'Network.Wai.lazyRequestBody', 'Web.Scotty.body', 'Web.Scotty.Trans.body', 'Network.Wai.Conduit.sourceRequestBody']);
 const SOCKET_READS = new Set(['Network.Socket.ByteString.recv', 'Network.Socket.ByteString.recvFrom', 'Network.Socket.ByteString.Lazy.recv']);
 const SET_COOKIE_HEADER = new Set(['Network.HTTP.Types.Header.hSetCookie', 'Network.HTTP.Types.hSetCookie']);
@@ -71,7 +75,8 @@ const isTrueLit = (e) => !!e && ((e.kind === 'literal' && /^true$/i.test(String(
 const TIME_SOURCES = new Set(['Data.Time.Clock.POSIX.getPOSIXTime', 'Data.Time.Clock.getCurrentTime', 'System.CPUTime.getCPUTime']);
 // A salt is deliberately absent: it must be unique, not unpredictable or secret (it is stored beside the hash), so a non-cryptographic generator
 // producing one is not a weakness the way it is for a token, nonce or key.
-const SECURITY_FN_SUBSTR = /(?:token|nonce|secret|otp|csrf|session|apikey|resetcode|passcode|verification)/i;
+// (`newKey`, `generateApiKey`, `mkKey`: a function that MAKES a key is security-shaped; `key` alone is not, it names map keys too)
+const SECURITY_FN_SUBSTR = /(?:token|nonce|secret|otp|csrf|session|apikey|resetcode|passcode|verification|(?:new|gen|generate|make|mk|create|issue|mint|fresh)_?(?:api_?)?key)/i;
 // Short credential words that would over-match as substrings (`spin`, `mapping`, `keyboard`): matched as whole camelCase / snake_case words.
 const SECURITY_WORDS = new Set(['pin', 'password', 'passwd', 'credential', 'credentials']);
 const SECURITY_FN = { test: (name) => SECURITY_FN_SUBSTR.test(name) || String(name).replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some((w) => SECURITY_WORDS.has(w)) };
@@ -102,8 +107,64 @@ const SESSION_COOKIE = /(?:sess|sid|token|tok|auth|jwt|csrf|login|remember|secre
 const SECURITY_VAR = /^(?:.*(?:token|secret|nonce|otp|csrf|apikey|api_?key|sessionid|session_?key|sessiontoken|resettoken)[a-z0-9_']*|key|iv|sessionId|sid)$/i;
 const PASSWORD_VAR = /(?:^|[^a-z])(?:pass(?:word|wd|phrase)?|pwd|pw)(?:[^a-z]|$)|password/i;
 const LOW_ENTROPY = /(?:pass(?:word|wd|phrase)?|pwd|ssn|creditcard|cardnumber|cvv|\bpin\b)/i;
+// a variable whose name says it holds the HASH of a credential (`hashedPassword`, `passwordHash`, `tokenDigest`): the stored form, not the secret
+const HASH_NAMED = /(?:hash|digest)/i;
+// Every use of the identifier `n` inside `arg` is as the object of a member access whose field is not credential-shaped (`attemptUser attempt`).
+function usedOnlyAsNonSensitiveField(arg, n) {
+  let uses = 0; let fields = 0;
+  const visit = (e, parent, d) => {
+    if (!e || typeof e !== 'object' || d > 40) return;
+    if (e.kind === 'ident' && e.name === n) {
+      uses++;
+      if (parent && parent.kind === 'member' && parent.object === e && typeof parent.prop === 'string' && !SENSITIVE.test(parent.prop)) fields++;
+      return;
+    }
+    for (const k of Object.keys(e)) {
+      if (k === 'hs') continue;
+      const v = e[k];
+      if (Array.isArray(v)) { for (const x of v) visit(x, e, d + 1); } else if (v && typeof v === 'object') visit(v, e, d + 1);
+    }
+  };
+  visit(arg, null, 0);
+  return uses > 0 && uses === fields;
+}
+// a value that is a one-time code only in context: `code` is a security value where the function talks about a reset, a verification, an OTP
+const CONTEXT_CODE_VAR = /^(?:code|pin|passcode|otp)$/i;
+const CODE_CONTEXT = /reset|verif|otp|one.?time|activation|confirm|2fa|mfa|two.?factor/i;
+// A project function of this file whose every return value is a comparison, a conjunction or a boolean predicate (after `pure`/`return`).
+function returnsYesNo(fir, callee) {
+  const fn = (fir.functions || []).find((x) => x.name === callee || x.qid === callee || (x.qid || '').endsWith(`::${callee}`));
+  if (!fn) return false;
+  const rets = Object.values(fn.cfg.nodes).filter((n) => n.kind === 'return' && n.value);
+  if (!rets.length) return false;
+  return rets.every((n) => {
+    let e = n.value;
+    for (let i = 0; i < 6 && e && e.kind === 'call' && typeof e.callee === 'string' && /(?:^|\.)(?:pure|return|liftIO)$/.test(e.callee) && (e.args || []).length === 1; i++) e = e.args[0];
+    if (!e) return false;
+    if (e.kind === 'binary' && ['==', '/=', '!=', '&&', '||', '<', '>', '<=', '>='].includes(e.op)) return true;
+    if (e.kind === 'logical') return true;
+    if (e.kind === 'literal' && typeof e.value === 'boolean') return true;
+    return e.kind === 'call' && typeof e.callee === 'string' && /(?:^|\.)(?:not|elem|notElem|null|isJust|isNothing|any|all|and|or)$/.test(e.callee);
+  });
+}
+
+function fnMentions(fn, re) {
+  for (const n of Object.values(fn.cfg.nodes)) {
+    for (const k of ['source', 'value', 'cond']) {
+      if (!n[k]) continue;
+      for (const x of walk(n[k])) {
+        if (x.kind === 'literal' && typeof x.value === 'string' && re.test(x.value)) return true;
+        if (x.kind === 'call' && typeof x.callee === 'string' && re.test(x.callee)) return true;
+      }
+    }
+    if (n.kind === 'call' && typeof n.callee === 'string' && re.test(n.callee)) return true;
+    if (Array.isArray(n.args)) for (const a of n.args) for (const x of walk(a)) if (x.kind === 'literal' && typeof x.value === 'string' && re.test(x.value)) return true;
+  }
+  return false;
+}
 export const SENSITIVE = /(?:pass(?:word|wd|phrase)?|pwd|(?:^|[^a-z])pw(?:[^a-z]|$)|secret|token|api_?key|ssn|credit_?card|card_?number|cvv|authorization|bearer|private_?key|session_?id)/i;
-const REDACTOR = /(?:^|\.)(?:redact|mask|scrub|obfuscate|anonymi[sz]e|censor|length|null)$|(?:^|\.)(?:redact|mask|scrub|obfuscate|anonymi[sz]e|censor)/i;
+// (a helper that keeps only a few characters of the value, `lastFour`, `last4`, `fingerprint`, `takeEnd`, is a masking helper by its name too)
+const REDACTOR = /(?:^|\.)(?:redact|mask|scrub|obfuscate|anonymi[sz]e|censor|length|null|takeEnd|fingerprint|abbreviate|truncate)$|(?:^|\.)(?:redact|mask|scrub|obfuscate|anonymi[sz]e|censor|last(?:four|4|digits|chars)|fingerprint)/i;
 
 const kids = (e) => {
   const out = [];
@@ -114,6 +175,19 @@ const kids = (e) => {
   if (e.hs && e.hs.inner && typeof e.hs.inner === 'object') out.push(e.hs.inner);              // `read s :: Int`: a number to the taint engine, still an expression here
   return out;
 };
+
+// Marks every node under an inlined helper's root with the helper's qid (`hs.inlineCtx`); idempotent, so a cached IR is marked once.
+function markInlined(e, ctx, depth) {
+  if (!e || typeof e !== 'object' || depth > 60) return;
+  const here = (e.hs && e.hs.inlinedFrom) || ctx;
+  if (here && !(e.hs && e.hs.inlineCtx)) e.hs = { ...(e.hs || {}), inlineCtx: here };
+  for (const k of Object.keys(e)) {
+    if (k === 'hs') continue;
+    const v = e[k];
+    if (Array.isArray(v)) { for (const x of v) markInlined(x, here, depth + 1); }
+    else if (v && typeof v === 'object') markInlined(v, here, depth + 1);
+  }
+}
 
 function* walk(e, depth = 0) {
   if (!e || typeof e !== 'object' || depth > 80) return;
@@ -279,11 +353,13 @@ export function analyzeHaskellRules(files, opts = {}) {
     if (/import\s+(?:qualified\s+)?Network\.Wai\.Middleware\.RequestSizeLimit\b/.test(text) || /\brequestSizeLimitMiddleware\b/.test(text)) { requestLimit = { file, line: (text.split('\n').findIndex((l) => /RequestSizeLimit|requestSizeLimitMiddleware/.test(l)) + 1) || 1 }; break; }
   }
 
+  let currentFn = null;
   const emit = (rule, file, line, extra = {}) => {
     const r = RULES[rule];
     const sev = extra.severity || r.severity;
     const f = {
       id: `hs-rule:${rule}:${file}:${line}`, severity: sev, file, line, vuln: extra.vuln || r.vuln, cwe: r.cwe,
+      _fnQid: currentFn ? currentFn.qid : null, ...(extra.inlineCtx ? { inlineCtx: extra.inlineCtx } : {}),
       description: `${extra.vuln || r.vuln}${extra.detail ? `: ${extra.detail}` : ''}`,
       remediation: r.remediation, parser: 'HS-RULES', family: r.family,
       language: 'haskell', capability: 'sast', analysisKind: 'application', evidenceKind: 'source',
@@ -306,6 +382,14 @@ export function analyzeHaskellRules(files, opts = {}) {
       }
     }
     for (const fn of fir.functions) {
+      currentFn = fn;
+      // A project helper the IR inlined at its call site (`digestFor (credPassword creds)` becomes the helper's body, rooted at a node with
+      // `hs.inlinedFrom`) is walked here as well as in the helper itself. Every node under such a root is marked with the helper's qid, so
+      // a rule that reports the same thing inside the helper can drop the call-site copy (the filter before the return).
+      for (const n of Object.values(fn.cfg.nodes)) {
+        for (const k of ['source', 'value', 'cond']) if (n[k]) markInlined(n[k], null, 0);
+        if (Array.isArray(n.args)) for (const a of n.args) markInlined(a, null, 0);
+      }
       if (fn.name.endsWith('.<module>')) continue;
       const bound = new Map();   // target var -> {callee, line}
       const sensitive = new Map(); // var -> {class:'low'|'high', hashed:boolean, line}
@@ -422,9 +506,13 @@ export function analyzeHaskellRules(files, opts = {}) {
               if (INPUT_READS.has(e.name) && !bounded && readsOutsideInput(fn, e.name, [], importsNetwork)) emit('hs-unbounded-input-read', file, node.line, { detail: `${e.name} reads everything`, confidence: 0.6 });
               continue;
             }
-            // a Set-Cookie header written by hand: `(hSetCookie, "session_id=" <> sid <> "; Path=/")`
-            if (e.kind === 'array' && e.hs && e.hs.tuple && e.elements.length === 2) {
-              const [k, v] = e.elements;
+            // a Set-Cookie header written by hand: `(hSetCookie, "session_id=" <> sid <> "; Path=/")`, or handed to a framework's header
+            // setter: Scotty `setHeader "Set-Cookie" ("session=" <> tok <> "; Path=/")`, Spock `setHeader`, Yesod `addHeader`
+            let cookiePair = null;
+            if (e.kind === 'array' && e.hs && e.hs.tuple && e.elements.length === 2) cookiePair = e.elements;
+            else if (e.kind === 'call' && typeof e.callee === 'string' && /(?:^|\.)(?:setHeader|addHeader|setResponseHeader|modifyHeader)$/.test(e.callee) && (e.args || []).length >= 2) cookiePair = [e.args[0], e.args[1]];
+            if (cookiePair) {
+              const [k, v] = cookiePair;
               const isSetCookie = k && ((k.kind === 'ident' && SET_COOKIE_HEADER.has(k.name)) || (k.kind === 'literal' && /^set-cookie$/i.test(String(k.value))) || (k.kind === 'call' && /(?:^|\.)(?:pack|fromString)$/.test(k.callee || '') && k.args && k.args[0] && k.args[0].kind === 'literal' && /^set-cookie$/i.test(String(k.args[0].value))));
               if (isSetCookie && v) {
                 const text = literalTextOf(v);
@@ -477,7 +565,10 @@ export function analyzeHaskellRules(files, opts = {}) {
             // scotty-cookie's helpers build a cookie that carries neither Secure nor HttpOnly
             if ((c === 'Web.Scotty.Cookie.setSimpleCookie' || c === 'Web.Scotty.Cookie.makeSimpleCookie') && args[0]) {
               const nm = args[0];
-              if (nm.kind !== 'literal' || SESSION_COOKIE.test(String(nm.value))) emit('hs-insecure-cookie', file, line, { detail: 'HttpOnly missing, Secure missing', evidence: { httpOnly: false, secure: false, helper: c } });
+              // A name that is a PARAMETER of this function is decided by the caller: the function is itself a cookie helper
+              // (scotty's own `setSimpleCookie n v`, `deleteCookie c`), and the call that passes a session name is the site to report.
+              const ownParam = nm.kind === 'ident' && Array.isArray(fn.params) && fn.params.includes(nm.name);
+              if (!ownParam && (nm.kind !== 'literal' || SESSION_COOKIE.test(String(nm.value)))) emit('hs-insecure-cookie', file, line, { detail: 'HttpOnly missing, Secure missing', evidence: { httpOnly: false, secure: false, helper: c } });
             }
             // a socket read repeated by a recursive loop, with no size test anywhere in it
             if (SOCKET_READS.has(c) && !hasSizeTest && !bounded && fn.calls.some((x) => x.callee === fn.name && x.hs && x.hs.target === fn.qid)) {
@@ -502,8 +593,9 @@ export function analyzeHaskellRules(files, opts = {}) {
               }
             }
             // password hashed with a fast hash
-            if (ANY_HASH_CALLS.has(c) && !STRONG_KDF.test(c) && args.some((a) => [...names(a)].some((n) => PASSWORD_VAR.test(n.replace(/^\./, ''))))) {
-              emit('hs-fast-password-hash', file, line, { detail: `${c} applied to a password-shaped value` });
+            // (a hash call the IR inlined from a project helper, `digestFor (credPassword creds)` at the comparison, is reported once, in the helper)
+            if (ANY_HASH_CALLS.has(c) && !STRONG_KDF.test(c) && !(e.hs && e.hs.inlinedFrom) && args.some((a) => [...names(a)].some((n) => PASSWORD_VAR.test(n.replace(/^\./, ''))))) {
+              emit('hs-fast-password-hash', file, line, { detail: `${c} applied to a password-shaped value`, inlineCtx: e.hs && e.hs.inlineCtx });
             }
             if (PBKDF2_CALLS.has(c)) {
               for (const a of args) for (const x of walk(a)) if (x.kind === 'object') for (const p of x.props || []) if (p.key === 'iterCounts' && p.value && p.value.kind === 'literal' && typeof p.value.value === 'number' && p.value.value < 10000) {
@@ -514,7 +606,7 @@ export function analyzeHaskellRules(files, opts = {}) {
             if (ECB_CALLS.has(c)) emit('hs-ecb-mode', file, line, { detail: c });
             if (IV_CALLS.has(c) && args[0] && isLiteralLike(args[0])) emit('hs-static-iv', file, line, { detail: `${c} of a constant value` });
             // randomness bound to a security-shaped name
-            if (RANDOM_CALLS.has(c) && node.kind === 'assign' && SECURITY_VAR.test(node.target || '')) {
+            if (RANDOM_CALLS.has(c) && node.kind === 'assign' && (SECURITY_VAR.test(node.target || '') || (CONTEXT_CODE_VAR.test(node.target || '') && fnMentions(fn, CODE_CONTEXT)))) {
               emitRandom(line, { detail: `${c} result bound to \`${node.target}\``, evidence: { binding: node.target } });
             }
             if (RANDOM_CALLS.has(c) && SECURITY_FN.test(fnBase) && node.kind !== 'assign') {
@@ -562,6 +654,14 @@ export function analyzeHaskellRules(files, opts = {}) {
           for (const n of srcNames) if (sensitive.has(n)) { const s = sensitive.get(n); cls = { name: s.name, low: s.low }; hashed = hashed || s.hashed; }
           if (cls) {
             let cleared = false;
+            // a yes/no answer about the credential (`accepted <- checkCredentials attempt`, a comparison, a conjunction) carries no credential text
+            let root = src; for (let i = 0; i < 6 && root && root.kind === 'call' && typeof root.callee === 'string' && /(?:^|\.)(?:liftIO|pure|return|lift)$/.test(root.callee) && (root.args || []).length === 1; i++) root = root.args[0];
+            if (root && ((root.kind === 'binary' && ['==', '/=', '!=', '&&', '||', '<', '>', '<=', '>='].includes(root.op)) || root.kind === 'logical')) cleared = true;
+            // the binding says it holds a hash or digest (`hashedPassword <- hashPassword plain`): the stored form, whatever made it
+            if (HASH_NAMED.test(node.target || '')) cleared = true;
+            if (root && root.kind === 'call' && typeof root.callee === 'string' && /(?:^|\.)(?:not|elem|notElem|null|isJust|isNothing|any|all|and|or)$/.test(root.callee)) cleared = true;
+            // a project helper whose every return is such an answer (`checkCredentials a = pure (user a == "x" && password a == "y")`)
+            if (root && root.kind === 'call' && typeof root.callee === 'string' && returnsYesNo(fir, root.callee)) cleared = true;
             for (const x of walk(src)) {
               if (x.kind !== 'call' || typeof x.callee !== 'string') continue;
               if (REDACTOR.test(x.callee)) cleared = true;
@@ -600,13 +700,19 @@ export function analyzeHaskellRules(files, opts = {}) {
               for (const n of names(arg)) {
                 if (hit) break;
                 const bare = n.replace(/^\./, '');
-                if (sensitive.has(n)) hit = { ...sensitive.get(n), var: n };
-                else if (SENSITIVE.test(bare) && !/^[A-Z][A-Za-z0-9_.]*\./.test(n)) hit = { name: bare, low: LOW_ENTROPY.test(bare), hashed: false, var: n };
+                // a value built from a credential (`attempt = Attempt user password`) logged through a field that is not the credential
+                // (`attemptUser attempt`, lowered to a member of `attempt`) is that field, not the secret
+                if (sensitive.has(n) && !usedOnlyAsNonSensitiveField(arg, n)) hit = { ...sensitive.get(n), var: n };
+                // a name that says it holds a hash or digest of the credential (`hashedPassword`, `tokenDigest`) is the stored form, not the secret
+                else if (SENSITIVE.test(bare) && !/^[A-Z][A-Za-z0-9_.]*\./.test(n) && !HASH_NAMED.test(bare)) hit = { name: bare, low: LOW_ENTROPY.test(bare), hashed: false, var: n };
+                // the record itself, logged whole (`show attempt`), when one of its fields was built from a credential (`attempt.attemptPassword`)
+                else if (!sensitive.has(n)) { const field = [...sensitive.keys()].find((k) => k.startsWith(`${n}.`)); if (field && !usedOnlyAsNonSensitiveField(arg, n)) hit = { ...sensitive.get(field), name: field, var: n }; }
                 if (hit) break;
               }
               if (!hit) { const rec = wholeRecord(arg); if (rec) hit = { name: `${rec.type}.${rec.field}`, low: LOW_ENTROPY.test(rec.field), hashed: false, var: rec.name }; }
               if (hit && !isRedacted(arg)) {
                 emit('hs-sensitive-logging', file, e.line || node.line, {
+                  inlineCtx: e.hs && e.hs.inlineCtx,
                   severity: hit.hashed ? 'low' : 'high',
                   detail: hit.hashed ? `a fast hash of low-entropy \`${hit.name}\` reaches ${e.callee}` : `\`${hit.name}\` reaches ${e.callee}`,
                   evidence: { value: hit.name, via: hit.var, channel: sink.channel, hashed: hit.hashed },
@@ -639,5 +745,16 @@ export function analyzeHaskellRules(files, opts = {}) {
   const out = [];
   for (const f of findings) { if (seen.has(f.id)) continue; seen.add(f.id); out.push(f); }
   void notes; void opts;
-  return { findings: out, controls, notes };
+  // A call-site copy of a finding the helper itself reports (the helper's body was inlined at the call) is dropped; a call-site finding
+  // whose helper reports nothing (the password shape is visible only at the call) is kept.
+  // The kept finding lists the call sites it also covers (`alsoAt`), so a reviewer still sees every line of the one weakness.
+  const byKey = new Map(out.map((f) => [`${f.rule}|${f.file}|${f._fnQid}`, f]));
+  const deduped = out.filter((f) => {
+    const helper = f.inlineCtx && f._fnQid !== f.inlineCtx ? byKey.get(`${f.rule}|${f.file}|${f.inlineCtx}`) : null;
+    if (!helper) return true;
+    helper.alsoAt = [...(helper.alsoAt || []), { line: f.line, reason: 'the same helper inlined at this call' }];
+    return false;
+  });
+  for (const f of deduped) delete f._fnQid;
+  return { findings: deduped, controls, notes };
 }

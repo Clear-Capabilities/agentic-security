@@ -135,7 +135,25 @@ fetch item = do
   req <- parseRequest ("https://api.example.com/items/" ++ item)
   _ <- httpBS req
   pure ()`);
-  assert.ok(cwes(await scan('M.hs', textual)).includes('CWE-918'), 'the path text is still caller-controlled');
+  // The text still flows to the request (the finding exists, with the caller's text as its origin). Since 0.195.9 a URL that starts
+  // from a literal naming the scheme, the host and a "/" is reported as information with the reason (`fixed-host-request`): the caller
+  // chooses a path on that host, not the host, which is not a server-side request forgery. A literal that stops inside the host keeps it.
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gapfix-')));
+  try {
+    fs.writeFileSync(path.join(dir, 'package.json'), '{}');
+    fs.writeFileSync(path.join(dir, 'M.hs'), textual);
+    const r = await runScan(dir, { deep: true });
+    const ssrf = (r.scan.findings || []).filter((f) => f.cwe === 'CWE-918');
+    assert.equal(ssrf.length, 1, 'the path text is still caller-controlled: the flow is reported');
+    assert.equal(ssrf[0].severity, 'info');
+    assert.equal(ssrf[0].guardNote && ssrf[0].guardNote.kind, 'fixed-host-request');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  const hostText = hs(HTTP, `fetch :: String -> IO ()
+fetch item = do
+  req <- parseRequest ("https://api." ++ item)
+  _ <- httpBS req
+  pure ()`);
+  assert.ok(cwes(await scan('M.hs', hostText)).includes('CWE-918'), 'the caller finishes the host name');
 });
 
 test('taint: a host allow-list on the parsed URL guards it; parsing alone, or a non-host allow-list, does not', async () => {

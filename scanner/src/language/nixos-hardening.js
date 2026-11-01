@@ -339,8 +339,11 @@ export function analyzeNixosHardening(opts, extra = {}) {
     const sv = view(sudoCfg);
     if (sv.state === 'known' && typeof sv.value === 'string' && sudoState !== 'inactive' && sudoState !== 'unknown') {
       const text = stripNixHash(sv.value);
-      if (/NOPASSWD\s*:\s*ALL\b/.test(text)) {
-        addFinding('sudo-nopasswd-all', { anchor: anchorOf(sudoCfg), scope: 'security.sudo.extraConfig', state: sudoState === 'conditional' ? 'conditional' : 'active', uncertain: !sv.definite, evidence: [evidenceOf(sudoCfg)] });
+      // `Defaults !authenticate` (optionally scoped, `Defaults:%wheel !authenticate`) turns the password off for every rule the
+      // scope matches, which is the same grant as NOPASSWD: ALL written as a default
+      const noAuth = /^\s*Defaults(?:[:>@!]\S+)?\s+(?:[\w,]+\s*,\s*)?!authenticate\b/m.test(text);
+      if (/NOPASSWD\s*:\s*ALL\b/.test(text) || noAuth) {
+        addFinding('sudo-nopasswd-all', { anchor: anchorOf(sudoCfg), scope: 'security.sudo.extraConfig', state: sudoState === 'conditional' ? 'conditional' : 'active', uncertain: !sv.definite, evidence: [evidenceOf(sudoCfg)], ...(noAuth ? { extra: { directive: 'Defaults !authenticate' } } : {}) });
         entryPoints.push({ id: 'sudo-nopasswd-all', kind: 'sudo-nopasswd', state: sudoState === 'conditional' ? 'conditional' : 'active', privilege: 'root', evidence: [evidenceOf(sudoCfg)] });
       }
     }
@@ -525,6 +528,18 @@ export function analyzeNixosHardening(opts, extra = {}) {
     }
   }
 
+  // ── TLS private keys of other services (postfix `sslKey`, dovecot `sslServerKey`, httpd `sslServerKey`, a `keyFile`/`tlsKey`/`privateKeyFile`)
+  // The same rule as nginx above: a path literal or a store-writer call puts the key in the store; a string is a runtime path.
+  for (const o of cfg.options.filter((x) => x.namespace === 'nixos' && /^services\.(?!nginx\.)[^.]+\.(?:.*\.)?(?:sslKey|sslServerKey|sslCertificateKey|tlsKey|keyFile|privateKeyFile|tlsKeyFile)$/.test(x.path))) {
+    const svc = o.path.split('.')[1];
+    const svcState = stateOf(nixos(`services.${svc}.enable`));
+    if (svcState !== 'active' && svcState !== 'conditional') continue;
+    const st = svcState === 'conditional' ? 'conditional' : 'active';
+    const node = rhsNodeOf(o, opts.files);
+    if (node && (hasPathNode(node) || isStoreCopy(node))) addFinding('tls-key-in-store', { anchor: anchorOf(o), scope: o.path, state: st, uncertain: false, evidence: [evidenceOf(o)] });
+    else if (view(o).state === 'known' && typeof view(o).value === 'string') controls.push({ control: 'tls-key-runtime-path', option: o.path, applies: true });
+  }
+
   // ── firewall ──
   const listeningNow = inventory.filter((i) => i.state === 'active' && i.listening !== 'no' && i.listening !== 'localhost-only');
   if (fwOff === 'yes' || fwOff === 'conditional') {
@@ -635,7 +650,9 @@ export function analyzeNixosHardening(opts, extra = {}) {
       const r = sc(key);
       if (!r) continue;
       const v = view(r);
-      const items = v.state === 'known' ? asList(v.value) : v.state === 'conditional' ? asList(v.definiteItems) : [];
+      // systemd accepts the capability set as a list or as one space-separated string (`AmbientCapabilities = "CAP_SYS_ADMIN"`)
+      const raw = v.state === 'known' ? v.value : v.state === 'conditional' ? v.definiteItems : [];
+      const items = typeof raw === 'string' ? raw.split(/\s+/).filter(Boolean) : asList(raw);
       const bad = items.filter((c) => typeof c === 'string' && !c.startsWith('~') && DANGEROUS_CAPS.has(c));
       // a bounding set only limits; an ambient set grants, so only Ambient is a hard finding for non-root-looking services
       if (bad.length && (key === 'AmbientCapabilities' || identity.state !== 'root-default')) {
