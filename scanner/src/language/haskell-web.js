@@ -20,7 +20,7 @@
 
 import { buildHaskellIR, lowerHandlerExpr, resolveName } from './haskell-ir.js';
 import { codeOfLine } from './haskell-comments.js';
-import { qualifyAmbiguous, HS_WEB_FRAMEWORKS, HS_WEB_MODEL_VERSION, modelStatus } from './haskell-models.js';
+import { qualifyAmbiguous, HS_WEB_FRAMEWORKS, HS_WEB_MODEL_VERSION, modelStatus, handlerFrameworkOf } from './haskell-models.js';
 
 export const HS_WEB_RULES_VERSION = 'haskell-web-rules/1';
 
@@ -43,6 +43,19 @@ const ADMIN_PATH = /(?:^|\/)(?:admin|internal|manage|superuser)(?:\/|$|:)/i;
 const ROLE_CALL = /(?:^|\.)(?:isAdmin|hasRole|requireAdmin|checkRole|hasPermission|requireRole|requirePermission|isSuperuser)$/i;
 const OWNER_CALL = /(?:^|\.)(?:checkOwner|ownedBy|belongsTo|isOwner|requireOwner|authorizeOwner)$/i;
 const CSRF_CALL = /csrf|xsrf/i;
+// Evidence that an object HAS an owner, read from the data the handler touches, never from a route or file name: a column of the statement
+// it runs (`owner_id`, `tenant_id`, `created_by`) or a field of a record declared in the project (`invOwner`, `profileUser`). An id lookup that
+// selects such an object without consulting the owner (the column is not in the WHERE clause; the field is never read in the handler) is a
+// lookup the client steers, whether or not a principal was authenticated.
+const OWNER_COL = /\b(?:owner|tenant|account|customer|author|created_by|user)_?id\b|\bowner\b/i;
+const OWNER_FIELD = /(?:^|_)(?:owner|tenant|author|created_?by)(?:_?id)?$|(?:^|_)(?:user|account|customer)_?id$/i;
+const SQL_VERB = /\b(?:select|update|delete|insert)\b/i;
+// A container lookup by key (`M.lookup invoiceId m`, `HM.!? key`): not a sensitive operation (no database, file or process), but the step at which an
+// object is selected by a client-supplied id, so it counts for the ownership judgement only.
+const LOOKUP_CALL = /(?:^|\.)(?:lookup|!\?|!|find|findWithDefault|elemAt)$/;
+// A call that only builds the response or lays values out: a handler whose every call is one of these does nothing a client could abuse,
+// so a missing authentication check on it is a question about the route (its method and path), not a visible operation.
+const RESPONSE_ONLY = /^(?:Web\.Scotty(?:\.Trans)?\.(?:text|json|html|status|setHeader|addHeader|raw|redirect|finish|raise|raiseStatus|param|params|queryParam|captureParam|header|headers|body|jsonData)|Servant(?:\.Server)?\.(?:throwError|throwAll)|Yesod(?:\.Core)?\.(?:redirect|returnJson|defaultLayout|setTitle|sendResponse|notFound|permissionDenied|invalidArgs|requireJsonBody|lookupGetParam|lookupPostParam|toWidget|hamletToRepHtml)|Prelude\.(?:pure|return|fmap|map|concatMap|unlines|lines|show|length|not|maybe|either|fst|snd|const|id|flip|unwords|words|filter|zip|lookup|elem|notElem)|Control\.Monad\.(?:when|unless|void|forM|forM_|mapM|mapM_|guard)|Control\.Monad\.IO\.Class\.liftIO|Control\.Monad\.Trans\.Class\.lift|Data\.(?:Text|Text\.Lazy|Text\.Encoding|ByteString(?:\.Char8|\.Lazy|\.Lazy\.Char8)?|Aeson|Maybe|List|Map|Map\.Strict|Char|String|Functor|Foldable)\.[^.]+)$/;
 
 // ── AST helpers ──────────────────────────────────────────────────────────────
 function unparen(e) { while (e && e.t === 'paren') e = e.e; return e; }
@@ -360,9 +373,14 @@ function handlerFacts(ctx, fn, opts = {}) {
   for (const a of assigns) if (a.source.kind === 'call' && isGuardCall(a.source)) principals.add(a.target);
   // ids read from the request
   const idVars = new Set();
+  const SCOTTY_PARAM = /^Web\.Scotty(?:\.Trans)?\.(?:param|captureParam|queryParam|pathParam)$/;
+  // `docId <- param "id" :: ActionM Int` lowers to a source temporary (`$src0 <- param "id"`) and a number whose `hs.inner` names that temporary
+  const paramReads = new Map();
+  for (const a of assigns) if (a.source.kind === 'call' && SCOTTY_PARAM.test(a.source.callee)) paramReads.set(a.target, a.source);
   for (const a of assigns) {
-    const s = a.source;
-    if (s.kind === 'call' && /^Web\.Scotty(?:\.Trans)?\.(?:param|captureParam|queryParam|pathParam)$/.test(s.callee)) {
+    let s = a.source.kind === 'literal' && a.source.hs && a.source.hs.inner ? a.source.hs.inner : a.source;
+    if (s.kind === 'ident' && paramReads.has(s.name)) s = paramReads.get(s.name);
+    if (s.kind === 'call' && SCOTTY_PARAM.test(s.callee)) {
       const nm = headerArg(s);
       if (nm && /id$/i.test(nm)) idVars.add(a.target);
     }
@@ -386,6 +404,45 @@ function hasOwnership(ctx, facts) {
   // 3. a project function receiving both
   for (const o of facts.ordered) if (o.call.hs && o.call.hs.status === 'resolved' && (o.call.args || []).some(mentionsPrincipal) && (o.call.args || []).some((a) => [...identsIr(a)].some((n) => idVars.has(n)))) return { kind: 'principal-scoped-helper', callee: o.call.callee };
   return null;
+}
+
+// Owner evidence for the lookups of one handler (see OWNER_COL / OWNER_FIELD). Returns the first piece found, or null.
+function ownerEvidence(ctx, fn, facts, lookups) {
+  // 1. a statement literal handed to a lookup names an owner column outside its WHERE clause
+  for (const o of lookups) {
+    for (const a of o.call.args || []) for (const x of walkIr(a)) {
+      if (x.kind !== 'literal' || typeof x.value !== 'string' || !SQL_VERB.test(x.value)) continue;
+      const [head, ...tail] = x.value.split(/\bwhere\b/i);
+      const col = OWNER_COL.exec(head);
+      if (col && !OWNER_COL.test(tail.join(' '))) return { kind: 'owner-column-not-in-where', column: col[0], statement: x.value.slice(0, 120), line: o.line };
+    }
+  }
+  // 2. a record declared in the project has an owner field, and the handler never reads it
+  const recTypes = ctx.project && typeof ctx.project.recordTypes === 'function' ? ctx.project.recordTypes() : null;
+  if (!recTypes || !recTypes.size) return null;
+  const mentioned = new Set();
+  for (const n of Object.values(fn.cfg.nodes)) for (const root of exprsOfNode(n)) for (const e of walkIr(root)) {
+    if (e.kind === 'ident' && e.name) mentioned.add(e.name.replace(/^.*\./, ''));
+    if (e.kind === 'call' && typeof e.callee === 'string') mentioned.add(e.callee.replace(/^.*\./, ''));
+    if (e.kind === 'member' && e.prop) mentioned.add(String(e.prop));
+  }
+  for (const c of facts.conds) for (const e of walkIr(c)) { if (e.kind === 'ident' && e.name) mentioned.add(e.name.replace(/^.*\./, '')); if (e.kind === 'call' && typeof e.callee === 'string') mentioned.add(e.callee.replace(/^.*\./, '')); }
+  for (const [type, fields] of recTypes) {
+    const list = (Array.isArray(fields) ? fields : [...(fields || [])]).map((f) => (typeof f === 'string' ? f : f && f.name)).filter(Boolean);
+    const ownerField = list.find((f) => OWNER_FIELD.test(String(f).replace(/([a-z0-9])([A-Z])/g, '$1_$2')));
+    // the record must be the object the handler works with: it reads another of its fields (`invTotal inv`), or builds it. A record declared in the
+    // module that the handler never touches says nothing about what the lookup selected (a `Post` type beside a download handler).
+    const inPlay = list.some((f) => f !== ownerField && mentioned.has(f)) || mentioned.has(type);
+    if (ownerField && inPlay && !mentioned.has(ownerField)) return { kind: 'owner-field-unread', type, field: ownerField, line: lookups[0] ? lookups[0].line : fn.line };
+  }
+  return null;
+}
+
+// The first call of a handler that is neither a sensitive operation nor response plumbing: a project function, a parameter called as a function, a
+// console write. Its presence means the handler does something the engine cannot see into.
+function effectfulCall(facts) {
+  const o = facts.ordered.find((x) => !facts.isSensitive(x.call) && !RESPONSE_ONLY.test(x.call.callee || '') && !/^(?:>>=|>>|<\$>|<\*>|\$|\.|fmap|pure|return)$/.test(x.call.callee || ''));
+  return o ? { callee: o.call.callee, line: o.line } : null;
 }
 
 // ── structural order of an inline guard (WAI, Servant, Yesod) ──────────────────
@@ -615,7 +672,13 @@ function analyzeRoute(ctx, route, handlerFn, opts) {
   R.sensitive = facts.sensIdx >= 0;
   // ownership / BOLA inputs
   R.ownership = hasOwnership(ctx, facts);
-  R.idLookups = facts.ordered.filter((o) => facts.isSensitive(o.call) && (o.call.args || []).some((a) => [...identsIr(a)].some((n) => facts.idVars.has(n))));
+  // a lookup's key sits in `hs.selector` (`M.lookup invoiceId m` keeps the key beside the container), so it is judged with the arguments
+  const operands = (c) => [...(c.args || []), ...(c.hs && c.hs.selector ? [c.hs.selector] : [])];
+  const byId = (c) => operands(c).some((a) => [...identsIr(a)].some((n) => facts.idVars.has(n)));
+  R.idLookups = facts.ordered.filter((o) => facts.isSensitive(o.call) && byId(o.call));
+  R.idSelections = facts.ordered.filter((o) => !facts.isSensitive(o.call) && LOOKUP_CALL.test(o.call.callee || '') && byId(o.call));
+  R.ownerEvidence = R.idLookups.length || R.idSelections.length ? ownerEvidence(ctx, handlerFn, facts, [...R.idLookups, ...R.idSelections]) : null;
+  R.effectful = facts.sensIdx >= 0 ? null : effectfulCall(facts);
 }
 
 // ── Scotty ─────────────────────────────────────────────────────────────────
@@ -762,7 +825,7 @@ function expandChain(chain, acc) {
   else if (name === 'ReqBody') a.order.push('body');
   else if (name === 'BasicAuth') { a.auth = { kind: 'basic', tag: 'BasicAuth' }; a.order.push('auth'); }
   else if (name === 'AuthProtect') { const nm = head.find((t) => t.t === 'str'); a.auth = { kind: 'token', tag: nm ? nm.v : 'AuthProtect' }; a.order.push('auth'); if (nm && /admin|role|perm/i.test(nm.v)) a.role = true; }
-  else if (name === 'Auth') { a.auth = { kind: 'token', tag: 'Auth' }; a.order.push('auth'); }
+  else if (name === 'Auth') { a.auth = { kind: 'token', tag: 'Auth' }; a.order.push('auth'); if (head.some((t) => t.t === 'con' && t.v !== 'Auth' && /admin|role|perm/i.test(t.v))) a.role = true; }   // `Auth '[JWT] Admin`: the principal type names the role, as an AuthProtect tag does
   else if (name && /^(?:Get|Post|Put|Delete|Patch)(?:NoContent)?$/.test(name)) return [finishServant(a, head)];
   return rest.length ? expandChain(rest, a) : [finishServant(a, head)];
 }
@@ -927,6 +990,27 @@ export function analyzeHaskellWeb(files, opts = {}) {
     }
   }
 
+  // Scotty handlers typed by the framework (`getDocument :: Connection -> ActionM ()`) that no `get`/`post` in an analysed file registers: the route
+  // table is elsewhere, so the method and path are unknown. They are analysed for object authorization only (the method decides nothing here):
+  // `UNKNOWN` is neither a write nor a privileged path, so no missing-authentication finding can come from one.
+  if (fw.has('scotty')) {
+    const registered = new Set();
+    for (const p of pending) if (p.framework === 'scotty' && p.handlerAst) { const sp = spine(p.handlerAst); const h = sp && sp.head ? sp.head : (p.handlerAst.t === 'var' ? p.handlerAst : null); if (h && h.name) registered.add(h.name); for (const n of walkAst(p.handlerAst)) if (n.t === 'var' && n.name) registered.add(n.name); }
+    for (const mod of ctx.modules) {
+      const mods = mod.imports.map((i) => i.module);
+      if (!mods.some((m) => /^Web\.Scotty(?:\.|$)/.test(m))) continue;
+      for (const fun of mod.groups.funs) {
+        const sig = mod.sigs.get(fun.name);
+        if (!sig || registered.has(fun.name)) continue;
+        const resultText = sig.resultText || String(sig.text || '').split('->').pop();
+        const h = handlerFrameworkOf(mods, resultText);
+        // a handler's result is unit (`ActionM ()`); a guard or helper returns a value (`requireUser :: ActionM User`) and is not a route
+        if (!h || h.framework !== 'scotty' || !/\(\s*\)\s*\)?\s*$/.test(resultText)) continue;
+        add({ framework: 'scotty', method: 'UNKNOWN', path: `<${fun.name}>`, file: mod.file, line: fun.line, mod, handlerName: fun.name, owner: `${mod.name}.${fun.name}`, conventional: true });
+      }
+    }
+  }
+
   // ── resolve handlers and analyse ─────────────────────────────────────────
   for (const p of pending) {
     const R = newRoute({ framework: p.framework, method: p.method, path: p.path, file: p.file, line: p.line, owner: p.owner });
@@ -967,11 +1051,14 @@ export function analyzeHaskellWeb(files, opts = {}) {
       const g = waiGlobals.find((w) => w.file === p.file && w.routers.has((p.routerFn || '').split('.').pop()));
       if (g) { o.globalAuth = g; if (g.role) o.globalRole = true; }
     }
+    // A handler written as a function may take closure arguments BEFORE the endpoint's values (`invoiceById store currentUser invoiceId` for
+    // `Capture "invoiceId" Int :> Get ..`): the endpoint's values are the LAST parameters, so they are paired from the end.
+    const servantOffset = p.framework === 'servant' ? Math.max(0, paramNames.length - (p.servant.order || []).length) : 0;
     if (p.framework === 'servant' && p.servant.auth) {
       o.typeAuth = p.servant.auth; if (p.servant.role) o.typeRole = true;
       o.principalVars = []; o.idVars = [];
       (p.servant.order || []).forEach((kind, i) => {
-        const nm = paramNames[i]; if (!nm) return;
+        const nm = paramNames[i + servantOffset]; if (!nm) return;
         if (kind === 'auth') o.principalVars.push(nm);
         else if (/^header:/.test(kind) && CREDENTIAL_HEADER.test(kind.slice(7))) (o.credentialParams ||= []).push({ name: nm, kind: /cookie/i.test(kind) ? 'cookie' : 'token' });
         else if (/^(?:capture|query):.*id$/i.test(kind)) o.idVars.push(nm);
@@ -979,7 +1066,7 @@ export function analyzeHaskellWeb(files, opts = {}) {
     } else if (p.framework === 'servant') {
       o.idVars = [];
       (p.servant.order || []).forEach((kind, i) => {
-        const nm = paramNames[i]; if (!nm) return;
+        const nm = paramNames[i + servantOffset]; if (!nm) return;
         if (/^(?:capture|query):.*id$/i.test(kind)) o.idVars.push(nm);
         else if (/^header:/.test(kind) && CREDENTIAL_HEADER.test(kind.slice(7))) (o.credentialParams ||= []).push({ name: nm, kind: /cookie/i.test(kind) ? 'cookie' : 'token' });
       });
@@ -1030,6 +1117,9 @@ function collectYesodAuthz(ctx) {
       const names = [];
       for (const n of walkAst(body)) if (n.t === 'var') names.push(n.name);
       if (names.some((n) => /^(?:requireAuthId|requireAuth|maybeAuthId|maybeAuth)$/.test(n)) || names.some((n) => { const q = ctx.qualify(mod, { name: n, qual: null }); return q && q.qid && guardSummary(ctx, ctx.fnFor(q)).auth; })) status = 'authenticated';
+      // A clause that can answer AuthenticationRequired or Unauthorized has a rejection path: it decides from something it read (a session
+      // key, a header), so the route is guarded. Only a clause that can ONLY answer Authorized is public.
+      else if (/\b(?:AuthenticationRequired|Unauthorized)\b/.test(text)) status = 'authenticated';
       else if (/"Authorized"/.test(text) || names.includes('Authorized')) status = 'public';
       if (names.some((n) => ROLE_CALL.test(n))) role = true;
       const rec = { status, role, file: mod.file, line: dcl.line || c.line };
@@ -1071,12 +1161,25 @@ function emitFindings(ctx, result, yesodAuthz) {
     const writes = WRITE_METHODS.has(R.method) || R.method === 'ANY';
     const privileged = ADMIN_PATH.test(R.path) || /admin/i.test(R.handler.name || '');
     if (R.auth.status === 'late') emit('hs-route-late-auth', R, { detail: R.auth.evidence[0].order === 'unknown' ? `the rejection ${R.auth.evidence[0].callee} cannot be shown to run before the first sensitive operation (${R.auth.evidence[0].reason})` : `guard ${R.auth.evidence[0].callee} runs after the first sensitive operation`, evidence: R.auth.evidence });
-    else if (R.auth.status === 'none' && (writes || privileged) && R.sensitive !== false) {
-      if (!(R.framework === 'yesod' && R.yesodExplicitPublic && !writes)) emit('hs-route-missing-auth', R, { severity: writes ? 'high' : 'medium', detail: R.method === 'ANY' ? 'any method' : 'state-changing method' });
+    else if (R.auth.status === 'none' && (writes || privileged) && !(R.framework === 'yesod' && R.yesodExplicitPublic && !writes)) {
+      const how = R.method === 'ANY' ? 'any method' : writes ? 'state-changing method' : 'privileged path';
+      if (R.sensitive !== false) emit('hs-route-missing-auth', R, { severity: writes ? 'high' : 'medium', detail: how });
+      // No database, file or process call is visible, but the handler calls something the engine cannot see into (a project function, a
+      // parameter): on a PRIVILEGED path (admin, internal, manage) the route is privileged by its path, so the finding stands at a lower severity
+      // and says what it could not see. A plain write with no visible operation is NOT reported: on real projects that shape is an echo, an
+      // upload demo or a health check (23 such routes on four projects), and only the handler's own text claimed otherwise.
+      else if (privileged && R.effectful) emit('hs-route-missing-auth', R, { severity: 'medium', confidence: 0.55, detail: `${how}; no database, file or process operation is visible in the handler (it calls ${R.effectful.callee}), so the impact is judged from the path alone`, evidence: { unseen: R.effectful.callee, line: R.effectful.line } });
     }
     if ((R.auth.status === 'authenticated') && privileged && R.role.status !== 'present') emit('hs-route-bfla', R, { detail: 'authenticated but no role/permission check was found', evidence: { auth: R.auth.evidence } });
-    if (R.auth.status === 'authenticated' && R.idLookups && R.idLookups.length && !R.ownership) {
-      emit('hs-route-bola', R, { detail: 'the id from the request reaches a lookup with no ownership or tenant check', line: R.idLookups[0].line, evidence: { lookup: R.idLookups[0].call.callee } });
+    // Object authorization (BOLA). The lookups are the sensitive calls and the container selections the request id reaches.
+    const lookups = [...(R.idLookups || []), ...(R.idSelections || [])];
+    if (lookups.length && !R.ownership && R.auth.status !== 'late') {
+      const first = lookups[0];
+      if (R.auth.status === 'authenticated') emit('hs-route-bola', R, { detail: 'the id from the request reaches a lookup with no ownership or tenant check', line: first.line, evidence: { lookup: first.call.callee, ...(R.ownerEvidence ? { owner: R.ownerEvidence } : {}) } });
+      // Unauthenticated: a WRITE to an object the client selected is the client's to make only if it owns the object, and nothing checked; for a
+      // read, the finding needs evidence that the object has an owner at all (a public article by id is not an authorization matter).
+      else if (writes) emit('hs-route-bola', R, { detail: 'the id from the request selects the object that is modified, with no authenticated principal and no ownership check', line: first.line, evidence: { lookup: first.call.callee, ...(R.ownerEvidence ? { owner: R.ownerEvidence } : {}) } });
+      else if (R.ownerEvidence) emit('hs-route-bola', R, { detail: R.ownerEvidence.kind === 'owner-column-not-in-where' ? `the statement names an owner column (${R.ownerEvidence.column}) that its WHERE clause does not use: the object is selected by the client's id alone` : `the ${R.ownerEvidence.type} record has an owner field (${R.ownerEvidence.field}) the handler never reads: the object is selected by the client's id alone`, line: first.line, evidence: { lookup: first.call.callee, owner: R.ownerEvidence } });
     }
     const cookie = R.credentialKinds && (R.credentialKinds.has('cookie') || R.credentialKinds.has('session'));
     if (writes && R.auth.status === 'authenticated' && cookie && !R.csrf && R.framework !== 'yesod') emit('hs-route-csrf', R, { detail: 'cookie/session credential with no CSRF token check' });

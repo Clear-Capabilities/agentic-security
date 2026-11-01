@@ -319,8 +319,10 @@ function allUsesEscaped(fn, e, escapers, depth = 0) {
   if (e.kind === 'call' && escapers.has(e.callee)) return true;     // whatever it receives is escaped
   if (e.kind === 'ident') {
     if (e.hs && e.hs.functionRef) return true;
+    // a name bound in this function stands for its definition (`page = "<p>" ++ path ++ "</p>"` with `path = escape (...)`): every use inside it must be escaped too
+    // A definition built from other values is judged by them; a definition with no value in it (`w <- param "w"`, a read) is the raw origin.
     const defs = nodeList(fn).filter((n) => n.kind === 'assign' && n.target === e.name && n.source);
-    return defs.length > 0 && defs.every((n) => n.source.kind === 'call' && escapers.has(n.source.callee));
+    return defs.length > 0 && defs.every((n) => (n.source.kind === 'call' && escapers.has(n.source.callee)) || (identNames(n.source).size > 0 && allUsesEscaped(fn, n.source, escapers, depth + 1)));
   }
   for (const [, c] of exprChildren(e)) if (!allUsesEscaped(fn, c, escapers, depth + 1)) return false;
   return true;
@@ -355,8 +357,10 @@ export function judgeFinding(f, perFile) {
       const escapers = htmlEscapers(perFile);
       const calls = [];
       const find = (e, d) => { if (!e || typeof e !== 'object' || d > 40) return; if (e.kind === 'call' && escapers.has(e.callee)) calls.push(e); for (const [, c] of exprChildren(e)) find(c, d + 1); };
-      find(argExpr, 0);
-      for (const n of nodeList(fn)) if (n.kind === 'assign' && n.source && identNames(argExpr).has(n.target)) find(n.source, 0);
+      // the escaper may sit behind one or more local bindings (`page = ... path ...`, `path = escape (...)`): follow them, each once
+      const followed = new Set();
+      const findIn = (e, d) => { if (!e || d > 40) return; find(e, d); for (const v of identNames(e)) { if (followed.has(v)) continue; followed.add(v); for (const n of nodeList(fn)) if (n.kind === 'assign' && n.source && n.target === v) findIn(n.source, d + 1); } };
+      findIn(argExpr, 0);
       if (calls.length && allUsesEscaped(fn, argExpr, escapers)) refuted = { kind: 'html-escaper', line: calls[0].line || fn.line, subject: calls[0].callee };
     }
     for (const fact of facts) {
@@ -473,10 +477,51 @@ export function quotedPositionals(f, perFile) {
 }
 
 /** Applies judgeFinding to every Haskell taint finding. Returns counts. */
+/**
+ * A raw WAI response (`responseLBS status headers body`) is an HTML context only when its headers say so. Returns `html` (a `text/html`
+ * content type is written in the header list), `other` (another content type is written there), or `unknown` (the headers are not literal
+ * text the walk can read). Read from the call's own header argument; nothing else decides it.
+ */
+export function waiHtmlContext(f, perFile) {
+  if (!f || f.cwe !== 'CWE-79' || !/^Network\.Wai\.response(?:LBS|Builder)$/.test(f.callee || '')) return null;
+  const ir = perFile && perFile[f.file];
+  if (!ir) return 'unknown';
+  const fns = [ir.functions.find((x) => x.qid === f._funcQid), ...ir.functions].filter(Boolean);
+  for (const fn of fns) {
+    const sites = findSites(fn, f.callee, f.line);
+    if (!sites.length) continue;
+    const texts = [];
+    const resolveLocal = (name) => { for (const n of nodeList(fn)) if (n.kind === 'assign' && n.target === name && n.source) return n.source; return null; };
+    const visit = (e, d) => {
+      if (!e || typeof e !== 'object' || d > 40) return;
+      if (e.kind === 'literal' && typeof e.value === 'string') texts.push(e.value);
+      if (e.kind === 'ident' && d < 2) { const src = resolveLocal(e.name); if (src) visit(src, d + 1); }
+      for (const [, c] of exprChildren(e)) visit(c, d + 1);
+    };
+    for (const site of sites) visit((site.call.args || [])[1], 0);
+    const types = texts.filter((t) => /^(?:text|application|image|audio|video|multipart)\/[\w.+-]+/i.test(t.trim()));
+    if (types.some((t) => /^text\/html/i.test(t.trim()))) return 'html';
+    if (types.length) return 'other';
+    return 'unknown';
+  }
+  return 'unknown';
+}
+
 export function applyHaskellGuards(findings, perFile) {
   const stats = { refuted: 0, weak: 0 };
   for (const f of findings || []) {
     if (!f || f.parser !== 'IR-TAINT') continue;
+    try {
+      const ctx = waiHtmlContext(f, perFile);
+      if (ctx === 'other' && !f._notHtmlContext) {
+        f._notHtmlContext = true; f.severity = 'info';
+        f.controls = [...(f.controls || []), { kind: 'non-html-content-type', evidenceKind: 'source' }];
+        f.guardNote = { kind: 'non-html-content-type', reason: 'the response headers written at this call name a content type other than text/html; the body is not parsed as HTML by a browser that honours them' };
+        stats.weak++;
+        continue;
+      }
+      if (ctx === 'unknown' && !f._htmlContextUnknown) { f._htmlContextUnknown = true; f.uncertainty = [...(f.uncertainty || []), { kind: 'unread-content-type', detail: 'the response headers at this call are not literal text, so whether the body is served as HTML was not read' }]; }
+    } catch { /* judged below */ }
     try { promoteShellInterpreter(f, perFile); } catch { /* judged as an argument-injection below */ }
     try {
       const qp = quotedPositionals(f, perFile);

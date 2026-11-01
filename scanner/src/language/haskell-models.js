@@ -162,6 +162,8 @@ for (const mod of ['Yesod.Core', 'Yesod']) {
 src('Yesod.Core.Json', ['parseJsonBody', 'requireJsonBody', 'parseCheckJsonBody', 'requireCheckJsonBody'], 'http-body', 'yesod request body', { package: 'yesod', framework: 'yesod' });
 // WAI: the multipart/form body parsers and the conduit request body, and the request's host and cookie headers
 src('Network.Wai.Parse', ['parseRequestBody', 'parseRequestBodyEx'], 'http-body', 'WAI parsed request body', { package: 'wai-extra', framework: 'wai' });
+// the name and content type of an uploaded file are fields the client wrote into the multipart body (`fileName fi` is the browser's file name, verbatim)
+src('Network.Wai.Parse', ['fileName', 'fileContentType', 'fileContent'], 'upload', 'uploaded file field', { package: 'wai-extra', framework: 'wai' });
 src('Network.Wai.Conduit', ['sourceRequestBody'], 'http-body', 'WAI request body stream', { package: 'wai-extra', framework: 'wai' });
 
 // A text parameter of an exported function that returns a web-framework HANDLER value (a Scotty action, a Yesod handler or widget, a Servant handler,
@@ -264,6 +266,9 @@ for (const mod of ['Yesod', 'Yesod.Core', 'Yesod.Core.Widget', 'Text.Blaze', 'Te
   sink(mod, ['preEscapedToMarkup', 'preEscapedToHtml'], { ...XSS, package: mod.startsWith('Yesod') ? 'yesod' : 'blaze-html', ...(mod.startsWith('Yesod') ? { framework: 'yesod' } : {}) });
 }
 sink('Web.Scotty', ['html'], { ...XSS, package: 'scotty', framework: 'scotty', vuln: 'Cross-Site Scripting (HTML response from text)' });
+// A raw WAI response is HTML only when its headers say so: haskell-guards.js `waiHtmlContext` reads the header argument and lowers the finding to
+// `info` for another content type (text/plain, application/json), keeps it for text/html, and keeps it with a stated uncertainty when the headers are opaque.
+sink('Network.Wai', ['responseLBS', 'responseBuilder'], { ...XSS, argIndex: 2, package: 'wai', framework: 'wai', vuln: 'Cross-Site Scripting (HTML response body from text)' });
 sink('Web.Scotty.Trans', ['html'], { ...XSS, package: 'scotty', framework: 'scotty', vuln: 'Cross-Site Scripting (HTML response from text)' });
 
 // HTML assembled by concatenation and written out as text: only when the string being built contains markup (a literal
@@ -339,6 +344,8 @@ const SAN = [];
 const san = (module, names, appliesTo, note, extra = {}) => { for (const e of E(module, names)) SAN.push({ ...e, appliesTo, note, ...extra }); };
 san('Text.Blaze.Html', ['toHtml', 'toMarkup', 'text', 'string', 'lazyText'], ['xss'], 'escapes &, <, >, quotes for HTML text/attribute context');
 san('Text.Blaze', ['toMarkup', 'toValue', 'text', 'string', 'lazyText'], ['xss'], 'escapes for HTML context');
+// Text.Blaze.Html5 and Html4 re-export the escaping combinators, and most files import the element module rather than Text.Blaze.Html
+for (const mod of ['Text.Blaze.Html5', 'Text.Blaze.Html4.Strict', 'Text.Blaze.Html4.Transitional', 'Text.Blaze.Html4.FrameSet', 'Text.Blaze.XHtml5', 'Text.Blaze.XHtml1.Strict']) san(mod, ['toHtml', 'toMarkup', 'toValue', 'text', 'string', 'lazyText', 'textValue', 'stringValue'], ['xss'], 'escapes &, <, >, quotes for HTML text/attribute context');
 san('Lucid', ['toHtml', 'toHtmlRaw_'], ['xss'], 'Lucid.toHtml escapes');
 san('System.FilePath', ['takeFileName', 'takeBaseName'], ['path'], 'drops every directory component');
 san('System.FilePath.Posix', ['takeFileName', 'takeBaseName'], ['path'], 'drops every directory component');

@@ -97,7 +97,8 @@ function sigInfo(tokens, sig) {
 // module proves it trusted. They are modelled as a source of kind "caller-controlled parameter" (a weaker claim than a
 // request or stdin read: the finding says so). A function without a signature, a non-exported function and a parameter
 // of any other type (a connection, a number, a record) are never sources.
-const TEXT_LIKE = /^\(?\s*(?:Maybe\s+)?(?:String|Text|ByteString|FilePath|URI|Url|URL|\[\s*Char\s*\]|\[\s*(?:String|Text)\s*\])\s*\)?$/;
+// (an aeson `Value`/`Object` is a JSON document the caller wrote: every string a handler digs out of it is the caller's text)
+const TEXT_LIKE = /^\(?\s*(?:Maybe\s+)?(?:String|Text|ByteString|FilePath|URI|Url|URL|Value|Object|\[\s*Char\s*\]|\[\s*(?:String|Text)\s*\])\s*\)?$/;
 // Parameters of an exported function whose declared type is a container or text (a list, a map, a set, a sequence, a vector, a string):
 // a PARTIAL function (`maximum`, `head`, `Map.!`) applied to one fails on the empty or missing case the caller can supply. Wider than
 // TEXT_LIKE on purpose, and used only by the partial-function rule, never as an injection source.

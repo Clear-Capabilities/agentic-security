@@ -257,7 +257,9 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
   // `log` category, not `http-response`.
   // 47 -> 59: twelve Haskell XSS sinks, all server-side: the pre-escaped constructors re-exported by Yesod / Yesod.Core / Yesod.Core.Widget / Text.Blaze*
   // (`preEscapedToMarkup`, `preEscapedToHtml`) that the earlier list did not resolve through those modules.
-  assert.equal(cwe79.length, 59);
+  // 59 -> 61 (0.195.8): `Network.Wai.responseLBS`/`responseBuilder` are CWE-79 sinks judged by their content-type header; both are
+  // server-side response writers, so they land in the `otherCount` bucket and `domCount` stays 6.
+  assert.equal(cwe79.length, 61);
   let domCount = 0;
   let otherCount = 0;
   let stdoutText = 0;
@@ -281,7 +283,7 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
     }
   }
   assert.equal(domCount, 6);   // 4 dom + 2 react
-  assert.equal(otherCount, 47);   // 18 -> 35 with the 17 Haskell server-side XSS sinks, 35 -> 47 with the re-exported pre-escaped constructors
+  assert.equal(otherCount, 49);   // 18 -> 35 with the 17 Haskell server-side XSS sinks, 35 -> 47 with the re-exported pre-escaped constructors, 47 -> 49 with the raw WAI response writers (0.195.8)
   assert.equal(stdoutText, 6);
 });
 
@@ -536,12 +538,14 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // 574 -> 597 and 385 -> 408 modeled: 23 Haskell sinks made for the unseen-v3 development set (file-serving responses in five frameworks, `useURI`, the
   // re-exported pre-escaped HTML constructors, the conduit module's http-client re-exports) net of the nine HTTP parse and URI-conversion sinks removed because the SEND is the
   // sink (a host check can only follow the parse). Re-measured against the live catalog.
-  assert.equal(SINKS.length, 597);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 408);
+  // 597 -> 599 and 408 -> 410 modeled (0.195.8): `Network.Wai.responseLBS`/`responseBuilder` as CWE-79 sinks (`http-response`, modeled), judged per call
+  // by the content-type header in haskell-guards.js. Re-measured against the live catalog.
+  assert.equal(SINKS.length, 599);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 410);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 174);
-  assert.equal(408 + 6 + 9 + 174, SINKS.length);
+  assert.equal(410 + 6 + 9 + 174, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

@@ -42,7 +42,7 @@ const ALLOWLIST = new Set([
   // named individually because the count grows with each corpus expansion.
   { glob: /^bench\/dag\/dev-haskell\/[a-z-]+\.mjs$/, reason: 'hand-run instruments of the Haskell real-code development set (see bench/dag/dev-haskell/README.md): scan, sample, label, score and diagnose; none is part of a pipeline or a gate' },
   { glob: /^bench\/dag\/independent-haskell\/(?:build-labels|show)\.mjs$/, reason: 'one-off labeling aids kept for the provenance of the committed labels, run by hand' },
-  { glob: /^bench\/language-support\/corpora\/unseen-v4\/summarize\.mjs$/, reason: 'operator-run summary of the unseen-v4 labels, run by hand' },
+  { glob: /^bench\/language-support\/corpora\/unseen-v\d+\/summarize\.mjs$/, reason: 'operator-run summary of a frozen split\'s measurement (unseen-v4, unseen-v5, ...), run by hand once per baseline' },
   { glob: /^bench\/dag\/independent\/(?:build-labels|show)\.mjs$/, reason: 'one-off labeling aids kept for the provenance of the committed labels, run by hand' },
   { glob: /^bench\/cve-replay\/generate-corpus.*\.mjs$/, reason: 'one-shot corpus-authoring tool, operator-invoked' },
   { glob: /^bench\/cve-replay\/verify-tier5\.mjs$/, reason: 'one-shot corpus-authoring tool, operator-invoked' },

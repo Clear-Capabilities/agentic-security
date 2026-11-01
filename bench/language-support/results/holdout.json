@@ -1,7 +1,7 @@
 {
   "schema": "agentic-security/language-support-measurement@2",
   "split": "holdout",
-  "measuredAt": "2026-10-26",
+  "measuredAt": "2026-11-01",
   "corpusVersion": "qa001-v2",
   "ecosystems": {
     "haskell": {
@@ -314,10 +314,10 @@
           "the original finding is still reported after the patch": 5
         },
         "advertised": {
-          "planned": 4,
-          "verified": 4,
+          "planned": 8,
+          "verified": 8,
           "notVerified": [],
-          "unsupported": 22
+          "unsupported": 18
         }
       }
     },

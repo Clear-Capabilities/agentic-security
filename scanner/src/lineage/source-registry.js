@@ -57,6 +57,7 @@ import { CATALOG } from '../dataflow/catalog.js';
 export const PROVENANCE_MAP = Object.freeze({
   'http-body':    Object.freeze({ category: 'http-body',             status: 'modeled', why: 'exact vocabulary match' }),
   'url-param':    Object.freeze({ category: 'http-query',            status: 'modeled', why: 'pure rename; the query string' }),
+  'upload':       Object.freeze({ category: 'http-upload',           status: 'modeled', why: 'a field of an uploaded file the client wrote into the multipart body (its name, content type or content); 0.195.8, Haskell wai-extra' }),
   'path-param':   Object.freeze({ category: 'http-route',            status: 'modeled', why: 'pure rename; a route/path segment' }),
   'header':       Object.freeze({ category: 'http-header',           status: 'modeled', why: 'pure rename' }),
   'cookie':       Object.freeze({ category: 'http-cookie',           status: 'modeled', why: 'pure rename' }),

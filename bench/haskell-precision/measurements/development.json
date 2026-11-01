@@ -2071,12 +2071,12 @@
    },
    "fresh": {
     "dhall-haskell": {
-     "rows": 91,
-     "flagged": 14,
-     "loweredToInfo": 77,
+     "rows": 93,
+     "flagged": 15,
+     "loweredToInfo": 78,
      "byStatus": {
       "no-verdict": 72,
-      "entrypoint-reachable": 15,
+      "entrypoint-reachable": 17,
       "external-api": 4
      }
     },
@@ -2090,13 +2090,13 @@
      }
     },
     "ihp": {
-     "rows": 57,
-     "flagged": 10,
+     "rows": 69,
+     "flagged": 22,
      "loweredToInfo": 47,
      "byStatus": {
-      "no-verdict": 33,
-      "unknown": 2,
-      "entrypoint-reachable": 17,
+      "no-verdict": 35,
+      "unknown": 9,
+      "entrypoint-reachable": 20,
       "external-api": 5
      }
     },
@@ -2110,12 +2110,13 @@
      }
     },
     "scotty": {
-     "rows": 16,
-     "flagged": 16,
+     "rows": 23,
+     "flagged": 23,
      "loweredToInfo": 0,
      "byStatus": {
-      "no-verdict": 9,
-      "entrypoint-reachable": 7
+      "external-api": 1,
+      "no-verdict": 11,
+      "entrypoint-reachable": 11
      }
     },
     "summoner": {

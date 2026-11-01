@@ -2,13 +2,13 @@
 // label-free sources, and scores with scanner/src/language/accuracy.js. The engine never sees a label, a case id or a split: each
 // case is written to an opaque scratch directory under its own source file name.
 //
-//   node bench/language-support/measure.mjs --split holdout|validation|train|unseen|shape-dev|shape-dev-2 [--eco haskell|nix] [--suites detection,privacy,pairs,fixes,supply,parser] [--out file]
+//   node bench/language-support/measure.mjs --split holdout|validation|train|unseen|shape-dev|shape-dev-2|unseen-v4|unseen-v5 [--eco haskell|nix] [--suites detection,privacy,pairs,fixes,supply,parser] [--out file]
 //
 // Output carries `splitRole` (frozen-holdout | development | generalisation), confusion matrices per layer and per family, denominators, the unknown-case outcomes reported separately, and the
 // hashes of the label files and the frozen holdout, so a result can show it was measured on unchanged data.
 import fs from 'node:fs';
 import path from 'node:path';
-import { DATA, readJson, read, sha } from './lib.mjs';
+import { DATA, readJson, read, sha, isFrozenSplit, frozenManifest } from './lib.mjs';
 import { runDetection } from './suites/detection.mjs';
 import { runPrivacy } from './suites/privacy.mjs';
 import { runPairs } from './suites/pairs.mjs';
@@ -25,12 +25,15 @@ const out = { schema: 'agentic-security/language-support-measurement@2', split, 
 
 // What this split is FOR, recorded with its result so a reader of the stored measurement cannot take a development number for a generalisation one:
 // `frozen-holdout` (measured once per promotion), `development` (train, validation, shape-dev, shape-dev-2, and unseen-v3 since 2026-10-26, which was
-// read and used to change the engine), or `generalisation` (an unseen set no engine change has been motivated by). Read from the corpus manifest.
+// read and used to change the engine), or `generalisation` (an unseen set no engine change has been motivated by). Read from the corpus manifest,
+// or for a frozen split (unseen-v4, unseen-v5, ...) from that split's own manifest, whose `role` its USE-LOG.md governs.
 {
   const m = readJson('manifest.json');
-  const role = split === 'holdout' ? 'frozen-holdout' : split === 'unseen' ? ((m.unseen || {}).role || 'generalisation') : 'development';
+  const frozen = isFrozenSplit(split) ? frozenManifest(split) : null;
+  const role = split === 'holdout' ? 'frozen-holdout' : split === 'unseen' ? ((m.unseen || {}).role || 'generalisation') : frozen ? (frozen.role || 'generalisation') : 'development';
   out.splitRole = role;
   if (split === 'unseen' && role === 'development') out.developmentSince = m.unseen.developmentSince || null;
+  if (frozen && role === 'development') out.developmentSince = frozen.developmentSince || null;
 }
 for (const eco of ['haskell', 'nix']) {
   if (ecoArg && ecoArg !== eco) continue;

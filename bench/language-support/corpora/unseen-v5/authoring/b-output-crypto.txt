@@ -1,0 +1,655 @@
+@@@ weak-password-hash | vulnerable | src/SignupForm.hs
+{-# LANGUAGE OverloadedStrings #-}
+module SignupForm (signupRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.Hash (Digest, MD5, hash)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.Text as T
+import Database.PostgreSQL.Simple
+import Web.Scotty
+
+data NewAccount = NewAccount { accountEmail :: T.Text, accountPassword :: B.ByteString }
+
+signupRoutes :: Connection -> ScottyM ()
+signupRoutes conn =
+  post "/signup" $ do
+    email    <- param "email"
+    password <- param "password"
+    let account = NewAccount email (B.pack password)
+        digest  = hash (accountPassword account) :: Digest MD5 --@@
+    _ <- liftIO (execute conn "INSERT INTO accounts (email, password_digest) VALUES (?, ?)" (accountEmail account, show digest))
+    redirect "/welcome"
+
+@@@ weak-password-hash | vulnerable | src/AdminUsers.hs
+module AdminUsers (main) where
+
+import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as B
+import Database.SQLite.Simple
+import System.Environment (getArgs)
+import System.Exit (exitFailure, exitSuccess)
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [user, supplied] -> do
+      conn <- open "admin.db"
+      rows <- query conn "SELECT password_digest FROM admins WHERE username = ?" (Only user) :: IO [Only B.ByteString]
+      close conn
+      case rows of
+        (Only stored : _) | verifyLogin stored (B.pack supplied) -> putStrLn "ok" >> exitSuccess
+        _ -> putStrLn "denied" >> exitFailure
+    _ -> putStrLn "usage: admin-users USER PASSWORD" >> exitFailure
+
+verifyLogin :: B.ByteString -> B.ByteString -> Bool
+verifyLogin stored supplied = stored == B16.encode (SHA256.hash supplied) --@@
+
+@@@ weak-password-hash | vulnerable | src/MemberLogin.hs
+{-# LANGUAGE OverloadedStrings, TypeFamilies #-}
+module MemberLogin (postMemberLoginR) where
+
+import Crypto.Hash (SHA1 (..), hashWith)
+import qualified Data.ByteArray.Encoding as BA
+import qualified Data.ByteString as BS
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Yesod
+import Foundation
+import Model
+
+data Credentials = Credentials { credEmail :: Text, credPassword :: Text }
+
+credentialsForm :: FormInput Handler Credentials
+credentialsForm = Credentials <$> ireq emailField "email" <*> ireq passwordField "password"
+
+postMemberLoginR :: Handler Html
+postMemberLoginR = do
+  creds <- runInputPost credentialsForm
+  found <- runDB (getBy (UniqueMemberEmail (credEmail creds)))
+  case found of
+    Just (Entity mid m) | memberDigest m == digestFor (credPassword creds) -> do
+      setSession "member" (toPathPiece mid)
+      redirect HomeR
+    _ -> do
+      setMessage "Email or password not recognised"
+      redirect MemberLoginR
+
+digestFor :: Text -> BS.ByteString
+digestFor pw = BA.convertToBase BA.Base16 (hashWith SHA1 (TE.encodeUtf8 pw)) --@@
+
+@@@ weak-password-hash | safe | src/SignupPage.hs
+{-# LANGUAGE OverloadedStrings #-}
+module SignupPage (signupRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.BCrypt (hashPasswordUsingPolicy, slowerBcryptHashingPolicy)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.Text as T
+import Database.PostgreSQL.Simple
+import Web.Scotty
+
+data NewAccount = NewAccount { accountEmail :: T.Text, accountPassword :: B.ByteString }
+
+signupRoutes :: Connection -> ScottyM ()
+signupRoutes conn =
+  post "/signup" $ do
+    email    <- param "email"
+    password <- param "password"
+    let account = NewAccount email (B.pack password)
+    hashed <- liftIO (hashPasswordUsingPolicy slowerBcryptHashingPolicy (accountPassword account)) --@@
+    case hashed of
+      Nothing -> raise "could not store credentials"
+      Just digest -> do
+        _ <- liftIO (execute conn "INSERT INTO accounts (email, password_digest) VALUES (?, ?)" (accountEmail account, digest))
+        redirect "/welcome"
+
+@@@ weak-password-hash | safe | src/AccountTool.hs
+module AccountTool (main) where
+
+import Crypto.Scrypt (EncryptedPass (..), Pass (..), verifyPass')
+import qualified Data.ByteString.Char8 as B
+import Database.SQLite.Simple
+import System.Environment (getArgs)
+import System.Exit (exitFailure, exitSuccess)
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [user, supplied] -> do
+      conn <- open "admin.db"
+      rows <- query conn "SELECT password_digest FROM admins WHERE username = ?" (Only user) :: IO [Only B.ByteString]
+      close conn
+      case rows of
+        (Only stored : _) | verifyLogin stored (B.pack supplied) -> putStrLn "ok" >> exitSuccess
+        _ -> putStrLn "denied" >> exitFailure
+    _ -> putStrLn "usage: account-tool USER PASSWORD" >> exitFailure
+
+verifyLogin :: B.ByteString -> B.ByteString -> Bool
+verifyLogin stored supplied = verifyPass' (Pass supplied) (EncryptedPass stored) --@@
+
+@@@ weak-password-hash | safe | src/MemberSignin.hs
+{-# LANGUAGE OverloadedStrings, TypeFamilies #-}
+module MemberSignin (postMemberSigninR) where
+
+import Crypto.PasswordStore (verifyPassword)
+import qualified Data.ByteString as BS
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Yesod
+import Foundation
+import Model
+
+data Credentials = Credentials { credEmail :: Text, credPassword :: Text }
+
+credentialsForm :: FormInput Handler Credentials
+credentialsForm = Credentials <$> ireq emailField "email" <*> ireq passwordField "password"
+
+postMemberSigninR :: Handler Html
+postMemberSigninR = do
+  creds <- runInputPost credentialsForm
+  found <- runDB (getBy (UniqueMemberEmail (credEmail creds)))
+  case found of
+    Just (Entity mid m) | matches (credPassword creds) (memberDigest m) -> do
+      setSession "member" (toPathPiece mid)
+      redirect HomeR
+    _ -> do
+      setMessage "Email or password not recognised"
+      redirect MemberSigninR
+
+matches :: Text -> BS.ByteString -> Bool
+matches pw stored = verifyPassword (TE.encodeUtf8 pw) stored --@@
+
+@@@ weak-randomness | vulnerable | src/PasswordReset.hs
+{-# LANGUAGE OverloadedStrings #-}
+module PasswordReset (resetRoutes) where
+
+import Control.Monad (replicateM)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import Database.PostgreSQL.Simple
+import System.Random (randomRIO)
+import Web.Scotty
+
+resetRoutes :: Connection -> ScottyM ()
+resetRoutes conn =
+  post "/password/reset" $ do
+    email <- param "email"
+    code <- liftIO (replicateM 6 (randomRIO ('0', '9'))) --@@
+    _ <- liftIO (execute conn "INSERT INTO reset_codes (email, code, expires_at) VALUES (?, ?, now() + interval '15 minutes')" (email :: T.Text, code))
+    liftIO (sendResetMail email (T.pack code))
+    text "If that address exists, a code is on its way."
+
+sendResetMail :: T.Text -> T.Text -> IO ()
+sendResetMail email code =
+  putStrLn ("queue mail to " <> T.unpack email <> " with subject 'Your reset code'" <> replicate (T.length code) ' ')
+
+@@@ weak-randomness | vulnerable | src/ApiKeys.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module ApiKeys (KeyApi, keyServer) where
+
+import Control.Monad (replicateM)
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Database.PostgreSQL.Simple
+import Servant
+import System.Random.MWC (createSystemRandom, uniformR)
+
+type KeyApi = "api-keys" :> Capture "account" Int :> Post '[JSON] Text
+
+alphabet :: String
+alphabet = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9']
+
+keyServer :: Connection -> Server KeyApi
+keyServer conn account = do
+  key <- liftIO newKey
+  _ <- liftIO (execute conn "INSERT INTO api_keys (account_id, key_value) VALUES (?, ?)" (account, key))
+  pure key
+
+newKey :: IO Text
+newKey = do
+  gen <- createSystemRandom
+  picks <- replicateM 40 (uniformR (0, length alphabet - 1) gen) --@@
+  pure (T.pack (map (alphabet !!) picks))
+
+@@@ weak-randomness | vulnerable | src/VisitorSession.hs
+{-# LANGUAGE OverloadedStrings #-}
+module VisitorSession (sessionApp) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.IORef
+import qualified Data.Map.Strict as M
+import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Time.Clock.POSIX (getPOSIXTime)
+import System.Random (mkStdGen, randomR)
+import Web.Spock
+
+type Sessions = IORef (M.Map Text Text)
+
+sessionApp :: Sessions -> SpockM () () () ()
+sessionApp sessions =
+  post "visitors/start" $ do
+    name <- param' "name"
+    seed <- liftIO (round <$> getPOSIXTime)
+    let (n, _) = randomR (0, maxBound :: Int) (mkStdGen seed) --@@
+        sid    = T.pack (show n)
+    liftIO (modifyIORef sessions (M.insert sid name))
+    setHeader "Set-Cookie" ("visitor=" <> sid <> "; Path=/; HttpOnly; Secure")
+    text ("welcome, " <> name)
+
+@@@ weak-randomness | safe | src/PasswordRecovery.hs
+{-# LANGUAGE OverloadedStrings #-}
+module PasswordRecovery (recoveryRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.Random (getRandomBytes)
+import qualified Data.ByteArray.Encoding as BA
+import qualified Data.ByteString as BS
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import Database.PostgreSQL.Simple
+import Web.Scotty
+
+recoveryRoutes :: Connection -> ScottyM ()
+recoveryRoutes conn =
+  post "/password/recover" $ do
+    email <- param "email"
+    raw <- liftIO (getRandomBytes 24 :: IO BS.ByteString) --@@
+    let code = TE.decodeLatin1 (BA.convertToBase BA.Base64URLUnpadded raw)
+    _ <- liftIO (execute conn "INSERT INTO reset_codes (email, code, expires_at) VALUES (?, ?, now() + interval '15 minutes')" (email :: T.Text, code))
+    liftIO (sendRecoveryMail email code)
+    text "If that address exists, a code is on its way."
+
+sendRecoveryMail :: T.Text -> T.Text -> IO ()
+sendRecoveryMail email code =
+  putStrLn ("queue mail to " <> T.unpack email <> " with subject 'Your recovery code'" <> replicate (T.length code) ' ')
+
+@@@ weak-randomness | safe | src/ApiTokens.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module ApiTokens (TokenApi, tokenServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.UUID as UUID
+import Data.UUID.V4 (nextRandom)
+import Database.PostgreSQL.Simple
+import Servant
+
+type TokenApi = "api-tokens" :> Capture "account" Int :> Post '[JSON] Text
+
+tokenServer :: Connection -> Server TokenApi
+tokenServer conn account = do
+  token <- liftIO newToken
+  _ <- liftIO (execute conn "INSERT INTO api_tokens (account_id, token_value) VALUES (?, ?)" (account, token))
+  pure token
+
+newToken :: IO Text
+newToken = do
+  first  <- nextRandom --@@
+  second <- nextRandom
+  pure (T.filter (/= '-') (UUID.toText first <> UUID.toText second))
+
+@@@ weak-randomness | safe | src/FeaturedPicks.hs
+{-# LANGUAGE OverloadedStrings #-}
+module FeaturedPicks (picksApp) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Database.SQLite.Simple
+import System.Random (randomRIO)
+import Web.Spock
+
+data Product = Product { productSku :: Text, productTitle :: Text }
+
+instance FromRow Product where
+  fromRow = Product <$> field <*> field
+
+picksApp :: Connection -> SpockM () () () ()
+picksApp conn =
+  get "home/featured" $ do
+    products <- liftIO (query_ conn "SELECT sku, title FROM products WHERE featured = 1")
+    chosen <- liftIO (pickSome 3 products)
+    text (T.unlines (map productTitle chosen))
+
+pickSome :: Int -> [a] -> IO [a]
+pickSome 0 _  = pure []
+pickSome _ [] = pure []
+pickSome n xs = do
+  i <- randomRIO (0, length xs - 1) --@@
+  let (before, after) = splitAt i xs
+  case after of
+    (x:rest) -> (x :) <$> pickSome (n - 1) (before ++ rest)
+    []       -> pure []
+
+@@@ sensitive-logging | vulnerable | src/LoginAudit.hs
+{-# LANGUAGE OverloadedStrings #-}
+module LoginAudit (loginRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import System.IO (hPutStrLn, stderr)
+import Web.Scotty
+
+data Attempt = Attempt { attemptUser :: T.Text, attemptPassword :: T.Text }
+
+checkCredentials :: Attempt -> IO Bool
+checkCredentials a = pure (attemptUser a == "demo" && attemptPassword a == "demo-pass")
+
+loginRoutes :: ScottyM ()
+loginRoutes =
+  post "/login" $ do
+    user     <- param "username"
+    password <- param "password"
+    let attempt = Attempt user password
+    liftIO (hPutStrLn stderr ("login attempt user=" <> T.unpack (attemptUser attempt) <> " password=" <> T.unpack (attemptPassword attempt))) --@@
+    accepted <- liftIO (checkCredentials attempt)
+    if accepted then redirect "/dashboard" else redirect "/login?retry=1"
+
+@@@ sensitive-logging | vulnerable | src/RequestTrace.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module RequestTrace (TraceApi, traceServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Servant
+import System.Log.FastLogger (LoggerSet, pushLogStrLn, toLogStr)
+
+type TraceApi = "account" :> "balance" :> Header' '[Required] "Authorization" Text :> Get '[JSON] Double
+
+traceServer :: LoggerSet -> Server TraceApi
+traceServer logger authorization = do
+  liftIO (logRequest logger "GET /account/balance" authorization)
+  pure 1280.55
+
+logRequest :: LoggerSet -> Text -> Text -> IO ()
+logRequest logger route authorization =
+  pushLogStrLn logger (toLogStr (T.concat ["route=", route, " authorization=", authorization])) --@@
+
+@@@ sensitive-logging | vulnerable | src/CheckoutPayment.hs
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+module CheckoutPayment (chargeCard) where
+
+import Control.Monad.Logger (MonadLogger, logInfoN)
+import Data.Aeson (FromJSON)
+import Data.Text (Text)
+import qualified Data.Text as T
+import GHC.Generics (Generic)
+
+data CardPayment = CardPayment
+  { cardNumber  :: Text
+  , cardExpiry  :: Text
+  , amountCents :: Int
+  , orderRef    :: Text
+  } deriving (Generic)
+
+instance FromJSON CardPayment
+
+data ChargeResult = Approved Text | Declined Text
+
+chargeCard :: MonadLogger m => CardPayment -> m ChargeResult
+chargeCard payment = do
+  logInfoN ("charging order " <> orderRef payment <> " card " <> cardNumber payment <> " exp " <> cardExpiry payment) --@@
+  if amountCents payment > 0
+    then pure (Approved ("ch_" <> T.take 8 (orderRef payment)))
+    else pure (Declined "zero amount")
+
+@@@ sensitive-logging | safe | src/LoginEvents.hs
+{-# LANGUAGE OverloadedStrings #-}
+module LoginEvents (loginRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import System.IO (hPutStrLn, stderr)
+import Web.Scotty
+
+data Attempt = Attempt { attemptUser :: T.Text, attemptPassword :: T.Text }
+
+checkCredentials :: Attempt -> IO Bool
+checkCredentials a = pure (attemptUser a == "demo" && attemptPassword a == "demo-pass")
+
+loginRoutes :: ScottyM ()
+loginRoutes =
+  post "/login" $ do
+    user     <- param "username"
+    password <- param "password"
+    let attempt = Attempt user password
+    accepted <- liftIO (checkCredentials attempt)
+    liftIO (hPutStrLn stderr ("login attempt user=" <> T.unpack (attemptUser attempt) <> " accepted=" <> show accepted)) --@@
+    if accepted then redirect "/dashboard" else redirect "/login?retry=1"
+
+@@@ sensitive-logging | safe | src/RequestLog.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module RequestLog (LogApi, logServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Servant
+import System.Log.FastLogger (LoggerSet, pushLogStrLn, toLogStr)
+
+type LogApi = "account" :> "balance" :> Header' '[Required] "Authorization" Text :> Get '[JSON] Double
+
+logServer :: LoggerSet -> Server LogApi
+logServer logger authorization = do
+  liftIO (logRequest logger "GET /account/balance" authorization)
+  pure 1280.55
+
+redact :: Text -> Text
+redact t = T.replicate (max 0 (T.length t - 4)) "*" <> T.takeEnd 4 t
+
+logRequest :: LoggerSet -> Text -> Text -> IO ()
+logRequest logger route authorization =
+  pushLogStrLn logger (toLogStr (T.concat ["route=", route, " authorization=", redact authorization])) --@@
+
+@@@ sensitive-logging | safe | src/CheckoutEvents.hs
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+module CheckoutEvents (chargeCard) where
+
+import Data.Aeson (FromJSON)
+import Data.Text (Text)
+import qualified Data.Text as T
+import GHC.Generics (Generic)
+import Katip
+
+data CardPayment = CardPayment
+  { cardNumber  :: Text
+  , cardExpiry  :: Text
+  , amountCents :: Int
+  , orderRef    :: Text
+  } deriving (Generic)
+
+instance FromJSON CardPayment
+
+data ChargeResult = Approved Text | Declined Text
+
+lastFour :: Text -> Text
+lastFour = T.takeEnd 4
+
+chargeCard :: KatipContext m => CardPayment -> m ChargeResult
+chargeCard payment = do
+  logFM InfoS (ls ("charging order " <> orderRef payment <> " card ending " <> lastFour (cardNumber payment))) --@@
+  if amountCents payment > 0
+    then pure (Approved ("ch_" <> T.take 8 (orderRef payment)))
+    else pure (Declined "zero amount")
+
+@@@ session-cookie | vulnerable | src/SignIn.hs
+{-# LANGUAGE OverloadedStrings #-}
+module SignIn (signInRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import Web.Scotty
+
+data Session = Session { sessionToken :: TL.Text, sessionUser :: TL.Text }
+
+issueSession :: TL.Text -> IO Session
+issueSession user = pure (Session ("s_" <> TL.reverse user <> "_2026") user)
+
+signInRoutes :: ScottyM ()
+signInRoutes =
+  post "/sign-in" $ do
+    user <- param "username"
+    session <- liftIO (issueSession user)
+    setHeader "Set-Cookie" ("session=" <> sessionToken session <> "; Path=/; Max-Age=86400") --@@
+    redirect "/dashboard"
+
+@@@ session-cookie | vulnerable | src/TeamLogin.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module TeamLogin (LoginApi, loginServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Builder as BB
+import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Servant
+import Web.Cookie
+
+type LoginApi = "team" :> "login" :> ReqBody '[JSON] Text :> Post '[JSON] (Headers '[Header "Set-Cookie" Text] NoContent)
+
+loginServer :: Server LoginApi
+loginServer member = do
+  token <- liftIO (lookupToken member)
+  pure (addHeader (renderCookie (authCookie token)) NoContent)
+
+lookupToken :: Text -> IO B.ByteString
+lookupToken member = pure ("t_" <> TE.encodeUtf8 member)
+
+authCookie :: B.ByteString -> SetCookie
+authCookie token = defaultSetCookie --@@
+  { setCookieName  = "team_auth"
+  , setCookieValue = token
+  , setCookiePath  = Just "/"
+  }
+
+renderCookie :: SetCookie -> Text
+renderCookie = TE.decodeLatin1 . BL.toStrict . BB.toLazyByteString . renderSetCookie
+
+@@@ session-cookie | vulnerable | src/PortalSignin.hs
+{-# LANGUAGE OverloadedStrings, TypeFamilies #-}
+module PortalSignin (postPortalSigninR) where
+
+import qualified Data.ByteString.Char8 as B
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Web.Cookie
+import Yesod
+import Foundation
+
+newtype SigninInput = SigninInput { signinAccount :: Text }
+
+signinForm :: FormInput Handler SigninInput
+signinForm = SigninInput <$> ireq textField "account"
+
+postPortalSigninR :: Handler Html
+postPortalSigninR = do
+  input <- runInputPost signinForm
+  token <- lookupToken (signinAccount input)
+  setCookie defaultSetCookie --@@
+    { setCookieName     = "portal_session"
+    , setCookieValue    = token
+    , setCookiePath     = Just "/"
+    , setCookieHttpOnly = False
+    , setCookieSecure   = False
+    }
+  redirect PortalHomeR
+
+lookupToken :: Text -> Handler B.ByteString
+lookupToken account = pure ("p_" <> TE.encodeUtf8 account)
+
+@@@ session-cookie | safe | src/SignInPage.hs
+{-# LANGUAGE OverloadedStrings #-}
+module SignInPage (signInRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import Web.Scotty
+
+data Session = Session { sessionToken :: TL.Text, sessionUser :: TL.Text }
+
+issueSession :: TL.Text -> IO Session
+issueSession user = pure (Session ("s_" <> TL.reverse user <> "_2026") user)
+
+signInRoutes :: ScottyM ()
+signInRoutes =
+  post "/sign-in" $ do
+    user <- param "username"
+    session <- liftIO (issueSession user)
+    setHeader "Set-Cookie" ("session=" <> sessionToken session <> "; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax") --@@
+    redirect "/dashboard"
+
+@@@ session-cookie | safe | src/TeamSignin.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module TeamSignin (SigninApi, signinServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Builder as BB
+import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Servant
+import Web.Cookie
+
+type SigninApi = "team" :> "signin" :> ReqBody '[JSON] Text :> Post '[JSON] (Headers '[Header "Set-Cookie" Text] NoContent)
+
+signinServer :: Server SigninApi
+signinServer member = do
+  token <- liftIO (lookupToken member)
+  pure (addHeader (renderCookie (authCookie token)) NoContent)
+
+lookupToken :: Text -> IO B.ByteString
+lookupToken member = pure ("t_" <> TE.encodeUtf8 member)
+
+authCookie :: B.ByteString -> SetCookie
+authCookie token = defaultSetCookie --@@
+  { setCookieName     = "team_auth"
+  , setCookieValue    = token
+  , setCookiePath     = Just "/"
+  , setCookieHttpOnly = True
+  , setCookieSecure   = True
+  , setCookieSameSite = Just sameSiteLax
+  }
+
+renderCookie :: SetCookie -> Text
+renderCookie = TE.decodeLatin1 . BL.toStrict . BB.toLazyByteString . renderSetCookie
+
+@@@ session-cookie | safe | src/LocalePreference.hs
+{-# LANGUAGE OverloadedStrings, TypeFamilies #-}
+module LocalePreference (postLocaleR) where
+
+import qualified Data.ByteString.Char8 as B
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Web.Cookie
+import Yesod
+import Foundation
+
+newtype LocaleInput = LocaleInput { chosenLocale :: Text }
+
+localeForm :: FormInput Handler LocaleInput
+localeForm = LocaleInput <$> ireq textField "locale"
+
+supported :: [Text]
+supported = ["en-GB", "en-US", "fr-FR", "de-DE", "ja-JP"]
+
+postLocaleR :: Handler Html
+postLocaleR = do
+  input <- runInputPost localeForm
+  let locale = if chosenLocale input `elem` supported then chosenLocale input else "en-GB"
+  setCookie defaultSetCookie --@@
+    { setCookieName   = "locale"
+    , setCookieValue  = TE.encodeUtf8 locale
+    , setCookiePath   = Just "/"
+    , setCookieMaxAge = Just (365 * 86400)
+    }
+  redirect PortalHomeR

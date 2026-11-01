@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "engineVersion": "0.195.7",
-  "bundleSha256": "346477cad051a8190fb627b517a90fc33dc2510c1003a280f53fd19f3e4900bf",
+  "engineVersion": "0.195.8",
+  "bundleSha256": "7c3b3e1eb9d729033dbffd856bfc855445aaca08ade16fafc0d9c953dcb9a4f4",
   "examples": {
     "haskell-app/vulnerable": {
       "exitCode": 3,
@@ -94,6 +94,16 @@
           "vuln": "State-changing route without authentication",
           "parser": "HS-WEB",
           "stableId": "e3ad2bcbfd35b9cf"
+        },
+        {
+          "family": "broken-object-authorization",
+          "severity": "high",
+          "file": "src/Main.hs",
+          "line": 40,
+          "cwe": "CWE-639",
+          "vuln": "Object looked up by a client-supplied id without an ownership check",
+          "parser": "HS-WEB",
+          "stableId": "9dbb7200a479cbab"
         }
       ],
       "sbom": [
@@ -146,6 +156,12 @@
           "line": 38,
           "exitCode": 4,
           "text": "No verified fix for this finding (unsupported, guidance-only): a missing authentication check needs a policy; the scanner reports the handler and does not invent the guard. The decision needed: which credential authenticates this route (session, token, API key) and what an unauthenticated caller receives (401, a redirect to login)."
+        },
+        {
+          "family": "broken-object-authorization",
+          "line": 40,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported, guidance-only): no deterministic fix is supported for this exact shape. The decision needed: what correct handling of this value is for this code (validate it, encode it for the sink it reaches, or stop it reaching the sink); the scanner has no verified rewrite for this shape."
         }
       ]
     },

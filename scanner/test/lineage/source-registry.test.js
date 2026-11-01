@@ -270,12 +270,14 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // (`hGetLine`, `hGetContents`, `hGetChar` and the Text/ByteString forms) read whatever handle they are given, so they are `file-read` sources
   // (a modeled provenance), no longer `stdin` (which the lineage registry can only broaden to the generic user-input category: partial). Each is a
   // call form and a lineage twin. Re-measured against the live catalog.
-  assert.equal(SOURCES.length, 672);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 514);
+  // 672 -> 678 and 514 -> 520 modeled (0.195.8): the three fields of an uploaded file in wai-extra (`Network.Wai.Parse.fileName`, `fileContentType`,
+  // `fileContent`), provenance `upload` (http-upload, modeled), each as a call form and a lineage twin. Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 678);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 520);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 41);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 117);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(514 + 41 + 117, SOURCES.length);
+  assert.equal(520 + 41 + 117, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

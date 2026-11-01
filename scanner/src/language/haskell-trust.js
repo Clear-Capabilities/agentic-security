@@ -26,9 +26,12 @@ import { findSites, identNames } from './haskell-guards.js';
 export const TRUST_VERDICTS = Object.freeze(['attacker-reachable', 'operator-controlled', 'api-contract', 'entry-parameter', 'data-input', 'unattributed']);
 
 const OPERATOR = new Set(['cli', 'env']);
-const EXTERNAL = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie', 'network']);
+const EXTERNAL = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie', 'network', 'upload']);
 const DATA = new Set(['stdin', 'file-read']);
 const WEAK_PARAM_LABEL = /\(caller-controlled\)$/;
+// CWE-918 is deliberately NOT a wrapper family: `fetch url = parseRequest url >>= httpNoBody` is pinned as a finding in
+// test/haskell/haskell-generalization.test.js (a URL the caller chooses is the SSRF shape of the development sets), the same way path
+// wrappers are kept. unseen-v4 labels that shape safe when the URL is configuration; that disagreement is recorded, not decided here.
 const WRAPPER_FAMILIES = new Set(['CWE-78', 'CWE-88']);
 const CONVERSIONS = /(?:^|\.)(?:pack|unpack|fromString|toString|show|encodeUtf8|decodeUtf8|toStrict|fromStrict|toText|unpackFS|fromText)$/;
 const PATH_JOIN = /(?:^|\.)(?:<\/>|combine|joinPath|<\.>)$/;
@@ -176,7 +179,8 @@ function passThroughVerdict(perFile, f) {
     if (!weak.size) return null;
     const own = new Set(Array.isArray(analysed.params) ? analysed.params : []);
     const res = localResolver(analysed);
-    return args.every((a) => isPassThrough(a, own, family, res)) && args.some((a) => { const seen = new Set(); const walkIds = (e, d = 0) => { if (!e || d > 12) return; if (e.kind === 'ident') seen.add(e.name); for (const k of ['left', 'right', 'object', 'value']) if (e[k] && typeof e[k] === 'object') walkIds(e[k], d + 1); for (const k of ['args', 'elements']) if (Array.isArray(e[k])) e[k].forEach((x) => walkIds(x, d + 1)); }; let x = a; for (let i = 0; i < 4; i++) { const r = res(x); if (r === x) break; x = r; } walkIds(x); return [...seen].some((n) => weak.has(n)); }) ? 'direct' : null;
+    // (a name bound once in the function stands for its definition here too, so `req <- parseRequest url; httpLbs req m` reaches `url`; a record update is a union of base and update)
+    return args.every((a) => isPassThrough(a, own, family, res)) && args.some((a) => { const seen = new Set(); const walkIds = (e, d = 0) => { if (!e || d > 12) return; if (e.kind === 'ident') { seen.add(e.name); const r = res(e); if (r && r !== e) walkIds(r, d + 1); } for (const k of ['left', 'right', 'object', 'value']) if (e[k] && typeof e[k] === 'object') walkIds(e[k], d + 1); for (const k of ['args', 'elements', 'branches']) if (Array.isArray(e[k])) e[k].forEach((x) => walkIds(x, d + 1)); }; let x = a; for (let i = 0; i < 4; i++) { const r = res(x); if (r === x) break; x = r; } walkIds(x); return [...seen].some((n) => weak.has(n)); }) ? 'direct' : null;
   }
   // the sink is in a callee
   const own = new Set(Array.isArray(sink.fn.params) ? sink.fn.params : []);

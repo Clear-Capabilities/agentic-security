@@ -48,6 +48,7 @@ Captured from the built bundle on `examples/haskell-app/vulnerable`: exit code *
 | high | `missing-authentication` | CWE-306 | src/Main.hs:34 |
 | critical | `command-injection` | CWE-78 | src/Main.hs:36 |
 | high | `missing-authentication` | CWE-306 | src/Main.hs:38 |
+| high | `broken-object-authorization` | CWE-639 | src/Main.hs:40 |
 
 Scan-health conditions:
 - no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
@@ -124,7 +125,7 @@ after the session). When one flaw reaches two nested sinks on a line (`readCreat
 (`strictRequestBody`) is CWE-770, the same class as the other unbounded-read rules.
 
 <!-- generated:hs-models:start -->
-The model registry (`scanner/src/language/haskell-models.js`) holds 195 sources, 283 sinks and 27 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
+The model registry (`scanner/src/language/haskell-models.js`) holds 198 sources, 285 sinks and 75 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
 | Sink family | CWE | APIs modelled | Examples |
 | --- | --- | --- | --- |
@@ -136,11 +137,11 @@ The model registry (`scanner/src/language/haskell-models.js`) holds 195 sources,
 | `redirect` | CWE-601 | 13 | `Happstack.Server.movedPermanently`, `Happstack.Server.seeOther`, `Happstack.Server.tempRedirect`, ... |
 | `sql` | CWE-89 | 47 | `Database.HDBC.prepare`, `Database.HDBC.quickQuery`, `Database.HDBC.quickQuery'`, ... |
 | `url` | CWE-918 | 59 | `Network.HTTP.Client.Conduit.http`, `Network.HTTP.Client.Conduit.httpLbs`, `Network.HTTP.Client.Conduit.httpNoBody`, ... |
-| `xss` | CWE-79 | 35 | `Data.Text.IO.putStr`, `Data.Text.IO.putStrLn`, `Lucid.Base.toHtmlRaw`, ... |
+| `xss` | CWE-79 | 37 | `Data.Text.IO.putStr`, `Data.Text.IO.putStrLn`, `Lucid.Base.toHtmlRaw`, ... |
 
-Source provenances: cli (1), cookie (2), env (3), file-read (17), header (13), http-body (51), network (7), stdin (13), url-param (88).
+Source provenances: cli (1), cookie (2), env (3), file-read (17), header (13), http-body (51), network (7), stdin (13), upload (3), url-param (88).
 
-Sanitizer effects: * (10), other (1), path (4), xss (12).
+Sanitizer effects: * (10), other (1), path (4), xss (60).
 <!-- generated:hs-models:end -->
 
 A text-typed parameter of an **exported** function that nothing in the module calls is a source, and the finding says which

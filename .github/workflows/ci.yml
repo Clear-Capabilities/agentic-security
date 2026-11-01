@@ -299,8 +299,13 @@ jobs:
   # events, so a failure here is more often the network than this code. The offline half (parser, module resolver, hardening rules,
   # isolated-evaluation harness with a fake evaluator) is blocking in language-suites. Nix is pinned to an exact release.
   # NIX-012. The suite needs a real NixOS host (/etc/NIXOS), which a hosted Ubuntu runner is not, so the flake's `nixos-host` check boots a
-  # throwaway NixOS guest in QEMU and runs the suite inside it. The host never activates a configuration. x86_64 uses KVM; the arm runner
-  # covers aarch64. INFORMATIONAL until the job has a recorded green run: see .github/required-checks.json.
+  # throwaway NixOS guest in QEMU and runs the suite inside it. The host never activates a configuration. The x86_64 leg runs the KVM guest
+  # and then the emulated aarch64 guest; the arm leg has no /dev/kvm, so it runs only the real-evaluator harness, the flake build and the
+  # example scan on aarch64 (about 30 s) and never boots a guest. It stays INFORMATIONAL on purpose: both legs were green on the 12
+  # consecutive main runs to 2026-11-01, but the x86_64 leg takes 4 to 8 minutes and starts with a network install, and a blocking job
+  # of that length would put the pull request's checks past the 10 minute release requirement (CLAUDE.md, "The release clock"). The job
+  # itself is NOT continue-on-error: a failed step fails the job, so the check run says what happened and the release gate's informational
+  # warning and the next reader can see it. See .github/required-checks.json.
   nixos-runtime:
     name: nixos-runtime (${{ matrix.system }})
     strategy:
@@ -311,7 +316,6 @@ jobs:
           - { os: ubuntu-24.04-arm, system: aarch64-linux }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
-    continue-on-error: true
     defaults:
       run:
         working-directory: scanner
