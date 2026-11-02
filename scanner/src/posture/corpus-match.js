@@ -47,9 +47,21 @@ function _any(scan, predicate) {
   return false;
 }
 
+// A finding the scanner itself has PROVED clean (`proof.verdict` `proven-*`: the sink is reached only through a sanitizer that covers the
+// finding's class, or only through a parameterizer) is a refuted report, not a detection: the fix lifecycle already drops it and the report
+// marks it refuted. It scores on neither side, so a fix that sanitises through a recognised escaper reads as `post:TN` and a vulnerable
+// shape the engine wrongly proves clean reads as `pre:FN`, both the honest direction. Added for the first real-advisory Haskell entry (keter,
+// HSEC-2024-0001, whose fix is an HTML escaper); the full baseline was re-run and no synthetic entry's verdict moved.
+function _refuted(f) { return !!(f && f.proof && typeof f.proof.verdict === 'string' && f.proof.verdict.startsWith('proven-')); }
+// A finding at `info` with a guard note is one the engine lowered on evidence it read (a non-HTML content type, a redirect body, a fixed
+// host): kept in the report so the lowering is visible, not a vulnerability it reports. It scores on neither side either. An `info`
+// finding WITHOUT such a note (a rule that is informational by design) still scores, so no synthetic entry's verdict moves.
+function _loweredOnEvidence(f) { return !!(f && f.severity === 'info' && f.guardNote && typeof f.guardNote === 'object'); }
+
 // One predicate, both sides. See the header for why the symmetric form is the
 // LOOSE one.
 function _matches(f, manifest, matcher) {
+  if (_refuted(f) || _loweredOnEvidence(f)) return false;
   return (matcher.test(f.vuln || '') || matcher.test(f.family || '')) &&
     (manifest?.cwe ? f.cwe === manifest.cwe || matcher.test(f.cwe || '') : true);
 }

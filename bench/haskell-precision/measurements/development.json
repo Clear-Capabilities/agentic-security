@@ -30,7 +30,7 @@
     "ghcup-hs:lib/GHCup/Legacy/Cabal.hs:72:path-traversal": [
      [
       "info",
-      "external-api",
+      "entrypoint-reachable",
       "high",
       "IR-TAINT"
      ]
@@ -248,7 +248,7 @@
     "ghcup-hs:lib/GHCup/Command/Rm.hs:164:path-traversal": [
      [
       "info",
-      "external-api",
+      "entrypoint-reachable",
       "high",
       "IR-TAINT"
      ]
@@ -256,7 +256,7 @@
     "ghcup-hs:lib/GHCup/Command/Set.hs:135:path-traversal": [
      [
       "info",
-      "external-api",
+      "entrypoint-reachable",
       "high",
       "IR-TAINT"
      ]
@@ -272,7 +272,7 @@
     "ghcup-hs:lib/GHCup/Legacy/HLS.hs:259:path-traversal": [
      [
       "info",
-      "external-api",
+      "entrypoint-reachable",
       "high",
       "IR-TAINT"
      ]
@@ -288,7 +288,7 @@
     "ghcup-hs:lib/GHCup/Query/DB.hs:204:path-traversal": [
      [
       "info",
-      "external-api",
+      "entrypoint-reachable",
       "high",
       "IR-TAINT"
      ]
@@ -304,7 +304,7 @@
     "ghcup-hs:lib/GHCup/Query/GHCupDirs.hs:539:path-traversal": [
      [
       "info",
-      "external-api",
+      "entrypoint-reachable",
       "high",
       "IR-TAINT"
      ]
@@ -320,7 +320,7 @@
     "ghcup-hs:lib/GHCup/Unpack.hs:74:path-traversal": [
      [
       "info",
-      "external-api",
+      "entrypoint-reachable",
       "high",
       "IR-TAINT"
      ]
@@ -328,7 +328,7 @@
     "ghcup-hs:lib/GHCup/Unpack.hs:76:path-traversal": [
      [
       "info",
-      "external-api",
+      "entrypoint-reachable",
       "high",
       "IR-TAINT"
      ]
@@ -472,6 +472,14 @@
    },
    "development-remainder": {
     "ghcup-hs:lib/GHCup/Download.hs:797:path-traversal": [
+     [
+      "high",
+      "external-api",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ghcup-hs:lib/GHCup/PlanJson.hs:18:path-traversal": [
      [
       "high",
       "external-api",
@@ -1401,6 +1409,14 @@
       "HS-RULES"
      ]
     ],
+    "ihp:ihp-ide/IHP/IDE/Data/View/Layout.hs:92:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES"
+     ]
+    ],
     "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:72:Partial function applied to caller-supplied text": [
      [
       "low",
@@ -1641,6 +1657,46 @@
       "IR-TAINT"
      ]
     ],
+    "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:393:Argument Injection (process arguments)": [
+     [
+      "medium",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:404:OS Command Injection (attacker-chosen executable)": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:575:path-traversal": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:579:path-traversal": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:580:path-traversal": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:588:path-traversal": [
      [
       "info",
@@ -1681,6 +1737,46 @@
       "IR-TAINT"
      ]
     ],
+    "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:654:path-traversal": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:749:path-traversal": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:811:Argument Injection (process arguments)": [
+     [
+      "medium",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:839:Argument Injection (process arguments)": [
+     [
+      "medium",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:865:path-traversal": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:919:path-traversal": [
      [
       "info",
@@ -1713,12 +1809,28 @@
       "HS-RULES"
      ]
     ],
+    "ihp:ihp/IHP/Controller/AccessDenied.hs:144:Cross-Site Scripting (HTML response body from text)": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
     "ihp:ihp/IHP/Controller/Layout.hs:25:unsafe-boundary": [
      [
       "info",
       null,
       "low",
       "HS-RULES"
+     ]
+    ],
+    "ihp:ihp/IHP/Controller/NotFound.hs:145:Cross-Site Scripting (HTML response body from text)": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
      ]
     ],
     "ihp:ihp/IHP/Controller/Render.hs:43:path-traversal": [
@@ -1815,6 +1927,78 @@
       null,
       "low",
       "HS-RULES"
+     ]
+    ],
+    "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:218:Cross-Site Scripting (HTML response body from text)": [
+     [
+      "high",
+      "unknown",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:229:path-traversal": [
+     [
+      "high",
+      "unknown",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:230:path-traversal": [
+     [
+      "high",
+      "unknown",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:232:Cross-Site Scripting (HTML response body from text)": [
+     [
+      "high",
+      "unknown",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:248:path-traversal": [
+     [
+      "high",
+      "unknown",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:250:Cross-Site Scripting (HTML response body from text)": [
+     [
+      "high",
+      "unknown",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:276:Cross-Site Scripting (HTML response body from text)": [
+     [
+      "high",
+      "unknown",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:276:Multi-Sink Taint Chain — uploaded file field reaches 7 sinks": [
+     [
+      "high",
+      null,
+      null,
+      "MULTI-SINK"
+     ]
+    ],
+    "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:53:Cross-Site Scripting (HTML response body from text)": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
      ]
     ],
     "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:100:unsafe-boundary": [
@@ -2046,13 +2230,13 @@
      }
     },
     "ghcup-hs": {
-     "rows": 38,
-     "flagged": 2,
-     "loweredToInfo": 36,
+     "rows": 41,
+     "flagged": 3,
+     "loweredToInfo": 38,
      "byStatus": {
       "no-verdict": 2,
-      "external-api": 33,
-      "entrypoint-reachable": 3
+      "external-api": 15,
+      "entrypoint-reachable": 24
      }
     },
     "gitit": {
@@ -2133,13 +2317,13 @@
      }
     },
     "ihp": {
-     "rows": 157,
-     "flagged": 25,
-     "loweredToInfo": 132,
+     "rows": 178,
+     "flagged": 35,
+     "loweredToInfo": 143,
      "byStatus": {
       "no-verdict": 111,
       "unknown": 19,
-      "entrypoint-reachable": 22,
+      "entrypoint-reachable": 43,
       "external-api": 5
      }
     },

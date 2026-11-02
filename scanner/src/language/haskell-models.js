@@ -42,6 +42,7 @@ export const HS_PACKAGES = Object.freeze({
   'http-conduit': { modules: ['Network.HTTP.Simple', 'Network.HTTP.Conduit'], tested: ['2.3'] },
   wreq: { modules: ['Network.Wreq', 'Network.Wreq.Session'], tested: ['0.5'] },
   'blaze-html': { modules: ['Text.Blaze', 'Text.Blaze.Html', 'Text.Blaze.Html5', 'Text.Blaze.Internal'], tested: ['0.9'] },
+  'blaze-builder': { modules: ['Blaze.ByteString.Builder.Html.Utf8', 'Blaze.ByteString.Builder.Html.Word'], tested: ['0.4.4'] },
   lucid: { modules: ['Lucid', 'Lucid.Base'], tested: ['2.11'] },
   shakespeare: { modules: ['Text.Hamlet', 'Text.Shakespeare'], tested: ['2.0'] },
   text: { modules: ['Data.Text', 'Data.Text.IO', 'Data.Text.Lazy', 'Data.Text.Lazy.IO', 'Data.Text.Encoding'], tested: ['2.0'] },
@@ -347,6 +348,10 @@ san('Text.Blaze', ['toMarkup', 'toValue', 'text', 'string', 'lazyText'], ['xss']
 // Text.Blaze.Html5 and Html4 re-export the escaping combinators, and most files import the element module rather than Text.Blaze.Html
 for (const mod of ['Text.Blaze.Html5', 'Text.Blaze.Html4.Strict', 'Text.Blaze.Html4.Transitional', 'Text.Blaze.Html4.FrameSet', 'Text.Blaze.XHtml5', 'Text.Blaze.XHtml1.Strict']) san(mod, ['toHtml', 'toMarkup', 'toValue', 'text', 'string', 'lazyText', 'textValue', 'stringValue'], ['xss'], 'escapes &, <, >, quotes for HTML text/attribute context');
 san('Lucid', ['toHtml', 'toHtmlRaw_'], ['xss'], 'Lucid.toHtml escapes');
+// blaze-builder's HTML escapers (names read from the 0.4.4.1 Haddock index): a raw WAI body built from them is escaped text. keter's fix for
+// its reflected XSS (HSEC-2024-0001) is `toByteString . fromHtmlEscapedByteString` over the Host header.
+san('Blaze.ByteString.Builder.Html.Utf8', ['fromHtmlEscapedChar', 'fromHtmlEscapedString', 'fromHtmlEscapedShow', 'fromHtmlEscapedText', 'fromHtmlEscapedLazyText'], ['xss'], 'escapes &, <, >, quotes for HTML text/attribute context', { package: 'blaze-builder' });
+san('Blaze.ByteString.Builder.Html.Word', ['fromHtmlEscapedWord', 'fromHtmlEscapedWordList', 'fromHtmlEscapedByteString', 'fromHtmlEscapedLazyByteString'], ['xss'], 'escapes &, <, >, quotes for HTML text/attribute context', { package: 'blaze-builder' });
 san('System.FilePath', ['takeFileName', 'takeBaseName'], ['path'], 'drops every directory component');
 san('System.FilePath.Posix', ['takeFileName', 'takeBaseName'], ['path'], 'drops every directory component');
 // A function whose result is a number or a boolean cannot carry caller text: nothing of the argument survives (`show (length x)`).

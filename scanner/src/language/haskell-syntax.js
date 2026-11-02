@@ -16,6 +16,8 @@ export class SyntaxBudgetError extends Error {}
 const KW = new Set(['case', 'class', 'data', 'default', 'deriving', 'do', 'else', 'foreign', 'if', 'import', 'in', 'infix', 'infixl', 'infixr', 'instance', 'let', 'module', 'newtype', 'of', 'then', 'type', 'where']);
 // An annotation naming a plain number or a boolean, alone or inside Maybe / IO / an action monad: a value of that type cannot carry caller text.
 const NUMERIC_TYPE = /^\(?\s*(?:(?:Maybe|IO|ActionM|Handler|Either\s+String)\s+)?\(?\s*(?:Int|Integer|Int(?:8|16|32|64)|Word|Word(?:8|16|32|64)|Double|Float|Natural|Bool|Scientific)\s*\)?\s*\)?$/;
+// The module enables Template Haskell (a LANGUAGE pragma; a cabal `default-extensions` entry is not seen here, a stated limit).
+const TH_PRAGMA = /\{-#\s*LANGUAGE\b[^#]*\bTemplateHaskell\b/;
 const RESERVED_OPS = new Set(['=', '|', '->', '<-', '::', '=>', '\\', '@', '~', '..']);
 const SYM = new Set('!#$%&*+./<=>?@\\^|-~:'.split(''));
 const OPEN = { '(': ')', '[': ']', '{': '}' };
@@ -30,9 +32,10 @@ const NUM = /0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?
  * t is var|con|op|rop|kw|int|float|str|chr|sp. `first` is true for the first
  * token on its line; `col` is the 0-based column with tabs at 8.
  */
-export function lexHs(src) {
+export function lexHs(src, opts = {}) {
   const T = [];
   const n = src.length;
+  const thSplices = !!opts.th;
   let i = 0;
   let line = 1;
   let col = 0;
@@ -142,6 +145,14 @@ export function lexHs(src) {
       push('sp', c, {}, 1);
       continue;
     }
+    // A Template Haskell splice in prefix position, `$(..)`, `$$(..)` or `$name`, with the extension on: one `splice` token, so the expression
+    // around it still parses (`pure (x, $(widgetFile "add-form"))`, real Yesod code). Without the extension `f $(g x)` is the ordinary `$`.
+    if (c === '$' && thSplices) {
+      const k = src[i + 1] === '$' ? i + 2 : i + 1;
+      const prev = i > 0 ? src[i - 1] : ' ';
+      const prefix = !(isIdChar(prev) || isSym(prev) || prev === ')' || prev === ']' || prev === '}' || prev === '"' || prev === "'");
+      if (prefix && (src[k] === '(' || (isIdStart(src[k]) && !isUpper(src[k])))) { push('splice', src.slice(i, k), {}, k - i); continue; }
+    }
     if (isSym(c)) {
       let j = i;
       while (isSym(src[j])) j++;
@@ -185,7 +196,7 @@ const BT_FIX = { elem: [4, 'l'], notElem: [4, 'l'], div: [7, 'l'], mod: [7, 'l']
  * @returns {{tokens:object[], module:object|null, imports:object[], decls:object[], sigs:object[], data:object[], classes:object[], instances:object[], errors:object[], boundaries:object[]}}
  */
 export function parseSyntax(src, opts = {}) {
-  const T = lexHs(src);
+  const T = lexHs(src, { th: TH_PRAGMA.test(src) });
   const mate = matchBrackets(T);
   const N = T.length;
   const errors = [];
@@ -317,7 +328,9 @@ export function parseSyntax(src, opts = {}) {
       return [t.v === '_' ? { t: 'pwild' } : { t: 'pvar', name: t.v }, i + 1];
     }
     if (t.t === 'con') {
-      if (isSp(T[i + 1], '{') && mate[i + 1] > i + 1 && T[i + 1].off === t.end) {
+      // A `{` after a constructor inside a pattern is always a record pattern (patterns have no record update and no explicit layout block), so
+      // `KeterConfig {..}` with a space before the brace is read like `KeterConfig{..}`. Real code (keter, hackage-server) writes the space.
+      if (isSp(T[i + 1], '{') && mate[i + 1] > i + 1) {
         const close = mate[i + 1];
         const fields = [];
         for (const [s, e] of splitTop(i + 2, close, comma)) {
@@ -509,7 +522,7 @@ export function parseSyntax(src, opts = {}) {
   function startsAexp() {
     const t = peek();
     if (!t) return false;
-    if (t.t === 'var' || t.t === 'con' || t.t === 'int' || t.t === 'float' || t.t === 'str' || t.t === 'chr') return true;
+    if (t.t === 'var' || t.t === 'con' || t.t === 'int' || t.t === 'float' || t.t === 'str' || t.t === 'chr' || t.t === 'splice') return true;
     return isSp(t, '(') || isSp(t, '[');
   }
   function fexp() {
@@ -535,6 +548,13 @@ export function parseSyntax(src, opts = {}) {
     else if (t.t === 'int' || t.t === 'float' || t.t === 'str' || t.t === 'chr') { pos++; e = { t: 'lit', kind: t.t, v: t.v, line: t.line }; }
     else if (isSp(t, '(') && mate[pos] > pos && mate[pos] < lim) { const close = mate[pos]; e = parenExpr(pos, close); pos = close + 1; }
     else if (isSp(t, '[') && mate[pos] > pos && mate[pos] < lim) { const close = mate[pos]; e = listExpr(pos, close); pos = close + 1; }
+    else if (t.t === 'splice') {
+      // The spliced code is generated at compile time: an opaque value here, disclosed by the parser's `th-splice` boundary.
+      pos++;
+      if (isSp(peek(), '(') && mate[pos] > pos && mate[pos] < lim) pos = mate[pos] + 1;
+      else if (peek() && peek().t === 'var') pos++;
+      return { t: 'splice', line: t.line };
+    }
     else { err('unexpected-token', t, `unexpected token ${t.v}`); pos++; return { t: 'unknown', line: t.line }; }
     while (isSp(peek(), '{') && mate[pos] > pos && mate[pos] < lim && (e.t === 'con' || e.t === 'var' || e.t === 'rec' || e.t === 'paren')) {
       const close = mate[pos];
@@ -577,7 +597,14 @@ export function parseSyntax(src, opts = {}) {
     const line = T[open].line;
     if (a === close) return { t: 'list', items: [], line };
     const bar = findTop(a, close, (x) => isRop(x, '|'));
-    if (bar > a) {
+    // A `|` after a top-level `of` (case alternatives), `\case` or a multiway `if` inside the brackets is a guard of that construct, not the
+    // bar of a comprehension: `[ a, case m of { Nothing -> ""; Just p | p > 0 -> "" }, b ]` is a three-element list (real code, keter).
+    let guardOwner = false;
+    for (let i = a; bar > a && i < bar; i = Math.min(bar, groupEnd(i))) {
+      const x = T[i];
+      if (isKw(x, 'of') || (isRop(x, '\\') && isKw(T[i + 1], 'case')) || (isKw(x, 'if') && isRop(T[i + 1], '|'))) { guardOwner = true; break; }
+    }
+    if (bar > a && !guardOwner) {
       const head = sub(a, bar, expr0);
       const quals = splitTop(bar + 1, close, comma).map(([s, e]) => parseQual(s, e));
       return { t: 'listcomp', head, quals, line };
@@ -689,7 +716,8 @@ export function parseSyntax(src, opts = {}) {
       name = T[infixAt].v;
       pats = [patRange(a, infixAt === infixEnd - 1 ? infixAt : infixAt), patRange(infixEnd, mark)];
       if (isSp(T[infixAt - 1], '`')) pats[0] = patRange(a, infixAt - 1);
-    } else if (T[a].t === 'var' && !T[a].q) {
+    } else if (T[a].t === 'var' && !T[a].q && !(isRop(T[a + 1], '@') && T[a + 1].off === T[a].end)) {
+      // (`hooks@TLS.ServerHooks{..} = ...` is an as-pattern binding, handled as a pattern binding below, not a function named `hooks`.)
       name = T[a].v;
       for (let q = a + 1; q < mark;) {
         const r = apatAt(q, mark);

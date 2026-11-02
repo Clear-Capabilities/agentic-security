@@ -329,7 +329,11 @@ const JAVA_SHELL = [
 const JAVA_URL_PATH_REGEX = [
   san('java', 'url',     'URLEncoder.encode',           ['url']),
   san('java', 'uri',     'URI',                         ['url']),
-  san('java', 'nio',     'Paths.get',                   ['path']),
+  // `Paths.get` only BUILDS a Path: a `..` segment in its argument survives into the file operation, so it neutralises nothing. It was
+  // listed as a path sanitizer, which made the engine PROVE the Spring path traversal `CVE-2018-1271-java-path-traversal` clean ("sanitized
+  // via Paths.get"); that false proof was hidden while the corpus scored a proven-clean finding as a detection, and showed the moment
+  // `posture/corpus-match.js` stopped counting refuted findings. (`Path.normalize` alone does not contain a path either, but with a
+  // `startsWith` check it is the guard `dropGuardedFindings` recognises; it stays listed, demoting only.)
   san('java', 'nio',     'Path.normalize',              ['path']),
   san('java', 'regex',   'Pattern.quote',               ['regex']),
 ];

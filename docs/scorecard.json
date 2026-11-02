@@ -1,13 +1,13 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.195.11",
-    "bundleSha256": "6b78d7c38e6fb579c79f160e3870ce1cd5cf2392f71893062505e392c65b9a46",
-    "commit": "50fb5889ae489b3b31701ada9c8d2a5f18b9c818",
+    "engineVersion": "0.195.12",
+    "bundleSha256": "a5a29b34945782b9200c9eb7e7733f276e168ba3c4a8a4033bc4e4dd3d8b1877",
+    "commit": "667ca9b9092a0fd238075255f3ff1f8890df10ef",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-02T15:58:33.552Z",
-    "corpusVersion": "5481d819acf1dd3481359a19e49e5a5b798fae1507b55173b53c8015b08214f6",
+    "generatedAt": "2026-11-02T21:36:26.473Z",
+    "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
   "methodology": {
@@ -21,17 +21,17 @@
   },
   "corpus": {
     "measuredThisRun": true,
-    "totalEntries": 228,
-    "scoredEntries": 228,
+    "totalEntries": 229,
+    "scoredEntries": 229,
     "notScored": [],
     "overall": {
       "detection": {
-        "n": 228,
-        "d": 228
+        "n": 229,
+        "d": 229
       },
       "silence": {
-        "n": 228,
-        "d": 228
+        "n": 229,
+        "d": 229
       }
     },
     "byLanguage": [
@@ -85,14 +85,14 @@
       },
       {
         "key": "haskell",
-        "entries": 8,
+        "entries": 9,
         "detection": {
-          "n": 8,
-          "d": 8
+          "n": 9,
+          "d": 9
         },
         "silence": {
-          "n": 8,
-          "d": 8
+          "n": 9,
+          "d": 9
         }
       },
       {
@@ -471,14 +471,14 @@
       },
       {
         "key": "CWE-79",
-        "entries": 12,
+        "entries": 13,
         "detection": {
-          "n": 12,
-          "d": 12
+          "n": 13,
+          "d": 13
         },
         "silence": {
-          "n": 12,
-          "d": 12
+          "n": 13,
+          "d": 13
         }
       },
       {
@@ -581,14 +581,14 @@
       },
       {
         "key": "deep",
-        "entries": 18,
+        "entries": 19,
         "detection": {
-          "n": 18,
-          "d": 18
+          "n": 19,
+          "d": 19
         },
         "silence": {
-          "n": 18,
-          "d": 18
+          "n": 19,
+          "d": 19
         }
       },
       {
@@ -624,7 +624,7 @@
         }
       },
       "scanner/src": {
-        "total": 692,
+        "total": 690,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -690,7 +690,6 @@
           "ir/parser-rust.js": 4,
           "ir/type-stubs.js": 4,
           "ir/universal-ir.js": 1,
-          "language/CLAUDE.md": 2,
           "language/bridges.js": 1,
           "language/context.js": 2,
           "language/discovery.js": 1,
@@ -1000,13 +999,13 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 420,
-    "d": 575
+    "n": 307,
+    "d": 574
   },
   "taintRecall": {
     "measuredThisRun": true,
     "wholeCorpus": {
-      "entriesScored": 228,
+      "entriesScored": 229,
       "byLanguage": [
         {
           "language": "c#",
@@ -1032,8 +1031,8 @@
         {
           "language": "haskell",
           "taint": {
-            "n": 8,
-            "d": 8
+            "n": 9,
+            "d": 9
           }
         },
         {
@@ -1102,7 +1101,7 @@
       ]
     },
     "deepTierOnly": {
-      "entriesScored": 18,
+      "entriesScored": 19,
       "byLanguage": [
         {
           "language": "c/c++",
@@ -1114,8 +1113,8 @@
         {
           "language": "haskell",
           "taint": {
-            "n": 8,
-            "d": 8
+            "n": 9,
+            "d": 9
           }
         },
         {
@@ -1159,9 +1158,9 @@
   "committedInputs": {
     "corpusBaseline": {
       "source": "bench/cve-replay/corpus-baseline.json",
-      "generatedAt": "2026-10-26",
-      "total": 228,
-      "passing": 228
+      "generatedAt": "2026-11-02",
+      "total": 229,
+      "passing": 229
     },
     "languageSupport": {
       "source": "docs/language-support.json",
@@ -2234,9 +2233,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.195.11",
-    "commit": "50fb5889ae489b3b31701ada9c8d2a5f18b9c818",
-    "bundleSha256": "6b78d7c38e6fb579c79f160e3870ce1cd5cf2392f71893062505e392c65b9a46",
+    "engineVersion": "0.195.12",
+    "commit": "667ca9b9092a0fd238075255f3ff1f8890df10ef",
+    "bundleSha256": "a5a29b34945782b9200c9eb7e7733f276e168ba3c4a8a4033bc4e4dd3d8b1877",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",

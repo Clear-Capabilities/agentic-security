@@ -87,11 +87,14 @@ export function planSteps({ tests = true } = {}) {
     { name: 'regenerate the evidence contracts', ...npm('ee:evidence-contracts') },
     { name: 'regenerate the regression report', ...node('scripts/engineering-excellence/regression-report.mjs') },
     { name: 'regenerate the final report', ...node('scripts/engineering-excellence/final-report.mjs') },
+    // Records the corpus entry count and the declared sources; the 0.195.12 ship stopped at the hosted checks because a new corpus entry
+    // left it stale (the test below compares the committed report with a fresh render).
+    { name: 'regenerate the dataset provenance report', ...node('scripts/engineering-excellence/dataset-audit.mjs') },
   ];
   if (tests) {
     const suite = (name, ...files) => ({ name, cmd: process.execPath, args: ['--test', ...files], cwd: 'scanner' });
     steps.push(
-      suite('docs, registry and inventory suites', 'test/language/*.test.js', 'test/documentation/*.test.js', 'test/engineering-excellence/e0-01-inventory.test.js', 'test/engineering-excellence/e8-03-regression-report.test.js', 'test/engineering-excellence/e8-04-docs.test.js', 'test/engineering-excellence/e8-05-handoff.test.js', 'test/engineering-excellence/e8-06-release-decision.test.js'),
+      suite('docs, registry and inventory suites', 'test/language/*.test.js', 'test/documentation/*.test.js', 'test/engineering-excellence/e0-01-inventory.test.js', 'test/engineering-excellence/e1-01-dataset-provenance.test.js', 'test/engineering-excellence/e8-03-regression-report.test.js', 'test/engineering-excellence/e8-04-docs.test.js', 'test/engineering-excellence/e8-05-handoff.test.js', 'test/engineering-excellence/e8-06-release-decision.test.js'),
       suite('pinned registry counts', 'test/lineage/*.test.js'),
       { name: 'language docs are current', ...npm('docs:check-language') },
       { name: 'gate and ship logic', cmd: process.execPath, args: ['--test', 'test/pre-push-gate.test.js', 'test/release-check.test.js', 'test/ship.test.js'], cwd: 'scanner' },

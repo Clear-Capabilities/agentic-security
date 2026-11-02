@@ -1443,6 +1443,13 @@ function _nestedSinkFindings(argExprs, state, callContext, line) {
       findings.push(..._nestedSinkFindings(leaves, state, callContext, line));
       continue;
     }
+    // Haskell: a tuple or a constructor application is an `array` (`hs.tuple` / `hs.con`); a call built inside it runs when the value is built,
+    // so `return (settings, WPRResponse (responseBuilder .. body))` carries the sink in its second component (real code, keter: the reverse
+    // proxy's unknown-host page). The elements are walked like arguments; the other IRs never put a sink call inside an array literal this way.
+    if (arg && arg.kind === 'array' && arg.hs && (arg.hs.tuple || arg.hs.con) && /\.(?:hs|lhs)$/i.test(_currentFile || '')) {
+      findings.push(..._nestedSinkFindings(arg.elements, state, callContext, line));
+      continue;
+    }
     if (!arg || arg.kind !== 'call') continue;
     const { cat, argTaints } = _matchCallCatalog(arg.callee, arg.args, state, callContext);
     const at = _sinkLine(arg, line);

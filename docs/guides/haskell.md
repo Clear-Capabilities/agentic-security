@@ -141,9 +141,23 @@ Besides direct calls, binds and the usual combinators, the engine follows these 
   a constructor (nullary, positional or record) of a type with exactly one visible instance of the class; the instance's type
   is part of the function's name in the call graph. An argument of unknown type keeps every instance as a candidate and
   reports nothing through it (a stated limit: no type inference).
-- **A function held in a record field of a top-level constant.** `exec ops x`, with `ops = Ops { exec = \x -> ... }` or
-  `exec = pingHost`, is the application of that function. A record built positionally, updated, or constructed at run time
-  keeps the field an indirect call.
+- **A function held in a record field.** `exec ops x`, with `ops = Ops { exec = \x -> ... }` or `exec = pingHost` a top-level
+  constant, is the application of that function. When the record is not a constant (a parameter bound by `Ops {..}`, a record built
+  at run time), the application is the union of the functions the project stores in that field over every construction of the
+  constructor: `Ops { exec = pingHost }`, or `Ops{..}` with `exec <- pure pingHost` or `exec = pingHost` in the building function, a
+  `case` or `if` choosing among them, `pure`/`return` peeled, and `const <$> e` / `const e` read as a function that ignores its
+  argument. One construction the engine cannot classify (a lambda over captured locals, an arbitrary expression) keeps the field an
+  indirect call, as before: a partial answer would hide a sink or invent one. Found on a reverse proxy whose unknown-host page
+  builder is chosen from the configuration at start-up (a published advisory).
+- **A sink built inside a tuple or a constructor.** `return (settings, WPRResponse (responseBuilder .. body))`: the call inside
+  the tuple and the constructor is a sink site, as it would be as a direct argument. The same reverse proxy returns its response
+  that way from a callback the proxy library calls.
+- **A record pattern written with a space, a guard inside a `case` inside a list, a splice in an expression.** Three parser gaps
+  from the same real code: `withClient isSecure MkProxySettings {..}` dropped the clause with every call in it; a `|` guard of a
+  `case` alternative inside a list literal read as a comprehension; `pure (x, $(widgetFile "add-form"))` failed the whole expression
+  under Template Haskell (now an opaque value, disclosed as the splice boundary). A Hamlet quasi-quote whose last interpolation ended
+  its line also dropped its function. Pinned in `scanner/test/haskell/haskell-real-advisory-shapes.test.js`; the advisories are
+  listed in `bench/cve-replay/real-haskell-advisories.md`.
 - **Request text handed to a project helper (the rules).** `deleteEnum tableId list`, where the caller's `tableId` was read
   from the request, makes the helper's parameter caller text for the partial-function, allocation and bounding rules, one
   call per round over a bounded number of rounds, decided from the resolved call edges (an inlined helper keeps its edge with
@@ -151,7 +165,7 @@ Besides direct calls, binds and the usual combinators, the engine follows these 
   on the index in that function covers it, as an emptiness test covers the list.
 
 <!-- generated:hs-models:start -->
-The model registry (`scanner/src/language/haskell-models.js`) holds 198 sources, 285 sinks and 75 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
+The model registry (`scanner/src/language/haskell-models.js`) holds 198 sources, 285 sinks and 84 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
 | Sink family | CWE | APIs modelled | Examples |
 | --- | --- | --- | --- |
@@ -167,7 +181,7 @@ The model registry (`scanner/src/language/haskell-models.js`) holds 198 sources,
 
 Source provenances: cli (1), cookie (2), env (3), file-read (17), header (13), http-body (51), network (7), stdin (13), upload (3), url-param (88).
 
-Sanitizer effects: * (10), other (1), path (4), xss (60).
+Sanitizer effects: * (10), other (1), path (4), xss (69).
 <!-- generated:hs-models:end -->
 
 A text-typed parameter of an **exported** function that nothing in the module calls is a source, and the finding says which
