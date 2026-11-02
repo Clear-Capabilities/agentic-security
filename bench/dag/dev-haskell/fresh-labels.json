@@ -2240,6 +2240,226 @@
    "project": "ihp",
    "label": "FP",
    "reason": "An echo application inside the framework's own hspec suite writes the request path back in a response with no content type; it is test code, not a shipped program, and the response is not declared HTML. First flagged by 0.195.11, when the IHP prelude re-export chain resolved its names (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-ide/IHP/IDE/Data/View/Layout.hs:92:Partial function applied to caller-supplied text": {
+   "index": 224,
+   "kind": "flagged-0.195.12",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "(Text.splitOn \"'\" input) !! 1 on the branch case length (Text.splitOn \"'\" input) of 3: the index is in range on that branch, so the call is total; the input is a column default read from the schema file, not a request. A guard shape the rule does not recognise (a case on the length), labelled FP without changing the rule. First reachable since 0.195.12 (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:393:Argument Injection (process arguments)": {
+   "index": 225,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "medium",
+   "vuln": "Argument Injection (process arguments)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The compile-time database tool starts, checks and stops a private PostgreSQL for the typed-SQL compiler: the paths (adbRoot, adbPgData, adbPgHost) are derived from the project directory and the IHP_TYPED_SQL_* environment settings, the executables are found on PATH, and the process ids come from the cluster's own pid file; every value is the build machine's, chosen by the person running the compiler, so no attacker-controlled data reaches the operation. First reachable since 0.195.12, when record patterns written with a space before the brace (PostgreSqlTools { pgCtlPath, ... }) started to parse (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:404:OS Command Injection (attacker-chosen executable)": {
+   "index": 226,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "OS Command Injection (attacker-chosen executable)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The compile-time database tool starts, checks and stops a private PostgreSQL for the typed-SQL compiler: the paths (adbRoot, adbPgData, adbPgHost) are derived from the project directory and the IHP_TYPED_SQL_* environment settings, the executables are found on PATH, and the process ids come from the cluster's own pid file; every value is the build machine's, chosen by the person running the compiler, so no attacker-controlled data reaches the operation. First reachable since 0.195.12, when record patterns written with a space before the brace (PostgreSqlTools { pgCtlPath, ... }) started to parse (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:575:path-traversal": {
+   "index": 227,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The compile-time database tool starts, checks and stops a private PostgreSQL for the typed-SQL compiler: the paths (adbRoot, adbPgData, adbPgHost) are derived from the project directory and the IHP_TYPED_SQL_* environment settings, the executables are found on PATH, and the process ids come from the cluster's own pid file; every value is the build machine's, chosen by the person running the compiler, so no attacker-controlled data reaches the operation. First reachable since 0.195.12, when record patterns written with a space before the brace (PostgreSqlTools { pgCtlPath, ... }) started to parse (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:579:path-traversal": {
+   "index": 228,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The compile-time database tool starts, checks and stops a private PostgreSQL for the typed-SQL compiler: the paths (adbRoot, adbPgData, adbPgHost) are derived from the project directory and the IHP_TYPED_SQL_* environment settings, the executables are found on PATH, and the process ids come from the cluster's own pid file; every value is the build machine's, chosen by the person running the compiler, so no attacker-controlled data reaches the operation. First reachable since 0.195.12, when record patterns written with a space before the brace (PostgreSqlTools { pgCtlPath, ... }) started to parse (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:580:path-traversal": {
+   "index": 229,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The compile-time database tool starts, checks and stops a private PostgreSQL for the typed-SQL compiler: the paths (adbRoot, adbPgData, adbPgHost) are derived from the project directory and the IHP_TYPED_SQL_* environment settings, the executables are found on PATH, and the process ids come from the cluster's own pid file; every value is the build machine's, chosen by the person running the compiler, so no attacker-controlled data reaches the operation. First reachable since 0.195.12, when record patterns written with a space before the brace (PostgreSqlTools { pgCtlPath, ... }) started to parse (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:654:path-traversal": {
+   "index": 230,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The compile-time database tool starts, checks and stops a private PostgreSQL for the typed-SQL compiler: the paths (adbRoot, adbPgData, adbPgHost) are derived from the project directory and the IHP_TYPED_SQL_* environment settings, the executables are found on PATH, and the process ids come from the cluster's own pid file; every value is the build machine's, chosen by the person running the compiler, so no attacker-controlled data reaches the operation. First reachable since 0.195.12, when record patterns written with a space before the brace (PostgreSqlTools { pgCtlPath, ... }) started to parse (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:749:path-traversal": {
+   "index": 231,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The compile-time database tool starts, checks and stops a private PostgreSQL for the typed-SQL compiler: the paths (adbRoot, adbPgData, adbPgHost) are derived from the project directory and the IHP_TYPED_SQL_* environment settings, the executables are found on PATH, and the process ids come from the cluster's own pid file; every value is the build machine's, chosen by the person running the compiler, so no attacker-controlled data reaches the operation. First reachable since 0.195.12, when record patterns written with a space before the brace (PostgreSqlTools { pgCtlPath, ... }) started to parse (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:811:Argument Injection (process arguments)": {
+   "index": 232,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "medium",
+   "vuln": "Argument Injection (process arguments)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The compile-time database tool starts, checks and stops a private PostgreSQL for the typed-SQL compiler: the paths (adbRoot, adbPgData, adbPgHost) are derived from the project directory and the IHP_TYPED_SQL_* environment settings, the executables are found on PATH, and the process ids come from the cluster's own pid file; every value is the build machine's, chosen by the person running the compiler, so no attacker-controlled data reaches the operation. First reachable since 0.195.12, when record patterns written with a space before the brace (PostgreSqlTools { pgCtlPath, ... }) started to parse (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:839:Argument Injection (process arguments)": {
+   "index": 233,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "medium",
+   "vuln": "Argument Injection (process arguments)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The compile-time database tool starts, checks and stops a private PostgreSQL for the typed-SQL compiler: the paths (adbRoot, adbPgData, adbPgHost) are derived from the project directory and the IHP_TYPED_SQL_* environment settings, the executables are found on PATH, and the process ids come from the cluster's own pid file; every value is the build machine's, chosen by the person running the compiler, so no attacker-controlled data reaches the operation. First reachable since 0.195.12, when record patterns written with a space before the brace (PostgreSqlTools { pgCtlPath, ... }) started to parse (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:865:path-traversal": {
+   "index": 234,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The compile-time database tool starts, checks and stops a private PostgreSQL for the typed-SQL compiler: the paths (adbRoot, adbPgData, adbPgHost) are derived from the project directory and the IHP_TYPED_SQL_* environment settings, the executables are found on PATH, and the process ids come from the cluster's own pid file; every value is the build machine's, chosen by the person running the compiler, so no attacker-controlled data reaches the operation. First reachable since 0.195.12, when record patterns written with a space before the brace (PostgreSqlTools { pgCtlPath, ... }) started to parse (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp/IHP/Controller/AccessDenied.hs:144:Cross-Site Scripting (HTML response body from text)": {
+   "index": 235,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "LBS.readFile of static/403.html or static/404.html served as text/html: the body is the operator's own static error page at a literal path in the deployed project, not request data. First reachable since 0.195.12 (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp/IHP/Controller/NotFound.hs:145:Cross-Site Scripting (HTML response body from text)": {
+   "index": 236,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "LBS.readFile of static/403.html or static/404.html served as text/html: the body is the operator's own static error page at a literal path in the deployed project, not request data. First reachable since 0.195.12 (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:53:Cross-Site Scripting (HTML response body from text)": {
+   "index": 237,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The hspec suite of the request-body middleware: in-process test applications echo the parsed body, the params and the uploaded file contents back in a response with no content type, and read the temporary upload file the middleware itself wrote (a path the client does not choose). Test code exercising the middleware, not a shipped program. First reachable since 0.195.12, when the suite's record patterns (FormBody { params, files, rawPayload }) parsed (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:218:Cross-Site Scripting (HTML response body from text)": {
+   "index": 238,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The hspec suite of the request-body middleware: in-process test applications echo the parsed body, the params and the uploaded file contents back in a response with no content type, and read the temporary upload file the middleware itself wrote (a path the client does not choose). Test code exercising the middleware, not a shipped program. First reachable since 0.195.12, when the suite's record patterns (FormBody { params, files, rawPayload }) parsed (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:229:path-traversal": {
+   "index": 239,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The hspec suite of the request-body middleware: in-process test applications echo the parsed body, the params and the uploaded file contents back in a response with no content type, and read the temporary upload file the middleware itself wrote (a path the client does not choose). Test code exercising the middleware, not a shipped program. First reachable since 0.195.12, when the suite's record patterns (FormBody { params, files, rawPayload }) parsed (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:230:path-traversal": {
+   "index": 240,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The hspec suite of the request-body middleware: in-process test applications echo the parsed body, the params and the uploaded file contents back in a response with no content type, and read the temporary upload file the middleware itself wrote (a path the client does not choose). Test code exercising the middleware, not a shipped program. First reachable since 0.195.12, when the suite's record patterns (FormBody { params, files, rawPayload }) parsed (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:232:Cross-Site Scripting (HTML response body from text)": {
+   "index": 241,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The hspec suite of the request-body middleware: in-process test applications echo the parsed body, the params and the uploaded file contents back in a response with no content type, and read the temporary upload file the middleware itself wrote (a path the client does not choose). Test code exercising the middleware, not a shipped program. First reachable since 0.195.12, when the suite's record patterns (FormBody { params, files, rawPayload }) parsed (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:248:path-traversal": {
+   "index": 242,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The hspec suite of the request-body middleware: in-process test applications echo the parsed body, the params and the uploaded file contents back in a response with no content type, and read the temporary upload file the middleware itself wrote (a path the client does not choose). Test code exercising the middleware, not a shipped program. First reachable since 0.195.12, when the suite's record patterns (FormBody { params, files, rawPayload }) parsed (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:250:Cross-Site Scripting (HTML response body from text)": {
+   "index": 243,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The hspec suite of the request-body middleware: in-process test applications echo the parsed body, the params and the uploaded file contents back in a response with no content type, and read the temporary upload file the middleware itself wrote (a path the client does not choose). Test code exercising the middleware, not a shipped program. First reachable since 0.195.12, when the suite's record patterns (FormBody { params, files, rawPayload }) parsed (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:276:Cross-Site Scripting (HTML response body from text)": {
+   "index": 244,
+   "kind": "flagged-0.195.12",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The hspec suite of the request-body middleware: in-process test applications echo the parsed body, the params and the uploaded file contents back in a response with no content type, and read the temporary upload file the middleware itself wrote (a path the client does not choose). Test code exercising the middleware, not a shipped program. First reachable since 0.195.12, when the suite's record patterns (FormBody { params, files, rawPayload }) parsed (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:276:Multi-Sink Taint Chain — uploaded file field reaches 7 sinks": {
+   "index": 245,
+   "kind": "flagged-0.195.12",
+   "parser": "MULTI-SINK",
+   "severity": "high",
+   "vuln": "Multi-Sink Taint Chain — uploaded file field reaches 7 sinks",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The hspec suite of the request-body middleware: in-process test applications echo the parsed body, the params and the uploaded file contents back in a response with no content type, and read the temporary upload file the middleware itself wrote (a path the client does not choose). Test code exercising the middleware, not a shipped program. First reachable since 0.195.12, when the suite's record patterns (FormBody { params, files, rawPayload }) parsed (added 2026-11-02, LABEL-CHANGES.md)."
   }
  }
 }

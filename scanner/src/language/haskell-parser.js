@@ -1131,7 +1131,10 @@ function analyze(source, file, dialect, ctx, res) {
         put(it.exprStart, seg.slice(it.exprStart, it.close));
         put(it.close, ')');
       }
-      put(interps[interps.length - 1].close + 1, ')');   // closes the application; the char after the last `}` is template text or the `|` of `|]`
+      // Closes the application at the `|` of the closing `|]`: always inside the segment and never a newline. (It used to go at the character
+      // after the last `}`, which is a newline when the interpolation ends its line, so the paren was dropped and the enclosing function failed
+      // to parse: every hledger-web handler whose last `^{widget}` ended a line lost its calls.)
+      put(seg.length - 2, ')');
       const text = chars.join('');
       if (text.length !== seg.length) continue;
       b.kind = 'quasiquote-hamlet';

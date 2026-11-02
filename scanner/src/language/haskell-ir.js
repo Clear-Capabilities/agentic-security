@@ -589,6 +589,9 @@ class FnLowerer {
         for (const r of refs) this.noteRef(r, 'section', ln);
         return { kind: 'array', elements: [this.lowerExpr(e.e, ln)], hs: { section: e.op, partial: { remaining: 1 } } };
       }
+      // A Template Haskell splice in expression position: generated code the analysis never sees. The parser has already disclosed the
+      // `th-splice` boundary for the module, so this is not a lowering gap of the IR; the value is unknown.
+      case 'splice': return unknownExpr({ splice: true });
       default: this.diagnostics.push({ kind: 'lowering-gap', detail: e.t || 'unknown' }); return unknownExpr({ ast: e.t || 'unknown' });
     }
   }
@@ -728,8 +731,17 @@ class FnLowerer {
         try { return this.lowerApp(held.expr, lowered, ln, via); } finally { this.mod = savedMod; this.lineOverride = savedOverride; this.inlineDepth -= 1; }
       }
       const obj = this.lowerExpr(argAsts[0], ln);
+      if (argAsts.length > 1) {
+        const viaField = this.applyFieldCandidates(r.def.con, r.name, argAsts.slice(1), ln, via);
+        if (viaField) return viaField;
+      }
       const mem = { kind: 'member', object: obj, prop: r.name };
       return argAsts.length === 1 ? mem : { kind: 'call', callee: '<indirect>', args: [mem, ...argAsts.slice(1).map((a) => this.lowerExpr(a, ln))], hs: { status: 'unknown', reason: 'field-applied' } };
+    }
+    // `psUnkownHost host` where `psUnkownHost` was bound by a record pattern: the functions the project stores in that field.
+    if (r.kind === 'local' && r.field && argAsts.length) {
+      const viaField = this.applyFieldCandidates(r.field.con, r.field.name, argAsts, ln, via);
+      if (viaField) return viaField;
     }
     const viaAlias = this.applyAlias(r, argAsts, ln, via);
     if (viaAlias) return viaAlias;
@@ -858,6 +870,31 @@ class FnLowerer {
     if (!fld) return null;
     this.noteRef(r0.qid, 'reference', ln);
     return { mod, expr: fld.e };
+  }
+
+  // A function held in a record field whose record is NOT a top-level constant (a parameter bound by `Con {..}`, a record built at run time):
+  // the application is the union of the functions the project stores in that field, found in every construction of the constructor
+  // (`Con { f = g }`, or `Con{..}` with `f <- pure g` / `f = g` in the building function; a `case`/`if` chooses among them; `pure`/`return` is
+  // peeled; `const <$> e` / `const e` is a function that ignores its argument). Any construction whose value cannot be classified (a lambda
+  // with captured locals, an arbitrary expression) leaves the call unresolved as before: a partial answer would hide a sink or invent one.
+  applyFieldCandidates(con, field, argAsts, ln, via) {
+    if (!con || !field || (this.inlineDepth || 0) >= INLINE_MAX_DEPTH) return null;
+    const cands = this.proj.fieldFunctionCandidates(con, field);
+    if (!cands.length || cands.some((c) => c.kind === 'opaque')) return null;
+    const lowered = argAsts.map((a) => ({ t: 'lowered', expr: this.lowerExpr(a, ln) }));
+    let out = null;
+    for (const c of cands) {
+      let v;
+      if (c.kind === 'ignores') v = unknownExpr({ fieldFunction: `${con}.${field}`, ignoresArguments: true });
+      else {
+        const savedMod = this.mod; const savedOverride = this.lineOverride;
+        this.lineOverride = this.lineOverride || ln; this.inlineDepth = (this.inlineDepth || 0) + 1; this.mod = c.mod;
+        try { v = this.lowerApp(c.expr, lowered, ln, via); } finally { this.mod = savedMod; this.lineOverride = savedOverride; this.inlineDepth -= 1; }
+      }
+      out = mkUnion(out, v);
+    }
+    if (out) out.hs = { ...(out.hs || {}), fieldFunction: `${con}.${field}`, candidates: cands.length };
+    return out;
   }
 
   // A mutable cell held in a local variable (see CELL_OPS): a write is an assignment of the cell's variable, a read is that variable, a modify is
@@ -1202,8 +1239,10 @@ class FnLowerer {
           const info = this.mod.cons.get(pat.con) || this.proj.findCon(pat.con);
           pat.args.forEach((x, i) => walk(x, { kind: 'member', object: s, prop: info && info.fields && info.fields[i] ? info.fields[i] : `${pat.con}.${i}` }));
           for (const f of pat.fields) {
-            if (f.wildcard) { for (const fld of (info && info.fields) || []) if (!pat.fields.some((g) => g.name === fld)) emit(fld, { kind: 'member', object: s, prop: fld }); }
-            else walk(f.pat, { kind: 'member', object: s, prop: f.name });
+            // A variable bound to a record field (`MkProxySettings {..}`, `Ops { exec = run }`) remembers which field it is, so applying it can be
+            // resolved to the functions the project stores in that field (see applyFieldCandidates).
+            if (f.wildcard) { for (const fld of (info && info.fields) || []) if (!pat.fields.some((g) => g.name === fld)) { emit(fld, { kind: 'member', object: s, prop: fld }); this.declare(fld, { kind: 'local', field: { con: pat.con, name: fld } }); } }
+            else { walk(f.pat, { kind: 'member', object: s, prop: f.name }); if (f.pat && f.pat.t === 'pvar') this.declare(f.pat.name, { kind: 'local', field: { con: pat.con, name: f.name } }); }
           }
           break;
         }
@@ -1449,6 +1488,83 @@ class Project {
       this._recTypes = recTypes;
     }
     return this._recTypes;
+  }
+
+  // The function values the project stores in field `field` of constructor `con`, over every construction in every module (see
+  // applyFieldCandidates). Each candidate is `{kind:'name', mod, expr}` (a name resolved where the construction is), `{kind:'ignores'}`
+  // (`const <$> e`, `fmap const e`, `const e`: the function ignores its argument) or `{kind:'opaque'}`. Bounded by a node budget per module.
+  fieldFunctionCandidates(con, field) {
+    const key = `${con}.${field}`;
+    if (!this._fieldCands) this._fieldCands = new Map();
+    if (this._fieldCands.has(key)) return this._fieldCands.get(key);
+    const out = [];
+    const walkAst = (n, visit, budget) => {
+      if (!n || typeof n !== 'object' || budget.n-- <= 0) return;
+      if (Array.isArray(n)) { for (const x of n) walkAst(x, visit, budget); return; }
+      if (typeof n.t === 'string') visit(n);
+      for (const k of Object.keys(n)) { const v = n[k]; if (v && typeof v === 'object') walkAst(v, visit, budget); }
+    };
+    // The expression bound to `name` inside the clause: a do-bind (`name <- e`), a `let`/`where` clause without parameters, or a pattern binding.
+    const bindingOf = (clause, name) => {
+      let found = null;
+      walkAst(clause, (n) => {
+        if (found) return;
+        if (n.t === 'sbind' && n.pat && n.pat.t === 'pvar' && n.pat.name === name) found = { e: n.e, bind: true };
+        else if (n.t === 'clause' && n.name === name && n.clause && !n.clause.pats.length && n.clause.rhs && n.clause.rhs.body && !(n.clause.rhs.guards && n.clause.rhs.guards.length)) found = { e: n.clause.rhs.body };
+        else if (n.t === 'patbind' && n.pat && n.pat.t === 'pvar' && n.pat.name === name && n.rhs && n.rhs.body) found = { e: n.rhs.body };
+      }, { n: 20000 });
+      return found;
+    };
+    const localsOf = (clause) => {
+      const names = new Set();
+      for (const p of clause.pats || []) for (const v of patternVars(p)) names.add(v);
+      walkAst(clause, (n) => {
+        if (n.t === 'sbind' && n.pat) for (const v of patternVars(n.pat)) names.add(v);
+        else if (n.t === 'clause' && n.name) names.add(n.name);
+        else if (n.t === 'lam') for (const p of n.params || []) for (const v of patternVars(p)) names.add(v);
+        else if (n.t === 'patbind' && n.pat) for (const v of patternVars(n.pat)) names.add(v);
+      }, { n: 20000 });
+      return names;
+    };
+    const isVar = (e, name) => { const u = unparen(e); return u && u.t === 'var' && !u.qual && u.name === name; };
+    const classify = (e, mod, locals, depth) => {
+      const u = unparen(e);
+      if (!u || depth > 6) { out.push({ kind: 'opaque' }); return; }
+      if (u.t === 'var') {
+        if (locals.has(u.name) && !u.qual) { out.push({ kind: 'opaque' }); return; }
+        const r = resolveGlobal(this, mod, u.name, u.qual || null);
+        if ((r.kind === 'def' && r.def.kind === 'fun') || r.kind === 'external' || r.kind === 'builtin') out.push({ kind: 'name', mod, expr: u });
+        else out.push({ kind: 'opaque' });
+        return;
+      }
+      if (u.t === 'op' && u.op === '$') { classify({ t: 'app', f: u.l, args: [u.r], line: u.line }, mod, locals, depth + 1); return; }
+      if (u.t === 'op' && u.op === '<$>' && isVar(u.l, 'const')) { out.push({ kind: 'ignores' }); return; }
+      if (u.t === 'app' && u.args.length === 1 && (isVar(u.f, 'pure') || isVar(u.f, 'return'))) { classify(u.args[0], mod, locals, depth + 1); return; }
+      if (u.t === 'app' && isVar(u.f, 'fmap') && u.args.length === 2 && isVar(u.args[0], 'const')) { out.push({ kind: 'ignores' }); return; }
+      if (u.t === 'app' && isVar(u.f, 'const') && u.args.length === 1) { out.push({ kind: 'ignores' }); return; }
+      if (u.t === 'case') { for (const a of u.alts || []) { if (a.rhs && a.rhs.guards && a.rhs.guards.length) for (const g of a.rhs.guards) classify(g.body, mod, locals, depth + 1); else classify(a.rhs && a.rhs.body, mod, locals, depth + 1); } return; }
+      if (u.t === 'if') { classify(u.a, mod, locals, depth + 1); classify(u.b, mod, locals, depth + 1); return; }
+      out.push({ kind: 'opaque' });
+    };
+    for (const mod of this.modules.values()) {
+      for (const f of (mod.groups && mod.groups.funs) || []) {
+        for (const c of f.clauses || []) {
+          const recs = [];
+          walkAst(c, (n) => { if (n.t === 'rec' && n.con && n.con.name === con) recs.push(n); }, { n: 20000 });
+          if (!recs.length) continue;
+          const locals = localsOf(c);
+          for (const r of recs) {
+            const explicit = (r.fields || []).find((x) => !x.wildcard && x.name === field);
+            if (explicit) { classify(explicit.e, mod, locals, 0); continue; }
+            if (!(r.fields || []).some((x) => x.wildcard)) continue;   // the field is not set here (a partial record): nothing is known about it
+            const b = bindingOf(c, field);
+            if (b) classify(b.e, mod, locals, 0); else out.push({ kind: 'opaque' });
+          }
+        }
+      }
+    }
+    this._fieldCands.set(key, out);
+    return out;
   }
 
   // A definition by its qid (the last one in module order wins, as the linear scan it replaces did).

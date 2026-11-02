@@ -507,6 +507,9 @@
           "blaze-html": [
             "0.9"
           ],
+          "blaze-builder": [
+            "0.4.4"
+          ],
           "lucid": [
             "2.11"
           ],

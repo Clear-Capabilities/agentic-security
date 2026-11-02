@@ -72,14 +72,14 @@ open-redirect, sql-injection, ssti, prototype-pollution, and 4 C/C++
 command-injection shapes) are documented as candidate future work, not a
 blocker.
 
-### Result — 228 entries, Haskell added (re-measured 2026-10-26; the 220-entry rows are the 2026-10-09 measurement)
+### Result — 229 entries, Haskell added (re-measured 2026-11-02; the 220-entry rows are the 2026-10-09 measurement)
 
 | language | entries | detected (any layer) | **detected by IR-TAINT** |
 |---|---:|---:|---:|
 | c# | 21 | 21 (100%) | 13 (62%) |
 | c/c++ | 11 | 11 (100%) | 2 (18%) |
 | go | 22 | 22 (100%) | 14 (64%) |
-| haskell | 8 | 8 (100%) | 8 (100%) |
+| haskell | 9 | 9 (100%) | 9 (100%) |
 | java | 25 | 25 (100%) | 13 (52%) |
 | js/ts | 38 | 38 (100%) | 22 (58%) |
 | kotlin | 21 | 21 (100%) | 10 (48%) |
@@ -89,7 +89,16 @@ blocker.
 | rust | 5 | 5 (100%) | 5 (100%) |
 | json | 1 | 1 (100%) | 0 (0%) |
 | terraform | 1 | 1 (100%) | 0 (0%) |
-| **total** | **228** | **228 (100%)** | **134 (59%)** |
+| **total** | **229** | **229 (100%)** | **135 (59%)** |
+
+**2026-11-02: the first real Haskell advisory, and a stricter corpus predicate (134 → 135, 228 → 229 entries).** `deep/hs-keter-unknown-host-xss-HSEC-2024-0001` is
+keter's `Keter/Proxy.hs` before and after the upstream fix, unmodified (the `Host` header echoed into an HTML page; the fix escapes it). Four
+general engine gaps found on that file are listed in `bench/cve-replay/real-haskell-advisories.md`, with the advisories that could NOT be
+replayed and why. The corpus predicate (`scanner/src/posture/corpus-match.js`) now counts neither a finding the engine proved clean
+(`proof.verdict` `proven-*`) nor one lowered to `info` on evidence it read (a `guardNote`): the product's own refutations are not detections.
+That exposed one wrong catalog entry (`Paths.get` as a path sanitizer, which had java's `CVE-2018-1271` proved clean and still counted;
+removed, java stays at 13) and two synthetic Haskell entries whose only finding was lowered as operator-controlled (a command-line argument);
+those two now read their input from standard input, the shape they pin unchanged.
 
 **2026-10-09 re-measurement: 122 → 126 (55% → 57%).** Measured by `npm run bench:layer-recall` before and after the
 differentiation programme's QA-005/QA-006 engine work (same corpus, same 220 entries, deep mode forced on). Three languages moved and no

@@ -1,12 +1,12 @@
 {
  "schema": "agentic-security/haskell-precision-baseline@1",
  "comparison": "equality: a regression fails, and so does an improvement that was not recorded here",
- "engineVersion": "0.195.10",
+ "engineVersion": "0.195.11",
  "labelsDigests": {
   "development-tuning": "f599e1edc2e1e8b68756b4d25c238daf0f0f04b34ea30983a16a793615e40395",
   "development-verification": "39b0c5bf5cd20298a8e7ab608e5d7b938c4725a8f8d51e5b22a4ba011f1d0870",
-  "development-remainder": "d2ddd962485c825a075d3108c030d938ac0377cb4740f62ac158e571b20de90a",
-  "fresh": "78b1abc0f47339bf75a165358b4f0ee5d2a34cdeff290afb70511c9e6d889a42"
+  "development-remainder": "0ebfc7a4e2cb100185c089b841fafe6f861d7eea3940952ce615158f719d3a52",
+  "fresh": "6d9067139a196c34b292d4d62efa5667783c1d6129c26478714930472a2926c2"
  },
  "aggregates": {
   "development-tuning": {
@@ -21,11 +21,11 @@
    "byStatus": {
     "entrypoint-reachable": {
      "TP": 0,
-     "FP": 11
+     "FP": 12
     },
     "external-api": {
      "TP": 0,
-     "FP": 6
+     "FP": 5
     },
     "unknown": {
      "TP": 0,
@@ -58,11 +58,11 @@
    "byStatus": {
     "entrypoint-reachable": {
      "TP": 0,
-     "FP": 10
+     "FP": 17
     },
     "external-api": {
      "TP": 0,
-     "FP": 13
+     "FP": 6
     },
     "unknown": {
      "TP": 0,
@@ -84,13 +84,13 @@
    ]
   },
   "development-remainder": {
-   "labelled": 10,
-   "reported": 10,
+   "labelled": 11,
+   "reported": 11,
    "notReported": 0,
-   "flagged": 6,
+   "flagged": 7,
    "loweredToInfo": 4,
    "tp": 0,
-   "fp": 6,
+   "fp": 7,
    "tpNotFlagged": 0,
    "byStatus": {
     "entrypoint-reachable": {
@@ -99,7 +99,7 @@
     },
     "external-api": {
      "TP": 0,
-     "FP": 7
+     "FP": 8
     },
     "unknown": {
      "TP": 0,
@@ -117,22 +117,22 @@
    "precision": 0,
    "wilson95": [
     0,
-    0.3903
+    0.3543
    ]
   },
   "fresh": {
-   "labelled": 224,
-   "reported": 185,
+   "labelled": 246,
+   "reported": 207,
    "notReported": 39,
-   "flagged": 31,
+   "flagged": 53,
    "loweredToInfo": 154,
    "tp": 21,
-   "fp": 10,
+   "fp": 32,
    "tpNotFlagged": 1,
    "byStatus": {
     "entrypoint-reachable": {
      "TP": 8,
-     "FP": 38
+     "FP": 51
     },
     "external-api": {
      "TP": 0,
@@ -140,7 +140,7 @@
     },
     "unknown": {
      "TP": 1,
-     "FP": 2
+     "FP": 9
     },
     "unreachable-in-project": {
      "TP": 0,
@@ -148,13 +148,13 @@
     },
     "no-verdict": {
      "TP": 12,
-     "FP": 113
+     "FP": 115
     }
    },
-   "precision": 0.6774,
+   "precision": 0.3962,
    "wilson95": [
-    0.5014,
-    0.8143
+    0.2759,
+    0.5306
    ]
   },
   "census": {
@@ -168,13 +168,13 @@
      }
     },
     "ghcup-hs": {
-     "rows": 38,
-     "flagged": 2,
-     "loweredToInfo": 36,
+     "rows": 41,
+     "flagged": 3,
+     "loweredToInfo": 38,
      "byStatus": {
       "no-verdict": 2,
-      "external-api": 33,
-      "entrypoint-reachable": 3
+      "external-api": 15,
+      "entrypoint-reachable": 24
      }
     },
     "gitit": {
@@ -255,13 +255,13 @@
      }
     },
     "ihp": {
-     "rows": 157,
-     "flagged": 25,
-     "loweredToInfo": 132,
+     "rows": 178,
+     "flagged": 35,
+     "loweredToInfo": 143,
      "byStatus": {
       "no-verdict": 111,
       "unknown": 19,
-      "entrypoint-reachable": 22,
+      "entrypoint-reachable": 43,
       "external-api": 5
      }
     },

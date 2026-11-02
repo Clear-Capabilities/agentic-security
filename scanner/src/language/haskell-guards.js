@@ -549,6 +549,9 @@ export function waiHtmlContext(f, perFile) {
     const types = texts.filter((t) => /^(?:text|application|image|audio|video|multipart)\/[\w.+-]+/i.test(t.trim()));
     if (types.some((t) => /^text\/html/i.test(t.trim()))) return 'html';
     if (types.length) return 'other';
+    // A `Location` header and no content type: a redirect, whose body a browser never renders (keter's redirect helper echoes the target
+    // URL as the body of its 3xx response; that is a redirect finding's business, not an HTML injection).
+    if (texts.some((t) => /^location$/i.test(t.trim()))) return 'redirect';
     return 'unknown';
   }
   return 'unknown';
@@ -633,6 +636,13 @@ export function applyHaskellGuards(findings, perFile) {
         f._notHtmlContext = true; f.severity = 'info';
         f.controls = [...(f.controls || []), { kind: 'non-html-content-type', evidenceKind: 'source' }];
         f.guardNote = { kind: 'non-html-content-type', reason: 'the response headers written at this call name a content type other than text/html; the body is not parsed as HTML by a browser that honours them' };
+        stats.weak++;
+        continue;
+      }
+      if (ctx === 'redirect' && !f._notHtmlContext) {
+        f._notHtmlContext = true; f.severity = 'info';
+        f.controls = [...(f.controls || []), { kind: 'redirect-response-body', evidenceKind: 'source' }];
+        f.guardNote = { kind: 'redirect-response-body', reason: 'the response headers written at this call set Location and no content type: a redirect, whose body a browser does not render' };
         stats.weak++;
         continue;
       }
