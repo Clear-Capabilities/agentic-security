@@ -125,7 +125,7 @@
           "family": "sensitive-logging",
           "line": 24,
           "exitCode": 0,
-          "text": "MITIGATION (full-source-edit): Replaced 2 sensitive log argument(s) with \"[REDACTED]\". The value is no longer logged; the log line loses that detail.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -24,1 +24,1 @@\n-logLogin user password = putStrLn (\"login \" ++ user ++ \" password=\" ++ password)\n+logLogin user password = putStrLn (\"login \" ++ user ++ \" \"[REDACTED]\"=\" ++ \"[REDACTED]\")\n  note: The redacted value no longer appears in the log; the line loses that detail.\n\n  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error:), so the patch could not be judged by compiling"
+          "text": "MITIGATION (full-source-edit): Replaced 2 sensitive log argument(s) with \"[REDACTED]\". The value is no longer logged; the log line loses that detail.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -24,1 +24,1 @@\n-logLogin user password = putStrLn (\"login \" ++ user ++ \" password=\" ++ password)\n+logLogin user password = putStrLn (\"login \" ++ user ++ \" \"[REDACTED]\"=\" ++ \"[REDACTED]\")\n  note: The redacted value no longer appears in the log; the line loses that detail.\n\n  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling"
         },
         {
           "family": "multi-sink-taint-chain",
@@ -137,7 +137,7 @@
           "family": "sql-injection",
           "line": 32,
           "exitCode": 0,
-          "text": "FULL (full-source-edit): Moved 1 interpolated value(s) out of the SQL text into query parameters.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -13,1 +13,1 @@\n-lookupOrder conn ref = query_ conn (fromString (\"SELECT status FROM orders WHERE ref = '\" ++ ref ++ \"'\"))\n+lookupOrder conn ref = query conn \"SELECT status FROM orders WHERE ref = ?\" (Only ref)\n  note: Interpolated values are now bound parameters. A splice that is not a value (a table or column name, an operator, a keyword) cannot be a parameter and needs an allow-list instead.\n\n  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error:), so the patch could not be judged by compiling"
+          "text": "FULL (full-source-edit): Moved 1 interpolated value(s) out of the SQL text into query parameters.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -13,1 +13,1 @@\n-lookupOrder conn ref = query_ conn (fromString (\"SELECT status FROM orders WHERE ref = '\" ++ ref ++ \"'\"))\n+lookupOrder conn ref = query conn \"SELECT status FROM orders WHERE ref = ?\" (Only ref)\n  note: Interpolated values are now bound parameters. A splice that is not a value (a table or column name, an operator, a keyword) cannot be a parameter and needs an allow-list instead.\n\n  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling"
         },
         {
           "family": "missing-authentication",
