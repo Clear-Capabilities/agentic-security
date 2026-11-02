@@ -23,6 +23,19 @@ const read = (p) => readFileSync(p, 'utf8');
 const REQUIRED_SCRIPTS = ['test:haskell', 'test:nix', 'test:language', 'test:language-stress', 'test:language-tools', 'bench:language-support:check', 'bench:language-support:perf'];
 const TEST_FILES = (script) => [...new Set((script || '').match(/test\/[\w.\-/]+\.test\.js/g) || [])];
 
+test('the support measurement judges the GHC on PATH against the recorded toolchain, both ways', async () => {
+  const { judgeGhc, recordedGhc } = await import('../../../bench/language-support/suites.mjs');
+  const pin = TOOLCHAIN.optionalTools.ghc['ci pin'].ghc;
+  assert.equal(recordedGhc(), pin, 'the measurement reads the same record the CI job installs from');
+  assert.deepEqual(judgeGhc(pin, pin), { ok: true, reason: null });
+  const other = judgeGhc('9.14.1', pin);
+  assert.equal(other.ok, false);
+  assert.match(other.reason, new RegExp(`ghc 9\\.14\\.1 is on PATH but the measurement is recorded against GHC ${pin.replace(/\\./g, '\\\\.')}`));
+  assert.match(other.reason, /installed per GHC version/, 'the reason says why another GHC records a false failure');
+  assert.deepEqual(judgeGhc(null, pin), { ok: false, reason: 'ghc is not on PATH' });
+  assert.equal(judgeGhc('9.14.1', null).ok, true, 'with nothing recorded there is nothing to mismatch');
+});
+
 test('[QA-004.AC02] every new critical suite has an npm script with a non-empty list of files that exist', () => {
   for (const name of REQUIRED_SCRIPTS) assert.ok(pkg.scripts[name], `missing npm script ${name}: npm run would fail`);
   for (const name of ['test:haskell', 'test:nix', 'test:language', 'test:language-stress', 'test:language-tools']) {

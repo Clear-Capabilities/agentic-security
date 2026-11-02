@@ -332,6 +332,44 @@ function weakDigestUse(fn, node, hashCall, hashArgs, fnBase) {
 }
 
 /**
+ * The migration shape: a fast password hash kept ONLY to verify hashes stored before a password KDF was introduced. True when every
+ * use of the function, in every file, is an operand of an equality (nothing new is stored with it) and a function that compares with
+ * it also computes a password KDF, directly or through one project function (`verify stored salt pw = if legacy stored then stored ==
+ * oldHash salt pw else stored == kdfHash salt pw`). The weak hash is still computed, so the finding is kept at `info` with this reason;
+ * a function that is also used to STORE a hash, or whose comparisons sit beside no KDF, is the full finding. Decided from the IR only,
+ * never from a name (`hashPasswordLegacy` is not evidence; the comparison and the KDF are).
+ */
+function legacyVerifierOnly(fn, ir, memo) {
+  if (memo.has(fn.qid)) return memo.get(fn.qid);
+  const allFns = Object.values(ir.perFile).flatMap((x) => x.functions || []);
+  const byQid = new Map(allFns.map((x) => [x.qid, x]));
+  const usesF = (e) => !!e.hs && ((e.kind === 'call' && e.hs.target === fn.qid) || e.hs.inlinedFrom === fn.qid);
+  const kdfCall = (c) => typeof c === 'string' && (STRONG_KDF.test(c) || PBKDF2_CALLS.has(c));
+  const hasKdf = (g, depth) => (g.calls || []).some((c) => kdfCall(c.callee) || (depth < 1 && c.hs && c.hs.target && c.hs.target !== g.qid && byQid.has(c.hs.target) && hasKdf(byQid.get(c.hs.target), depth + 1)));
+  let uses = 0; let compared = 0; let besideKdf = false;
+  const visit = (e, parent, g, depth) => {
+    if (!e || typeof e !== 'object' || depth > 60) return;
+    if (usesF(e)) {
+      uses++;
+      if (parent && parent.kind === 'binary' && EQUALITY_OPS.has(parent.op)) { compared++; if (hasKdf(g, 0)) besideKdf = true; }
+      return;     // under an inlined root the nodes are the helper's own body, not further uses of it
+    }
+    for (const k of Object.keys(e)) {
+      if (k === 'hs') continue;
+      const v = e[k];
+      if (Array.isArray(v)) { for (const x of v) visit(x, e, g, depth + 1); } else if (v && typeof v === 'object') visit(v, e, g, depth + 1);
+    }
+  };
+  for (const g of allFns) {
+    if (g.qid === fn.qid) continue;
+    for (const n of Object.values(g.cfg.nodes)) for (const root of [n.source, n.value, n.cond, ...(n.args || [])]) visit(root, null, g, 0);
+  }
+  const r = uses > 0 && compared === uses && besideKdf;
+  memo.set(fn.qid, r);
+  return r;
+}
+
+/**
  * @param {Record<string,string>} files path -> source (only Haskell files are read)
  * @param {object} [opts]
  * @param {Record<string,string>} [opts.packageVersions] package name -> resolved version, when known
@@ -354,6 +392,7 @@ export function analyzeHaskellRules(files, opts = {}) {
   }
 
   let currentFn = null;
+  const legacyMemo = new Map();
   const emit = (rule, file, line, extra = {}) => {
     const r = RULES[rule];
     const sev = extra.severity || r.severity;
@@ -595,7 +634,11 @@ export function analyzeHaskellRules(files, opts = {}) {
             // password hashed with a fast hash
             // (a hash call the IR inlined from a project helper, `digestFor (credPassword creds)` at the comparison, is reported once, in the helper)
             if (ANY_HASH_CALLS.has(c) && !STRONG_KDF.test(c) && !(e.hs && e.hs.inlinedFrom) && args.some((a) => [...names(a)].some((n) => PASSWORD_VAR.test(n.replace(/^\./, ''))))) {
-              emit('hs-fast-password-hash', file, line, { detail: `${c} applied to a password-shaped value`, inlineCtx: e.hs && e.hs.inlineCtx });
+              if (!(e.hs && e.hs.inlineCtx) && legacyVerifierOnly(fn, ir, legacyMemo)) {
+                emit('hs-fast-password-hash', file, line, { severity: 'info', confidence: 0.5, detail: `${c} applied to a password-shaped value, in a function used only to verify hashes made before a migration (every use of it is an equality, beside a password KDF): re-hash with the KDF at the next successful login and remove it once no stored hash needs it`, inlineCtx: e.hs && e.hs.inlineCtx, evidence: { legacyVerifier: true } });
+              } else {
+                emit('hs-fast-password-hash', file, line, { detail: `${c} applied to a password-shaped value`, inlineCtx: e.hs && e.hs.inlineCtx });
+              }
             }
             if (PBKDF2_CALLS.has(c)) {
               for (const a of args) for (const x of walk(a)) if (x.kind === 'object') for (const p of x.props || []) if (p.key === 'iterCounts' && p.value && p.value.kind === 'literal' && typeof p.value.value === 'number' && p.value.value < 10000) {

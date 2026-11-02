@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REPO, DATA, readJson, read, sha } from './lib.mjs';
-import { runAll, probeTools, CAPABILITY_SUITES } from './suites.mjs';
+import { runAll, probeTools, judgeGhc, CAPABILITY_SUITES } from './suites.mjs';
 import { buildRegistry, renderTable } from './registry-build.mjs';
 
 const RESULTS = path.join(REPO, 'bench', 'language-support', 'results');
@@ -33,6 +33,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(im
     if (r.status !== 0) { process.stderr.write(`measurement failed:\n${r.stderr}\n`); process.exit(2); }
   }
   if (!reuse || !fs.existsSync(SUITES)) {
+    // A GHC other than the recorded toolchain compiles the route fixtures against an empty package set and records a false failure for
+    // `auth`: refuse to measure under it unless told to (`--allow-ghc-mismatch`, which records the mismatch in the registry's limits).
+    const probe = probeTools();
+    const ghc = judgeGhc(probe.ghcVersion, probe.ghcRecorded);
+    if (probe.ghc && !ghc.ok && !process.argv.includes('--allow-ghc-mismatch')) { process.stderr.write(`refusing to measure the suites: ${ghc.reason}\n(pass --allow-ghc-mismatch to measure anyway; the mismatch is then recorded in the registry's limits)\n`); process.exit(2); }
     const results = runAll();
     fs.writeFileSync(SUITES, `${JSON.stringify({ schema: 'agentic-security/language-support-suites@1', ranAt: new Date().toISOString().slice(0, 10), node: process.version, tools: probeTools(), capabilitySuites: CAPABILITY_SUITES, results }, null, 2)}\n`);
   }

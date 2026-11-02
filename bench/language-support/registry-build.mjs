@@ -15,9 +15,16 @@ export const LIMITS = Object.freeze([
 function limitsFor(tools, unseen) {
   const out = [...LIMITS].filter((l) => !/^No GHC, cabal, stack or nix is installed/.test(l));
   const missing = ['ghc', 'cabal', 'stack', 'nix', 'nixos'].filter((t) => !tools[t]);
+  const ghcNote = tools.ghc
+    ? (tools.ghcVersion
+      ? (tools.ghcMatchesRecorded === false
+        ? ` GHC ${tools.ghcVersion} was present but is not the recorded toolchain (${tools.ghcRecorded}); a compile criterion that failed for a missing package under it is recorded as blocked, not as an engine failure.`
+        : ` GHC ${tools.ghcVersion}${tools.ghcRecorded ? ' (the recorded toolchain)' : ''} was present, so the Haskell route fixtures were compiled.`)
+      : ' GHC was present, so the Haskell route fixtures were compiled.')
+    : '';
   out.splice(2, 0, missing.length
-    ? `Not available where the measurement ran: ${missing.join(', ')}. Capabilities that need them are blocked, never reported as passing.${tools.ghc ? ' GHC was present, so the Haskell route fixtures were compiled.' : ''}`
-    : 'Every tool the capabilities need was available where the measurement ran.');
+    ? `Not available where the measurement ran: ${missing.join(', ')}. Capabilities that need them are blocked, never reported as passing.${ghcNote}`
+    : `Every tool the capabilities need was available where the measurement ran.${ghcNote}`);
   const dev = unseen && unseen.splitRole === 'development';
   out.push(unseen
     ? (dev

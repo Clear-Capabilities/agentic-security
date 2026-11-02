@@ -243,6 +243,8 @@ export function evaluateSupport(language, input) {
   for (const [cap, req] of Object.entries(REQUIRES_TOOL[language] || {})) {
     const r = out.rows[cap];
     if (r && !tools[req.tool]) out.rows[cap] = { ...r, status: 'blocked', reasons: [`${req.tool} is not available on the measuring host: ${req.why}`, ...r.reasons] };
+    // a GHC other than the recorded toolchain compiles the fixtures against an empty package set: not a verdict on the engine
+    else if (r && req.tool === 'ghc' && tools.ghcMatchesRecorded === false && r.status !== 'supported') out.rows[cap] = { ...r, status: 'blocked', reasons: [`ghc ${tools.ghcVersion} on the measuring host is not the recorded toolchain (${tools.ghcRecorded}); the criterion that needs it could not be judged`, ...r.reasons] };
   }
   const rows = Object.values(out.rows);
   out.summary = { required: rows.length, supported: rows.filter((r) => r.status === 'supported').length, notSupported: rows.filter((r) => r.status !== 'supported').map((r) => `${r.capability}:${r.status}`), dataOk: dataOk.ok };

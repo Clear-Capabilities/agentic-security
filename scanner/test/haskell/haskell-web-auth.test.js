@@ -138,10 +138,16 @@ test('[HS-006.AC01] the route fixtures compile (requires GHC; an unavailable com
   // directory on the import path) separately, never every file in one invocation.
   const out = mkTestTmp('hs-compile-');
   const mains = (dir) => readdirSync(join(FX, dir)).filter((f) => f.endsWith('.hs') && f !== 'Auth.hs');
+  // The fixtures' packages (scotty, wai, servant, yesod, ...) are installed per GHC version. A compile that fails for a MISSING MODULE under a
+  // GHC other than the recorded toolchain (docs/language-toolchain.json) is an unavailable compiler, not a failed criterion: the message says so,
+  // and the support registry records the row as blocked with that reason rather than as an engine failure.
+  const recorded = (() => { try { return JSON.parse(readFileSync(join(FX, '..', '..', '..', '..', 'docs', 'language-toolchain.json'), 'utf8')).optionalTools.ghc['ci pin'].ghc; } catch { return null; } })();
   for (const dir of ['scotty', 'wai', 'servant', 'yesod']) {
     for (const f of mains(dir)) {
       const p = spawnSync('ghc', ['-fno-code', '-Wno-all', `-i${join(FX, dir)}`, '-outputdir', out, join(FX, dir, f)], { encoding: 'utf8', timeout: 600000 });
-      assert.equal(p.status, 0, `${dir}/${f}: ${p.stderr.slice(0, 400)}`);
+      const missing = /Could not find module/.test(p.stderr || '');
+      const otherGhc = recorded && ghc !== recorded;
+      assert.equal(p.status, 0, `${dir}/${f}: ${missing && otherGhc ? `unavailable compiler: ghc ${ghc} is on PATH but the fixtures' packages are installed for the recorded GHC ${recorded} (docs/language-toolchain.json); put that GHC first on PATH. ` : ''}${p.stderr.slice(0, 400)}`);
     }
   }
 });

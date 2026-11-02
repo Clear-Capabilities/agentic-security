@@ -11,10 +11,33 @@ import { REPO } from './lib.mjs';
 
 const SCANNER = path.join(REPO, 'scanner');
 
+/** The GHC the measurement is recorded against (docs/language-toolchain.json, the version the CI job installs and the route fixtures' packages are built for). */
+export function recordedGhc() {
+  try { return JSON.parse(fs.readFileSync(path.join(REPO, 'docs', 'language-toolchain.json'), 'utf8')).optionalTools.ghc['ci pin'].ghc || null; } catch { return null; }
+}
+
+/**
+ * Whether the GHC on PATH is the recorded one. The route fixtures' packages are installed per GHC version, so another GHC compiles them
+ * against an empty package set and the `auth` row records a FAILURE that nothing in the engine caused (2026-11-01: the host's default
+ * ghc moved to 9.14.1 while the fixtures live under 9.4.8, and the first re-measure wrote the row as failed). The decision is pure so a
+ * test can pin both directions.
+ * @returns {{ok: boolean, reason: string|null}}
+ */
+export function judgeGhc(version, recorded) {
+  if (!version) return { ok: false, reason: 'ghc is not on PATH' };
+  if (!recorded) return { ok: true, reason: null };
+  if (version === recorded) return { ok: true, reason: null };
+  return { ok: false, reason: `ghc ${version} is on PATH but the measurement is recorded against GHC ${recorded} (docs/language-toolchain.json): the route fixtures' packages are installed per GHC version, so a compile under another GHC fails for a missing package, not an engine defect. Put GHC ${recorded} first on PATH and re-run.` };
+}
+
 /** Which external tools exist on this host. A capability that NEEDS a tool is blocked when it is absent, whatever its tests say. */
 export function probeTools() {
   const has = (bin) => { const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin], { encoding: 'utf8' }); return r.status === 0; };
-  return { ghc: has('ghc'), cabal: has('cabal'), stack: has('stack'), nix: has('nix'), nixos: fs.existsSync('/etc/NIXOS'), platform: process.platform, arch: process.arch };
+  const version = (bin) => { const r = spawnSync(bin, ['--numeric-version'], { encoding: 'utf8', timeout: 20000 }); return !r.error && r.status === 0 ? String(r.stdout).trim() : null; };
+  const ghc = has('ghc');
+  const ghcVersion = ghc ? version('ghc') : null;
+  const recorded = recordedGhc();
+  return { ghc, ghcVersion, ghcRecorded: recorded, ghcMatchesRecorded: ghc ? judgeGhc(ghcVersion, recorded).ok : null, cabal: has('cabal'), stack: has('stack'), nix: has('nix'), nixos: fs.existsSync('/etc/NIXOS'), platform: process.platform, arch: process.arch };
 }
 
 /** capability -> test files (relative to scanner/), per ecosystem. */

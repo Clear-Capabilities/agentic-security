@@ -24,6 +24,10 @@ import { haskellFixWitness, haskellFunctionAt } from '../../src/language/witness
 import { sandboxAvailable } from '../../src/sandbox/index.js';
 import { mkTestTmp } from '../helpers/tmp.js';
 
+// The stubs and the patches need only boot packages (base, bytestring, text). A host's GHC package environment file (written by `cabal install
+// --lib`) can HIDE boot packages it does not list, which turned every compile below into not-run under one of the maintainer's two GHCs for a
+// reason that had nothing to do with the patch; this file runs in its own process, so it tells GHC to ignore that environment.
+process.env.GHC_ENVIRONMENT = '-';
 const GHC = !spawnSync('ghc', ['--numeric-version'], { encoding: 'utf8' }).error;
 const skipNoGhc = GHC ? false : 'GHC is not installed: compile verification could not run (this is a skip, not a pass)';
 

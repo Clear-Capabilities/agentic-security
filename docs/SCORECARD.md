@@ -9,9 +9,9 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.195.9 |
-| Bundle SHA-256 | `19dc2c52e129ad724c2604371ec085abff39ecbd70a9a48374e00a84668ba9fc` |
-| Commit | `33dfb648b5f5df80ada25707d15fe4ef339af4de` |
+| Engine version | 0.195.10 |
+| Bundle SHA-256 | `4104b02904216922e410b459fcde235a0bf73ec5b3515a3bc07acec62312fe65` |
+| Commit | `2d52d957fe42d441a5665e619aff17da5a1996f6` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -19,7 +19,7 @@ that produced them.
 | Corpus entries | 228 (228 scored) |
 | Corpus version | `5481d819acf1dd3481359a19e49e5a5b798fae1507b55173b53c8015b08214f6` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-01T20:25:25.420Z |
+| Generated (UTC) | 2026-11-02T02:02:01.128Z |
 
 ## What these numbers are, and what they are not
 
@@ -236,7 +236,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 427/573 (74.5%) |
+| 422/573 (73.6%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -331,11 +331,11 @@ Not supported here: nix-eval (blocked: nix is not available on the measuring hos
 Unknown and unmodelled cases: {"total":17,"disclosed":17,"withFinding":17,"silentClean":0,"requiredDisclosure":0,"requiredDisclosureMissing":0}.
 Metamorphic pairs: {"preserve":1,"change":1,"gate":{"change":1,"preserve":0.9},"ok":true,"broken":[]}.
 
-Tools present where this was measured: ghc=true, cabal=true, stack=absent, nix=absent, nixos=absent, platform=darwin, arch=arm64.
+Tools present where this was measured: ghc=true, ghcVersion=9.4.8, ghcRecorded=9.4.8, ghcMatchesRecorded=true, cabal=true, stack=absent, nix=absent, nixos=absent, platform=darwin, arch=arm64.
 
 - The corpus is synthetic and template-generated (QA-001): holdout cases vary nouns, fields and paths over the SAME shapes as the development cases, so a holdout score measures robustness to those variations, not accuracy on arbitrary real-world code.
 - No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.
-- Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.
+- Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC 9.4.8 (the recorded toolchain) was present, so the Haskell route fixtures were compiled.
 - Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.
 - A text parameter of an exported Haskell function is a source, and the finding says which kind. When the function returns a web-framework handler value (a Scotty action, a Yesod handler or widget, a Servant handler, a WAI application) the source is labelled request input, because the framework supplies the value from the request. For any other export it stays the weaker "caller-controlled" label (the callers of a library function are not known to be clients). A project record handed to an exported function is not a taint source at all (its fields are used by the data-flow lineage view only).
 - The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules) are reported beside it, with intervals over shapes (two near-identical cases per shape). From 2026-10-26 this split is a DEVELOPMENT set: its failures were read and the engine was changed to fix their causes, so the column is a regression result and says nothing about code shapes the engine was not fitted to. A generalisation claim needs a new unseen set that no engine change has been motivated by. The earlier unseen-v1 and unseen-v2 sets became the development sets shape-dev and shape-dev-2 the same way.
@@ -378,7 +378,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.195.9), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.195.10), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both
