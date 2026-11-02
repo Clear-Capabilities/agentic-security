@@ -124,6 +124,32 @@ after the session). When one flaw reaches two nested sinks on a line (`readCreat
 `dedupedVulns`); two independent sinks on one line stay two findings. A request body read whole with no size limit
 (`strictRequestBody`) is CWE-770, the same class as the other unbounded-read rules.
 
+Besides direct calls, binds and the usual combinators, the engine follows these shapes (each pinned in both directions in
+`scanner/test/haskell/haskell-taint-shapes.test.js`), with the limit of each stated:
+
+- **A project that defines a module the model registry knows.** When the project is the framework (a framework repository
+  scanning itself, or a vendored copy), its own definition of `param`, `body` or any other modelled name keeps the registry's
+  meaning at every call: the request read is a request read, not an ordinary project function whose body happens to read an
+  implicit parameter. The definition is still referenced (it is never an uncalled entry point) and its own body is still
+  analysed. Found on a framework's development tools, where a request parameter reached a shell through a helper and nothing
+  was reported because the in-tree definition shadowed the model.
+- **A mutable cell written and read in one function.** `writeIORef ref v`, `putMVar box v`, `writeTVar cell v` (under
+  `atomically` or not) and `modifyIORef ref f` carry what was written to the next `readIORef`, `takeMVar`, `readMVar` or
+  `readTVarIO` of the same local cell (also `STRef`). A cell created in one function, written in another and read in a
+  third is **not** followed: the write assigns a variable of the function that holds it, and nothing carries it out.
+- **A class method applied to a constructor.** `run Shell x` is a call of the `Runner Shell` instance's `run` when `Shell` is
+  a constructor (nullary, positional or record) of a type with exactly one visible instance of the class; the instance's type
+  is part of the function's name in the call graph. An argument of unknown type keeps every instance as a candidate and
+  reports nothing through it (a stated limit: no type inference).
+- **A function held in a record field of a top-level constant.** `exec ops x`, with `ops = Ops { exec = \x -> ... }` or
+  `exec = pingHost`, is the application of that function. A record built positionally, updated, or constructed at run time
+  keeps the field an indirect call.
+- **Request text handed to a project helper (the rules).** `deleteEnum tableId list`, where the caller's `tableId` was read
+  from the request, makes the helper's parameter caller text for the partial-function, allocation and bounding rules, one
+  call per round over a bounded number of rounds, decided from the resolved call edges (an inlined helper keeps its edge with
+  the arguments). `list !! tableId` with a caller-supplied index is the same flaw as a caller-supplied list; a relational test
+  on the index in that function covers it, as an emptiness test covers the list.
+
 <!-- generated:hs-models:start -->
 The model registry (`scanner/src/language/haskell-models.js`) holds 198 sources, 285 sinks and 75 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
@@ -314,9 +340,9 @@ agentic-security fix --finding <id> --apply       # written only after every gat
 agentic-security undo                             # restores the file byte for byte
 ```
 
-A deterministic fix exists for twelve shapes (`hs-sql-parameterize`, `hs-process-argv`, `hs-html-escape`,
+A deterministic fix exists for thirteen shapes (`hs-sql-parameterize`, `hs-process-argv`, `hs-html-escape`,
 `hs-html-escape-text`, `hs-hash-sha256`, `hs-log-redact`, `hs-path-takefilename`, `hs-tls-validate`, `hs-cookie-attributes`,
-`hs-random-os-entropy`, `hs-request-body-bound`, `hs-password-kdf-migrate`). Each plan carries a **tier** (`full-source-edit`, or `guidance-only`
+`hs-random-os-entropy`, `hs-request-body-bound`, `hs-scotty-body-limit`, `hs-password-kdf-migrate`). Each plan carries a **tier** (`full-source-edit`, or `guidance-only`
 for a refusal), a **consequences** list that states what the patch changes for the running program, and a label,
 **FULL**, **MITIGATION** or **WORKAROUND**, by what it really changes. Every plan runs the same gates: path inside the
 project, syntax, the rescan (the original finding is gone and no new medium-or-higher finding appears), the
@@ -339,7 +365,8 @@ refuses, is reported as such; nothing is invented.
 | Certificate validation off | CWE-295 | the literal `True` of `settingDisableCertificateValidation` (positional or record form of the `connection` package's `TLSSettingsSimple`) becomes `False`. Consequence: connections to a self-signed, expired or privately issued certificate fail until the authority is in the system trust store. An OpenSSL `VerifyNone` is refused: `VerifyPeer` verifies nothing until a CA bundle is loaded and does not check the host name |
 | Cookie without `Secure` / `HttpOnly` | CWE-1004 | four recognised shapes: a `Set-Cookie` header string literal, a `Web.Cookie` `SetCookie` record update, servant-auth `cookieIsSecure = NotSecure`, scotty `setSimpleCookie` / `makeSimpleCookie` (written out as the record update they are). Consequence: the cookie is no longer sent over plain HTTP and page scripts cannot read it. `SameSite` is not changed. Anything else, or a flag set from an expression, is refused |
 | Predictable generator | CWE-338 | only a one-line action `name :: IO <fixed-width integer>`, `name = randomIO`, in a file that already imports `System.Entropy`: it reads `getEntropy` bytes and decodes them big-endian. Everything else is refused (a range, a wider or non-integer type, no entropy import): the CSPRNG's result type differs, so the code around it changes, and the token's type and size are a decision |
-| Request body without a limit | CWE-770 | a mitigation, only for wai `strictRequestBody <request variable>` in a file importing `Network.Wai` and `Data.ByteString.Lazy`: it becomes `boundedRequestBody`, defined in the same file, which throws past `requestBodyLimitBytes`. The limit (1 MiB) is a **declared default, not a measured need**; larger bodies now raise an `IOException`. Every other resource limit is refused |
+| Request body without a limit (scotty) | CWE-770 | a mitigation: scotty's `body` has no per-read bound, so `setMaxRequestBodySize` (scotty 0.12 and later; a 413 before any handler runs) is added as the first statement of the ScottyM block that contains the read or names the handler, with a declared constant (1024 KB, a **default**, not a measured need). The rule then treats every body read of that block, and of the handlers it names, as bounded; a limit set in another file keeps the finding at low with its reach stated as unverified. Refused when the block is in another file, when a cabal bound excludes every scotty version with the call, or when a name of the patch is taken |
+| Request body without a limit (wai) | CWE-770 | a mitigation, only for wai `strictRequestBody <request variable>` in a file importing `Network.Wai` and `Data.ByteString.Lazy`: it becomes `boundedRequestBody`, defined in the same file, which throws past `requestBodyLimitBytes`. The limit (1 MiB) is a **declared default, not a measured need**; larger bodies now raise an `IOException`. Every other resource limit is refused |
 | Fast password hash | CWE-916 | a migration, not a swap, for one shape: a pure one-line `hashPassword salt password = ...` of one text type (`String`, `Text` or strict `ByteString`) in a file that already imports cryptonite or crypton. The old function is kept as `hashPasswordLegacy` for verification only, `hashPassword` becomes PBKDF2-HMAC-SHA256 (600000 iterations, a declared default) with a tag in front of the hex, `hashPasswordNeedsRehash` reads the tag, `hashPasswordVerify stored salt password` checks either form, and every `stored == hashPassword salt password` in the file calls it; an export list gains the helpers. Consequence: a new password is stored in the KDF form, a stored hash still verifies, and it stays in the old form until the caller re-hashes it after a successful login (the caller's write, named in the plan). The kept weak hash is then reported at `info` because every use of it is an equality beside a password KDF (decided from the IR, never from its name). Refused, naming the decision, when the file imports no KDF package, the function takes no salt, another file compares with it (the lockout the migration exists to avoid), or the types differ |
 | Server-side request forgery | CWE-918 | refused: the decision is which hosts or address ranges the service may call (checked after name resolution and on every redirect) |
 | Argument injection | CWE-88 | refused: `--` helps only programs that honour it; the decision is the permitted values for the argument |
@@ -489,7 +516,8 @@ The measured status of each capability, with its denominators, is in [Haskell an
 
 ## Limits worth knowing
 
-- Static analysis of the source as written: no type checking, no instance resolution, no evaluation of laziness.
+- Static analysis of the source as written: no type checking, no evaluation of laziness, and instance resolution only where
+  a constructor argument names the type (see the shapes above); a method applied to a value of unknown type stays unresolved.
 - A flow through an imported module with no security model is widened and disclosed on the finding.
 - Template Haskell splices and quasi-quotes are boundaries except the closed set described above (known generators over names and literals, raw-string and non-interpolating quoters); those are analysed under a stated assumption that the name is the upstream one. Nothing is ever run, so what a splice generates is not modelled even when it is accepted.
 - A CPP conditional is decided only from the file, a stated compiler and the project's dependency bounds; a macro set by a build flag or the environment is undecided and both branches are analysed. A `tested-with` decision is a project claim, not a pin, and is reported as an assumption: a branch dead under it was not analysed.

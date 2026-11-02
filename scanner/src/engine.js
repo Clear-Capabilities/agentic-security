@@ -317,6 +317,7 @@ import {
 import { SCANNER_VERSION as _ENGINE_VERSION } from './posture/version.js';
 import { isLanguageSource, isLanguageExcludedPath, withLanguageClosure } from './language/discovery.js';
 import { annotateHaskellFindings } from './language/haskell-findings.js';
+import { stripComments as stripHaskellComments } from './language/haskell-comments.js';
 import { annotateHaskellLlm, analyzeHaskellLlmRules } from './language/haskell-llm.js';
 import { languagePragmaOnLine as _languagePragmaOnLine, languagePragmaSuppresses as _languagePragmaSuppresses } from './language/pragma.js';
 import { applyHaskellGuards, consolidateFlowSinks } from './language/haskell-guards.js';
@@ -364,6 +365,10 @@ function _commentLangFor(fp) {
   if (_ALL_COMMENT_EXTS.has(ext)) return 'php';
   if (_RUBY_COMMENT_EXTS.has(ext)) return 'rb';
   if (_HASH_COMMENT_EXTS.has(ext)) return 'py';
+  // Haskell: `--` lines and nesting `{- -}` blocks (language/haskell-comments.js, the same lexer the Haskell findings' snippets use). The
+  // language-neutral detectors that read the comment-blanked view (ciphers, protocol shapes, structural patterns) fired on API names quoted
+  // in a Haskell doc comment; a comment is never a call. Literate `.lhs` is left to the Haskell parser (its prose is not a comment form).
+  if (ext === '.hs') return 'hs';
   return undefined; // C-family default: `//` and `/* */` only, `#` left alone.
 }
 // Single-entry memo for the comment-blanked view.
@@ -383,7 +388,7 @@ function _commentLangFor(fp) {
 let _blankMemoSrc = null, _blankMemoLang, _blankMemoOut = null;
 function _blankCached(src, lang) {
   if (src === _blankMemoSrc && lang === _blankMemoLang) return _blankMemoOut;
-  const out = blankComments(src, lang);
+  const out = lang === 'hs' ? stripHaskellComments(src) : blankComments(src, lang);
   _blankMemoSrc = src; _blankMemoLang = lang; _blankMemoOut = out;
   return out;
 }

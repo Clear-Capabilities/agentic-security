@@ -43,6 +43,26 @@ const IO_NAMES = new Set(['putStr', 'putStrLn', 'print', 'getLine', 'getContents
 
 // name -> positions of the function, the collection and (folds) the seed.
 const BODY_SETTER = /^Network\.HTTP\.(?:Simple|Conduit|Client)\.setRequestBody(?:JSON|LBS|BS|URLEncoded|File)$/;
+// A mutable cell carries what was written to it: `writeIORef ref v` assigns the cell's variable, `readIORef ref` reads it, `modifyIORef ref f`
+// is `ref = f ref`. The same for MVar, TVar and STRef. Only a cell held in a LOCAL variable of the function that reads it is modelled
+// (created there, or handed in as a parameter): a cell written in one function and read in another is not followed (see the guide's limits).
+const CELL_OPS = Object.freeze({
+  'Data.IORef.writeIORef': 'write', 'Data.IORef.readIORef': 'read', 'Data.IORef.modifyIORef': 'modify', "Data.IORef.modifyIORef'": 'modify', 'Data.IORef.atomicWriteIORef': 'write',
+  'Control.Concurrent.MVar.putMVar': 'write', 'Control.Concurrent.MVar.takeMVar': 'read', 'Control.Concurrent.MVar.readMVar': 'read', 'Control.Concurrent.MVar.modifyMVar_': 'modify', 'Control.Concurrent.MVar.swapMVar': 'write',
+  'Control.Concurrent.putMVar': 'write', 'Control.Concurrent.takeMVar': 'read', 'Control.Concurrent.readMVar': 'read', 'Control.Concurrent.modifyMVar_': 'modify',
+  'Control.Concurrent.STM.writeTVar': 'write', 'Control.Concurrent.STM.readTVar': 'read', 'Control.Concurrent.STM.readTVarIO': 'read', 'Control.Concurrent.STM.modifyTVar': 'modify', "Control.Concurrent.STM.modifyTVar'": 'modify',
+  'Control.Concurrent.STM.TVar.writeTVar': 'write', 'Control.Concurrent.STM.TVar.readTVar': 'read', 'Control.Concurrent.STM.TVar.readTVarIO': 'read', 'Control.Concurrent.STM.TVar.modifyTVar': 'modify', "Control.Concurrent.STM.TVar.modifyTVar'": 'modify',
+  'Data.STRef.writeSTRef': 'write', 'Data.STRef.readSTRef': 'read', 'Data.STRef.modifySTRef': 'modify', "Data.STRef.modifySTRef'": 'modify',
+});
+// `instance Runner Shell`, `instance Show a => Runner (Box a)`: the type constructor the instance is for (the first constructor after the class name).
+function instanceTypeOf(inst) {
+  const head = String((inst && inst.headText) || '').replace(/^.*?=>\s*/, '');
+  const cls = inst && inst.name ? String(inst.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
+  if (!cls) return null;
+  const after = head.replace(new RegExp(`^\\s*(?:[A-Z][\\w']*\\.)*${cls}(?![\\w'])`), '');
+  const m = /^[\s([]*(?:[A-Z][\w']*\.)*([A-Z][\w']*)/.exec(after);
+  return m ? m[1] : null;
+}
 const HOF = {
   map: { fn: 0, coll: 1, kind: 'map' }, fmap: { fn: 0, coll: 1, kind: 'map' }, concatMap: { fn: 0, coll: 1, kind: 'map' },
   traverse: { fn: 0, coll: 1, kind: 'traverse' }, mapM: { fn: 0, coll: 1, kind: 'traverse' },
@@ -232,6 +252,11 @@ function exportedLookup(proj, target, name, depth, seen) {
   if (depth > HS_IR_LIMITS.maxResolveDepth) return { kind: 'unknown', reason: 'resolution-depth-cap' };
   const next = new Set(seen); next.add(key);
   if (!target.exports) return target.defs.has(name) ? defResult(target, name) : null;
+  // A wildcard re-export of a module the project does not contain (`module CorePrelude` over `import CorePrelude hiding (..)`) can only say the
+  // name MIGHT come from there. It is kept as the fallback while the rest of the export list is searched: a definition the project holds, or a
+  // name an import lists, is the answer when one exists. IHP's preludes re-export `CorePrelude` first and `IHP.Controller.Param` later, and
+  // returning the possibility first made every `param` an unknown external name instead of the in-tree request read.
+  let fallback = null;
   for (const ex of target.exports) {
     if (ex.kind === 'var' && ex.name === name) return resolveGlobal(proj, target, name, ex.qual || null, depth + 1, next);
     if (ex.kind === 'type' && ex.all) {
@@ -245,11 +270,13 @@ function exportedLookup(proj, target, name, depth, seen) {
         if (imp.items && (imp.hiding ? imp.items.includes(name) : !imp.items.includes(name))) continue;
         const t2 = proj.modules.get(imp.module);
         const r = t2 ? exportedLookup(proj, t2, name, depth + 1, next) : { kind: 'external', module: imp.module, name, certain: !!(imp.items && !imp.hiding && imp.items.includes(name)) };
-        if (r) return r;
+        if (!r) continue;
+        if (r.kind === 'external' && !r.certain) { if (!fallback) fallback = r; continue; }
+        return r;
       }
     }
   }
-  return null;
+  return fallback;
 }
 
 // A top-level resolution (depth 0, nothing seen yet) is a pure function of the module table, which is complete before any function
@@ -285,7 +312,9 @@ function resolveGlobalUncached(proj, mod, name, qual, depth, seen) {
         const owner = r.kind === 'def' ? (r.def.kind === 'field' ? (proj.modules.get(r.mod)?.cons.get(r.def.con)?.type) : r.def.kind === 'method' ? r.def.cls : null) : null;
         if (!owner || !(imp.typeAll || []).includes(owner)) continue;
       }
-      if (r.kind === 'unknown') { unknownReason = r.reason; if (r.candidates) unknownCandidates = r.candidates; } else hits.push(r);
+      if (r.kind === 'unknown') { unknownReason = r.reason; if (r.candidates) unknownCandidates = r.candidates; }
+      else if (r.kind === 'external' && !r.certain) wildcard.push(r.module || imp.module);   // a re-export chain's "might come from there" is a possibility, not a hit that makes a definition ambiguous
+      else hits.push(r);
     } else if (qual || (imp.items && !imp.hiding && imp.items.includes(name))) hits.push({ kind: 'external', module: imp.module, name, certain: true });
     else wildcard.push(imp.module);   // includes `import M (T(..))` of a module we cannot read: possible, never certain
   }
@@ -590,6 +619,11 @@ class FnLowerer {
     const r = this.resolve(e.name, e.qual);
     if (r.kind === 'alias') return r.expr;
     if (r.kind === 'def' && r.def.kind === 'field') return { kind: 'ident', name: e.name, hs: { fieldSelector: r.name } };
+    if (r.kind === 'def' && r.def.kind === 'fun' && isKnownApi(r.mod, r.name)) {
+      // a modelled name the project itself defines (see applyVar): the registry's meaning, the definition still referenced
+      this.noteRef(r.qid, 'modelled-definition', ln);
+      return { kind: 'ident', name: `${r.mod}.${r.name}`, hs: { resolution: 'external', certain: true, modelledDefinition: r.qid } };
+    }
     if (r.kind === 'def' || r.kind === 'localfn') {
       this.noteRef(r.qid, 'reference', ln);
       return { kind: 'ident', name: this.canonical(r), hs: { functionRef: r.qid } };
@@ -683,6 +717,16 @@ class FnLowerer {
       if (f.name === 'uncurry' && argAsts.length === 2 && tup(argAsts[1])) return this.lowerApp(argAsts[0], tup(argAsts[1]), ln, via);
     }
     if (r.kind === 'def' && r.def.kind === 'field' && argAsts.length >= 1) {
+      // `exec ops x` where `ops` is a top-level constant record whose `exec` field holds a function: the application is of THAT function. The
+      // held function is found in the constant's record syntax (`Ops { exec = \x -> .. }` or `Ops { exec = pingHost }`); a positional
+      // construction, a field set by an update, or a record built at run time stay an indirect call.
+      const held = argAsts.length > 1 ? this.heldFieldFunction(r, argAsts[0], ln) : null;
+      if (held) {
+        const lowered = argAsts.slice(1).map((a) => ({ t: 'lowered', expr: this.lowerExpr(a, ln) }));
+        const savedMod = this.mod; const savedOverride = this.lineOverride;
+        this.lineOverride = this.lineOverride || ln; this.inlineDepth = (this.inlineDepth || 0) + 1; this.mod = held.mod;
+        try { return this.lowerApp(held.expr, lowered, ln, via); } finally { this.mod = savedMod; this.lineOverride = savedOverride; this.inlineDepth -= 1; }
+      }
       const obj = this.lowerExpr(argAsts[0], ln);
       const mem = { kind: 'member', object: obj, prop: r.name };
       return argAsts.length === 1 ? mem : { kind: 'call', callee: '<indirect>', args: [mem, ...argAsts.slice(1).map((a) => this.lowerExpr(a, ln))], hs: { status: 'unknown', reason: 'field-applied' } };
@@ -700,7 +744,18 @@ class FnLowerer {
     if (selector) hs.selector = selector;
     let callee = f.qual ? `${f.qual}.${f.name}` : f.name;
     const arity = (r.kind === 'def' && r.def.kind === 'fun') ? r.def.arity : (r.kind === 'localfn' ? r.arity : -1);
-    if ((r.kind === 'def' && r.def.kind === 'fun') || r.kind === 'localfn') {
+    if (r.kind === 'def' && r.def.kind === 'fun' && isKnownApi(r.mod, r.name)) {
+      // The project defines a module the model registry models: the project IS the framework (a framework repository scanning itself) or
+      // carries a copy of it. The registry says what the name means to its caller (a request read, a sink, a sanitizer), which the
+      // definition's body, written in terms the registry does not model (an implicit request parameter, a parser over it), does not show.
+      // The call is lowered as the library call; the definition is still referenced, so it is never an uncalled entry point, and its own
+      // body is still analysed as a function of the project. Pinned both ways in test/haskell/haskell-taint-shapes.test.js.
+      this.noteRef(r.qid, 'modelled-definition', ln);
+      callee = `${r.mod}.${r.name}`;
+      hs.status = 'external'; hs.certain = true; hs.modelledDefinition = r.qid;
+      hs.effect = r.def.sig ? (r.def.sig.returnsIO ? 'io' : 'pure') : (IO_NAMES.has(f.name) ? 'io' : 'unknown');
+      if (hs.effect === 'io') this.sawIO = true;
+    } else if ((r.kind === 'def' && r.def.kind === 'fun') || r.kind === 'localfn') {
       callee = this.canonical(r);
       hs.status = 'resolved'; hs.target = r.qid;
       if (r.kind === 'def' && arity === args.length && arity > 0 && (this.inlineDepth || 0) < INLINE_MAX_DEPTH) {
@@ -722,6 +777,10 @@ class FnLowerer {
       hs.status = 'typeclass'; hs.cls = r.def.cls; hs.method = r.name; hs.target = r.qid;
       hs.candidates = this.proj.instancesOf(r.def.cls, r.name);
       hs.effect = 'unknown';
+      // `run Shell x`: an argument that is a constructor of a type with exactly one visible instance of the class names the instance, so the
+      // call is a call of that instance's method (a resolved edge, not a set of candidates). An argument of unknown type keeps the candidates.
+      const picked = this.dispatchInstance(r.def.cls, r.name, args);
+      if (picked) { callee = picked.name; hs.status = 'resolved'; hs.target = picked.qid; hs.dispatchedOn = picked.type; delete hs.candidates; }
     } else if (r.kind === 'param') {
       hs.status = 'param'; hs.paramIndex = r.index; hs.effect = 'unknown';
     } else if (r.kind === 'local') {
@@ -747,6 +806,10 @@ class FnLowerer {
       if (ctxTargets.some((t) => t.length)) hs.argTargets = ctxTargets;
     }
     const call = { kind: 'call', callee, args, line: ln, hs };
+    if (hs.status === 'external' || hs.status === 'builtin') {
+      const cell = this.lowerCellOp(callee, args, argAsts, ln, call);
+      if (cell) return cell;
+    }
     // `setRequestBodyJSON body req` returns the REQUEST with a body: the body's taint is a property of the body, and
     // must not make the request's URL tainted. The call still gets its own node so a sink on the body argument fires.
     if ((hs.status === 'external' || hs.status === 'builtin') && BODY_SETTER.test(callee) && args.length >= 2) {
@@ -755,6 +818,64 @@ class FnLowerer {
       return args[args.length - 1];
     }
     return (hs.status === 'external' || hs.status === 'builtin') && isSourceApi(callee) ? this.sourceValue(call, ln) : call;
+  }
+
+  // The instance a class-method call dispatches to, when an argument is a constructor (nullary, positional or record) of a type that has
+  // exactly one visible instance of the class. Several candidate types, or no constructor argument, is null (the candidates stay).
+  dispatchInstance(cls, method, args) {
+    const cands = this.proj.instancesOf(cls, method);
+    if (!cands.length) return null;
+    const types = new Set();
+    for (const a of args) {
+      const con = a && a.hs && a.hs.con;
+      if (!con) continue;
+      const c = this.mod.cons.get(con) || this.proj.findCon(con);
+      if (c && c.type) types.add(c.type);
+    }
+    if (types.size !== 1) return null;
+    const [type] = types;
+    const hits = cands.filter((q) => { const m = this.proj.instanceMeta.get(q); return m && m.type === type; });
+    if (hits.length !== 1) return null;
+    return { qid: hits[0], name: this.proj.instanceMeta.get(hits[0]).name, type };
+  }
+
+  // The function a record field of a top-level constant holds: `ops = Ops { exec = \x -> .. }` for `exec ops`. Returns the field's expression
+  // and the module it was written in, or null (the constant is not a single record literal, or the field is not set there).
+  heldFieldFunction(r, objAst, ln) {
+    if ((this.inlineDepth || 0) >= INLINE_MAX_DEPTH) return null;
+    const u = unparen(objAst);
+    if (!u || u.t !== 'var') return null;
+    const r0 = this.resolve(u.name, u.qual);
+    if (r0.kind !== 'def' || r0.def.kind !== 'fun' || r0.def.arity !== 0) return null;
+    const mod = this.proj.modules.get(r0.mod);
+    const fnAst = mod && mod.groups.funs.find((f) => f.name === r0.name);
+    if (!fnAst || fnAst.clauses.length !== 1) return null;
+    const c = fnAst.clauses[0];
+    if (c.pats.length || !c.rhs || (c.rhs.guards && c.rhs.guards.length) || (c.rhs.where && c.rhs.where.length) || !c.rhs.body) return null;
+    const body = unparen(c.rhs.body);
+    if (!body || body.t !== 'rec' || !body.con || body.con.name !== r.def.con) return null;
+    const fld = (body.fields || []).find((f) => !f.wildcard && f.name === r.name && f.e);
+    if (!fld) return null;
+    this.noteRef(r0.qid, 'reference', ln);
+    return { mod, expr: fld.e };
+  }
+
+  // A mutable cell held in a local variable (see CELL_OPS): a write is an assignment of the cell's variable, a read is that variable, a modify is
+  // the function applied to it. Anything else (a cell that is not a local variable, a missing argument) is the plain call.
+  lowerCellOp(callee, args, argAsts, ln, call) {
+    const op = CELL_OPS[callee];
+    if (!op) return null;
+    const ref = args[0];
+    if (!ref || ref.kind !== 'ident' || !ref.name || ref.hs) return null;
+    this.sawIO = true;
+    if (op === 'read') return { kind: 'ident', name: ref.name };
+    if (op === 'write' && args.length >= 2) { this.cfg.add('assign', ln, { target: ref.name, source: args[1], hs: { demand: 'executed', cellWrite: callee } }); return call; }
+    if (op === 'modify' && argAsts.length >= 2) {
+      const applied = this.lowerApp(argAsts[1], [{ t: 'lowered', expr: { kind: 'ident', name: ref.name } }], ln, callee);
+      this.cfg.add('assign', ln, { target: ref.name, source: applied, hs: { demand: 'executed', cellWrite: callee } });
+      return call;
+    }
+    return null;
   }
 
   // A modelled source read gets its own assignment node, so the evidence chain names the exact line the
@@ -813,7 +934,8 @@ class FnLowerer {
     try {
       inl.params.forEach((name, i) => this.declare(name, { kind: 'alias', expr: loweredArgs[i] }));
       this.mod = calleeMod;
-      (this.inlinedCalls ||= []).push({ site: null, callee: this.canonical(r), args: [], line: ln, hs: { status: 'resolved', target: r.qid, effect: 'unknown', inlined: true, ...(via ? { via } : {}) } });
+      // the lowered arguments are kept on the edge: a rule asking what a helper's parameters receive reads them (haskell-security-rules.js requestTextParams)
+      (this.inlinedCalls ||= []).push({ site: null, callee: this.canonical(r), args: loweredArgs, line: ln, hs: { status: 'resolved', target: r.qid, effect: 'unknown', inlined: true, ...(via ? { via } : {}) } });
       const out = this.lowerExpr(inl.body, ln);
       return out && typeof out === 'object' ? { ...out, hs: { ...(out.hs || {}), inlinedFrom: r.qid } } : out;
     } finally {
@@ -1297,6 +1419,7 @@ class Project {
     this.fns = [];
     this.byFile = new Map();
     this.instanceIndex = new Map(); // `${cls}.${method}` -> qids
+    this.instanceMeta = new Map();  // instance-method qid -> { type, name }: the type the instance is for and the function's call-graph name
     this.diagnostics = [];
   }
 
@@ -1467,7 +1590,11 @@ function buildHaskellIRUncached(fileContents) {
         const key = `${inst.name}.${f.name}`;
         if (!proj.instanceIndex.has(key)) proj.instanceIndex.set(key, []);
         proj.instanceIndex.get(key).push(qid);
-        instQids.push({ mod, inst, f, qid });
+        // the call-graph name carries the instance's type when it is known, so two instances of one class resolve to different functions by name
+        const type = instanceTypeOf(inst);
+        const name = `${mod.name}.$inst.${inst.name}${type ? `.${type}` : ''}.${f.name}`;
+        proj.instanceMeta.set(qid, { type, name });
+        instQids.push({ mod, inst, f, qid, name });
       }
     }
   }
@@ -1481,8 +1608,8 @@ function buildHaskellIRUncached(fileContents) {
       try { proj.addFn(lowerPatbind(proj, mod, pb)); } catch (err) { proj.diagnostics.push({ file: mod.file, line: pb.line, kind: 'ir-lowering-failure', detail: String(err && err.message) }); }
     }
   }
-  for (const { mod, inst, f, qid } of instQids) {
-    const info = { qid, name: `${mod.name}.$inst.${inst.name}.${f.name}`, line: f.line, parentName: `${mod.name}.$inst.${inst.name}.${f.name}` };
+  for (const { mod, inst, f, qid, name } of instQids) {
+    const info = { qid, name, line: f.line, parentName: name };
     try {
       const L = new FnLowerer(proj, mod, info, []);
       L.lowerClauses(f.clauses, f.line);

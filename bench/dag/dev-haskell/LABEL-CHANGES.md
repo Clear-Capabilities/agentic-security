@@ -20,4 +20,7 @@ new verdict, the evidence, and that the scanner output was or was not seen) and 
 
 | date | set | site | old | new | evidence | scanner output seen first? |
 | --- | --- | --- | --- | --- | --- | --- |
-| (none recorded) | | | | | | |
+| (none recorded before 2026-11-02) | | | | | | |
+| 2026-11-02 | development-remainder | `xmonad-contrib:XMonad/Prompt/DirExec.hs:101`, `Man.hs:76`, `OrgMode.hs:274` (path-traversal), `DirExec.hs:86` (partial function), `hackage-server:.../BlobStorage.hs:217` (path-traversal) | (unlabelled) | FP | sites the 0.195.11 engine flags for the first time, because the xmonad and hackage preludes' re-export chains now resolve to the directory, file and Prelude functions; each reads a path from the user's own configuration, the operator's machine or the server's own temporary file (reasons in `labels-remainder.json`). No existing verdict changed. | yes: the sites were found by the scan, then read |
+| 2026-11-02 | fresh | `ihp:ihp-ide/IHP/IDE/SchemaDesigner/SchemaOperations.hs:542` (partial function) | (unlabelled) | TP | a request-indexed `!!` in a schema-designer helper, the same flaw as the two Enums sites already labelled TP, reached since 0.195.11 through request text handed to the helper. No existing verdict changed. | yes |
+| 2026-11-02 | fresh | `ihp:ihp-ide/Test/ServerSpec.hs:14` (XSS) | (unlabelled) | FP | an echo application in the framework's own hspec suite, test code with no HTML content type, flagged since 0.195.11 when the IHP prelude chain resolved its names. No existing verdict changed. | yes |

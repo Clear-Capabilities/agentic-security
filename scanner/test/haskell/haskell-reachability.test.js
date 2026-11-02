@@ -255,7 +255,7 @@ test('platform variants: both modules an undecided import could mean are referen
 
 test('instance methods: callable by anything that can see the type, so unknown/instance-method; an ordinary function beside one is judged', () => {
   const lib = hs('module Render (Shape(..), describe, helper) where', [], 'class Render a where\n  render :: a -> String\n\ndata Shape = Shape String\n\ninstance Render Shape where\n  render (Shape s) = helper s\n\nhelper :: String -> String\nhelper s = s\n\ndescribe :: String -> String\ndescribe s = s ++ "!"');
-  const s = status({ 'src/Render.hs': lib, 'src/Other.hs': OTHER, 'app/Main.hs': hs('module Main (main) where', ['import Render ()'], 'main :: IO ()\nmain = putStrLn "x"') }, { manifests: manifests() }, 'Render.$inst.Render.render');
+  const s = status({ 'src/Render.hs': lib, 'src/Other.hs': OTHER, 'app/Main.hs': hs('module Main (main) where', ['import Render ()'], 'main :: IO ()\nmain = putStrLn "x"') }, { manifests: manifests() }, 'Render.$inst.Render.Shape.render');   // the instance's type is part of the call-graph name since 0.195.11
   assert.equal(s.r.status, 'unknown');
   assert.equal(s.r.holeReason, 'instance-method');
   const ordinary = [...s.ir.callGraph.functions.values()].find((f) => f.name === 'Render.describe');

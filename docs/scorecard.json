@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.195.10",
-    "bundleSha256": "4104b02904216922e410b459fcde235a0bf73ec5b3515a3bc07acec62312fe65",
-    "commit": "2d52d957fe42d441a5665e619aff17da5a1996f6",
+    "engineVersion": "0.195.11",
+    "bundleSha256": "6b78d7c38e6fb579c79f160e3870ce1cd5cf2392f71893062505e392c65b9a46",
+    "commit": "50fb5889ae489b3b31701ada9c8d2a5f18b9c818",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-02T02:02:01.128Z",
+    "generatedAt": "2026-11-02T15:58:33.552Z",
     "corpusVersion": "5481d819acf1dd3481359a19e49e5a5b798fae1507b55173b53c8015b08214f6",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -624,7 +624,7 @@
         }
       },
       "scanner/src": {
-        "total": 690,
+        "total": 692,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -690,6 +690,7 @@
           "ir/parser-rust.js": 4,
           "ir/type-stubs.js": 4,
           "ir/universal-ir.js": 1,
+          "language/CLAUDE.md": 2,
           "language/bridges.js": 1,
           "language/context.js": 2,
           "language/discovery.js": 1,
@@ -999,8 +1000,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 422,
-    "d": 573
+    "n": 420,
+    "d": 575
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -1164,7 +1165,7 @@
     },
     "languageSupport": {
       "source": "docs/language-support.json",
-      "generatedAt": "2026-11-01",
+      "generatedAt": "2026-11-02",
       "node": "v24.20.0",
       "tools": {
         "ghc": true,
@@ -1205,7 +1206,7 @@
           },
           "measuredOn": {
             "split": "holdout",
-            "measuredAt": "2026-11-01",
+            "measuredAt": "2026-11-02",
             "corpusVersion": "qa001-v2",
             "hashes": {
               "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
@@ -1422,7 +1423,7 @@
           },
           "measuredOn": {
             "split": "holdout",
-            "measuredAt": "2026-11-01",
+            "measuredAt": "2026-11-02",
             "corpusVersion": "qa001-v2",
             "hashes": {
               "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
@@ -2233,9 +2234,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.195.10",
-    "commit": "2d52d957fe42d441a5665e619aff17da5a1996f6",
-    "bundleSha256": "4104b02904216922e410b459fcde235a0bf73ec5b3515a3bc07acec62312fe65",
+    "engineVersion": "0.195.11",
+    "commit": "50fb5889ae489b3b31701ada9c8d2a5f18b9c818",
+    "bundleSha256": "6b78d7c38e6fb579c79f160e3870ce1cd5cf2392f71893062505e392c65b9a46",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",

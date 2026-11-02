@@ -510,6 +510,46 @@
       "high",
       "IR-TAINT"
      ]
+    ],
+    "hackage-server:src/Distribution/Server/Framework/BlobStorage.hs:217:path-traversal": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "xmonad-contrib:XMonad/Prompt/DirExec.hs:101:path-traversal": [
+     [
+      "high",
+      "external-api",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "xmonad-contrib:XMonad/Prompt/DirExec.hs:86:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES"
+     ]
+    ],
+    "xmonad-contrib:XMonad/Prompt/Man.hs:76:path-traversal": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT"
+     ]
+    ],
+    "xmonad-contrib:XMonad/Prompt/OrgMode.hs:274:path-traversal": [
+     [
+      "high",
+      "external-api",
+      null,
+      "IR-TAINT"
+     ]
     ]
    },
    "fresh": {
@@ -1361,6 +1401,22 @@
       "HS-RULES"
      ]
     ],
+    "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:72:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:75:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES"
+     ]
+    ],
     "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Migrations.hs:118:path-traversal": [
      [
       "info",
@@ -1377,11 +1433,35 @@
       "IR-TAINT"
      ]
     ],
+    "ihp:ihp-ide/IHP/IDE/SchemaDesigner/SchemaOperations.hs:542:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/ToolServer/Helper/Controller.hs:42:OS Command Injection (shell string)": [
+     [
+      "critical",
+      "unknown",
+      null,
+      "IR-TAINT"
+     ]
+    ],
     "ihp:ihp-ide/IHP/IDE/WorkerSignal.hs:35:path-traversal": [
      [
       "info",
       "entrypoint-reachable",
       "high",
+      "IR-TAINT"
+     ]
+    ],
+    "ihp:ihp-ide/Test/ServerSpec.hs:14:Cross-Site Scripting (HTML response body from text)": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
       "IR-TAINT"
      ]
     ],
@@ -1958,11 +2038,11 @@
   "census": {
    "dev": {
     "cabal2nix": {
-     "rows": 2,
+     "rows": 3,
      "flagged": 0,
-     "loweredToInfo": 2,
+     "loweredToInfo": 3,
      "byStatus": {
-      "external-api": 2
+      "external-api": 3
      }
     },
     "ghcup-hs": {
@@ -1976,39 +2056,41 @@
      }
     },
     "gitit": {
-     "rows": 6,
+     "rows": 15,
      "flagged": 2,
-     "loweredToInfo": 4,
+     "loweredToInfo": 13,
      "byStatus": {
-      "entrypoint-reachable": 1,
-      "no-verdict": 4,
+      "entrypoint-reachable": 8,
+      "no-verdict": 6,
       "external-api": 1
      }
     },
     "hackage-server": {
-     "rows": 43,
-     "flagged": 1,
-     "loweredToInfo": 42,
+     "rows": 47,
+     "flagged": 2,
+     "loweredToInfo": 45,
      "byStatus": {
-      "entrypoint-reachable": 34,
-      "external-api": 5,
-      "no-verdict": 4
+      "entrypoint-reachable": 35,
+      "external-api": 6,
+      "no-verdict": 6
      }
     },
     "pandoc": {
-     "rows": 7,
+     "rows": 9,
      "flagged": 0,
-     "loweredToInfo": 7,
+     "loweredToInfo": 9,
      "byStatus": {
-      "no-verdict": 7
+      "no-verdict": 7,
+      "entrypoint-reachable": 2
      }
     },
     "stack": {
-     "rows": 2,
+     "rows": 5,
      "flagged": 0,
-     "loweredToInfo": 2,
+     "loweredToInfo": 5,
      "byStatus": {
-      "entrypoint-reachable": 2
+      "entrypoint-reachable": 4,
+      "no-verdict": 1
      }
     },
     "stackage-server": {
@@ -2020,12 +2102,13 @@
      }
     },
     "xmonad-contrib": {
-     "rows": 2,
-     "flagged": 1,
-     "loweredToInfo": 1,
+     "rows": 16,
+     "flagged": 5,
+     "loweredToInfo": 11,
      "byStatus": {
-      "external-api": 1,
-      "no-verdict": 1
+      "no-verdict": 4,
+      "entrypoint-reachable": 7,
+      "external-api": 5
      }
     }
    },
@@ -2050,13 +2133,13 @@
      }
     },
     "ihp": {
-     "rows": 68,
-     "flagged": 20,
-     "loweredToInfo": 48,
+     "rows": 157,
+     "flagged": 25,
+     "loweredToInfo": 132,
      "byStatus": {
-      "no-verdict": 34,
-      "unknown": 9,
-      "entrypoint-reachable": 20,
+      "no-verdict": 111,
+      "unknown": 19,
+      "entrypoint-reachable": 22,
       "external-api": 5
      }
     },

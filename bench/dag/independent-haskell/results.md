@@ -1,7 +1,7 @@
 # Independent Haskell precision results
 
-Date: 2026-10-27
-Scanner version: 0.188.0
+Date: 2026-11-02
+Scanner version: 0.195.10
 Labels digest: c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b
 
 MEASUREMENT ONLY. See README.md and USE-LOG.md.
@@ -10,22 +10,22 @@ MEASUREMENT ONLY. See README.md and USE-LOG.md.
 
 | group | flagged | tp | fp | ambiguous | unlabeled | tp+fp | precision | 95% Wilson | range if ambiguous all fp / all tp |
 |---|---|---|---|---|---|---|---|---|---|
-| all haskell projects | 73 | 1 | 34 | 11 | 27 | 35 | 2.9% | 0.5% to 14.5% | 2.2% to 26.1% |
+| all haskell projects | 77 | 1 | 34 | 11 | 31 | 35 | 2.9% | 0.5% to 14.5% | 2.2% to 26.1% |
 
 ## Per project
 
 | group | flagged | tp | fp | ambiguous | unlabeled | tp+fp | precision | 95% Wilson | range if ambiguous all fp / all tp |
 |---|---|---|---|---|---|---|---|---|---|
 | hakyll | 4 | 0 | 4 | 0 | 0 | 4 | 0.0% | 0.0% to 49.0% | 0.0% to 0.0% |
-| hledger | 43 | 1 | 25 | 1 | 16 | 26 | 3.9% | 0.7% to 18.9% | 3.7% to 7.4% |
-| postgrest | 10 | 0 | 5 | 0 | 5 | 5 | 0.0% | 0.0% to 43.5% | 0.0% to 0.0% |
+| hledger | 45 | 1 | 25 | 1 | 18 | 26 | 3.9% | 0.7% to 18.9% | 3.7% to 7.4% |
+| postgrest | 12 | 0 | 5 | 0 | 7 | 5 | 0.0% | 0.0% to 43.5% | 0.0% to 0.0% |
 | shellcheck | 16 | 0 | 0 | 10 | 6 | 0 | n/a | n/a | 0.0% to 100.0% |
 
 ## Per source kind
 
 | group | flagged | tp | fp | ambiguous | unlabeled | tp+fp | precision | 95% Wilson | range if ambiguous all fp / all tp |
 |---|---|---|---|---|---|---|---|---|---|
-| haskell source (.hs) | 55 | 1 | 32 | 1 | 21 | 33 | 3.0% | 0.5% to 15.3% | 2.9% to 5.9% |
+| haskell source (.hs) | 59 | 1 | 32 | 1 | 25 | 33 | 3.0% | 0.5% to 15.3% | 2.9% to 5.9% |
 | non-Haskell file in a Haskell project | 18 | 0 | 2 | 10 | 6 | 2 | 0.0% | 0.0% to 65.8% | 0.0% to 83.3% |
 
 ## Per vulnerability class (classes with at least one label)
@@ -39,19 +39,19 @@ MEASUREMENT ONLY. See README.md and USE-LOG.md.
 | Missing Timeout on Outbound HTTP Request (DoS) | 1 | 0 | 1 | 0 | 0 | 1 | 0.0% | 0.0% to 79.3% | 0.0% to 0.0% |
 | OS Command Injection (shell string) | 3 | 1 | 0 | 0 | 2 | 1 | 100.0% | 20.6% to 100.0% | 100.0% to 100.0% |
 | Open Redirect | 1 | 0 | 1 | 0 | 0 | 1 | 0.0% | 0.0% to 79.3% | 0.0% to 0.0% |
-| Partial function applied to caller-supplied text | 2 | 0 | 1 | 1 | 0 | 1 | 0.0% | 0.0% to 79.3% | 0.0% to 50.0% |
+| Partial function applied to caller-supplied text | 3 | 0 | 1 | 1 | 1 | 1 | 0.0% | 0.0% to 79.3% | 0.0% to 50.0% |
 | Path Traversal (copy/rename) | 1 | 0 | 1 | 0 | 0 | 1 | 0.0% | 0.0% to 79.3% | 0.0% to 0.0% |
-| Path Traversal (filesystem operation) | 4 | 0 | 2 | 0 | 2 | 2 | 0.0% | 0.0% to 65.8% | 0.0% to 0.0% |
+| Path Traversal (filesystem operation) | 5 | 0 | 2 | 0 | 3 | 2 | 0.0% | 0.0% to 65.8% | 0.0% to 0.0% |
 | Path Traversal | 8 | 0 | 3 | 0 | 5 | 3 | 0.0% | 0.0% to 56.1% | 0.0% to 0.0% |
 | PostgreSQL Connection URI | 2 | 0 | 1 | 0 | 1 | 1 | 0.0% | 0.0% to 79.3% | 0.0% to 0.0% |
 | Server-Side Request Forgery | 1 | 0 | 1 | 0 | 0 | 1 | 0.0% | 0.0% to 79.3% | 0.0% to 0.0% |
 | Session cookie without HttpOnly or Secure | 2 | 0 | 2 | 0 | 0 | 2 | 0.0% | 0.0% to 65.8% | 0.0% to 0.0% |
-| Unsafe boundary: unsafePerformIO | 13 | 0 | 12 | 0 | 1 | 12 | 0.0% | 0.0% to 24.3% | 0.0% to 0.0% |
+| Unsafe boundary: unsafePerformIO | 14 | 0 | 12 | 0 | 2 | 12 | 0.0% | 0.0% to 24.3% | 0.0% to 0.0% |
 
 ## Reading these numbers
 
 - precision = tp / (tp + fp). Ambiguous sites are excluded from the denominator and counted separately; the last column shows the range if they were all fp or all tp.
-- Only 73 sites are flagged in total across 4 projects, so the labeled sample is most of the flagged population (a near census of flags, not a draw from a large population). Unlabeled sites are never counted.
+- Only 77 sites are flagged in total across 4 projects, so the labeled sample is most of the flagged population (a near census of flags, not a draw from a large population). Unlabeled sites are never counted.
 - Recall cannot be measured here: there is no ground-truth list of the vulnerabilities in these projects, and a flag list says nothing about what was missed.
 - Intervals treat the sample as simple random. Sites cluster by file and rule (for example ten sampled sites are one Dockerfile rule across sibling build images, and twelve are unsafePerformIO global-state idioms), so the true uncertainty is wider.
 - Stale labels (labeled sites no longer flagged): 14.

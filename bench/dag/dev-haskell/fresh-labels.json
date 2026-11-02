@@ -2220,6 +2220,26 @@
    "project": "summoner",
    "label": "FP",
    "reason": "An unsafeCoerce/unsafePerformIO/unsafeInterleaveIO idiom (type-level coercion between phantom-indexed types, a global reference, a deferred local read). 14 of the 121 were read at random and none had external data reaching it; the rule itself claims no vulnerability class. Labelled FP."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/SchemaOperations.hs:542:Partial function applied to caller-supplied text": {
+   "index": 222,
+   "kind": "flagged-0.195.11",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "A request parameter (the table index of a schema-designer action) reaches updateTable through the controller and indexes the statement list with !!, so an out-of-range value raises an exception in the request handler. Low severity. First flagged by 0.195.11, when request text handed to a project helper became caller text in the helper (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "ihp:ihp-ide/Test/ServerSpec.hs:14:Cross-Site Scripting (HTML response body from text)": {
+   "index": 223,
+   "kind": "flagged-0.195.11",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "An echo application inside the framework's own hspec suite writes the request path back in a response with no content type; it is test code, not a shipped program, and the response is not declared HTML. First flagged by 0.195.11, when the IHP prelude re-export chain resolved its names (added 2026-11-02, LABEL-CHANGES.md)."
   }
  }
 }
