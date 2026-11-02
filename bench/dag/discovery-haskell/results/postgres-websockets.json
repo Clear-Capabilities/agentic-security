@@ -1,0 +1,18 @@
+{
+ "id": "postgres-websockets",
+ "commit": "68a775dcd5f1eefc767315a7b3ea2b2b1c926b6a",
+ "rows": [
+  {
+   "file": "src/PostgresWebsockets/Config.hs",
+   "line": 99,
+   "severity": "high",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "unattributed",
+   "reach": "entrypoint-reachable",
+   "proof": "feasible",
+   "provenance": null
+  }
+ ]
+}

@@ -1347,17 +1347,17 @@
     ],
     "hlint:src/Test/InputOutput.hs:36:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "hlint:src/Test/InputOutput.hs:38:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -2309,8 +2309,8 @@
     },
     "hlint": {
      "rows": 14,
-     "flagged": 2,
-     "loweredToInfo": 12,
+     "flagged": 0,
+     "loweredToInfo": 14,
      "byStatus": {
       "entrypoint-reachable": 5,
       "no-verdict": 9

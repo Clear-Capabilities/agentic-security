@@ -129,6 +129,11 @@ is also true of a scan that read zero files — so when nothing was examined eve
 mapped control degrades to `engine-gap` instead of reporting as satisfied. That
 one was caught by the module's own test, not in review.
 
+**API contract diff** — `api-contract.js`. Cross-references OpenAPI/GraphQL contract files against the detected routes. A contract found
+inside one package of a monorepo governs that package's routes only (`contractScope`: the nearest ancestor of the file with a package
+manifest, else the scan root); two example `swagger.json` files in a servant monorepo had produced 78 "implemented but not declared"
+routes across every other package. `test/api-contract-scope.test.js`.
+
 **Posture artifacts** — `sbom.js`, `aibom.js`, `api-inventory.js`, `threat-model.js`, `trust-boundary-diagram.js`, `stack-playbook.js`, `deploy-platform.js`, `license-policy.js`, `material-change.js`, `mttr.js`, `streak.js`, `accuracy-scorecard.js` (see "Published accuracy scorecard (R3)" above — this line previously named a bare "scorecard" module that never existed under that filename), `security-trend.js`.
 
 **Why this fired** — `why-fired.js`. Runs LAST so it reflects every annotation. Customer-facing provenance.

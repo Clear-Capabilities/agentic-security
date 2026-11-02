@@ -14,7 +14,8 @@ the frozen holdout). The unseen-v3 split is a development set and was used as su
 | development | gitit, hackage-server, stackage-server, ghcup-hs, cabal2nix, stack, xmonad-contrib, pandoc | 2,166 | 359,000 | fixes were designed on it |
 | fresh | ihp, dhall-haskell, hlint, summoner, scotty, ormolu | 2,047 | 197,000 | acquired after the fixes, scanned once, labelled, not tuned on |
 
-`acquire.mjs [--set=fresh]` fetches exactly the pinned commits into `.cache/` (gitignored).
+`acquire.mjs [--set=fresh]` fetches exactly the pinned commits into `.cache/` (gitignored). A third, separate development set of six
+projects the engine had never been run on is `bench/dag/discovery-haskell` (its own manifest, labels and use log).
 
 ## Protocol (development set)
 
@@ -61,6 +62,7 @@ Numbers are from the runs recorded in this directory (`score.mjs`, `fresh-score.
 | fresh, after the 0.195.9 trust-boundary changes (not independent) | 26 | 17 | 65.4% [46.2%, 80.6%] |
 | fresh, after the 0.195.11 taint work (not independent) | 31 | 21 | 67.7% [50.1%, 81.4%] |
 | fresh, after the 0.195.12 parser fixes (not independent; 22 newly readable sites, all false positives, `LABEL-CHANGES.md`) | 53 | 21 | 39.6% [27.6%, 53.1%] |
+| fresh, after the 0.195.13 layout rules (not independent; two hlint false positives lowered as operator-controlled once more of hlint parsed) | 51 | 21 | 41.2% [28.8%, 54.8%] |
 
 **0.195.9** read the 28 remaining fresh false positives and the 5 remainder sites by cause (`bench/haskell-precision`, the gate's live run): 14 were a command-line program reading a file name from its own standard input (dhall, summoner), 5 a path parameter handed on whole by a library function (ihp, hlint, gitit, hackage-server), 3 scotty's own cookie helpers, 1 a hashing tool printing the hash it made; the rest are a record over-taint in scotty's response builder, file content in a library-role module (hlint), an environment-and-file path in a service-role package (ihp's schema compiler), the `fileContent` of an upload, and a framework helper whose path parameter is labelled request input. The changes: a whole-handoff path parameter of an uncalled export is `api-contract` (information), standard input in a command-line program is operator-controlled for a PATH operation only, a cookie helper whose name is its own parameter is decided by its caller, and a `hashed*`/`*Digest` binding is the stored form. No fresh true positive moved. On the development set two labelled sites (gitit `State.hs:62` and `:78`, two call sites of one fast-hash helper the labeller recorded as "three sites of one weakness") are now carried as `alsoAt` on the helper's finding (`State.hs:69`, still reported), so the tuning half reads 2 true positives of 5 flagged, not 4 of 10.
 

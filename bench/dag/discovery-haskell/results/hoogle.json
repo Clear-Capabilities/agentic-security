@@ -1,0 +1,97 @@
+{
+ "id": "hoogle",
+ "commit": "df554c496c676874a889cc6526e154c2d8b5bc7d",
+ "rows": [
+  {
+   "file": "src/General/Web.hs",
+   "line": 178,
+   "severity": "high",
+   "cwe": "CWE-79",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "entrypoint-reachable",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/General/Web.hs",
+   "line": 180,
+   "severity": "high",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (file served from a request-chosen path)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "entrypoint-reachable",
+   "proof": "feasible",
+   "provenance": "url-param"
+  },
+  {
+   "file": "src/Action/Search.hs",
+   "line": 108,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "cli"
+  },
+  {
+   "file": "src/Action/Server.hs",
+   "line": 85,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/General/IString.hs",
+   "line": 33,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/General/IString.hs",
+   "line": 39,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/General/Store.hs",
+   "line": 202,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/General/Template.hs",
+   "line": 82,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Output/Names.hs",
+   "line": 46,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  }
+ ]
+}

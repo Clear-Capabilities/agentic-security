@@ -158,6 +158,11 @@ Besides direct calls, binds and the usual combinators, the engine follows these 
   under Template Haskell (now an opaque value, disclosed as the splice boundary). A Hamlet quasi-quote whose last interpolation ended
   its line also dropped its function. Pinned in `scanner/test/haskell/haskell-real-advisory-shapes.test.js`; the advisories are
   listed in `bench/cve-replay/real-haskell-advisories.md`.
+- **Two layout rules from a search engine's request handler.** A `where` that starts a line at the case alternatives' own column
+  closes the alternatives and belongs to the function (hoogle's `replyServer` was read as one more alternative and dropped with its
+  62 calls), and semicolon-separated statements on one line of a nested `do` stay in that `do` (`s <- act pay; pure s` split the
+  enclosing block instead). Found on `bench/dag/discovery-haskell`, six projects the engine had never been run on, every flagged site
+  read and labelled; pinned in `scanner/test/haskell/haskell-discovery-shapes.test.js`.
 - **Request text handed to a project helper (the rules).** `deleteEnum tableId list`, where the caller's `tableId` was read
   from the request, makes the helper's parameter caller text for the partial-function, allocation and bounding rules, one
   call per round over a bounded number of rounds, decided from the resolved call edges (an inlined helper keeps its edge with

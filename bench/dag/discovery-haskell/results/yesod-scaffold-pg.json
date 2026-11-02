@@ -1,0 +1,24 @@
+{
+ "id": "yesod-scaffold-pg",
+ "commit": "fce4aa53b4741e9b57b5132317b532b8659d2477",
+ "rows": [
+  {
+   "file": "src/Handler/Home.hs",
+   "line": 39,
+   "severity": "high",
+   "cwe": "CWE-306",
+   "vuln": "State-changing route without authentication",
+   "parser": "HS-WEB",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Foundation.hs",
+   "line": 99,
+   "severity": "medium",
+   "cwe": "CWE-352",
+   "vuln": "Yesod middleware overridden without CSRF protection",
+   "parser": "HS-WEB",
+   "proof": "unproven"
+  }
+ ]
+}

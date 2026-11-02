@@ -255,9 +255,15 @@ export function parseSyntax(src, opts = {}) {
     const items = [];
     let start = a;
     let i = a;
+    // A `;` separates items of THIS block only when the line starts at the block's indent (or is the line the block opened on) and no
+    // layout keyword opened a nested implicit block earlier on that line: `remod t = do (a,_) <- f t; pure a` keeps the `;` in the `do`.
+    let lineCol = indent;
+    let nestedOnLine = false;
     while (i < b) {
       tick();
       const t = T[i];
+      if (t.first) { lineCol = t.col; nestedOnLine = false; }
+      if ((t.t === 'kw' && (t.v === 'do' || t.v === 'of' || t.v === 'let' || t.v === 'where')) || (isRop(t, '\\') && isKw(T[i + 1], 'case'))) nestedOnLine = true;
       // A new line at the block's indent starts a new item EVEN when that line opens a bracket
       // (`("GET", ["a"]) -> ...`): the boundary test must run before the bracket is skipped.
       if (indent !== null && i > start && t.first && t.col === indent && !isSp(t, ';')) {
@@ -265,6 +271,10 @@ export function parseSyntax(src, opts = {}) {
         start = i;
       }
       if (t.t === 'sp' && OPEN[t.v] && mate[i] > i) { i = mate[i] + 1; continue; }
+      // `s <- act pay; bs <- evaluate s; pure (s, bs)` on one line of a nested `do`: those semicolons separate the statements of the
+      // nested block, not the items of an enclosing implicit block (the module's top level split on them and read `bs <- ..` as a
+      // declaration; real code, hoogle). In an implicit block a `;` counts only on a line that starts at the block's own indent.
+      if (isSp(t, ';') && indent !== null && (lineCol !== indent || nestedOnLine)) { i++; continue; }
       if (isSp(t, ';')) {
         if (i > start) items.push([start, i]);
         start = i + 1;

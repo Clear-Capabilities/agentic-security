@@ -645,10 +645,18 @@ function analyze(source, file, dialect, ctx, res) {
     const items = [];
     let start = a;
     let i = a;
+    let lineCol = indent;   // column of the first token on the current line (the block's own indent on the line it opened on)
+    let nestedOnLine = false;   // a layout keyword opened a nested implicit block earlier on this line
     while (i < b) {
       ctx.tick();
       const t = T[i];
+      if (t.fol) { lineCol = t.lcol; nestedOnLine = false; }
+      if (t.k === 'kw' && (t.v === 'do' || t.v === 'of' || t.v === 'let' || t.v === 'where')) nestedOnLine = true;
       if (OPENERS[t.k] && match[i] > i) { i = match[i] + 1; continue; }
+      // In an implicit block a `;` separates items only on a line that starts at the block's own indent and opened no nested block before
+      // it: `s <- act pay; pure s` on one line of a nested `do` belongs to that `do`, and `remod t = do (a,_) <- f t; pure a` keeps its `;`
+      // in the `do` (hoogle; the same rule as haskell-syntax.js's splitItems).
+      if (t.k === ';' && indent !== null && (lineCol !== indent || nestedOnLine)) { i++; continue; }
       if (t.k === ';') {
         if (i > start) items.push({ a: start, b: i });
         start = i + 1;
@@ -678,6 +686,9 @@ function analyze(source, file, dialect, ctx, res) {
       ctx.tick();
       const t = T[j];
       if (j > a && t.fol && t.lcol < indent) break;
+      // Haskell's parse-error(t) rule: a `where` that starts a line at the block's own indent cannot begin an item, so it closes the
+      // implicit block (a function whose body is a `case` with its `where` at the alternatives' column; hoogle's request handler).
+      if (j > a && t.fol && t.lcol === indent && t.k === 'kw' && t.v === 'where') break;
       if (OPENERS[t.k] && match[j] > j) { j = match[j]; continue; }
       if (CLOSERS.has(t.k)) break;
       if (t.k === ',' && termComma) break;

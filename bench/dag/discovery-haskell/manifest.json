@@ -1,0 +1,11 @@
+{
+  "note": "Six Haskell projects the engine had never been run on before 2026-11-02, chosen for a web or input-processing surface and for absence from every other set (dev, fresh, sealed, unseen). Shallow clones at these commits; yesod-scaffold is its `postgres` branch (the default branch holds no scaffold).",
+  "projects": [
+    { "id": "hoogle", "url": "https://github.com/ndmitchell/hoogle", "commit": "df554c496c676874a889cc6526e154c2d8b5bc7d", "hsFiles": 34 },
+    { "id": "wai", "url": "https://github.com/yesodweb/wai", "commit": "a14965ae1d419a28876b9f66b4126e8d5da475ad", "hsFiles": 200 },
+    { "id": "mighttpd2", "url": "https://github.com/kazu-yamamoto/mighttpd2", "commit": "a4be0e2fff5495db8e74a54424dfefd8f82c0107", "hsFiles": 23 },
+    { "id": "postgres-websockets", "url": "https://github.com/diogob/postgres-websockets", "commit": "68a775dcd5f1eefc767315a7b3ea2b2b1c926b6a", "hsFiles": 16 },
+    { "id": "yesod-scaffold-pg", "url": "https://github.com/yesodweb/yesod-scaffold", "branch": "postgres", "commit": "fce4aa53b4741e9b57b5132317b532b8659d2477", "hsFiles": 20 },
+    { "id": "servant", "url": "https://github.com/haskell-servant/servant", "commit": "5387b8ca96377146e1bdcb72d103ace38a5a9635", "hsFiles": 233 }
+  ]
+}
