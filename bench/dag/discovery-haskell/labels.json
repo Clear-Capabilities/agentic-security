@@ -1,0 +1,133 @@
+{
+  "note": "Discovery set (bench/dag/discovery-haskell): every flagged (non-info) site of the six projects at the pinned commits, labelled by reading the code after the scan found it, by one labeller. A development set: it may inform general engine changes; it is not sealed and nothing was tuned against it before the labels were written. Keyed project:file:line:stratum.",
+  "labels": {
+    "hoogle:src/General/Web.hs:178:Cross-Site Scripting (HTML response body from text)": {
+      "parser": "IR-TAINT",
+      "severity": "high",
+      "vuln": "Cross-Site Scripting (HTML response body from text)",
+      "project": "hoogle",
+      "label": "ambiguous",
+      "reason": "The text of an exception raised while answering the request is written as a 500 body with no content type. Query parsing returns errors as values rather than throwing, so the text is normally an internal error, but an exception that quoted the request would be reflected without a declared type; a browser may sniff it. Not shown either way."
+    },
+    "hoogle:src/General/Web.hs:180:path-traversal": {
+      "parser": "IR-TAINT",
+      "severity": "high",
+      "vuln": "Path Traversal (file served from a request-chosen path)",
+      "project": "hoogle",
+      "label": "FP",
+      "reason": "responseFile serves joinPath (htmlDir : segments), but every request path is parsed by readInput, which returns Nothing (a 400) for any segment that is \"..\", \".\" or contains a separator (badSegment), so no traversal reaches the file operation. The engine does not read a validation inside a Maybe-returning constructor."
+    },
+    "servant:servant-server/src/Servant/Server/Internal/ServerError.hs:25:Cross-Site Scripting (HTML response body from text)": {
+      "parser": "IR-TAINT",
+      "severity": "high",
+      "vuln": "Cross-Site Scripting (HTML response body from text)",
+      "project": "servant",
+      "label": "FP",
+      "reason": "responseLBS of a ServerError: the flow is the Accept header into acceptCheck, whose RESULT (a Delayed carrying err406) the engine treats as tainted because a call with a tainted argument returns tainted; err406's body is a fixed string and the header is never echoed."
+    },
+    "servant:servant-auth/servant-auth-server/src/Servant/Auth/Server/Internal/Cookie.hs:90:Session cookie without HttpOnly or Secure": {
+      "parser": "HS-RULES",
+      "severity": "medium",
+      "vuln": "Session cookie without HttpOnly or Secure",
+      "project": "servant",
+      "label": "FP",
+      "reason": "servant-auth-server's cookie builders: the session cookie gets HttpOnly True in applySessionCookieSettings and Secure from the settings (default Secure); the XSRF token cookie is HttpOnly False by design, since the client script must read it to send the header. The rule reads the False literally."
+    },
+    "servant:servant-auth/servant-auth-server/src/Servant/Auth/Server/Internal/Cookie.hs:115:Session cookie without HttpOnly or Secure": {
+      "parser": "HS-RULES",
+      "severity": "medium",
+      "vuln": "Session cookie without HttpOnly or Secure",
+      "project": "servant",
+      "label": "FP",
+      "reason": "servant-auth-server's cookie builders: the session cookie gets HttpOnly True in applySessionCookieSettings and Secure from the settings (default Secure); the XSRF token cookie is HttpOnly False by design, since the client script must read it to send the header. The rule reads the False literally."
+    },
+    "servant:servant-auth/servant-auth-server/src/Servant/Auth/Server/Internal/Cookie.hs:123:Session cookie without HttpOnly or Secure": {
+      "parser": "HS-RULES",
+      "severity": "medium",
+      "vuln": "Session cookie without HttpOnly or Secure",
+      "project": "servant",
+      "label": "FP",
+      "reason": "servant-auth-server's cookie builders: the session cookie gets HttpOnly True in applySessionCookieSettings and Secure from the settings (default Secure); the XSRF token cookie is HttpOnly False by design, since the client script must read it to send the header. The rule reads the False literally."
+    },
+    "servant:servant-server/src/Servant/Server/Internal.hs:1047:Request body read without a size limit": {
+      "parser": "HS-RULES",
+      "severity": "medium",
+      "vuln": "Request body read without a size limit",
+      "project": "servant",
+      "label": "TP",
+      "reason": "The ReqBody handler reads the whole request body with lazyRequestBody and no bound; servant-server leaves the limit to a WAI middleware the application may or may not add. Framework code, the same class as the IHP request-params middleware labelled TP in the fresh set."
+    },
+    "servant:servant-swagger/example/src/Todo.hs:27:api-contract": {
+      "parser": "REGEX",
+      "severity": "high",
+      "vuln": "Route GET /todo/:id is implemented but not declared in the API contract",
+      "project": "servant",
+      "label": "FP",
+      "reason": "The example's own routes against the example's generated swagger.json: the route keys differ only in parameter syntax (/todo/:id against /todo/{id}), so the contract does declare them. A matcher limit, not an undocumented endpoint."
+    },
+    "servant:servant-swagger/example/src/Todo.hs:34:api-contract": {
+      "parser": "REGEX",
+      "severity": "high",
+      "vuln": "Route GET /swagger.json is implemented but not declared in the API contract",
+      "project": "servant",
+      "label": "FP",
+      "reason": "The example's own routes against the example's generated swagger.json: the route keys differ only in parameter syntax (/todo/:id against /todo/{id}), so the contract does declare them. A matcher limit, not an undocumented endpoint."
+    },
+    "wai:wai-extra/Network/Wai/Middleware/MethodOverridePost.hs:40:Request body read without a size limit": {
+      "parser": "HS-RULES",
+      "severity": "low",
+      "vuln": "Request body read without a size limit",
+      "project": "wai",
+      "label": "TP",
+      "reason": "The middleware reads the whole form body with lazyRequestBody and no bound to find _method. Low severity as reported; the same class as the other unbounded body reads."
+    },
+    "wai:wai-app-static/WaiAppStatic/Storage/Embedded/Runtime.hs:60:Weak hash function (MD5/SHA-1)": {
+      "parser": "HS-RULES",
+      "severity": "medium",
+      "vuln": "Weak hash function (MD5/SHA-1)",
+      "project": "wai",
+      "label": "FP",
+      "reason": "MD5 over file contents to build an ETag (a cache validator), not a security digest; the rule found a comparison use and raised it from info."
+    },
+    "wai:wai-app-static/WaiAppStatic/Storage/Filesystem.hs:155:Weak hash function (MD5/SHA-1)": {
+      "parser": "HS-RULES",
+      "severity": "medium",
+      "vuln": "Weak hash function (MD5/SHA-1)",
+      "project": "wai",
+      "label": "FP",
+      "reason": "MD5 over file contents to build an ETag (a cache validator), not a security digest; the rule found a comparison use and raised it from info."
+    },
+    "wai:wai-frontend-monadcgi/Network/Wai/Frontend/MonadCGI.hs:35:Request body read without a size limit": {
+      "parser": "HS-RULES",
+      "severity": "low",
+      "vuln": "Request body read without a size limit",
+      "project": "wai",
+      "label": "TP",
+      "reason": "The CGI frontend reads the whole request body with lazyRequestBody and no bound before decoding it. Low severity as reported."
+    },
+    "postgres-websockets:src/PostgresWebsockets/Config.hs:99:path-traversal": {
+      "parser": "IR-TAINT",
+      "severity": "high",
+      "vuln": "Path Traversal",
+      "project": "postgres-websockets",
+      "label": "FP",
+      "reason": "readFile of the file named by the PGWS_DB_URI setting when it starts with \"@\": the operator's own configuration, read at start-up."
+    },
+    "yesod-scaffold-pg:src/Handler/Home.hs:39:State-changing route without authentication": {
+      "parser": "HS-WEB",
+      "severity": "high",
+      "vuln": "State-changing route without authentication",
+      "project": "yesod-scaffold-pg",
+      "label": "FP",
+      "reason": "postHomeR runs the sample form and re-renders the page with a database read; it changes no state and is the scaffold's demonstration page."
+    },
+    "yesod-scaffold-pg:src/Foundation.hs:99:Yesod middleware overridden without CSRF protection": {
+      "parser": "HS-WEB",
+      "severity": "medium",
+      "vuln": "Yesod middleware overridden without CSRF protection",
+      "project": "yesod-scaffold-pg",
+      "label": "FP",
+      "reason": "yesodMiddleware = defaultYesodMiddleware without defaultCsrfMiddleware, exactly as the scaffold ships it; its only write request is a Yesod form, which carries and checks its own token (generateFormPost / runFormPost), so the middleware token is not what protects it. The rule's claim is right about header or JSON requests, which the scaffold has none of."
+    }
+  }
+}

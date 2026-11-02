@@ -1,0 +1,159 @@
+{
+ "id": "wai",
+ "commit": "a14965ae1d419a28876b9f66b4126e8d5da475ad",
+ "rows": [
+  {
+   "file": "wai-extra/Network/Wai/Middleware/MethodOverridePost.hs",
+   "line": 40,
+   "severity": "low",
+   "cwe": "CWE-770",
+   "vuln": "Request body read without a size limit",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai-app-static/WaiAppStatic/Storage/Embedded/Runtime.hs",
+   "line": 60,
+   "severity": "medium",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai-app-static/WaiAppStatic/Storage/Filesystem.hs",
+   "line": 155,
+   "severity": "medium",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai-frontend-monadcgi/Network/Wai/Frontend/MonadCGI.hs",
+   "line": 35,
+   "severity": "low",
+   "cwe": "CWE-770",
+   "vuln": "Request body read without a size limit",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "time-manager/System/TimeManager.hs",
+   "line": 93,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai-extra/Network/Wai/Middleware/Approot.hs",
+   "line": 42,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai-extra/Network/Wai/Middleware/RequestLogger.hs",
+   "line": 394,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai-extra/Network/Wai/Middleware/RequestLogger.hs",
+   "line": 402,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai-http2-extra/Network/Wai/Middleware/Push/Referer/Manager.hs",
+   "line": 36,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai-http2-extra/Network/Wai/Middleware/Push/Referer/Manager.hs",
+   "line": 40,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai/Network/Wai.hs",
+   "line": 585,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "warp/Network/Wai/Handler/Warp/HTTP2/Request.hs",
+   "line": 122,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "warp/Network/Wai/Handler/Warp/HTTP2/Request.hs",
+   "line": 135,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "warp/Network/Wai/Handler/Warp/HTTP2/Request.hs",
+   "line": 148,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "warp/Network/Wai/Handler/Warp/Request.hs",
+   "line": 406,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "warp/Network/Wai/Handler/Warp/Request.hs",
+   "line": 410,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "warp/Network/Wai/Handler/Warp/Request.hs",
+   "line": 415,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  }
+ ]
+}

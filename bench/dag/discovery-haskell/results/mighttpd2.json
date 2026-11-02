@@ -1,0 +1,19 @@
+{
+ "id": "mighttpd2",
+ "commit": "a4be0e2fff5495db8e74a54424dfefd8f82c0107",
+ "rows": [
+  {
+   "file": "Program/Mighty/Parser.hs",
+   "line": 29,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  }
+ ]
+}

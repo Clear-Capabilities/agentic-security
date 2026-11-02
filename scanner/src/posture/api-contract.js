@@ -185,9 +185,47 @@ export function runApiContractScan(scanRoot, codeRoutes) {
     if (c.kind === 'openapi') contractRoutes = parseOpenAPI(c.doc);
     else if (c.kind === 'graphql') contractRoutes = parseGraphQL(c.doc);
     contractRoutes.forEach(r => { r.contractFile = c.path; });
-    findings.push(...diffRoutes(contractRoutes, codeRoutes || []));
+    findings.push(...diffRoutes(contractRoutes, routesGovernedBy(c.path, scanRoot, codeRoutes || [])));
   }
   return findings;
+}
+
+// A manifest that makes a directory a package of its own: the contract found inside such a package describes that package's API.
+const PACKAGE_MANIFEST = /^(?:package\.json|pyproject\.toml|setup\.py|setup\.cfg|go\.mod|pom\.xml|build\.gradle(?:\.kts)?|Cargo\.toml|composer\.json|Gemfile|mix\.exs|package\.yaml|[^/]+\.cabal|[^/]+\.csproj|[^/]+\.fsproj)$/i;
+
+function hasPackageManifest(dir) {
+  try { return fs.readdirSync(dir).some((n) => PACKAGE_MANIFEST.test(n)); } catch { return false; }
+}
+
+/**
+ * The directory a contract file governs: the nearest ancestor of the file (up to the scan root) that holds a package manifest. A contract at
+ * the scan root's own package, or in a directory with no package above it, governs every route as before.
+ *
+ * Why: a monorepo's packages each carry their own API; an example `swagger.json` three packages away does not declare the routes of the
+ * others. Scanned over a servant monorepo, two example contracts in `servant-swagger/example` and `servant-openapi3/example` produced 78
+ * "implemented but not declared" routes across every other package, each twice. Scoping by package keeps the single-package case unchanged.
+ */
+export function contractScope(contractPath, scanRoot) {
+  const top = path.resolve(scanRoot);
+  let dir = path.dirname(path.resolve(contractPath));
+  while (true) {
+    if (dir === top) return top;
+    if (!dir.startsWith(top + path.sep)) return top;   // outside the scan root: no narrower scope can be claimed
+    if (hasPackageManifest(dir)) return dir;
+    const up = path.dirname(dir);
+    if (up === dir) return top;
+    dir = up;
+  }
+}
+
+function routesGovernedBy(contractPath, scanRoot, codeRoutes) {
+  const scope = contractScope(contractPath, scanRoot);
+  if (scope === path.resolve(scanRoot)) return codeRoutes;
+  return codeRoutes.filter((r) => {
+    if (!r || typeof r.file !== 'string') return false;
+    const abs = path.resolve(scanRoot, r.file);
+    return abs === scope || abs.startsWith(scope + path.sep);
+  });
 }
 
 export const _internals = { CONTRACT_FILE_PATTERNS, parseOpenAPI, parseGraphQL };

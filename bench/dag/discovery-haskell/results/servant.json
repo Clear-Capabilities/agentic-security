@@ -1,0 +1,113 @@
+{
+ "id": "servant",
+ "commit": "5387b8ca96377146e1bdcb72d103ace38a5a9635",
+ "rows": [
+  {
+   "file": "servant-server/src/Servant/Server/Internal/ServerError.hs",
+   "line": 25,
+   "severity": "high",
+   "cwe": "CWE-79",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "unknown",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "servant-auth/servant-auth-server/src/Servant/Auth/Server.hs",
+   "line": 186,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "unknown",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "servant-auth/servant-auth-server/src/Servant/Auth/Server.hs",
+   "line": 182,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "unknown",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "servant-auth/servant-auth-server/src/Servant/Auth/Server/Internal/Cookie.hs",
+   "line": 90,
+   "severity": "medium",
+   "cwe": "CWE-1004",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "servant-auth/servant-auth-server/src/Servant/Auth/Server/Internal/Cookie.hs",
+   "line": 115,
+   "severity": "medium",
+   "cwe": "CWE-1004",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "servant-auth/servant-auth-server/src/Servant/Auth/Server/Internal/Cookie.hs",
+   "line": 123,
+   "severity": "medium",
+   "cwe": "CWE-1004",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "servant-server/src/Servant/Server/Internal.hs",
+   "line": 1047,
+   "severity": "medium",
+   "cwe": "CWE-770",
+   "vuln": "Request body read without a size limit",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "servant-quickcheck/src/Servant/QuickCheck/Internal/QuickCheck.hs",
+   "line": 223,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "servant-swagger/example/src/Todo.hs",
+   "line": 27,
+   "severity": "high",
+   "cwe": "CWE-1059",
+   "vuln": "Route GET /todo/:id is implemented but not declared in the API contract",
+   "parser": "REGEX"
+  },
+  {
+   "file": "servant-swagger/example/src/Todo.hs",
+   "line": 27,
+   "severity": "high",
+   "cwe": "CWE-1059",
+   "vuln": "Route PUT /todo/:id is implemented but not declared in the API contract",
+   "parser": "REGEX"
+  },
+  {
+   "file": "servant-swagger/example/src/Todo.hs",
+   "line": 34,
+   "severity": "high",
+   "cwe": "CWE-1059",
+   "vuln": "Route GET /swagger.json is implemented but not declared in the API contract",
+   "parser": "REGEX"
+  }
+ ]
+}

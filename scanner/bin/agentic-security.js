@@ -682,6 +682,12 @@ async function cmdScan(args) {
   }
   const target = args._[1] || '.';
   const targetAbs = path.resolve(target);
+  // A target that does not exist cannot be scanned: say so and exit with the ERROR code (4), never with the clean one. A scan of a typo'd
+  // path used to report "complete, 0 files" and exit 0, which a deploy gate reads as a pass (test/deploy-gate-replay.test.js).
+  if (!fs.existsSync(targetAbs)) {
+    console.error(`agentic-security scan: "${target}" does not exist (resolved to ${targetAbs}); nothing was scanned.`);
+    process.exit(4);
+  }
   // Load persona profile (R1). Persona-aware defaults flow from here.
   const profile = loadPersonaProfile(targetAbs, args);
   const format = args.flags.format || (profile.profile === 'pro' ? 'cli' : 'ship');
