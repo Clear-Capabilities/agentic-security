@@ -703,7 +703,225 @@ function fixBody(text, f) {
   };
 }
 
+// ── HTML from text (CWE-79): scotty's `html` of concatenated text ─────────────
+// `html $ mconcat ["<h1>", v, "</h1>"]`: scotty's `html` sends lazy Text as text/html, so a value concatenated into the markup IS markup. The
+// rewrite applies an escaper DEFINED IN THE FILE (the five characters that open markup or end a quoted attribute) to every non-literal part of
+// the concatenation, or to the whole argument when it is one expression that contains no literal and no renderer. A MITIGATION: a value inside
+// a <script>, a style, a URL or an unquoted attribute is not made safe by this escaping, and markup the value deliberately carried is now shown
+// as text. Only in a file importing Web.Scotty (or Web.Scotty.Trans) and Data.Text.Lazy (so `text` is declared by the component). The rescan
+// recognises the escaper by the entities it spells out, never by its name (`htmlEscapers` in haskell-guards.js).
+const HTML_TEXT_HELPER = `-- Escapes the five characters that open HTML markup or end a quoted attribute, so a value is shown as text. Covers HTML text and quoted
+-- attribute values; not a script, a style, a URL or an unquoted-attribute context.
+agenticEscapeHtml :: AgenticTL.Text -> AgenticTL.Text
+agenticEscapeHtml = AgenticTL.concatMap escapeChar
+  where
+    escapeChar '<' = AgenticTL.pack "&lt;"
+    escapeChar '>' = AgenticTL.pack "&gt;"
+    escapeChar '&' = AgenticTL.pack "&amp;"
+    escapeChar '"' = AgenticTL.pack "&quot;"
+    escapeChar '\\'' = AgenticTL.pack "&#39;"
+    escapeChar c = AgenticTL.singleton c
+`;
+export { HTML_TEXT_HELPER };
+const HTML_TEXT_ESCAPER = 'agenticEscapeHtml';
+const RENDERER = /(?<![\w'])(?:render\w*|toHtml|preEscaped\w*|toMarkup|unsafeByteString|html\w*)(?![\w'])/;
+function fixHtmlText(text, f) {
+  if (!/^import\s+(?:qualified\s+)?Web\.Scotty(?:\.Trans)?(?:\s|$|\()/m.test(text)) return null;
+  const tl = importInfo(text, 'Data.Text.Lazy'); if (!tl || tl.hiding) return null;
+  if (hasPragma(text, 'NoImplicitPrelude') || /^import\s+(?:qualified\s+)?Prelude\s*(?:\(|hiding\b|as\b)/m.test(text)) return null;
+  const code = stripComments(text);
+  const hasHelper = text.includes(HTML_TEXT_HELPER);
+  if (!hasHelper && (new RegExp(`(?<![\\w'.])${HTML_TEXT_ESCAPER}(?![\\w'])`).test(code) || /(?<![\w'.])AgenticTL\./.test(text))) return null;      // a name of ours is already taken
+  const lb = lineBounds(text, f.line);
+  const call = findCall(lb.text, ['html']);
+  if (!call) return null;
+  let aStart = call.after; while (lb.text[aStart] === ' ') aStart++;
+  let aEnd; let dollar = false;
+  if (lb.text[aStart] === '$') { dollar = true; aStart++; while (lb.text[aStart] === ' ') aStart++; aEnd = lb.text.length; }
+  else aEnd = atomEnd(lb.text, aStart);
+  if (aEnd < 0 || aEnd <= aStart) return null;
+  const arg = lb.text.slice(aStart, aEnd).trim();
+  if (/\$/.test(arg) && !dollar) return null;
+  const inner = trimParens(arg);
+  if (!inner || STRING.test(inner)) return null;                                              // a literal alone is not a flow
+  const wrap = (e) => (IDENT.test(e) ? `${HTML_TEXT_ESCAPER} ${e}` : `${HTML_TEXT_ESCAPER} (${e})`);
+  let rebuilt = null; const wrapped = [];
+  const cat = /^(?:mconcat|(?:[A-Z][\w']*\.)?concat)\s*\[([\s\S]*)\]$/.exec(inner);
+  if (cat) {
+    const parts = topLevelSplit(cat[1], ','); if (!parts) return null;
+    const out = [];
+    let literals = 0;
+    for (const raw of parts) {
+      const e = raw.trim();
+      if (!e) return null;
+      if (STRING.test(e)) { literals++; out.push(e); continue; }
+      if (/"/.test(e) || RENDERER.test(e)) return null;                                         // a nested construction or a renderer: not judged
+      if (new RegExp(`^${HTML_TEXT_ESCAPER}\\s`).test(e)) { out.push(e); continue; }               // already escaped
+      out.push(wrap(e)); wrapped.push(e);
+    }
+    if (!wrapped.length || !literals) return null;                                            // nothing raw, or no markup to be concatenated into
+    rebuilt = `${inner.slice(0, inner.indexOf('['))}[${out.join(', ')}]`;
+  } else {
+    if (/"/.test(inner) || RENDERER.test(inner) || /\bagenticEscapeHtml\b/.test(inner)) return null;
+    rebuilt = wrap(inner); wrapped.push(inner);
+  }
+  const replaced = lb.text.slice(0, aStart) + (dollar ? rebuilt : `(${rebuilt})`) + lb.text.slice(aEnd);
+  let next = splice(text, lb.start, lb.end, replaced);
+  if (!hasHelper) {
+    const lines = next.split('\n'); let at = -1; lines.forEach((l, i) => { if (/^import\s/.test(l)) at = i; });
+    if (at < 0) return null;
+    lines.splice(at + 1, 0, 'import qualified Data.Text.Lazy as AgenticTL');
+    next = lines.join('\n').replace(/\n*$/, '\n') + '\n' + HTML_TEXT_HELPER;
+  }
+  const n = wrapped.length;
+  return {
+    ruleId: 'hs-html-escape-text', label: 'MITIGATION', text: next,
+    explanation: `Applied ${HTML_TEXT_ESCAPER}, defined in this file, to ${n} value${n === 1 ? '' : 's'} (${wrapped.join(', ')}) before ${call.prefix}html sends the text as HTML: <, >, &, " and ' become entities, so the value is shown as text.`,
+    consequences: [
+      'Markup the value deliberately contained is now shown as text.',
+      'The escaping covers HTML text and quoted attribute values. A value placed inside a <script> or <style> element, in a URL or in an unquoted attribute is not made safe by it; those contexts need their own encoding.',
+      'Requires the `text` package to be declared by the component (this file already imports Data.Text.Lazy, so it is); the build is not checked against the cabal file.',
+    ],
+    behavior: { kind: 'html-text', escaper: HTML_TEXT_ESCAPER, wrapped },
+    expectEffective: { kind: 'html-text', line: replaced, wrapped: n },
+  };
+}
+
+// ── password hashing (CWE-916): the migration shape ───────────────────────────
+// A password hashed with a fast digest cannot be swapped for a KDF on its line: every stored hash was made by the old function, and a swap locks
+// every user out. The rewrite that keeps them in is a MIGRATION, written out in the file: the old function is kept verbatim under `<name>Legacy`
+// (verification of stored hashes only), `<name>` becomes PBKDF2-HMAC-SHA256 over the same salt and password with a tag in front of the hex
+// (`pbkdf2-sha256$600000$...`, so a stored hash says how it was made), `<name>NeedsRehash` reads the tag, and `<name>Verify stored salt pw`
+// checks either form. Every `stored == <name> salt pw` comparison in the file becomes `<name>Verify stored salt pw`; the caller re-hashes at
+// the next successful login when `<name>NeedsRehash` says so (that write is the caller's, not the patch's). Recognised ONLY where the
+// migration can be shown to keep behavior:
+//   - a one-line, top-level, pure definition `name a b = ...` of two plain parameters, one password-shaped and one salt-shaped, with a
+//     signature `T -> T -> T` for one T among String, Text and (strict) ByteString;
+//   - the file imports a module of cryptonite / crypton (`Crypto.Hash`, `Crypto.KDF.*`, ...), so `Crypto.KDF.PBKDF2` is in a declared package,
+//     and `Data.Text` (String and Text forms: the bytes are the UTF-8 encoding) or `Data.ByteString` (ByteString form);
+//   - no other file compares with the function (a comparison the patch cannot rewrite would lock those users out), and the four names are free.
+// The iteration count (600000, the OWASP figure for PBKDF2-HMAC-SHA256) is a declared default the operator reviews, not a measured cost.
+// The API is cryptonite's / crypton's, from the package documentation: `fastPBKDF2_SHA256 :: (ByteArrayAccess password, ByteArrayAccess salt,
+// ByteArray out) => Parameters -> password -> salt -> out`, `data Parameters = Parameters { iterCounts :: Int, outputLength :: Int }`.
+const KDF_ITERATIONS = 600000;
+const KDF_TAG = `pbkdf2-sha256$${KDF_ITERATIONS}$`;
+const KDF_LIB_IMPORT = /^import\s+(?:qualified\s+)?Crypto\.(?:Hash|KDF|MAC|Random|Cipher|Error|PubKey|Number)(?:\.|\s|$)/m;
+const PASSWORD_PARAM = /pass(?:word|wd|phrase)?|pwd|^pw$|secret/i;
+const SALT_PARAM = /salt|nonce|pepper/i;
+const KDF_TYPES = Object.freeze({
+  String: { bytes: (v) => `AgenticTE.encodeUtf8 (AgenticT.pack ${v})`, hex: (h) => h, tag: `"${KDF_TAG}"`, prefix: 'AgenticList.isPrefixOf', needs: 'Data.Text' },
+  Text: { bytes: (v) => `AgenticTE.encodeUtf8 ${v}`, hex: (h) => `AgenticT.pack (${h})`, tag: `AgenticT.pack "${KDF_TAG}"`, prefix: 'AgenticT.isPrefixOf', needs: 'Data.Text' },
+  ByteString: { bytes: (v) => v, hex: (h) => `AgenticBC.pack (${h})`, tag: `AgenticBC.pack "${KDF_TAG}"`, prefix: 'AgenticBS.isPrefixOf', needs: 'Data.ByteString' },
+});
+const KDF_IMPORTS = ['import qualified Crypto.KDF.PBKDF2 as AgenticPBKDF2', 'import qualified Data.ByteString as AgenticBS', 'import qualified Data.ByteString.Char8 as AgenticBC', 'import qualified Data.Text as AgenticT', 'import qualified Data.Text.Encoding as AgenticTE', 'import qualified Data.List as AgenticList'];
+const KDF_ALIASES = ['AgenticPBKDF2', 'AgenticBS', 'AgenticBC', 'AgenticT', 'AgenticTE', 'AgenticList'];
+
+/** `stored == name a b` / `name a b == stored` on one line of code (atoms only); returns the rewritten line or null. */
+function rewriteHashComparisons(lineText, name, verify) {
+  const atom = `(?:[A-Za-z_][\\w'.]*|"(?:[^"\\\\]|\\\\.)*"|\\([^()]*\\))`;
+  const call = `${name}\\s+(${atom})\\s+(${atom})`;
+  let n = 0;
+  let out = lineText.replace(new RegExp(`(?<![\\w'.])(${atom})\\s*==\\s*(?:${call}|\\(${call}\\))(?![\\w'])`, 'g'), (_, stored, a1, b1, a2, b2) => { n++; return `${verify} ${stored} ${a1 || a2} ${b1 || b2}`; });
+  out = out.replace(new RegExp(`(?<![\\w'.])(?:${call}|\\(${call}\\))\\s*==\\s*(${atom})(?![\\w'.])`, 'g'), (_, a1, b1, a2, b2, stored) => { n++; return `${verify} ${stored} ${a1 || a2} ${b1 || b2}`; });
+  return n ? { text: out, n } : null;
+}
+
+function fixPasswordKdf(text, f) {
+  const lb = lineBounds(text, f.line);
+  const def = /^([a-z_][\w']*)\s+([a-z_][\w']*)\s+([a-z_][\w']*)\s*=\s*(\S.*)$/.exec(lb.text);
+  if (!def) return null;
+  const [, name, p1, p2, body] = def;
+  if (/(?<![\w'])(?:do|unsafePerformIO)(?![\w'])|<-/.test(body)) return null;                      // not a pure one-line definition
+  const pwIdx = [p1, p2].findIndex((p) => PASSWORD_PARAM.test(p) && !SALT_PARAM.test(p));
+  const saltIdx = [p1, p2].findIndex((p) => SALT_PARAM.test(p));
+  if (pwIdx < 0 || saltIdx < 0 || pwIdx === saltIdx) return null;
+  const sig = new RegExp(`^${name}\\s*::\\s*(\\S+)\\s*->\\s*(\\S+)\\s*->\\s*(\\S+)\\s*$`, 'm').exec(text);
+  if (!sig) return null;
+  const tyOf = (t) => { const m = /^(?:[A-Z][\w']*\.)?(String|Text|ByteString)$/.exec(t); return m ? m[1] : null; };
+  const T = tyOf(sig[1]);
+  if (!T || tyOf(sig[2]) !== T || tyOf(sig[3]) !== T) return null;
+  const ty = KDF_TYPES[T];
+  const code = stripComments(text);
+  if ((code.match(new RegExp(`^${name}\\s+[a-z_]`, 'gm')) || []).length !== 1) return null;            // one clause, defined once
+  if (!KDF_LIB_IMPORT.test(text)) return null;                                                          // Crypto.KDF.PBKDF2 is not in a declared package
+  if (T === 'ByteString' && importInfo(text, 'Data.ByteString.Lazy') && !importInfo(text, 'Data.ByteString')) return null;   // a lazy ByteString: not the strict type the KDF takes
+  if (!importInfo(text, ty.needs) && !(T !== 'ByteString' && importInfo(text, 'Data.Text.Encoding'))) return null;
+  const pb = importInfo(text, 'Crypto.KDF.PBKDF2'); if (pb && pb.hiding) return null;
+  if (hasPragma(text, 'NoImplicitPrelude') || /^import\s+(?:qualified\s+)?Prelude\s*(?:\(|hiding\b|as\b)/m.test(text)) return null;
+  const legacy = `${name}Legacy`, verify = `${name}Verify`, needs = `${name}NeedsRehash`, tagName = `${name}Tag`, hexName = `${name}Hex`;
+  for (const nm of [legacy, verify, needs, tagName, hexName]) if (new RegExp(`(?<![\\w'.])${nm}(?![\\w'])`).test(code)) return null;
+  if (new RegExp(`(?<![\\w'.])(?:${KDF_ALIASES.join('|')})\\.`).test(text)) return null;
+  // every comparison with the function, in this file, is rewritten; one in another file would be left comparing against the new form
+  const lines = text.split('\n');
+  const sigLine = lines.findIndex((l) => new RegExp(`^${name}\\s*::`).test(l));
+  let compared = 0;
+  const useRe = new RegExp(`(?<![\\w'.])${name}(?![\\w'])`);
+  for (let i = 0; i < lines.length; i++) {
+    if (i === f.line - 1 || i === sigLine || /^import\s/.test(lines[i])) continue;
+    const r = rewriteHashComparisons(lines[i], name, verify);
+    if (r) { lines[i] = r.text; compared += r.n; continue; }
+    if (useRe.test(stripComments(lines[i])) && /==/.test(lines[i])) return null;                     // a comparison of a shape the rewrite does not cover
+  }
+  for (const [other, t] of Object.entries(f._files || {})) {
+    if (other === f.file || typeof t !== 'string' || !/\.l?hs$/i.test(other)) continue;
+    if (t.split('\n').some((l) => !/^import\s/.test(l) && useRe.test(stripComments(l)) && /==/.test(l))) return null;
+  }
+  const pw = pwIdx === 0 ? p1 : p2, salt = saltIdx === 0 ? p1 : p2;
+  const hexOf = `${hexName} (AgenticPBKDF2.fastPBKDF2_SHA256 (AgenticPBKDF2.Parameters { AgenticPBKDF2.iterCounts = ${KDF_ITERATIONS}, AgenticPBKDF2.outputLength = 32 }) (${ty.bytes(pw)}) (${ty.bytes(salt)}))`;
+  // the original signature stays where it is, above the new definition; the kept function gets its own
+  const block = [
+    `-- PBKDF2-HMAC-SHA256, ${KDF_ITERATIONS} iterations (a declared default: review the cost for this service), tagged so a stored hash says how it was made.`,
+    `${name} ${p1} ${p2} = ${tagName} <> ${ty.hex(hexOf)}`,
+    '',
+    `${tagName} :: ${sig[3]}`,
+    `${tagName} = ${ty.tag}`,
+    '',
+    `${hexName} :: AgenticBS.ByteString -> String`,
+    `${hexName} = AgenticBS.foldr (\\w acc -> hexDigit (w \`div\` 16) : hexDigit (w \`mod\` 16) : acc) ""`,
+    `  where hexDigit d = "0123456789abcdef" !! fromIntegral d`,
+    '',
+    `-- Kept, under a new name, for passwords stored before the migration: ${verify} checks a stored hash with it when ${needs} says so.`,
+    `${legacy} :: ${sig[1]} -> ${sig[2]} -> ${sig[3]}`,
+    `${legacy} ${p1} ${p2} = ${body}`,
+    '',
+    `-- True for a hash made by ${legacy}: verify it with ${verify}, then store ${name} of the password at the next successful login.`,
+    `${needs} :: ${sig[3]} -> Bool`,
+    `${needs} stored = not (${tagName} \`${ty.prefix}\` stored)`,
+    '',
+    `-- Checks a password against a stored hash of either form, in place of \`stored == ${name} ${salt} ${pw}\`.`,
+    `${verify} :: ${sig[3]} -> ${sig[1]} -> ${sig[2]} -> Bool`,
+    `${verify} stored ${p1} ${p2} = if ${needs} stored then stored == ${legacy} ${p1} ${p2} else stored == ${name} ${p1} ${p2}`,
+  ];
+  lines.splice(f.line - 1, 1, ...block);
+  let at = -1; lines.forEach((l, i) => { if (/^import\s/.test(l)) at = i; });
+  if (at < 0) return null;
+  lines.splice(at + 1, 0, ...KDF_IMPORTS);
+  let next = lines.join('\n');
+  // an export list that names the function exports the helpers too: a caller in another module needs the verify helper
+  const hdr = /^module\s+[\w.']+\s*\(/m.exec(next);
+  if (hdr) {
+    const open = hdr.index + hdr[0].length - 1;
+    const close = atomEnd(next, open);
+    if (close > 0 && /^\s*where/.test(next.slice(close))) {
+      const list = next.slice(open + 1, close - 1);
+      if (useRe.test(list)) next = next.slice(0, open + 1) + list.replace(useRe, `${name}, ${legacy}, ${verify}, ${needs}`) + next.slice(close - 1);
+    }
+  }
+  return {
+    ruleId: 'hs-password-kdf-migrate', label: 'MITIGATION', text: next,
+    explanation: `${name} now computes PBKDF2-HMAC-SHA256 (${KDF_ITERATIONS} iterations, 32 bytes, over the same salt and password) and tags the result; the old function is kept as ${legacy} for verification only, ${verify} checks a stored hash of either form, and ${needs} says which hashes to re-hash at the next successful login. ${compared} comparison${compared === 1 ? '' : 's'} in this file now call${compared === 1 ? 's' : ''} ${verify}.`,
+    consequences: [
+      `Requires cryptonite or crypton (Crypto.KDF.PBKDF2; this file already imports a module of that package), bytestring and text to be declared by the component; the build is not checked against the cabal file.`,
+      `A new password is stored in the tagged PBKDF2 form; a stored hash of the old form still verifies through ${legacy}, so no user is locked out, and it stays in the old form until the caller re-hashes it (store ${name} of the password when ${needs} is True after a successful login). ${compared === 0 ? `No comparison with ${name} was found in this file: a caller elsewhere that compares with == must call ${verify} instead.` : ''}`.trim(),
+      `Each hash now costs ${KDF_ITERATIONS} HMAC-SHA256 iterations (tenths of a second per attempt, by design); the count is a declared default, not a measured cost for this service. The comparison in ${verify} is the same == the original used, not a constant-time one.`,
+    ],
+    behavior: { kind: 'kdf', fn: name, legacy, verify, needs, type: T, iterations: KDF_ITERATIONS, rewrittenComparisons: compared },
+    expectEffective: { kind: 'kdf', fn: name, legacy, verify, needs, type: T, rewrittenComparisons: compared },
+  };
+}
+
 const FIXERS = [
+  { id: 'hs-password-kdf-migrate', applies: (f) => f.cwe === 'CWE-916' && (f.rule === 'hs-fast-password-hash' || /fast general-purpose hash/i.test(String(f.vuln || ''))), run: fixPasswordKdf },
   { id: 'hs-tls-validate', applies: (f) => f.cwe === 'CWE-295' || f.rule === 'hs-tls-validation-disabled', run: fixTls, reportedLineOnly: true },
   { id: 'hs-cookie-attributes', applies: (f) => f.cwe === 'CWE-1004' || f.rule === 'hs-insecure-cookie', run: fixCookie, reportedLineOnly: true },
   { id: 'hs-random-os-entropy', applies: (f) => f.cwe === 'CWE-338' || f.rule === 'hs-predictable-random', run: fixRandom, reportedLineOnly: true },
@@ -711,6 +929,7 @@ const FIXERS = [
   { id: 'hs-sql-parameterize', applies: (f) => f.cwe === 'CWE-89', run: fixSql },
   { id: 'hs-process-argv', applies: (f) => f.cwe === 'CWE-78', run: fixProcess },
   { id: 'hs-html-escape', applies: (f) => f.cwe === 'CWE-79', run: fixHtml },
+  { id: 'hs-html-escape-text', applies: (f) => f.cwe === 'CWE-79', run: fixHtmlText, reportedLineOnly: true },
   { id: 'hs-hash-sha256', applies: (f) => f.cwe === 'CWE-328' || f.rule === 'hs-weak-hash', run: fixWeakHash },
   { id: 'hs-log-redact', applies: (f) => f.cwe === 'CWE-532' || f.rule === 'hs-sensitive-logging', run: fixLogging },
   { id: 'hs-path-takefilename', applies: (f) => f.cwe === 'CWE-22', run: fixPath },
@@ -761,7 +980,7 @@ export function planHaskellFix(finding, files) {
     // An attribute, a generator or a limit is fixed where the finding says it is, never in the body of a function called on that line (that would change a
     // helper for all of its callers: the scotty cookie helpers, for instance, are the library's own definitions).
     for (const line of fx.reportedLineOnly ? [finding.line] : [finding.line, ...calleeLines(before, finding.line)]) {
-      let r = null; try { r = fx.run(before, { ...finding, line }); } catch { r = null; }
+      let r = null; try { r = fx.run(before, { ...finding, line, _files: files }); } catch { r = null; }
       if (r && r.text && r.text !== before) return { ok: true, tier: TIERS.edit, ruleId: r.ruleId, label: r.label, file: finding.file, before, after: r.text, explanation: r.explanation, consequences: r.consequences || DEFAULT_CONSEQUENCES[r.ruleId] || [], behavior: r.behavior, expectEffective: r.expectEffective || null, ...(line !== finding.line ? { fixedAtLine: line } : {}) };
     }
   }
@@ -787,7 +1006,7 @@ const DEFAULT_CONSEQUENCES = Object.freeze({
 const CLASS_REASONS = Object.freeze({
   'CWE-918': 'server-side request forgery has no line-level repair: a check on the URL string is bypassed by redirects, alternate encodings and DNS. The decision needed: which hosts or networks this service may call (an allow-list of exact hosts, or an address policy that rejects loopback, link-local and private ranges after name resolution and on every redirect).',
   'CWE-88': 'argument injection is repaired by a rule about what the called program accepts; inserting "--" only helps programs that honour it, so no patch is made. The decision needed: the permitted values for this argument (a closed list or a strict pattern), or the option of that program that ends option parsing.',
-  'CWE-916': 'password hashing needs a password KDF (Argon2id, scrypt, bcrypt, or PBKDF2 with a high iteration count) from a library the project may not declare as a dependency, and every stored hash was produced by the old function: swapping it makes every existing password fail to verify and locks the users out. The decision needed: which KDF and library, with which cost parameters, and the migration (verify the old hash once, then re-hash with the new KDF at the next successful login, or force a password reset).',
+  'CWE-916': 'password hashing needs a password KDF (Argon2id, scrypt, bcrypt, or PBKDF2 with a high iteration count) from a library the project may not declare as a dependency, and every stored hash was produced by the old function: swapping it makes every existing password fail to verify and locks the users out. The one shape rewritten is a migration: a pure one-line `name salt password = ...` of one text type (String, Text or strict ByteString) in a file that already imports cryptonite or crypton and Data.Text or Data.ByteString, whose comparisons all sit in this file; it keeps the old function for verification, adds PBKDF2-HMAC-SHA256 and a verify helper, and this is not that shape. The decision needed: which KDF and library, with which cost parameters, and the migration (verify the old hash once, then re-hash with the new KDF at the next successful login, or force a password reset).',
   'CWE-338': 'a predictable generator is replaced by the operating system CSPRNG (System.Entropy or Crypto.Random), whose result type is bytes, not System.Random\'s: the surrounding code must change with it. Only a one-line action of type IO <fixed-width integer> equal to randomIO, in a file that already imports System.Entropy, is rewritten. The decision needed: the token\'s type and size (a 30-bit integer cannot be made unguessable by changing the generator) and the entropy library the project declares.',
   'CWE-1004': 'cookie attributes live in different places per framework. The recognised shapes are a Set-Cookie header string literal, a Web.Cookie SetCookie record update, servant-auth cookieIsSecure, and scotty setSimpleCookie/makeSimpleCookie; this is none of them, or an attribute is set from an expression. The decision needed: which attributes to send (Secure, HttpOnly, SameSite) and whether this cookie must work over plain HTTP.',
   'CWE-306': 'a missing authentication check needs a policy; the scanner reports the handler and does not invent the guard. The decision needed: which credential authenticates this route (session, token, API key) and what an unauthenticated caller receives (401, a redirect to login).',
@@ -796,7 +1015,7 @@ const CLASS_REASONS = Object.freeze({
   'CWE-798': 'a hard-coded secret must be rotated and moved to a secret store; rewriting the line would leave the leaked value valid. The decision needed: where the secret is read from at run time (environment, a secrets manager, a file outside the repository) and rotating the exposed value, which no edit of this file can do.',
   'CWE-611': 'XML entity handling depends on the parser configuration in use. The decision needed: whether this document source is trusted and which entity and DTD features the parser may enable.',
   'CWE-22': 'path traversal is repaired by confining the final path to a base directory. takeFileName is applied only to a String/FilePath parameter spliced under a fixed directory in a file operation; this shape (several segments, a base chosen at run time, a directory operation, a path handed through other functions) is not that. The decision needed: the directory the files must stay in, and whether a name containing separators or ".." is rejected or reduced to its last segment.',
-  'CWE-79': 'output encoding depends on the context the value is written into (HTML text, attribute, script, URL) and on the library that renders it; only blaze-html\'s preEscapedToHtml is rewritten. The decision needed: render the value through the project\'s escaping HTML library, or send it as text/plain.',
+  'CWE-79': 'output encoding depends on the context the value is written into (HTML text, attribute, script, URL) and on the library that renders it; only blaze-html\'s preEscapedToHtml and scotty\'s html of concatenated text are rewritten (the latter with an escaper defined in the file, for HTML text and quoted attribute values). The decision needed: render the value through the project\'s escaping HTML library, or send it as text/plain.',
   'CWE-601': 'an open redirect is repaired by restricting where the redirect may go. The decision needed: the permitted destinations (an allow-list of hosts, or relative paths only).',
 });
 
@@ -810,8 +1029,12 @@ export async function defaultRescan(files) {
   try {
     for (const [f, t] of Object.entries(files)) { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), t); }
     const r = await runScan(dir, { deep: true });
-    // a flow the proof gate discharged (a dominating guard, a sanitizer) is reported but is not still a finding
-    return (r.scan.findings || []).filter((f) => !(f.proof && /^proven-/.test(f.proof.verdict)));
+    // a flow the proof gate discharged (a dominating guard, a sanitizer) is reported but is not still a finding, and neither is a finding the
+    // engine LOWERED to information for a reason it states (`originalSeverity`: a recognised guard, an operator-controlled origin; the legacy
+    // verifier of a password-hash migration): the same `actionable` rule the benches score by. A finding that is `info` in its own right (an MD5
+    // whose use is not visible) is still counted, so a fix of it can still be shown to have removed it.
+    const lowered = (f) => f.severity === 'info' && (f.originalSeverity || (f.evidence && f.evidence.legacyVerifier === true));
+    return (r.scan.findings || []).filter((f) => !(f.proof && /^proven-/.test(f.proof.verdict)) && !lowered(f));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
@@ -916,6 +1139,29 @@ export function haskellEffectiveCheck(plan, patched) {
     if (!after.includes(BODY_HELPER)) return { ok: false, ran: true, detail: 'the bounded reader is not defined in the patched file' };
     if (!new RegExp(`requestBodyLimitBytes\\s*=\\s*${BODY_LIMIT_DEFAULT}\\b`).test(after)) return { ok: false, ran: true, detail: 'the declared limit is not the one the patch states' };
     return { ok: true, ran: true, detail: `${want.replaced} strictRequestBody call(s) were replaced by the bounded reader, whose limit is the declared constant` };
+  }
+  if (want.kind === 'html-text') {
+    const code = stripComments(after);
+    if (!code.split('\n').includes(want.line)) return { ok: false, ran: true, detail: 'the rewritten html call is not in the patched file as planned' };
+    if (!after.includes(HTML_TEXT_HELPER)) return { ok: false, ran: true, detail: 'the escaper is not defined in the patched file' };
+    const uses = (t) => (stripComments(t).split('\n').filter((l) => !new RegExp(`^${HTML_TEXT_ESCAPER}\\s`).test(l)).join('\n').match(new RegExp(`(?<![\\w'.])${HTML_TEXT_ESCAPER}(?![\\w'])`, 'g')) || []).length;
+    if (uses(after) - uses(before) !== want.wrapped) return { ok: false, ran: true, detail: `exactly ${want.wrapped} value(s) should have been wrapped; ${uses(after) - uses(before)} were` };
+    return { ok: true, ran: true, detail: `${want.wrapped} value(s) pass through the file's escaper before the html call and the escaper spells out the entities` };
+  }
+  if (want.kind === 'kdf') {
+    const code = stripComments(after); const ls = code.split('\n');
+    const defs = (nm) => ls.filter((l) => new RegExp(`^${nm}\\s+[a-z_][\\w']*\\s+[a-z_][\\w']*\\s*=`).test(l));
+    if (defs(want.legacy).length !== 1) return { ok: false, ran: true, detail: `${want.legacy} is not defined exactly once` };
+    const oldBody = (stripComments(before).split('\n').find((l) => new RegExp(`^${want.fn}\\s+[a-z_][\\w']*\\s+[a-z_][\\w']*\\s*=`).test(l)) || '').replace(/^[^=]*=\s*/, '');
+    if (!oldBody || defs(want.legacy)[0].replace(/^[^=]*=\s*/, '') !== oldBody) return { ok: false, ran: true, detail: `${want.legacy} is not the original definition kept verbatim` };
+    const nd = defs(want.fn);
+    if (nd.length !== 1 || !new RegExp(`fastPBKDF2_SHA256 .*iterCounts = ${KDF_ITERATIONS}\\b`).test(nd[0])) return { ok: false, ran: true, detail: `${want.fn} does not compute PBKDF2-HMAC-SHA256 with ${KDF_ITERATIONS} iterations` };
+    const vd = ls.filter((l) => new RegExp(`^${want.verify}\\s+stored\\s`).test(l));
+    if (vd.length !== 1 || !new RegExp(`${want.needs} stored then stored == ${want.legacy} .* else stored == ${want.fn} `).test(vd[0])) return { ok: false, ran: true, detail: `${want.verify} does not check both forms` };
+    const comparisons = (t) => (stripComments(t).split('\n').filter((l) => !new RegExp(`^${want.verify}\\s`).test(l)).join('\n').match(new RegExp(`==\\s*\\(?${want.fn}\\s|${want.fn}\\s+\\S+\\s+\\S+\\)?\\s*==`, 'g')) || []).length;
+    const verifyCalls = ls.filter((l) => !/^module\s/.test(l) && !new RegExp(`^${want.verify}\\s`).test(l) && new RegExp(`(?<![\\w'.])${want.verify}(?![\\w'])`).test(l)).length;
+    if (comparisons(after) !== 0 || verifyCalls !== want.rewrittenComparisons) return { ok: false, ran: true, detail: `expected ${want.rewrittenComparisons} comparison(s) with ${want.fn} to call ${want.verify}; ${comparisons(after)} comparison(s) remain and ${verifyCalls} call it` };
+    return { ok: true, ran: true, detail: `${want.legacy} keeps the original definition, ${want.fn} computes PBKDF2-HMAC-SHA256 with ${KDF_ITERATIONS} iterations, ${want.verify} checks both forms and the ${want.rewrittenComparisons} comparison(s) call it` };
   }
   return { ok: false, ran: true, detail: `unknown effective check ${want.kind}` };
 }

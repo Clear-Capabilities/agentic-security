@@ -17,6 +17,9 @@ import { planHaskellFix, validateHaskellFix, compileGate, sqlDriverOf, SUPPORTED
 import { languageFixPreview } from '../../src/language/context.js';
 import { mkTestTmp } from '../helpers/tmp.js';
 
+// The stubs need only boot packages; a host's GHC package environment file (`cabal install --lib`) can hide the ones it does not list, so this
+// file (its own process) tells GHC to ignore that environment.
+process.env.GHC_ENVIRONMENT = '-';
 const GHC = !spawnSync('ghc', ['--numeric-version'], { encoding: 'utf8' }).error;
 const skipNoGhc = GHC ? false : 'GHC is not installed: compile verification could not run (this is a skip, not a pass)';
 
@@ -216,8 +219,8 @@ newSession = randomRIO (0, 1000000000)
   }
 });
 
-test('the fixer set is exactly the ten rewrites that are proved the same program minus the vulnerability (or a stated mitigation)', () => {
-  assert.deepEqual([...SUPPORTED_FIX_IDS].sort(), ['hs-cookie-attributes', 'hs-hash-sha256', 'hs-html-escape', 'hs-log-redact', 'hs-path-takefilename', 'hs-process-argv', 'hs-random-os-entropy', 'hs-request-body-bound', 'hs-sql-parameterize', 'hs-tls-validate']);
+test('the fixer set is exactly the rewrites that are proved the same program minus the vulnerability (or a stated mitigation)', () => {
+  assert.deepEqual([...SUPPORTED_FIX_IDS].sort(), ['hs-cookie-attributes', 'hs-hash-sha256', 'hs-html-escape', 'hs-html-escape-text', 'hs-log-redact', 'hs-password-kdf-migrate', 'hs-path-takefilename', 'hs-process-argv', 'hs-random-os-entropy', 'hs-request-body-bound', 'hs-sql-parameterize', 'hs-tls-validate']);
 });
 
 test('validateHaskellFix never writes without apply and reports the compile gate as not run by default', async () => {

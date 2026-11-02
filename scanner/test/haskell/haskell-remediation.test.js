@@ -171,9 +171,10 @@ test('[HS-010.AC02] every fix carries exactly one FULL/MITIGATION/WORKAROUND lab
   const labels = Object.keys(SRC).map((k) => planHaskellFix(fin(k), filesOf(k)).label);
   for (const l of labels) assert.ok(LABELS.includes(l));
   assert.ok(labels.includes('FULL') && labels.includes('MITIGATION'));
-  // the five original fixers, hs-path-takefilename (real-code precision work), and the four added with the 0.190.0 remediation work (TLS validation,
-  // cookie attributes, OS entropy, request-body bound); the exact set is pinned in haskell-remediation-classes.test.js
-  assert.equal(SUPPORTED_FIX_IDS.length, 10);
+  // the five original fixers, hs-path-takefilename (real-code precision work), the four added with the 0.190.0 remediation work (TLS validation,
+  // cookie attributes, OS entropy, request-body bound) and the two of 0.195.10 (HTML from text, the password-hash migration); the exact set is
+  // pinned in haskell-remediation-classes.test.js
+  assert.equal(SUPPORTED_FIX_IDS.length, 12);
   for (const id of ['hs-sql-parameterize', 'hs-process-argv', 'hs-html-escape', 'hs-hash-sha256', 'hs-log-redact']) assert.ok(SUPPORTED_FIX_IDS.includes(id), id);
 });
 

@@ -1,9 +1,12 @@
 {
   "schema": "agentic-security/language-support-suites@1",
-  "ranAt": "2026-11-01",
+  "ranAt": "2026-11-02",
   "node": "v24.20.0",
   "tools": {
     "ghc": true,
+    "ghcVersion": "9.4.8",
+    "ghcRecorded": "9.4.8",
+    "ghcMatchesRecorded": true,
     "cabal": true,
     "stack": false,
     "nix": false,

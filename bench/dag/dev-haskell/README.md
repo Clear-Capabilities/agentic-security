@@ -64,6 +64,17 @@ Numbers are from the runs recorded in this directory (`score.mjs`, `fresh-score.
 
 Read these with the limits above: eight and six projects, one labeller, small counts. They describe these projects.
 
+## Remediation on the labelled true positives
+
+`fix-real.mjs <project> --all` runs the fix preview (the path the CLI `fix`, the MCP `synthesize_fix` and the LSP use) over every non-info finding of a project. On 2026-11-01 it was run over the five projects that hold labelled true positives (gitit, scotty, dhall-haskell, hackage-server, ihp; 47 flagged sites, 26 of them labelled true positive).
+
+| | labelled true-positive sites with a verified patch |
+| --- | --- |
+| before 0.195.10 | 3 of 26 (one scotty session cookie, two IHP wai request bodies) |
+| after 0.195.10 | 8 of 26 (the three above and the five scotty `html $ mconcat [...]` sites) |
+
+Still refused, by class: scotty's own `body` reads (3; the bound is a scotty option, not a rewrite of the read), two dhall path operations spread over several functions, three generators in files importing no entropy package, IHP's OpenSSL `VerifyNone`, an open redirect, two partial functions, and gitit's password hash, which imports the `SHA` package (no KDF in it: the migration fixer needs cryptonite or crypton in the file, and the library is the operator's decision). The 47 flagged sites are the same before and after: the two fixers changed no finding.
+
 The first measurement on the fresh set is the honest generalisation figure, and it is modest (9.5% to 10.6%): 112 of its 161
 remaining flagged sites were `unsafe*` boundary notes that an existing test pins at `low`. Four true positives were **lost**
 (three distinct flaws: a command injection and two request-indexed `!!`, all in IHP's own development IDE, found before only because
