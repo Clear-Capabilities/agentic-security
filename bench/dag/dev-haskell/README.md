@@ -75,6 +75,14 @@ Read these with the limits above: eight and six projects, one labeller, small co
 
 Still refused, by class: scotty's own `body` reads (3; the bound is a scotty option, not a rewrite of the read), two dhall path operations spread over several functions, three generators in files importing no entropy package, IHP's OpenSSL `VerifyNone`, an open redirect, two partial functions, and gitit's password hash, which imports the `SHA` package (no KDF in it: the migration fixer needs cryptonite or crypton in the file, and the library is the operator's decision). The 47 flagged sites are the same before and after: the two fixers changed no finding.
 
+**2026-11-02 (0.195.11).** Run again after the scotty body-limit fixer and the taint work (the same five projects, `fix-real.mjs <project> --all`):
+
+| | labelled true-positive sites with a verified patch |
+| --- | --- |
+| after 0.195.11 | 11 of 27 (the eight above, the three scotty `body` reads with `setMaxRequestBodySize` as the first statement of the example's block) |
+
+The denominator grew by one: a request-indexed `!!` in IHP's schema designer (`SchemaOperations.hs:542`) is flagged and labelled for the first time (`LABEL-CHANGES.md`). The four true positives lost before are back as three flagged sites plus the multi-sink chain at the same command-injection line, which is still not reported (one `tpNotFlagged` on the fresh set): the in-tree definition of IHP's request accessor now keeps the registry's model, and the IHP preludes' re-export chains resolve to it instead of to an external name they re-export first. The restored sites are refused by class: the command injection builds a `Text` command for `Process.system` (the argv rewrite recognises a `String` shell string), and a partial function has no deterministic rewrite. The fresh set now flags 31 labelled sites, 21 of them true positives (67.7%, Wilson 50.1% to 81.4%), against 26 and 17 (65.4%) before; two of the ten false positives and five development-census sites are new, all read and labelled after the scan found them, none fed back into a rule. The sealed independent set, measured once (its `USE-LOG.md`), is unchanged at 1 true positive of 35 decided.
+
 The first measurement on the fresh set is the honest generalisation figure, and it is modest (9.5% to 10.6%): 112 of its 161
 remaining flagged sites were `unsafe*` boundary notes that an existing test pins at `low`. Four true positives were **lost**
 (three distinct flaws: a command injection and two request-indexed `!!`, all in IHP's own development IDE, found before only because

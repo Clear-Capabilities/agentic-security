@@ -20,7 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { parseHaskell } from './haskell-parser.js';
 import { SENSITIVE } from './haskell-security-rules.js';
 import { stripComments } from './haskell-comments.js';
-import { compareVersions, parseVersion } from './haskell-manifests.js';
+import { compareVersions, parseVersion, parseCabalFile, versionSatisfies } from './haskell-manifests.js';
 import { runFixLifecycle, unifiedDiff, writeWithBackup, undoFix } from './fix-lifecycle.js';
 
 export const HS_FIX_VERSION = 'haskell-fix/1';
@@ -920,7 +920,102 @@ function fixPasswordKdf(text, f) {
   };
 }
 
+// ── scotty request body limit (CWE-770) ───────────────────────────────────────
+// scotty's `body` reads the whole request body. The bound scotty offers is application-wide: `setMaxRequestBodySize :: Kilobytes -> ScottyM ()`
+// (scotty 0.12 and later; a request past it gets a 413 before any handler runs). The mitigation adds ONE call, as the first statement of the
+// ScottyM block that builds the application this handler belongs to: the block that contains the read (an inline route), or the block in this
+// file that names the handler function. The limit is a declared default (1 MiB) written as a named constant the operator must review. Refused:
+// a block in another file (the rule can then only say "a limit exists somewhere"), a `do` that keeps a statement on its own line, a name of ours
+// already taken, and a cabal file whose scotty bound excludes every version from 0.12 on.
+const SCOTTY_LIMIT_KB = 1024;
+const SCOTTY_LIMIT_CONST = 'agenticRequestBodyLimitKb';
+const SCOTTY_LIMIT_ALIAS = 'AgenticScotty';
+const SCOTTY_LIMIT_DEF = `-- Upper bound, in kilobytes, for any request body this application accepts: a request past it is answered 413 before a handler runs. This is a default chosen by the fixer, not a measured need: set it for this service.
+${SCOTTY_LIMIT_CONST} :: Int
+${SCOTTY_LIMIT_CONST} = ${SCOTTY_LIMIT_KB}
+`;
+export { SCOTTY_LIMIT_DEF, SCOTTY_LIMIT_KB };
+const SCOTTY_VERSIONS_WITH_LIMIT = ['0.12', '0.12.1', '0.20', '0.21', '0.22', '0.30', '0.31'];
+const TOP_DECL = /^([a-z_][\w']*)\b/;
+const NOT_A_DEF = new Set(['import', 'module', 'data', 'type', 'newtype', 'class', 'instance', 'where', 'infix', 'infixl', 'infixr', 'foreign', 'default', 'deriving', 'pattern']);
+// The ScottyM blocks of a file: `main = scotty 3000 $ do`, `app = scottyOpts opts $ do`, or `app :: ScottyM ()` with `app = do`. Each block:
+// the top-level function that holds it, the line of its `do`, and the indentation of its first statement.
+function scottyBlocksOf(code) {
+  const ls = code.split('\n');
+  const starts = []; ls.forEach((l, i) => { const m = TOP_DECL.exec(l); if (m && !NOT_A_DEF.has(m[1])) starts.push({ line: i, name: m[1] }); });
+  const fnAt = (i) => { let cur = null; for (const s of starts) { if (s.line <= i) cur = s; else break; } return cur ? cur.name : null; };
+  const sigs = new Set(); ls.forEach((l) => { const m = /^([a-z_][\w']*)\s*::\s*ScottyM\s*\(\)\s*$/.exec(l); if (m) sigs.add(m[1]); });
+  const out = [];
+  ls.forEach((l, i) => {
+    const inline = /(?:^|[\s$(])(?:[A-Z][\w']*\.)?scotty(?:Opts|T|OptsT|App|AppT)?\b[^\n]*\$\s*do\s*$/.test(l);
+    const named = (() => { const m = /^([a-z_][\w']*)\s*=\s*do\s*$/.exec(l); return !!(m && sigs.has(m[1])); })();
+    if (!inline && !named) return;
+    let j = i + 1; while (j < ls.length && ls[j].trim() === '') j++;
+    if (j >= ls.length) return;
+    const indent = /^(\s*)/.exec(ls[j])[1];
+    if (!indent.length || ls[j].trim().startsWith('where')) return;
+    out.push({ fn: fnAt(i), doLine: i, firstStatement: j, indent });
+  });
+  return { blocks: out, fnAt };
+}
+// The scotty bound every cabal file in the tree declares, judged against the versions that have the limit: null when no bound is declared.
+function scottyBoundExcludesLimit(files) {
+  for (const [name, text] of Object.entries(files || {})) {
+    if (!/\.cabal$/i.test(name) || typeof text !== 'string') continue;
+    let parsed = null; try { parsed = parseCabalFile(text); } catch { parsed = null; }
+    for (const c of (parsed && parsed.components) || []) for (const d of c.dependencies || []) {
+      if (!d || d.name !== 'scotty' || !d.range) continue;
+      let admits = false;
+      for (const v of SCOTTY_VERSIONS_WITH_LIMIT) { try { if (versionSatisfies({ ok: true, ast: d.range }, v)) { admits = true; break; } } catch { admits = true; break; } }
+      if (!admits) return { file: name, rangeText: d.rangeText || '' };
+    }
+  }
+  return null;
+}
+function fixScottyBody(text, f) {
+  if (!/Web\.Scotty(?:\.Trans)?\.body\b/.test(String(f.description || f.detail || ''))) return null;
+  const trans = !importInfo(text, 'Web.Scotty') && importInfo(text, 'Web.Scotty.Trans');
+  if (!importInfo(text, 'Web.Scotty') && !trans) return null;
+  const code = stripComments(text);
+  if (new RegExp(`(?<![\\w'.])(?:${SCOTTY_LIMIT_CONST}|setMaxRequestBodySize)(?![\\w'])`).test(code) || new RegExp(`\\b${SCOTTY_LIMIT_ALIAS}\\b`).test(code)) return null;
+  const { blocks, fnAt } = scottyBlocksOf(code);
+  if (!blocks.length) return null;
+  const holder = fnAt(f.line - 1);
+  let block = blocks.find((b) => b.fn && b.fn === holder) || null;
+  if (!block && holder) {
+    const ls = code.split('\n');
+    const starts = []; ls.forEach((l, i) => { const m = TOP_DECL.exec(l); if (m && !NOT_A_DEF.has(m[1])) starts.push(i); });
+    const spanOf = (b) => { const s = b.doLine; let e = ls.length; for (const i of starts) if (i > s) { e = i; break; } return ls.slice(s, e).join('\n'); };
+    const naming = blocks.filter((b) => new RegExp(`(?<![\\w'.])${holder}(?![\\w'])`).test(spanOf(b)));
+    if (naming.length === 1) block = naming[0];
+  }
+  if (!block) return null;
+  const excluded = scottyBoundExcludesLimit(f._files);
+  if (excluded) return null;
+  const lines = text.split('\n');
+  const statement = `${block.indent}${SCOTTY_LIMIT_ALIAS}.setMaxRequestBodySize ${SCOTTY_LIMIT_CONST}`;
+  lines.splice(block.firstStatement, 0, statement);
+  // the last import of the CODE: an `import` inside a block comment (a commented-out alternative main) is not one
+  let at = -1; stripComments(lines.join('\n')).split('\n').forEach((l, i) => { if (/^import\s/.test(l)) at = i; });
+  if (at < 0) return null;
+  lines.splice(at + 1, 0, `import qualified ${trans ? 'Web.Scotty.Trans' : 'Web.Scotty'} as ${SCOTTY_LIMIT_ALIAS}`);
+  const next = lines.join('\n').replace(/\n*$/, '\n') + '\n' + SCOTTY_LIMIT_DEF;
+  const insertedLine = block.firstStatement + 2;   // 1-based, after the import line added above it
+  const bound = (() => { for (const [name, t] of Object.entries(f._files || {})) if (/\.cabal$/i.test(name) && typeof t === 'string' && /\bscotty\b/.test(t)) return name; return null; })();
+  return {
+    ruleId: 'hs-scotty-body-limit', label: 'MITIGATION', text: next,
+    explanation: `Added setMaxRequestBodySize ${SCOTTY_LIMIT_CONST} (${SCOTTY_LIMIT_KB} KB, a declared default, not a measured need) as the first statement of the ScottyM block in \`${block.fn || 'the application'}\`, which ${block.fn === holder ? 'contains this body read' : `registers \`${holder}\``}.`,
+    consequences: [
+      `Every route of the application built in \`${block.fn || 'this block'}\` now answers a request whose body exceeds ${SCOTTY_LIMIT_KB} KB with a 413 before the handler runs; legitimate large uploads are rejected until ${SCOTTY_LIMIT_CONST} is raised.`,
+      `Requires scotty 0.12 or later (setMaxRequestBodySize); ${bound ? `the bound declared in ${bound} admits such a version, and the build is not checked against it` : 'no cabal file in the tree declares a scotty bound, so the version is not checked'}.`,
+    ],
+    behavior: { kind: 'scotty-body-limit', fn: block.fn, kb: SCOTTY_LIMIT_KB, line: insertedLine },
+    expectEffective: { kind: 'scotty-body-limit', line: insertedLine, statement },
+  };
+}
+
 const FIXERS = [
+  { id: 'hs-scotty-body-limit', applies: (f) => f.rule === 'hs-unbounded-request-body' && /Web\.Scotty(?:\.Trans)?\.body\b/.test(String(f.description || f.detail || '')), run: fixScottyBody, reportedLineOnly: true },
   { id: 'hs-password-kdf-migrate', applies: (f) => f.cwe === 'CWE-916' && (f.rule === 'hs-fast-password-hash' || /fast general-purpose hash/i.test(String(f.vuln || ''))), run: fixPasswordKdf },
   { id: 'hs-tls-validate', applies: (f) => f.cwe === 'CWE-295' || f.rule === 'hs-tls-validation-disabled', run: fixTls, reportedLineOnly: true },
   { id: 'hs-cookie-attributes', applies: (f) => f.cwe === 'CWE-1004' || f.rule === 'hs-insecure-cookie', run: fixCookie, reportedLineOnly: true },
@@ -1010,7 +1105,7 @@ const CLASS_REASONS = Object.freeze({
   'CWE-338': 'a predictable generator is replaced by the operating system CSPRNG (System.Entropy or Crypto.Random), whose result type is bytes, not System.Random\'s: the surrounding code must change with it. Only a one-line action of type IO <fixed-width integer> equal to randomIO, in a file that already imports System.Entropy, is rewritten. The decision needed: the token\'s type and size (a 30-bit integer cannot be made unguessable by changing the generator) and the entropy library the project declares.',
   'CWE-1004': 'cookie attributes live in different places per framework. The recognised shapes are a Set-Cookie header string literal, a Web.Cookie SetCookie record update, servant-auth cookieIsSecure, and scotty setSimpleCookie/makeSimpleCookie; this is none of them, or an attribute is set from an expression. The decision needed: which attributes to send (Secure, HttpOnly, SameSite) and whether this cookie must work over plain HTTP.',
   'CWE-306': 'a missing authentication check needs a policy; the scanner reports the handler and does not invent the guard. The decision needed: which credential authenticates this route (session, token, API key) and what an unauthenticated caller receives (401, a redirect to login).',
-  'CWE-770': 'a resource limit is a number only the operator can choose (how many bytes a body may have, how many requests, how large an allocation). The one recognised shape is wai strictRequestBody of a Request variable in a file importing Network.Wai and Data.ByteString.Lazy, which gets a bounded reader with a declared default; this is not that shape. The decision needed: the limit for this input, and what happens past it (reject with 413, truncate, spool to disk).',
+  'CWE-770': 'a resource limit is a number only the operator can choose (how many bytes a body may have, how many requests, how large an allocation). Two shapes are recognised, each with a declared default: wai strictRequestBody of a Request variable in a file importing Network.Wai and Data.ByteString.Lazy, which gets a bounded reader, and scotty body in a file whose ScottyM block contains the read or names the handler, which gets setMaxRequestBodySize as that block\'s first statement (scotty 0.12 and later; refused when the block is in another file or a cabal bound excludes those versions); this is neither shape. The decision needed: the limit for this input, and what happens past it (reject with 413, truncate, spool to disk).',
   'CWE-295': 'enabling certificate validation can break connections the project depends on. Only the connection package\'s TLSSettingsSimple with a literal True is flipped. The decision needed: the trust store (the system store, a pinned CA bundle, a private authority) and host-name verification; an OpenSSL VerifyNone is not rewritten because VerifyPeer verifies nothing until a CA bundle is loaded and does not check the host name.',
   'CWE-798': 'a hard-coded secret must be rotated and moved to a secret store; rewriting the line would leave the leaked value valid. The decision needed: where the secret is read from at run time (environment, a secrets manager, a file outside the repository) and rotating the exposed value, which no edit of this file can do.',
   'CWE-611': 'XML entity handling depends on the parser configuration in use. The decision needed: whether this document source is trusted and which entity and DTD features the parser may enable.',
@@ -1131,6 +1226,17 @@ export function haskellEffectiveCheck(plan, patched) {
     if (/randomIO|System\.Random/.test(d)) return { ok: false, ran: true, detail: 'the action still calls System.Random' };
     if (!new RegExp(`getEntropy\\s+${want.bytes}\\s*$`).test(d)) return { ok: false, ran: true, detail: `the action does not read ${want.bytes} entropy byte(s)` };
     return { ok: true, ran: true, detail: `${want.fn} reads ${want.bytes} byte(s) from getEntropy and no longer calls System.Random` };
+  }
+  if (want.kind === 'scotty-body-limit') {
+    const count = (t, re) => (stripComments(t).match(re) || []).length;
+    const limits = (t) => count(t, /(?<![\w'])(?:[A-Z][\w']*\.)?setMaxRequestBodySize(?![\w'])/g);
+    const bodies = (t) => count(t, /(?<![\w'.])body(?![\w'])/g);
+    if (limits(after) !== limits(before) + 1) return { ok: false, ran: true, detail: 'exactly one setMaxRequestBodySize call should have been added' };
+    const ls = stripComments(after).split('\n');
+    if (ls[want.line - 1] !== want.statement) return { ok: false, ran: true, detail: `the limit is not the statement at line ${want.line} as planned` };
+    if (bodies(after) !== bodies(before)) return { ok: false, ran: true, detail: 'the body reads changed; the patch should only add the limit' };
+    if (!new RegExp(`^${SCOTTY_LIMIT_CONST}\\s*=\\s*${SCOTTY_LIMIT_KB}\\b`, 'm').test(after)) return { ok: false, ran: true, detail: 'the declared limit is not the one the patch states' };
+    return { ok: true, ran: true, detail: `setMaxRequestBodySize is the first statement of the application block, with the declared constant (${SCOTTY_LIMIT_KB} KB), and no body read changed` };
   }
   if (want.kind === 'body') {
     const count = (t, re) => (stripComments(t).match(re) || []).length;

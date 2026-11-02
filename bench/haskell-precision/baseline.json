@@ -1,12 +1,12 @@
 {
  "schema": "agentic-security/haskell-precision-baseline@1",
  "comparison": "equality: a regression fails, and so does an improvement that was not recorded here",
- "engineVersion": "0.195.8",
+ "engineVersion": "0.195.10",
  "labelsDigests": {
   "development-tuning": "f599e1edc2e1e8b68756b4d25c238daf0f0f04b34ea30983a16a793615e40395",
   "development-verification": "39b0c5bf5cd20298a8e7ab608e5d7b938c4725a8f8d51e5b22a4ba011f1d0870",
-  "development-remainder": "cbd0e3a60f3419444b3d0caa71d9c993ceaa112c2caa4283818a1be5ab7a3463",
-  "fresh": "d4cf3853939888491e1b30aad368c09ca72b893e00debfc1ec2000c0e5fbd3d7"
+  "development-remainder": "d2ddd962485c825a075d3108c030d938ac0377cb4740f62ac158e571b20de90a",
+  "fresh": "78b1abc0f47339bf75a165358b4f0ee5d2a34cdeff290afb70511c9e6d889a42"
  },
  "aggregates": {
   "development-tuning": {
@@ -84,22 +84,22 @@
    ]
   },
   "development-remainder": {
-   "labelled": 5,
-   "reported": 5,
+   "labelled": 10,
+   "reported": 10,
    "notReported": 0,
-   "flagged": 1,
+   "flagged": 6,
    "loweredToInfo": 4,
    "tp": 0,
-   "fp": 1,
+   "fp": 6,
    "tpNotFlagged": 0,
    "byStatus": {
     "entrypoint-reachable": {
      "TP": 0,
-     "FP": 0
+     "FP": 2
     },
     "external-api": {
      "TP": 0,
-     "FP": 5
+     "FP": 7
     },
     "unknown": {
      "TP": 0,
@@ -111,35 +111,35 @@
     },
     "no-verdict": {
      "TP": 0,
-     "FP": 0
+     "FP": 1
     }
    },
    "precision": 0,
    "wilson95": [
     0,
-    0.7935
+    0.3903
    ]
   },
   "fresh": {
-   "labelled": 222,
-   "reported": 180,
-   "notReported": 42,
-   "flagged": 26,
+   "labelled": 224,
+   "reported": 185,
+   "notReported": 39,
+   "flagged": 31,
    "loweredToInfo": 154,
-   "tp": 17,
-   "fp": 9,
-   "tpNotFlagged": 4,
+   "tp": 21,
+   "fp": 10,
+   "tpNotFlagged": 1,
    "byStatus": {
     "entrypoint-reachable": {
      "TP": 8,
-     "FP": 37
+     "FP": 38
     },
     "external-api": {
      "TP": 0,
      "FP": 11
     },
     "unknown": {
-     "TP": 0,
+     "TP": 1,
      "FP": 2
     },
     "unreachable-in-project": {
@@ -147,24 +147,24 @@
      "FP": 0
     },
     "no-verdict": {
-     "TP": 9,
+     "TP": 12,
      "FP": 113
     }
    },
-   "precision": 0.6538,
+   "precision": 0.6774,
    "wilson95": [
-    0.4622,
-    0.8059
+    0.5014,
+    0.8143
    ]
   },
   "census": {
    "dev": {
     "cabal2nix": {
-     "rows": 2,
+     "rows": 3,
      "flagged": 0,
-     "loweredToInfo": 2,
+     "loweredToInfo": 3,
      "byStatus": {
-      "external-api": 2
+      "external-api": 3
      }
     },
     "ghcup-hs": {
@@ -178,39 +178,41 @@
      }
     },
     "gitit": {
-     "rows": 6,
+     "rows": 15,
      "flagged": 2,
-     "loweredToInfo": 4,
+     "loweredToInfo": 13,
      "byStatus": {
-      "entrypoint-reachable": 1,
-      "no-verdict": 4,
+      "entrypoint-reachable": 8,
+      "no-verdict": 6,
       "external-api": 1
      }
     },
     "hackage-server": {
-     "rows": 43,
-     "flagged": 1,
-     "loweredToInfo": 42,
+     "rows": 47,
+     "flagged": 2,
+     "loweredToInfo": 45,
      "byStatus": {
-      "entrypoint-reachable": 34,
-      "external-api": 5,
-      "no-verdict": 4
+      "entrypoint-reachable": 35,
+      "external-api": 6,
+      "no-verdict": 6
      }
     },
     "pandoc": {
-     "rows": 7,
+     "rows": 9,
      "flagged": 0,
-     "loweredToInfo": 7,
+     "loweredToInfo": 9,
      "byStatus": {
-      "no-verdict": 7
+      "no-verdict": 7,
+      "entrypoint-reachable": 2
      }
     },
     "stack": {
-     "rows": 2,
+     "rows": 5,
      "flagged": 0,
-     "loweredToInfo": 2,
+     "loweredToInfo": 5,
      "byStatus": {
-      "entrypoint-reachable": 2
+      "entrypoint-reachable": 4,
+      "no-verdict": 1
      }
     },
     "stackage-server": {
@@ -222,12 +224,13 @@
      }
     },
     "xmonad-contrib": {
-     "rows": 2,
-     "flagged": 1,
-     "loweredToInfo": 1,
+     "rows": 16,
+     "flagged": 5,
+     "loweredToInfo": 11,
      "byStatus": {
-      "external-api": 1,
-      "no-verdict": 1
+      "no-verdict": 4,
+      "entrypoint-reachable": 7,
+      "external-api": 5
      }
     }
    },
@@ -252,13 +255,13 @@
      }
     },
     "ihp": {
-     "rows": 68,
-     "flagged": 20,
-     "loweredToInfo": 48,
+     "rows": 157,
+     "flagged": 25,
+     "loweredToInfo": 132,
      "byStatus": {
-      "no-verdict": 34,
-      "unknown": 9,
-      "entrypoint-reachable": 20,
+      "no-verdict": 111,
+      "unknown": 19,
+      "entrypoint-reachable": 22,
       "external-api": 5
      }
     },
@@ -295,13 +298,13 @@
  "sealed": {
   "labelsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
   "resultsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
-  "scannerVersion": "0.188.0",
+  "scannerVersion": "0.195.10",
   "all": {
-   "flagged": 73,
+   "flagged": 77,
    "tp": 1,
    "fp": 34,
    "ambiguous": 11,
-   "unlabeled": 27,
+   "unlabeled": 31,
    "precision": 0.0286
   }
  }

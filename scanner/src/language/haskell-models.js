@@ -398,6 +398,13 @@ export const HS_RULE_APIS = Object.freeze([
   // mwc-random and splitmix are statistical generators, not CSPRNGs (createSystemRandom only seeds from the OS)
   ...E('System.Random.MWC', ['uniformR', 'uniform', 'uniformRM', 'uniformM', 'createSystemRandom', 'create', 'initialize', 'withSystemRandom', 'withSystemRandomST']),
   ...E('System.Random.SplitMix', ['nextWord64', 'nextInt', 'nextDouble', 'mkSMGen', 'newSMGen', 'initSMGen']),
+  // mutable cells (haskell-ir.js CELL_OPS): named here so the IR qualifies them whichever wildcard imports a module has
+  ...E('Data.IORef', ['newIORef', 'readIORef', 'writeIORef', 'modifyIORef', "modifyIORef'", 'atomicWriteIORef']),
+  ...E('Control.Concurrent.MVar', ['newMVar', 'newEmptyMVar', 'putMVar', 'takeMVar', 'readMVar', 'modifyMVar_', 'swapMVar']),
+  ...E('Control.Concurrent', ['newMVar', 'newEmptyMVar', 'putMVar', 'takeMVar', 'readMVar', 'modifyMVar_']),
+  ...E('Control.Concurrent.STM', ['atomically', 'newTVar', 'newTVarIO', 'readTVar', 'readTVarIO', 'writeTVar', 'modifyTVar', "modifyTVar'"]),
+  ...E('Control.Concurrent.STM.TVar', ['newTVar', 'newTVarIO', 'readTVar', 'readTVarIO', 'writeTVar', 'modifyTVar', "modifyTVar'"]),
+  ...E('Data.STRef', ['newSTRef', 'readSTRef', 'writeSTRef', 'modifySTRef', "modifySTRef'"]),
   ...E('Crypto.Random', ['getRandomBytes']), ...E('System.Entropy', ['getEntropy']),
   ...E('Network.Wai', ['strictRequestBody', 'lazyRequestBody']),
   ...E('Data.Time.Clock.POSIX', ['getPOSIXTime']), ...E('Data.Time.Clock', ['getCurrentTime']), ...E('System.CPUTime', ['getCPUTime']),
@@ -441,8 +448,8 @@ export const HS_WEB_FRAMEWORKS = Object.freeze({
   yesod: { modules: ['Yesod', 'Yesod.Core', 'Yesod.Auth'], package: 'yesod', tested: ['1.6'] },
 });
 export const HS_WEB_APIS = Object.freeze([
-  ...E('Web.Scotty', ['get', 'post', 'put', 'delete', 'patch', 'options', 'addroute', 'matchAny', 'middleware', 'scotty', 'scottyApp', 'status', 'finish', 'raise', 'raiseStatus', 'redirect', 'text', 'json', 'html', 'file', 'setHeader', 'header', 'headers', 'param', 'params', 'captureParam', 'queryParam', 'formParam', 'body', 'jsonData', 'files', 'rescue', 'liftIO', 'notFound']),
-  ...E('Web.Scotty.Trans', ['get', 'post', 'put', 'delete', 'patch', 'middleware', 'scottyT', 'status', 'finish', 'raise', 'raiseStatus', 'redirect', 'text', 'json', 'html', 'header', 'param', 'captureParam', 'queryParam', 'formParam', 'body', 'jsonData']),
+  ...E('Web.Scotty', ['get', 'post', 'put', 'delete', 'patch', 'options', 'addroute', 'matchAny', 'middleware', 'scotty', 'scottyApp', 'status', 'finish', 'raise', 'raiseStatus', 'redirect', 'text', 'json', 'html', 'file', 'setHeader', 'header', 'headers', 'param', 'params', 'captureParam', 'queryParam', 'formParam', 'body', 'jsonData', 'files', 'rescue', 'liftIO', 'notFound', 'setMaxRequestBodySize']),
+  ...E('Web.Scotty.Trans', ['get', 'post', 'put', 'delete', 'patch', 'middleware', 'scottyT', 'status', 'finish', 'raise', 'raiseStatus', 'redirect', 'text', 'json', 'html', 'header', 'param', 'captureParam', 'queryParam', 'formParam', 'body', 'jsonData', 'setMaxRequestBodySize']),
   ...E('Network.Wai', ['pathInfo', 'requestMethod', 'requestHeaders', 'responseLBS', 'queryString', 'rawPathInfo']),
   ...E('Network.Wai.Handler.Warp', ['run', 'runSettings']),
   ...E('Network.HTTP.Types', ['status200', 'status201', 'status400', 'status401', 'status403', 'status404', 'unauthorized401', 'forbidden403', 'methodGet', 'methodPost', 'methodPut', 'methodDelete', 'hAuthorization', 'hCookie']),

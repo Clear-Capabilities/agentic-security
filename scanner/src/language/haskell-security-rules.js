@@ -87,6 +87,54 @@ const BOUNDING = /(?:^|\.)(?:take|takeE|isolate|hGetSome|hGet|splitAt|limit|limi
 const REQUEST_PROVENANCE = new Set(['url-param', 'path-param', 'http-body', 'header', 'cookie', 'upload']);
 // wai-extra's `requestSizeCheck (Just n) req` wraps the request so the body read after it fails past n bytes: a bound on every body read of the function.
 const WAI_SIZE_CHECK = /(?:^|\.)requestSizeCheck$/;
+// scotty's global body limit: `setMaxRequestBodySize kb` in the ScottyM block answers every body read of the application it builds with a 413.
+const SCOTTY_BODY_LIMIT = /^Web\.Scotty(?:\.Trans)?\.setMaxRequestBodySize$/;
+
+// Request text handed to a project helper: in `deleteEnum tableId list`, where the caller's `tableId` was read from the request, the helper's
+// first parameter carries caller text for the partial-function, allocation and bounding rules (which do not follow calls themselves). Decided
+// from the IR's RESOLVED call targets and the caller's own request reads, one hop per round, bounded rounds; a parameter the IR could not name
+// (`$arg0`, a pattern) is skipped. Returns qid -> Set of parameter names.
+function requestTextParams(ir) {
+  const byQid = new Map();
+  for (const fir of Object.values(ir.perFile)) for (const fn of fir.functions) byQid.set(fn.qid, fn);
+  const out = new Map();
+  const requestRead = (c) => { const s = sourceInfo(c.callee); return !!s && REQUEST_PROVENANCE.has(s.provenance); };
+  const callsIn = (e) => { const r = []; for (const x of walk(e)) if (x.kind === 'call' && typeof x.callee === 'string') r.push(x); return r; };
+  for (let round = 0; round < 4; round++) {
+    let grew = false;
+    for (const fn of byQid.values()) {
+      const from = new Set(out.get(fn.qid) || []);
+      for (let k = 0; k < 8; k++) {
+        let g = false;
+        for (const n of fnNodes(fn)) {
+          if (n.kind !== 'assign' || !n.target || !n.source) continue;
+          if (!from.has(n.target) && (callsIn(n.source).some(requestRead) || [...names(n.source)].some((x) => from.has(x)))) { from.add(n.target); g = true; }
+        }
+        if (!g) break;
+      }
+      const derived = (e) => [...names(e)].some((x) => from.has(x)) || callsIn(e).some(requestRead);
+      const mark = (x) => {
+        if (!x || !x.hs) return;
+        // a call with every argument, or a partial application (`updateSchema (deleteEnum tableId)`: the IR keeps the supplied arguments as elements)
+        const target = x.kind === 'call' && x.hs.status === 'resolved' ? x.hs.target : (x.kind === 'array' && x.hs.partial ? x.hs.partial.target : null);
+        if (!target) return;
+        const callee = byQid.get(target);
+        if (!callee || callee === fn || !Array.isArray(callee.params)) return;
+        ((x.kind === 'call' ? x.args : x.elements) || []).forEach((a, i) => {
+          const p = callee.params[i];
+          if (!p || typeof p !== 'string' || p.startsWith('$') || !derived(a)) return;
+          if (!out.has(callee.qid)) out.set(callee.qid, new Set());
+          if (!out.get(callee.qid).has(p)) { out.get(callee.qid).add(p); grew = true; }
+        });
+      };
+      for (const n of fnNodes(fn)) for (const ex of [n.value, n.source, n.cond, ...(n.args || [])]) if (ex) for (const x of walk(ex)) mark(x);
+      // a helper the IR inlined at its call site keeps its edge, with the arguments, on `fn.calls`
+      for (const c of fn.calls || []) if (c && c.hs && c.hs.inlined) mark(c);
+    }
+    if (!grew) break;
+  }
+  return out;
+}
 // `replicateM n getLine` reads n lines: the count is an allocation (and an input loop) sized by whoever supplied n.
 const ALLOCATORS = new Set(['replicate', 'Prelude.replicate', 'Data.List.replicate', 'Data.ByteString.replicate', 'Data.ByteString.Char8.replicate', 'Data.ByteString.Lazy.replicate', 'Data.Text.replicate', 'Data.Vector.replicate', 'Control.Monad.replicateM', 'Control.Monad.replicateM_', 'Data.Vector.replicateM', 'Data.List.genericReplicate']);
 const CLAMPS = /^(?:(?:Prelude|Data\.Ord)\.)?(?:min|clamp)$/;
@@ -391,6 +439,20 @@ export function analyzeHaskellRules(files, opts = {}) {
     if (/import\s+(?:qualified\s+)?Network\.Wai\.Middleware\.RequestSizeLimit\b/.test(text) || /\brequestSizeLimitMiddleware\b/.test(text)) { requestLimit = { file, line: (text.split('\n').findIndex((l) => /RequestSizeLimit|requestSizeLimitMiddleware/.test(l)) + 1) || 1 }; break; }
   }
 
+  const requestParams = requestTextParams(ir);
+  // A ScottyM block that calls setMaxRequestBodySize bounds every body read of the application it builds: certain for a body read in the SAME
+  // function (an inline route) and for a handler the block references; a block elsewhere in the project is a control whose reach is not verified
+  // (the finding stays, at low, as for the wai middleware).
+  const scottyLimitFns = [];
+  for (const fir of Object.values(ir.perFile)) for (const fn of fir.functions) if ((fn.calls || []).some((c) => typeof c.callee === 'string' && SCOTTY_BODY_LIMIT.test(c.callee))) scottyLimitFns.push(fn);
+  const scottyLimitFor = (fn) => {
+    if (!scottyLimitFns.length) return null;
+    if (scottyLimitFns.includes(fn)) return { certain: true, fn };
+    const refs = (g) => new Set([...((g.hs && g.hs.refs) || []).map((r) => r.target), ...(g.calls || []).map((c) => c.hs && c.hs.target).filter(Boolean)]);
+    const g = scottyLimitFns.find((x) => refs(x).has(fn.qid));
+    return g ? { certain: true, fn: g } : { certain: false, fn: scottyLimitFns[0] };
+  };
+
   let currentFn = null;
   const legacyMemo = new Map();
   const emit = (rule, file, line, extra = {}) => {
@@ -446,8 +508,10 @@ export function analyzeHaskellRules(files, opts = {}) {
       // A value READ from the request inside the function (`raw <- param "page"`, `body <- strictRequestBody req`, `lookup h (requestHeaders req)`)
       // is caller-supplied text wherever the function sits: the framework's own read says who supplied it, so no parameter label is needed.
       const requestRead = (c) => { const s = sourceInfo(c.callee); return !!s && REQUEST_PROVENANCE.has(s.provenance); };
-      const derivedText = new Set([...(fnHs.textParams || []).filter((n) => strongParam.has(n) || entryLike), ...(entryLike ? (fnHs.inputParams || []) : [])]);
-      const fromRequest = new Set();
+      // a parameter a caller fills with request-derived text (`requestTextParams`) is caller text here too, whatever this function's own label
+      const helperParams = requestParams.get(fn.qid) || new Set();
+      const derivedText = new Set([...(fnHs.textParams || []).filter((n) => strongParam.has(n) || entryLike), ...(entryLike ? (fnHs.inputParams || []) : []), ...helperParams]);
+      const fromRequest = new Set(helperParams);
       for (let round = 0; round < 8; round++) {
         let grew = false;
         for (const n of fnNodes(fn)) {
@@ -592,9 +656,14 @@ export function analyzeHaskellRules(files, opts = {}) {
               if (e.hs.con === 'VerifyNone' && e.kind === 'literal' && importsFrom(['OpenSSL.Session'])) emit('hs-tls-validation-disabled', file, e.line || node.line, { detail: 'OpenSSL verification mode VerifyNone', evidence: { mode: 'VerifyNone' } });
             }
             // `xs !! n` raises on a short list: a partial function, written as an operator, applied to caller-supplied text
-            if (e.kind === 'binary' && e.op === '!!' && e.left && mentionsText(e.left) && !isTested([e.left])) {
-              emit('hs-partial-function-on-input', file, e.line || node.line, { detail: '!! on a caller-supplied list', evidence: { partial: '!!' } });
-              continue;
+            // (an INDEX from caller text is the same flaw, `list !! tableId`: out of range raises; a relational test on the index in this function covers it)
+            if (e.kind === 'binary' && e.op === '!!' && e.left && e.right) {
+              const listText = mentionsText(e.left) && !isTested([e.left]);
+              const indexText = !listText && mentionsText(e.right) && !isTested([e.right]) && ![...names(e.right)].some((v) => sizeTestedVars.has(v));
+              if (listText || indexText) {
+                emit('hs-partial-function-on-input', file, e.line || node.line, { detail: listText ? '!! on a caller-supplied list' : '!! with a caller-supplied index', evidence: { partial: '!!' }, inlineCtx: e.hs && e.hs.inlineCtx });
+                continue;
+              }
             }
             if (e.kind !== 'call' || typeof e.callee !== 'string') continue;
             const c = e.callee;
@@ -663,12 +732,18 @@ export function analyzeHaskellRules(files, opts = {}) {
               emit('hs-unbounded-allocation', file, line, { detail: `${c} sized by parsed caller text`, evidence: { allocator: c } });
             }
             // a partial function applied to caller text: one malformed value raises an uncaught exception
-            if (PARTIALS.has(c) && args.some((a) => mentionsText(a)) && !isTested(args)) emit('hs-partial-function-on-input', file, line, { detail: `${c} on caller-supplied input`, evidence: { partial: c } });
+            if (PARTIALS.has(c) && args.some((a) => mentionsText(a)) && !isTested(args)) emit('hs-partial-function-on-input', file, line, { detail: `${c} on caller-supplied input`, evidence: { partial: c }, inlineCtx: e.hs && e.hs.inlineCtx });
             // a session/token cookie assembled without HttpOnly or Secure
             if (c === 'Web.Cookie.defaultSetCookie') { /* handled on the record update below */ }
             // unbounded body
             if (BODY_CALLS.has(c) && !sizeChecked && !(c === 'Network.Wai.Conduit.sourceRequestBody' && bounded)) {
-              if (requestLimit) {
+              const scottyLimit = /^Web\.Scotty/.test(c) ? scottyLimitFor(fn) : null;
+              if (scottyLimit && scottyLimit.certain) {
+                controls.push({ kind: 'scotty-body-limit', file: scottyLimit.fn.file, line: scottyLimit.fn.line, appliesTo: `${file}:${line}`, verified: true });
+              } else if (scottyLimit) {
+                controls.push({ kind: 'scotty-body-limit', file: scottyLimit.fn.file, line: scottyLimit.fn.line, appliesTo: `${file}:${line}`, verified: false });
+                emit('hs-unbounded-request-body', file, line, { severity: 'low', confidence: 0.4, detail: c, uncertainty: [{ kind: 'unresolved-import', detail: `a scotty body limit is set (${scottyLimit.fn.file}:${scottyLimit.fn.line}); that this handler is registered in that application is not verified` }] });
+              } else if (requestLimit) {
                 controls.push({ kind: 'request-size-limit', file: requestLimit.file, line: requestLimit.line, appliesTo: `${file}:${line}`, verified: false });
                 emit('hs-unbounded-request-body', file, line, { severity: 'low', confidence: 0.4, detail: c, uncertainty: [{ kind: 'unresolved-import', detail: `a request-size-limit middleware exists (${requestLimit.file}:${requestLimit.line}); that it wraps this handler is not verified` }] });
               } else emit('hs-unbounded-request-body', file, line, { detail: c });

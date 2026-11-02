@@ -143,9 +143,13 @@ export async function runShip(ctx, opts = {}) {
         state.note('checks', `${rows.filter((x) => x.state === 'pass').length} pass, ${c.pending.length} blocking pending${c.failing.length ? `, FAILING: ${c.failing.join(', ')}` : ''}`);
         if (c.green) return { green: true };
         let rerunThisTick = false;
-        const runs = ghJson(['run', 'list', '--branch', branch, '--limit', '12', '--json', 'databaseId,status,conclusion,workflowName']) || [];
+        // Only the runs of the pushed head are candidates: the branch's older runs (a previous release's failed push) are not this pull request's
+        // checks, and one of them whose jobs endpoint answered 502 on every poll stopped a ship twice (0.195.11). A run whose jobs cannot be read
+        // this tick is skipped and read again on the next one; the blocking verdict itself comes from `gh pr checks` above, never from here.
+        const runs = (ghJson(['run', 'list', '--branch', branch, '--limit', '12', '--json', 'databaseId,status,conclusion,workflowName,headSha']) || []).filter((x) => !prHead || !x.headSha || x.headSha === prHead);
         for (const run of runs.filter((x) => x.status === 'in_progress' || (x.status === 'completed' && x.conclusion === 'failure'))) {
-          const jobs = (ghJson(['run', 'view', String(run.databaseId), '--json', 'jobs']) || { jobs: [] }).jobs;
+          let jobs;
+          try { jobs = (ghJson(['run', 'view', String(run.databaseId), '--json', 'jobs']) || { jobs: [] }).jobs; } catch (e) { ctx.log(`  run ${run.databaseId} (${run.workflowName}): jobs not readable this tick (${String(e.message || e).slice(0, 120)})`); continue; }
           const stuck = run.status === 'in_progress' ? findStuckJobs(jobs, ctx.now(), { maxMinutes: o.stuckMinutes, exempt: informational }) : [];
           const infra = run.status === 'completed' ? classifyReleaseFailure(jobs).kind === 'infra' : false;
           if (!stuck.length && !infra) continue;

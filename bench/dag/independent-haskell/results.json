@@ -1,14 +1,14 @@
 {
- "scannerVersion": "0.188.0",
+ "scannerVersion": "0.195.10",
  "labelsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
  "definition": "precision = tp / (tp + fp); ambiguous and unlabeled excluded from the denominator; 95% Wilson interval",
  "all": {
   "all haskell projects": {
-   "flagged": 73,
+   "flagged": 77,
    "tp": 1,
    "fp": 34,
    "ambiguous": 11,
-   "unlabeled": 27,
+   "unlabeled": 31,
    "labeledDenominator": 35,
    "precision": 0.0286,
    "wilson95": [
@@ -36,11 +36,11 @@
    "ifAmbiguousAllTp": 0
   },
   "hledger": {
-   "flagged": 43,
+   "flagged": 45,
    "tp": 1,
    "fp": 25,
    "ambiguous": 1,
-   "unlabeled": 16,
+   "unlabeled": 18,
    "labeledDenominator": 26,
    "precision": 0.0385,
    "wilson95": [
@@ -51,11 +51,11 @@
    "ifAmbiguousAllTp": 0.0741
   },
   "postgrest": {
-   "flagged": 10,
+   "flagged": 12,
    "tp": 0,
    "fp": 5,
    "ambiguous": 0,
-   "unlabeled": 5,
+   "unlabeled": 7,
    "labeledDenominator": 5,
    "precision": 0,
    "wilson95": [
@@ -80,11 +80,11 @@
  },
  "perSourceKind": {
   "haskell source (.hs)": {
-   "flagged": 55,
+   "flagged": 59,
    "tp": 1,
    "fp": 32,
    "ambiguous": 1,
-   "unlabeled": 21,
+   "unlabeled": 25,
    "labeledDenominator": 33,
    "precision": 0.0303,
    "wilson95": [
@@ -112,6 +112,18 @@
  },
  "perClass": {
   "Concurrency: fire-and-forget async call in browsePingInit() — result not awaited": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
+  },
+  "Cross-Site Scripting (HTML response body from text)": {
    "flagged": 1,
    "tp": 0,
    "fp": 0,
@@ -223,11 +235,11 @@
    "ifAmbiguousAllTp": 0
   },
   "Partial function applied to caller-supplied text": {
-   "flagged": 2,
+   "flagged": 3,
    "tp": 0,
    "fp": 1,
    "ambiguous": 1,
-   "unlabeled": 0,
+   "unlabeled": 1,
    "labeledDenominator": 1,
    "precision": 0,
    "wilson95": [
@@ -253,11 +265,11 @@
    "ifAmbiguousAllTp": 0
   },
   "Path Traversal (filesystem operation)": {
-   "flagged": 4,
+   "flagged": 5,
    "tp": 0,
    "fp": 2,
    "ambiguous": 0,
-   "unlabeled": 2,
+   "unlabeled": 3,
    "labeledDenominator": 2,
    "precision": 0,
    "wilson95": [
@@ -460,11 +472,11 @@
    "ifAmbiguousAllTp": 0
   },
   "Unsafe boundary: unsafePerformIO": {
-   "flagged": 13,
+   "flagged": 14,
    "tp": 0,
    "fp": 12,
    "ambiguous": 0,
-   "unlabeled": 1,
+   "unlabeled": 2,
    "labeledDenominator": 12,
    "precision": 0,
    "wilson95": [

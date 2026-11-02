@@ -58,3 +58,34 @@ test('unsafe boundary notes are information in a scan, with the severity the rul
   assert.equal(notes[0].severity, 'info');
   assert.equal(notes[0].originalSeverity, 'low');
 });
+
+// ── the comment-blanked view (since 0.195.11) ────────────────────────────────────────────────────────────────────────────────────
+// The language-neutral detectors (ciphers, protocol shapes, structural text patterns) read a comment-blanked view of every file. For Haskell
+// that view was the C-family one, which knows neither `--` lines nor `{- -}` blocks, so an API name quoted in a Haskell doc comment
+// (`crypto.createHash('md5')`, a JWT verify with `none`) was reported as a call. The view for `.hs` is now the Haskell comment lexer's
+// (language/haskell-comments.js), the same one the Haskell findings' snippets use. Pinned both ways: the comment is silent, and the same text
+// in code position of a JavaScript file still fires.
+async function scanWithCiphers(files) {
+  const dir = mkTestTmp('hs-generic-view-');
+  writeFileSync(join(dir, 'package.json'), '{}');
+  for (const [f, text] of Object.entries(files)) { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), text); }
+  const r = await runScan(dir, { deep: true });
+  return { findings: [...(r.scan.findings || []), ...(r.scan.logicVulns || [])], ciphers: (r.scan.ciphers && r.scan.ciphers.atRest) || r.scan.ciphersAtRest || [] };
+}
+const QUOTED = "crypto.createHash('md5') over the password; jwt.verify(token, secret, { algorithms: ['none'] })";
+
+test('a Haskell comment quoting other-language API calls produces no language-neutral finding; the same text as JavaScript code does', async () => {
+  const hs = await scanWithCiphers({ 'src/Svc.hs': `module Svc (run) where\n\n-- ${QUOTED}\n{- ${QUOTED}\n   nested {- ${QUOTED} -} still a comment -}\nrun :: IO ()\nrun = putStrLn "ok"\n` });
+  const generic = hs.findings.filter((f) => f.file === 'src/Svc.hs' && !/^HS-|^IR-TAINT$/.test(String(f.parser || '')));
+  assert.deepEqual(generic.map((f) => `${f.parser}:${f.vuln}`), [], 'nothing fires on a comment');
+  assert.deepEqual(hs.ciphers.filter((c) => c.file === 'src/Svc.hs'), [], 'no cipher is read from a comment');
+  const js = await scanWithCiphers({ 'src/svc.js': `const crypto = require('crypto');\nconst jwt = require('jsonwebtoken');\nfunction run(password, token, secret) {\n  const h = ${QUOTED.replace(/ over the password; /, '; const v = ')};\n  return [h, v];\n}\nmodule.exports = { run };\n` });
+  assert.ok(js.findings.some((f) => /none/i.test(String(f.vuln))) || js.ciphers.some((c) => c.cipher === 'md5'), `the detectors still fire on code: ${JSON.stringify(js.findings.map((f) => f.vuln))} ${JSON.stringify(js.ciphers)}`);
+});
+
+test('a Haskell string literal is code, not a comment: a dash sequence inside it does not blank the rest of the line', async () => {
+  // `"--"` inside a string must not be read as a comment start (the Haskell lexer handles it; this pins that the engine uses that lexer and not
+  // a naive `--` rule). The rule-based Haskell analyzers must still see the shell call on the line.
+  const hs = await scanWithCiphers({ 'src/Svc.hs': `module Svc (run) where\n\nimport System.Process (callCommand)\n\nrun :: String -> IO ()\nrun host = callCommand ("ping -- " ++ host)\n` });
+  assert.ok(hs.findings.some((f) => f.cwe === 'CWE-78' && f.file === 'src/Svc.hs'), JSON.stringify(hs.findings.map((f) => [f.cwe, f.parser])));
+});
