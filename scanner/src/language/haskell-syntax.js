@@ -23,6 +23,7 @@ const TH_PRAGMA = /\{-#\s*LANGUAGE\b[^#]*\bTemplateHaskell\b/;
 const RECORD_DOT_PRAGMA = /\{-#\s*LANGUAGE\b[^#]*\bOverloadedRecordDot\b/;
 const LABELS_PRAGMA = /\{-#\s*LANGUAGE\b[^#]*\bOverloadedLabels\b/;
 const RECDO_PRAGMA = /\{-#\s*LANGUAGE\b[^#]*\bRecursiveDo\b/;
+const DIGEST_TYPE = /^\(?\s*Digest\s+([A-Za-z][A-Za-z0-9_]*)\s*\)?$/;
 const RESERVED_OPS = new Set(['=', '|', '->', '<-', '::', '=>', '\\', '@', '~', '..']);
 const SYM = new Set('!#$%&*+./<=>?@\\^|-~:'.split(''));
 const OPEN = { '(': ')', '[': ']', '{': '}' };
@@ -459,6 +460,8 @@ export function parseSyntax(src, opts = {}) {
         // lowers to a constant (no caller text survives such a type). Every other annotation is dropped as before.
         const typeText = T.slice(from, pos).map((x) => x.v).join(' ');
         if (NUMERIC_TYPE.test(typeText)) e = { t: 'typed', e, type: typeText, line: e && e.line };
+        // `hash x :: Digest MD5`: the annotation chooses the digest algorithm (type-directed selection); kept for the weak-hash rule.
+        else { const m = DIGEST_TYPE.exec(typeText); if (m) e = { t: 'typed', e, type: typeText, digest: m[1], line: e && e.line }; }
       }
       return e;
     } finally { depth--; }

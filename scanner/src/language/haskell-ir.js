@@ -599,7 +599,14 @@ class FnLowerer {
       // `read s :: Int`: the value is a number, so it is a clean constant for the taint engine. The lowered inner expression rides on `hs.inner`, which the rule and web
       // analyses read (an unsafe coercion in it, the id it names), exactly as they read `hs.selector`. (A sanitizer call would be wrong here: the engine's sanitizer label is per expression, so a
       // number in `"kill " ++ show n ++ name` would mark the tainted `name` sanitized too.)
-      case 'typed': return { kind: 'literal', value: 0, hs: { numeric: e.type, inner: this.lowerExpr(e.e, ln) } };
+      case 'typed': {
+        if (e.digest) {   // `hash x :: Digest MD5`: the call itself, stamped with the algorithm the annotation selects
+          const inner = this.lowerExpr(e.e, ln);
+          if (inner && inner.kind === 'call') inner.hs = { ...(inner.hs || {}), digest: e.digest };
+          return inner;
+        }
+        return { kind: 'literal', value: 0, hs: { numeric: e.type, inner: this.lowerExpr(e.e, ln) } };
+      }
       case 'tuple': return { kind: 'array', elements: e.items.map((x) => this.lowerExpr(x, ln)), hs: { tuple: true } };
       case 'list': return { kind: 'array', elements: e.items.map((x) => this.lowerExpr(x, ln)) };
       case 'range': return { kind: 'array', elements: e.items.map((x) => this.lowerExpr(x, ln)), hs: { range: true } };

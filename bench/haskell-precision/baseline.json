@@ -1,7 +1,7 @@
 {
  "schema": "agentic-security/haskell-precision-baseline@1",
  "comparison": "equality: a regression fails, and so does an improvement that was not recorded here",
- "engineVersion": "0.195.13",
+ "engineVersion": "0.195.14",
  "labelsDigests": {
   "development-tuning": "f599e1edc2e1e8b68756b4d25c238daf0f0f04b34ea30983a16a793615e40395",
   "development-verification": "39b0c5bf5cd20298a8e7ab608e5d7b938c4725a8f8d51e5b22a4ba011f1d0870",
@@ -85,12 +85,12 @@
   },
   "development-remainder": {
    "labelled": 11,
-   "reported": 11,
-   "notReported": 0,
-   "flagged": 7,
+   "reported": 10,
+   "notReported": 1,
+   "flagged": 6,
    "loweredToInfo": 4,
    "tp": 0,
-   "fp": 7,
+   "fp": 6,
    "tpNotFlagged": 0,
    "byStatus": {
     "entrypoint-reachable": {
@@ -111,13 +111,13 @@
     },
     "no-verdict": {
      "TP": 0,
-     "FP": 1
+     "FP": 0
     }
    },
    "precision": 0,
    "wilson95": [
     0,
-    0.3543
+    0.3903
    ]
   },
   "fresh": {
@@ -199,11 +199,11 @@
      }
     },
     "pandoc": {
-     "rows": 9,
+     "rows": 10,
      "flagged": 0,
-     "loweredToInfo": 9,
+     "loweredToInfo": 10,
      "byStatus": {
-      "no-verdict": 7,
+      "no-verdict": 8,
       "entrypoint-reachable": 2
      }
     },
@@ -225,11 +225,11 @@
      }
     },
     "xmonad-contrib": {
-     "rows": 16,
-     "flagged": 5,
+     "rows": 15,
+     "flagged": 4,
      "loweredToInfo": 11,
      "byStatus": {
-      "no-verdict": 4,
+      "no-verdict": 3,
       "entrypoint-reachable": 7,
       "external-api": 5
      }

@@ -9,6 +9,21 @@
 > make the history less accurate, not more.
 
 
+## 0.195.15 - Haskell rule precision from semantics: total list shapes, guards written as combinators, length tests, and a weak digest chosen by a type annotation
+
+**Measured, 0.195.14:** `TIMINGS preflight=3s push=7s pr=4s checks=431s merge=5s verify=6s tag=2s release=223s npm=90s total=771s release-clock=236s`, shipped in 12 min 53 s with the npm listing verified on a resume 15 minutes later. The release clock (merge to published release) was 236 s. The push waited for the background gate to pass before starting (670 s), which avoided the bundle-check race that stopped the two previous ships.
+
+Why: plan Phase 3, items 10 and 11, each started with a self-written probe run before any rule was touched. Thirteen partial-function idioms in thirteen exported functions: the rule reported five, of which two were TOTAL calls (`head (x : xs)`, `last (xs ++ [x])`), one a guard written as `when (length xs > 2) ..` (a call argument, not an `if` node), one a `case length xs of 3` size test, and two the unguarded calls it should report. The weak-hash rule did not read a digest chosen by a type annotation (`hash x :: Digest MD5`), a limit its header had stated since the rule was written.
+
+- **Total shapes** (`haskell-security-rules.js` `nonEmptyList`, `NONEMPTY_TOTAL`): a partial list function on a cons, a non-empty literal, or a concatenation with one of those is total and not reported. The development-set site that showed the shape is xmonad's `last (["Root"] ++ ..)` (labelled FP in 0.195.11); the rule is general and pinned on synthetic code.
+- **Guards as combinators and length tests** (`COND_COMBINATOR`, `LENGTH_CALL`, `lengthVars`): the first argument of `when`/`unless`/`guard` is a tested condition wherever the call sits; a comparison of a list's length with a number (`case length xs of 3 -> ..`, `length xs == 2`) tests the list, including through the scratch variable the IR puts a case scrutinee in. A test of another value still covers nothing (pinned).
+- **Type-directed digests** (`haskell-syntax.js` `DIGEST_TYPE`, `haskell-ir.js` `hs.digest`): `hash x :: Digest MD5` and `hashlazy x :: Digest SHA1` are the weak hashes they name, judged by the same use analysis as `hashWith MD5` (medium with a comparison or a credential, info without).
+- `hs-unsafe-io-boundary` was found already lowered to `info` for every site by `engine.js` (planned item 9 needed no shape rule; the sealed-set table that lists those sites as flagged predates that lowering and is re-measured at the end of the programme).
+
+**Measured on real code** (`bench/dag/dev-haskell`, re-recorded with `bench:haskell-precision:update`): the fresh set is unchanged at 51 flagged, 21 true positives (41.2%); the development remainder lost one false positive (xmonad `DirExec.hs:86`, the total `last` of a literal-prepended list, labelled FP in 0.195.11), 7 to 6, and pandoc gained one info row. No label changed.
+
+Gates, from the runs recorded for this entry: `test:haskell` 481/481 (`haskell-rule-precision`, 3 tests, wired into the script), `test:dataflow` 1599/1599, `bench:mutation:check` 460/460, `bench:cve-replay:check` 229/229 and `bench:layer-recall:check` unchanged, `bench:self-scan:check` 690/113/0 unchanged, the support registry re-promoted under GHC 9.4.8 (Haskell 9/9), the sealed set and unseen-v6 not re-scored.
+
 ## 0.195.14 - Haskell taint, second round: interpolating quasi-quoters, record dot and labels, module-level cells across functions, lambda-form functions, four syntax gaps, three library models
 
 **Measured, 0.195.13:** `TIMINGS preflight=3s push=7s pr=1s checks=365s merge=6s verify=6s tag=2s release=223s npm=268s total=881s release-clock=237s`, shipped in 30 min 5 s on the second attempt. The release clock (merge to published release) was 237 s. The first attempt stopped at the hosted checks on two tests this release makes pass for real (a scan of a missing path exited 0; a quoted file name in a guide read as a missing path), and the second stopped before the merge on the background gate's bundle check, which a re-run passed.

@@ -177,6 +177,9 @@ Besides direct calls, binds and the usual combinators, the engine follows these 
   `where` are the functions they define, so a call reaches the sink inside them. `mdo` is read as `do` (`rec` blocks are not); a GADT
   `data T where` declares its constructors (record fields included) so a match on them binds the right field; a `pattern` synonym is a
   declaration, not a function.
+- **Partial functions: total shapes and more guards.** `head (x : xs)`, `last (xs ++ [x])` and `head [a, b]` are total and not reported;
+  a guard written as `when (length xs > 2) ..` or `unless (null xs) ..`, and a size test `case length xs of 3 -> ..` or `length xs == 2`,
+  cover the call like an `if`. A weak digest chosen by a type annotation, `hash x :: Digest MD5`, is reported like `hashWith MD5`.
 - **Two layout rules from a search engine's request handler.** A `where` that starts a line at the case alternatives' own column
   closes the alternatives and belongs to the function (hoogle's `replyServer` was read as one more alternative and dropped with its
   62 calls), and semicolon-separated statements on one line of a nested `do` stay in that `do` (`s <- act pay; pure s` split the
