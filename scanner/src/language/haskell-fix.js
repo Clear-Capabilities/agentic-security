@@ -65,7 +65,9 @@ const litValue = (t) => t.slice(1, -1);
 /** `"a" ++ n ++ "b"` -> [{lit:'a'},{var:'n'},{lit:'b'}], or null for anything we cannot prove simple. */
 function concatParts(expr) {
   const e = trimParens(expr);
-  const raw = topLevelSplit(e, '++');
+  let raw = topLevelSplit(e, '++');
+  if (raw && raw.length === 1) { const t = topLevelSplit(e, '<>'); if (t && t.length > 1) raw = t; }   // a Text (Semigroup) concatenation
+  else if (raw && topLevelSplit(e, '<>')?.length > 1) return null;                                     // both operators: not a shape this reads
   if (!raw) return null;
   const out = [];
   for (const r of raw) {
@@ -188,15 +190,41 @@ function applyImportDelta(orig, withImports, body) {
 
 function fixProcess(text, f) {
   const lb = lineBounds(text, f.line);
-  const call = findCall(lb.text, ['callCommand', 'system']);
+  const call = findCall(lb.text, ['callCommand', 'system', 'spawnCommand']);
   if (!call) return null;
   let aStart = call.after; while (lb.text[aStart] === ' ') aStart++;
   let aEnd;
   if (lb.text[aStart] === '$') { aStart++; while (lb.text[aStart] === ' ') aStart++; aEnd = lb.text.length; }
   else aEnd = atomEnd(lb.text, aStart);
   if (aEnd < 0) return null;
-  const parts = concatParts(lb.text.slice(aStart, aEnd));
+  // Since 0.195.16: a Text command, `system (cs t)` / `(T.unpack t)`, whose Text is a `<>` concatenation on the line or in a one-line
+  // `let` of the same function used nowhere else. The unpack is kept per piece, so each argument is still a String.
+  let argText = trimParens(lb.text.slice(aStart, aEnd));
+  let unpackFn = null; let letLine = -1;
+  const um = /^(cs|(?:[A-Z][\w']*\.)*unpack)\s+(.+)$/.exec(argText);
+  if (um) { unpackFn = um[1]; argText = trimParens(um[2]); }
+  if (IDENT.test(argText)) {
+    const ls = text.split('\n');
+    let start = 0; for (let i = f.line - 1; i >= 0; i--) { const mm = TOP_DECL.exec(ls[i] || ''); if (mm && !NOT_A_DEF.has(mm[1])) { start = i; break; } }
+    let end = ls.length; for (let i = f.line; i < ls.length; i++) { const mm = TOP_DECL.exec(ls[i] || ''); if (mm && !NOT_A_DEF.has(mm[1])) { end = i; break; } }
+    const uses = new RegExp(`(?<![\\w'.])${argText}(?![\\w'])`, 'g');
+    const body = ls.slice(start, end);
+    let bound = null;
+    for (let i = 0; i < body.length; i++) { const mm = new RegExp(`^\\s+let\\s+${argText}\\s*=\\s*(.+)$`).exec(body[i]); if (mm && start + i < f.line - 1) { bound = { i: start + i, expr: mm[1].trim() }; } }
+    const count = (body.join('\n').match(uses) || []).length;
+    if (bound && count === 2 && !/^\s+let\b/.test(ls[bound.i + 1] || '') && !/^\s{2,}\S/.test(ls[bound.i + 1] || '') || (bound && count === 2 && !(ls[bound.i + 1] || '').trim())) { argText = trimParens(bound.expr); letLine = bound.i; }
+    else if (bound && count === 2) {
+      // the binding has no continuation only when the next line is not indented deeper than `let`'s binding
+      const letIndent = (/^\s*/.exec(ls[bound.i]) || [''])[0].length;
+      const nextIndent = (/^\s*/.exec(ls[bound.i + 1] || '') || [''])[0].length;
+      if ((ls[bound.i + 1] || '').trim() && nextIndent > letIndent) return null;
+      argText = trimParens(bound.expr); letLine = bound.i;
+    }
+  }
+  if (/(?<![\w'])(?:if|case|let|do)(?![\w'])/.test(argText)) return null;
+  const parts = concatParts(argText);
   if (!parts || !parts.some((p) => p.var)) return null;       // a bare variable: no provable argv split
+  if (unpackFn === null && parts.some((p) => p.var) && /\bcs\b|unpack/.test(argText)) return null;
   // tokenise into words; a word is a list of pieces
   const words = []; let cur = [];
   const flush = () => { if (cur.length) { words.push(cur); cur = []; } };
@@ -209,7 +237,8 @@ function fixProcess(text, f) {
   if (!words.length || words[0].some((p) => p.var)) return null;      // the program itself must be a literal
   if (/[|&;<>`$*?()\\]/.test(words[0].map((p) => p.lit).join('')) || words.slice(1).some((w) => w.every((p) => p.lit !== undefined) && /[|&;<>`$*?()]/.test(w.map((p) => p.lit).join('')))) return null; // shell syntax in the literal: not an argv
   const prog = words[0].map((p) => p.lit).join('');
-  const argExpr = (w) => (w.length === 1 && w[0].lit !== undefined ? `"${w[0].lit}"` : (w.length === 1 ? w[0].var : `(${w.map((p) => (p.lit !== undefined ? `"${p.lit}"` : p.var)).join(' ++ ')})`));
+  const v = (name) => (unpackFn ? `${unpackFn} ${name}` : name);
+  const argExpr = (w) => (w.length === 1 && w[0].lit !== undefined ? `"${w[0].lit}"` : (w.length === 1 ? v(w[0].var) : `(${w.map((p) => (p.lit !== undefined ? `"${p.lit}"` : v(p.var))).join(' ++ ')})`));
   let args = words.slice(1);
   // End option parsing before the first value-bearing argument, but only when no earlier literal is itself an
   // option (it might take a value, and "--" would then be consumed as that value). Otherwise leave it to the gate.
@@ -222,7 +251,9 @@ function fixProcess(text, f) {
   const imp = ensureImport(text, 'System.Process', [fn]); if (!imp) return null;
   const repl = `${call.prefix || imp.prefix}${fn} "${prog}" [${args.map(argExpr).join(', ')}]`;
   const replaced = lb.text.slice(0, call.index) + repl + lb.text.slice(aEnd);
-  const next = applyImportDelta(text, imp.text, splice(text, lb.start, lb.end, replaced));
+  let edited = splice(text, lb.start, lb.end, replaced);
+  if (letLine >= 0) { const ls = edited.split('\n'); ls.splice(letLine, 1); edited = ls.join('\n'); }   // the one-line `let` is now unused: -Werror would reject it
+  const next = applyImportDelta(text, imp.text, edited);
   return { ruleId: 'hs-process-argv', label: 'MITIGATION', text: next, explanation: `Replaced a shell command string with a direct ${fn} of "${prog}" and an argument list; no shell parses the value${whole ? '' : ' (a value fused into an argument is still passed as data)'}. ${terminated ? 'A "--" now ends option parsing before the value (assumes the program follows that convention).' : 'A value that starts with "-" can still be read as an option by the program: add "--" or validate it.'}`, behavior: { kind: 'process', program: prog, argv: args.map((w) => w.map((p) => (p.lit !== undefined ? { lit: p.lit } : { var: p.var }))) } };
 }
 
@@ -279,6 +310,14 @@ function splitOperators(expr) {
 
 /** The declared types of the parameters of the top-level function containing `line`: { name -> type text }, from its signature and first clause. */
 function paramTypesAt(text, line) {
+  const sig = signatureAt(text, line);
+  if (!sig) return null;
+  const out = {};
+  sig.params.forEach((p, i) => { if (sig.types[i] !== undefined) out[p] = sig.types[i]; });
+  return out;
+}
+/** The top-level clause enclosing `line` (1-based) and its signature: { name, params, types (the last is the result), clause (0-based line) }. */
+function signatureAt(text, line) {
   const lines = text.split('\n');
   let clause = -1;
   for (let i = Math.min(line - 1, lines.length - 1); i >= 0; i--) if (/^[a-z_][\w']*\b[^:\n]*=/.test(lines[i]) && !/^[a-z_][\w']*\s*::/.test(lines[i])) { clause = i; break; }
@@ -300,9 +339,45 @@ function paramTypesAt(text, line) {
     cur += c;
   }
   types.push(cur.trim());
-  const out = {};
-  params.forEach((p, i) => { if (types[i] !== undefined) out[p] = types[i]; });
-  return out;
+  return { name, params, types, clause };
+}
+
+// hs-path-contain (0.195.16): a path parameter that reaches a file operation anywhere in its function (the sink may sit in a callee or a
+// `where` helper: the two dhall test-server sites are a read and an existence test under one FilePath parameter). A guard CLAUSE is
+// added before the function's first equation, rejecting a parent-directory segment or an absolute path, and falls through to the
+// existing equations otherwise, so no line of the body moves. The check is the one the taint engine's guard recogniser already
+// understands (`".." \`elem\` splitDirectories p`), so the rescan judges the same semantics, not a name. Only a function with exactly
+// one String/FilePath parameter and a `Maybe` result (bare, or under one monad) is rewritten: `Nothing` is the only failure value the
+// fixer can construct without inventing an error type. A MITIGATION: a symbolic link inside the base can still point outside it.
+function fixPathContain(text, f) {
+  const sig = signatureAt(text, f.line);
+  if (!sig) return null;
+  const pathParams = sig.params.filter((p, i) => /^(?:String|FilePath)$/.test(sig.types[i] || ''));
+  if (pathParams.length !== 1) return null;
+  const param = pathParams[0];
+  const result = sig.types[sig.types.length - 1] || '';
+  const rm = /^(?:(?:[A-Z][\w'.]*\s+)?\(\s*Maybe\s+[^()]+\)|Maybe\s+[^()\s]+(?:\s+[^()\s]+)*)$/.exec(result.trim());
+  if (!rm) return null;
+  const monadic = /^[A-Z]/.test(result.trim()) && !/^Maybe\b/.test(result.trim());
+  const fail = monadic ? 'pure Nothing' : 'Nothing';
+  const lines = text.split('\n');
+  // the first equation of this function (the clause enclosing the line may be a later one)
+  let first = sig.clause; for (let i = 0; i < sig.clause; i++) if (new RegExp(`^${sig.name}(?![\\w'])`).test(lines[i]) && !new RegExp(`^${sig.name}\\s*::`).test(lines[i])) { first = i; break; }
+  if (new RegExp(`splitDirectories\\s+${param}(?![\\w'])`).test(stripComments(text))) return null;     // already checked somewhere
+  const imp = ensureImport(text, 'System.FilePath', ['splitDirectories', 'isAbsolute']); if (!imp) return null;
+  const guard = `${sig.name} ${param}\n    | ".." \`elem\` ${imp.prefix}splitDirectories ${param} || ${imp.prefix}isAbsolute ${param} = ${fail}`;
+  lines.splice(first, 0, guard);
+  const next = applyImportDelta(text, imp.text, lines.join('\n'));
+  return {
+    ruleId: 'hs-path-contain', label: 'MITIGATION', text: next,
+    explanation: `Added a guard equation to \`${sig.name}\` that answers ${fail} when \`${param}\` has a ".." segment or is absolute, before any file operation runs; every other call falls through to the existing equations unchanged.`,
+    consequences: [
+      `A request naming a parent directory or an absolute path now gets the function's ${fail} (its not-found answer) instead of the file; a symbolic link inside the served directory can still point outside it (resolve with canonicalizePath and compare the prefix when links are possible).`,
+      'The check is on the parameter as received: a path decoded or joined later inside the function is not re-checked.',
+    ],
+    behavior: { kind: 'path-contain', fn: sig.name, param },
+    expectEffective: { kind: 'path-contain', fn: sig.name, param, fail },
+  };
 }
 
 function fixPath(text, f) {
@@ -336,17 +411,46 @@ function fixPath(text, f) {
 }
 
 const LOG_CALLS = ['putStrLn', 'putStr', 'hPutStrLn', 'hPutStr', 'print', 'trace', 'traceShow', 'traceShowId', 'logInfoN', 'logDebugN', 'logWarnN', 'logErrorN', 'logInfo', 'logDebug', 'logWarn', 'logError'];
+// hxt (0.195.16): `withSubstDTDEntities yes` (or `True`) on the reported line becomes `no` (`False`): the parser no longer substitutes
+// entities declared in a DTD, which is the whole of the finding, so the label is FULL. `yes`/`no` come from Text.XML.HXT.Core (hxt
+// 9.3.1.22 re-exports the XmlState type definitions); an explicit import list that names `yes` but not `no` gets `no` added.
+function fixXmlEntities(text, f) {
+  const lb = lineBounds(text, f.line);
+  const m = /(?<![\w'.])((?:[A-Z][\w']*\.)?)withSubstDTDEntities\s+((?:[A-Z][\w']*\.)?)(yes|True)(?![\w'])/.exec(lb.text);
+  if (!m) return null;
+  const [, , qual, val] = m;
+  const to = val === 'True' ? 'False' : `${qual}no`;
+  let t = text;
+  if (val === 'yes' && !qual) {
+    const info = importInfo(text, 'Text.XML.HXT.Core');
+    if (info && !info.qualified && info.items && !info.items.some((x) => x.trim() === 'no')) { const e = ensureImport(text, 'Text.XML.HXT.Core', ['no']); if (!e) return null; t = e.text; }
+  }
+  const shifted = t.split('\n').length - text.split('\n').length;
+  const lb2 = lineBounds(t, f.line + shifted);
+  if (lb2.text !== lb.text) return null;
+  const at = lb2.start + m.index + m[0].length - val.length;
+  const next = splice(t, at, at + val.length, to);
+  return {
+    ruleId: 'hs-xml-no-entity-substitution', label: 'FULL', text: next,
+    explanation: `withSubstDTDEntities now reads ${to}: entities declared in a document's DTD are no longer substituted, so an external or recursive entity in untrusted XML is not expanded by this parser configuration.`,
+    consequences: ['A document that relies on its own DTD entities for content now yields the entity references unexpanded; a document that needs them must be parsed with a separate, trusted configuration.'],
+    behavior: { kind: 'hxt-entities', line: f.line + shifted },
+    expectEffective: { kind: 'hxt-entities', line: f.line + shifted },
+  };
+}
 function fixLogging(text, f) {
   const lb = lineBounds(text, f.line);
   const call = findCall(lb.text, LOG_CALLS);
   if (!call) return null;
   const head = lb.text.slice(0, call.after); let rest = lb.text.slice(call.after);
   let n = 0;
-  rest = rest.replace(/(?<![\w'.])(?:show\s+)?((?:[A-Za-z_][\w']*\.)?[a-z_][\w']*)(?![\w'(])/g, (all, id) => {
+  // Only code is rewritten: a string literal is kept as it is (before 0.195.16 the word inside `" password="` was replaced too, which
+  // produced an unparseable line; the guide's captured example showed it).
+  rest = rest.split(/("(?:[^"\\]|\\.)*")/).map((seg, i) => (i % 2 === 1 ? seg : seg.replace(/(?<![\w'.])(?:show\s+)?((?:[A-Za-z_][\w']*\.)?[a-z_][\w']*)(?![\w'(])/g, (all, id) => {
     const bare = id.replace(/^.*\./, '');
     if (/^(?:show|pack|unpack|stderr|stdout)$/.test(bare) || !SENSITIVE.test(bare)) return all;
     n++; return '"[REDACTED]"';
-  });
+  }))).join('');
   if (!n) return null;
   const next = splice(text, lb.start, lb.end, head + rest);
   return { ruleId: 'hs-log-redact', label: 'MITIGATION', text: next, explanation: `Replaced ${n} sensitive log argument(s) with "[REDACTED]". The value is no longer logged; the log line loses that detail.`, behavior: { kind: 'log', redacted: n } };
@@ -408,8 +512,52 @@ export function tlsSettingsOf(text) {
   return out;
 }
 
+// HsOpenSSL (0.195.16, from IHP's OpenAI client): `contextSetVerificationMode ctx VerifyNone` as a statement of a do block becomes
+// `contextSetDefaultVerifyPaths ctx` (the system CA locations; HsOpenSSL 0.11.7.11 documents it as "the default locations from which CA
+// certificates are loaded") followed by `contextSetVerificationMode ctx (VerifyPeer True True Nothing)` (a certificate is required,
+// requested once, no callback). A MITIGATION: the chain is now verified against the system store, but HsOpenSSL checks the host name
+// only through `enableHostnameValidation` on the SSL connection object, which this context-level code never sees, so a valid
+// certificate for another host is still accepted; the consequence says so.
+function fixOpenSslVerify(text, f) {
+  const info = importInfo(text, 'OpenSSL.Session');
+  if (!info || info.hiding) return null;
+  const STMT = /^(\s+)((?:[A-Z][\w']*\.)?)contextSetVerificationMode\s+([a-z_][\w']*)\s+((?:[A-Z][\w']*\.)?)VerifyNone\s*$/;
+  const lines = text.split('\n');
+  const okQual = (qual, qual2) => (!qual || (info.qualified && (info.alias || 'OpenSSL.Session') + '.' === qual)) && (!qual2 || qual2 === qual);
+  // a statement: the nearest less-indented preceding non-blank line opens a do block (`\ctx -> do`, `= do`, `do`)
+  const isStatement = (i, indent) => { for (let j = i - 1; j >= 0; j--) { const l = lines[j]; if (!l.trim()) continue; const ind = (/^\s*/.exec(l) || [''])[0].length; if (ind < indent.length) return /\bdo\s*$/.test(stripComments(l)); } return false; };
+  // The reported line first; every other VerifyNone statement of the same shape in the file is rewritten with it (one logical fix: the
+  // rule reports the class once per file, so a second site left as it was would keep the finding and block the patch for a reason the
+  // reader could not see). A VerifyNone the shape does not cover stays, and the rescan then says so.
+  const m0 = STMT.exec(lines[f.line - 1] || '');
+  if (!m0 || !okQual(m0[2], m0[4]) || !isStatement(f.line - 1, m0[1])) return null;
+  const sites = [];
+  lines.forEach((l, i) => { const m = STMT.exec(l); if (m && okQual(m[2], m[4]) && isStatement(i, m[1])) sites.push({ i, indent: m[1], ctx: m[3], qual: m[2] }); });
+  let t = text; let prefix = m0[2];
+  if (!m0[2]) { const e = ensureImport(text, 'OpenSSL.Session', ['contextSetDefaultVerifyPaths', 'contextSetVerificationMode', 'VerificationMode(..)']); if (!e) return null; t = e.text; prefix = e.prefix; }
+  const shifted = t.split('\n').length - lines.length;
+  const out = t.split('\n');
+  for (const s of [...sites].reverse()) {
+    if (out[s.i + shifted] !== lines[s.i]) return null;
+    out.splice(s.i + shifted, 1, `${s.indent}${prefix}contextSetDefaultVerifyPaths ${s.ctx}`, `${s.indent}${prefix}contextSetVerificationMode ${s.ctx} (${prefix}VerifyPeer True True Nothing)`);
+  }
+  // the mode statement of each site in the patched file: the import shift, plus one line per site above it
+  const modeLines = sites.map((s, k) => s.i + shifted + k + 2);
+  const next = out.join('\n');
+  const where = sites.length === 1 ? 'The OpenSSL context' : `Each of the ${sites.length} OpenSSL contexts set up in this file`;
+  return {
+    ruleId: 'hs-tls-validate', label: 'MITIGATION', text: next,
+    explanation: `${where} now loads the system CA locations (contextSetDefaultVerifyPaths) and requires a peer certificate that verifies against them (VerifyPeer True True Nothing) instead of VerifyNone${sites.length > 1 ? ` (${sites.length} sites, one per client function; the rule reports the class once per file)` : ''}.`,
+    consequences: [
+      'Connections to a server whose certificate is self-signed, expired or issued by an authority missing from the system store now fail.',
+      'The host name is NOT verified by this change: HsOpenSSL checks it only through enableHostnameValidation on the SSL connection object, which this context-level code does not have, so a valid certificate issued for another host is still accepted.',
+    ],
+    behavior: { kind: 'tls-openssl', sites: sites.map((s, k) => ({ ctx: s.ctx, line: modeLines[k] })) },
+    expectEffective: { kind: 'tls-openssl', sites: sites.map((s, k) => ({ ctx: s.ctx, line: modeLines[k] })) },   // each mode statement; the paths statement is the line above it
+  };
+}
 function fixTls(text, f) {
-  if (!importInfo(text, 'Network.Connection') && !importInfo(text, 'Network.Connection.Types')) return null;   // the detector's own precondition
+  if (!importInfo(text, 'Network.Connection') && !importInfo(text, 'Network.Connection.Types')) return fixOpenSslVerify(text, f);   // the detector's own precondition
   const lb = lineBounds(text, f.line);
   const m = new RegExp(TLS_CTOR_RE.source).exec(lb.text);
   if (!m) return null;
@@ -616,16 +764,85 @@ function fixCookie(text, f) {
 // and ONLY when the file already imports System.Entropy (the dependency is therefore already declared). `randomRIO (lo, hi)`, a range, a generator
 // threaded through other code, a non-integer result and every other shape are refused: the result type of an OS CSPRNG differs from System.Random's.
 const FIXED_WIDTH = { Word8: 1, Word16: 2, Word32: 4, Word64: 8, Word: 8, Int8: 1, Int16: 2, Int32: 4, Int64: 8, Int: 8 };
+// The three shapes of 0.195.16 (each from a real site labelled TP: scotty's session id, gitit's session key, hackage-server's digest nonce):
+//   replicateM N (randomRIO ('a', 'z'))                       -> N bytes, each mapped into the character range
+//   randomRIO (lo, hi)  (integer literals)                     -> 8 bytes decoded big-endian, reduced into the range
+//   (take N . map f . randomRs (lo, hi)) <$> newStdGen         -> N bytes, each reduced into the range and mapped by f
+// The reduction is `b mod (hi - lo + 1)`: for a range that does not divide the byte space (26 letters, 10^9) the low values are chosen slightly
+// more often (at most 2% for 26 of 256, negligible for 10^9 of 2^64), stated in the consequences; a rejection loop would need a different
+// program shape. `System.Entropy` is imported when missing, which makes the patch a MITIGATION: the `entropy` package must be declared by
+// the component, and only a build checks that.
+const ENT_DECODE = "AgenticBS.foldl' (\\acc b -> acc * 256 + fromIntegral b) (0 :: Integer)";
+function fixRandomLine(text, f) {
+  const lb = lineBounds(text, f.line);
+  const line = lb.text;
+  const chr = (s) => (s.length === 3 ? s[1] : s === "'\\''" ? "'" : null);
+  let m; let repl = null; let bytes = 0; let what = '';
+  const used = [];
+  if ((m = /(?<![\w'.])replicateM\s+(\d+)\s+\(\s*(?:System\.Random\.)?randomRIO\s+\(\s*('(?:[^'\\]|\\.)')\s*,\s*('(?:[^'\\]|\\.)')\s*\)\s*\)/.exec(line)) && chr(m[2]) !== null && chr(m[3]) !== null) {
+    bytes = Number(m[1]); used.push('randomRIO');
+    repl = `(map (\\b -> toEnum (fromEnum ${m[2]} + fromIntegral b \`mod\` (fromEnum ${m[3]} - fromEnum ${m[2]} + 1))) . AgenticBS.unpack <$> getEntropy ${bytes})`;
+    what = `${bytes} characters in the range ${m[2]} to ${m[3]}`;
+  } else if ((m = /(?<![\w'.])(?:System\.Random\.)?randomRIO\s+\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)/.exec(line))) {
+    const lo = BigInt(m[1]); const hi = BigInt(m[2]);
+    if (hi <= lo) return null;
+    bytes = 8; used.push('randomRIO');
+    repl = `((\\w -> ${m[1]} + fromIntegral (w \`mod\` ${(hi - lo + 1n).toString()})) . ${ENT_DECODE} <$> getEntropy 8)`;
+    what = `an integer in the range ${m[1]} to ${m[2]}`;
+  } else if ((m = /(?:fmap\s+\(\s*take\s+(\d+)\s*\.\s*map\s+([a-z_][\w'.]*)\s*\.\s*(?:System\.Random\.)?randomRs\s+\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)\s*\)\s+newStdGen|\(\s*take\s+(\d+)\s*\.\s*map\s+([a-z_][\w'.]*)\s*\.\s*(?:System\.Random\.)?randomRs\s+\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)\s*\)\s*<\$>\s*newStdGen)/.exec(line))) {
+    const n = m[1] || m[5]; const fn = m[2] || m[6]; const lo = BigInt(m[3] || m[7]); const hi = BigInt(m[4] || m[8]);
+    if (hi <= lo) return null;
+    bytes = Number(n); used.push('randomRs', 'newStdGen');
+    repl = `(map (${fn} . (\\b -> ${lo.toString()} + fromIntegral b \`mod\` ${(hi - lo + 1n).toString()})) . AgenticBS.unpack <$> getEntropy ${bytes})`;
+    what = `${bytes} values in the range ${lo} to ${hi} mapped by ${fn}`;
+  }
+  if (!repl || !(bytes > 0)) return null;
+  if (/\bAgenticBS\b/.test(text)) return null;
+  const entropyWasImported = !!importInfo(text, 'System.Entropy');
+  const e1 = ensureImport(text, 'System.Entropy', ['getEntropy']); if (!e1) return null;
+  let t2 = e1.text;
+  const lines = t2.split('\n'); let at = -1; stripComments(t2).split('\n').forEach((l, i) => { if (/^import\s/.test(l)) at = i; });
+  if (at < 0) return null;
+  lines.splice(at + 1, 0, 'import qualified Data.ByteString as AgenticBS');
+  t2 = lines.join('\n');
+  const newLineNo = f.line + (entropyWasImported ? 1 : 2);   // the edited line moved down by the import(s) inserted above it
+  const lb2 = lineBounds(t2, newLineNo);
+  if (lb2.text !== line) return null;
+  const newLine = line.slice(0, m.index) + repl + line.slice(m.index + m[0].length);
+  let out = splice(t2, lb2.start, lb2.end, newLine);
+  // drop the System.Random names the file no longer uses (an unused import is an error under -Werror); the import goes when nothing is left
+  const code = () => out.split('\n').filter((l) => !/^import\s/.test(l)).join('\n');
+  const ri = importInfo(out, 'System.Random');
+  if (ri && !ri.qualified && ri.items) {
+    const keep = ri.items.filter((x) => !used.includes(x.replace(/\(.*$/, '').trim()) || new RegExp(`(?<![\\w'])${x.replace(/\(.*$/, '').trim()}(?![\\w'])`).test(code()));
+    if (!keep.length) out = out.replace(ri.line + '\n', '');
+    else if (keep.length !== ri.items.length) out = out.replace(ri.line, ri.line.replace(/\((.*)\)/, `(${keep.join(', ')})`));
+  }
+  const fnName = (() => { const ls = stripComments(text).split('\n'); let name = null; for (let i = 0; i < f.line; i++) { const mm = TOP_DECL.exec(ls[i] || ''); if (mm && !NOT_A_DEF.has(mm[1])) name = mm[1]; } return name; })();
+  const finalLine = out.split('\n').indexOf(newLine) + 1;   // where the edited line sits once the unused import above it may have gone
+  if (finalLine < 1) return null;
+  return {
+    ruleId: 'hs-random-os-entropy', label: entropyWasImported ? 'FULL' : 'MITIGATION', text: out,
+    explanation: `${fnName || 'the action'} now draws ${what} from the operating system CSPRNG (System.Entropy.getEntropy, ${bytes} byte(s)) instead of System.Random's deterministic generator.`,
+    consequences: [
+      `Requires the \`entropy\` and \`bytestring\` packages to be declared by the component${entropyWasImported ? ' (this file already imported System.Entropy, so the first is)' : ' (the import of System.Entropy was ADDED: add `entropy` to build-depends)'}; the build is not checked against the cabal file.`,
+      'Values are reduced into the range with a modulus, so for a range that does not divide the byte space the low values are drawn slightly more often (at most 2% for 26 letters over 256, negligible for an integer range over 2^64); the generated value is no longer predictable from a seed, which is what the finding is about.',
+    ],
+    behavior: { kind: 'random-line', fn: fnName, line: finalLine, bytes },
+    expectEffective: { kind: 'random-line', line: finalLine, bytes },
+  };
+}
 function fixRandom(text, f) {
   const lb = lineBounds(text, f.line);
   const m = /^([a-z_][\w']*)\s*=\s*(?:System\.Random\.)?randomIO\s*$/.exec(lb.text);
-  if (!m) return null;
+  if (!m) return fixRandomLine(text, f);
   const name = m[1];
   const sig = new RegExp(`^${name}\\s*::\\s*IO\\s+(${Object.keys(FIXED_WIDTH).join('|')})\\s*$`, 'm').exec(text);
   if (!sig) return null;
   if ((text.match(new RegExp(`^${name}\\s*=`, 'gm')) || []).length !== 1) return null;
   const bytes = FIXED_WIDTH[sig[1]];
-  const ent = importInfo(text, 'System.Entropy'); if (!ent || ent.hiding) return null;
+  // Since 0.195.16 the import is added when missing (a MITIGATION: `entropy` must then be declared by the component).
+  const ent = importInfo(text, 'System.Entropy'); if (ent && ent.hiding) return null;
   const e1 = ensureImport(text, 'System.Entropy', ['getEntropy']); if (!e1) return null;
   if (/(?<![\w'.])AgenticBS\./.test(text)) return null;
   let t2 = e1.text;
@@ -642,8 +859,8 @@ function fixRandom(text, f) {
   if (!stillUsed && ri && !ri.qualified && ri.items && ri.items.length === 1 && ri.items[0] === 'randomIO') out = out.replace(ri.line + '\n', '');
   else if (!stillUsed && ri && !ri.qualified && ri.items && ri.items.includes('randomIO')) out = out.replace(ri.line, ri.line.replace(/\((.*)\)/, (_, inner) => `(${ri.items.filter((x) => x !== 'randomIO').join(', ')})`));
   return {
-    ruleId: 'hs-random-os-entropy', label: 'FULL', text: out,
-    explanation: `${name} now reads ${bytes} byte(s) from the operating system CSPRNG (System.Entropy.getEntropy) and decodes them big-endian into ${sig[1]}, instead of System.Random's deterministic generator.`,
+    ruleId: 'hs-random-os-entropy', label: ent ? 'FULL' : 'MITIGATION', text: out,
+    explanation: `${name} now reads ${bytes} byte(s) from the operating system CSPRNG (System.Entropy.getEntropy) and decodes them big-endian into ${sig[1]}, instead of System.Random's deterministic generator.${ent ? '' : ' The import of System.Entropy was added: add `entropy` to the component\'s build-depends.'}`,
     consequences: [`Requires the \`entropy\` and \`bytestring\` packages to be declared by the component (this file already imports System.Entropy, so the first is); the build is not checked against the cabal file.`, 'The value is uniform over the full range of its type; a caller that relied on a smaller range or on a seeded sequence changes behavior.'],
     behavior: { kind: 'random', fn: name, type: sig[1], bytes },
     expectEffective: { kind: 'random', fn: name, bytes },
@@ -1016,7 +1233,7 @@ function fixScottyBody(text, f) {
 
 const FIXERS = [
   { id: 'hs-scotty-body-limit', applies: (f) => f.rule === 'hs-unbounded-request-body' && /Web\.Scotty(?:\.Trans)?\.body\b/.test(String(f.description || f.detail || '')), run: fixScottyBody, reportedLineOnly: true },
-  { id: 'hs-password-kdf-migrate', applies: (f) => f.cwe === 'CWE-916' && (f.rule === 'hs-fast-password-hash' || /fast general-purpose hash/i.test(String(f.vuln || ''))), run: fixPasswordKdf },
+  { id: 'hs-password-kdf-migrate', applies: (f) => f.cwe === 'CWE-916' && (f.rule === 'hs-fast-password-hash' || f.rule === 'hs-pbkdf2-low-iterations' || /fast general-purpose hash|too few iterations/i.test(String(f.vuln || ''))), run: fixPasswordKdf },
   { id: 'hs-tls-validate', applies: (f) => f.cwe === 'CWE-295' || f.rule === 'hs-tls-validation-disabled', run: fixTls, reportedLineOnly: true },
   { id: 'hs-cookie-attributes', applies: (f) => f.cwe === 'CWE-1004' || f.rule === 'hs-insecure-cookie', run: fixCookie, reportedLineOnly: true },
   { id: 'hs-random-os-entropy', applies: (f) => f.cwe === 'CWE-338' || f.rule === 'hs-predictable-random', run: fixRandom, reportedLineOnly: true },
@@ -1027,7 +1244,9 @@ const FIXERS = [
   { id: 'hs-html-escape-text', applies: (f) => f.cwe === 'CWE-79', run: fixHtmlText, reportedLineOnly: true },
   { id: 'hs-hash-sha256', applies: (f) => f.cwe === 'CWE-328' || f.rule === 'hs-weak-hash', run: fixWeakHash },
   { id: 'hs-log-redact', applies: (f) => f.cwe === 'CWE-532' || f.rule === 'hs-sensitive-logging', run: fixLogging },
+  { id: 'hs-xml-no-entity-substitution', applies: (f) => f.cwe === 'CWE-611' || f.rule === 'hs-xml-entity-substitution', run: fixXmlEntities, reportedLineOnly: true },
   { id: 'hs-path-takefilename', applies: (f) => f.cwe === 'CWE-22', run: fixPath },
+  { id: 'hs-path-contain', applies: (f) => f.cwe === 'CWE-22', run: fixPathContain, reportedLineOnly: true },
 ];
 export const SUPPORTED_FIX_IDS = Object.freeze(FIXERS.map((x) => x.id));
 
@@ -1098,18 +1317,19 @@ const DEFAULT_CONSEQUENCES = Object.freeze({
 
 // Classes whose repair needs a choice the code does not contain (a policy, a library, a limit). The scanner reports them; it does not guess.
 // Each reason ends with "The decision needed: ..." naming what the operator has to decide; planHaskellFix returns that part as `decision`.
-const CLASS_REASONS = Object.freeze({
+export const CLASS_REASONS = Object.freeze({
   'CWE-918': 'server-side request forgery has no line-level repair: a check on the URL string is bypassed by redirects, alternate encodings and DNS. The decision needed: which hosts or networks this service may call (an allow-list of exact hosts, or an address policy that rejects loopback, link-local and private ranges after name resolution and on every redirect).',
+  'CWE-78': 'a shell command string is replaced by a direct call of the program with an argument list. The recognised shape is callCommand/system/spawnCommand of a ++ or <> concatenation (String, or Text under cs/unpack, on the line or in a one-line let of the same function) whose first word is a string literal naming the program. The decision needed: when the program itself is a variable (an editor or tool chosen through an environment variable, say), how that value splits into a program and its own arguments, because a configured command such as "code --goto" is not one program name; and for an argument built with if/case or a function call, the exact argument list.',
   'CWE-88': 'argument injection is repaired by a rule about what the called program accepts; inserting "--" only helps programs that honour it, so no patch is made. The decision needed: the permitted values for this argument (a closed list or a strict pattern), or the option of that program that ends option parsing.',
   'CWE-916': 'password hashing needs a password KDF (Argon2id, scrypt, bcrypt, or PBKDF2 with a high iteration count) from a library the project may not declare as a dependency, and every stored hash was produced by the old function: swapping it makes every existing password fail to verify and locks the users out. The one shape rewritten is a migration: a pure one-line `name salt password = ...` of one text type (String, Text or strict ByteString) in a file that already imports cryptonite or crypton and Data.Text or Data.ByteString, whose comparisons all sit in this file; it keeps the old function for verification, adds PBKDF2-HMAC-SHA256 and a verify helper, and this is not that shape. The decision needed: which KDF and library, with which cost parameters, and the migration (verify the old hash once, then re-hash with the new KDF at the next successful login, or force a password reset).',
-  'CWE-338': 'a predictable generator is replaced by the operating system CSPRNG (System.Entropy or Crypto.Random), whose result type is bytes, not System.Random\'s: the surrounding code must change with it. Only a one-line action of type IO <fixed-width integer> equal to randomIO, in a file that already imports System.Entropy, is rewritten. The decision needed: the token\'s type and size (a 30-bit integer cannot be made unguessable by changing the generator) and the entropy library the project declares.',
+  'CWE-338': 'a predictable generator is replaced by the operating system CSPRNG (System.Entropy or Crypto.Random), whose result type is bytes, not System.Random\'s: the surrounding code must change with it. Four shapes are rewritten (System.Entropy imported when missing, which makes the patch a MITIGATION until `entropy` is declared): a one-line action of type IO <fixed-width integer> equal to randomIO; `replicateM n (randomRIO (c1, c2))` over a character range; `randomRIO (lo, hi)` over integer literals; `(take n . map f . randomRs (lo, hi)) <$> newStdGen`. Any other shape (a generator threaded through other code, a non-literal range, a non-integer result) is not. The decision needed: the token\'s type and size (a 30-bit integer cannot be made unguessable by changing the generator) and the entropy library the project declares.',
   'CWE-1004': 'cookie attributes live in different places per framework. The recognised shapes are a Set-Cookie header string literal, a Web.Cookie SetCookie record update, servant-auth cookieIsSecure, and scotty setSimpleCookie/makeSimpleCookie; this is none of them, or an attribute is set from an expression. The decision needed: which attributes to send (Secure, HttpOnly, SameSite) and whether this cookie must work over plain HTTP.',
   'CWE-306': 'a missing authentication check needs a policy; the scanner reports the handler and does not invent the guard. The decision needed: which credential authenticates this route (session, token, API key) and what an unauthenticated caller receives (401, a redirect to login).',
   'CWE-770': 'a resource limit is a number only the operator can choose (how many bytes a body may have, how many requests, how large an allocation). Two shapes are recognised, each with a declared default: wai strictRequestBody of a Request variable in a file importing Network.Wai and Data.ByteString.Lazy, which gets a bounded reader, and scotty body in a file whose ScottyM block contains the read or names the handler, which gets setMaxRequestBodySize as that block\'s first statement (scotty 0.12 and later; refused when the block is in another file or a cabal bound excludes those versions); this is neither shape. The decision needed: the limit for this input, and what happens past it (reject with 413, truncate, spool to disk).',
-  'CWE-295': 'enabling certificate validation can break connections the project depends on. Only the connection package\'s TLSSettingsSimple with a literal True is flipped. The decision needed: the trust store (the system store, a pinned CA bundle, a private authority) and host-name verification; an OpenSSL VerifyNone is not rewritten because VerifyPeer verifies nothing until a CA bundle is loaded and does not check the host name.',
+  'CWE-295': 'enabling certificate validation can break connections the project depends on. Only the connection package\'s TLSSettingsSimple with a literal True is flipped. An HsOpenSSL `contextSetVerificationMode ctx VerifyNone` statement is rewritten to load the default CA locations and require a verified peer (a mitigation: the host name is still unchecked). The decision needed: the trust store (the system store, a pinned CA bundle, a private authority) and host-name verification.',
   'CWE-798': 'a hard-coded secret must be rotated and moved to a secret store; rewriting the line would leave the leaked value valid. The decision needed: where the secret is read from at run time (environment, a secrets manager, a file outside the repository) and rotating the exposed value, which no edit of this file can do.',
   'CWE-611': 'XML entity handling depends on the parser configuration in use. The decision needed: whether this document source is trusted and which entity and DTD features the parser may enable.',
-  'CWE-22': 'path traversal is repaired by confining the final path to a base directory. takeFileName is applied only to a String/FilePath parameter spliced under a fixed directory in a file operation; this shape (several segments, a base chosen at run time, a directory operation, a path handed through other functions) is not that. The decision needed: the directory the files must stay in, and whether a name containing separators or ".." is rejected or reduced to its last segment.',
+  'CWE-22': 'path traversal is repaired by confining the final path to a base directory. takeFileName is applied only to a String/FilePath parameter spliced under a fixed directory in a file operation, and a guard equation rejecting ".." segments and absolute paths is added only to a function with exactly one String/FilePath parameter and a Maybe result (bare or under one monad); this shape (a base chosen at run time, several path parameters, a result with no not-found value, a path handed through other functions) is neither. The decision needed: the directory the files must stay in, and whether a name containing separators or ".." is rejected or reduced to its last segment.',
   'CWE-79': 'output encoding depends on the context the value is written into (HTML text, attribute, script, URL) and on the library that renders it; only blaze-html\'s preEscapedToHtml and scotty\'s html of concatenated text are rewritten (the latter with an escaper defined in the file, for HTML text and quoted attribute values). The decision needed: render the value through the project\'s escaping HTML library, or send it as text/plain.',
   'CWE-601': 'an open redirect is repaired by restricting where the redirect may go. The decision needed: the permitted destinations (an allow-list of hosts, or relative paths only).',
 });
@@ -1226,6 +1446,37 @@ export function haskellEffectiveCheck(plan, patched) {
     if (/randomIO|System\.Random/.test(d)) return { ok: false, ran: true, detail: 'the action still calls System.Random' };
     if (!new RegExp(`getEntropy\\s+${want.bytes}\\s*$`).test(d)) return { ok: false, ran: true, detail: `the action does not read ${want.bytes} entropy byte(s)` };
     return { ok: true, ran: true, detail: `${want.fn} reads ${want.bytes} byte(s) from getEntropy and no longer calls System.Random` };
+  }
+  if (want.kind === 'tls-openssl') {
+    const ls = stripComments(after).split('\n');
+    for (const s of want.sites) {
+      const set = ls[s.line - 1] || ''; const paths = ls[s.line - 2] || '';
+      if (!new RegExp(`contextSetVerificationMode\\s+${s.ctx}\\s+\\((?:[A-Z][\\w']*\\.)?VerifyPeer True True Nothing\\)\\s*$`).test(set)) return { ok: false, ran: true, detail: `line ${s.line}: the context is not set to VerifyPeer True True Nothing` };
+      if (!new RegExp(`contextSetDefaultVerifyPaths\\s+${s.ctx}\\s*$`).test(paths)) return { ok: false, ran: true, detail: `line ${s.line}: the context does not load the default CA locations before the mode is set` };
+    }
+    const none = (t) => (stripComments(t).match(/(?<![\w'])VerifyNone(?![\w'])/g) || []).length;   // qualified uses count too
+    if (none(after) !== none(before) - want.sites.length) return { ok: false, ran: true, detail: `the patch did not remove exactly ${want.sites.length} VerifyNone` };
+    return { ok: true, ran: true, detail: `${want.sites.map((s) => s.ctx).join(', ')} load the default CA locations and require a verified peer certificate (${want.sites.length} site(s); host name not checked by this patch)` };
+  }
+  if (want.kind === 'hxt-entities') {
+    const l = stripComments(after).split('\n')[want.line - 1] || '';
+    if (!/(?<![\w'.])withSubstDTDEntities\s+(?:(?:[A-Z][\w']*\.)?no|False)(?![\w'])/.test(l)) return { ok: false, ran: true, detail: 'the line does not set withSubstDTDEntities to no' };
+    const yes = (t) => (stripComments(t).match(/withSubstDTDEntities\s+(?:(?:[A-Z][\w']*\.)?yes|True)(?![\w'])/g) || []).length;
+    if (yes(after) !== yes(before) - 1) return { ok: false, ran: true, detail: 'the patch did not turn off exactly one entity substitution' };
+    return { ok: true, ran: true, detail: `line ${want.line} no longer substitutes DTD entities` };
+  }
+  if (want.kind === 'path-contain') {
+    const re = new RegExp(`^${want.fn} ${want.param}\\n\\s+\\| "\\.\\." \`elem\` (?:[A-Z][\\w']*\\.)?splitDirectories ${want.param} \\|\\| (?:[A-Z][\\w']*\\.)?isAbsolute ${want.param} = ${want.fail.replace(/ /g, '\\s+')}\\s*$`, 'm');
+    if (!re.test(stripComments(after))) return { ok: false, ran: true, detail: `no guard equation on ${want.fn} rejects a ".." segment or an absolute ${want.param}` };
+    const eqs = (t) => stripComments(t).split('\n').filter((l) => new RegExp(`^${want.fn}(?![\\w'])`).test(l) && !new RegExp(`^${want.fn}\\s*::`).test(l)).length;
+    if (eqs(after) !== eqs(before) + 1) return { ok: false, ran: true, detail: 'the patch did not add exactly one equation' };
+    return { ok: true, ran: true, detail: `${want.fn} answers ${want.fail} for a ".." segment or an absolute ${want.param} before its body runs` };
+  }
+  if (want.kind === 'random-line') {
+    const d = (stripComments(after).split('\n')[want.line - 1] || '');
+    if (/randomRIO|randomRs|newStdGen|randomIO|System\.Random/.test(d)) return { ok: false, ran: true, detail: 'the line still calls System.Random' };
+    if (!new RegExp(`getEntropy\\s+${want.bytes}(?![\\d])`).test(d)) return { ok: false, ran: true, detail: `the line does not read ${want.bytes} entropy byte(s)` };
+    return { ok: true, ran: true, detail: `line ${want.line} reads ${want.bytes} byte(s) from getEntropy and no longer calls System.Random` };
   }
   if (want.kind === 'scotty-body-limit') {
     const count = (t, re) => (stripComments(t).match(re) || []).length;

@@ -247,7 +247,11 @@ cell('CAP-002', 'haskell', () => {
   const cmd = fam(j, 'command-injection')[0];
   const refused = cli(dir, ['fix', '--finding', cmd.id, '--preview', '--root', dir]);
   assert.equal(refused.status, 4); assert.match(refused.err, /No verified fix/, 'a rewrite a gate refuses is reported, never applied');
-  const none = cli(dir, ['fix', '--finding', fam(j, 'weak-randomness')[0].id, '--preview', '--root', dir]);
+  // Since 0.195.16 the example's `randomRIO (100000, 999999)` is rewritten (8 entropy bytes reduced into the range; a MITIGATION because
+  // System.Entropy had to be imported), so the refused class pinned here is the missing-authentication route, a decision by design.
+  const rnd = cli(dir, ['fix', '--finding', fam(j, 'weak-randomness')[0].id, '--preview', '--root', dir]);
+  assert.equal(rnd.status, 0, rnd.text); assert.match(rnd.out, /MITIGATION/); assert.match(rnd.out, /getEntropy 8/);
+  const none = cli(dir, ['fix', '--finding', fam(j, 'missing-authentication')[0].id, '--preview', '--root', dir]);
   assert.equal(none.status, 4); assert.match(none.err, /unsupported/, 'an unsupported shape says so rather than inventing a patch');
 });
 cell('CAP-002', 'nix', () => {
