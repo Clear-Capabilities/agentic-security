@@ -49,6 +49,10 @@ export const BOUNDARIES = Object.freeze({
 
 const WEAK_HASH_CALLS = new Set(['Crypto.Hash.MD5.hash', 'Crypto.Hash.MD5.hashlazy', 'Crypto.Hash.SHA1.hash', 'Crypto.Hash.SHA1.hashlazy', 'Data.Digest.Pure.MD5.md5', 'Data.Digest.Pure.MD5.md5DigestBytes', 'Data.Digest.Pure.SHA.sha1', 'Data.Digest.Pure.SHA.sha1Incremental']);
 const WEAK_ALGO_CONS = new Set(['MD5', 'MD4', 'MD2', 'SHA1']);
+// Partial list functions that are total on a list with at least one element (see nonEmptyList), and the length calls a size test may name.
+const NONEMPTY_TOTAL = /(?:^|\.)(?:head|last|init|tail|maximum|minimum|foldr1|foldl1|maximumBy|minimumBy|cycle)$/;
+const LENGTH_CALL = /(?:^|\.)(?:length|genericLength|size)$/;
+const COND_COMBINATOR = /(?:^|\.)(?:when|unless|guard)$/;
 const ANY_HASH_CALLS = new Set([...WEAK_HASH_CALLS, 'Crypto.Hash.hash', 'Crypto.Hash.hashlazy', 'Crypto.Hash.hashWith', 'Crypto.Hash.SHA256.hash', 'Crypto.Hash.SHA256.hashlazy', 'Crypto.Hash.SHA512.hash', 'Crypto.Hash.SHA512.hashlazy', 'Data.Digest.Pure.SHA.sha256', 'Data.Digest.Pure.SHA.sha512']);
 const WEAK_CIPHER_MODULES = new Set(['Crypto.Cipher.DES', 'Crypto.Cipher.RC4', 'Crypto.Cipher.RC2', 'Crypto.Cipher.Blowfish']);
 const ECB_CALLS = new Set(['Crypto.Cipher.Types.ecbEncrypt', 'Crypto.Cipher.Types.ecbDecrypt']);
@@ -547,7 +551,40 @@ export function analyzeHaskellRules(files, opts = {}) {
           if (x.kind === 'binary' && ['==', '/=', '!='].includes(x.op) && [x.left, x.right].some((side) => side && side.kind === 'array' && side.elements.length === 0)) for (const nm of directNames(x)) testedVars.add(nm);
         }
       }
+      // `case length xs of 3 -> ..`, `if length xs == 3`: a comparison of the list's LENGTH with a number is a test of the list (the IR lowers the
+      // case alternative to an equality on the scrutinee variable, so the length call sits behind an assignment).
+      const lengthVars = new Set();
+      for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source && n.source.kind === 'call' && typeof n.source.callee === 'string' && LENGTH_CALL.test(n.source.callee)) lengthVars.add(n.target);
+      // The conditions this function tests: every `if`, plus the first argument of `when` / `unless` / `guard` wherever the call sits
+      // (`when (length xs > 2) (putStrLn (xs !! 2))` is a guard written as a combinator, not an `if` node).
+      const condExprs = [];
+      for (const n of fnNodes(fn)) {
+        if (n.kind === 'if' && n.cond) condExprs.push(n.cond);
+        for (const ex of [n.value, n.source, ...(n.args || [])]) if (ex) for (const x of walk(ex)) if (x.kind === 'call' && typeof x.callee === 'string' && COND_COMBINATOR.test(x.callee) && x.args && x.args[0]) condExprs.push(x.args[0]);
+      }
+      for (const cond of condExprs) {
+        for (const x of walk(cond)) {
+          if (x.kind === 'call' && typeof x.callee === 'string' && EMPTINESS_CHECK.test(x.callee)) {
+            for (const nm of directNames(x)) testedVars.add(nm);
+            for (const s of splitsIn(x)) testedSplits.add(s);
+            // `case length xs of 3 -> ..`: the match is on a scratch variable holding the length; the list behind it is what was tested
+            for (const a of x.args || []) if (a && a.kind === 'ident' && lengthVars.has(a.name)) for (const nm of assignSources.get(a.name) || []) testedVars.add(nm);
+          }
+          if (x.kind !== 'binary' || !['==', '/=', '!='].includes(x.op)) continue;
+          for (const side of [x.left, x.right]) {
+            if (side && side.kind === 'call' && typeof side.callee === 'string' && LENGTH_CALL.test(side.callee)) for (const nm of directNames(side)) testedVars.add(nm);
+            if (side && side.kind === 'ident' && lengthVars.has(side.name)) for (const nm of assignSources.get(side.name) || []) testedVars.add(nm);
+          }
+        }
+      }
       const testedAll = withOrigins(testedVars);
+      // `head (x : xs)`, `last (xs ++ [x])`, `head [a, b]`: the list has at least one element, so the call is total (real code: xmonad's `last (["Root"] ++ ..)`).
+      const nonEmptyList = (e) => {
+        if (!e || typeof e !== 'object') return false;
+        if (e.kind === 'array') return !!(e.hs && e.hs.cons) || (!(e.hs && (e.hs.tuple || e.hs.con || e.hs.range)) && (e.elements || []).length > 0);
+        if (e.kind === 'binary' && e.hs && e.hs.concat) return nonEmptyList(e.left) || nonEmptyList(e.right);
+        return false;
+      };
       const isTested = (args) => {
         if (args.some((a) => splitsIn(a).some((s) => testedSplits.has(s)))) return true;
         const mine = withOrigins([...args.flatMap((a) => [...directNames(a)])]);
@@ -686,7 +723,9 @@ export function analyzeHaskellRules(files, opts = {}) {
             // a signing/encryption secret that is a constant in the source
             if (SECRET_KEY_CALLS.has(c) && args[0] && isLiteralLike(args[0]) && !(args[0].kind === 'literal' && String(args[0].value).length < 8)) emit('hs-hardcoded-secret', file, line, { detail: `${c} given a constant`, confidence: 0.85, evidence: { call: c } });
             // weak hash
-            if (WEAK_HASH_CALLS.has(c) || (c === 'Crypto.Hash.hashWith' && args[0] && args[0].kind === 'literal' && WEAK_ALGO_CONS.has(args[0].value))) {
+            // `hash x :: Digest MD5` / `hashlazy x :: Digest SHA1`: the digest is chosen by the type annotation (haskell-syntax.js keeps a
+            // `Digest <algo>` annotation as a `typed` node; haskell-ir.js stamps `hs.digest` on the call).
+            if (WEAK_HASH_CALLS.has(c) || (c === 'Crypto.Hash.hashWith' && args[0] && args[0].kind === 'literal' && WEAK_ALGO_CONS.has(args[0].value)) || (ANY_HASH_CALLS.has(c) && e.hs && e.hs.digest && WEAK_ALGO_CONS.has(e.hs.digest))) {
               const pw = args.some((a) => [...names(a)].some((n) => PASSWORD_VAR.test(n)));
               // MD5 and SHA-1 are broken for collision and preimage resistance, which only matters where an attacker gains from a
               // collision: a digest that is VERIFIED (compared with an expected value), that authenticates or signs, that hashes a
@@ -732,7 +771,7 @@ export function analyzeHaskellRules(files, opts = {}) {
               emit('hs-unbounded-allocation', file, line, { detail: `${c} sized by parsed caller text`, evidence: { allocator: c } });
             }
             // a partial function applied to caller text: one malformed value raises an uncaught exception
-            if (PARTIALS.has(c) && args.some((a) => mentionsText(a)) && !isTested(args)) emit('hs-partial-function-on-input', file, line, { detail: `${c} on caller-supplied input`, evidence: { partial: c }, inlineCtx: e.hs && e.hs.inlineCtx });
+            if (PARTIALS.has(c) && !(NONEMPTY_TOTAL.test(c) && nonEmptyList(args[0])) && args.some((a) => mentionsText(a)) && !isTested(args)) emit('hs-partial-function-on-input', file, line, { detail: `${c} on caller-supplied input`, evidence: { partial: c }, inlineCtx: e.hs && e.hs.inlineCtx });
             // a session/token cookie assembled without HttpOnly or Secure
             if (c === 'Web.Cookie.defaultSetCookie') { /* handled on the record update below */ }
             // unbounded body

@@ -535,14 +535,6 @@
       "IR-TAINT"
      ]
     ],
-    "xmonad-contrib:XMonad/Prompt/DirExec.hs:86:Partial function applied to caller-supplied text": [
-     [
-      "low",
-      null,
-      null,
-      "HS-RULES"
-     ]
-    ],
     "xmonad-contrib:XMonad/Prompt/Man.hs:76:path-traversal": [
      [
       "high",
@@ -2261,11 +2253,11 @@
      }
     },
     "pandoc": {
-     "rows": 9,
+     "rows": 10,
      "flagged": 0,
-     "loweredToInfo": 9,
+     "loweredToInfo": 10,
      "byStatus": {
-      "no-verdict": 7,
+      "no-verdict": 8,
       "entrypoint-reachable": 2
      }
     },
@@ -2287,11 +2279,11 @@
      }
     },
     "xmonad-contrib": {
-     "rows": 16,
-     "flagged": 5,
+     "rows": 15,
+     "flagged": 4,
      "loweredToInfo": 11,
      "byStatus": {
-      "no-verdict": 4,
+      "no-verdict": 3,
       "entrypoint-reachable": 7,
       "external-api": 5
      }

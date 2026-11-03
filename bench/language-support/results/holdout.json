@@ -291,7 +291,7 @@
         "crashed": [],
         "withErrors": 4,
         "boundaryDisclosed": 5,
-        "maxMs": 1,
+        "maxMs": 2,
         "validFixturesParsedCleanly": 156,
         "validFixtures": 156
       },
