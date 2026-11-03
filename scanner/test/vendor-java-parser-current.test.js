@@ -32,6 +32,8 @@ test('a stale copy is rebuilt and left complete, with no staging directory behin
   assert.match(r.stderr, /vendored java-parser/);
   assert.ok(fs.existsSync(path.join(FINAL, 'node_modules', 'java-parser', 'package.json')));
   assert.doesNotMatch(fs.readFileSync(path.join(FINAL, 'entry.mjs'), 'utf8'), /stale/);
-  const leftovers = fs.readdirSync(path.join(SCANNER, 'vendor')).filter((n) => n !== 'java-parser');
-  assert.deepEqual(leftovers, [], 'no .java-parser-stage-* or .java-parser-old-* directory remains');
+  // Only this child's own directories are checked: other test processes (npm pack, npm ci) run the same script at the same time and
+  // may legitimately have a staging directory of their own for an instant.
+  const own = fs.readdirSync(path.join(SCANNER, 'vendor')).filter((n) => n === `.java-parser-stage-${r.pid}` || n === `.java-parser-old-${r.pid}`);
+  assert.deepEqual(own, [], 'the run left no staging or old directory behind');
 });
