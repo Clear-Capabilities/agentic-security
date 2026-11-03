@@ -1321,8 +1321,9 @@ Limits: value versions come from per-function reaching definitions; mutation thr
 `haskell-view.js` rewrites a clone of each Haskell function so a monadic source read becomes a seedable member read on the
 synthetic root `$hs`, seeds record-parameter sources, and treats `length`/`null` as non-content. `nix-view.js` builds
 field-to-store flows from `language/nix-privacy.js` (a personal-data `config.<module>.<field>` interpolated into another option;
-hashed, measured or compared references are protected and make no flow). Coverage reports `unknown` for both languages: no
-taint-recall tier is borrowed. See `scanner/src/language/CLAUDE.md`.
+hashed, measured or compared references are protected and make no flow). Coverage reports tier `partial` for both languages (since 0.195.17; it was `unknown`), with NO recall number: the
+only measured Haskell figure is the nine self-authored entries of `docs/METRICS.md`, and showing it as "100% measured recall" in the impact
+report would read as a real-code measurement. No taint-recall tier is borrowed. See `scanner/src/language/CLAUDE.md`.
 
 ## Runtime twin additions (PRD 2 gap closure)
 

@@ -5,10 +5,11 @@ import { LANGUAGE_COVERAGE_TIER_VALUES } from '../../src/lineage/schema.js';
 
 const LINEAGE_WIRED_LANGUAGES = ['js', 'python', 'java', 'csharp', 'kotlin', 'go', 'php', 'ruby', 'cpp'];
 const PATTERN_ONLY_LANGUAGES = ['rust', 'solidity', 'swift', 'dart'];
+const DISCLOSED_PARTIAL_LANGUAGES = ['haskell', 'nix'];   // wired, but no recall number is borrowed (see the module comment)
 
-test('LANGUAGE_COVERAGE_TIERS has exactly the 9 lineage-wired languages plus the 4 pattern-only ones, no more, no fewer', () => {
+test('LANGUAGE_COVERAGE_TIERS has exactly the 9 lineage-wired languages, Haskell and Nix, and the 4 pattern-only ones, no more, no fewer', () => {
   const keys = LANGUAGE_COVERAGE_TIERS.map((e) => e.language).sort();
-  const expected = [...LINEAGE_WIRED_LANGUAGES, ...PATTERN_ONLY_LANGUAGES].sort();
+  const expected = [...LINEAGE_WIRED_LANGUAGES, ...DISCLOSED_PARTIAL_LANGUAGES, ...PATTERN_ONLY_LANGUAGES].sort();
   assert.deepEqual(keys, expected);
 });
 
@@ -33,6 +34,16 @@ test('the exact 9 recall numbers match docs/METRICS.md verbatim', () => {
   const expected = { python: 66, go: 59, js: 58, csharp: 57, ruby: 55, java: 52, php: 52, kotlin: 48, cpp: 18 };
   for (const [lang, pct] of Object.entries(expected)) {
     assert.equal(coverageTierForLanguage(lang).irTaintRecallPct, pct, `${lang} recall mismatch`);
+  }
+});
+
+test('Haskell and Nix are tier "partial" with NO recall number: the only measured Haskell figure is a self-authored nine-entry sample and is not borrowed', () => {
+  for (const lang of DISCLOSED_PARTIAL_LANGUAGES) {
+    const e = coverageTierForLanguage(lang);
+    assert.equal(e.tier, 'partial');
+    assert.equal(e.irTaintRecallPct, null, `${lang} must not carry a recall percentage`);
+    assert.equal(e.measuredAt, null);
+    assert.equal(e.source, null);
   }
 });
 

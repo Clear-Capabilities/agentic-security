@@ -9,6 +9,19 @@
 > make the history less accurate, not more.
 
 
+## 0.195.17 - Data Flow Explorer: Haskell and Nix coverage tiers, a corrected guide, and the graph and SCA items the plan found false or contract-changing
+
+**Measured, 0.195.16:** `TIMINGS preflight=3s push=6s pr=1s checks=182s merge=5s verify=5s tag=2s release=223s npm=328s total=755s release-clock=235s`, shipped in 17 min 29 s over four attempts: two hosted test-shard failures (fixed in that release, see its entry) and one transient GitHub 503 while polling checks, each resumed. The release clock (merge to published release) was 235 s.
+
+Why: plan Phase 5. Each item was checked against the code before any change, and three of five turned out to rest on a false premise, so this release is small on purpose.
+
+- **Coverage tiers** (`lineage/language-coverage-tiers.js`): Haskell and Nix are tier `partial` instead of `unknown`, because both are wired into the lineage graph. **No recall number is attached.** The only measured Haskell figure, `docs/METRICS.md`'s 9 of 9 by IR-TAINT, is nine self-authored entries; the impact report prints a number as "measured recall", and 100% would read as a measurement of real code (the real-code figure is precision, 21 of 51 flagged sites true, `bench/dag/dev-haskell`). The pinning test now asserts the null number, and the captured coverage ledger shows the change.
+- **Guide corrected** (`docs/guides/haskell.md`): the capability table said privacy lineage needs nothing. Checked on the Haskell example: without `AGENTIC_SECURITY_LINEAGE_DEEP=1` no graph is written and `dataflow export` answers "No lineage graph found"; with it, a program handling no personal data yields an empty graph.
+- **Dangling reference removed** (`lineage/sink-registry.js`): a comment named a Haskell AI overlay file that never existed; model-provider destinations are decided by the technical provider catalog in `recipient-registry.js`, by destination host.
+- **Examined and not built, with the reason recorded in `scanner/src/language/CLAUDE.md`:** CWE-78/88/94 sink categories (the categories are FR-201's egress taxonomy, and a new one is a signed cross-language contract change); finding references on sink nodes (sink nodes carry no location by design, and the Haskell rule findings are produced after the graph is built); SCA reachability from `plan.json` (it carries no module names, and the package database lives outside the project); moving the ledger entries off `proposed` (the checker requires `proposed`; implemented status lives in the support registry).
+
+Gates, from the runs recorded for this entry: `test:lineage` 1554/1554, `bench:self-scan:check` no drift, `docs:check-language` current.
+
 ## 0.195.16 - Haskell remediation for the refused true positives: entropy for three generator shapes, Text commands, path containment, OpenSSL verification, XML entities, and the log-redact literal bug
 
 **Measured, 0.195.15:** `TIMINGS preflight=3s push=7s pr=4s checks=394s merge=5s verify=6s tag=2s release=192s npm=145s total=758s release-clock=205s`, shipped in 14 min 13 s with the npm listing verified on a resume. The release clock (merge to published release) was 205 s.

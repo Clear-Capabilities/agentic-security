@@ -550,7 +550,8 @@ condition could not be decided).
 
 | Capability | Needs | Without it |
 |---|---|---|
-| Parse, SAST, taint, privacy lineage, SCA, BOM, fixes, reports | nothing | n/a |
+| Parse, SAST, taint, SCA, BOM, fixes, reports | nothing | n/a |
+| The Data Flow Explorer graph (`dataflow export`, `explore`) | `AGENTIC_SECURITY_LINEAGE_DEEP=1` on the scan (checked 2026-11-03: without it no graph is written and `dataflow export` answers "No lineage graph found") | no graph. With it, a program that handles no personal data yields an empty graph, and the coverage ledger reports Haskell as tier `partial` with no recall number (the only measured figure is nine self-authored entries, not a measurement of real code) |
 | Compile check of a fix (`compile: true`) | `ghc` on `PATH` | reported as not run |
 | The criterion that every route fixture compiles (HS-006.AC01) | `ghc` | the criterion **fails**; the support registry marks `auth` as `blocked` on a host without it |
 | Resolved dependency graph | a plan or Stack export in the project | declared inventory only, stated |

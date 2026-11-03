@@ -561,5 +561,5 @@ AI inventory (`scan --format aibom`): models `gpt-4o-mini`; 1 endpoint(s); 1 dec
 
 Dependency inventory (`--format cyclonedx`): `aeson@?`, `base@?`, `http-conduit@?`, `text@?` (declared; no plan was supplied, so no resolved versions).
 
-Data Flow Explorer export (`dataflow export --format json`, schema 1.0.0): 6 nodes, 4 edges; per-language coverage: haskell 1/1 files (unknown), python 1/1 files (partial).
+Data Flow Explorer export (`dataflow export --format json`, schema 1.0.0): 6 nodes, 4 edges; per-language coverage: haskell 1/1 files (partial), python 1/1 files (partial).
 <!-- generated:pp-facts:end -->

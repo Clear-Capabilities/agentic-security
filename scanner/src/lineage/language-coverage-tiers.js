@@ -38,6 +38,14 @@ export const LANGUAGE_COVERAGE_TIERS = Object.freeze([
   Object.freeze({ language: 'php', tier: 'partial', irTaintRecallPct: 52, measuredAt: '2026-08-19', source: 'docs/METRICS.md' }),
   Object.freeze({ language: 'kotlin', tier: 'partial', irTaintRecallPct: 48, measuredAt: '2026-08-19', source: 'docs/METRICS.md' }),
   Object.freeze({ language: 'cpp', tier: 'partial', irTaintRecallPct: 18, measuredAt: '2026-08-19', source: 'docs/METRICS.md' }),
+  // Haskell and Nix are wired into the lineage graph (haskell-view.js seeds request/record sources through the taint engine; nix-view.js
+  // builds field-to-store flows from the NixOS option analysis), so they are not "unknown". `partial` is the honest categorical claim: some
+  // flows are seen, the stated limits apply (docs/guides/haskell.md), and neither reaches `full`. NO recall number is attached, on purpose:
+  // docs/METRICS.md's Haskell row (9 of 9 by IR-TAINT) is a sample of nine self-authored entries, and shown as "100% measured recall" in the
+  // impact report it would read as a measurement of real code, which it is not (the real-code figure is precision on a fresh set, 21 of 51
+  // flagged sites true, bench/dag/dev-haskell). Nix has no taint recall at all: it is configuration reasoning, not a flow engine.
+  Object.freeze({ language: 'haskell', tier: 'partial', irTaintRecallPct: null, measuredAt: null, source: null }),
+  Object.freeze({ language: 'nix', tier: 'partial', irTaintRecallPct: null, measuredAt: null, source: null }),
   Object.freeze({ language: 'rust', tier: 'pattern-only', irTaintRecallPct: null, measuredAt: null, source: null }),
   Object.freeze({ language: 'solidity', tier: 'pattern-only', irTaintRecallPct: null, measuredAt: null, source: null }),
   Object.freeze({ language: 'swift', tier: 'pattern-only', irTaintRecallPct: null, measuredAt: null, source: null }),
