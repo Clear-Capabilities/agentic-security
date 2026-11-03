@@ -1,22 +1,22 @@
 {
- "scannerVersion": "0.195.10",
+ "scannerVersion": "0.195.18",
  "labelsDigest": "c2f17b33a43176a28799a6cd6b47f773d99c6ea273275c41a83bee1f926beb9b",
  "definition": "precision = tp / (tp + fp); ambiguous and unlabeled excluded from the denominator; 95% Wilson interval",
  "all": {
   "all haskell projects": {
-   "flagged": 77,
+   "flagged": 78,
    "tp": 1,
-   "fp": 34,
+   "fp": 33,
    "ambiguous": 11,
-   "unlabeled": 31,
-   "labeledDenominator": 35,
-   "precision": 0.0286,
+   "unlabeled": 33,
+   "labeledDenominator": 34,
+   "precision": 0.0294,
    "wilson95": [
-    0.0051,
-    0.1453
+    0.0052,
+    0.1492
    ],
-   "ifAmbiguousAllFp": 0.0217,
-   "ifAmbiguousAllTp": 0.2609
+   "ifAmbiguousAllFp": 0.0222,
+   "ifAmbiguousAllTp": 0.2667
   }
  },
  "perProject": {
@@ -36,11 +36,11 @@
    "ifAmbiguousAllTp": 0
   },
   "hledger": {
-   "flagged": 45,
+   "flagged": 47,
    "tp": 1,
    "fp": 25,
    "ambiguous": 1,
-   "unlabeled": 18,
+   "unlabeled": 20,
    "labeledDenominator": 26,
    "precision": 0.0385,
    "wilson95": [
@@ -51,16 +51,16 @@
    "ifAmbiguousAllTp": 0.0741
   },
   "postgrest": {
-   "flagged": 12,
+   "flagged": 11,
    "tp": 0,
-   "fp": 5,
+   "fp": 4,
    "ambiguous": 0,
    "unlabeled": 7,
-   "labeledDenominator": 5,
+   "labeledDenominator": 4,
    "precision": 0,
    "wilson95": [
     0,
-    0.4345
+    0.4899
    ],
    "ifAmbiguousAllFp": 0,
    "ifAmbiguousAllTp": 0
@@ -80,19 +80,19 @@
  },
  "perSourceKind": {
   "haskell source (.hs)": {
-   "flagged": 59,
+   "flagged": 60,
    "tp": 1,
-   "fp": 32,
+   "fp": 31,
    "ambiguous": 1,
-   "unlabeled": 25,
-   "labeledDenominator": 33,
-   "precision": 0.0303,
+   "unlabeled": 27,
+   "labeledDenominator": 32,
+   "precision": 0.0313,
    "wilson95": [
-    0.0054,
-    0.1532
+    0.0055,
+    0.1574
    ],
-   "ifAmbiguousAllFp": 0.0294,
-   "ifAmbiguousAllTp": 0.0588
+   "ifAmbiguousAllFp": 0.0303,
+   "ifAmbiguousAllTp": 0.0606
   },
   "non-Haskell file in a Haskell project": {
    "flagged": 18,
@@ -175,16 +175,16 @@
    "ifAmbiguousAllTp": 1
   },
   "Known-Broken Code Marker Near Security-Sensitive Logic": {
-   "flagged": 8,
+   "flagged": 7,
    "tp": 0,
-   "fp": 8,
+   "fp": 7,
    "ambiguous": 0,
    "unlabeled": 0,
-   "labeledDenominator": 8,
+   "labeledDenominator": 7,
    "precision": 0,
    "wilson95": [
     0,
-    0.3244
+    0.3543
    ],
    "ifAmbiguousAllFp": 0,
    "ifAmbiguousAllTp": 0
@@ -203,6 +203,18 @@
    ],
    "ifAmbiguousAllFp": 0,
    "ifAmbiguousAllTp": 0
+  },
+  "OS Command Injection (shell command spec)": {
+   "flagged": 1,
+   "tp": 0,
+   "fp": 0,
+   "ambiguous": 0,
+   "unlabeled": 1,
+   "labeledDenominator": 0,
+   "precision": null,
+   "wilson95": null,
+   "ifAmbiguousAllFp": null,
+   "ifAmbiguousAllTp": null
   },
   "OS Command Injection (shell string)": {
    "flagged": 3,
@@ -265,11 +277,11 @@
    "ifAmbiguousAllTp": 0
   },
   "Path Traversal (filesystem operation)": {
-   "flagged": 5,
+   "flagged": 6,
    "tp": 0,
    "fp": 2,
    "ambiguous": 0,
-   "unlabeled": 3,
+   "unlabeled": 4,
    "labeledDenominator": 2,
    "precision": 0,
    "wilson95": [
@@ -487,5 +499,5 @@
    "ifAmbiguousAllTp": 0
   }
  },
- "staleLabels": 14
+ "staleLabels": 15
 }
