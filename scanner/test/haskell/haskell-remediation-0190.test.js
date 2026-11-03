@@ -150,12 +150,14 @@ test('TLS: a variable, a setting already False, a file without the connection im
   assert.equal(planHaskellFix({ cwe: 'CWE-295', file: 'src/T.hs', line: 5 }, { 'src/T.hs': variable }).ok, false);
   const noImport = 'module T where\n\ns = TLSSettingsSimple True False False\n';
   assert.equal(planHaskellFix({ cwe: 'CWE-295', file: 'src/T.hs', line: 3 }, { 'src/T.hs': noImport }).ok, false);
+  // Since 0.195.16 a VerifyNone STATEMENT of a do block is rewritten (haskell-remediation-0195-16.test.js); an expression body, where no
+  // second statement can be added, is still refused, and the reason says what the rewrite leaves unchecked.
   const openssl = 'module T where\nimport qualified OpenSSL.Session as SSL\n\nf ctx = SSL.contextSetVerificationMode ctx SSL.VerifyNone\n';
   const r = planHaskellFix({ cwe: 'CWE-295', file: 'src/T.hs', line: 4 }, { 'src/T.hs': openssl });
   assert.equal(r.ok, false);
   assert.equal(r.tier, TIERS.guidance);
   assert.match(r.decision, /trust store/);
-  assert.match(r.reason, /VerifyPeer verifies nothing until a CA bundle is loaded/);
+  assert.match(r.reason, /the host name is still unchecked/);
 });
 
 test('TLS effective check: a patch that edits a DIFFERENT TLS site is caught even though one finding is gone', () => {
@@ -284,12 +286,17 @@ test('randomness: the patched action is EVALUATED by GHC against chosen entropy 
 test('randomness: every other shape is refused (a range, no entropy import, a wider or non-integer type, a function with parameters)', () => {
   const plan = (src, line) => planHaskellFix({ cwe: 'CWE-338', file: 'src/Tok.hs', line }, { 'src/Tok.hs': src });
   const base = RND('Word64')['src/Tok.hs'];
-  assert.equal(plan(base.replace('= randomIO', '= randomRIO (0, 1000000000)').replace('import System.Random (randomIO)', 'import System.Random (randomRIO)'), 9).ok, false, 'a bounded range needs rejection sampling, not a byte decode');
-  assert.equal(plan(base.replace('import System.Entropy (getEntropy)\n', ''), 9).ok, false, 'the entropy dependency is not declared by the file');
+  // Since 0.195.16 (haskell-remediation-entropy.test.js): an integer-literal range is reduced from 8 entropy bytes, and a missing System.Entropy
+  // import is ADDED (the patch is then a MITIGATION: the operator declares `entropy`). The shapes below stay refused.
+  const range = plan(base.replace('= randomIO', '= randomRIO (0, 1000000000)').replace('import System.Random (randomIO)', 'import System.Random (randomRIO)'), 9);
+  assert.equal(range.ok, true, 'an integer-literal range is reduced from entropy bytes');
+  assert.equal(range.label, 'FULL');
+  const noImport = plan(base.replace('import System.Entropy (getEntropy)\n', ''), 8);   // the definition is one line up once the import is gone
+  assert.equal(noImport.ok, true); assert.equal(noImport.label, 'MITIGATION', 'the entropy dependency is not declared by the file: the import is added and the patch is a mitigation');
   assert.equal(plan(base.replace('IO Word64', 'IO Integer'), 9).ok, false);
   assert.equal(plan(base.replace('newCsrfToken :: IO Word64\nnewCsrfToken = randomIO', 'newCsrfToken :: Int -> IO Word64\nnewCsrfToken n = fmap (+ fromIntegral n) randomIO'), 9).ok, false);
-  const gitit = 'module S where\nimport System.Random (randomRIO)\nnewSession :: IO Int\nnewSession = randomRIO (0, 1000000000)\n';
-  const r = plan(gitit, 4);
+  const threaded = 'module S where\nimport System.Random (randomRIO, mkStdGen, randomR)\nnewSession :: Int -> IO Int\nnewSession seed = pure (fst (randomR (0, 9) (mkStdGen seed)))\n';
+  const r = plan(threaded, 4);
   assert.equal(r.ok, false); assert.match(r.reason, /CSPRNG/); assert.match(r.decision, /token's type and size/);
 });
 

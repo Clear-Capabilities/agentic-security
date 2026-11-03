@@ -173,8 +173,8 @@ test('[HS-010.AC02] every fix carries exactly one FULL/MITIGATION/WORKAROUND lab
   assert.ok(labels.includes('FULL') && labels.includes('MITIGATION'));
   // the five original fixers, hs-path-takefilename (real-code precision work), the four added with the 0.190.0 remediation work (TLS validation,
   // cookie attributes, OS entropy, request-body bound) and the two of 0.195.10 (HTML from text, the password-hash migration); the exact set is
-  // pinned in haskell-remediation-classes.test.js
-  assert.equal(SUPPORTED_FIX_IDS.length, 13);
+  // pinned in haskell-remediation-classes.test.js; 0.195.16 added hs-path-contain and hs-xml-no-entity-substitution
+  assert.equal(SUPPORTED_FIX_IDS.length, 15);
   for (const id of ['hs-sql-parameterize', 'hs-process-argv', 'hs-html-escape', 'hs-hash-sha256', 'hs-log-redact']) assert.ok(SUPPORTED_FIX_IDS.includes(id), id);
 });
 

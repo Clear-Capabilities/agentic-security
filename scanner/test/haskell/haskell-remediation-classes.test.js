@@ -205,12 +205,14 @@ newSession = randomRIO (0, 1000000000)
   const pw = pick(fs, (x) => x.cwe === 'CWE-916');
   const rnd = pick(fs, (x) => x.cwe === 'CWE-338');
   assert.ok(pw && rnd, JSON.stringify(fs.map((x) => [x.cwe, x.line])));
-  for (const f of [pw, rnd]) {
-    const pv = await languageFixPreview(f, gitit);
-    assert.equal(pv.ok, false);
-    assert.match(String(pv.reason), /KDF|CSPRNG/);
-    assert.equal(pv.proposal, 'model-assisted');
-  }
+  const pwPreview = await languageFixPreview(pw, gitit);
+  assert.equal(pwPreview.ok, false);
+  assert.match(String(pwPreview.reason), /KDF/);
+  assert.equal(pwPreview.proposal, 'model-assisted');
+  // Since 0.195.16 the integer-literal range IS rewritten (haskell-remediation-entropy.test.js): a MITIGATION, since System.Entropy had to be imported.
+  const rndPreview = await languageFixPreview(rnd, gitit);
+  assert.equal(rndPreview.ok, true, JSON.stringify(rndPreview));
+  assert.equal(rndPreview.label, 'MITIGATION');
   for (const cwe of ['CWE-918', 'CWE-88', 'CWE-1004', 'CWE-306', 'CWE-770']) {
     const r = planHaskellFix({ cwe, file: 'src/X.hs', line: 3 }, { 'src/X.hs': 'module X where\nx :: Int\nx = 1\n' });
     assert.equal(r.ok, false, cwe);
@@ -220,7 +222,7 @@ newSession = randomRIO (0, 1000000000)
 });
 
 test('the fixer set is exactly the rewrites that are proved the same program minus the vulnerability (or a stated mitigation)', () => {
-  assert.deepEqual([...SUPPORTED_FIX_IDS].sort(), ['hs-cookie-attributes', 'hs-hash-sha256', 'hs-html-escape', 'hs-html-escape-text', 'hs-log-redact', 'hs-password-kdf-migrate', 'hs-path-takefilename', 'hs-process-argv', 'hs-random-os-entropy', 'hs-request-body-bound', 'hs-scotty-body-limit', 'hs-sql-parameterize', 'hs-tls-validate']);
+  assert.deepEqual([...SUPPORTED_FIX_IDS].sort(), ['hs-cookie-attributes', 'hs-hash-sha256', 'hs-html-escape', 'hs-html-escape-text', 'hs-log-redact', 'hs-password-kdf-migrate', 'hs-path-contain', 'hs-path-takefilename', 'hs-process-argv', 'hs-random-os-entropy', 'hs-request-body-bound', 'hs-scotty-body-limit', 'hs-sql-parameterize', 'hs-tls-validate', 'hs-xml-no-entity-substitution']);
 });
 
 test('validateHaskellFix never writes without apply and reports the compile gate as not run by default', async () => {

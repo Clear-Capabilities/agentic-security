@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "engineVersion": "0.195.15",
-  "bundleSha256": "3d395cf95358af8a372a685bf6119f46dac36e3502237a525812949a53776c3c",
+  "engineVersion": "0.195.16",
+  "bundleSha256": "f9c1b8e9f561855e7ce1868d46b2dafeaf313e69ab497add36d0d387e83a46d2",
   "examples": {
     "haskell-app/vulnerable": {
       "exitCode": 3,
@@ -118,14 +118,14 @@
         {
           "family": "weak-randomness",
           "line": 21,
-          "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported, guidance-only): a predictable generator is replaced by the operating system CSPRNG (System.Entropy or Crypto.Random), whose result type is bytes, not System.Random's: the surrounding code must change with it. Only a one-line action of type IO <fixed-width integer> equal to randomIO, in a file that already imports System.Entropy, is rewritten. The decision needed: the token's type and size (a 30-bit integer cannot be made unguessable by changing the generator) and the entropy library the project declares."
+          "exitCode": 0,
+          "text": "MITIGATION (full-source-edit): statusToken now draws an integer in the range 100000 to 999999 from the operating system CSPRNG (System.Entropy.getEntropy, 8 byte(s)) instead of System.Random's deterministic generator.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -8,14 +8,15 @@\n-import System.Random (randomRIO)\n-import Web.Scotty\n-\n--- | Look an order up by reference. The reference comes straight from the URL.\n-lookupOrder :: Connection -> String -> IO [Only String]\n-lookupOrder conn ref = query_ conn (fromString (\"SELECT status FROM orders WHERE ref = '\" ++ ref ++ \"'\"))\n-\n--- | Create a shipping label with an external tool, named after the order.\n-makeLabel :: String -> IO ()\n-makeLabel name = callCommand (\"label-printer --order \" ++ name ++ \" --out /srv/labels\")\n-\n--- | A one-time token for the order status page.\n-statusToken :: IO Int\n-statusToken = randomRIO (100000, 999999)\n+import Web.Scotty\n+import System.Entropy (getEntropy)\n+import qualified Data.ByteString as AgenticBS\n+\n+-- | Look an order up by reference. The reference comes straight from the URL.\n+lookupOrder :: Connection -> String -> IO [Only String]"
         },
         {
           "family": "sensitive-logging",
           "line": 24,
           "exitCode": 0,
-          "text": "MITIGATION (full-source-edit): Replaced 2 sensitive log argument(s) with \"[REDACTED]\". The value is no longer logged; the log line loses that detail.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -24,1 +24,1 @@\n-logLogin user password = putStrLn (\"login \" ++ user ++ \" password=\" ++ password)\n+logLogin user password = putStrLn (\"login \" ++ user ++ \" \"[REDACTED]\"=\" ++ \"[REDACTED]\")\n  note: The redacted value no longer appears in the log; the line loses that detail.\n\n  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling"
+          "text": "MITIGATION (full-source-edit): Replaced 1 sensitive log argument(s) with \"[REDACTED]\". The value is no longer logged; the log line loses that detail.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -24,1 +24,1 @@\n-logLogin user password = putStrLn (\"login \" ++ user ++ \" password=\" ++ password)\n+logLogin user password = putStrLn (\"login \" ++ user ++ \" password=\" ++ \"[REDACTED]\")\n  note: The redacted value no longer appears in the log; the line loses that detail.\n\n  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling"
         },
         {
           "family": "multi-sink-taint-chain",
@@ -559,7 +559,7 @@
           "family": "path-traversal",
           "line": 14,
           "exitCode": 4,
-          "text": "No verified fix for this finding (unsupported, guidance-only): path traversal is repaired by confining the final path to a base directory. takeFileName is applied only to a String/FilePath parameter spliced under a fixed directory in a file operation; this shape (several segments, a base chosen at run time, a directory operation, a path handed through other functions) is not that. The decision needed: the directory the files must stay in, and whether a name containing separators or \"..\" is rejected or reduced to its last segment."
+          "text": "No verified fix for this finding (unsupported, guidance-only): path traversal is repaired by confining the final path to a base directory. takeFileName is applied only to a String/FilePath parameter spliced under a fixed directory in a file operation, and a guard equation rejecting \"..\" segments and absolute paths is added only to a function with exactly one String/FilePath parameter and a Maybe result (bare or under one monad); this shape (a base chosen at run time, several path parameters, a result with no not-found value, a path handed through other functions) is neither. The decision needed: the directory the files must stay in, and whether a name containing separators or \"..\" is rejected or reduced to its last segment."
         },
         {
           "family": "command-injection",
