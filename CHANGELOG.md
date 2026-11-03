@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.195.19 - The end-of-programme measurement of the two untouched Haskell splits, recorded as measured
+
+**Measured, 0.195.18:** `TIMINGS preflight=3s push=26s pr=10s checks=360s merge=7s verify=5s tag=3s release=223s npm=359s total=996s release-clock=238s`, shipped in 18 min 18 s. The first attempt stopped in the hosted checks on the public-contract test (fixed in that release, see its entry); the second passed, and the npm check was re-run once with `--resume`. The release clock (merge to published release) was 238 s.
+
+No engine change. This release records the single measurement the plan reserved for its end, on the two splits nobody tunes against, aggregate output only, no site and no case source opened.
+
+- **Sealed independent Haskell set** (`bench/dag/independent-haskell`, scanner 0.195.18): 78 flagged (77 at 0.195.11), 1 true positive, 33 false positives (34), 11 ambiguous, 33 unlabelled (31); precision 2.9% (95% Wilson 0.5% to 14.9%), unchanged from 2.9%. The pre-registered rule stays: under 2 points is no generalisation and no claim. The run does not show whether the known-broken-marker change removed the false-positive class it was written for; the counts moved by one labelled false positive out and two unlabelled sites in, and none of them was traced.
+- **unseen-v6** (`bench/language-support/corpora/unseen-v6`): SAST + taint 25 true positives, 5 false positives, 14 false negatives; precision 83.3%, recall 64.1%, F1 72.5%, identical to the 0.195.11 result (the result JSON differs only in its date). None of this programme's work targeted the shapes this split exercises, so no movement is the expected reading.
+
+Both logged in their `USE-LOG.md`. `docs/guides/haskell.md` is unchanged.
+
 ## 0.195.18 - Haskell rule precision: fixed-path file reads, cookie randomness by flow, and a whole-word security vocabulary for the known-broken-marker detector
 
 **Measured, 0.195.17:** `TIMINGS preflight=3s push=8s pr=4s checks=370s merge=5s verify=6s tag=2s release=163s npm=328s total=889s release-clock=176s`, shipped in 16 min 34 s (the npm check was re-run once with `--resume`). The release clock (merge to published release) was 176 s.
