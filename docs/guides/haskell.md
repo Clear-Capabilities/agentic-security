@@ -158,6 +158,25 @@ Besides direct calls, binds and the usual combinators, the engine follows these 
   under Template Haskell (now an opaque value, disclosed as the splice boundary). A Hamlet quasi-quote whose last interpolation ended
   its line also dropped its function. Pinned in `scanner/test/haskell/haskell-real-advisory-shapes.test.js`; the advisories are
   listed in `bench/cve-replay/real-haskell-advisories.md`.
+- **A string-interpolating quasi-quote is the concatenation of its interpolations.** `[i|SELECT .. '#{name}'|]` (string-interpolate,
+  interpolate), `[st|..#{e}..|]` (shakespeare-text), `[text|..$name ${e}..|]` (neat-interpolation) and `[fmt|..{e} {e:spec}..|]` (PyF)
+  carry each interpolated expression to the sink the quote is handed to, with a sanitizer inside an interpolation still seen. Only under an
+  import of the quoter's own module; any other quoter stays an opaque boundary. The template text is not modelled, so a text sink that
+  needs a markup literal (`putStrLn`) does not fire through a quote (a stated limit). A self-written probe of the five forms found none
+  followed before this; pinned in `scanner/test/haskell/haskell-quasiquote-interp.test.js`.
+- **Record dot and labels.** With `OverloadedRecordDot` on, `order.customer` is a read of that field (a sibling field stays clean) and
+  `(.note)` the selector; with `OverloadedLabels`, `get #customer order` and `set #customer v order` carry the record's and the value's
+  text (the field itself is not selected: a stated limit). Both are read from the module's LANGUAGE pragma only; a cabal
+  `default-extensions` entry is not seen.
+- **A module-level cell written in one function and read in another.** `{-# NOINLINE ref #-} ref = unsafePerformIO (newIORef ..)`
+  (MVar, TVar, STRef alike) is one variable for the whole project: a write with request text anywhere makes every later read tainted,
+  across modules, including a point-free writer (`remember = writeIORef ref`). Flow-insensitive, and the root is not carried across
+  the cell (the reader's trust verdict is `unattributed`, never lowered). A cell stored in a data structure or returned from a function
+  is still not followed.
+- **A function written in lambda form.** `dispatch = \case ..`, `pair = \cases ..`, `run = \x -> ..` at the top level or in a
+  `where` are the functions they define, so a call reaches the sink inside them. `mdo` is read as `do` (`rec` blocks are not); a GADT
+  `data T where` declares its constructors (record fields included) so a match on them binds the right field; a `pattern` synonym is a
+  declaration, not a function.
 - **Two layout rules from a search engine's request handler.** A `where` that starts a line at the case alternatives' own column
   closes the alternatives and belongs to the function (hoogle's `replyServer` was read as one more alternative and dropped with its
   62 calls), and semicolon-separated statements on one line of a nested `do` stay in that `do` (`s <- act pay; pure s` split the
@@ -170,21 +189,21 @@ Besides direct calls, binds and the usual combinators, the engine follows these 
   on the index in that function covers it, as an emptiness test covers the list.
 
 <!-- generated:hs-models:start -->
-The model registry (`scanner/src/language/haskell-models.js`) holds 198 sources, 285 sinks and 84 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
+The model registry (`scanner/src/language/haskell-models.js`) holds 200 sources, 293 sinks and 84 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
 | Sink family | CWE | APIs modelled | Examples |
 | --- | --- | --- | --- |
-| `cmd` | CWE-78 | 39 | `Shelly.Lifted.bash`, `Shelly.Lifted.bashPipeFail`, `Shelly.Lifted.bash_`, ... |
-| `cmd` | CWE-88 | 16 | `Shelly.Lifted.run`, `Shelly.Lifted.runFoldLines`, `Shelly.Lifted.run_`, ... |
+| `cmd` | CWE-78 | 40 | `Shelly.Lifted.bash`, `Shelly.Lifted.bashPipeFail`, `Shelly.Lifted.bash_`, ... |
+| `cmd` | CWE-88 | 17 | `Shelly.Lifted.run`, `Shelly.Lifted.runFoldLines`, `Shelly.Lifted.run_`, ... |
 | `code` | CWE-94 | 3 | `Language.Haskell.Interpreter.eval`, `Language.Haskell.Interpreter.interpret`, `Language.Haskell.Interpreter.runStmt` |
 | `llm-prompt` | CWE-1427 | 5 | `Network.HTTP.Conduit.setRequestBodyJSON`, `Network.HTTP.Conduit.setRequestBodyLBS`, `Network.HTTP.Simple.setRequestBodyJSON`, ... |
 | `path` | CWE-22 | 64 | `Data.ByteString.Char8.appendFile`, `Data.ByteString.Char8.readFile`, `Data.ByteString.Char8.writeFile`, ... |
 | `redirect` | CWE-601 | 13 | `Happstack.Server.movedPermanently`, `Happstack.Server.seeOther`, `Happstack.Server.tempRedirect`, ... |
-| `sql` | CWE-89 | 47 | `Database.HDBC.prepare`, `Database.HDBC.quickQuery`, `Database.HDBC.quickQuery'`, ... |
+| `sql` | CWE-89 | 53 | `Database.Esqueleto.Experimental.rawExecute`, `Database.Esqueleto.Experimental.rawSql`, `Database.Esqueleto.Legacy.rawExecute`, ... |
 | `url` | CWE-918 | 59 | `Network.HTTP.Client.Conduit.http`, `Network.HTTP.Client.Conduit.httpLbs`, `Network.HTTP.Client.Conduit.httpNoBody`, ... |
 | `xss` | CWE-79 | 37 | `Data.Text.IO.putStr`, `Data.Text.IO.putStrLn`, `Lucid.Base.toHtmlRaw`, ... |
 
-Source provenances: cli (1), cookie (2), env (3), file-read (17), header (13), http-body (51), network (7), stdin (13), upload (3), url-param (88).
+Source provenances: cli (3), cookie (2), env (3), file-read (17), header (13), http-body (51), network (7), stdin (13), upload (3), url-param (88).
 
 Sanitizer effects: * (10), other (1), path (4), xss (69).
 <!-- generated:hs-models:end -->

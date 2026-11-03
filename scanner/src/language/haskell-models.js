@@ -43,6 +43,9 @@ export const HS_PACKAGES = Object.freeze({
   wreq: { modules: ['Network.Wreq', 'Network.Wreq.Session'], tested: ['0.5'] },
   'blaze-html': { modules: ['Text.Blaze', 'Text.Blaze.Html', 'Text.Blaze.Html5', 'Text.Blaze.Internal'], tested: ['0.9'] },
   'blaze-builder': { modules: ['Blaze.ByteString.Builder.Html.Utf8', 'Blaze.ByteString.Builder.Html.Word'], tested: ['0.4.4'] },
+  'typed-process': { modules: ['System.Process.Typed'], tested: ['0.2.13'] },
+  esqueleto: { modules: ['Database.Esqueleto', 'Database.Esqueleto.Experimental', 'Database.Esqueleto.Legacy'], tested: ['3.6'] },
+  'optparse-applicative': { modules: ['Options.Applicative'], tested: ['0.19'] },
   lucid: { modules: ['Lucid', 'Lucid.Base'], tested: ['2.11'] },
   shakespeare: { modules: ['Text.Hamlet', 'Text.Shakespeare'], tested: ['2.0'] },
   text: { modules: ['Data.Text', 'Data.Text.IO', 'Data.Text.Lazy', 'Data.Text.Lazy.IO', 'Data.Text.Encoding'], tested: ['2.0'] },
@@ -98,6 +101,8 @@ src('Data.ByteString', ['hGetLine', 'hGetContents'], 'file-read', 'bytes input',
 src('Data.ByteString.Char8', ['getLine', 'getContents'], 'stdin', 'bytes input', { package: 'bytestring' });
 src('Data.ByteString.Char8', ['hGetLine', 'hGetContents'], 'file-read', 'bytes input', { package: 'bytestring' });
 src('System.Environment', ['getArgs'], 'cli', 'command-line argument', { package: 'base' });
+// optparse-applicative (0.19.0.0): the parsed options record is the command line (`opts <- execParser parserInfo`; each field is an argument).
+src('Options.Applicative', ['execParser', 'customExecParser'], 'cli', 'command-line options (optparse-applicative)', { package: 'optparse-applicative' });
 src('System.Environment', ['getEnv', 'lookupEnv', 'getEnvironment'], 'env', 'environment variable', { package: 'base' });
 src('Prelude', ['readFile'], 'file-read', 'file content', { package: 'base' });
 src('System.IO', ['readFile'], 'file-read', 'file content', { package: 'base' });
@@ -208,6 +213,10 @@ sink('System.Process', ['callProcess', 'spawnProcess', 'readProcess', 'readProce
 sink('System.Process', ['callProcess', 'spawnProcess', 'proc'], { family: 'cmd', cwe: 'CWE-88', severity: 'medium', argIndex: 1, shell: false, argv: true, package: 'process', vuln: 'Argument Injection (process arguments)', remediation: 'Shell-free argument lists prevent shell parsing but not option injection: validate each argument against an allow-list and insert `--` before untrusted values.' });
 sink('System.Process', ['readProcess', 'readProcessWithExitCode'], { family: 'cmd', cwe: 'CWE-88', severity: 'medium', argIndex: 1, shell: false, argv: true, package: 'process', vuln: 'Argument Injection (process arguments)', remediation: 'Validate each argument against an allow-list and insert `--` before untrusted values.' });
 sink('System.Process.Typed', ['shell'], { family: 'cmd', cwe: 'CWE-78', severity: 'critical', argIndex: 0, shell: true, package: 'process', vuln: 'OS Command Injection (typed-process shell)', remediation: 'Use `proc` with a fixed program and an argument list.' });
+// typed-process (names read from the 0.2.13.0 Haddock index): `proc prog args` builds the ProcessConfig that `readProcess`, `runProcess`,
+// `startProcess` and `withProcess*` run, so the construction is the sink: the program (CWE-78) and the argument list (CWE-88), as for process.
+sink('System.Process.Typed', ['proc'], { family: 'cmd', cwe: 'CWE-78', severity: 'high', argIndex: 0, shell: false, package: 'typed-process', vuln: 'OS Command Injection (attacker-chosen executable)', remediation: 'The program path must be a fixed value or chosen from an allow-list.' });
+sink('System.Process.Typed', ['proc'], { family: 'cmd', cwe: 'CWE-88', severity: 'medium', argIndex: 1, shell: false, argv: true, package: 'typed-process', vuln: 'Argument Injection (process arguments)', remediation: 'Shell-free argument lists prevent shell parsing but not option injection: validate each argument against an allow-list and insert `--` before untrusted values.' });
 
 // CWE-22. Path-taking operations.
 const PATH_FN = ['readFile', 'writeFile', 'appendFile', 'openFile', 'withFile', 'readFile\'', 'openBinaryFile', 'withBinaryFile'];
@@ -301,6 +310,8 @@ sink('Database.HDBC', ['run', 'quickQuery', "quickQuery'", 'prepare', 'runRaw'],
 sink('Database.SQLite3', ['exec', 'prepare'], { ...SQL, argIndex: 1, package: 'direct-sqlite', vuln: 'SQL Injection (SQLite statement text)' });
 sink('Database.PostgreSQL.LibPQ', ['exec', 'execParams', 'prepare'], { ...SQL, argIndex: 1, package: 'postgresql-libpq', vuln: 'SQL Injection (libpq command text)' });
 for (const mod of ['Database.Persist.Postgresql', 'Database.Persist.Sqlite', 'Database.Persist.MySQL']) sink(mod, ['rawSql', 'rawExecute', 'rawQuery'], { ...SQL, argIndex: 0, package: 'persistent-backends', vuln: 'SQL Injection (raw SQL text)' });
+// esqueleto re-exports persistent's raw SQL (names read from the 3.6.0.3 Haddock index of Database.Esqueleto.Experimental).
+for (const mod of ['Database.Esqueleto', 'Database.Esqueleto.Experimental', 'Database.Esqueleto.Legacy']) sink(mod, ['rawSql', 'rawExecute'], { ...SQL, argIndex: 0, package: 'esqueleto', vuln: 'SQL Injection (raw SQL text)' });
 
 // CWE-918. Req builds a URL from typed pieces, so the HOST is the attacker-steered part; HTTP's request constructors take the URL text.
 sink('Network.HTTP.Req', ['https', 'http'], { ...SSRF, argIndex: 0, package: 'req', vuln: 'Server-Side Request Forgery (request host)' });

@@ -1,7 +1,7 @@
 {
   "schema": "agentic-security/language-support-measurement@2",
   "split": "holdout",
-  "measuredAt": "2026-11-02",
+  "measuredAt": "2026-11-03",
   "corpusVersion": "qa001-v2",
   "ecosystems": {
     "haskell": {

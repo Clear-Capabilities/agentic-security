@@ -18,6 +18,11 @@ const KW = new Set(['case', 'class', 'data', 'default', 'deriving', 'do', 'else'
 const NUMERIC_TYPE = /^\(?\s*(?:(?:Maybe|IO|ActionM|Handler|Either\s+String)\s+)?\(?\s*(?:Int|Integer|Int(?:8|16|32|64)|Word|Word(?:8|16|32|64)|Double|Float|Natural|Bool|Scientific)\s*\)?\s*\)?$/;
 // The module enables Template Haskell (a LANGUAGE pragma; a cabal `default-extensions` entry is not seen here, a stated limit).
 const TH_PRAGMA = /\{-#\s*LANGUAGE\b[^#]*\bTemplateHaskell\b/;
+// OverloadedRecordDot: `r.field` (no spaces, lowercase field) is a field selection, `(.field)` a selector section. OverloadedLabels: `#field`
+// in prefix position is a label value (IHP's `get #name r`, `set #name v r`). Both read from the LANGUAGE pragma only, as above.
+const RECORD_DOT_PRAGMA = /\{-#\s*LANGUAGE\b[^#]*\bOverloadedRecordDot\b/;
+const LABELS_PRAGMA = /\{-#\s*LANGUAGE\b[^#]*\bOverloadedLabels\b/;
+const RECDO_PRAGMA = /\{-#\s*LANGUAGE\b[^#]*\bRecursiveDo\b/;
 const RESERVED_OPS = new Set(['=', '|', '->', '<-', '::', '=>', '\\', '@', '~', '..']);
 const SYM = new Set('!#$%&*+./<=>?@\\^|-~:'.split(''));
 const OPEN = { '(': ')', '[': ']', '{': '}' };
@@ -36,6 +41,9 @@ export function lexHs(src, opts = {}) {
   const T = [];
   const n = src.length;
   const thSplices = !!opts.th;
+  const recordDot = !!opts.recordDot;
+  const labels = !!opts.labels;
+  const recursiveDo = !!opts.recursiveDo;
   let i = 0;
   let line = 1;
   let col = 0;
@@ -138,7 +146,9 @@ export function lexHs(src, opts = {}) {
       let k = i;
       while (isIdChar(src[k])) k++;
       const v = src.slice(i, k);
-      push(KW.has(v) ? 'kw' : 'var', v, {}, k - i);
+      // `mdo` (RecursiveDo) is a `do` whose statements may refer to later ones; for the lowering that is a `do`. (`rec` blocks are not read.)
+      if (v === 'mdo' && recursiveDo) push('kw', 'do', {}, k - i);
+      else push(KW.has(v) ? 'kw' : 'var', v, {}, k - i);
       continue;
     }
     if (c === '(' || c === ')' || c === '[' || c === ']' || c === ',' || c === ';' || c === '`' || c === '{' || c === '}') {
@@ -152,6 +162,22 @@ export function lexHs(src, opts = {}) {
       const prev = i > 0 ? src[i - 1] : ' ';
       const prefix = !(isIdChar(prev) || isSym(prev) || prev === ')' || prev === ']' || prev === '}' || prev === '"' || prev === "'");
       if (prefix && (src[k] === '(' || (isIdStart(src[k]) && !isUpper(src[k])))) { push('splice', src.slice(i, k), {}, k - i); continue; }
+    }
+    // `r.field` / `(e).field` / `r.a.b` with OverloadedRecordDot: a `.` touching an identifier, `)` or `}` on its left and a lowercase name on
+    // its right is a field selection (`sel` token), never composition (GHC reads it the same way under the extension). `(.field)` is the
+    // selector section: a `.` touching `(` on its left.
+    if (c === '.' && recordDot && isIdStart(src[i + 1]) && !isUpper(src[i + 1]) && i > 0 && (isIdChar(src[i - 1]) || src[i - 1] === ')' || src[i - 1] === '}' || src[i - 1] === '(')) {
+      let m = i + 1;
+      while (isIdChar(src[m])) m++;
+      push('sel', src.slice(i + 1, m), { section: src[i - 1] === '(' }, m - i);
+      continue;
+    }
+    // `#field` with OverloadedLabels, in prefix position: a label value.
+    if (c === '#' && labels && isIdStart(src[i + 1]) && !isUpper(src[i + 1]) && (i === 0 || !(isIdChar(src[i - 1]) || isSym(src[i - 1]) || src[i - 1] === ')' || src[i - 1] === ']'))) {
+      let m = i + 1;
+      while (isIdChar(src[m])) m++;
+      push('label', src.slice(i + 1, m), {}, m - i);
+      continue;
     }
     if (isSym(c)) {
       let j = i;
@@ -196,7 +222,7 @@ const BT_FIX = { elem: [4, 'l'], notElem: [4, 'l'], div: [7, 'l'], mod: [7, 'l']
  * @returns {{tokens:object[], module:object|null, imports:object[], decls:object[], sigs:object[], data:object[], classes:object[], instances:object[], errors:object[], boundaries:object[]}}
  */
 export function parseSyntax(src, opts = {}) {
-  const T = lexHs(src, { th: TH_PRAGMA.test(src) });
+  const T = lexHs(src, { th: TH_PRAGMA.test(src), recordDot: RECORD_DOT_PRAGMA.test(src), labels: LABELS_PRAGMA.test(src), recursiveDo: RECDO_PRAGMA.test(src) });
   const mate = matchBrackets(T);
   const N = T.length;
   const errors = [];
@@ -469,6 +495,19 @@ export function parseSyntax(src, opts = {}) {
         pos = blk.b;
         return { t: 'lamcase', alts: withIndent(blk.indent, () => blk.items.map(([a, b]) => parseAlt(a, b))), line: t.line };
       }
+      // `\cases` (GHC 9.4): alternatives with SEVERAL patterns each, `0 y -> ..; x y -> ..`.
+      if (peek() && peek().t === 'var' && peek().v === 'cases') {
+        const blk = blockAfter(pos, lim, layoutIndent);
+        pos = blk.b;
+        const parseAltMulti = (a, b) => {
+          const k = findTop(a, b, (x) => isRop(x, '->') || isRop(x, '|'));
+          if (k < 0) { err('expected-arrow', T[a], 'case alternative has no `->`'); return { pats: [{ t: 'pwild' }], rhs: { guards: null, body: { t: 'unknown' }, where: [] }, line: T[a].line, bad: true }; }
+          const pats = [];
+          for (let q = a; q < k;) { const r = apatAt(q, k); if (!r) break; pats.push(r[0]); q = r[1]; }
+          return { pats, rhs: parseRhs(k, b, '->'), line: T[a].line };
+        };
+        return { t: 'lamcases', alts: withIndent(blk.indent, () => blk.items.map(([a, b]) => parseAltMulti(a, b))), line: t.line };
+      }
       const params = [];
       while (pos < lim && !isRop(T[pos], '->')) {
         const r = apatAt(pos, lim);
@@ -532,7 +571,7 @@ export function parseSyntax(src, opts = {}) {
   function startsAexp() {
     const t = peek();
     if (!t) return false;
-    if (t.t === 'var' || t.t === 'con' || t.t === 'int' || t.t === 'float' || t.t === 'str' || t.t === 'chr' || t.t === 'splice') return true;
+    if (t.t === 'var' || t.t === 'con' || t.t === 'int' || t.t === 'float' || t.t === 'str' || t.t === 'chr' || t.t === 'splice' || t.t === 'label') return true;
     return isSp(t, '(') || isSp(t, '[');
   }
   function fexp() {
@@ -565,6 +604,7 @@ export function parseSyntax(src, opts = {}) {
       else if (peek() && peek().t === 'var') pos++;
       return { t: 'splice', line: t.line };
     }
+    else if (t.t === 'label') { pos++; e = { t: 'label', name: t.v, line: t.line }; }
     else { err('unexpected-token', t, `unexpected token ${t.v}`); pos++; return { t: 'unknown', line: t.line }; }
     while (isSp(peek(), '{') && mate[pos] > pos && mate[pos] < lim && (e.t === 'con' || e.t === 'var' || e.t === 'rec' || e.t === 'paren')) {
       const close = mate[pos];
@@ -580,6 +620,8 @@ export function parseSyntax(src, opts = {}) {
       e = e.t === 'con' ? { t: 'rec', con: e, fields, line: t.line } : { t: 'recupd', base: e, fields, line: t.line };
       pos = close + 1;
     }
+    // `e.field` (OverloadedRecordDot): the field selector applied to `e`, which the IR lowers to a member read of a known record field.
+    while (peek() && peek().t === 'sel' && !peek().section) { const s = peek(); pos++; e = { t: 'app', f: { t: 'var', name: s.v, qual: null, line: s.line }, args: [e], line: s.line, recordDot: true }; }
     return e;
   }
   const isOpTok = (x) => x && x.t === 'op';
@@ -594,6 +636,8 @@ export function parseSyntax(src, opts = {}) {
     }
     const [s, e] = parts[0];
     const first = T[s];
+    // `(.field)` (OverloadedRecordDot): the selector function itself.
+    if (first && first.t === 'sel' && first.section && e - s === 1) return { t: 'var', name: first.v, qual: null, line };
     if (isOpTok(first) && e - s === 1) return { t: 'var', name: first.v, qual: first.q || null, op: true, line };
     if (isOpTok(first) && first.v !== '-') return { t: 'rsec', op: first.v, qual: first.q || null, e: sub(s + 1, e, expr0), line };
     if (isSp(first, '`') && T[s + 2] && isSp(T[s + 2], '`') && e - s > 3) return { t: 'rsec', op: T[s + 1].v, qual: T[s + 1].q || null, e: sub(s + 3, e, expr0), line, backtick: true };
@@ -700,6 +744,9 @@ export function parseSyntax(src, opts = {}) {
     return out;
   }
   function parseDecl(a, b) {
+    // `pattern P :: T` / `pattern P x = ..` (PatternSynonyms): a synonym, recorded by name, not a function called `pattern`. Its right-hand
+    // side is not modelled (a match on `P` is a constructor pattern to the IR, which is sound for taint: it binds what it binds).
+    if (T[a].t === 'var' && T[a].v === 'pattern' && T[a + 1] && T[a + 1].t === 'con' && a + 1 < b) return { t: 'patsyn', name: T[a + 1].v, line: T[a].line };
     const mark = findTop(a, b, (x) => x.t === 'rop' && (x.v === '=' || x.v === '|' || x.v === '::'));
     if (mark < 0) { err('expected-declaration', T[a], 'item is neither a binding nor a signature'); return null; }
     if (T[mark].v === '::') {
@@ -754,7 +801,39 @@ export function parseSyntax(src, opts = {}) {
     let nameTok = null;
     for (let q = a + 1; q < (eq < 0 ? b : eq); q++) if (T[q].t === 'con') { nameTok = T[q]; break; }
     const decl = { t: 'data', newtype: isNewtype, name: nameTok ? nameTok.v : null, constructors: [], line: T[a].line };
-    if (eq < 0) return decl;
+    if (eq < 0) {
+      // GADT syntax: `data T where { A :: Int -> T; B :: { fld :: String } -> T }`. Each item names one or more constructors, their record
+      // fields when written with braces, else an arity of one per top-level arrow; the result type is not read (no type checking).
+      const w = findTop(a, b, (x) => isKw(x, 'where'));
+      if (w < 0) return decl;
+      const blk = blockAfter(w, b, layoutIndent);
+      for (const [s, e] of blk.items) {
+        const names = [];
+        let i = s;
+        while (i < e && T[i].t === 'con') { names.push(T[i].v); i++; if (isSp(T[i], ',')) i++; else break; }
+        if (!names.length || !isRop(T[i], '::')) continue;
+        i++;
+        while (i < e && ((T[i].t === 'var' && T[i].v === 'forall') || T[i].t === 'op' || isRop(T[i], '=>'))) i = findTop(i, e, (x) => isRop(x, '=>')) >= 0 ? findTop(i, e, (x) => isRop(x, '=>')) + 1 : e;
+        let fields = null;
+        let arity = 0;
+        if (isSp(T[i], '{') && mate[i] > i) {
+          fields = [];
+          const close = mate[i];
+          let j = i + 1;
+          while (j < close) {
+            const ns = [];
+            while (j < close && T[j].t === 'var') { ns.push(T[j].v); j++; if (isSp(T[j], ',')) j++; else break; }
+            if (isRop(T[j], '::')) { j++; while (j < close && !isSp(T[j], ',')) j = Math.min(close, groupEnd(j)); j++; } else break;
+            fields.push(...ns);
+          }
+          arity = fields.length;
+        } else {
+          for (let j = i; j < e;) { if (isRop(T[j], '->')) arity++; j = Math.min(e, groupEnd(j)); }
+        }
+        for (const n of names) decl.constructors.push({ name: n, fields, arity });
+      }
+      return decl;
+    }
     let end = findTop(eq + 1, b, (x) => isKw(x, 'deriving'));
     if (end < 0) end = b;
     for (const [s0, e] of splitTop(eq + 1, end, (x) => isRop(x, '|'))) {

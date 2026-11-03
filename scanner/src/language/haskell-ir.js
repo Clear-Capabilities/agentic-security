@@ -199,6 +199,7 @@ function buildModuleInfo(file, src, cpp) {
   const pp = preprocessForSyntaxInfo(src, { file, cpp });
   const parse = parseSyntax(pp.text);
   const groups = groupDecls(parse.decls);
+  groups.funs = groups.funs.map(lambdaBodied);
   const name = parse.module && parse.module.name ? parse.module.name : 'Main';
   const mod = {
     name, file, parse, groups, exports: parse.module ? parse.module.exports : null, imports: parse.imports,
@@ -479,14 +480,54 @@ function aliasBodyOf(fnAst) {
   const c = fnAst.clauses[0];
   if (c.pats.length || !c.rhs || (c.rhs.guards && c.rhs.guards.length) || (c.rhs.where && c.rhs.where.length) || !c.rhs.body) return null;
   const names = [];
+  const argNames = [];   // names the alias applies its function to (`remember = writeIORef lastName`): checked for shadowing, not for being library names
   const ok = (e) => {
     const x = unparen(e);
     if (!x) return false;
     if (x.t === 'var') { if (!x.qual) names.push(x.name); return x.name !== fnAst.name; }
     if (x.t === 'op' && x.op === '.' && !x.qual) return ok(x.l) && ok(x.r);
+    // A partial application of a library function to names or literals is an alias of that function with those arguments fixed.
+    if (x.t === 'app') return ok(x.f) && x.args.every((a) => { const u = unparen(a); if (!u) return false; if (u.t === 'lit') return true; if (u.t === 'var') { if (!u.qual) argNames.push(u.name); return u.name !== fnAst.name; } return false; });
     return false;
   };
-  return ok(c.rhs.body) ? { body: c.rhs.body, names } : null;
+  return ok(c.rhs.body) ? { body: c.rhs.body, names, argNames } : null;
+}
+
+// `f = \x y -> ..`, `f = \case ..`, `f = \cases ..`: a function written in lambda form is the function `f x y = ..` (a `\case` takes one
+// parameter and matches it; a `\cases` takes as many as its widest alternative and matches them as a tuple), so a call `f c` is resolved
+// and analysed with the value it is given instead of being the unknown application of a closure value. Applied to top-level, `let` and
+// `where` bindings alike (a guard or a `where` on the binding keeps it as written).
+function lambdaBodied(f) {
+  if (!f || f.clauses.length !== 1) return f;
+  const c = f.clauses[0];
+  const body = c.pats.length === 0 && c.rhs && !(c.rhs.guards && c.rhs.guards.length) && !(c.rhs.where && c.rhs.where.length) ? unparen(c.rhs.body) : null;
+  if (!body) return f;
+  if (body.t === 'lam' && body.params.every((p) => p && p.t === 'pvar')) return { ...f, clauses: [{ ...c, pats: body.params, rhs: { ...c.rhs, body: body.body } }] };
+  if (body.t === 'lamcase') return { ...f, clauses: [{ ...c, pats: [{ t: 'pvar', name: '$lc' }], rhs: { ...c.rhs, body: { t: 'case', scrut: { t: 'var', name: '$lc', qual: null }, alts: body.alts, line: body.line } } }] };
+  if (body.t === 'lamcases') {
+    const n = Math.max(1, ...body.alts.map((a) => (a.pats || []).length));
+    const pats = Array.from({ length: n }, (_, i) => ({ t: 'pvar', name: `$lc${i}` }));
+    const scrut = n === 1 ? { t: 'var', name: '$lc0', qual: null } : { t: 'tuple', items: pats.map((p) => ({ t: 'var', name: p.name, qual: null })) };
+    const alts = body.alts.map((a) => ({ pat: n === 1 ? (a.pats[0] || { t: 'pwild' }) : { t: 'ptuple', items: Array.from({ length: n }, (_, i) => a.pats[i] || { t: 'pwild' }) }, rhs: a.rhs, line: a.line }));
+    return { ...f, clauses: [{ ...c, pats, rhs: { ...c.rhs, body: { t: 'case', scrut, alts, line: body.line } } }] };
+  }
+  return f;
+}
+
+// A module-level mutable cell: `name = unsafePerformIO (newIORef ..)` (MVar, TVar, STRef alike; the NOINLINE pragma is a comment the parser
+// does not see). A write anywhere in the project reaches a read anywhere (see lowerCellOp and the taint engine's cell seeds).
+const CELL_NEW = new Set(['newIORef', 'newMVar', 'newEmptyMVar', 'newTVarIO', 'newTVar', 'newSTRef']);
+function cellBodyOf(fnAst) {
+  if (!fnAst || fnAst.clauses.length !== 1) return false;
+  const c = fnAst.clauses[0];
+  if (c.pats.length || !c.rhs || !c.rhs.body || (c.rhs.guards && c.rhs.guards.length)) return false;
+  const b = unparen(c.rhs.body);
+  let inner = null;
+  if (b && b.t === 'app' && b.args.length === 1) { const h = unparen(b.f); if (h && h.t === 'var' && h.name === 'unsafePerformIO') inner = unparen(b.args[0]); }
+  else if (b && b.t === 'op' && b.op === '$') { const h = unparen(b.l); if (h && h.t === 'var' && h.name === 'unsafePerformIO') inner = unparen(b.r); }
+  if (!inner) return false;
+  const head = inner.t === 'app' ? unparen(inner.f) : inner;
+  return !!(head && head.t === 'var' && CELL_NEW.has(head.name));
 }
 
 // ── per-function lowering ────────────────────────────────────────────────────
@@ -575,6 +616,14 @@ class FnLowerer {
       case 'multiif': return this.lowerGuards(e.guards, ln);
       case 'case': return this.lowerCase(e, ln);
       case 'lamcase': return this.liftClosure({ params: [{ t: 'pvar', name: '$lc' }], body: { t: 'case', scrut: { t: 'var', name: '$lc', qual: null }, alts: e.alts, line: ln }, line: ln }, ln);
+      // `\cases`: a lambda of as many parameters as the widest alternative, matched as a tuple.
+      case 'lamcases': {
+        const n = Math.max(1, ...e.alts.map((a) => (a.pats || []).length));
+        const params = Array.from({ length: n }, (_, i) => ({ t: 'pvar', name: `$lc${i}` }));
+        const scrut = n === 1 ? { t: 'var', name: '$lc0', qual: null } : { t: 'tuple', items: params.map((p) => ({ t: 'var', name: p.name, qual: null })) };
+        const alts = e.alts.map((a) => ({ pat: n === 1 ? (a.pats[0] || { t: 'pwild' }) : { t: 'ptuple', items: Array.from({ length: n }, (_, i) => a.pats[i] || { t: 'pwild' }) }, rhs: a.rhs, line: a.line }));
+        return this.liftClosure({ params, body: { t: 'case', scrut, alts, line: ln }, line: ln }, ln);
+      }
       case 'lam': return this.liftClosure(e, ln);
       case 'let': {
         this.push();
@@ -592,6 +641,9 @@ class FnLowerer {
       // A Template Haskell splice in expression position: generated code the analysis never sees. The parser has already disclosed the
       // `th-splice` boundary for the module, so this is not a lowering gap of the IR; the value is unknown.
       case 'splice': return unknownExpr({ splice: true });
+      // `#name` (OverloadedLabels): a label value, a literal naming the field. An IHP `get #name r` is then a library call with the label and
+      // the record as arguments (the record's taint reaches the result; the field is not selected, a stated limit).
+      case 'label': return { kind: 'literal', value: e.name, hs: { label: true } };
       default: this.diagnostics.push({ kind: 'lowering-gap', detail: e.t || 'unknown' }); return unknownExpr({ ast: e.t || 'unknown' });
     }
   }
@@ -697,6 +749,12 @@ class FnLowerer {
 
   applyVar(f, argAsts, ln, via) {
     const r = this.resolve(f.name, f.qual);
+    // `iQ`: the parser's stand-in for a string-interpolating quasi-quote (`[i|.. #{a} .. #{b}|]` becomes `(iQ (a) (b))`, haskell-parser.js
+    // INTERP_QUOTERS): the value is the concatenation of the interpolated expressions. Only the unbound name is taken; a project `iQ` is itself.
+    if (f.name === 'iQ' && !f.qual && r.kind === 'unknown' && argAsts.length) {
+      const parts = argAsts.map((a) => this.lowerExpr(a, ln));
+      return parts.reduce((acc, p) => ({ kind: 'binary', op: '+', left: acc, right: p, hs: { concat: '<>', quasiquote: true } }));
+    }
     // Bounded collection summaries only apply to library names, never a user definition.
     if (HOF[f.name] && (r.kind === 'builtin' || r.kind === 'external')) {
       const out = this.lowerHof(f.name, argAsts, ln);
@@ -903,13 +961,27 @@ class FnLowerer {
     const op = CELL_OPS[callee];
     if (!op) return null;
     const ref = args[0];
-    if (!ref || ref.kind !== 'ident' || !ref.name || ref.hs) return null;
+    let name = null; let global = false;
+    if (ref && ref.kind === 'ident' && ref.name && !ref.hs) name = ref.name;
+    else {
+      // A module-level cell (cellBodyOf): one variable for the whole project, `$cell:<qid>`, which the taint engine seeds across functions.
+      const u = unparen(argAsts[0]);
+      if (u && u.t === 'var') {
+        const r = this.resolve(u.name, u.qual);
+        if (r.kind === 'def' && r.def.kind === 'fun' && r.def.arity === 0) {
+          const mod = this.proj.modules.get(r.mod);
+          if (cellBodyOf(mod && mod.groups.funs.find((f) => f.name === r.name))) { name = `$cell:${r.def.qid}`; global = true; this.noteRef(r.def.qid, 'reference', ln); }
+        }
+      }
+    }
+    if (!name) return null;
     this.sawIO = true;
-    if (op === 'read') return { kind: 'ident', name: ref.name };
-    if (op === 'write' && args.length >= 2) { this.cfg.add('assign', ln, { target: ref.name, source: args[1], hs: { demand: 'executed', cellWrite: callee } }); return call; }
+    const cell = global ? { kind: 'ident', name, hs: { globalCell: true } } : { kind: 'ident', name };
+    if (op === 'read') return cell;
+    if (op === 'write' && args.length >= 2) { this.cfg.add('assign', ln, { target: name, source: args[1], hs: { demand: 'executed', cellWrite: callee, ...(global ? { globalCell: true } : {}) } }); return call; }
     if (op === 'modify' && argAsts.length >= 2) {
-      const applied = this.lowerApp(argAsts[1], [{ t: 'lowered', expr: { kind: 'ident', name: ref.name } }], ln, callee);
-      this.cfg.add('assign', ln, { target: ref.name, source: applied, hs: { demand: 'executed', cellWrite: callee } });
+      const applied = this.lowerApp(argAsts[1], [{ t: 'lowered', expr: cell }], ln, callee);
+      this.cfg.add('assign', ln, { target: name, source: applied, hs: { demand: 'executed', cellWrite: callee, ...(global ? { globalCell: true } : {}) } });
       return call;
     }
     return null;
@@ -933,7 +1005,7 @@ class FnLowerer {
       alias = calleeMod ? aliasBodyOf(calleeMod.groups.funs.find((f) => f.name === r.name)) : null;
     }
     if (!alias || (this.inlineDepth || 0) >= INLINE_MAX_DEPTH) return null;
-    if (alias.names.some((n) => this.lookupLocal(n))) return null;
+    if ([...alias.names, ...(alias.argNames || [])].some((n) => this.lookupLocal(n))) return null;
     const savedMod = this.mod;
     // Only an alias of LIBRARY functions is expanded. A project function keeps its own summary and call-graph node, and
     // expanding it here would replace the edge to it with edges to what it calls.
@@ -1258,12 +1330,7 @@ class FnLowerer {
     const g = groupDecls(decls);
     // `let run = \x -> ...` is a function of one parameter written in lambda form: treat it as `run x = ...` so a call `run c` is resolved and analysed
     // for the value it is given, instead of being an unknown call of a local value.
-    g.funs = g.funs.map((f) => {
-      if (f.clauses.length !== 1) return f;
-      const c = f.clauses[0];
-      const body = c.pats.length === 0 && c.rhs && !(c.rhs.guards && c.rhs.guards.length) && !(c.rhs.where && c.rhs.where.length) ? unparen(c.rhs.body) : null;
-      return body && body.t === 'lam' && body.params.every((p) => p && p.t === 'pvar') ? { ...f, clauses: [{ ...c, pats: body.params, rhs: { ...c.rhs, body: body.body } }] } : f;
-    });
+    g.funs = g.funs.map(lambdaBodied);
     const scope = this.scopes[this.scopes.length - 1];
     const parent = this.info.parentName || this.info.name;
     for (const f of g.funs) {

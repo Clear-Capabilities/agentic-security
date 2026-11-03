@@ -272,12 +272,14 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // call form and a lineage twin. Re-measured against the live catalog.
   // 672 -> 678 and 514 -> 520 modeled (0.195.8): the three fields of an uploaded file in wai-extra (`Network.Wai.Parse.fileName`, `fileContentType`,
   // `fileContent`), provenance `upload` (http-upload, modeled), each as a call form and a lineage twin. Re-measured against the live catalog.
-  assert.equal(SOURCES.length, 678);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 520);
+  // 678 -> 682 and 520 -> 524 modeled (0.195.14): optparse-applicative `execParser` and `customExecParser` as `cli` sources (the parsed options
+  // record is the command line), each as a call form and a lineage twin. Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 682);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 524);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 41);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 117);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(520 + 41 + 117, SOURCES.length);
+  assert.equal(524 + 41 + 117, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

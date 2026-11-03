@@ -418,10 +418,17 @@ test('[boundaries.qq] raw-string and non-interpolating quasi-quotes are inert st
     assert.equal(r.complete, true);
     assert.equal((await outcomeOf({ 'M.hs': src }))['M.hs'], 'analyzed', body);
   }
+  // An interpolating quoter of an imported module is read as the concatenation of its interpolations (since 0.195.14, `quasiquote-interp`,
+  // haskell-quasiquote-interp.test.js): analysed, not opaque. `here` interpolates too but its module is not modelled, so it stays opaque.
+  const interp = ['a = [i|hello #{name}|]', 'a = [iii|hello #{name}|]'];
+  for (const body of interp) {
+    const src = `${head}${body}\nok = putStrLn "x"\n`;
+    const r = parse(src);
+    assert.ok(r.boundaries.every((b) => b.kind === 'quasiquote-interp'), `${body}: ${kinds(r)}`);
+    assert.equal((await outcomeOf({ 'M.hs': src }))['M.hs'], 'analyzed', body);
+  }
   const opaque = [
-    'a = [i|hello #{name}|]',
     'a = [here|hello ${name}|]',
-    'a = [iii|hello #{name}|]',
     'a = [sql|select 1|]',
     'a = [parseRoutes|/ HomeR GET|]',
   ];

@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/language-support-suites@1",
-  "ranAt": "2026-11-02",
+  "ranAt": "2026-11-03",
   "node": "v24.20.0",
   "tools": {
     "ghc": true,

@@ -824,11 +824,13 @@ function _isInternalModuleCall(calleeExpr, callContext) {
 const _JS_FILE = /\.(?:[cm]?[jt]sx?)$/i;
 function _isJsFile(file) { return typeof file === 'string' && _JS_FILE.test(file); }
 
-function _arrayLiteralTaint(expr, prefix, state, callContext) {
+function _arrayLiteralTaint(expr, prefix, state, callContext, bracket = false) {
   const out = { whole: false, paths: [] };
   (expr.elements || []).forEach((el, i) => {
     if (!el) return;
-    const path = prefix ? `${prefix}.${i}` : String(i);
+    // Haskell reads a tuple component as the member `[i]` (haskell-ir.js bindPattern), so its paths are written that way (`bracket`).
+    const seg = bracket ? `[${i}]` : String(i);
+    const path = prefix ? `${prefix}.${seg}` : seg;
     if (el.kind === 'object') {
       const inner = _objectLiteralTaint(el, path, state, callContext);
       if (inner.whole) out.paths.push(path);
@@ -1632,6 +1634,8 @@ function step(node, stateIn, callContext) {
     case 'assign': {
       const src = exprIsSource(node.source, callContext);
       const target = typeof node.target === 'string' ? node.target : null;
+      // A Haskell module-level cell written with tainted data: every function reads it tainted from now on (see _cellSeeds).
+      if (target && target.startsWith('$cell:') && !_cellSeeds.has(target) && exprTaint(node.source, state, callContext)) _cellSeeds.add(target);
       // Sink matching is additive to this case's existing source/target/taint
       // handling below: an assignment's RHS can itself be a sink call (e.g.
       // `const rows = db.query(tainted)`), which previously went unreported
@@ -1829,10 +1833,13 @@ function step(node, stateIn, callContext) {
           }
         }
       }
-      if (target && node.source && node.source.kind === 'array' && !src && _isJsFile(_currentFile) && !(node.source.spreads && node.source.spreads.length)) {
+      // Haskell: a tuple literal (`hs.tuple`) is assigned component by component the same way, so `(a, _) = (clean, tainted)` leaves `a` clean
+      // (a `\cases` or a `case` on `(x, y)` matches through a tuple scratch variable). Other Haskell arrays (lists, constructors) keep the whole rule.
+      const hsTuple = node.source && node.source.kind === 'array' && node.source.hs && node.source.hs.tuple && /\.l?hs$/i.test(_currentFile || '');
+      if (target && node.source && node.source.kind === 'array' && !src && (_isJsFile(_currentFile) || hsTuple) && !(node.source.spreads && node.source.spreads.length)) {
         // E2-03: an array literal without spread elements is assigned index by index, so `[tainted, 'ls']` leaves `arr[1]` clean. Reading the
         // array as a whole (`arr.join()`, passing `arr`) is still tainted through the descendant rule. A literal with a spread keeps the whole-array rule.
-        const lit = _arrayLiteralTaint(node.source, '', newState, callContext);
+        const lit = _arrayLiteralTaint(node.source, '', newState, callContext, !!hsTuple);
         newState = removePathAndDescendants(newState, target);
         if (lit.whole) newState = _addPathAliasAware(newState, target, callContext);
         for (const p of lit.paths) newState = _addPathAliasAware(newState, `${target}.${p}`, callContext);
@@ -2228,8 +2235,13 @@ function _siteKey(expr) {
 // only for fields some function assigns, so `req.other` stays clean. Cross-file middleware chains need a router model and are out of scope.
 const _REQ_PARAM = /^(?:req|request|ctx)$/;
 let _requestFieldSeeds = new Map(); // file -> Set<'field' | 'a.b'>
+// Haskell module-level cells (`$cell:<qid>`, haskell-ir.js lowerCellOp): a cell that any function wrote with tainted data is tainted at the
+// entry of every Haskell function from then on (flow-insensitive, project-wide, like a global). Filled while the fixed-point pre-pass walks
+// the writers; a change re-runs the pass so the readers see it.
+let _cellSeeds = new Set();
 function _buildRequestFieldSeeds(fnList, callGraph, opts, deadlineMs) {
   _requestFieldSeeds = new Map();
+  _cellSeeds = new Set();
   for (const fn of fnList) {
     if (!fn || !Array.isArray(fn.params) || !_REQ_PARAM.test(fn.params[0] || '') || !fn.cfg || !fn.cfg.nodes) continue;
     const p0 = fn.params[0];
@@ -2253,6 +2265,7 @@ function _buildRequestFieldSeeds(fnList, callGraph, opts, deadlineMs) {
 }
 
 function _unionAnnotationTaint(fn, entrySet) {
+  if (_cellSeeds.size && /\.l?hs$/i.test(fn.file || '')) entrySet = new Set([...entrySet, ..._cellSeeds]);
   const seeds = _requestFieldSeeds.get(fn.file);
   if (seeds && seeds.size && Array.isArray(fn.params) && _REQ_PARAM.test(fn.params[0] || '')) {
     entrySet = new Set([...entrySet, ...[...seeds].map((f) => `${fn.params[0]}.${f}`)]);
@@ -2595,6 +2608,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     // iteration; if nothing changed, the fixed point has been reached and
     // further iterations would recompute byte-identical results.
     let changedThisIter = false;
+    const cellSeedsBefore = _cellSeeds.size;
     for (const fn of fnList) {
       if (Date.now() > deadlineMs) break;
       // DAG-05 begin: a function proved clean is not re-walked; its recorded exit state and findings stand in.
@@ -2659,6 +2673,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     // write, silently delivering 2 rounds of fixed-point refinement instead
     // of the MAX_FP_ITERS=3 this code and dataflow/CLAUDE.md both promise.
     // `changedThisIter` tracks actual value changes instead.
+    if (_cellSeeds.size !== cellSeedsBefore) changedThisIter = true;   // a newly tainted Haskell cell changes every reader's entry state
     if (!changedThisIter) { _fpConverged = true; break; }
   }
   // DAG-05 begin

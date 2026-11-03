@@ -226,7 +226,8 @@ test('D3/preservation: every `unsupported` sink entry carries a non-empty reason
   // other CWE-78 entry. Re-measured against the live catalog.
   // 134 -> 174: the post-0.173 Haskell sinks (System.Cmd, Turtle, Shelly process sinks, hint code evaluation) are `unsupported` for the same
   // reason as every other CWE-78/CWE-88/CWE-94 entry. Re-measured against the live catalog.
-  assert.equal(unsupported.length, 174);
+  // 174 -> 176 (0.195.14): typed-process `proc` as a CWE-78 (program) and a CWE-88 (arguments) sink, `unsupported` like every process sink.
+  assert.equal(unsupported.length, 176);
   for (const r of unsupported) {
     assert.equal(r.kind, 'process');
     assert.ok(r.reason && r.reason.length > 0);
@@ -540,12 +541,14 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // sink (a host check can only follow the parse). Re-measured against the live catalog.
   // 597 -> 599 and 408 -> 410 modeled (0.195.8): `Network.Wai.responseLBS`/`responseBuilder` as CWE-79 sinks (`http-response`, modeled), judged per call
   // by the content-type header in haskell-guards.js. Re-measured against the live catalog.
-  assert.equal(SINKS.length, 599);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 410);
+  // 599 -> 607 and 410 -> 416 modeled, 174 -> 176 unsupported (0.195.14): esqueleto `rawSql`/`rawExecute` in three modules (SQL, modeled) and
+  // typed-process `proc` as a program and an arguments sink (process execution, unsupported). Names read from Hackage; re-measured against the live catalog.
+  assert.equal(SINKS.length, 607);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 416);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
-  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 174);
-  assert.equal(410 + 6 + 9 + 174, SINKS.length);
+  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 176);
+  assert.equal(416 + 6 + 9 + 176, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {
