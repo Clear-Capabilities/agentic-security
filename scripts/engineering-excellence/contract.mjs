@@ -28,6 +28,11 @@ export function mergeShapes(a, b) {
   if (a === undefined) return b;
   if (b === undefined) return a;
   if (JSON.stringify(a) === JSON.stringify(b)) return a;
+  // A key that is optional on either side is optional in the merge, once. Merging two optional shapes used to fall through to the union below
+  // and serialise each into the other's text, so the recorded shape grew with the ORDER of the elements (the same findings in another order
+  // gave a different shape, and a scan on another host failed the committed snapshot with no change to any finding).
+  const isOptional = (x) => !!x && typeof x === 'object' && 'optional' in x;
+  if (isOptional(a) || isOptional(b)) return { optional: mergeShapes(isOptional(a) ? a.optional : a, isOptional(b) ? b.optional : b) };
   if (a && b && typeof a === 'object' && typeof b === 'object') {
     if ('array' in a && 'array' in b) return { array: mergeShapes(a.array, b.array) };
     if ('object' in a && 'object' in b) {
@@ -36,7 +41,7 @@ export function mergeShapes(a, b) {
       for (const k of [...keys].sort()) {
         const inA = k in a.object; const inB = k in b.object;
         const base = mergeShapes(a.object[k], b.object[k]);
-        out[k] = inA && inB ? base : { optional: base };
+        out[k] = inA && inB ? base : (isOptional(base) ? base : { optional: base });
       }
       return { object: out };
     }

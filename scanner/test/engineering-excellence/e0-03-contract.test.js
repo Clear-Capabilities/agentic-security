@@ -20,6 +20,12 @@ test('a shape records key names and value types, merges array elements, and mark
   assert.equal(mergeShapes('string', 'null'), 'null|string');
 });
 
+test('a merged shape does not depend on the order of the elements, and a key optional on both sides is optional once', () => {
+  const a = { a: ['x'] }; const b = {};
+  const expected = { array: { object: { a: { optional: { array: 'string' } } } } };
+  for (const order of [[a, b, a, b, a, b], [a, a, a, b, b, b], [b, b, b, a, a, a], [b, a, b, a, b, a]]) assert.deepEqual(shapeOf(order), expected);
+});
+
 test('removing a key or changing a type is breaking; adding a key or widening a type is additive', () => {
   const before = shapeOf({ id: 'a', severity: 'high', line: 1 });
   const removed = diffShapes(before, shapeOf({ id: 'a', severity: 'high' }));
