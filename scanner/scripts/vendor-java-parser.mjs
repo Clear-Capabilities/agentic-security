@@ -38,7 +38,15 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(HERE, '..');
 const SRC_NODE_MODULES = path.join(SCANNER, 'node_modules');
-const VENDOR_ROOT = path.join(SCANNER, 'vendor', 'java-parser', 'node_modules');
+const FINAL_DIR = path.join(SCANNER, 'vendor', 'java-parser');
+// The tree is built in a private staging directory and swapped in, never deleted and recopied in place: `npm pack` and `npm ci` both run this
+// script (the "prepare" lifecycle), and a test process that imports "#java-parser" at that moment would find the directory half-copied
+// (observed on the hosted test-shard (3/8): a Java taint test lost every finding, 4 runs in 6 when this script ran beside it).
+const STAGE_DIR = path.join(SCANNER, 'vendor', `.java-parser-stage-${process.pid}`);
+const VENDOR_ROOT = path.join(STAGE_DIR, 'node_modules');
+const ENTRY_SOURCE =
+  "export * from './node_modules/java-parser/src/index.js';\n" +
+  "export { default } from './node_modules/java-parser/src/index.js';\n";
 
 // The full resolved closure java-parser needs at runtime: itself, chevrotain
 // (+ its own scoped @chevrotain/* packages and chevrotain-allstar), and the
@@ -57,6 +65,29 @@ function copyDir(src, dest) {
   fs.cpSync(src, dest, { recursive: true, dereference: true });
 }
 
+const versionOf = (dir) => {
+  try { return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version || null; } catch { return null; }
+};
+// A directory (or a scope's packages) counts as current when every package.json version matches the installed one.
+function sameVersions(src, dest) {
+  if (!fs.existsSync(dest)) return false;
+  if (fs.existsSync(path.join(src, 'package.json'))) return versionOf(src) !== null && versionOf(src) === versionOf(dest);
+  const names = fs.readdirSync(src);
+  return names.length > 0 && names.every((n) => sameVersions(path.join(src, n), path.join(dest, n)));
+}
+function vendoredIsCurrent() {
+  const root = path.join(FINAL_DIR, 'node_modules');
+  try {
+    if (fs.readFileSync(path.join(FINAL_DIR, 'entry.mjs'), 'utf8') !== ENTRY_SOURCE) return false;
+  } catch { return false; }
+  for (const name of PACKAGES) if (!sameVersions(path.join(SRC_NODE_MODULES, name), path.join(root, name))) return false;
+  for (const scope of SCOPED_DIRS) {
+    const src = path.join(SRC_NODE_MODULES, scope);
+    if (fs.existsSync(src) && !sameVersions(src, path.join(root, scope))) return false;
+  }
+  return true;
+}
+
 function main() {
   if (!fs.existsSync(path.join(SRC_NODE_MODULES, 'java-parser'))) {
     console.error(
@@ -65,7 +96,11 @@ function main() {
     process.exit(1);
   }
 
-  fs.rmSync(path.join(SCANNER, 'vendor', 'java-parser'), { recursive: true, force: true });
+  if (vendoredIsCurrent()) {
+    console.error('vendor-java-parser: vendor/java-parser is already current (same package versions), left untouched');
+    return;
+  }
+  fs.rmSync(STAGE_DIR, { recursive: true, force: true });
   fs.mkdirSync(VENDOR_ROOT, { recursive: true });
 
   const copied = [];
@@ -112,11 +147,15 @@ function main() {
   // relative import from ordinary source (not a package.json imports/exports
   // target) has no such restriction, so this thin re-export file — sitting
   // outside any node_modules directory — is the entry point instead.
-  fs.writeFileSync(
-    path.join(SCANNER, 'vendor', 'java-parser', 'entry.mjs'),
-    "export * from './node_modules/java-parser/src/index.js';\n" +
-      "export { default } from './node_modules/java-parser/src/index.js';\n",
-  );
+  fs.writeFileSync(path.join(STAGE_DIR, 'entry.mjs'), ENTRY_SOURCE);
+
+  // Swap: the old tree is renamed aside and the staged one renamed into place, so a reader sees a complete tree or, for the instant
+  // between the two renames, none; never a half-copied one.
+  const OLD_DIR = path.join(SCANNER, 'vendor', `.java-parser-old-${process.pid}`);
+  fs.rmSync(OLD_DIR, { recursive: true, force: true });
+  if (fs.existsSync(FINAL_DIR)) fs.renameSync(FINAL_DIR, OLD_DIR);
+  fs.renameSync(STAGE_DIR, FINAL_DIR);
+  fs.rmSync(OLD_DIR, { recursive: true, force: true });
 
   // stderr, not stdout: this script runs as part of the "prepare" lifecycle
   // hook, which also fires during `npm pack`/`npm publish` — anything on
