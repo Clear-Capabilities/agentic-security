@@ -1968,8 +1968,8 @@
    "severity": "critical",
    "vuln": "Multi-Sink Taint Chain — text parameter of an exported function (caller-controlled) reaches 2 sinks",
    "project": "ihp",
-   "label": "TP",
-   "reason": "OpenEditorAction passes the request parameter path to openEditor, which runs Process.system on a shell string built from it: command injection from an HTTP request (to a localhost development tool). Lost: the helper became reachable, and in this repository (the framework itself) the request accessor is a project function the engine cannot know as a source."
+   "label": "FP",
+   "reason": "OpenEditorAction passes the request parameter path to openEditor, which runs Process.system on a shell string built from it: command injection from an HTTP request (to a localhost development tool). Lost: the helper became reachable, and in this repository (the framework itself) the request accessor is a project function the engine cannot know as a source. RELABELLED 2026-11-02 (LABEL-CHANGES.md): the chain was an aggregation artefact. openEditor has ONE sink (Process.system, the TP labelled at this line); the aggregator groups findings by their source LABEL, and \"text parameter of an exported function (caller-controlled)\" named another function's parameter as the second sink. There is no second flow from this parameter; a chain of two unrelated functions is not a vulnerability of this site."
   },
   "ihp:ihp-ide/IHP/IDE/WorkerSignal.hs:35:path-traversal": {
    "index": 197,

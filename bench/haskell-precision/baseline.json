@@ -1,12 +1,12 @@
 {
  "schema": "agentic-security/haskell-precision-baseline@1",
  "comparison": "equality: a regression fails, and so does an improvement that was not recorded here",
- "engineVersion": "0.195.12",
+ "engineVersion": "0.195.13",
  "labelsDigests": {
   "development-tuning": "f599e1edc2e1e8b68756b4d25c238daf0f0f04b34ea30983a16a793615e40395",
   "development-verification": "39b0c5bf5cd20298a8e7ab608e5d7b938c4725a8f8d51e5b22a4ba011f1d0870",
   "development-remainder": "0ebfc7a4e2cb100185c089b841fafe6f861d7eea3940952ce615158f719d3a52",
-  "fresh": "6d9067139a196c34b292d4d62efa5667783c1d6129c26478714930472a2926c2"
+  "fresh": "7406b4a3a6950ef1661df4c91d98f34847e30aac53b65c6e95f372fcf093fce8"
  },
  "aggregates": {
   "development-tuning": {
@@ -128,7 +128,7 @@
    "loweredToInfo": 156,
    "tp": 21,
    "fp": 30,
-   "tpNotFlagged": 1,
+   "tpNotFlagged": 0,
    "byStatus": {
     "entrypoint-reachable": {
      "TP": 8,
@@ -160,10 +160,11 @@
   "census": {
    "dev": {
     "cabal2nix": {
-     "rows": 3,
+     "rows": 8,
      "flagged": 0,
-     "loweredToInfo": 3,
+     "loweredToInfo": 8,
      "byStatus": {
+      "entrypoint-reachable": 5,
       "external-api": 3
      }
     },
@@ -236,13 +237,13 @@
    },
    "fresh": {
     "dhall-haskell": {
-     "rows": 93,
+     "rows": 111,
      "flagged": 3,
-     "loweredToInfo": 90,
+     "loweredToInfo": 108,
      "byStatus": {
-      "no-verdict": 72,
-      "entrypoint-reachable": 17,
-      "external-api": 4
+      "entrypoint-reachable": 26,
+      "external-api": 13,
+      "no-verdict": 72
      }
     },
     "hlint": {
@@ -266,11 +267,11 @@
      }
     },
     "ormolu": {
-     "rows": 3,
+     "rows": 7,
      "flagged": 0,
-     "loweredToInfo": 3,
+     "loweredToInfo": 7,
      "byStatus": {
-      "entrypoint-reachable": 1,
+      "entrypoint-reachable": 5,
       "no-verdict": 2
      }
     },

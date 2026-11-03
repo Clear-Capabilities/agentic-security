@@ -2222,10 +2222,11 @@
   "census": {
    "dev": {
     "cabal2nix": {
-     "rows": 3,
+     "rows": 8,
      "flagged": 0,
-     "loweredToInfo": 3,
+     "loweredToInfo": 8,
      "byStatus": {
+      "entrypoint-reachable": 5,
       "external-api": 3
      }
     },
@@ -2298,13 +2299,13 @@
    },
    "fresh": {
     "dhall-haskell": {
-     "rows": 93,
+     "rows": 111,
      "flagged": 3,
-     "loweredToInfo": 90,
+     "loweredToInfo": 108,
      "byStatus": {
-      "no-verdict": 72,
-      "entrypoint-reachable": 17,
-      "external-api": 4
+      "entrypoint-reachable": 26,
+      "external-api": 13,
+      "no-verdict": 72
      }
     },
     "hlint": {
@@ -2328,11 +2329,11 @@
      }
     },
     "ormolu": {
-     "rows": 3,
+     "rows": 7,
      "flagged": 0,
-     "loweredToInfo": 3,
+     "loweredToInfo": 7,
      "byStatus": {
-      "entrypoint-reachable": 1,
+      "entrypoint-reachable": 5,
       "no-verdict": 2
      }
     },

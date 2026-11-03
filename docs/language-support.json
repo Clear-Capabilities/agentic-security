@@ -1,7 +1,7 @@
 {
   "schema": "agentic-security/language-support@1",
   "version": "language-support/1",
-  "generatedAt": "2026-11-02",
+  "generatedAt": "2026-11-03",
   "node": "v24.20.0",
   "targets": {
     "precision": 0.9,
@@ -26,7 +26,7 @@
       },
       "measuredOn": {
         "split": "holdout",
-        "measuredAt": "2026-11-02",
+        "measuredAt": "2026-11-03",
         "corpusVersion": "qa001-v2",
         "hashes": {
           "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
@@ -510,6 +510,15 @@
           "blaze-builder": [
             "0.4.4"
           ],
+          "typed-process": [
+            "0.2.13"
+          ],
+          "esqueleto": [
+            "3.6"
+          ],
+          "optparse-applicative": [
+            "0.19"
+          ],
           "lucid": [
             "2.11"
           ],
@@ -587,7 +596,7 @@
       },
       "measuredOn": {
         "split": "holdout",
-        "measuredAt": "2026-11-02",
+        "measuredAt": "2026-11-03",
         "corpusVersion": "qa001-v2",
         "hashes": {
           "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",

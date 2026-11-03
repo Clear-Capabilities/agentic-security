@@ -40,21 +40,90 @@ export const DEFAULT_PARSE_BUDGETS = Object.freeze({
 
 // Boundaries that are disclosed but do not make a file incomplete: the content was either parsed (cpp, ffi) or matched
 // by a closed, sound pattern and stated as an assumption (see haskell-boundaries.js).
-export const NON_OPAQUE_BOUNDARIES = new Set(['cpp', 'ffi', 'th-safe-splice', 'quasiquote-inert', 'quasiquote-hamlet']);
+export const NON_OPAQUE_BOUNDARIES = new Set(['cpp', 'ffi', 'th-safe-splice', 'quasiquote-inert', 'quasiquote-hamlet', 'quasiquote-interp']);
 
 // Shakespeare's HTML template quoters: the interpolations are Haskell expressions of the enclosing scope (see absorbSafeBoundaries).
 const HAMLET_QUOTERS = new Set(['hamlet', 'whamlet', 'shamlet', 'xhamlet', 'ihamlet', 'xshamlet']);
+
+// String-interpolating quoters: the body is TEXT with Haskell expressions spliced in, so `[i|SELECT .. '#{name}'|]` is a concatenation of the
+// text and `name`. Each is accepted only under an import of its documented module (a project quoter that borrows the name stays opaque),
+// and the interpolation syntax is the quoter's own: `#{e}` (string-interpolate, interpolate, shakespeare-text), `$name` / `${e}`
+// (neat-interpolation, `$$` escapes), `{e}` / `{e:spec}` (PyF, `{{` escapes). Names read from each package's Haddock index.
+const INTERP_QUOTERS = {
+  'Data.String.Interpolate': { syntax: 'hash', quoters: ['i', '__i', 'iii', "__i'E", "__i'L", "iii'E", "iii'L"] },
+  'Data.String.Interpolate.IsString': { syntax: 'hash', quoters: ['i'] },
+  'Text.Shakespeare.Text': { syntax: 'hash', quoters: ['st', 'lt', 'sbt', 'lbt', 'stext', 'ltext', 'text'] },
+  'NeatInterpolation': { syntax: 'dollar', quoters: ['text', 'trimming', 'untrimming'] },
+  'PyF': { syntax: 'brace', quoters: ['fmt', 'fmtTrim', 'str', 'strTrim'] },
+};
+
+/** The interpolations of a string-interpolating quoter's body (see INTERP_QUOTERS): `{open, exprStart, exprEnd, close, bare}` offsets. */
+export function interpolationsOf(seg, from, to, syntax) {
+  if (syntax === 'hash') return hamletInterpolations(seg, from, to, '#').map((it) => ({ ...it, exprEnd: it.close }));
+  const out = [];
+  const closeOf = (j) => {   // the index of the `}` matching the `{` before j, brace-nesting and string-aware; -1 when unclosed
+    let depth = 1, k = j, inStr = false;
+    for (; k < to && depth > 0; k++) {
+      const c = seg[k];
+      if (inStr) { if (c === '\\') k++; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) return k; }
+    }
+    return -1;
+  };
+  if (syntax === 'dollar') {
+    for (let i = from; i < to; i++) {
+      if (seg[i] !== '$') continue;
+      if (seg[i + 1] === '$') { i++; continue; }
+      if (seg[i + 1] === '{') {
+        const close = closeOf(i + 2);
+        if (close < 0) continue;
+        if (close > i + 2) out.push({ open: i, exprStart: i + 2, exprEnd: close, close, bare: false });
+        i = close;
+      } else if (/[a-z_]/.test(seg[i + 1] || '')) {
+        let k = i + 1;
+        while (k < to && /[A-Za-z0-9_']/.test(seg[k])) k++;
+        out.push({ open: i, exprStart: i + 1, exprEnd: k, close: -1, bare: true });
+        i = k - 1;
+      }
+    }
+    return out;
+  }
+  if (syntax === 'brace') {
+    for (let i = from; i < to; i++) {
+      if (seg[i] !== '{') continue;
+      if (seg[i + 1] === '{') { i++; continue; }
+      const close = closeOf(i + 1);
+      if (close < 0) continue;
+      // `{expr:spec}`: the format spec after a top-level `:` is not an expression (a `:` inside brackets or quotes is part of the expression)
+      let exprEnd = close, depth = 0, inStr = false;
+      for (let k = i + 1; k < close; k++) {
+        const c = seg[k];
+        if (inStr) { if (c === '\\') k++; else if (c === '"') inStr = false; continue; }
+        if (c === '"') inStr = true;
+        else if (c === '(' || c === '[' || c === '{') depth++;
+        else if (c === ')' || c === ']' || c === '}') depth--;
+        else if (c === ':' && depth === 0) { exprEnd = k; break; }
+      }
+      if (exprEnd > i + 1) out.push({ open: i, exprStart: i + 1, exprEnd, close, bare: false });
+      i = close;
+    }
+    return out;
+  }
+  return out;
+}
 
 /**
  * The interpolations of a hamlet body, in order: `#{e}` (escaped value), `^{e}` (embedded template or widget), `@{r}` / `@?{r}` (route) and `_{m}`
  * (message). Braces nest (a record or a lambda inside), and a string literal may contain `}`. Returns offsets into the segment: the opener's
  * first character, the expression's first character, and the closing brace.
  */
-export function hamletInterpolations(seg, from, to) {
+export function hamletInterpolations(seg, from, to, markers = '#^@_') {
   const out = [];
   for (let i = from; i < to; i++) {
     const ch = seg[i];
-    if (!(ch === '#' || ch === '^' || ch === '@' || ch === '_')) continue;
+    if (!markers.includes(ch)) continue;
     let j = i + 1;
     if (ch === '@' && seg[j] === '?') j++;
     if (seg[j] !== '{') continue;
@@ -1153,6 +1222,37 @@ function analyze(source, file, dialect, ctx, res) {
       b.assumption = 'upstream-quoter';
       res.blankRanges.push({ kind: 'quasiquote-hamlet', startOffset: b.span.startOffset, endOffset: b.span.endOffset, text });
     }
+    // String-interpolating quoters (`[i|SELECT .. '#{name}'|]`, INTERP_QUOTERS): rewritten in place, same length, same newlines, as
+    // `(iQ (e1) (e2))`, an application the IR lowers to a CONCATENATION of the interpolated expressions (haskell-ir.js), so text reaching a
+    // sink through the quoter is followed. The template text itself is not modelled (a text sink that needs a markup literal, `putStrLn`,
+    // does not fire through a quoter: a stated limit). A quoter of an unimported module, or an unknown quoter, stays an opaque boundary.
+    const interpModules = res.imports.map((im) => im.module).filter((m) => INTERP_QUOTERS[m]);
+    for (const b of res.boundaries) {
+      if (b.kind !== 'quasiquote' || !interpModules.length) continue;
+      const mod = interpModules.find((m) => INTERP_QUOTERS[m].quoters.includes(b.quoter));
+      if (!mod) continue;
+      const seg = source.slice(b.span.startOffset, b.span.endOffset);
+      const bar = seg.indexOf('|');
+      if (bar < 0 || !seg.endsWith('|]')) continue;
+      const interps = interpolationsOf(seg, bar + 1, seg.length - 2, INTERP_QUOTERS[mod].syntax);
+      if (!interps.length) continue;   // a literal-only body is left to the inert rule above
+      const chars = seg.split('').map((ch) => (ch === '\n' || ch === '\r' ? ch : ' '));
+      const put = (at, s) => { for (let i = 0; i < s.length; i++) if (chars[at + i] !== '\n' && chars[at + i] !== '\r') chars[at + i] = s[i]; };
+      put(0, '(iQ'.padEnd(bar + 1));
+      for (const it of interps) {
+        if (it.bare) { put(it.open, ' '); put(it.exprStart, seg.slice(it.exprStart, it.exprEnd)); continue; }   // `$name`: the name at its offset
+        put(it.open, ' ('.slice(-(it.exprStart - it.open)).padStart(it.exprStart - it.open));   // `#{`, `${` become ` (`; `{` becomes `(`
+        put(it.exprStart, seg.slice(it.exprStart, it.exprEnd));
+        put(it.close, ')');
+      }
+      put(seg.length - 2, ')');
+      const text = chars.join('');
+      if (text.length !== seg.length) continue;
+      b.kind = 'quasiquote-interp';
+      b.detail = `quasi-quote [${b.quoter}|...|] with ${interps.length} interpolation(s), read as the concatenation of the interpolated expressions (analysed in the enclosing scope); the template text is not modelled; ASSUMED to be the ${mod} quoter`;
+      b.assumption = 'upstream-quoter';
+      res.blankRanges.push({ kind: 'quasiquote-interp', startOffset: b.span.startOffset, endOffset: b.span.endOffset, text });
+    }
   }
 
   // ── errors → withheld calls ──
@@ -1240,7 +1340,7 @@ export function preprocessForSyntaxInfo(source, opts = {}) {
     const seg = out.slice(b.startOffset, b.endOffset);
     let repl = blank(seg);
     if (b.kind === 'quasiquote-inert' && repl.length >= 2) repl = `"${repl.slice(1, -1)}"`;
-    if (b.kind === 'quasiquote-hamlet' && typeof b.text === 'string' && b.text.length === seg.length) repl = b.text;   // the interpolations, at their offsets
+    if ((b.kind === 'quasiquote-hamlet' || b.kind === 'quasiquote-interp') && typeof b.text === 'string' && b.text.length === seg.length) repl = b.text;   // the interpolations, at their offsets
     out = out.slice(0, b.startOffset) + repl + out.slice(b.endOffset);
   }
   return { text: out, opaque };
