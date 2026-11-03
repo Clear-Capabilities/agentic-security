@@ -153,8 +153,14 @@ function main() {
   // between the two renames, none; never a half-copied one.
   const OLD_DIR = path.join(SCANNER, 'vendor', `.java-parser-old-${process.pid}`);
   fs.rmSync(OLD_DIR, { recursive: true, force: true });
-  if (fs.existsSync(FINAL_DIR)) fs.renameSync(FINAL_DIR, OLD_DIR);
-  fs.renameSync(STAGE_DIR, FINAL_DIR);
+  // Two processes can both find the copy stale (npm ci beside npm pack): the loser's rename finds the directory already moved, or the
+  // winner's tree already in place. Either way a complete tree exists, so the loser discards its stage instead of failing the install.
+  try { fs.renameSync(FINAL_DIR, OLD_DIR); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  try { fs.renameSync(STAGE_DIR, FINAL_DIR); }
+  catch (e) {
+    if (!(['ENOTEMPTY', 'EEXIST', 'ENOTDIR'].includes(e.code) && fs.existsSync(path.join(FINAL_DIR, 'entry.mjs')))) throw e;
+    fs.rmSync(STAGE_DIR, { recursive: true, force: true });
+  }
   fs.rmSync(OLD_DIR, { recursive: true, force: true });
 
   // stderr, not stdout: this script runs as part of the "prepare" lifecycle
