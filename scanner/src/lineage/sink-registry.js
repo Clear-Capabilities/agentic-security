@@ -118,7 +118,8 @@ export const CWE_MAP = Object.freeze({
   'CWE-918':  Object.freeze({ category: 'external-api',  status: 'modeled',     why: 'SSRF sinks are outbound HTTP client calls' }),
   // X-004 / haskell-models.js: untrusted text placed in a model request BODY. The call is an ordinary outbound HTTP
   // body setter, so it is an external-api destination; whether the destination is a model provider is decided by
-  // the AI-evidence overlay (lineage/haskell-ai.js), never by this table.
+  // the technical provider catalog in recipient-registry.js (the destination host, e.g. an anthropic.com or openai.com
+  // base URL), never by this table.
   'CWE-1427': Object.freeze({ category: 'external-api',  status: 'modeled',     why: 'a model request body is an outbound HTTP request body' }),
   'CWE-601':  Object.freeze({ category: 'http-response', status: 'modeled',     why: 'a redirect is written as a response header' }),
   'CWE-113':  Object.freeze({ category: 'http-response', status: 'modeled',     why: 'response splitting — the sink IS the response header writer' }),
