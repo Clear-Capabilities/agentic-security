@@ -9,6 +9,18 @@
 > make the history less accurate, not more.
 
 
+## 0.195.18 - Haskell rule precision: fixed-path file reads, cookie randomness by flow, and a whole-word security vocabulary for the known-broken-marker detector
+
+**Measured, 0.195.17:** `TIMINGS preflight=3s push=8s pr=4s checks=370s merge=5s verify=6s tag=2s release=163s npm=328s total=889s release-clock=176s`, shipped in 16 min 34 s (the npm check was re-run once with `--resume`). The release clock (merge to published release) was 176 s.
+
+Three precision items, each designed from the semantics and probed before the engine was touched.
+
+- **Fixed-path file content is `low`, not `high`.** A taint finding whose every origin is a read of a file at a literal path in the program text (`readFile "static/404.html"`) is the program's own data. It is lowered to `low` with the reason and kept, because another part of the program could write that file. A path in a name, a parameter or standard input keeps its severity. The probe also showed that a library parameter appended under a fixed directory, and a parameter in a command with fixed text, are real constructions, so the broader `api-contract` lowering the plan floated was not built. Effect on the measured fresh set: two IHP sites moved from `high` to `low` (both already labelled false positives before this rule existed); the gate counts `low` as flagged, so the fresh precision is unchanged at 21 of 51 flagged.
+- **`hs-predictable-random` by flow.** A System.Random value that becomes a cookie value (scotty-cookie `setSimpleCookie`, web-cookie `setCookieValue`, a hand-built `Set-Cookie` header) is reported whatever the function and variables are called. The three positive pins fail on the previous rule and pass on this one; a constant or entropy-derived value, and a random value that never reaches a cookie, stay silent. No new site appeared in any measured set.
+- **Known-broken-marker detector, whole words.** The security vocabulary was matched as substrings, so a marker near `author` or a `Hashable` import counted. It is now matched as whole words after camelCase and snake_case splitting, for every language. The self-scan, CVE-replay (229/229), mutation (460/460) and layer-recall baselines did not move. The sealed set holds the only labelled instances of this false positive and was not opened; its effect is measured once, at the end.
+
+Verified: `test:haskell` 502/502, `test:sast` 950/950, `test:posture` 3526 of 3546 pass and 0 fail (the other 20 were not reported as failures), the precision gate passes with the baseline re-recorded for the two severities above.
+
 ## 0.195.17 - Data Flow Explorer: Haskell and Nix coverage tiers, a corrected guide, and the graph and SCA items the plan found false or contract-changing
 
 **Measured, 0.195.16:** `TIMINGS preflight=3s push=6s pr=1s checks=182s merge=5s verify=5s tag=2s release=223s npm=328s total=755s release-clock=235s`, shipped in 17 min 29 s over four attempts: two hosted test-shard failures (fixed in that release, see its entry) and one transient GitHub 503 while polling checks, each resumed. The release clock (merge to published release) was 235 s.

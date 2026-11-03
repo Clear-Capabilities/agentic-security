@@ -6300,6 +6300,13 @@ function scanEntropySecrets(fp,raw,_suppOut){
 }
 
 // ─── TODO/FIXME adjacent to auth/crypto ──────────────────────────────────────
+// The security vocabulary is matched as WHOLE WORDS after camelCase and snake_case identifiers are split into their words, so `getAuthToken`
+// and `check_password` still count, while `author` (not `auth`), `Hashable` (not `hash`) and `rolesetting`-style run-ons do not: a substring
+// match flagged a marker near any identifier that merely contained one of these letters in a row.
+const _SECURITY_WORD_RE=/\b(?:auth|authn|authz|authenticat(?:e|ed|es|ion|or)|authoriz(?:e|ed|es|ation|er)|jwts?|tokens?|passwords?|passwd|verif(?:y|ies|ied|ication)|hash(?:ed|es|ing)?|crypto|cryptograph\w*|sessions?|cookies?|login|logins|permissions?|roles?|rbac|admins?|administrator)\b/i;
+function _splitIdentifierWords(text){
+  return text.replace(/([a-z0-9])([A-Z])/g,"$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g,"$1 $2").replace(/[_\-.]+/g," ");
+}
 function scanTodosNearSecurity(fp,raw){
   const lines=raw.split("\n");
   const out=[];
@@ -6307,7 +6314,7 @@ function scanTodosNearSecurity(fp,raw){
     const ln=lines[i];
     if(!/\b(?:TODO|FIXME|HACK|XXX|BUG|TEMP)\b/.test(ln))continue;
     const window=lines.slice(Math.max(0,i-3),Math.min(lines.length,i+4)).join(" ");
-    if(!/(?:auth|jwt|token|password|verify|hash|crypto|session|cookie|login|permission|role|rbac|admin)/i.test(window))continue;
+    if(!_SECURITY_WORD_RE.test(_splitIdentifierWords(window)))continue;
     out.push({
       vuln:"Known-Broken Code Marker Near Security-Sensitive Logic",
       severity:"medium",cwe:"CWE-1077",stride:"Tampering",

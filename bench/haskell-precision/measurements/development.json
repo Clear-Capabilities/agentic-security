@@ -1803,9 +1803,9 @@
     ],
     "ihp:ihp/IHP/Controller/AccessDenied.hs:144:Cross-Site Scripting (HTML response body from text)": [
      [
-      "high",
+      "low",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -1819,9 +1819,9 @@
     ],
     "ihp:ihp/IHP/Controller/NotFound.hs:145:Cross-Site Scripting (HTML response body from text)": [
      [
-      "high",
+      "low",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],

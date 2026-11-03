@@ -123,9 +123,11 @@ const exprChildren = (e) => {
 // Find the sink call at `line` with callee `callee`; returns [{ nodeId, facts, call }].
 export function findSites(fn, callee, line) {
   const sites = [];
+  // `callee` is a name, or a pattern when several spellings of one operation are wanted (`readFile`, `T.readFile`, `B.readFile`)
+  const named = typeof callee === 'string' ? (c) => c === callee : (c) => typeof c === 'string' && callee.test(c);
   const visit = (e, nodeId, facts, depth) => {
     if (!e || typeof e !== 'object' || depth > 60) return;
-    if (e.kind === 'call' && e.callee === callee && (e.line === line || nodeLine(nodeId) === line)) sites.push({ nodeId, facts, call: e });
+    if (e.kind === 'call' && named(e.callee) && (e.line === line || nodeLine(nodeId) === line)) sites.push({ nodeId, facts, call: e });
     if (e.kind === 'union') {
       const bc = e.hs && e.hs.branchConds;
       e.branches.forEach((b, i) => visit(b, nodeId, bc && bc[i] ? [...facts, bc[i]] : facts, depth + 1));
@@ -135,7 +137,7 @@ export function findSites(fn, callee, line) {
   };
   const nodeLine = (id) => (fn.cfg.nodes[id] ? fn.cfg.nodes[id].line : -1);
   for (const n of nodeList(fn)) {
-    if (n.kind === 'call' && n.callee === callee && n.line === line) sites.push({ nodeId: n.id, facts: [], call: { kind: 'call', callee: n.callee, args: n.args || [] } });
+    if (n.kind === 'call' && named(n.callee) && n.line === line) sites.push({ nodeId: n.id, facts: [], call: { kind: 'call', callee: n.callee, args: n.args || [] } });
     for (const k of ['source', 'value', 'cond']) if (n[k]) visit(n[k], n.id, [], 0);
     if (Array.isArray(n.args) && n.kind === 'call') for (const a of n.args) visit(a, n.id, [], 0);
   }
