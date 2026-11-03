@@ -16,7 +16,9 @@
 //                         positive had that shape; a parameter spliced UNDER a fixed directory (`"/srv/" ++ name`) is still kept,
 //                         because the function chose the directory and lets the caller leave it
 //   entry-parameter       a parameter of such a function used inside a larger value the function builds: its own construction, kept
-//   data-input            standard input or a file's content in a service or a library: data the program processes, kept
+//   data-input            standard input or a file's content in a service or a library: data the program processes, kept. When every
+//                         origin is a read of a file at a literal path (`readFile "config/schema.dhall"`) the finding is lowered to `low`
+//                         with the reason, since the location is the program's own; other file reads keep their severity
 //   unattributed          the engine recorded no origin: kept
 //
 // A command-line program is one reached only from `main`s whose reachable modules import no server framework or socket library
@@ -250,6 +252,29 @@ export function originClasses(f) {
   return { roots, classes: new Set(roots.map(classOf)) };
 }
 
+const FILE_READ_CALL = /(?:^|\.)(?:readFile|readFile'|readFileUtf8|readBinaryFile|decodeFileThrow|decodeFileEither|decodeFile)$/;
+const isFixedPath = (e) => !!e && e.kind === 'literal' && typeof e.value === 'string' && e.value.length > 0 && !/^[a-z][a-z0-9+.-]*:\/\//i.test(e.value);
+
+/**
+ * Is every file-read origin of this finding a read of a file whose location the program text fixes (`readFile "config/schema.dhall"`)? Judged from
+ * the call at the origin's recorded line: its first argument must be a string literal. A path held in a name, built from parts or taken from
+ * a parameter is not judged (the read stays as reported). Content at a fixed project location is the program's own data, not something a
+ * request chose; it can still be written by another part of the program, so the finding is lowered to `low`, never to `info`.
+ */
+function fixedFileReads(perFile, f, roots) {
+  const reads = roots.filter((r) => r.provenance === 'file-read');
+  if (!reads.length || reads.length !== roots.length) return false;
+  const chain = (f.chain || []).filter((c) => c && c.provenance === 'file-read');
+  const where = reads.map((r, i) => ({ file: r.file || (chain[i] && chain[i].file) || (f.source && f.source.file), line: Number.isInteger(r.line) ? r.line : (chain[i] && chain[i].line) || (f.source && f.source.line) }));
+  return where.every((w) => {
+    const ir = perFile && perFile[w.file];
+    if (!ir || !Number.isInteger(w.line)) return false;
+    let seen = false;
+    for (const fn of ir.functions) for (const s of findSites(fn, FILE_READ_CALL, w.line)) { seen = true; if (!isFixedPath((s.call.args || [])[0])) return false; }
+    return seen;
+  });
+}
+
 /**
  * Stamps `trustBoundary` on every Haskell IR-TAINT finding and lowers to `info` the verdicts that name no boundary crossed
  * (`operator-controlled`, `api-contract`). Mutates the findings; returns counts.
@@ -264,6 +289,7 @@ export function applyTrustBoundary(findings, perFile) {
     let verdict;
     let reason;
     let inferred = false;
+    let lowToLow = false;
     if (classes.has('external')) { verdict = 'attacker-reachable'; reason = 'a request, socket, header, cookie or remote response supplies the value'; }
     else if (roots.length && [...classes].every((c) => c === 'operator')) {
       verdict = 'operator-controlled';
@@ -276,7 +302,13 @@ export function applyTrustBoundary(findings, perFile) {
       reason = f.cwe === 'CWE-22' && roots.some((r) => r.provenance === 'stdin')
         ? 'the function belongs to a command-line program (reached from a main that imports no server framework) and the file it works on is named by the person running it: on its standard input, in files it was pointed at, or in its arguments and environment'
         : 'the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is covered by this rule only for a path operation';
-    } else if (classes.has('data')) { verdict = 'data-input'; reason = 'standard input or file content supplies the value'; }
+    } else if (classes.has('data')) {
+      verdict = 'data-input'; reason = 'standard input or file content supplies the value';
+      if (!classes.has('operator') && !classes.has('weak-param') && !classes.has('other') && fixedFileReads(perFile, f, roots)) {
+        reason = 'the value is the content of a file at a location the program text fixes (a literal path), not a request or a caller-supplied name; another part of the program could still write that file, so the finding is lowered to low and kept';
+        lowToLow = true;
+      }
+    }
     else if (classes.has('weak-param')) {
       verdict = 'entry-parameter';
       reason = 'a parameter of an exported function that nothing in the analysed code calls';
@@ -294,6 +326,13 @@ export function applyTrustBoundary(findings, perFile) {
     f.trustBoundary = { verdict, reason, role, ...(inferred ? { inferred: true } : {}), roots: roots.slice(0, 5) };
     const key = verdict.replace(/-(\w)/g, (_, c) => c.toUpperCase());
     stats[key] = (stats[key] || 0) + 1;
+    if (lowToLow && f.severity !== 'info' && f.severity !== 'low' && !f._trustLowered) {
+      f._trustLowered = true;
+      f.originalSeverity = f.originalSeverity || f.severity;
+      f.severity = 'low';
+      f.controls = [...(f.controls || []), { kind: 'fixed-file-source', evidenceKind: 'source' }];
+      f.guardNote = { kind: 'data-input', reason };
+    }
     if (verdict === 'operator-controlled' || verdict === 'api-contract') {
       lowerFinding(f, { kind: verdict, reason, controlKind: verdict === 'operator-controlled' ? 'operator-controlled-input' : 'api-contract-wrapper', guard: '_trustLowered' });
     }

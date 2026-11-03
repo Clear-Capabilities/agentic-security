@@ -86,7 +86,7 @@ origin):
 | `operator-controlled` | command-line arguments or environment variables; in a command-line program also the files it is pointed at | lowered to `info`, the severity it would have had is kept in `originalSeverity` |
 | `api-contract` | a parameter of an exported function nothing calls, handed whole to a process (`exec exe args = callProcess exe args`) | lowered to `info`: a thin wrapper, the caller chose what to run |
 | `entry-parameter` | a parameter of such a function used inside a command or path the function builds | reported |
-| `data-input` | standard input, or file content in a service or library | reported |
+| `data-input` | standard input, or file content in a service or library; when every origin is a read of a file at a literal path in the program text, the finding is lowered to `low` with the reason | reported (`low` for a literal path) |
 | `unattributed` | no origin recorded | reported |
 
 A *command-line program* is code reached only from `main` functions whose reachable modules import no server framework

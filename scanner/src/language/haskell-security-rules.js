@@ -883,16 +883,49 @@ export function analyzeHaskellRules(files, opts = {}) {
       // A security-shaped function (`generateApiKey`, `newResetCode`) whose RESULT is built from a System.Random value: the generator was bound
       // to an ordinary name (`g <- newStdGen`, `let bytes = take 16 (randoms g)`), so neither the binding rule nor the "feeds the function" rule
       // above saw it; the value reaching the function's return is what makes it the token.
+      // The bindings that hold a System.Random value (`g <- newStdGen`, `let bytes = take 16 (randoms g)`), followed through the function's own assignments.
+      const hasRandom = (e) => { for (const x of walk(e)) if ((x.kind === 'call' && RANDOM_CALLS.has(x.callee)) || (x.kind === 'ident' && RANDOM_CALLS.has(x.name) && !(x.hs && x.hs.functionRef))) return true; return false; };
+      const carriers = new Set(); let seedLine = null;
+      for (let round = 0; round < 8; round++) {
+        let grew = false;
+        for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source && !carriers.has(n.target) && (hasRandom(n.source) || [...names(n.source)].some((x) => carriers.has(x)))) { carriers.add(n.target); if (seedLine === null || (Number.isFinite(n.line) && n.line < seedLine)) seedLine = n.line; grew = true; }
+        if (!grew) break;
+      }
+      const carriesRandom = (e) => !!e && (hasRandom(e) || [...names(e)].some((x) => carriers.has(x)));
+      // A security-shaped function (`generateApiKey`, `newResetCode`) whose RESULT is built from a System.Random value: the generator was bound
+      // to an ordinary name, so neither the binding rule nor the "feeds the function" rule above saw it; the value reaching the function's
+      // return is what makes it the token.
       if (!randomEmitted && SECURITY_FN.test(fnBase)) {
-        const hasRandom = (e) => { for (const x of walk(e)) if ((x.kind === 'call' && RANDOM_CALLS.has(x.callee)) || (x.kind === 'ident' && RANDOM_CALLS.has(x.name) && !(x.hs && x.hs.functionRef))) return true; return false; };
-        const carriers = new Set(); let seedLine = null;
-        for (let round = 0; round < 8; round++) {
-          let grew = false;
-          for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source && !carriers.has(n.target) && (hasRandom(n.source) || [...names(n.source)].some((x) => carriers.has(x)))) { carriers.add(n.target); if (seedLine === null || (Number.isFinite(n.line) && n.line < seedLine)) seedLine = n.line; grew = true; }
-          if (!grew) break;
-        }
-        const ret = fnReturns.find((n) => hasRandom(n.value) || [...names(n.value)].some((x) => carriers.has(x)));
+        const ret = fnReturns.find((n) => carriesRandom(n.value));
         if (ret) emitRandom(ret.line || seedLine || fn.line, { detail: `a System.Random value reaches the result of \`${fnBase}\``, evidence: { function: fnBase, via: [...carriers].slice(0, 4) } });
+      }
+      // By flow, whatever the names are: a System.Random value that becomes the VALUE of a cookie (a Set-Cookie header written by hand, a
+      // header setter, scotty-cookie's `setSimpleCookie`, or web-cookie's `setCookieValue` field) is a session credential a client can predict.
+      // The cookie's value is the sink; a random value in a cookie's other attributes (an expiry jitter) is not.
+      if (!randomEmitted && (carriers.size || fnNodes(fn).some((n) => [n.value, n.source, ...(n.args || [])].some((ex) => ex && hasRandom(ex))))) {
+        for (const n of fnNodes(fn)) {
+          if (randomEmitted) break;
+          const roots = [];
+          if (n.kind === 'assign' && n.source) roots.push(n.source);
+          if (n.kind === 'return' && n.value) roots.push(n.value);
+          if (n.kind === 'call') roots.push({ kind: 'call', callee: n.callee, args: n.args || [], line: n.line });
+          for (const root of roots) {
+            for (const e of walk(root)) {
+              if (randomEmitted) break;
+              let valueExpr = null; let sink = null;
+              if (e.kind === 'call' && typeof e.callee === 'string' && /(?:^|\.)setSimpleCookie$/.test(e.callee) && (e.args || []).length >= 2) { valueExpr = e.args[1]; sink = 'setSimpleCookie'; }
+              else if (e.kind === 'object' && e.hs && e.hs.update && Array.isArray(e.props)) { const p = e.props.find((x) => x && x.key === 'setCookieValue'); if (p) { valueExpr = p.value; sink = 'setCookieValue'; } }
+              else if (e.kind === 'call' && typeof e.callee === 'string' && /(?:^|\.)(?:setHeader|addHeader|setResponseHeader|modifyHeader)$/.test(e.callee) && (e.args || []).length >= 2) {
+                const k = e.args[0];
+                if (k && ((k.kind === 'literal' && /^set-cookie$/i.test(String(k.value))) || (k.kind === 'ident' && SET_COOKIE_HEADER.has(k.name)))) { valueExpr = e.args[1]; sink = 'Set-Cookie header'; }
+              } else if (e.kind === 'array' && e.hs && e.hs.tuple && e.elements.length === 2) {
+                const k = e.elements[0];
+                if (k && ((k.kind === 'ident' && SET_COOKIE_HEADER.has(k.name)) || (k.kind === 'literal' && /^set-cookie$/i.test(String(k.value))))) { valueExpr = e.elements[1]; sink = 'Set-Cookie header'; }
+              }
+              if (valueExpr && carriesRandom(valueExpr)) emitRandom(e.line || n.line, { detail: `a System.Random value becomes the value of a cookie (${sink})`, evidence: { function: fnBase, sink, via: [...carriers].slice(0, 4) } });
+            }
+          }
+        }
       }
     }
   }
