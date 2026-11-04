@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.195.22",
-    "bundleSha256": "af785a81038bee79b2d722220e74edbb0fae47162142a2b8b6f58ad56c278c86",
-    "commit": "a35caf7bdba4beca76aeb6e3dbd836c76646c724",
+    "engineVersion": "0.195.23",
+    "bundleSha256": "c99c86a3f8172dcc3f6f1a23f6de0b955859ef9d8ea709e6d744e536f5676a15",
+    "commit": "bb04f9b33c9bebe302117e08dfc703123d40314b",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-04T07:35:41.470Z",
+    "generatedAt": "2026-11-04T15:37:36.421Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -624,7 +624,7 @@
         }
       },
       "scanner/src": {
-        "total": 690,
+        "total": 683,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -737,7 +737,7 @@
           "pipeline/supervised-analyzers.js": 1,
           "poc-video.js": 1,
           "posture/adversarial-self-test.js": 1,
-          "posture/adversary-agent.js": 5,
+          "posture/adversary-agent.js": 1,
           "posture/agents-memory.js": 8,
           "posture/aibom.js": 3,
           "posture/api-contract.js": 1,
@@ -814,7 +814,6 @@
           "posture/fleet/fleet-manifest.js": 1,
           "posture/fleet/job-runner.js": 1,
           "posture/fleet/scan-cache.js": 6,
-          "posture/flow-narration.js": 1,
           "posture/grader-calibration.js": 4,
           "posture/harness-discovery.js": 1,
           "posture/holdout-eval.js": 3,
@@ -827,7 +826,6 @@
           "posture/license-graph.js": 3,
           "posture/license-policy.js": 3,
           "posture/llm-redteam-prompts.js": 1,
-          "posture/llm-redteam.js": 1,
           "posture/mcp-rug-pull.js": 1,
           "posture/mitigation-composite.js": 1,
           "posture/model-rescan.js": 1,
@@ -937,7 +935,7 @@
           "sca/binary-metadata.js": 5,
           "sca/container.js": 2,
           "sca/dep-confusion.js": 3,
-          "sca/llm-function-extract.js": 2,
+          "sca/llm-function-extract.js": 1,
           "sca/py-package-functions.js": 1,
           "sca/sigstore-verify.js": 7,
           "server/CLAUDE.md": 1,
@@ -998,8 +996,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 418,
-    "d": 567
+    "n": 225,
+    "d": 565
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2178,6 +2176,17 @@
     "metrics": {
       "schema": "agentic-security/strategic-metrics",
       "version": 1,
+      "scope": {
+        "kind": "per-scan",
+        "scanId": null,
+        "scanStartedAt": null,
+        "attempts": {
+          "from": null,
+          "to": null,
+          "recorded": 3
+        },
+        "trend": "not a trend: one scan and this machine's recorded attempts; compare scans by scanId to see movement"
+      },
       "assuranceCoverage": {
         "status": "measured",
         "files": {
@@ -2200,6 +2209,7 @@
         "scanStatus": "partial"
       },
       "evidenceConversion": {
+        "status": "measured",
         "numerator": 2,
         "denominator": 11,
         "percent": 18.2,
@@ -2209,18 +2219,26 @@
           "taint-confirmed": 0,
           "execution-proven": 0
         },
-        "basis": "findings that reached corroborated or stronger, over all findings"
+        "basis": "findings that reached corroborated or stronger, over all findings of the last scan"
       },
       "verifiedRemediationRate": {
+        "status": "measured",
         "numerator": 2,
         "denominator": 3,
         "percent": 66.7,
+        "recorded": 3,
+        "repeated": 0,
+        "failed": 1,
         "disappearedOnly": 0,
-        "basis": "attempts that passed the re-scan, the project tests and the independent attack replay, over all attempts. A lower bound where a class has no replay"
+        "window": {
+          "from": null,
+          "to": null
+        },
+        "basis": "the latest attempt per finding that passed the re-scan, the project tests and the independent attack replay, over the latest attempt per finding. A lower bound where a class has no replay"
       },
       "securityLearningRate": {
-        "status": "not-measured",
-        "reason": "the rule compiler grades its rules against a corpus built from the same finding; no independent measurement of novel weaknesses converted into reusable knowledge exists"
+        "status": "unmeasured",
+        "reason": "the rule compiler grades its rules against a corpus built from the same finding and the reviewer-supplied independent examples; no independent longitudinal measurement of novel weaknesses converted into reusable knowledge exists"
       }
     }
   },
@@ -2232,9 +2250,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.195.22",
-    "commit": "a35caf7bdba4beca76aeb6e3dbd836c76646c724",
-    "bundleSha256": "af785a81038bee79b2d722220e74edbb0fae47162142a2b8b6f58ad56c278c86",
+    "engineVersion": "0.195.23",
+    "commit": "bb04f9b33c9bebe302117e08dfc703123d40314b",
+    "bundleSha256": "c99c86a3f8172dcc3f6f1a23f6de0b955859ef9d8ea709e6d744e536f5676a15",
     "cleanMeasurement": true,
     "identity": "the commit and bundle below identify exactly the tree that was measured",
     "currentEngineIndependentAccuracy": "unmeasured",

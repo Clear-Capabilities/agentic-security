@@ -30,6 +30,7 @@ const SRC = path.join(SCANNER, 'src');
 
 const EXCLUDED_FILES = new Map([
   ['src/egress/policy.js', 'the policy module itself — evaluateEgress is defined here, not a caller of itself'],
+  ['src/egress/transport.js', 'the shared model transport (0.195.23): the one place a model request leaves the process, invoked only after its caller evaluated the policy; it bounds the call (no redirect, capped reply, deadline) and decides nothing'],
   ['src/engine.js', 'OSV/KEV/npm/PyPI/registry fetches, not LLM egress'],
   ['src/posture/epss.js', 'FIRST.org EPSS score fetches, not LLM egress'],
   ['src/posture/federated-learning.js', 'calibration/telemetry sink, not an LLM provider'],
@@ -62,6 +63,9 @@ function walk(dir, out = []) {
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 }
+// A call site is a bare `fetch(` or, since 0.195.23, the shared model transport `modelFetch(` (egress/transport.js): routing a prompt
+// through the transport bounds the call but does not evaluate the policy, so such a file still needs evaluateEgress.
+const callsFetch = (s) => /\b(?:fetch|modelFetch)\(/.test(s);
 
 test('every real fetch() call site under src/ either imports evaluateEgress or is on the reviewed exclude list', () => {
   const missing = [];
@@ -70,7 +74,7 @@ test('every real fetch() call site under src/ either imports evaluateEgress or i
     if (EXCLUDED_FILES.has(rel)) continue;
     const raw = fs.readFileSync(file, 'utf8');
     const codeOnly = stripComments(raw);
-    if (!codeOnly.includes('fetch(')) continue;
+    if (!callsFetch(codeOnly)) continue;
     if (!raw.includes('evaluateEgress')) missing.push(rel);
   }
   assert.deepEqual(missing, [],
@@ -86,7 +90,7 @@ test('every EXCLUDED_FILES entry still exists and still contains a fetch( call (
     const full = path.join(SCANNER, rel);
     if (!fs.existsSync(full)) { stale.push(`${rel}: file no longer exists`); continue; }
     const src = fs.readFileSync(full, 'utf8');
-    if (!src.includes('fetch(')) stale.push(`${rel}: no longer contains fetch( — remove this stale exclusion`);
+    if (!callsFetch(src)) stale.push(`${rel}: no longer contains fetch( or modelFetch( — remove this stale exclusion`);
   }
   assert.deepEqual(stale, [], `stale EXCLUDED_FILES entries:\n${stale.join('\n')}`);
 });
@@ -97,7 +101,7 @@ test('the guard itself found more than zero gated LLM-egress files (sanity — p
     const rel = path.relative(SCANNER, file).replace(/\\/g, '/');
     if (EXCLUDED_FILES.has(rel)) continue;
     const raw = fs.readFileSync(file, 'utf8');
-    if (stripComments(raw).includes('fetch(') && raw.includes('evaluateEgress')) gated++;
+    if (callsFetch(stripComments(raw)) && raw.includes('evaluateEgress')) gated++;
   }
   assert.ok(gated >= 6, `expected at least 6 files with a gated fetch() call, found ${gated} — the scan may have stopped matching`);
 });

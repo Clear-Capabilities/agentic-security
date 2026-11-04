@@ -26,6 +26,8 @@
 
 import * as crypto from 'node:crypto';
 import { evaluateEgress } from '../egress/policy.js';
+import { modelFetch } from '../egress/transport.js';
+import { resolveProvider } from '../llm-validator/providers.js';
 
 const MAX_CALLS_DEFAULT = 50;
 const MAX_WALL_MS_DEFAULT = 15 * 60 * 1000;
@@ -96,11 +98,21 @@ export function isExceeded(transcript, budget) {
 // and parses the response as a single tool-call request. The endpoint is
 // expected to follow an OpenAI-style chat-completions shape; we extract a
 // JSON object of `{ tool, args }` from the model's reply.
+// GA-06.3: the provider is resolved like the validator's, so the `local` preset's loopback refusal applies here, and a vendor key is
+// sent only with that vendor's own preset (a bare OPENAI_API_KEY is never attached to an arbitrary endpoint). Ollama's protocol is not
+// implemented here, so that preset counts as not configured for this agent.
+export function _agentProvider(env = process.env) {
+  const r = resolveProvider({ role: 'verify', env });
+  if (!r.ok || r.config.provider === 'ollama') return null;
+  return r.config;
+}
+
 export async function defaultLlmInvoke(transcript) {
-  const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
-  if (!endpoint) return null;
-  const model = process.env.AGENTIC_SECURITY_LLM_MODEL || 'gpt-4o-mini';
-  const apiKey = process.env.AGENTIC_SECURITY_LLM_API_KEY || process.env.OPENAI_API_KEY || '';
+  const provider = _agentProvider();
+  if (!provider) return null;
+  const { endpoint } = provider;
+  const model = provider.model || 'gpt-4o-mini';
+  const apiKey = provider.apiKey || '';
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
   const tools = [...TOOL_ACL].map(t => ({ tool: t, description: TOOL_HELP[t] || '' }));
@@ -115,7 +127,7 @@ export async function defaultLlmInvoke(transcript) {
   };
   let res;
   try {
-    res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+    res = await modelFetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
   } catch (e) {
     return null;
   }
@@ -136,6 +148,9 @@ const TOOL_HELP = {
   'record_outcome': 'Terminate the run with a verdict (outcome: one of OUTCOMES)',
 };
 
+/** Bounds for a tool probe against the target: a reply is kept to 4000 characters anyway, so 64 KiB and 30 s are generous. */
+const PROBE_BOUNDS = Object.freeze({ timeoutMs: 30_000, maxResponseBytes: 64 * 1024 });
+
 // Default executeTool — wraps http.get / http.post against `transcript.target`.
 // Falls back to refusal when the tool is db.read_sandbox_copy (we do not ship
 // a sandboxed DB by default; the caller must supply one).
@@ -144,7 +159,8 @@ export async function defaultExecuteTool(call, transcript) {
   if (call.tool === 'http.get') {
     const url = (transcript?.target || '').replace(/\/$/, '') + (call.args?.path || '/');
     try {
-      const r = await fetch(url, { method: 'GET', headers: call.args?.headers || {} });
+      // the probe goes through the shared transport too: no redirect off the target, a capped reply, a deadline
+      const r = await modelFetch(url, { method: 'GET', headers: call.args?.headers || {} }, PROBE_BOUNDS);
       const body = await r.text();
       return { status: r.status, headers: Object.fromEntries(r.headers), body: body.slice(0, 4000) };
     } catch (e) { return { error: String(e?.message || e) }; }
@@ -152,11 +168,11 @@ export async function defaultExecuteTool(call, transcript) {
   if (call.tool === 'http.post') {
     const url = (transcript?.target || '').replace(/\/$/, '') + (call.args?.path || '/');
     try {
-      const r = await fetch(url, {
+      const r = await modelFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(call.args?.headers || {}) },
         body: typeof call.args?.body === 'string' ? call.args.body : JSON.stringify(call.args?.body || {}),
-      });
+      }, PROBE_BOUNDS);
       const body = await r.text();
       return { status: r.status, headers: Object.fromEntries(r.headers), body: body.slice(0, 4000) };
     } catch (e) { return { error: String(e?.message || e) }; }
@@ -176,8 +192,9 @@ export async function runAgent(finding, opts = {}) {
   // called later in the loop below) never runs at all.
   let egressDecision = null;
   let llmInvoke = opts.llmInvoke || null;
-  if (!llmInvoke && process.env.AGENTIC_SECURITY_LLM_ENDPOINT) {
-    egressDecision = evaluateEgress({ scanRoot: opts.scanRoot, purpose: 'adversary-agent', endpoint: process.env.AGENTIC_SECURITY_LLM_ENDPOINT });
+  const provider = llmInvoke ? null : _agentProvider();
+  if (!llmInvoke && provider) {
+    egressDecision = evaluateEgress({ scanRoot: opts.scanRoot, purpose: 'adversary-agent', endpoint: provider.endpoint });
     if (egressDecision.allowed) llmInvoke = defaultLlmInvoke;
   }
   const executeTool = opts.executeTool || (transcript.target ? (call) => defaultExecuteTool(call, transcript) : null);

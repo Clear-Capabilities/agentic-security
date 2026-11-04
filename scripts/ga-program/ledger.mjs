@@ -82,10 +82,13 @@ export function modelCallSites(repo = REPO, exempt = {}) {
       if (e.isDirectory()) walk(p);
       else if (/\.(?:m?js|cjs)$/.test(e.name) && !/\.test\.m?js$/.test(e.name)) {
         const text = code(readFileSync(p, 'utf8'));
-        if (!/\bfetch\s*\(/.test(text) || !/\b(?:prompt|messages)\b/.test(text)) continue;
+        if (!/\b(?:fetch|modelFetch|guardedModelCall)\s*\(/.test(text) || !/\b(?:prompt|messages)\b/.test(text)) continue;
         const rel = path.relative(repo, p);
         const guarded = /\bguardedModelCall\s*\(/.test(text) || /\bevaluateEgress\s*\(/.test(text) || /\bresolveLlmInvokeWithDecision\s*\(/.test(text);
-        out.push({ file: rel, guarded, exempt: exempt[rel] || null });
+        // GA-06.3: a model site also sends through the shared transport (no redirect, capped reply, deadline), never a bare fetch
+        const bareFetch = /(?<![.\w])fetch\s*\(/.test(text) && rel !== path.join('scanner', 'src', 'egress', 'transport.js');
+        const bounded = /\bmodelFetch\s*\(/.test(text) || /\bguardedModelCall\s*\(/.test(text);
+        out.push({ file: rel, guarded, bounded: bounded && !bareFetch, exempt: exempt[rel] || null });
       }
     }
   };
@@ -96,9 +99,10 @@ export function modelCallSites(repo = REPO, exempt = {}) {
 function egressAllModelPaths(ctx) {
   const sites = modelCallSites(ctx.repo, ctx.ledger.program.nonModelFetch || {});
   const bad = sites.filter((s) => !s.guarded && !s.exempt);
-  return bad.length
-    ? { status: 'failed', detail: `${bad.length} model-call site(s) bypass the egress policy: ${bad.map((s) => s.file).join(', ')}`, evidence: null }
-    : { status: 'passed', detail: `${sites.filter((s) => s.guarded).length} model-call site(s) evaluate the policy; ${sites.filter((s) => s.exempt).length} exempt with a reason`, evidence: 'scripts/ga-program/ledger.mjs (modelCallSites)' };
+  const unbounded = sites.filter((s) => s.guarded && !s.bounded && !s.exempt);
+  if (bad.length) return { status: 'failed', detail: `${bad.length} model-call site(s) bypass the egress policy: ${bad.map((s) => s.file).join(', ')}`, evidence: null };
+  if (unbounded.length) return { status: 'failed', detail: `${unbounded.length} model-call site(s) send through a bare fetch instead of the shared transport: ${unbounded.map((s) => s.file).join(', ')}`, evidence: null };
+  return { status: 'passed', detail: `${sites.filter((s) => s.guarded).length} model-call site(s) evaluate the policy and send through the shared transport; ${sites.filter((s) => s.exempt).length} exempt with a reason`, evidence: 'scripts/ga-program/ledger.mjs (modelCallSites)' };
 }
 
 const MECHANICAL = { 'registry-ga-bar': registryGaBar, 'evidence-identity': evidenceIdentity, 'independent-accuracy-current': independentAccuracyCurrent, 'egress-all-model-paths': egressAllModelPaths };

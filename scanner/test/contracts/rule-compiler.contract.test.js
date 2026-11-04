@@ -21,6 +21,9 @@ const spec = {
   originalCode: 'const row = db.rawQuery("SELECT * FROM t WHERE id = " + userId);',
   patchedCode: 'const row = db.rawQuery("SELECT * FROM t WHERE id = ?", [userId]);',
   nearbyCleanCode: ['const n = items.length;'], protectedVariantsCode: [],
+  // independent examples (GA-07): outside the finding and never mutated; promotion needs at least one of each
+  independentVulnerableCode: ['const rows = db.rawQuery("SELECT * FROM orders WHERE owner = " + ownerId);'],
+  independentCleanCode: ['const rows = db.rawQuery("SELECT * FROM orders WHERE owner = ?", [ownerId]);'],
 };
 
 function project() {
@@ -37,7 +40,8 @@ const readJson = (root, ...p) => JSON.parse(fs.readFileSync(path.join(root, '.ag
 const root = project();
 const synth = rules(root, 'synthesize', 'F1', '--spec', 'spec.json');
 const evaluate = rules(root, 'evaluate', ID, '--json');
-const promote = rules(root, 'promote', ID);
+const unreviewed = rules(root, 'promote', ID);
+const promote = rules(root, 'promote', ID, '--reviewed-by', 'a reviewer', '--scope', 'the fixture project');
 const status = JSON.parse(rules(root, 'status', '--json').stdout);
 const regress = JSON.parse(rules(root, 'regress', '--json').stdout);
 const dir = ['rule-compiler', ID];
@@ -48,6 +52,7 @@ const ledger = readJson(root, 'rule-compiler', 'ledger.json');
 test('contract: the commands run in order with the documented exit codes', () => {
   assert.equal(synth.status, 0, synth.stderr);
   assert.equal(evaluate.status, 0, evaluate.stderr);
+  assert.equal(unreviewed.status, 4, 'a promotion without a named reviewer is a usage problem');
   assert.equal(promote.status, 0, promote.stderr);
   assert.equal(rules(root, 'evaluate', 'no-such-rule').status, 4, 'an unknown rule is a usage problem');
   assert.equal(rules(root, 'synthesize', 'NOPE', '--spec', 'spec.json').status, 4, 'an unknown finding is a usage problem');
@@ -55,7 +60,7 @@ test('contract: the commands run in order with the documented exit codes', () =>
 });
 
 test('contract: the rule has the documented fields; structure and corpus inputs are the only extras', () => {
-  const carried = ['originalCode', 'patchedCode', 'nearbyCleanCode', 'protectedVariantsCode'];
+  const carried = ['originalCode', 'patchedCode', 'nearbyCleanCode', 'protectedVariantsCode', 'independentVulnerableCode', 'independentCleanCode'];
   sameFields(ir, fieldsUnder(PAGE, 'Rule fields'), 'rule', carried);
   for (const k of carried) assert.ok(PAGE.includes(`\`${k}\``), `${k} is on the page`);
   sameFields(ir.provenance, fieldsUnder(PAGE, 'Rule provenance'), 'rule provenance');

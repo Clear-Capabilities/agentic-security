@@ -287,14 +287,16 @@ function judgeCandidates(candidates, priorScan, triageFeedback) {
 /* harmony export */ });
 /* unused harmony exports defaultLlmInvoke, parseEndpoints, consensusOf, resolveLlmInvoke */
 /* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(45712);
-/* harmony import */ var _llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(38947);
-/* harmony import */ var _llm_validator_ollama_provider_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(23837);
+/* harmony import */ var _egress_transport_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73785);
+/* harmony import */ var _llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(38947);
+/* harmony import */ var _llm_validator_ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(23837);
 //
 // Shared LLM endpoint caller. Both the hunter and the refutation panel need
 // the same default endpoint caller when tests don't inject a mock. Two copies
 // of a network call is one copy too many — if one path gets fixed and the
 // other does not, the bug stays buried in one direction.
 //
+
 
 
 
@@ -326,7 +328,7 @@ async function defaultLlmInvoke(prompt, opts = {}) {
   const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : DEFAULT_TIMEOUT_MS;
 
   if (!opts.endpoint) {
-    const resolved = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_1__.resolveProvider)({ role: opts.role || 'hunt' });
+    const resolved = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_2__.resolveProvider)({ role: opts.role || 'hunt' });
     // A REFUSAL (a preset was explicitly configured and declined — e.g. a
     // non-loopback Ollama host, or `local`'s own non-loopback refusal) must
     // propagate here, not silently fall through to the legacy raw-endpoint
@@ -338,7 +340,7 @@ async function defaultLlmInvoke(prompt, opts = {}) {
     if (!resolved.ok && resolved.reason) throw new Error(resolved.reason);
     if (resolved.ok && resolved.config.provider === 'ollama') {
       const oc = resolved.config.ollama;
-      const r = await (0,_llm_validator_ollama_provider_js__WEBPACK_IMPORTED_MODULE_2__/* .callOllamaChat */ .L5)({
+      const r = await (0,_llm_validator_ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__/* .callOllamaChat */ .L5)({
         host: resolved.config.endpoint,
         model: resolved.config.model,
         messages: [{ role: 'user', content: prompt }],
@@ -365,12 +367,11 @@ async function defaultLlmInvoke(prompt, opts = {}) {
   // Absent, it falls back to the single configured endpoint — so the ordinary
   // single-model path is byte-identical to what it was before consensus existed.
   const endpoint = opts.endpoint || process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
-  const res = await fetch(endpoint, { // agentic-security-ignore: CWE-918
+  const res = await (0,_egress_transport_js__WEBPACK_IMPORTED_MODULE_1__/* .modelFetch */ .Ye)(endpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ prompt }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  }, { timeoutMs });
   if (!res.ok) throw new Error(`llm endpoint returned ${res.status}`);
   const body = await res.json();
   return typeof body === 'string' ? body : (body?.text ?? JSON.stringify(body));
@@ -513,7 +514,7 @@ function resolveLlmInvokeWithDecision(opts = {}) {
   // exist, per the block comment above). Checked BEFORE the legacy
   // raw-endpoint fallback below, matching providers.js's own precedence
   // (ollama/local checked before a bare BYO endpoint).
-  const resolved = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_1__.resolveProvider)({ role: opts.role || 'hunt' });
+  const resolved = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_2__.resolveProvider)({ role: opts.role || 'hunt' });
   if (!resolved.ok && resolved.reason) {
     // A REFUSAL (non-loopback ollama/local, explicitly configured and
     // declined) is itself a policy decision — same shape as an egress

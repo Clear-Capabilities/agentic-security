@@ -206,6 +206,14 @@ function describePartial(isScaLike, reason) {
         reasons: ['rename_detected_not_followed'],
       };
     }
+    // GA-05: the parent of the candidate commit could not be inspected (the replay there failed), so absence in it is unproven.
+    // This is not "we could not see far enough" (shallow) and not "it was never true" (never confirmed): it is "we do not know".
+    if (reason === 'parent-not-inspectable') {
+      return {
+        limitation: 'a candidate commit was found but the replay in its parent failed, so absence there is unproven; the introducing commit is the earliest observable, not a verified boundary',
+        reasons: ['parent_not_inspectable'],
+      };
+    }
     return {
       limitation: reason
         ? `earliest observable — history could not confirm a verified parent boundary (${reason})`

@@ -13,6 +13,8 @@ export const modules = {
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
 /* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(45712);
+/* harmony import */ var _egress_transport_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(73785);
+/* harmony import */ var _llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(38947);
 // LLM-assisted vulnerable function extraction for SCA findings.
 //
 // For CVEs without OSV ecosystem_specific data or GHSA fix commits,
@@ -20,6 +22,8 @@ export const modules = {
 //
 // Gated behind AGENTIC_SECURITY_LLM_SCA=1 (opt-in).
 // Uses the same LLM endpoint config as the SAST validator.
+
+
 
 
 
@@ -52,24 +56,26 @@ function isLlmScaEnabled() {
   return process.env.AGENTIC_SECURITY_LLM_SCA === '1';
 }
 
-function _endpointConfig() {
-  const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
-  const apiKey = process.env.AGENTIC_SECURITY_LLM_API_KEY;
-  const model = process.env.AGENTIC_SECURITY_LLM_MODEL || 'unknown';
-  return endpoint ? { endpoint, apiKey, model } : null;
+// The provider is resolved the same way the validator resolves it (GA-06.3): the `local` preset refuses a non-loopback endpoint here
+// too, instead of this module reading the raw endpoint variable and calling it regardless. The Ollama provider speaks a different
+// protocol and this extractor does not implement it, so it is treated as not configured.
+function _endpointConfig(env = process.env) {
+  const r = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_5__.resolveProvider)({ role: 'validate', env });
+  if (!r.ok || r.config.provider === 'ollama') return null;
+  return { endpoint: r.config.endpoint, apiKey: r.config.apiKey, model: r.config.model || 'unknown', shape: r.config.shape };
 }
 
 async function _askLlm(prompt, config) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
-  const resp = await fetch(config.endpoint, {
+  const req = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_5__/* .buildProviderRequest */ .Z$)(config, prompt, 256);
+  const resp = await (0,_egress_transport_js__WEBPACK_IMPORTED_MODULE_4__/* .modelFetch */ .Ye)(config.endpoint, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({ prompt, model: config.model }),
-    signal: AbortSignal.timeout(15000),
-  });
+    headers: req.headers,
+    body: JSON.stringify(req.body),
+  }, { timeoutMs: 15000 });
   if (!resp.ok) return null;
-  const text = await resp.text();
+  let text = await resp.text();
+  // a vendor shape wraps the model's text in its own envelope; the generic shape's reply is searched as it came
+  try { const t = req.extractText(JSON.parse(text)); if (typeof t === 'string' && t) text = t; } catch { /* not an envelope */ }
   const jsonMatch = text.match(/\{[^{}]*"functions"\s*:\s*\[[^\]]*\][^{}]*\}/);
   if (!jsonMatch) return null;
   try { return JSON.parse(jsonMatch[0]); } catch { return null; }

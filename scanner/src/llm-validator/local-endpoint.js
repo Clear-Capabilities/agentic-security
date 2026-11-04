@@ -22,7 +22,10 @@
 // The connect timeout is short for the same reason — a dead port must not hang
 // a scan.
 
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
+// `localhost` is the one name accepted; `[::1]` is how the URL parser spells the IPv6 loopback (a bare `::1` never reaches this set).
+// `0.0.0.0` is NOT here (GA-06.3): it is the unspecified address, and a connect to it reaches a local interface only by an operating
+// system convention, not by the address's meaning. The promise is "literal loopback", so it is refused like `[::]` and `http://0/`.
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 export const DEFAULT_LOCAL_ENDPOINT = 'http://127.0.0.1:11434/v1/chat/completions';
 export const DEFAULT_LOCAL_TIMEOUT_MS = 20000;

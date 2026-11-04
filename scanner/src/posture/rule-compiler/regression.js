@@ -41,7 +41,7 @@ function operatorFalsePositives(root) {
   return out;
 }
 
-function promotedRuleIds(ledger) {
+export function promotedRuleIds(ledger) {
   return [...new Set(ledger.entries.map((e) => e.ruleId))].filter((id) => stateOf(ledger, id) === 'PROMOTED');
 }
 

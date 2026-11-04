@@ -14,6 +14,7 @@
 
 import { RED_TEAM_PROMPTS, ATTACK_STRATEGIES, PLUGIN_SEVERITY, categorizePrompts, pluginCoverage } from './llm-redteam-prompts.js';
 import { evaluateEgress } from '../egress/policy.js';
+import { modelFetch } from '../egress/transport.js';
 
 // ─── STATIC mode ─────────────────────────────────────────────────────────
 // Scan the repo for prompt files / system-prompt strings and check whether
@@ -143,7 +144,8 @@ async function sendPrompt(endpoint, apiKey, prompt) {
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
   let response;
   try {
-    const r = await fetch(endpoint, {
+    // the target under test is the operator's named endpoint; the shared transport still refuses a redirect off it and caps the reply
+    const r = await modelFetch(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify({ prompt }),

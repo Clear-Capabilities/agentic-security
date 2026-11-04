@@ -4,7 +4,11 @@
 // actually recorded, and nothing in this module writes to it.
 import { scoreRule } from './corpus.js';
 
-export const PROMOTION_DEFAULTS = Object.freeze({ minPrecision: 0.95, minRecall: 0.80, maxProtectedFailures: 0 });
+// Since 0.195.23 (GA-07) promotion also needs independent evidence: at least one vulnerable and one safe example that are not the
+// source finding or a mutation of it, and the rule must detect every independent vulnerable example and stay quiet on every
+// independent safe one. The synthesis loop still scores attempts without them (`evaluateRule`); only the promotion decision
+// (`gatePromotion`) requires them, so a candidate can be proposed before a reviewer has gathered the outside examples.
+export const PROMOTION_DEFAULTS = Object.freeze({ minPrecision: 0.95, minRecall: 0.80, maxProtectedFailures: 0, minIndependentVulnerable: 1, minIndependentClean: 1 });
 
 // Deliberately independent of posture/evaluation/custody.js: that module's term list and guard are reserved for
 // the evaluation custodian's sealed-label boundary (QA-002.AC03), and a test enforces that nothing outside
@@ -59,5 +63,11 @@ export function gatePromotion({ ir, corpus, leakageCheck, thresholds } = {}) {
   const evalResult = evaluateRule(ir, corpus, thresholds);
   const reasons = [...evalResult.reasons];
   if (!leakageCheck || leakageCheck.ok !== true) reasons.push(leakageCheck ? `leakage check failed: ${leakageCheck.offendingTerms.join(', ')}` : 'leakage check was not run');
-  return { pass: reasons.length === 0, reasons, evaluation: evalResult };
+  const t = evalResult.thresholds;
+  const ind = evalResult.score.independent ?? { positives: 0, negatives: 0, detected: 0, falseAlarms: 0 };
+  if (ind.positives < t.minIndependentVulnerable) reasons.push(`${ind.positives} independent vulnerable example(s) beyond the source finding and its mutations (min ${t.minIndependentVulnerable}): supply independentVulnerableCode`);
+  else if (ind.detected < ind.positives) reasons.push(`misses ${ind.positives - ind.detected} of ${ind.positives} independent vulnerable example(s)`);
+  if (ind.negatives < t.minIndependentClean) reasons.push(`${ind.negatives} independent safe example(s) (min ${t.minIndependentClean}): supply independentCleanCode`);
+  else if (ind.falseAlarms > 0) reasons.push(`fires on ${ind.falseAlarms} of ${ind.negatives} independent safe example(s)`);
+  return { pass: reasons.length === 0, reasons, evaluation: evalResult, independent: ind };
 }

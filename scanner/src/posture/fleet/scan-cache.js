@@ -102,7 +102,7 @@ export function writeCache(dir, key, payload) {
   if (!key || !/^[0-9a-f]{64}$/.test(key)) return false;
   try {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const body = { schema: 'agentic-security/fleet-scan-cache', version: 1, key, ...payload };
+    const body = { schema: 'agentic-security/fleet-scan-cache', version: 1, key, cachedAt: new Date().toISOString(), ...payload };
     const doc = { ...body, digest: sha(JSON.stringify(body)) };
     const tmp = path.join(dir, `.${key}.${process.pid}.tmp`);
     fs.writeFileSync(tmp, JSON.stringify(doc), { mode: 0o600 });

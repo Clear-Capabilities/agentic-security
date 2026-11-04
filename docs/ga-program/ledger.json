@@ -634,6 +634,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "rule-compiler:REVIEWED-PROMOTION",
+          "kind": "manual",
+          "workstream": "GA-07",
+          "requirement": "Promotion needs a named reviewer and independent examples scored apart; a rule edited after evaluation, an originating commit not in history, a foreign rule file and a duplicate match are refused; the ledger is signed and never replaced on a failed check; every pattern passes the superlinear-regex detector; regressions run from the CI templates.",
+          "status": "passed",
+          "sourceCommit": "cee423df8f841b7b3fc7c926cb09f89987c1d14a",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "command": "cd scanner && node --test test/rule-compiler/gates.test.js test/contracts/rule-compiler.contract.test.js test/cli/rule-compiler-cli.test.js test/ci-templates.test.js",
+          "exitCode": 0,
+          "evidencePath": "scanner/test/rule-compiler/gates.test.js",
+          "recordedAt": "2026-11-04T14:58:52Z",
+          "blocker": null
         }
       ]
     },
@@ -822,6 +838,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "fleet-scan:ACCOUNTING",
+          "kind": "manual",
+          "workstream": "GA-09",
+          "requirement": "A cached result is reused only inside the manifest cache age bound and never without a recorded time; an unverifiable artifact never leaves the organization green; counts move from the state the repository had; artifacts are written whole or not at all.",
+          "status": "passed",
+          "sourceCommit": "cee423df8f841b7b3fc7c926cb09f89987c1d14a",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "command": "cd scanner && node --test test/fleet/accounting.test.js test/contracts/fleet.contract.test.js",
+          "exitCode": 0,
+          "evidencePath": "scanner/test/fleet/accounting.test.js",
+          "recordedAt": "2026-11-04T14:58:52Z",
+          "blocker": null
         }
       ]
     },
@@ -1016,6 +1048,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "finding-provenance:PARENT-BOUNDARY",
+          "kind": "manual",
+          "workstream": "GA-05",
+          "requirement": "An introducing commit is complete only when its parent was inspected and the finding was absent there (the evidence is named); a parent whose replay failed yields partial with the reason.",
+          "status": "passed",
+          "sourceCommit": "cee423df8f841b7b3fc7c926cb09f89987c1d14a",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "command": "cd scanner && node --test test/posture/provenance-origin-resolver.test.js test/posture/provenance-coordinator.test.js",
+          "exitCode": 0,
+          "evidencePath": "scanner/test/posture/provenance-origin-resolver.test.js",
+          "recordedAt": "2026-11-04T14:58:52Z",
+          "blocker": null
         }
       ]
     },
@@ -1321,6 +1369,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "local-models:LOCAL-PRESET-EVERY-CALLER",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "The local preset refuses a non-loopback endpoint on every caller (flow narration, the dependency function extractor, the adversary agent), a vendor key is sent only with its own preset, and the unspecified address is not loopback.",
+          "status": "passed",
+          "sourceCommit": "cee423df8f841b7b3fc7c926cb09f89987c1d14a",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "command": "cd scanner && node --test test/local-preset-callers.test.js test/local-endpoint.test.js test/contracts/local-models.contract.test.js",
+          "exitCode": 0,
+          "evidencePath": "scanner/test/local-preset-callers.test.js",
+          "recordedAt": "2026-11-04T14:58:52Z",
+          "blocker": null
         }
       ]
     },
@@ -1569,6 +1633,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "strategic-metrics:SCOPE-AND-DENOMINATORS",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "The report states its scope and time basis (one scan, the attempt window, not a trend), every metric uses one status vocabulary with unmeasured for missing input, and repeated attempts on one finding count once.",
+          "status": "passed",
+          "sourceCommit": "cee423df8f841b7b3fc7c926cb09f89987c1d14a",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "command": "cd scanner && node --test test/contracts/strategic-metrics.contract.test.js",
+          "exitCode": 0,
+          "evidencePath": "scanner/test/contracts/strategic-metrics.contract.test.js",
+          "recordedAt": "2026-11-04T14:58:52Z",
+          "blocker": null
         }
       ]
     },
@@ -3290,6 +3370,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "model-egress-policy:TRANSPORT-BOUNDS",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "Every model request leaves the process through one transport: no redirect is followed, the reply is capped while it is read, every call has a deadline, proxy variables are ignored; a model site that sends through a bare fetch fails the egress record.",
+          "status": "passed",
+          "sourceCommit": "cee423df8f841b7b3fc7c926cb09f89987c1d14a",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "command": "cd scanner && node --test test/egress-transport.test.js test/ga-program.test.js test/egress-policy-completeness.test.js",
+          "exitCode": 0,
+          "evidencePath": "scanner/test/egress-transport.test.js",
+          "recordedAt": "2026-11-04T14:58:52Z",
+          "blocker": null
         }
       ]
     },

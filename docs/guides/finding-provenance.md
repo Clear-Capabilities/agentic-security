@@ -58,7 +58,7 @@ that leaves it unset:
 | Status | Meaning |
 |---|---|
 | `complete` | The introducing commit was found and its parent boundary was verified. |
-| `partial` | Something is known (an earliest-observable commit, a rename lineage) but the boundary couldn't be verified — a shallow clone, an advisory with no `introduced` bound, or a file that was renamed after introduction all land here. |
+| `partial` | Something is known (an earliest-observable commit, a rename lineage) but the boundary couldn't be verified — a shallow clone, an advisory with no `introduced` bound, a file that was renamed after introduction, or (since 0.195.23, reason `parent-not-inspectable`) a parent commit whose replay failed, which proves nothing about absence there, all land here. A `complete` result names its evidence of absence in the parent: the predicate did not reproduce there, or the file did not exist there yet. |
 | `uncommitted` | The finding exists only in the working tree; there is no commit to attribute it to yet. |
 | `not_available` | Provenance wasn't attempted for this finding — `--no-provenance`, or a finding kind provenance doesn't cover (see **What never gets a real origin**, below). |
 | `budget_exhausted` | The scan's provenance time budget ran out before this finding was reached. Never cached — it describes the run, not the repository. |

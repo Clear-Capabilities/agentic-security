@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { statePath, ensureStateDir, safeWriteState } from '../state-dir.js';
 import { newLedger, verifyLedger } from './lifecycle.js';
+import { signLastScan, verifyLastScan } from '../integrity.js';
 import { compileToCustomRule } from './ir.js';
 import { verifyRulePack, loadTrustedKeys, signRulePack } from '../rule-pack-signing.js';
 
@@ -15,20 +16,39 @@ const EXT = { javascript: 'js', typescript: 'ts', python: 'py', go: 'go', ruby: 
 
 function ruleDir(scanRoot, id) { return statePath(scanRoot, DIR, id); }
 
-export function loadLedger(scanRoot) {
+/**
+ * The lifecycle ledger is hash-chained (lifecycle.js) AND signed with the per-install HMAC key (the same key as last-scan.json),
+ * since 0.195.23 (GA-07): the chain alone could be recomputed by anyone who could edit the file. A ledger that fails either check,
+ * or that cannot be parsed, is returned WITH `tampered: true` and its reason, and `saveLedger` refuses to write it, so a bad ledger
+ * is never quietly replaced by a fresh one and its history lost. An unsigned ledger with entries (written before 0.195.23) is
+ * accepted only with AGENTIC_SECURITY_RULES_UNSIGNED=1, the same switch that accepts an unsigned rules override, and is signed on
+ * its next save.
+ */
+export function loadLedger(scanRoot, env = process.env) {
   const f = statePath(scanRoot, DIR, 'ledger.json');
   if (!fs.existsSync(f)) return newLedger();
-  try {
-    const ledger = JSON.parse(fs.readFileSync(f, 'utf8'));
-    const v = verifyLedger(ledger);
-    return v.ok ? ledger : { ...newLedger(), tampered: true, tamperReason: v.reason };
-  } catch { return newLedger(); }
+  let text;
+  try { text = fs.readFileSync(f, 'utf8'); } catch (e) { return { ...newLedger(), tampered: true, tamperReason: `cannot read the ledger: ${e.message}` }; }
+  let ledger;
+  try { ledger = JSON.parse(text); } catch (e) { return { ...newLedger(), tampered: true, tamperReason: `the ledger is not valid JSON: ${e.message}` }; }
+  if (!ledger || !Array.isArray(ledger.entries)) return { ...newLedger(), tampered: true, tamperReason: 'the ledger has no entries array' };
+  const v = verifyLedger(ledger);
+  if (!v.ok) return { ...ledger, tampered: true, tamperReason: v.reason };
+  const sig = verifyLastScan(text, `${f}.sig`);
+  if (sig === false) return { ...ledger, tampered: true, tamperReason: 'the ledger signature does not verify under this install key' };
+  if (sig === null && ledger.entries.length && env.AGENTIC_SECURITY_RULES_UNSIGNED !== '1') {
+    return { ...ledger, tampered: true, tamperReason: 'the ledger is unsigned (written before 0.195.23 or by another tool); set AGENTIC_SECURITY_RULES_UNSIGNED=1 once to accept and re-sign it' };
+  }
+  return ledger;
 }
 
 export function saveLedger(scanRoot, ledger) {
+  if (ledger?.tampered) return { ok: false, reason: `refusing to overwrite a ledger that failed its integrity check (${ledger.tamperReason})` };
   if (!ensureStateDir(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = statePath(scanRoot, DIR, 'ledger.json');
-  return { ok: safeWriteState(f, JSON.stringify(ledger, null, 2)) };
+  const text = JSON.stringify(ledger, null, 2);
+  const ok = safeWriteState(f, text) && safeWriteState(`${f}.sig`, signLastScan(text));
+  return { ok };
 }
 
 export function saveIR(scanRoot, ir) {

@@ -74,12 +74,19 @@ sanitizer/guard-carrying variants:
 `evaluate` automatically generates structural siblings of both the positive and negative sides, variable rename,
 wrap-in-function, insert-indirection, deterministic and semantics-preserving, so "does this rule generalize"
 is answered without needing a second hand-written fixture for every shape. The promotion gate (default: precision
-≥95%, recall ≥80%, zero protected-negative failures) must pass before the state can advance to `VALIDATED`, and
-only a `VALIDATED` rule can be promoted:
+≥95%, recall ≥80%, zero protected-negative failures, and since 0.195.23 at least one independent vulnerable and one
+independent safe example, `independentVulnerableCode` and `independentCleanCode` in the corpus, taken from outside the
+finding and never mutated) must pass before the state can advance to `VALIDATED`, and only a `VALIDATED` rule can be
+promoted, by a named reviewer:
 
 ```bash
-agentic-security rules promote orm-raw-query-concat
+agentic-security rules promote orm-raw-query-concat --reviewed-by "Dana Reviewer" --scope "the orders service"
 ```
+
+A promotion without `--reviewed-by` is refused: a model may propose a rule and a corpus may score it, but a person
+promotes it, and the ledger entry and the provenance record carry the reviewer and the scope. Promotion also refuses a
+rule edited after its evaluation, an originating commit that is not in the repository's history, a rule file the
+compiler did not write under the same id, and a second rule with the identical match.
 
 This compiles the rule IR into a document the EXISTING custom-rule engine (`posture/custom-rules.js`) already
 knows how to run, no second matching engine, and writes it to `.agentic-security/rules/orm-raw-query-concat.yml`.
@@ -117,7 +124,7 @@ agentic-security rules evaluate orm-raw-query-structured --corpus corpus.json
 Rule orm-raw-query-structured: VALIDATED
   precision 100.0%  recall 100.0%  protected-failures 0
   regression fixtures written: 15 file(s) under .agentic-security/rule-compiler/orm-raw-query-structured/fixtures/
-agentic-security rules promote orm-raw-query-structured --sign-key "$RULE_SIGNING_KEY"
+agentic-security rules promote orm-raw-query-structured --reviewed-by "Dana Reviewer" --sign-key "$RULE_SIGNING_KEY"
 Rule orm-raw-query-structured: VALIDATED -> PROMOTED. Published to /private/var/folders/df/jvqnhbfd36v2lw3z4kwbdc580000gn/T/tmp.W6DJQJj3Wj/.agentic-security/rules/orm-raw-query-structured.yml.
   signed: /private/var/folders/df/jvqnhbfd36v2lw3z4kwbdc580000gn/T/tmp.W6DJQJj3Wj/.agentic-security/rules/orm-raw-query-structured.yml.sig
   The scanner will load it (signed, accepted in pass-through mode (no trusted keys are configured)).
@@ -195,7 +202,7 @@ Rule orm-raw-query-concat: VALIDATED
 ```
 
 ```
-$ agentic-security rules promote orm-raw-query-concat
+$ agentic-security rules promote orm-raw-query-concat --reviewed-by "Dana Reviewer"
 Rule orm-raw-query-concat: VALIDATED -> PROMOTED. Published to ./.agentic-security/rules/orm-raw-query-concat.yml.
 ```
 
@@ -249,7 +256,7 @@ signs the published rule when you give it a key (`--sign-key <base64>` or `AGENT
 plainly that the rule is **not live yet**, instead of implying a capability that a scan would then not show:
 
 ```
-agentic-security rules promote orm-raw-query-structured
+agentic-security rules promote orm-raw-query-structured --reviewed-by "Dana Reviewer"
 Rule orm-raw-query-structured: VALIDATED -> PROMOTED. Published to /private/var/folders/df/jvqnhbfd36v2lw3z4kwbdc580000gn/T/tmp.OQ9DCuPOeM/.agentic-security/rules/orm-raw-query-structured.yml.
   NOT LIVE YET: the scanner will refuse this rule (unsigned). To make it live: sign it (agentic-security-rule sign .agentic-security/rules/orm-raw-query-structured.yml with your key, or re-run promote with --sign-key <base64>), or opt in for this environment with AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1.
 

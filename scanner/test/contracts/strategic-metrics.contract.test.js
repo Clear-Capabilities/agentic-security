@@ -49,10 +49,51 @@ test('contract: every figure carries its numerator and denominator, and the numb
   assert.equal(report.verifiedRemediationRate.percent, null, 'an empty denominator is null, never 0% or 100%');
 });
 
-test('contract: the learning rate is reported as not measured, with the reason', () => {
-  assert.equal(report.securityLearningRate.status, 'not-measured');
+test('contract: the learning rate is reported as unmeasured, with the reason', () => {
+  assert.equal(report.securityLearningRate.status, 'unmeasured');
   assert.match(report.securityLearningRate.reason, /independent/);
-  assert.equal(securityLearningRate().status, 'not-measured');
+  assert.equal(securityLearningRate().status, 'unmeasured');
+});
+
+test('contract: one status vocabulary on every metric, and the scope names the scan and the attempt window', () => {
+  sameFields(report.scope, fieldsUnder(PAGE, 'Scope'), 'scope');
+  assert.equal(report.scope.kind, 'per-scan');
+  const scan = JSON.parse(fs.readFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), 'utf8'));
+  assert.equal(report.scope.scanId, scan.scanId);
+  assert.equal(report.scope.scanStartedAt, scan.startedAt);
+  assert.deepEqual(report.scope.attempts, { from: null, to: null, recorded: 0 });
+  assert.match(report.scope.trend, /not a trend/);
+  const words = new Set(['measured', 'partial', 'unmeasured']);
+  for (const k of ['assuranceCoverage', 'evidenceConversion', 'verifiedRemediationRate', 'securityLearningRate']) assert.ok(words.has(report[k].status), `${k}: ${report[k].status}`);
+  assert.equal(report.verifiedRemediationRate.status, 'unmeasured', 'no attempts: unmeasured, not 0%');
+  assert.equal(evidenceConversion([]).status, 'unmeasured');
+  assert.equal(evidenceConversion([{ parser: 'REGEX' }]).status, 'measured');
+});
+
+test('contract: repeated attempts on one finding count once, by the latest; partial and failed attempts stay in the denominator; the window is the recorded span', () => {
+  const r = verifiedRemediationRate([
+    { at: '2026-11-01T10:00:00.000Z', stableId: 'F1', ok: false, verifiedFull: false },
+    { at: '2026-11-01T11:00:00.000Z', stableId: 'F1', ok: true, verifiedFull: false },
+    { at: '2026-11-01T12:00:00.000Z', stableId: 'F1', ok: true, verifiedFull: true },
+    { at: '2026-11-02T09:00:00.000Z', stableId: 'F2', ok: true, verifiedFull: false },
+    { at: '2026-11-02T08:00:00.000Z', stableId: 'F3', ok: false, verifiedFull: false },
+    { ok: true, verifiedFull: true },
+  ]);
+  assert.equal(r.recorded, 6);
+  assert.equal(r.repeated, 2, 'two earlier attempts on F1 were replaced by the latest');
+  assert.equal(r.denominator, 4, 'F1, F2, F3 and the attempt with no finding id');
+  assert.equal(r.numerator, 2, 'the latest F1 attempt and the anonymous one');
+  assert.equal(r.percent, 50);
+  assert.equal(r.failed, 2, 'F2 (partial) and F3 (failed) stay in the denominator');
+  assert.deepEqual(r.window, { from: '2026-11-01T10:00:00.000Z', to: '2026-11-02T09:00:00.000Z' });
+  // out-of-order timestamps: the latest by time wins, not the last line
+  const reorder = verifiedRemediationRate([{ at: '2026-11-03T00:00:00.000Z', stableId: 'F1', verifiedFull: true }, { at: '2026-11-01T00:00:00.000Z', stableId: 'F1', verifiedFull: false }]);
+  assert.deepEqual([reorder.numerator, reorder.denominator], [1, 1]);
+  // no timestamps: the last line wins
+  const positional = verifiedRemediationRate([{ stableId: 'F1', verifiedFull: true }, { stableId: 'F1', verifiedFull: false }]);
+  assert.deepEqual([positional.numerator, positional.denominator, positional.window], [0, 1, { from: null, to: null }]);
+  assert.equal(verifiedRemediationRate([]).status, 'unmeasured');
+  assert.equal(verifiedRemediationRate([]).recorded, 0);
 });
 
 test('contract: assurance coverage headline is the lower of files and analyzers, and a count the scan did not report is never zero', () => {

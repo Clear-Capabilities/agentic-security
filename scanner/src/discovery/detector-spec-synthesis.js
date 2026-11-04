@@ -16,6 +16,7 @@ import { resolveAssuranceConfig, featureStatus } from '../posture/assurance/conf
 import { guardedModelCall, readFileBounded } from '../posture/assurance/bounded-io.js';
 import { evaluateEgress } from '../egress/policy.js';
 import { recordEgressCall } from '../egress/audit.js';
+import { modelFetch } from '../egress/transport.js';
 import { parseLastJsonObject } from '../llm-validator/index.js';
 
 export const FEATURE_ID = 'detector-spec-synthesis';
@@ -103,12 +104,11 @@ async function defaultTransport({ endpoint, text, signal, model, apiKey }) {
   // The operator's own API key goes to the operator's own endpoint as the bearer credential: that is what the key is for. The egress
   // policy has already allowed this endpoint (deny and local-only stop the call before this function runs), so the credentials-to-HTTP
   // flow the self-scan reports here is the intended one, suppressed with that reason rather than absorbed into the drift baseline.
-  const res = await fetch(endpoint, { // agentic-security-ignore
+  const res = await modelFetch(endpoint, { // agentic-security-ignore
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
     body: JSON.stringify({ model: model || 'gpt-4o-mini', messages: [{ role: 'system', content: 'You output a single JSON object. Nothing else.' }, { role: 'user', content: text }], temperature: 0, response_format: { type: 'json_object' } }),
-    signal,
-  });
+  }, { signal });
   if (!res.ok) throw new Error(`model endpoint returned ${res.status}`);
   const body = await res.json();
   return String(body?.choices?.[0]?.message?.content || body?.content || '');

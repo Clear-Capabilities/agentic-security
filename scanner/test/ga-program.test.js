@@ -7,7 +7,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { evaluate, validateLedger, loadLedger, render, modelCallSites, LEDGER_FILE, STATUS_MD } from '../../scripts/ga-program/ledger.mjs';
@@ -62,6 +63,22 @@ test('mechanical records are computed from the artifacts: the GA bar passes for 
   assert.equal(egress.status, 'passed');
   assert.ok(sites.some((s) => s.file === 'scanner/src/discovery/detector-spec-synthesis.js' && s.guarded));
   assert.ok(sites.some((s) => s.file === 'scripts/autopilot.mjs' && s.guarded));
+  // 0.195.23: every guarded site also sends through the shared transport (no redirect, capped reply, deadline); a guarded site with a
+  // bare fetch fails the record. A file that uses only modelFetch is still a candidate: the transport does not hide a site.
+  assert.deepEqual(sites.filter((s) => s.guarded && !s.bounded).map((s) => s.file), []);
+  for (const f of ['scanner/src/posture/flow-narration.js', 'scanner/src/posture/adversary-agent.js', 'scanner/src/sca/llm-function-extract.js', 'scanner/src/posture/llm-redteam.js']) {
+    assert.ok(sites.some((s) => s.file === f && s.guarded && s.bounded), `${f} is seen, guarded and bounded`);
+  }
+});
+
+test('a model site that sends through a bare fetch fails the egress record even when it evaluates the policy', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ga-bare-fetch-'));
+  mkdirSync(path.join(dir, 'scanner', 'src', 'x'), { recursive: true });
+  writeFileSync(path.join(dir, 'scanner', 'src', 'x', 'bare.js'), "import { evaluateEgress } from '../egress/policy.js';\nexport async function ask(prompt, endpoint) {\n  evaluateEgress({ endpoint });\n  return fetch(endpoint, { body: prompt });\n}\n");
+  writeFileSync(path.join(dir, 'scanner', 'src', 'x', 'bounded.js'), "import { evaluateEgress } from '../egress/policy.js';\nimport { modelFetch } from '../egress/transport.js';\nexport async function ask(prompt, endpoint) {\n  evaluateEgress({ endpoint });\n  return modelFetch(endpoint, { body: prompt });\n}\n");
+  const sites = modelCallSites(dir, {});
+  assert.deepEqual(sites.map((s) => [s.file, s.guarded, s.bounded]), [['scanner/src/x/bare.js', true, false], ['scanner/src/x/bounded.js', true, true]]);
+  rmSync(dir, { recursive: true, force: true });
 });
 
 test('the headline is honest: verified GA is 0 of 36 until a current-engine independent record exists, and the milestone is not met', () => {
