@@ -1031,7 +1031,16 @@ const KDF_TYPES = Object.freeze({
   ByteString: { bytes: (v) => v, hex: (h) => `AgenticBC.pack (${h})`, tag: `AgenticBC.pack "${KDF_TAG}"`, prefix: 'AgenticBS.isPrefixOf', needs: 'Data.ByteString' },
 });
 const KDF_IMPORTS = ['import qualified Crypto.KDF.PBKDF2 as AgenticPBKDF2', 'import qualified Data.ByteString as AgenticBS', 'import qualified Data.ByteString.Char8 as AgenticBC', 'import qualified Data.Text as AgenticT', 'import qualified Data.Text.Encoding as AgenticTE', 'import qualified Data.List as AgenticList'];
-const KDF_ALIASES = ['AgenticPBKDF2', 'AgenticBS', 'AgenticBC', 'AgenticT', 'AgenticTE', 'AgenticList'];
+// The same migration where the file hashes with the `SHA` package and imports no cryptonite/crypton module (gitit's shape): PBKDF2-HMAC-SHA256
+// for one 32-byte block (RFC 8018 section 5.2) is written out in the file over that package's HMAC, documented at SHA 1.6.4.4 as
+// `hmacSha256 :: ByteString -> ByteString -> Digest SHA256State` and `bytestringDigest :: Digest t -> ByteString`, both over LAZY bytes. The
+// construction is checked against the RFC 7914 section 11 vectors (the first 32 bytes of each) by `test/haskell/haskell-remediation-kdf.test.js`
+// where the package is installed. The bytes of a String come from utf8-string (`Data.ByteString.Lazy.UTF8.fromString`) when the file imports a
+// module of that package, else from `text`; a Text's from `text`; a strict ByteString's from `fromStrict`. The package is pure Haskell, so one
+// hash at the declared count costs seconds of CPU, not tenths; the consequences say so.
+const KDF_SHA_IMPORTS = ['import qualified Data.Digest.Pure.SHA as AgenticSHA', 'import qualified Data.ByteString.Lazy as AgenticBL', 'import qualified Data.Bits as AgenticBits', 'import qualified Data.List as AgenticList'];
+const KDF_ALIASES = ['AgenticPBKDF2', 'AgenticBS', 'AgenticBC', 'AgenticT', 'AgenticTE', 'AgenticList', 'AgenticSHA', 'AgenticBL', 'AgenticBits', 'AgenticUTF8', 'AgenticTL', 'AgenticTLE'];
+const TEXT_IMPORT = /^import\s+(?:qualified\s+)?Data\.Text(?:\.|\s|$)/m;
 
 /** `stored == name a b` / `name a b == stored` on one line of code (atoms only); returns the rewritten line or null. */
 function rewriteHashComparisons(lineText, name, verify) {
@@ -1057,16 +1066,32 @@ function fixPasswordKdf(text, f) {
   const tyOf = (t) => { const m = /^(?:[A-Z][\w']*\.)?(String|Text|ByteString)$/.exec(t); return m ? m[1] : null; };
   const T = tyOf(sig[1]);
   if (!T || tyOf(sig[2]) !== T || tyOf(sig[3]) !== T) return null;
-  const ty = KDF_TYPES[T];
+  let ty = KDF_TYPES[T];
   const code = stripComments(text);
   if ((code.match(new RegExp(`^${name}\\s+[a-z_]`, 'gm')) || []).length !== 1) return null;            // one clause, defined once
-  if (!KDF_LIB_IMPORT.test(text)) return null;                                                          // Crypto.KDF.PBKDF2 is not in a declared package
+  // the KDF comes from a declared package: cryptonite/crypton (Crypto.KDF.PBKDF2), or the SHA package's HMAC with the derivation written out
+  const shaPkg = importInfo(text, 'Data.Digest.Pure.SHA');
+  const backend = KDF_LIB_IMPORT.test(text) ? 'crypton' : (shaPkg && !shaPkg.hiding ? 'sha' : null);
+  if (!backend) return null;
   if (T === 'ByteString' && importInfo(text, 'Data.ByteString.Lazy') && !importInfo(text, 'Data.ByteString')) return null;   // a lazy ByteString: not the strict type the KDF takes
-  if (!importInfo(text, ty.needs) && !(T !== 'ByteString' && importInfo(text, 'Data.Text.Encoding'))) return null;
-  const pb = importInfo(text, 'Crypto.KDF.PBKDF2'); if (pb && pb.hiding) return null;
+  let typeImports = [];       // the imports the bytes conversion of this type needs, on top of the backend's
+  let bytesPackage = null;    // the package that conversion requires the component to declare
+  if (backend === 'crypton') {
+    if (!importInfo(text, ty.needs) && !(T !== 'ByteString' && importInfo(text, 'Data.Text.Encoding'))) return null;
+    const pb = importInfo(text, 'Crypto.KDF.PBKDF2'); if (pb && pb.hiding) return null;
+  } else if (T === 'String') {
+    if (importInfo(text, 'Data.ByteString.Lazy.UTF8') || importInfo(text, 'Data.ByteString.UTF8')) { ty = { ...ty, bytes: (v) => `AgenticUTF8.fromString ${v}` }; typeImports = ['import qualified Data.ByteString.Lazy.UTF8 as AgenticUTF8']; bytesPackage = 'utf8-string'; }
+    else if (TEXT_IMPORT.test(text)) { ty = { ...ty, bytes: (v) => `AgenticTLE.encodeUtf8 (AgenticTL.pack ${v})` }; typeImports = ['import qualified Data.Text.Lazy as AgenticTL', 'import qualified Data.Text.Lazy.Encoding as AgenticTLE']; bytesPackage = 'text'; }
+    else return null;                                                                                   // no declared package turns a String into UTF-8 bytes
+  } else if (T === 'Text') {
+    if (!TEXT_IMPORT.test(text)) return null;
+    ty = { ...ty, bytes: (v) => `AgenticTLE.encodeUtf8 (AgenticTL.fromStrict ${v})` }; typeImports = ['import qualified Data.Text as AgenticT', 'import qualified Data.Text.Lazy as AgenticTL', 'import qualified Data.Text.Lazy.Encoding as AgenticTLE']; bytesPackage = 'text';
+  } else {
+    ty = { ...ty, bytes: (v) => `AgenticBL.fromStrict ${v}` }; typeImports = ['import qualified Data.ByteString as AgenticBS', 'import qualified Data.ByteString.Char8 as AgenticBC'];
+  }
   if (hasPragma(text, 'NoImplicitPrelude') || /^import\s+(?:qualified\s+)?Prelude\s*(?:\(|hiding\b|as\b)/m.test(text)) return null;
-  const legacy = `${name}Legacy`, verify = `${name}Verify`, needs = `${name}NeedsRehash`, tagName = `${name}Tag`, hexName = `${name}Hex`;
-  for (const nm of [legacy, verify, needs, tagName, hexName]) if (new RegExp(`(?<![\\w'.])${nm}(?![\\w'])`).test(code)) return null;
+  const legacy = `${name}Legacy`, verify = `${name}Verify`, needs = `${name}NeedsRehash`, tagName = `${name}Tag`, hexName = `${name}Hex`, kdfName = `${name}Pbkdf2`;
+  for (const nm of [legacy, verify, needs, tagName, hexName, ...(backend === 'sha' ? [kdfName] : [])]) if (new RegExp(`(?<![\\w'.])${nm}(?![\\w'])`).test(code)) return null;
   if (new RegExp(`(?<![\\w'.])(?:${KDF_ALIASES.join('|')})\\.`).test(text)) return null;
   // every comparison with the function, in this file, is rewritten; one in another file would be left comparing against the new form
   const lines = text.split('\n');
@@ -1084,7 +1109,10 @@ function fixPasswordKdf(text, f) {
     if (t.split('\n').some((l) => !/^import\s/.test(l) && useRe.test(stripComments(l)) && /==/.test(l))) return null;
   }
   const pw = pwIdx === 0 ? p1 : p2, salt = saltIdx === 0 ? p1 : p2;
-  const hexOf = `${hexName} (AgenticPBKDF2.fastPBKDF2_SHA256 (AgenticPBKDF2.Parameters { AgenticPBKDF2.iterCounts = ${KDF_ITERATIONS}, AgenticPBKDF2.outputLength = 32 }) (${ty.bytes(pw)}) (${ty.bytes(salt)}))`;
+  const hexOf = backend === 'crypton'
+    ? `${hexName} (AgenticPBKDF2.fastPBKDF2_SHA256 (AgenticPBKDF2.Parameters { AgenticPBKDF2.iterCounts = ${KDF_ITERATIONS}, AgenticPBKDF2.outputLength = 32 }) (${ty.bytes(pw)}) (${ty.bytes(salt)}))`
+    : `${hexName} (${kdfName} (${ty.bytes(pw)}) (${ty.bytes(salt)}))`;
+  const bytesModule = backend === 'crypton' ? 'AgenticBS' : 'AgenticBL';
   // the original signature stays where it is, above the new definition; the kept function gets its own
   const block = [
     `-- PBKDF2-HMAC-SHA256, ${KDF_ITERATIONS} iterations (a declared default: review the cost for this service), tagged so a stored hash says how it was made.`,
@@ -1093,8 +1121,18 @@ function fixPasswordKdf(text, f) {
     `${tagName} :: ${sig[3]}`,
     `${tagName} = ${ty.tag}`,
     '',
-    `${hexName} :: AgenticBS.ByteString -> String`,
-    `${hexName} = AgenticBS.foldr (\\w acc -> hexDigit (w \`div\` 16) : hexDigit (w \`mod\` 16) : acc) ""`,
+    ...(backend === 'sha' ? [
+      `-- PBKDF2-HMAC-SHA256 (RFC 8018 section 5.2) for one 32-byte block, over the SHA package's HMAC: U1 = HMAC(password, salt || 00 00 00 01), U(i) = HMAC(password, U(i-1)), and the key is the xor of U1 .. U(${KDF_ITERATIONS}).`,
+      `${kdfName} :: AgenticBL.ByteString -> AgenticBL.ByteString -> AgenticBL.ByteString`,
+      `${kdfName} password salt = AgenticList.foldl' xorBytes u1 (take (${KDF_ITERATIONS} - 1) (tail (iterate prf u1)))`,
+      '  where',
+      '    prf = AgenticSHA.bytestringDigest . AgenticSHA.hmacSha256 password',
+      '    u1 = prf (AgenticBL.append salt (AgenticBL.pack [0, 0, 0, 1]))',
+      '    xorBytes a b = AgenticBL.pack (AgenticBL.zipWith AgenticBits.xor a b)',
+      '',
+    ] : []),
+    `${hexName} :: ${bytesModule}.ByteString -> String`,
+    `${hexName} = ${bytesModule}.foldr (\\w acc -> hexDigit (w \`div\` 16) : hexDigit (w \`mod\` 16) : acc) ""`,
     `  where hexDigit d = "0123456789abcdef" !! fromIntegral d`,
     '',
     `-- Kept, under a new name, for passwords stored before the migration: ${verify} checks a stored hash with it when ${needs} says so.`,
@@ -1112,7 +1150,7 @@ function fixPasswordKdf(text, f) {
   lines.splice(f.line - 1, 1, ...block);
   let at = -1; lines.forEach((l, i) => { if (/^import\s/.test(l)) at = i; });
   if (at < 0) return null;
-  lines.splice(at + 1, 0, ...KDF_IMPORTS);
+  lines.splice(at + 1, 0, ...(backend === 'crypton' ? KDF_IMPORTS : [...KDF_SHA_IMPORTS, ...typeImports]));
   let next = lines.join('\n');
   // an export list that names the function exports the helpers too: a caller in another module needs the verify helper
   const hdr = /^module\s+[\w.']+\s*\(/m.exec(next);
@@ -1126,14 +1164,18 @@ function fixPasswordKdf(text, f) {
   }
   return {
     ruleId: 'hs-password-kdf-migrate', label: 'MITIGATION', text: next,
-    explanation: `${name} now computes PBKDF2-HMAC-SHA256 (${KDF_ITERATIONS} iterations, 32 bytes, over the same salt and password) and tags the result; the old function is kept as ${legacy} for verification only, ${verify} checks a stored hash of either form, and ${needs} says which hashes to re-hash at the next successful login. ${compared} comparison${compared === 1 ? '' : 's'} in this file now call${compared === 1 ? 's' : ''} ${verify}.`,
+    explanation: `${name} now computes PBKDF2-HMAC-SHA256 (${KDF_ITERATIONS} iterations, 32 bytes, over the same salt and password${backend === 'sha' ? `, written out in ${kdfName} over the SHA package's hmacSha256` : ''}) and tags the result; the old function is kept as ${legacy} for verification only, ${verify} checks a stored hash of either form, and ${needs} says which hashes to re-hash at the next successful login. ${compared} comparison${compared === 1 ? '' : 's'} in this file now call${compared === 1 ? 's' : ''} ${verify}.`,
     consequences: [
-      `Requires cryptonite or crypton (Crypto.KDF.PBKDF2; this file already imports a module of that package), bytestring and text to be declared by the component; the build is not checked against the cabal file.`,
+      backend === 'crypton'
+        ? `Requires cryptonite or crypton (Crypto.KDF.PBKDF2; this file already imports a module of that package), bytestring and text to be declared by the component; the build is not checked against the cabal file.`
+        : `Requires the SHA package (Data.Digest.Pure.SHA; this file already imports it)${bytesPackage ? `, bytestring and ${bytesPackage}` : ' and bytestring'} to be declared by the component; the build is not checked against the cabal file. ${kdfName} is the RFC 8018 construction written out over that package's HMAC, not a library KDF: review it, or replace it with a KDF package once one is declared.`,
       `A new password is stored in the tagged PBKDF2 form; a stored hash of the old form still verifies through ${legacy}, so no user is locked out, and it stays in the old form until the caller re-hashes it (store ${name} of the password when ${needs} is True after a successful login). ${compared === 0 ? `No comparison with ${name} was found in this file: a caller elsewhere that compares with == must call ${verify} instead.` : ''}`.trim(),
-      `Each hash now costs ${KDF_ITERATIONS} HMAC-SHA256 iterations (tenths of a second per attempt, by design); the count is a declared default, not a measured cost for this service. The comparison in ${verify} is the same == the original used, not a constant-time one.`,
+      backend === 'crypton'
+        ? `Each hash now costs ${KDF_ITERATIONS} HMAC-SHA256 iterations (tenths of a second per attempt, by design); the count is a declared default, not a measured cost for this service. The comparison in ${verify} is the same == the original used, not a constant-time one.`
+        : `Each hash now costs ${KDF_ITERATIONS} HMAC-SHA256 iterations. The SHA package is pure Haskell, so at this count one hash costs seconds of CPU per attempt, not tenths (a C-backed KDF package is faster by an order of magnitude); the count is a declared default, not a measured cost for this service, and lowering it weakens the hash. The comparison in ${verify} is the same == the original used, not a constant-time one.`,
     ],
-    behavior: { kind: 'kdf', fn: name, legacy, verify, needs, type: T, iterations: KDF_ITERATIONS, rewrittenComparisons: compared },
-    expectEffective: { kind: 'kdf', fn: name, legacy, verify, needs, type: T, rewrittenComparisons: compared },
+    behavior: { kind: 'kdf', fn: name, legacy, verify, needs, type: T, iterations: KDF_ITERATIONS, rewrittenComparisons: compared, backend, ...(backend === 'sha' ? { kdf: kdfName } : {}) },
+    expectEffective: { kind: 'kdf', fn: name, legacy, verify, needs, type: T, rewrittenComparisons: compared, backend, ...(backend === 'sha' ? { kdf: kdfName } : {}) },
   };
 }
 
@@ -1321,7 +1363,10 @@ export const CLASS_REASONS = Object.freeze({
   'CWE-918': 'server-side request forgery has no line-level repair: a check on the URL string is bypassed by redirects, alternate encodings and DNS. The decision needed: which hosts or networks this service may call (an allow-list of exact hosts, or an address policy that rejects loopback, link-local and private ranges after name resolution and on every redirect).',
   'CWE-78': 'a shell command string is replaced by a direct call of the program with an argument list. The recognised shape is callCommand/system/spawnCommand of a ++ or <> concatenation (String, or Text under cs/unpack, on the line or in a one-line let of the same function) whose first word is a string literal naming the program. The decision needed: when the program itself is a variable (an editor or tool chosen through an environment variable, say), how that value splits into a program and its own arguments, because a configured command such as "code --goto" is not one program name; and for an argument built with if/case or a function call, the exact argument list.',
   'CWE-88': 'argument injection is repaired by a rule about what the called program accepts; inserting "--" only helps programs that honour it, so no patch is made. The decision needed: the permitted values for this argument (a closed list or a strict pattern), or the option of that program that ends option parsing.',
-  'CWE-916': 'password hashing needs a password KDF (Argon2id, scrypt, bcrypt, or PBKDF2 with a high iteration count) from a library the project may not declare as a dependency, and every stored hash was produced by the old function: swapping it makes every existing password fail to verify and locks the users out. The one shape rewritten is a migration: a pure one-line `name salt password = ...` of one text type (String, Text or strict ByteString) in a file that already imports cryptonite or crypton and Data.Text or Data.ByteString, whose comparisons all sit in this file; it keeps the old function for verification, adds PBKDF2-HMAC-SHA256 and a verify helper, and this is not that shape. The decision needed: which KDF and library, with which cost parameters, and the migration (verify the old hash once, then re-hash with the new KDF at the next successful login, or force a password reset).',
+  'CWE-916': 'password hashing needs a password KDF (Argon2id, scrypt, bcrypt, or PBKDF2 with a high iteration count) from a library the project may not declare as a dependency, and every stored hash was produced by the old function: swapping it makes every existing password fail to verify and locks the users out. The one shape rewritten is a migration: a pure one-line `name salt password = ...` of one text type (String, Text or strict ByteString) in a file that already imports cryptonite or crypton (with Data.Text or Data.ByteString), or the SHA package (with utf8-string or text for the bytes of a String), whose comparisons all sit in this file; it keeps the old function for verification, adds PBKDF2-HMAC-SHA256 (the library KDF, or the RFC 8018 construction written out over the SHA package\'s HMAC) and a verify helper, and this is not that shape. The decision needed: which KDF and library, with which cost parameters, and the migration (verify the old hash once, then re-hash with the new KDF at the next successful login, or force a password reset).',
+  'CWE-248': 'a partial function on caller-supplied input (an index with !!, head, fromJust, read) has no rewrite that keeps the function\'s type: the total form needs a value for the failure, and the code does not say which. The decision needed: what the function returns when the input is out of range or does not parse (an error response from the handler that read the input, an unchanged result, a default), and where that check belongs (at the read, so the handler answers the caller, or before the index).',
+  'CWE-327': 'a broken cipher or ECB mode is replaced by an AEAD (AES-GCM or ChaCha20-Poly1305), which changes the stored form: everything encrypted so far must be re-encrypted or read through the old cipher once, and the nonce and authentication tag need a place beside the ciphertext. The decision needed: the AEAD and key size, the migration of the ciphertext already stored, and where the nonce and tag are kept.',
+  'CWE-329': 'a static IV or nonce is replaced by a fresh random one per message, which then has to travel with the ciphertext: the decrypting side must read it from there, and the messages encrypted so far carry none. The decision needed: where the IV is stored or sent (in front of the ciphertext, a separate field) and how the decrypting code tells an old message from a new one.',
   'CWE-338': 'a predictable generator is replaced by the operating system CSPRNG (System.Entropy or Crypto.Random), whose result type is bytes, not System.Random\'s: the surrounding code must change with it. Four shapes are rewritten (System.Entropy imported when missing, which makes the patch a MITIGATION until `entropy` is declared): a one-line action of type IO <fixed-width integer> equal to randomIO; `replicateM n (randomRIO (c1, c2))` over a character range; `randomRIO (lo, hi)` over integer literals; `(take n . map f . randomRs (lo, hi)) <$> newStdGen`. Any other shape (a generator threaded through other code, a non-literal range, a non-integer result) is not. The decision needed: the token\'s type and size (a 30-bit integer cannot be made unguessable by changing the generator) and the entropy library the project declares.',
   'CWE-1004': 'cookie attributes live in different places per framework. The recognised shapes are a Set-Cookie header string literal, a Web.Cookie SetCookie record update, servant-auth cookieIsSecure, and scotty setSimpleCookie/makeSimpleCookie; this is none of them, or an attribute is set from an expression. The decision needed: which attributes to send (Secure, HttpOnly, SameSite) and whether this cookie must work over plain HTTP.',
   'CWE-306': 'a missing authentication check needs a policy; the scanner reports the handler and does not invent the guard. The decision needed: which credential authenticates this route (session, token, API key) and what an unauthenticated caller receives (401, a redirect to login).',
@@ -1512,7 +1557,12 @@ export function haskellEffectiveCheck(plan, patched) {
     const oldBody = (stripComments(before).split('\n').find((l) => new RegExp(`^${want.fn}\\s+[a-z_][\\w']*\\s+[a-z_][\\w']*\\s*=`).test(l)) || '').replace(/^[^=]*=\s*/, '');
     if (!oldBody || defs(want.legacy)[0].replace(/^[^=]*=\s*/, '') !== oldBody) return { ok: false, ran: true, detail: `${want.legacy} is not the original definition kept verbatim` };
     const nd = defs(want.fn);
-    if (nd.length !== 1 || !new RegExp(`fastPBKDF2_SHA256 .*iterCounts = ${KDF_ITERATIONS}\\b`).test(nd[0])) return { ok: false, ran: true, detail: `${want.fn} does not compute PBKDF2-HMAC-SHA256 with ${KDF_ITERATIONS} iterations` };
+    // the written-out construction (SHA package): the function calls it, and its definition reads back as the iterated HMAC at the planned count
+    const writtenOut = want.backend === 'sha' && nd.length === 1 && new RegExp(`(?<![\\w'.])${want.kdf}(?![\\w'])`).test(nd[0])
+      && ls.some((l) => new RegExp(`^${want.kdf}\\s+password\\s+salt\\s*=\\s*AgenticList\\.foldl' xorBytes u1 \\(take \\(${KDF_ITERATIONS} - 1\\) \\(tail \\(iterate prf u1\\)\\)\\)\\s*$`).test(l))
+      && ls.some((l) => /^\s+prf = AgenticSHA\.bytestringDigest \. AgenticSHA\.hmacSha256 password\s*$/.test(l));
+    const library = want.backend !== 'sha' && nd.length === 1 && new RegExp(`fastPBKDF2_SHA256 .*iterCounts = ${KDF_ITERATIONS}\\b`).test(nd[0]);
+    if (!writtenOut && !library) return { ok: false, ran: true, detail: `${want.fn} does not compute PBKDF2-HMAC-SHA256 with ${KDF_ITERATIONS} iterations` };
     const vd = ls.filter((l) => new RegExp(`^${want.verify}\\s+stored\\s`).test(l));
     if (vd.length !== 1 || !new RegExp(`${want.needs} stored then stored == ${want.legacy} .* else stored == ${want.fn} `).test(vd[0])) return { ok: false, ran: true, detail: `${want.verify} does not check both forms` };
     const comparisons = (t) => (stripComments(t).split('\n').filter((l) => !new RegExp(`^${want.verify}\\s`).test(l)).join('\n').match(new RegExp(`==\\s*\\(?${want.fn}\\s|${want.fn}\\s+\\S+\\s+\\S+\\)?\\s*==`, 'g')) || []).length;

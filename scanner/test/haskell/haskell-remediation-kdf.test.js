@@ -107,6 +107,76 @@ verifyUser :: BS.ByteString -> BS.ByteString -> BS.ByteString -> Bool
 verifyUser stored salt pw = stored == hashPassword salt pw
 `;
 
+// ── the SHA package form (gitit's shape): no cryptonite module, the hash is Data.Digest.Pure.SHA's, the bytes of a String come from utf8-string ──
+// Stubs of the documented API shape (SHA 1.6.4.4; utf8-string 1.0.2): the stub digest is derived from its inputs and is NOT a hash.
+const STUB_SHA = `module Data.Digest.Pure.SHA (Digest, SHA256State, SHA512State, sha512, hmacSha256, showDigest, bytestringDigest) where
+import qualified Data.ByteString.Lazy as BL
+-- documented: hmacSha256 :: ByteString -> ByteString -> Digest SHA256State; sha512 :: ByteString -> Digest SHA512State;
+--             bytestringDigest :: Digest t -> ByteString; showDigest :: Digest t -> String   (lazy ByteStrings throughout)
+data SHA256State
+data SHA512State
+newtype Digest t = Digest BL.ByteString
+mix :: Int -> BL.ByteString -> BL.ByteString
+mix n b = BL.pack (take n (zipWith (+) [1 ..] (cycle (if BL.null b then [0] else BL.unpack b))))
+sha512 :: BL.ByteString -> Digest SHA512State
+sha512 = Digest . mix 64
+hmacSha256 :: BL.ByteString -> BL.ByteString -> Digest SHA256State
+hmacSha256 key msg = Digest (mix 32 (BL.append msg key))
+bytestringDigest :: Digest t -> BL.ByteString
+bytestringDigest (Digest b) = b
+showDigest :: Digest t -> String
+showDigest (Digest b) = concatMap (\\w -> [hexDigit (w \`div\` 16), hexDigit (w \`mod\` 16)]) (BL.unpack b)
+  where hexDigit d = "0123456789abcdef" !! fromIntegral d
+`;
+const STUB_UTF8 = `module Data.ByteString.Lazy.UTF8 (fromString) where
+import qualified Data.ByteString.Lazy as BL
+-- documented: fromString :: String -> ByteString (UTF-8). The stub maps code points below 256 only.
+fromString :: String -> BL.ByteString
+fromString = BL.pack . map (fromIntegral . fromEnum)
+`;
+const STUBS_SHA = { 'Data/Digest/Pure/SHA.hs': STUB_SHA, 'Data/ByteString/Lazy/UTF8.hs': STUB_UTF8 };
+const AUTH_SHA_STRING = `module Auth where
+
+import Data.Digest.Pure.SHA (sha512, showDigest)
+import qualified Data.ByteString.Lazy.UTF8 as L (fromString)
+
+hashPassword :: String -> String -> String
+hashPassword salt pass = showDigest $ sha512 $ L.fromString $ salt ++ pass
+
+register :: String -> String -> (String, String)
+register salt pass = (salt, hashPassword salt pass)
+
+login :: (String, String) -> String -> Bool
+login (salt, stored) pass = stored == hashPassword salt pass
+`;
+const AUTH_SHA_TEXT = `module Auth where
+
+import Data.Digest.Pure.SHA (sha512, showDigest)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
+
+hashPassword :: Text -> Text -> Text
+hashPassword salt password = T.pack (showDigest (sha512 (TLE.encodeUtf8 (TL.fromStrict (T.append salt password)))))
+
+checkLogin :: Text -> Text -> Text -> Bool
+checkLogin stored salt password = (hashPassword salt password) == stored
+`;
+const AUTH_SHA_BYTES = `module Auth where
+
+import Data.Digest.Pure.SHA (sha512, showDigest)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy as BL
+
+hashPassword :: BS.ByteString -> BS.ByteString -> BS.ByteString
+hashPassword salt pw = BC.pack (showDigest (sha512 (BL.fromStrict (BS.append salt pw))))
+
+verifyUser :: BS.ByteString -> BS.ByteString -> BS.ByteString -> Bool
+verifyUser stored salt pw = stored == hashPassword salt pw
+`;
+
 const MAIN_RUN = `module Main (main) where
 import Auth
 main :: IO ()
@@ -126,6 +196,17 @@ function runGhc(files, mainFile) {
   for (const [f, t] of Object.entries(files)) { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), t); }
   return spawnSync('runghc', ['-isrc', '-i.', mainFile], { cwd: dir, encoding: 'utf8', timeout: 180000 });
 }
+// Compiled, not interpreted: the written-out PBKDF2 iterates 600000 times, which the interpreter would take minutes over.
+function runGhcCompiled(files, mainFile, extraArgs = []) {
+  const dir = mkTestTmp('hs-kdf-bin-');
+  for (const [f, t] of Object.entries(files)) { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), t); }
+  const build = spawnSync('ghc', ['-O0', '-isrc', '-i.', '-outputdir', 'o', '-o', 'main', ...extraArgs, mainFile], { cwd: dir, encoding: 'utf8', timeout: 180000 });
+  if (build.status !== 0) return build;
+  return spawnSync(join(dir, 'main'), [], { cwd: dir, encoding: 'utf8', timeout: 180000 });
+}
+// The real SHA package, when the host's GHC can see it (`ghc-pkg latest SHA`): only then is the construction run against the RFC vectors.
+const SHA_PKG = GHC && !spawnSync('ghc-pkg', ['latest', 'SHA'], { encoding: 'utf8' }).error && spawnSync('ghc-pkg', ['latest', 'SHA'], { encoding: 'utf8' }).status === 0;
+const skipNoShaPkg = SHA_PKG ? false : 'the SHA package is not installed for the GHC on PATH: the written-out PBKDF2 could not be run against the RFC 7914 vectors (this is a skip, not a pass)';
 
 // ═══ 1. the String form, verified by the real rescan, the effective check and a compile against the stubs ═══════════════════════
 test('migration (String): the old function is kept as the legacy verifier, the KDF form is tagged, the comparison calls the verify helper; rescan, effective check and compile pass; the export list gains the helpers', async () => {
@@ -180,6 +261,86 @@ for (const [name, src, cmpLine] of [['Text', AUTH_TEXT, /^checkLogin stored salt
   });
 }
 
+// ═══ 2b. the SHA package form: the derivation is written out over the package's HMAC ═════════════════════════════════════════
+test('migration over the SHA package (String, gitit\'s shape): PBKDF2 is written out over hmacSha256, the bytes come from utf8-string; rescan, effective check and compile pass, and the kept weak hash is reported at info', async () => {
+  const files = { 'src/Auth.hs': AUTH_SHA_STRING, ...STUBS_SHA };
+  const fs = await scan(files);
+  const f = actionable(fs)[0];
+  assert.ok(f, JSON.stringify(fs.map((x) => [x.cwe, x.file, x.line, x.severity])));
+  assert.equal(f.line, 7);
+  const v = await validateHaskellFix(f, { files, compile: GHC });
+  assert.equal(v.status, 'verified', JSON.stringify({ reason: v.reason, gates: v.gates }));
+  assert.equal(v.plan.ruleId, 'hs-password-kdf-migrate');
+  assert.equal(v.label, 'MITIGATION');
+  assert.equal(v.plan.behavior.backend, 'sha');
+  assert.equal(v.gates.rescan.originalGone, true);
+  assert.equal(v.gates.effective.ok, true, v.gates.effective.detail);
+  if (GHC) assert.deepEqual([v.gates.compile.ran, v.gates.compile.ok], [true, true], v.gates.compile.detail);
+  const after = v.plan.after;
+  assert.match(after, /^hashPasswordLegacy salt pass = showDigest \$ sha512 \$ L\.fromString \$ salt \+\+ pass$/m, 'the original body is kept verbatim under the legacy name');
+  assert.match(after, /^hashPassword salt pass = hashPasswordTag <> hashPasswordHex \(hashPasswordPbkdf2 \(AgenticUTF8\.fromString pass\) \(AgenticUTF8\.fromString salt\)\)$/m);
+  assert.match(after, /^hashPasswordPbkdf2 password salt = AgenticList\.foldl' xorBytes u1 \(take \(600000 - 1\) \(tail \(iterate prf u1\)\)\)$/m);
+  assert.match(after, /^    prf = AgenticSHA\.bytestringDigest \. AgenticSHA\.hmacSha256 password$/m);
+  assert.match(after, /^    u1 = prf \(AgenticBL\.append salt \(AgenticBL\.pack \[0, 0, 0, 1\]\)\)$/m);
+  assert.match(after, /^import qualified Data\.Digest\.Pure\.SHA as AgenticSHA$/m);
+  assert.match(after, /^import qualified Data\.ByteString\.Lazy\.UTF8 as AgenticUTF8$/m);
+  assert.doesNotMatch(after, /Crypto\.KDF|AgenticPBKDF2/, 'no cryptonite name is introduced');
+  assert.match(after, /^login \(salt, stored\) pass = hashPasswordVerify stored salt pass$/m);
+  assert.ok(v.consequences.some((c) => /Requires the SHA package .* utf8-string/.test(c)), JSON.stringify(v.consequences));
+  assert.ok(v.consequences.some((c) => /seconds of CPU per attempt, not tenths/.test(c)), 'the cost of the pure-Haskell HMAC is stated');
+  const again = await scan({ ...files, 'src/Auth.hs': after });
+  assert.equal(actionable(again).length, 0, JSON.stringify(pwFindings(again).map((x) => [x.line, x.severity, x.description])));
+  const kept = pwFindings(again).find((x) => x.severity === 'info');
+  assert.ok(kept && /used only to verify hashes made before a migration/.test(kept.description), kept && kept.description);
+  // the written-out derivation is a KDF by its structure, not by its name: the same file with the xor fold removed is no migration
+  const noFold = after.replace(/^hashPasswordPbkdf2 password salt = .*$/m, 'hashPasswordPbkdf2 password salt = last (take 600000 (iterate prf u1))').replace(/^    xorBytes a b = .*\n/m, '');
+  const notKdf = await scan({ ...files, 'src/Auth.hs': noFold });
+  assert.ok(actionable(notKdf).some((x) => x.line > 7), `an iterated HMAC with no xor fold is not the construction: the kept hash is the full finding (${JSON.stringify(pwFindings(notKdf).map((x) => [x.line, x.severity]))})`);
+});
+
+test('migration over the SHA package: the patched program RUNS (compiled) against the stubs: a legacy hash still verifies, a new one verifies, a wrong password does not, and the tag decides re-hashing', { skip: skipNoGhc }, () => {
+  const files = { 'src/Auth.hs': AUTH_SHA_STRING, ...STUBS_SHA };
+  const plan = planHaskellFix({ cwe: 'CWE-916', rule: 'hs-fast-password-hash', file: 'src/Auth.hs', line: 7 }, files);
+  assert.equal(plan.ok, true, plan.reason);
+  const r = runGhcCompiled({ ...files, 'src/Auth.hs': plan.after, 'Main.hs': MAIN_RUN }, 'Main.hs');
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(r.stdout.trim().split('\n'), ['(True,True)', '(True,False)', '(True,True)', '(False,False,False)', '(True,False,False)']);
+});
+
+// The construction itself, against the real package: the generated definition is compiled as written, with ONLY its iteration-count literal
+// replaced by the vector's count (c = 1 and c = 80000), and must produce the first 32 bytes of the RFC 7914 section 11 PBKDF2-HMAC-SHA-256 vectors.
+const RFC7914 = [
+  ['passwd', 'salt', 1, '55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc'],
+  ['Password', 'NaCl', 80000, '4ddcd8f60b98be21830cee5ef22701f9641a4418d04c0414aeff08876b34ab56'],
+];
+test('the written-out PBKDF2 matches the RFC 7914 vectors against the real SHA package (the generated definition, count literal replaced)', { skip: skipNoShaPkg || skipNoGhc }, () => {
+  const plan = planHaskellFix({ cwe: 'CWE-916', rule: 'hs-fast-password-hash', file: 'src/Auth.hs', line: 10 }, { 'src/Auth.hs': AUTH_SHA_TEXT });
+  assert.equal(plan.ok, true, plan.reason);
+  const ls = plan.after.split('\n');
+  const start = ls.findIndex((l) => /^hashPasswordPbkdf2 ::/.test(l));
+  assert.ok(start > 0);
+  const def = ls.slice(start, start + 6);
+  assert.match(def[1], /take \(600000 - 1\)/);
+  const mods = RFC7914.map(([, , c], i) => `module V${i} (hashPasswordPbkdf2) where\nimport qualified Data.Digest.Pure.SHA as AgenticSHA\nimport qualified Data.ByteString.Lazy as AgenticBL\nimport qualified Data.Bits as AgenticBits\nimport qualified Data.List as AgenticList\n${def.join('\n').replace('take (600000 - 1)', `take (${c} - 1)`)}\n`);
+  const main = `module Main (main) where\nimport qualified Data.ByteString.Lazy.Char8 as BLC\nimport qualified Data.ByteString.Lazy as BL\nimport qualified V0\nimport qualified V1\nhex :: BL.ByteString -> String\nhex = BL.foldr (\\w acc -> hexDigit (w \`div\` 16) : hexDigit (w \`mod\` 16) : acc) "" where hexDigit d = "0123456789abcdef" !! fromIntegral d\nmain :: IO ()\nmain = do\n  putStrLn (hex (V0.hashPasswordPbkdf2 (BLC.pack "${RFC7914[0][0]}") (BLC.pack "${RFC7914[0][1]}")))\n  putStrLn (hex (V1.hashPasswordPbkdf2 (BLC.pack "${RFC7914[1][0]}") (BLC.pack "${RFC7914[1][1]}")))\n`;
+  const r = runGhcCompiled({ 'V0.hs': mods[0], 'V1.hs': mods[1], 'Main.hs': main }, 'Main.hs', ['-package', 'SHA']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(r.stdout.trim().split('\n'), RFC7914.map((v) => v[3]));
+});
+
+for (const [name, src, line, cmpLine] of [['Text', AUTH_SHA_TEXT, 10, /^checkLogin stored salt password = hashPasswordVerify stored salt password$/m], ['ByteString', AUTH_SHA_BYTES, 9, /^verifyUser stored salt pw = hashPasswordVerify stored salt pw$/m]]) {
+  test(`migration over the SHA package (${name}): the bytes of that type; verified by the real rescan and the compile gate against the stub`, async () => {
+    const files = { 'src/Auth.hs': src, 'Data/Digest/Pure/SHA.hs': STUB_SHA };
+    const f = actionable(await scan(files))[0];
+    assert.ok(f); assert.equal(f.line, line);
+    const v = await validateHaskellFix(f, { files, compile: GHC });
+    assert.equal(v.status, 'verified', JSON.stringify({ reason: v.reason, gates: v.gates }));
+    assert.deepEqual([v.plan.behavior.type, v.plan.behavior.backend], [name, 'sha']);
+    assert.match(v.plan.after, cmpLine);
+    if (GHC) assert.deepEqual([v.gates.compile.ran, v.gates.compile.ok], [true, true], v.gates.compile.detail);
+  });
+}
+
 // ═══ 3. the effective check is not the rescan ═════════════════════════════════════════════════════════════════════════════════
 test('effective check: a verify helper that checks only the new form, or a legacy function whose body was changed, fails it although the finding is gone', () => {
   const files = { 'src/Auth.hs': AUTH_STRING, ...STUBS };
@@ -201,7 +362,9 @@ test('effective check: a verify helper that checks only the new form, or a legac
 test('refusals: no KDF package imported, a one-parameter hash, a comparison in another file, a taken name, another type, an impure body, a lazy ByteString', async () => {
   const at = (src, line = 8) => planHaskellFix({ cwe: 'CWE-916', rule: 'hs-fast-password-hash', file: 'src/Auth.hs', line }, { 'src/Auth.hs': src, ...STUBS });
   const refused = (r, why) => { assert.equal(r.ok, false, why); assert.equal(r.tier, TIERS.guidance); assert.match(r.reason, /The one shape rewritten is a migration/); assert.match(r.decision, /which KDF and library/); };
-  refused(at(AUTH_STRING.replace('import Crypto.Hash (Digest, SHA256, hash)', 'import Data.Digest.Pure.SHA (sha256, showDigest)').replace(/^hashPassword salt password = .*$/m, 'hashPassword salt password = showDigest (sha256 (BC.pack (salt ++ password)))')), 'no cryptonite module: Crypto.KDF.PBKDF2 is not in a declared package');
+  refused(at(AUTH_STRING.replace('import Crypto.Hash (Digest, SHA256, hash)', 'import Data.Digest.Pure.MD5 (md5)').replace(/^hashPassword salt password = .*$/m, 'hashPassword salt password = show (md5 (BC.pack (salt ++ password)))')), 'neither a cryptonite module nor the SHA package: no declared package offers a KDF or an HMAC to build one on');
+  // the SHA package's shape needs a declared package for the bytes of a String: with no utf8-string and no text module imported, refused
+  refused(at(AUTH_SHA_STRING.replace('import qualified Data.ByteString.Lazy.UTF8 as L (fromString)', 'import qualified Data.ByteString.Lazy.Char8 as L (pack)').replace('L.fromString', 'L.pack'), 7), 'SHA package, but no declared package turns a String into UTF-8 bytes');
   refused(at(AUTH_STRING.replace('hashPassword :: String -> String -> String', 'hashPassword :: String -> String').replace(/^hashPassword salt password = /m, 'hashPassword password = ').replace('salt ++ password', 'password').replace(/hashPassword salt password/g, 'hashPassword password')), 'no salt parameter: a pure function cannot add one');
   refused(at(AUTH_STRING.replace(/String -> String -> String/, 'Int -> String -> String').replace(/^hashPassword salt password = .*$/m, 'hashPassword salt password = show salt ++ password')), 'a parameter of another type');
   refused(at(AUTH_STRING.replace(/^hashPassword salt password = .*$/m, 'hashPassword salt password = unsafePerformIO (pure (salt ++ password))')), 'not a pure one-line definition');
@@ -215,7 +378,7 @@ test('refusals: no KDF package imported, a one-parameter hash, a comparison in a
   assert.equal(storeElsewhere.ok, true, storeElsewhere.reason);
   assert.ok(storeElsewhere.consequences.some((c) => /re-hashes it/.test(c)));
   // the preview path reports the same refusal with the class reason
-  const pv = await languageFixPreview({ cwe: 'CWE-916', rule: 'hs-fast-password-hash', file: 'src/Auth.hs', line: 8, vuln: 'Password hashed with a fast general-purpose hash' }, { 'src/Auth.hs': AUTH_STRING.replace('import Crypto.Hash (Digest, SHA256, hash)', 'import Data.Digest.Pure.SHA (sha256, showDigest)').replace(/^hashPassword salt password = .*$/m, 'hashPassword salt password = showDigest (sha256 (BC.pack (salt ++ password)))') });
+  const pv = await languageFixPreview({ cwe: 'CWE-916', rule: 'hs-fast-password-hash', file: 'src/Auth.hs', line: 8, vuln: 'Password hashed with a fast general-purpose hash' }, { 'src/Auth.hs': AUTH_STRING.replace('import Crypto.Hash (Digest, SHA256, hash)', 'import Data.Digest.Pure.MD5 (md5)').replace(/^hashPassword salt password = .*$/m, 'hashPassword salt password = show (md5 (BC.pack (salt ++ password)))') });
   assert.equal(pv.ok, false); assert.equal(pv.proposal, 'model-assisted'); assert.match(String(pv.reason), /KDF/);
 });
 

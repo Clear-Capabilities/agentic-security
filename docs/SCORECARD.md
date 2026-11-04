@@ -9,17 +9,17 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.195.19 |
-| Bundle SHA-256 | `fbfc495f2f9efeff41f494d4d3428b580737f5aa9f5f72d597393a7c103a3ff2` |
-| Commit | `073ded6788faed866742013f0658286d2637bddf` |
-| Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
-| Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
+| Engine version | 0.195.20 |
+| Bundle SHA-256 | `60f87190cb5ccfffcc3fbe658229ca0a510ee96ea2877f0856dae461e7c98de0` |
+| Commit | `a2f27b82407c76df43517605c8d005a9be34a23c` |
+| Worktree at measurement time | clean |
+| Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
 | Node | v24.20.0 |
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-03T19:05:41.943Z |
+| Generated (UTC) | 2026-11-04T03:22:47.788Z |
 
 ## What these numbers are, and what they are not
 
@@ -236,7 +236,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 410/573 (71.6%) |
+| 409/573 (71.4%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -287,7 +287,7 @@ this run.
 
 ## Haskell and Nix/NixOS support
 
-*Committed artifact:* `docs/language-support.json`, measured 2026-11-03 on node v24.20.0. It is read here, not re-measured by this command.
+*Committed artifact:* `docs/language-support.json`, measured 2026-11-04 on node v24.20.0. It is read here, not re-measured by this command.
 
 Every row is **supported** only from passing evidence of its own metric kind. Layers are scored independently (the taint layer
 is the injection families, the SAST layer is every other family) and a finding of a different family inside a case is counted
@@ -378,7 +378,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.195.19), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.195.20), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both

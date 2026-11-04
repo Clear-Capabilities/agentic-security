@@ -12,7 +12,7 @@ Agentic Security is an autonomous security assurance platform. It pairs **determ
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.195.19-blue)]()
+[![Version](https://img.shields.io/badge/version-0.195.20-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 > Built by **[Clear Capabilities](https://www.clearcapabilities.com/)**. Also known as an *agentic security harness* for Claude Code, Codex, Cursor and Gemini CLI.
@@ -377,7 +377,7 @@ All 57 requirements of the Haskell and Nix/NixOS programme are verified by the l
 | nix-eval | blocked | nix is not available on the measuring host: a successful controlled evaluation needs a real nix binary (NIX-01 |
 | nixos-host | blocked | nixos is not available on the measuring host: the complete scanner must run on a NixOS host (NIX-012) |
 
-Measured 2026-11-03 on the synthetic, template-generated corpus described in [Haskell and Nix support](docs/language-support.md); the corpus is synthetic and template-generated (qa-001).
+Measured 2026-11-04 on the synthetic, template-generated corpus described in [Haskell and Nix support](docs/language-support.md); the corpus is synthetic and template-generated (qa-001).
 <!-- generated:support-summary:end -->
 
 Honest limits: the corpus behind these numbers is synthetic and template-generated, so a score of 100% describes robustness

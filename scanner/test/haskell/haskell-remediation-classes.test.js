@@ -205,18 +205,28 @@ newSession = randomRIO (0, 1000000000)
   const pw = pick(fs, (x) => x.cwe === 'CWE-916');
   const rnd = pick(fs, (x) => x.cwe === 'CWE-338');
   assert.ok(pw && rnd, JSON.stringify(fs.map((x) => [x.cwe, x.line])));
+  // Since 0.195.20 this shape (the SHA package imported, utf8-string for the bytes) IS rewritten (haskell-remediation-kdf.test.js): the migration with
+  // PBKDF2 written out over the package's HMAC, a MITIGATION. The same file hashing with a package that offers neither a KDF nor an HMAC is refused.
   const pwPreview = await languageFixPreview(pw, gitit);
-  assert.equal(pwPreview.ok, false);
-  assert.match(String(pwPreview.reason), /KDF/);
-  assert.equal(pwPreview.proposal, 'model-assisted');
+  assert.equal(pwPreview.ok, true, JSON.stringify(pwPreview));
+  assert.equal(pwPreview.label, 'MITIGATION');
+  const noHmac = { 'src/State.hs': gitit['src/State.hs'].replace('import Data.Digest.Pure.SHA (sha512, showDigest)', 'import Data.Digest.Pure.MD5 (md5)').replace('showDigest $ sha512 $', 'show $ md5 $') };
+  const pw2 = pick(await scan(noHmac), (x) => x.cwe === 'CWE-916');
+  assert.ok(pw2);
+  const refusedPreview = await languageFixPreview(pw2, noHmac);
+  assert.equal(refusedPreview.ok, false);
+  assert.match(String(refusedPreview.reason), /KDF/);
+  assert.equal(refusedPreview.proposal, 'model-assisted');
   // Since 0.195.16 the integer-literal range IS rewritten (haskell-remediation-entropy.test.js): a MITIGATION, since System.Entropy had to be imported.
   const rndPreview = await languageFixPreview(rnd, gitit);
   assert.equal(rndPreview.ok, true, JSON.stringify(rndPreview));
   assert.equal(rndPreview.label, 'MITIGATION');
-  for (const cwe of ['CWE-918', 'CWE-88', 'CWE-1004', 'CWE-306', 'CWE-770']) {
+  // every class the Haskell rules report without a fixer names the decision (CWE-248, CWE-327 and CWE-329 since 0.195.20)
+  for (const cwe of ['CWE-918', 'CWE-88', 'CWE-1004', 'CWE-306', 'CWE-770', 'CWE-248', 'CWE-327', 'CWE-329', 'CWE-601', 'CWE-798', 'CWE-611']) {
     const r = planHaskellFix({ cwe, file: 'src/X.hs', line: 3 }, { 'src/X.hs': 'module X where\nx :: Int\nx = 1\n' });
     assert.equal(r.ok, false, cwe);
     assert.ok(r.reason && r.reason !== 'no deterministic fix is supported for this exact shape', `${cwe} has a class-level reason: ${r.reason}`);
+    assert.ok(r.decision && r.decision.length > 20, `${cwe} names the decision`);
     assert.equal(r.proposal, 'model-assisted');
   }
 });

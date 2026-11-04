@@ -406,7 +406,9 @@ export const HS_RULE_APIS = Object.freeze([
   ...E('Crypto.Hash', ['hash', 'hashWith', 'hashlazy']),
   ...E('Crypto.Hash.MD5', ['hash', 'hashlazy']), ...E('Crypto.Hash.SHA1', ['hash', 'hashlazy']),
   ...E('Crypto.Hash.SHA256', ['hash', 'hashlazy']), ...E('Crypto.Hash.SHA512', ['hash', 'hashlazy']),
-  ...E('Data.Digest.Pure.MD5', ['md5']), ...E('Data.Digest.Pure.SHA', ['sha1', 'sha256', 'sha512']),
+  ...E('Data.Digest.Pure.MD5', ['md5']),
+  // SHA 1.6.4.4: the digests, and the HMACs a written-out PBKDF2 is built on (the rule layer recognises that construction by its calls)
+  ...E('Data.Digest.Pure.SHA', ['sha1', 'sha256', 'sha512', 'hmacSha224', 'hmacSha256', 'hmacSha384', 'hmacSha512', 'bytestringDigest', 'showDigest']),
   ...E('Crypto.Cipher.Types', ['makeIV', 'ecbEncrypt', 'ecbDecrypt', 'nullIV', 'cbcEncrypt', 'cbcDecrypt']),
   ...E('Crypto.Cipher.ChaChaPoly1305', ['nonce12', 'nonce8']),
   ...E('Crypto.KDF.PBKDF2', ['generate', 'fastPBKDF2_SHA1', 'fastPBKDF2_SHA256', 'fastPBKDF2_SHA512']),
