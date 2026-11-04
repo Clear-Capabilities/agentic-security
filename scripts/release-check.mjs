@@ -1058,22 +1058,37 @@ function remoteCiFacts(headSha) {
   if (version.status !== 0) return { cliAvailable: false, authenticated: false, checkRuns: null };
   const auth = run(FORGE_CLI, ['auth', 'status']);
   if (auth.status !== 0) return { cliAvailable: true, authenticated: false, checkRuns: null };
+  // PAGINATED (0.195.21). The check-runs endpoint returns 30 runs per page and this commit's workflows produce more (38 on the
+  // 0.195.21 release commit): the unpaginated query had only ever shown the gate the first page, which the old rule (judge what
+  // reported) could not notice and the new rule (every blocking job must report) turned into eight "did not report" errors on a
+  // commit whose checks were all green. One JSON object per line, across pages.
   const api = run(FORGE_CLI, [
-    'api', `repos/{owner}/{repo}/commits/${headSha}/check-runs`,
-    '--jq', '[.check_runs[] | {name, status, conclusion}]',
-  ], { cwd: REPO });
+    'api', '--paginate', `repos/{owner}/{repo}/commits/${headSha}/check-runs`,
+    '--jq', '.check_runs[] | {name, status, conclusion}',
+  ], { cwd: REPO, maxBuffer: 64 * 1024 * 1024 });
   if (api.status !== 0) return { cliAvailable: true, authenticated: true, checkRuns: null };
-  try {
-    const parsed = JSON.parse(api.stdout);
-    return {
-      cliAvailable: true,
-      authenticated: true,
-      checkRuns: Array.isArray(parsed) ? parsed : null,
-      changedPaths: changedPathsOf(headSha),
-    };
-  } catch {
-    return { cliAvailable: true, authenticated: true, checkRuns: null };
+  const checkRuns = parseCheckRunLines(api.stdout);
+  return {
+    cliAvailable: true,
+    authenticated: true,
+    checkRuns,
+    changedPaths: checkRuns ? changedPathsOf(headSha) : null,
+  };
+}
+
+/** The paginated query's output: one `{name,status,conclusion}` per line (a page boundary adds nothing). An unparseable line yields null, never a partial list. */
+export function parseCheckRunLines(stdout) {
+  const out = [];
+  for (const line of String(stdout || '').split('\n')) {
+    const t = line.trim();
+    if (!t) continue;
+    try {
+      const o = JSON.parse(t);
+      if (!o || typeof o !== 'object' || Array.isArray(o) || typeof o.name !== 'string') return null;
+      out.push({ name: o.name, status: o.status ?? null, conclusion: o.conclusion ?? null });
+    } catch { return null; }
   }
+  return out;
 }
 
 /**
