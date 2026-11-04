@@ -970,6 +970,22 @@
           "evidencePath": "scanner/test/lineage/seeding-across-calls.test.js",
           "recordedAt": "2026-11-04T18:13:29Z",
           "blocker": null
+        },
+        {
+          "kind": "manual",
+          "workstream": "GA-03",
+          "status": "passed",
+          "sourceCommit": "fd2fbcace1fc2d25a64d6c88e2f1f4bda06d51a7",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "exitCode": 0,
+          "recordedAt": "2026-11-04T21:49:51Z",
+          "blocker": null,
+          "id": "code-boundaries:BOUNDARY-JOIN",
+          "requirement": "Cross-service boundary joins reach the documented opt-in scan path: a queue publish and its receive, or a store write and its read, are joined in the lineage graph when both name the same literal identity or a boundary contract declares the edge; the consumer is seeded on the fields that reached the producer with the record keys mapped; a computed identity stays unjoined with a reason; every join is modeled, never observed. Measured on the multi-service fixture: every flow label passes (6 of 6 positive, 3 of 3 negative), from 3 of 6.",
+          "command": "cd scanner && node --test test/lineage/boundary-join.test.js && cd .. && node bench/dag/run.mjs --check",
+          "evidencePath": "scanner/test/lineage/boundary-join.test.js"
         }
       ]
     },
@@ -1180,6 +1196,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "kind": "manual",
+          "workstream": "GA-03",
+          "status": "passed",
+          "sourceCommit": "fd2fbcace1fc2d25a64d6c88e2f1f4bda06d51a7",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "exitCode": 0,
+          "recordedAt": "2026-11-04T21:49:51Z",
+          "blocker": null,
+          "id": "graph-precision:DEMAND-PARITY",
+          "requirement": "Demand queries are benchmarked against the full analysis for answer parity, and a fallback is explicit and bounded: on the synthetic workload and on this repository's own source every sampled query returns the full analysis's findings (parity on 30 of 30 in each), the queries that fell back to the full path are counted and named (7 of 30 on scanner/src, all at the caller-depth limit), and a limited walk never yields a negative claim (negativeClaimWithheld is reported per query).",
+          "command": "node bench/dag-demand/run.mjs",
+          "evidencePath": "bench/dag-demand/results/latest.json"
         }
       ]
     },

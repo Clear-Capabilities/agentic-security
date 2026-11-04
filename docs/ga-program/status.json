@@ -11,8 +11,8 @@
     "milestoneDeclared": false
   },
   "records": {
-    "required": 243,
-    "passed": 64
+    "required": 245,
+    "passed": 66
   },
   "realCodeAccuracy": {
     "label": "historical (not this engine)",
@@ -83,8 +83,8 @@
     "GA-03": {
       "title": "Harden Code Boundaries, graph analysis and context intelligence",
       "accountableRole": "graph/analysis lead",
-      "required": 11,
-      "passed": 1,
+      "required": 13,
+      "passed": 3,
       "blocked": 0
     },
     "GA-04": {
@@ -843,8 +843,8 @@
         "GA-12"
       ],
       "status": "blocked",
-      "passed": 2,
-      "required": 8,
+      "passed": 3,
+      "required": 9,
       "records": [
         {
           "id": "code-boundaries:REG-BAR",
@@ -924,6 +924,16 @@
           "status": "passed",
           "detail": "cd scanner && node ../bench/data-lineage/runner.mjs --check && node --test test/lineage/seeding-across-calls.test.js (exit 0) at 0f6818d4951e: scanner/test/lineage/seeding-across-calls.test.js",
           "evidencePath": "scanner/test/lineage/seeding-across-calls.test.js",
+          "blocker": null
+        },
+        {
+          "id": "code-boundaries:BOUNDARY-JOIN",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Cross-service boundary joins reach the documented opt-in scan path: a queue publish and its receive, or a store write and its read, are joined in the lineage graph when both name the same literal identity or a boundary contract declares the edge; the consumer is seeded on the fields that reached the producer with the record keys mapped; a computed identity stays unjoined with a reason; every join is modeled, never observed. Measured on the multi-service fixture: every flow label passes (6 of 6 positive, 3 of 3 negative), from 3 of 6.",
+          "status": "passed",
+          "detail": "cd scanner && node --test test/lineage/boundary-join.test.js && cd .. && node bench/dag/run.mjs --check (exit 0) at fd2fbcace1fc: scanner/test/lineage/boundary-join.test.js",
+          "evidencePath": "scanner/test/lineage/boundary-join.test.js",
           "blocker": null
         }
       ],
@@ -1039,8 +1049,8 @@
         "GA-12"
       ],
       "status": "blocked",
-      "passed": 1,
-      "required": 7,
+      "passed": 2,
+      "required": 8,
       "records": [
         {
           "id": "graph-precision:REG-BAR",
@@ -1111,6 +1121,16 @@
           "detail": "pilot repositories not selected; maintainer not named",
           "evidencePath": null,
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "graph-precision:DEMAND-PARITY",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Demand queries are benchmarked against the full analysis for answer parity, and a fallback is explicit and bounded: on the synthetic workload and on this repository's own source every sampled query returns the full analysis's findings (parity on 30 of 30 in each), the queries that fell back to the full path are counted and named (7 of 30 on scanner/src, all at the caller-depth limit), and a limited walk never yields a negative claim (negativeClaimWithheld is reported per query).",
+          "status": "passed",
+          "detail": "node bench/dag-demand/run.mjs (exit 0) at fd2fbcace1fc: bench/dag-demand/results/latest.json",
+          "evidencePath": "bench/dag-demand/results/latest.json",
+          "blocker": null
         }
       ],
       "nextAction": "graph-precision:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
@@ -3528,11 +3548,11 @@
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
       "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "fleet-scan: owner unassigned (role graph/analysis lead)",
-      "code-boundaries: 2/8 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "code-boundaries: 3/9 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "code-boundaries: owner unassigned (role security evaluation lead)",
       "finding-provenance: 2/7 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "finding-provenance: owner unassigned (role security evaluation lead)",
-      "graph-precision: 1/7 acceptance records passed (blocked); next: graph-precision:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "graph-precision: 2/8 acceptance records passed (blocked); next: graph-precision:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "graph-precision: owner unassigned (role security evaluation lead)",
       "detection-and-response: 1/7 acceptance records passed (in-progress); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "detection-and-response: owner unassigned (role analysis/platform engineer)",

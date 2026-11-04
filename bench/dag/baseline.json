@@ -1,6 +1,6 @@
 {
  "note": "Deterministic facts only. Regenerate with: node bench/dag/run.mjs --update-baseline. Timing and memory are never stored here.",
- "recordedAtCommit": "d41cccb2442d5a443e2f3f88a75f52cb68fe0ccb",
+ "recordedAtCommit": "fd2fbcace1fc2d25a64d6c88e2f1f4bda06d51a7",
  "deterministic": {
   "schema": 1,
   "units": {
@@ -28,12 +28,12 @@
     "graph": {
      "status": "complete",
      "nodes": 10,
-     "edges": 7,
-     "flows": 7,
+     "edges": 9,
+     "flows": 9,
      "callStatementSites": 109,
      "connectedSinkSites": 7,
      "truncatedQueries": 0,
-     "pathsEnumerated": 11
+     "pathsEnumerated": 15
     }
    },
    "fastify/lib": {
@@ -71,11 +71,11 @@
    "scotty/Web": {
     "status": "ok",
     "files": 11,
-    "findings": 2,
+    "findings": 7,
     "lineageFailure": null,
     "graph": {
      "status": "complete",
-     "nodes": 4,
+     "nodes": 6,
      "edges": 0,
      "flows": 0,
      "callStatementSites": 0,
@@ -87,30 +87,30 @@
    "scotty/examples": {
     "status": "ok",
     "files": 17,
-    "findings": 12,
+    "findings": 18,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 9,
+     "edges": 2,
+     "flows": 2,
+     "callStatementSites": 29,
+     "connectedSinkSites": 1,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 2
+    }
+   },
+   "yesod/yesod-core": {
+    "status": "ok",
+    "files": 44,
+    "findings": 2,
     "lineageFailure": null,
     "graph": {
      "status": "complete",
      "nodes": 8,
      "edges": 0,
      "flows": 0,
-     "callStatementSites": 29,
-     "connectedSinkSites": 0,
-     "truncatedQueries": 0,
-     "pathsEnumerated": 0
-    }
-   },
-   "yesod/yesod-core": {
-    "status": "ok",
-    "files": 44,
-    "findings": 4,
-    "lineageFailure": null,
-    "graph": {
-     "status": "complete",
-     "nodes": 7,
-     "edges": 0,
-     "flows": 0,
-     "callStatementSites": 1,
+     "callStatementSites": 3,
      "connectedSinkSites": 0,
      "truncatedQueries": 0,
      "pathsEnumerated": 0
@@ -135,7 +135,7 @@
    "yesod/yesod-auth": {
     "status": "ok",
     "files": 15,
-    "findings": 4,
+    "findings": 2,
     "lineageFailure": null,
     "graph": {
      "status": "complete",
@@ -151,7 +151,7 @@
    "home-manager/modules/services": {
     "status": "ok",
     "files": 218,
-    "findings": 38,
+    "findings": 35,
     "lineageFailure": null,
     "graph": {
      "status": "complete",
@@ -167,7 +167,7 @@
    "nixpkgs-subset/nixos/modules/security": {
     "status": "ok",
     "files": 36,
-    "findings": 38,
+    "findings": 37,
     "lineageFailure": null,
     "graph": {
      "status": "complete",
@@ -183,7 +183,7 @@
    "nixpkgs-subset/nixos/modules/services/web-servers": {
     "status": "ok",
     "files": 41,
-    "findings": 64,
+    "findings": 54,
     "lineageFailure": null,
     "graph": {
      "status": "complete",
@@ -203,8 +203,8 @@
     "graph": {
      "status": "complete",
      "nodes": 6,
-     "edges": 3,
-     "flows": 3,
+     "edges": 8,
+     "flows": 8,
      "truncatedQueries": 0
     }
    }
@@ -256,8 +256,8 @@
    "scotty:Web/Scotty/Session.hs:187:weak-rng": "TP",
    "scotty:Web/Scotty/Cookie.hs:132:cookie-flags": "TP",
    "yesod:yesod-auth/Yesod/Auth/Email.hs:959:weak-hash": "TP",
-   "yesod:yesod-auth/Yesod/Auth/Email.hs:998:unsafe-boundary": "TP",
-   "yesod:yesod-auth/Yesod/Auth/GoogleEmail2.hs:615:unsafe-boundary": "TP",
+   "yesod:yesod-auth/Yesod/Auth/Email.hs:998:unsafe-boundary": "FN",
+   "yesod:yesod-auth/Yesod/Auth/GoogleEmail2.hs:615:unsafe-boundary": "FN",
    "yesod:yesod-auth/Yesod/Auth/OpenId.hs:77:open-redirect": "excluded",
    "yesod:yesod-core/src/Yesod/Core/Class/Yesod.hs:888:cookie-flags": "excluded",
    "yesod:yesod-core/src/Yesod/Core/Handler.hs:1604:cookie-flags": "excluded",
@@ -281,12 +281,12 @@
    "home-manager:modules/services/pass-secret-service.nix:53:nix-secret": "TN"
   },
   "fixture": {
-   "ms:F1": "TP-sink",
-   "ms:F2": "TP-sink",
+   "ms:F1": "TP+sink",
+   "ms:F2": "TP+sink",
    "ms:F3": "TP+sink",
-   "ms:F4": "FN",
-   "ms:F5": "FN",
-   "ms:F6": "FN",
+   "ms:F4": "TP+sink",
+   "ms:F5": "TP+sink",
+   "ms:F6": "TP+sink",
    "ms:N1": "TN",
    "ms:N2": "TN",
    "ms:N3": "TN",
@@ -616,15 +616,11 @@
      }
     },
     "attribution": {
-     "examined": 3,
-     "correct": 3,
-     "falseAttributions": 0,
+     "examined": 8,
+     "correct": 7,
+     "falseAttributions": 1,
      "negativeLabelHits": 0,
-     "missingPositive": [
-      "ms:F4",
-      "ms:F5",
-      "ms:F6"
-     ]
+     "missingPositive": []
     }
    },
    "fixture/callreturn": {
@@ -728,26 +724,26 @@
    },
    "express/examples": {
     "witness": {
-     "sinksWithPaths": 31,
-     "attempted": 31,
+     "sinksWithPaths": 36,
+     "attempted": 36,
      "buildRefused": 0,
-     "built": 31,
+     "built": 36,
      "builtCrossScope": 0,
-     "replayed": 31,
+     "replayed": 36,
      "replayedCrossScope": 0,
      "replayFailed": 0,
-     "completeBundles": 31,
+     "completeBundles": 36,
      "tamper": {
-      "edge-altered-resigned": "31/31",
-      "edge-altered-unsigned": "31/31",
-      "source-blob-altered": "31/31",
-      "graph-altered": "31/31"
+      "edge-altered-resigned": "36/36",
+      "edge-altered-unsigned": "36/36",
+      "source-blob-altered": "36/36",
+      "graph-altered": "36/36"
      }
     },
     "callReturn": {
      "v1": {
-      "sinks": 31,
-      "paths": 39,
+      "sinks": 36,
+      "paths": 48,
       "pathsWithCallOrReturn": 0,
       "impossible": 0,
       "unmatchedReturnPaths": 0,
@@ -758,8 +754,8 @@
       "truncatedQueries": 0
      },
      "v2": {
-      "sinks": 30,
-      "paths": 38,
+      "sinks": 35,
+      "paths": 47,
       "pathsWithCallOrReturn": 0,
       "impossible": 0,
       "unmatchedReturnPaths": 0,
@@ -772,7 +768,7 @@
     },
     "attribution": {
      "labeled": 7,
-     "unlabeled": 0,
+     "unlabeled": 2,
      "correct": 6,
      "wrongField": 0,
      "spurious": 1,
