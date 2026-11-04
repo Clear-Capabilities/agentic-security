@@ -965,9 +965,10 @@ test('expected jobs — the paginated check-runs output is parsed line by line, 
   assert.equal(parseCheckRunLines('[{"name":"ci"}]'), null, 'the old whole-array form is not the paginated form');
 });
 
-test('expected jobs — every check run name seen on a recent release commit is classified (CodeQL included)', () => {
+test('expected jobs — every workflow job name seen on a recent release commit is classified (CodeQL is the code-scanning summary, not a job, and stays unlisted)', () => {
   const tiers = readCheckTiers();
-  for (const name of ['CodeQL', 'analyze (javascript-typescript)', 'test-shard (5/8)', 'telemetry-capture', 'language-stress', 'dependency-currency']) {
+  assert.ok(!tiers.blocking.includes('CodeQL') && !tiers.informational.includes('CodeQL'));
+  for (const name of ['analyze (javascript-typescript)', 'test-shard (5/8)', 'telemetry-capture', 'language-stress', 'dependency-currency']) {
     assert.ok(tiers.blocking.includes(name) || tiers.informational.includes(name), `${name} is classified`);
   }
 });
