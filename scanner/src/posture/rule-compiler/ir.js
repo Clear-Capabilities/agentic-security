@@ -74,9 +74,18 @@ export function validateRuleIR(ir) {
   return errs;
 }
 
+/** JSON with every object's keys sorted at every depth, so the digest does not depend on insertion order. */
+function stableStringify(v) {
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`;
+  if (v && typeof v === 'object') return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`).join(',')}}`;
+  return JSON.stringify(v);
+}
+
 export function ruleIRDigest(ir) {
   const { state: _s, ...rest } = ir;
-  return sha256(JSON.stringify(rest, Object.keys(rest).sort()));
+  // Until 0.195.23 this passed the TOP-LEVEL key list as the JSON replacer, which also filters nested objects: `match.pattern` and
+  // every structural regex were serialized as `{}`, so the digest never covered the one thing a rule is. Sorted at every depth now.
+  return sha256(stableStringify(rest));
 }
 
 /** Build a DRAFT rule IR. Caller supplies the candidate pattern — this module never invents one. */

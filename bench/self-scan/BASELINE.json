@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-04T07:01:27.517Z",
-  "commit": "1f97d015591b1f4f84f7bcd060510b0ea9d8c134",
+  "generatedAt": "2026-11-04T14:32:39.427Z",
+  "commit": "c23f4c6d2472622fc6a5bd93d69929a446282aa2",
   "targets": {
     "hooks": {
       "total": 21,
@@ -62,7 +62,7 @@
       }
     },
     "scanner/src": {
-      "total": 690,
+      "total": 683,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -175,7 +175,7 @@
         "pipeline/supervised-analyzers.js": 1,
         "poc-video.js": 1,
         "posture/adversarial-self-test.js": 1,
-        "posture/adversary-agent.js": 5,
+        "posture/adversary-agent.js": 1,
         "posture/agents-memory.js": 8,
         "posture/aibom.js": 3,
         "posture/api-contract.js": 1,
@@ -252,7 +252,6 @@
         "posture/fleet/fleet-manifest.js": 1,
         "posture/fleet/job-runner.js": 1,
         "posture/fleet/scan-cache.js": 6,
-        "posture/flow-narration.js": 1,
         "posture/grader-calibration.js": 4,
         "posture/harness-discovery.js": 1,
         "posture/holdout-eval.js": 3,
@@ -265,7 +264,6 @@
         "posture/license-graph.js": 3,
         "posture/license-policy.js": 3,
         "posture/llm-redteam-prompts.js": 1,
-        "posture/llm-redteam.js": 1,
         "posture/mcp-rug-pull.js": 1,
         "posture/mitigation-composite.js": 1,
         "posture/model-rescan.js": 1,
@@ -375,7 +373,7 @@
         "sca/binary-metadata.js": 5,
         "sca/container.js": 2,
         "sca/dep-confusion.js": 3,
-        "sca/llm-function-extract.js": 2,
+        "sca/llm-function-extract.js": 1,
         "sca/py-package-functions.js": 1,
         "sca/sigstore-verify.js": 7,
         "server/CLAUDE.md": 1,

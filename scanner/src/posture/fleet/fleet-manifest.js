@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { load as loadYaml } from '../../util/yaml.js';
 
-export const FLEET_MANIFEST_SCHEMA_KEYS = Object.freeze(['organization', 'repositories', 'workers', 'perRepoTimeout', 'retries', 'resources']);
+export const FLEET_MANIFEST_SCHEMA_KEYS = Object.freeze(['organization', 'repositories', 'workers', 'perRepoTimeout', 'retries', 'resources', 'cacheMaxAge']);
 export const REPO_KEYS = Object.freeze(['id', 'path', 'required', 'kind', 'internetFacing', 'environment', 'dataClasses', 'trustZone', 'calls', 'produces', 'consumes', 'reads', 'writes', 'providers', 'aliases']);
 export const RESOURCE_KEYS = Object.freeze(['id', 'kind', 'dataClasses', 'trustZone', 'internetFacing', 'environment', 'aliases']);
 export const REPO_KINDS = Object.freeze(['service', 'library', 'frontend', 'worker', 'gateway']);
@@ -93,12 +93,15 @@ export function validateFleetManifest(doc, { baseDir = '.' } = {}) {
   if (doc.workers != null && !(Number.isInteger(doc.workers) && doc.workers >= 1 && doc.workers <= 32)) errors.push('workers must be an integer in 1..32');
   if (doc.retries != null && !(Number.isInteger(doc.retries) && doc.retries >= 0 && doc.retries <= 5)) errors.push('retries must be an integer in 0..5');
   if (doc.perRepoTimeout != null && parseDuration(doc.perRepoTimeout, null) == null) errors.push(`perRepoTimeout is not a valid duration: ${doc.perRepoTimeout}`);
+  if (doc.cacheMaxAge != null && parseDuration(doc.cacheMaxAge, null) == null) errors.push(`cacheMaxAge is not a valid duration: ${doc.cacheMaxAge}`);
   if (errors.length) return { ok: false, errors };
   return {
     ok: true, errors: [],
     manifest: {
       organization: doc.organization, repositories: repos, resources,
       workers: doc.workers ?? 4, retries: doc.retries ?? 1, perRepoTimeoutMs: parseDuration(doc.perRepoTimeout, 20 * 60000),
+      // GA-09: a cached result older than this is stale and is not reused (the feeds it was enriched with have moved on); 7 days by default
+      cacheMaxAgeMs: parseDuration(doc.cacheMaxAge, 7 * 24 * 3600000),
     },
   };
 }

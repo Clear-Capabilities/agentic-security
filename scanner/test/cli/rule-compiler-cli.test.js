@@ -49,6 +49,22 @@ const SAFE_HANDLER = `function handler(req, res) {
 }
 module.exports = handler;
 `;
+// Independent examples (GA-07): code from elsewhere, not the finding and not a mutation of it. Promotion needs at least one of each,
+// and they are never mutated. The clean one is bound AND escaped so it is safe under both the text rule and the structured rules.
+const INDEPENDENT = {
+  independentVulnerableCode: [`function listOrders(req, res) {
+  const ownerId = req.params.owner;
+  const rows = db.rawQuery("SELECT * FROM orders WHERE owner = " + ownerId);
+  res.json(rows);
+}
+`],
+  independentCleanCode: [`function listOrders(req, res) {
+  const rows = db.rawQuery("SELECT * FROM orders WHERE owner = ?", [escapeSql(req.params.owner)]);
+  res.json(rows);
+}
+`],
+};
+const REVIEWED = ['--reviewed-by', 'a reviewer', '--scope', 'this project'];
 
 test('killer scenario: deterministic engine misses it, rule compiler learns it, promoted rule catches an unseen sibling with zero model calls', () => {
   const dir = mkProject();
@@ -84,6 +100,7 @@ test('killer scenario: deterministic engine misses it, rule compiler learns it, 
     originalCode: VULN_HANDLER, patchedCode: SAFE_HANDLER,
     nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'],
     protectedVariantsCode: [SAFE_HANDLER],
+    ...INDEPENDENT,
   };
   const corpusFile = path.join(dir, 'corpus.json');
   fs.writeFileSync(corpusFile, JSON.stringify(corpus));
@@ -95,7 +112,10 @@ test('killer scenario: deterministic engine misses it, rule compiler learns it, 
   // 5. Promote: ONLY now does anything become a live, loaded rule.
   const beforePromote = runIn(dir, ['scan', '.', '--format', 'json']);
   assert.equal((JSON.parse(beforePromote.stdout).findings || []).length, 0, 'must not be live before promotion');
-  const promote = runIn(dir, ['rules', 'promote', 'orm-raw-query-concat']);
+  const unreviewed = runIn(dir, ['rules', 'promote', 'orm-raw-query-concat']);
+  assert.equal(unreviewed.status, 4, 'a promotion with no named reviewer is refused');
+  assert.match(unreviewed.stderr, /--reviewed-by/);
+  const promote = runIn(dir, ['rules', 'promote', 'orm-raw-query-concat', ...REVIEWED]);
   assert.equal(promote.status, 0, promote.stderr + promote.stdout);
   assert.match(promote.stdout, /VALIDATED -> PROMOTED/);
   assert.ok(fs.existsSync(path.join(dir, '.agentic-security', 'rules', 'orm-raw-query-concat.yml')));
@@ -164,7 +184,7 @@ test('labs synthesize-rule proposes the rule itself from the vulnerable and patc
   // no `match` at all: the compiler proposes it. The material is code only; no benchmark name, no weakness comment.
   const spec = {
     id: 'auto-raw-query-concat', title: 'rawQuery built from string concatenation', severity: 'critical', cwe: 'CWE-89', family: 'sql-injection', languages: ['javascript'],
-    originalCode: VULN_HANDLER, patchedCode: SAFE_HANDLER, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE_HANDLER],
+    originalCode: VULN_HANDLER, patchedCode: SAFE_HANDLER, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE_HANDLER], ...INDEPENDENT,
     model: 'hunt-agent-1', promptConfigVersion: 'p3', discoveryCost: { usd: 0.42, tokens: 51234, model: 'hunt-agent-1' },
   };
   const specFile = path.join(dir, 'spec.json'); fs.writeFileSync(specFile, JSON.stringify(spec));
@@ -185,7 +205,7 @@ test('labs synthesize-rule proposes the rule itself from the vulnerable and patc
   assert.equal(prov.promotionEvent, null, 'not promoted yet, and the provenance says so');
   assert.ok(prov.mutatorCoverage.applied.length >= 3);
 
-  assert.equal(runIn(dir, ['rules', 'promote', 'auto-raw-query-concat']).status, 0);
+  assert.equal(runIn(dir, ['rules', 'promote', 'auto-raw-query-concat', ...REVIEWED]).status, 0);
   const afterPromote = JSON.parse(fs.readFileSync(path.join(dir, '.agentic-security', 'rule-compiler', 'auto-raw-query-concat', 'provenance.json'), 'utf8'));
   assert.equal(afterPromote.promotionEvent.ruleHash, prov.ruleHash);
 
@@ -246,10 +266,10 @@ function b(req, res) {
   fs.writeFileSync(path.join(dir, 'spec.json'), JSON.stringify(spec));
   assert.equal(runIn(dir, ['rules', 'synthesize', findingId, '--spec', path.join(dir, 'spec.json')]).status, 0);
   const SAFE = VULN_HANDLER.replace('req.query.id', 'escapeSql(req.query.id)');
-  fs.writeFileSync(path.join(dir, 'corpus.json'), JSON.stringify({ originalCode: VULN_HANDLER, patchedCode: SAFE, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE] }));
+  fs.writeFileSync(path.join(dir, 'corpus.json'), JSON.stringify({ originalCode: VULN_HANDLER, patchedCode: SAFE, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE], ...INDEPENDENT }));
   const ev = runIn(dir, ['rules', 'evaluate', 'orm-raw-query-structured', '--corpus', path.join(dir, 'corpus.json')]);
   assert.equal(ev.status, 0, ev.stderr + ev.stdout); assert.match(ev.stdout, /VALIDATED/);
-  assert.equal(runIn(dir, ['rules', 'promote', 'orm-raw-query-structured']).status, 0);
+  assert.equal(runIn(dir, ['rules', 'promote', 'orm-raw-query-structured', ...REVIEWED]).status, 0);
   const yml = fs.readFileSync(path.join(dir, '.agentic-security', 'rules', 'orm-raw-query-structured.yml'), 'utf8');
   assert.match(yml, /guardedBy:/); assert.match(yml, /fileRequires:/); assert.match(yml, /excludeLine:/);
   const findings = JSON.parse(runIn(dir, ['scan', '.', '--format', 'json']).stdout).findings || [];
@@ -266,13 +286,13 @@ test('regression integration (PRD 3 requirement 8): a promoted rule joins a shar
   const findingId = 'hunt-rawquery-0003';
   fs.writeFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), JSON.stringify({ findings: [{ id: findingId, stableId: findingId, file: 'server.js', line: 3, cwe: 'CWE-89', vuln: 'SQL injection via rawQuery', severity: 'critical', parser: 'IR-TAINT', snippet: 'db.rawQuery(x)' }] }));
   const SAFE = VULN_HANDLER.replace('req.query.id', 'escapeSql(req.query.id)');
-  const corpus = { originalCode: VULN_HANDLER, patchedCode: SAFE, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE] };
+  const corpus = { originalCode: VULN_HANDLER, patchedCode: SAFE, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE], ...INDEPENDENT };
   fs.writeFileSync(path.join(dir, 'corpus.json'), JSON.stringify(corpus));
   const specA = { id: 'rule-a-rawquery', title: 'rawQuery fed by a request value', severity: 'critical', cwe: 'CWE-89', family: 'sql-injection', languages: ['javascript'], source: '(?:req(?:uest)?|ctx)\\.(?:request\\.)?(?:query|params|body)\\b', sink: 'rawQuery\\s*\\(', sanitizer: 'escapeSql\\s*\\(', window: 4 };
   fs.writeFileSync(path.join(dir, 'a.json'), JSON.stringify(specA));
   assert.equal(runIn(dir, ['rules', 'synthesize', findingId, '--spec', path.join(dir, 'a.json')]).status, 0);
   assert.equal(runIn(dir, ['rules', 'evaluate', 'rule-a-rawquery', '--corpus', path.join(dir, 'corpus.json')]).status, 0);
-  assert.equal(runIn(dir, ['rules', 'promote', 'rule-a-rawquery']).status, 0);
+  assert.equal(runIn(dir, ['rules', 'promote', 'rule-a-rawquery', ...REVIEWED]).status, 0);
 
   // nothing regressed yet
   const clean = runIn(dir, ['rules', 'regress']);
@@ -308,7 +328,7 @@ function trustProject() {
   const fid = 'hunt-rawquery-0004';
   fs.writeFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), JSON.stringify({ findings: [{ id: fid, stableId: fid, file: 'server.js', line: 3, cwe: 'CWE-89', vuln: 'x', severity: 'critical', parser: 'IR-TAINT', snippet: 'x' }] }));
   const SAFE = VULN_HANDLER.replace('req.query.id', 'escapeSql(req.query.id)');
-  fs.writeFileSync(path.join(dir, 'corpus.json'), JSON.stringify({ originalCode: VULN_HANDLER, patchedCode: SAFE, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE] }));
+  fs.writeFileSync(path.join(dir, 'corpus.json'), JSON.stringify({ originalCode: VULN_HANDLER, patchedCode: SAFE, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE], ...INDEPENDENT }));
   fs.writeFileSync(path.join(dir, 'spec.json'), JSON.stringify({ id: 'trust-rawquery', title: 'rawQuery fed by a request value', severity: 'critical', cwe: 'CWE-89', family: 'sql-injection', languages: ['javascript'], source: '(?:req(?:uest)?|ctx)\\.(?:request\\.)?(?:query|params|body)\\b', sink: 'rawQuery\\s*\\(', sanitizer: 'escapeSql\\s*\\(', window: 4 }));
   return { dir, fid };
 }
@@ -319,7 +339,7 @@ test('promotion is not trust: an unsigned promoted rule is reported NOT LIVE and
   const { dir, fid } = trustProject();
   assert.equal(runStrict(dir, ['rules', 'synthesize', fid, '--spec', path.join(dir, 'spec.json')]).status, 0);
   assert.equal(runStrict(dir, ['rules', 'evaluate', 'trust-rawquery', '--corpus', path.join(dir, 'corpus.json')]).status, 0);
-  const promote = runStrict(dir, ['rules', 'promote', 'trust-rawquery']);
+  const promote = runStrict(dir, ['rules', 'promote', 'trust-rawquery', ...REVIEWED]);
   assert.equal(promote.status, 0, promote.stderr);
   assert.match(promote.stdout, /NOT LIVE YET: the scanner will refuse this rule \(unsigned\)/);
   assert.match(promote.stdout, /agentic-security-rule sign|--sign-key/);
@@ -336,7 +356,7 @@ test('promotion is not trust: an unsigned promoted rule is reported NOT LIVE and
   const dir2 = trustProject();
   assert.equal(runStrict(dir2.dir, ['rules', 'synthesize', dir2.fid, '--spec', path.join(dir2.dir, 'spec.json')]).status, 0);
   assert.equal(runStrict(dir2.dir, ['rules', 'evaluate', 'trust-rawquery', '--corpus', path.join(dir2.dir, 'corpus.json')]).status, 0);
-  const signed = runStrict(dir2.dir, ['rules', 'promote', 'trust-rawquery', '--sign-key', privateKey]);
+  const signed = runStrict(dir2.dir, ['rules', 'promote', 'trust-rawquery', '--sign-key', privateKey, ...REVIEWED]);
   assert.equal(signed.status, 0, signed.stderr); assert.match(signed.stdout, /signed: .*trust-rawquery\.yml\.sig/); assert.match(signed.stdout, /The scanner will load it/);
   assert.ok(fs.existsSync(path.join(dir2.dir, '.agentic-security', 'rules', 'trust-rawquery.yml.sig')));
   assert.match(runStrict(dir2.dir, ['rules', 'status', 'trust-rawquery']).stdout, /live: yes/);

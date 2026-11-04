@@ -468,7 +468,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | model-egress-policy:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate contract-conformance) |
 | model-egress-policy:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.22 at a35caf7bdba4, bundle af785a81038b |
-| model-egress-policy:EGRESS-ALL-PATHS | mechanical |  | passed | 8 model-call site(s) evaluate the policy; 2 exempt with a reason |
+| model-egress-policy:EGRESS-ALL-PATHS | mechanical |  | passed | 9 model-call site(s) evaluate the policy and send through the shared transport; 2 exempt with a reason |
 | model-egress-policy:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | model-egress-policy:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
 | model-egress-policy:GA-07-001 | manual | GA-07 | not-started | depends on GA-02 and GA-06; mutation execution needs GA-08 |

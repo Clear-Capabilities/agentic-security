@@ -45,6 +45,29 @@ export function computeOrgHealth({ manifest, jobs }) {
   return { counts, assurance, reasons, repositories: repos };
 }
 
+/**
+ * Fold artifact problems (a result whose file is missing or does not match its recorded hash) into the health (GA-09). The repository
+ * becomes `failed`; a required one turns the organization red, an optional one makes it degraded (it used to stay green); the counts
+ * move from whatever state the repository had, not always from `complete`. Returns the same object, changed in place.
+ */
+export function applyArtifactProblems(health, manifest, problems) {
+  if (!Array.isArray(problems) || !problems.length) return health;
+  const stateKey = { complete: 'complete', partial: 'partial', failed: 'failed', 'timed-out': 'timedOut', cancelled: 'cancelled', 'not-run': 'notRun' };
+  let requiredHit = false; let optionalHit = false;
+  for (const p of problems) {
+    const r = health.repositories.find((x) => x.id === p.repoId);
+    if (!r) continue;
+    if (r.state !== 'failed') { health.counts[stateKey[r.state]]--; health.counts.failed++; }
+    r.state = 'failed'; r.error = p.problem;
+    const required = manifest.repositories.some((m) => m.id === p.repoId && m.required);
+    if (required) requiredHit = true; else optionalHit = true;
+  }
+  if (requiredHit) health.assurance = 'red';
+  else if (optionalHit && health.assurance === 'green') health.assurance = 'degraded';
+  health.reasons.push(`${problems.length} result(s) could not be verified: ${problems.map((p) => `${p.repoId} (${p.problem})`).join(', ')}`);
+  return health;
+}
+
 const n = (x) => x.toLocaleString('en-US');
 export function renderOrgHealth(h) {
   const c = h.counts;

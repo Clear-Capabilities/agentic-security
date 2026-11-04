@@ -674,9 +674,7 @@ function runOfJob(store, id) {
 async function finishRun({ args, root, store, runId, manifest, manifestFile, interrupted }) {
   const { artifacts, problems } = (0,_job_runner_js__WEBPACK_IMPORTED_MODULE_8__/* .loadArtifacts */ .kZ)({ store, runId, root });
   const jobs = store.listJobs(runId);
-  const health = (0,_org_health_js__WEBPACK_IMPORTED_MODULE_9__/* .computeOrgHealth */ .WB)({ manifest, jobs });
-  for (const p of problems) { const r = health.repositories.find((x) => x.id === p.repoId); if (r) { r.state = 'failed'; r.error = p.problem; } }
-  if (problems.length) { health.counts.complete -= problems.filter((p) => health.repositories.find((x) => x.id === p.repoId)).length; health.counts.failed += problems.length; if (health.assurance !== 'red' && manifest.repositories.some((r) => r.required && problems.some((p) => p.repoId === r.id))) health.assurance = 'red'; health.reasons.push(`${problems.length} result(s) could not be verified: ${problems.map((p) => `${p.repoId} (${p.problem})`).join(', ')}`); }
+  const health = (0,_org_health_js__WEBPACK_IMPORTED_MODULE_9__/* .applyArtifactProblems */ .Dh)((0,_org_health_js__WEBPACK_IMPORTED_MODULE_9__/* .computeOrgHealth */ .WB)({ manifest, jobs }), manifest, problems);
 
   let previous = null;
   const rollupFile = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, ROLLUP_FILE);
@@ -1433,7 +1431,7 @@ function blastRadius(graph, repoId) {
 
 
 
-const FLEET_MANIFEST_SCHEMA_KEYS = Object.freeze(['organization', 'repositories', 'workers', 'perRepoTimeout', 'retries', 'resources']);
+const FLEET_MANIFEST_SCHEMA_KEYS = Object.freeze(['organization', 'repositories', 'workers', 'perRepoTimeout', 'retries', 'resources', 'cacheMaxAge']);
 const REPO_KEYS = Object.freeze(['id', 'path', 'required', 'kind', 'internetFacing', 'environment', 'dataClasses', 'trustZone', 'calls', 'produces', 'consumes', 'reads', 'writes', 'providers', 'aliases']);
 const RESOURCE_KEYS = Object.freeze(['id', 'kind', 'dataClasses', 'trustZone', 'internetFacing', 'environment', 'aliases']);
 const REPO_KINDS = Object.freeze(['service', 'library', 'frontend', 'worker', 'gateway']);
@@ -1512,12 +1510,15 @@ function validateFleetManifest(doc, { baseDir = '.' } = {}) {
   if (doc.workers != null && !(Number.isInteger(doc.workers) && doc.workers >= 1 && doc.workers <= 32)) errors.push('workers must be an integer in 1..32');
   if (doc.retries != null && !(Number.isInteger(doc.retries) && doc.retries >= 0 && doc.retries <= 5)) errors.push('retries must be an integer in 0..5');
   if (doc.perRepoTimeout != null && parseDuration(doc.perRepoTimeout, null) == null) errors.push(`perRepoTimeout is not a valid duration: ${doc.perRepoTimeout}`);
+  if (doc.cacheMaxAge != null && parseDuration(doc.cacheMaxAge, null) == null) errors.push(`cacheMaxAge is not a valid duration: ${doc.cacheMaxAge}`);
   if (errors.length) return { ok: false, errors };
   return {
     ok: true, errors: [],
     manifest: {
       organization: doc.organization, repositories: repos, resources,
       workers: doc.workers ?? 4, retries: doc.retries ?? 1, perRepoTimeoutMs: parseDuration(doc.perRepoTimeout, 20 * 60000),
+      // GA-09: a cached result older than this is stale and is not reused (the feeds it was enriched with have moved on); 7 days by default
+      cacheMaxAgeMs: parseDuration(doc.cacheMaxAge, 7 * 24 * 3600000),
     },
   };
 }
@@ -1554,7 +1555,7 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony export */   nY: () => (/* binding */ planRun),
 /* harmony export */   zD: () => (/* binding */ reclaimDeadWorkers)
 /* harmony export */ });
-/* unused harmony export DEFAULTS */
+/* unused harmony exports DEFAULTS, DEFAULT_CACHE_MAX_AGE_MS, cacheFreshness */
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
 /* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(48161);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
@@ -1637,6 +1638,21 @@ function planRun({ manifest, manifestHash, store, runId = null, config = {}, now
  * Run (or continue) a planned run until no job is queued or leased by a live worker. Returns when the work is done, the signal
  * aborts, or `maxWaitMs` passes with only other workers' leases outstanding.
  */
+const DEFAULT_CACHE_MAX_AGE_MS = 7 * 24 * 3600000;
+
+/**
+ * Is a cache hit fresh enough to reuse (GA-09)? A record with no readable `cachedAt` (written before 0.195.23) is never fresh, and a
+ * record older than `maxAgeMs` (the manifest's `cacheMaxAge`, 7 days by default) is stale. Returns `{ fresh, cacheAgeMs }`.
+ */
+function cacheFreshness(hit, maxAgeMs, nowMs) {
+  if (!hit) return { fresh: false, cacheAgeMs: null };
+  const t = typeof hit.cachedAt === 'string' ? Date.parse(hit.cachedAt) : NaN;
+  if (Number.isNaN(t)) return { fresh: false, cacheAgeMs: null };
+  const cacheAgeMs = Math.max(0, nowMs - t);
+  const max = Number.isFinite(maxAgeMs) && maxAgeMs > 0 ? maxAgeMs : DEFAULT_CACHE_MAX_AGE_MS;
+  return { fresh: cacheAgeMs <= max, cacheAgeMs };
+}
+
 async function runJobs({ manifest, store, runId, root, scan = childScan, scanOptions = {}, workers = manifest.workers, leaseMs = DEFAULTS.leaseMs, heartbeatMs = DEFAULTS.heartbeatMs, retryDelayMs = DEFAULTS.retryDelayMs, pollMs = DEFAULTS.pollMs, maxWaitMs = null, signal, now = () => Date.now(), onEvent = () => {}, cacheDir = null, artifactDir = null, useCache = true }) {
   const repoById = new Map(manifest.repositories.map((r) => [r.id, r]));
   const cacheD = cacheDir ?? (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, 'fleet', 'cache');
@@ -1646,7 +1662,11 @@ async function runJobs({ manifest, store, runId, root, scan = childScan, scanOpt
   const writeArtifact = (job, payload) => {
     const text = JSON.stringify({ schema: 'agentic-security/fleet-scan-artifact', version: 1, runId, repoId: job.repoId, epoch: job.epoch, commit: job.commit, ...payload });
     const file = node_path__WEBPACK_IMPORTED_MODULE_2__.join(artD, `${job.repoId}.${job.epoch}.json`);
-    node_fs__WEBPACK_IMPORTED_MODULE_0__.writeFileSync(file, text, { mode: 0o600 });
+    // written whole or not at all (GA-09): a worker killed mid-write leaves no half artifact for the hash check to find, only a
+    // stray temp file, and the job stays leased until the lease expires and another worker redoes it
+    const tmp = `${file}.${process.pid}.tmp`;
+    node_fs__WEBPACK_IMPORTED_MODULE_0__.writeFileSync(tmp, text, { mode: 0o600 });
+    node_fs__WEBPACK_IMPORTED_MODULE_0__.renameSync(tmp, file);
     return { file, sha256: sha(text) };
   };
 
@@ -1668,11 +1688,16 @@ async function runJobs({ manifest, store, runId, root, scan = childScan, scanOpt
       idleSince = null;
       const repo = repoById.get(job.repoId);
       onEvent({ type: 'start', repo: job.repoId, attempt: job.attempts });
-      const cached = useCache ? (0,_scan_cache_js__WEBPACK_IMPORTED_MODULE_7__/* .readCache */ .xe)(cacheD, job.cacheKey) : null;
+      const hit = useCache ? (0,_scan_cache_js__WEBPACK_IMPORTED_MODULE_7__/* .readCache */ .xe)(cacheD, job.cacheKey) : null;
+      // GA-09: a hit is reused only while it is fresh. A result with no recorded time (written before 0.195.23) or older than the
+      // manifest's `cacheMaxAge` is stale: it is scanned again, never folded into a green organization as if it were current.
+      const { fresh, cacheAgeMs } = cacheFreshness(hit, manifest.cacheMaxAgeMs, now());
+      const cached = fresh ? hit : null;
+      if (hit && !cached) onEvent({ type: 'cache-stale', repo: job.repoId, cacheAgeMs });
       if (cached) {
-        const a = writeArtifact(job, { entry: cached.entry, findings: cached.findings, findingsTruncated: !!cached.findingsTruncated, lineage: cached.lineage ?? null, cached: true });
+        const a = writeArtifact(job, { entry: cached.entry, findings: cached.findings, findingsTruncated: !!cached.findingsTruncated, lineage: cached.lineage ?? null, cached: true, cachedAt: cached.cachedAt, cacheAgeMs });
         const status = cached.entry?.scanHealth && cached.entry.scanHealth.status !== 'complete' ? 'partial' : 'succeeded';
-        if (store.complete(job.jobId, job.epoch, { status, artifactSha256: a.sha256, summary: { total: cached.entry?.total ?? null, cached: true, artifact: node_path__WEBPACK_IMPORTED_MODULE_2__.basename(a.file) }, now: now() })) onEvent({ type: 'done', repo: job.repoId, cached: true, status });
+        if (store.complete(job.jobId, job.epoch, { status, artifactSha256: a.sha256, summary: { total: cached.entry?.total ?? null, cached: true, cacheAgeMs, artifact: node_path__WEBPACK_IMPORTED_MODULE_2__.basename(a.file) }, now: now() })) onEvent({ type: 'done', repo: job.repoId, cached: true, status });
         continue;
       }
       const ac = new AbortController();
@@ -1946,6 +1971,7 @@ function summarizeLineage(graph) {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Dh: () => (/* binding */ applyArtifactProblems),
 /* harmony export */   Vp: () => (/* binding */ renderOrgHealth),
 /* harmony export */   WB: () => (/* binding */ computeOrgHealth)
 /* harmony export */ });
@@ -1996,6 +2022,29 @@ function computeOrgHealth({ manifest, jobs }) {
     ...(optionalProblems.length ? [`${optionalProblems.length} optional ${optionalProblems.length === 1 ? 'repository has' : 'repositories have'} a problem: ${optionalProblems.map((x) => `${x.id} (${x.state})`).join(', ')}`] : []),
   ];
   return { counts, assurance, reasons, repositories: repos };
+}
+
+/**
+ * Fold artifact problems (a result whose file is missing or does not match its recorded hash) into the health (GA-09). The repository
+ * becomes `failed`; a required one turns the organization red, an optional one makes it degraded (it used to stay green); the counts
+ * move from whatever state the repository had, not always from `complete`. Returns the same object, changed in place.
+ */
+function applyArtifactProblems(health, manifest, problems) {
+  if (!Array.isArray(problems) || !problems.length) return health;
+  const stateKey = { complete: 'complete', partial: 'partial', failed: 'failed', 'timed-out': 'timedOut', cancelled: 'cancelled', 'not-run': 'notRun' };
+  let requiredHit = false; let optionalHit = false;
+  for (const p of problems) {
+    const r = health.repositories.find((x) => x.id === p.repoId);
+    if (!r) continue;
+    if (r.state !== 'failed') { health.counts[stateKey[r.state]]--; health.counts.failed++; }
+    r.state = 'failed'; r.error = p.problem;
+    const required = manifest.repositories.some((m) => m.id === p.repoId && m.required);
+    if (required) requiredHit = true; else optionalHit = true;
+  }
+  if (requiredHit) health.assurance = 'red';
+  else if (optionalHit && health.assurance === 'green') health.assurance = 'degraded';
+  health.reasons.push(`${problems.length} result(s) could not be verified: ${problems.map((p) => `${p.repoId} (${p.problem})`).join(', ')}`);
+  return health;
 }
 
 const n = (x) => x.toLocaleString('en-US');
@@ -2131,7 +2180,7 @@ function writeCache(dir, key, payload) {
   if (!key || !/^[0-9a-f]{64}$/.test(key)) return false;
   try {
     node_fs__WEBPACK_IMPORTED_MODULE_0__.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const body = { schema: 'agentic-security/fleet-scan-cache', version: 1, key, ...payload };
+    const body = { schema: 'agentic-security/fleet-scan-cache', version: 1, key, cachedAt: new Date().toISOString(), ...payload };
     const doc = { ...body, digest: sha(JSON.stringify(body)) };
     const tmp = node_path__WEBPACK_IMPORTED_MODULE_1__.join(dir, `.${key}.${process.pid}.tmp`);
     node_fs__WEBPACK_IMPORTED_MODULE_0__.writeFileSync(tmp, JSON.stringify(doc), { mode: 0o600 });

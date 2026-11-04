@@ -77,6 +77,7 @@ import { localEndpointConfig } from './local-endpoint.js';
 import { resolveProvider, buildProviderRequest, providerMatrix } from './providers.js';
 import { evaluateEgress } from '../egress/policy.js';
 import { recordEgressCall, payloadMetrics } from '../egress/audit.js';
+import { modelFetch } from '../egress/transport.js';
 import { MODEL_STATUS, summarizeModelStatus } from './model-status.js';
 import { callOllamaChat } from './ollama-provider.js';
 
@@ -408,12 +409,13 @@ async function callEndpoint(endpoint, apiKey, model, prompt, preset = null, shap
     // A model that accepts the connection and never answers must not hold a scan open forever: every call is bounded.
     // The result is an UNAVAILABLE finding (kept, unvalidated), never a silent pass.
     const ms = Number(process.env.AGENTIC_SECURITY_LLM_TIMEOUT_MS) > 0 ? Number(process.env.AGENTIC_SECURITY_LLM_TIMEOUT_MS) : 60_000;
-    const r = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(ms) });
+    const r = await modelFetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) }, { timeoutMs: ms });
     if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
     const j = await r.json().catch(() => null);
     return { ok: true, text: String(extractText(j) || ''), usage: extractUsage ? extractUsage(j) : null };
   } catch (e) {
-    return { ok: false, error: e && e.name === 'TimeoutError' ? 'timeout' : e.message };
+    // a redirect, an oversized body or a spent budget is an unavailable validator, named by its transport code, never a pass
+    return { ok: false, error: e && e.code === 'timeout' ? 'timeout' : (e && e.code ? `${e.code}: ${e.message}` : e.message) };
   }
 }
 

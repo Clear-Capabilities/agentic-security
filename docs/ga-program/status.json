@@ -2966,7 +2966,7 @@
           "requirement": "Every file that sends a prompt to a model endpoint evaluates the egress policy before building the prompt or goes through the shared bounded call.",
           "check": "egress-all-model-paths",
           "status": "passed",
-          "detail": "8 model-call site(s) evaluate the policy; 2 exempt with a reason",
+          "detail": "9 model-call site(s) evaluate the policy and send through the shared transport; 2 exempt with a reason",
           "evidencePath": "scripts/ga-program/ledger.mjs (modelCallSites)"
         },
         {

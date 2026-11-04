@@ -10,6 +10,8 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { evaluateEgress } from '../egress/policy.js';
+import { modelFetch } from '../egress/transport.js';
+import { resolveProvider, buildProviderRequest } from '../llm-validator/providers.js';
 
 const CACHE_DIR = process.env.XDG_CONFIG_HOME
   ? path.join(process.env.XDG_CONFIG_HOME, 'agentic-security', 'llm-sca-cache')
@@ -37,24 +39,26 @@ export function isLlmScaEnabled() {
   return process.env.AGENTIC_SECURITY_LLM_SCA === '1';
 }
 
-function _endpointConfig() {
-  const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
-  const apiKey = process.env.AGENTIC_SECURITY_LLM_API_KEY;
-  const model = process.env.AGENTIC_SECURITY_LLM_MODEL || 'unknown';
-  return endpoint ? { endpoint, apiKey, model } : null;
+// The provider is resolved the same way the validator resolves it (GA-06.3): the `local` preset refuses a non-loopback endpoint here
+// too, instead of this module reading the raw endpoint variable and calling it regardless. The Ollama provider speaks a different
+// protocol and this extractor does not implement it, so it is treated as not configured.
+function _endpointConfig(env = process.env) {
+  const r = resolveProvider({ role: 'validate', env });
+  if (!r.ok || r.config.provider === 'ollama') return null;
+  return { endpoint: r.config.endpoint, apiKey: r.config.apiKey, model: r.config.model || 'unknown', shape: r.config.shape };
 }
 
 async function _askLlm(prompt, config) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
-  const resp = await fetch(config.endpoint, {
+  const req = buildProviderRequest(config, prompt, 256);
+  const resp = await modelFetch(config.endpoint, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({ prompt, model: config.model }),
-    signal: AbortSignal.timeout(15000),
-  });
+    headers: req.headers,
+    body: JSON.stringify(req.body),
+  }, { timeoutMs: 15000 });
   if (!resp.ok) return null;
-  const text = await resp.text();
+  let text = await resp.text();
+  // a vendor shape wraps the model's text in its own envelope; the generic shape's reply is searched as it came
+  try { const t = req.extractText(JSON.parse(text)); if (typeof t === 'string' && t) text = t; } catch { /* not an envelope */ }
   const jsonMatch = text.match(/\{[^{}]*"functions"\s*:\s*\[[^\]]*\][^{}]*\}/);
   if (!jsonMatch) return null;
   try { return JSON.parse(jsonMatch[0]); } catch { return null; }

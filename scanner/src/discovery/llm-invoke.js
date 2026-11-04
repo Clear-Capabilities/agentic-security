@@ -6,6 +6,7 @@
 //
 
 import { evaluateEgress } from '../egress/policy.js';
+import { modelFetch } from '../egress/transport.js';
 import { resolveProvider } from '../llm-validator/providers.js';
 import { callOllamaChat } from '../llm-validator/ollama-provider.js';
 
@@ -74,12 +75,11 @@ export async function defaultLlmInvoke(prompt, opts = {}) {
   // Absent, it falls back to the single configured endpoint — so the ordinary
   // single-model path is byte-identical to what it was before consensus existed.
   const endpoint = opts.endpoint || process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
-  const res = await fetch(endpoint, { // agentic-security-ignore: CWE-918
+  const res = await modelFetch(endpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ prompt }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  }, { timeoutMs });
   if (!res.ok) throw new Error(`llm endpoint returned ${res.status}`);
   const body = await res.json();
   return typeof body === 'string' ? body : (body?.text ?? JSON.stringify(body));

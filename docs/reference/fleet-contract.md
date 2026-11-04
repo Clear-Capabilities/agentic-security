@@ -20,6 +20,7 @@ The manifest is validated closed-world: any key not listed here refuses the whol
 | `workers` | Parallel scans, 1 to 32 (default 4) |
 | `retries` | Extra attempts for a failed or timed-out repository, 0 to 5 (default 1) |
 | `perRepoTimeout` | A duration such as `20m` (default 20 minutes) |
+| `cacheMaxAge` | A duration (default 7 days, since 0.195.23): an unchanged repository's cached result older than this is stale and is scanned again rather than reused; a cached result with no recorded time is never reused |
 
 **Repository keys**
 

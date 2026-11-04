@@ -69,6 +69,21 @@ export function planRun({ manifest, manifestHash, store, runId = null, config = 
  * Run (or continue) a planned run until no job is queued or leased by a live worker. Returns when the work is done, the signal
  * aborts, or `maxWaitMs` passes with only other workers' leases outstanding.
  */
+export const DEFAULT_CACHE_MAX_AGE_MS = 7 * 24 * 3600000;
+
+/**
+ * Is a cache hit fresh enough to reuse (GA-09)? A record with no readable `cachedAt` (written before 0.195.23) is never fresh, and a
+ * record older than `maxAgeMs` (the manifest's `cacheMaxAge`, 7 days by default) is stale. Returns `{ fresh, cacheAgeMs }`.
+ */
+export function cacheFreshness(hit, maxAgeMs, nowMs) {
+  if (!hit) return { fresh: false, cacheAgeMs: null };
+  const t = typeof hit.cachedAt === 'string' ? Date.parse(hit.cachedAt) : NaN;
+  if (Number.isNaN(t)) return { fresh: false, cacheAgeMs: null };
+  const cacheAgeMs = Math.max(0, nowMs - t);
+  const max = Number.isFinite(maxAgeMs) && maxAgeMs > 0 ? maxAgeMs : DEFAULT_CACHE_MAX_AGE_MS;
+  return { fresh: cacheAgeMs <= max, cacheAgeMs };
+}
+
 export async function runJobs({ manifest, store, runId, root, scan = childScan, scanOptions = {}, workers = manifest.workers, leaseMs = DEFAULTS.leaseMs, heartbeatMs = DEFAULTS.heartbeatMs, retryDelayMs = DEFAULTS.retryDelayMs, pollMs = DEFAULTS.pollMs, maxWaitMs = null, signal, now = () => Date.now(), onEvent = () => {}, cacheDir = null, artifactDir = null, useCache = true }) {
   const repoById = new Map(manifest.repositories.map((r) => [r.id, r]));
   const cacheD = cacheDir ?? statePath(root, 'fleet', 'cache');
@@ -78,7 +93,11 @@ export async function runJobs({ manifest, store, runId, root, scan = childScan, 
   const writeArtifact = (job, payload) => {
     const text = JSON.stringify({ schema: 'agentic-security/fleet-scan-artifact', version: 1, runId, repoId: job.repoId, epoch: job.epoch, commit: job.commit, ...payload });
     const file = path.join(artD, `${job.repoId}.${job.epoch}.json`);
-    fs.writeFileSync(file, text, { mode: 0o600 });
+    // written whole or not at all (GA-09): a worker killed mid-write leaves no half artifact for the hash check to find, only a
+    // stray temp file, and the job stays leased until the lease expires and another worker redoes it
+    const tmp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, text, { mode: 0o600 });
+    fs.renameSync(tmp, file);
     return { file, sha256: sha(text) };
   };
 
@@ -100,11 +119,16 @@ export async function runJobs({ manifest, store, runId, root, scan = childScan, 
       idleSince = null;
       const repo = repoById.get(job.repoId);
       onEvent({ type: 'start', repo: job.repoId, attempt: job.attempts });
-      const cached = useCache ? readCache(cacheD, job.cacheKey) : null;
+      const hit = useCache ? readCache(cacheD, job.cacheKey) : null;
+      // GA-09: a hit is reused only while it is fresh. A result with no recorded time (written before 0.195.23) or older than the
+      // manifest's `cacheMaxAge` is stale: it is scanned again, never folded into a green organization as if it were current.
+      const { fresh, cacheAgeMs } = cacheFreshness(hit, manifest.cacheMaxAgeMs, now());
+      const cached = fresh ? hit : null;
+      if (hit && !cached) onEvent({ type: 'cache-stale', repo: job.repoId, cacheAgeMs });
       if (cached) {
-        const a = writeArtifact(job, { entry: cached.entry, findings: cached.findings, findingsTruncated: !!cached.findingsTruncated, lineage: cached.lineage ?? null, cached: true });
+        const a = writeArtifact(job, { entry: cached.entry, findings: cached.findings, findingsTruncated: !!cached.findingsTruncated, lineage: cached.lineage ?? null, cached: true, cachedAt: cached.cachedAt, cacheAgeMs });
         const status = cached.entry?.scanHealth && cached.entry.scanHealth.status !== 'complete' ? 'partial' : 'succeeded';
-        if (store.complete(job.jobId, job.epoch, { status, artifactSha256: a.sha256, summary: { total: cached.entry?.total ?? null, cached: true, artifact: path.basename(a.file) }, now: now() })) onEvent({ type: 'done', repo: job.repoId, cached: true, status });
+        if (store.complete(job.jobId, job.epoch, { status, artifactSha256: a.sha256, summary: { total: cached.entry?.total ?? null, cached: true, cacheAgeMs, artifact: path.basename(a.file) }, now: now() })) onEvent({ type: 'done', repo: job.repoId, cached: true, status });
         continue;
       }
       const ac = new AbortController();

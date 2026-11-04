@@ -28,10 +28,23 @@ agentic-security metrics [path] [--format text|json]
 |---|---|
 | `schema` | `agentic-security/strategic-metrics` |
 | `version` | `1` |
+| `scope` | What the figures describe: one scan and this machine's recorded attempts (below) |
 | `assuranceCoverage` | Of the analysis requested, how much finished |
 | `evidenceConversion` | Of the findings, how many reached stronger evidence |
 | `verifiedRemediationRate` | Of the fix attempts, how many reached the strongest verification tier |
-| `securityLearningRate` | Always `not-measured`, with the reason |
+| `securityLearningRate` | Always `unmeasured`, with the reason |
+
+**Scope**
+
+| Field | Meaning |
+|---|---|
+| `kind` | `per-scan`: the figures describe one scan, never an organisation trend |
+| `scanId` | The scan the coverage and conversion figures were read from, or `null` |
+| `scanStartedAt` | When that scan started, or `null` |
+| `attempts` | The fix attempts counted: `from` and `to`, the span their timestamps cover (or `null`), and `recorded`, how many lines the log holds |
+| `trend` | A sentence saying these are not a trend and how to see movement |
+
+Every metric carries a `status`: `measured`, `partial` (one component could not be counted) or `unmeasured` (nothing to count, or the scan did not report it). A missing input is `unmeasured` and `percent: null`, never 0% or 100%.
 
 **Assurance Coverage**
 
@@ -48,6 +61,7 @@ agentic-security metrics [path] [--format text|json]
 
 | Field | Meaning |
 |---|---|
+| `status` | `measured`, or `unmeasured` with no findings |
 | `numerator` | Findings that reached `corroborated` or stronger |
 | `denominator` | All findings |
 | `percent` | The ratio as a percent with one decimal, or `null` with no findings |
@@ -58,22 +72,29 @@ agentic-security metrics [path] [--format text|json]
 
 | Field | Meaning |
 |---|---|
+| `status` | `measured`, or `unmeasured` with no attempts |
 | `numerator` | Attempts that passed the re-scan, the project tests and the independent attack replay |
-| `denominator` | All recorded attempts |
+| `denominator` | One attempt per finding: the latest recorded attempt for each finding id, plus every attempt with no finding id |
 | `percent` | The ratio as a percent with one decimal, or `null` with no attempts |
+| `recorded` | How many attempts the log holds before repeats are folded |
+| `repeated` | Earlier attempts on a finding that a later attempt replaced |
+| `failed` | Counted attempts that did not verify at all |
 | `disappearedOnly` | Attempts that satisfied only the re-scan, which is also what deleting the code produces |
+| `window` | `from` and `to`: the span the recorded attempts' timestamps cover, or `null` |
 | `basis` | What was counted, in words |
 
 ## How each figure is counted
 
 - **Assurance Coverage** reads the scan's own health record. A file counts as completed when it was scanned and did not time out; an analyzer counts as completed when it ran to the end. The headline is the lower of the two percents, so a complete analyzer set cannot hide files that were never read. A count the scan did not report makes that component `null` and the status `partial` or `unmeasured`. It is never zero.
 - **Evidence Conversion** puts each finding at the strongest state it has evidence for: `execution-proven` (a recorded execution proof), `taint-confirmed` (the taint engine found the path), `corroborated` (two or more different analyzers reported it), otherwise `single-signal`. The numerator is every finding above `single-signal`. The report names the state each finding reached, so a high rate cannot hide that no finding was executed.
-- **Verified Remediation Rate** counts an attempt as fully verified only when the finding disappeared on re-scan, the project's tests ran and passed, and the independent attack replay confirmed the hole shut.
+- **Verified Remediation Rate** counts an attempt as fully verified only when the finding disappeared on re-scan, the project's tests ran and passed, and the independent attack replay confirmed the hole shut. A finding tried several times is one remediation: the latest recorded attempt for each finding id is the one counted (by its timestamp, else by its position in the log), the earlier ones are reported as `repeated`, and an attempt with no finding id counts on its own. A failed or partial attempt stays in the denominator and is never promoted by a later retry's record being absent.
 
 ## Guarantees
 
-- **No figure appears without its numerator and denominator.** An empty denominator gives `percent: null`, never 0% or 100%.
+- **No figure appears without its numerator and denominator.** An empty denominator gives `percent: null` and `status: unmeasured`, never 0% or 100%.
 - **A quantity the scan did not report is unmeasured, not zero.**
+- **The scope and time basis are stated.** Every report names the scan it describes and the span of attempts it counted, and says it is not a trend; a per-scan figure is never presented as an organisation figure.
+- **Repeated attempts are counted once.** Retrying a fix cannot raise or lower the rate by the number of retries.
 - **The Security Learning Rate is not reported as a number.** Nothing measures it independently of the rule compiler's own corpus.
 - **Nothing is read from a scan that failed its integrity check.**
 

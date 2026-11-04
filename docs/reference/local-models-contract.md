@@ -29,8 +29,9 @@ An endpoint is loopback only when its host, as the URL parser reads it, is one o
 | `http://[::1]:11434` | Yes |
 | `http://localhost:11434/v1` | Yes: `localhost` is the one name accepted |
 | `https://localhost` | Yes |
-| `http://0.0.0.0:11434` | Yes |
 | `http://0x7f.0.0.1` | Yes: the parser reads it as 127.0.0.1, which is where the request goes |
+| `http://0.0.0.0:11434` | No (since 0.195.23): the unspecified address reaches a local interface only by operating-system convention, not by its meaning |
+| `http://[::]:11434`, `http://0/` | No: the IPv6 and short forms of the same unspecified address |
 | `http://evil.example@127.0.0.1` | Yes: the host is 127.0.0.1 and `evil.example` is a user name |
 | `http://127.0.0.1@evil.example` | No: the host is `evil.example` |
 | `http://localhost.evil.example` | No |

@@ -39,6 +39,7 @@ import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 import { globFiles } from '../util/glob.js';
 import { loadTrustedKeys, verifyRulePack } from './rule-pack-signing.js';
+import { isUnsafeRegex } from '../sast/redos-nfa.js';
 
 import { statePath, safeWriteState } from './state-dir.js';
 const LANG_EXTS = {
@@ -156,8 +157,19 @@ export function loadCustomRules(scanRoot) {
 // Catches (a+)+, (a*)*, (.+)+, (\w+)+, (a|b)+, (a+|b)* etc.
 // Not exhaustive but eliminates the vast majority of catastrophic patterns.
 const _REDOS_NESTED_RE = /\([^)]*[+*][^)]*\)[+*?{]/;
+// The textual heuristic above misses an ambiguous alternation under a quantifier (`(a|a)*b`) and the polynomial shapes; since
+// 0.195.23 (GA-07) the NFA-based detector the SAST layer already ships (`sast/redos-nfa.js`) is consulted as well, so a custom or
+// compiled rule is held to the same bar as the code the scanner flags for CWE-1333.
 function _isSafePattern(p) {
-  return !_REDOS_NESTED_RE.test(p);
+  if (_REDOS_NESTED_RE.test(p)) return false;
+  return !isUnsafeRegex(p).unsafe;
+}
+/** Why a pattern is refused, for the loader's message and the rule compiler's validation. Null when it is safe. */
+export function unsafePatternReason(p) {
+  if (typeof p !== 'string') return 'not a string';
+  if (_REDOS_NESTED_RE.test(p)) return 'nested quantifiers';
+  const r = isUnsafeRegex(p);
+  return r.unsafe ? (r.reason || 'superlinear matching') : null;
 }
 
 /** The loader's own rule normalizer, exported so anything that scores or validates a rule uses the SAME one the scanner loads

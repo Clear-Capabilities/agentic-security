@@ -56,6 +56,7 @@ const { runProjectTests } = await mod('posture/fix-verify-loop.js');
 const { resolveProvider, buildProviderRequest } = await mod('llm-validator/providers.js');
 // Every prompt leaves through the egress policy (deny, local-only) and the redactor, and is audited, like every other model path (0.195.22).
 const { evaluateEgress } = await mod('egress/policy.js');
+const { modelFetch } = await mod('egress/transport.js');
 const { redactPayload } = await mod('egress/redact.js');
 const { recordEgressCall, payloadMetrics } = await mod('egress/audit.js');
 
@@ -163,12 +164,11 @@ async function _modelPatch(config, finding, content) {
     // scanned code influences it. Suppressed with the reason rather than
     // absorbed into the drift baseline, which is a tripwire and not a
     // reviewed-and-accepted list.
-    const r = await fetch(config.endpoint, { // agentic-security-ignore: SSRF
+    const r = await modelFetch(config.endpoint, { // agentic-security-ignore: SSRF
       method: 'POST',
       headers: { 'content-type': 'application/json', ...req.headers },
       body: JSON.stringify(req.body),
-      signal: AbortSignal.timeout(120000),
-    });
+    }, { timeoutMs: 120000 });
     if (!r.ok) return null;
     text = req.extractText(await r.json());
   } catch { return null; }

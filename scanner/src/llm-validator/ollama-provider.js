@@ -32,6 +32,7 @@
 // never to this module's error path. See ollama-offline-egress.test.js.
 
 import { isLoopbackUrl } from './local-endpoint.js';
+import { modelFetch } from '../egress/transport.js';
 import { recordOOMEvent } from './oom-feedback.js';
 
 export const DEFAULT_OLLAMA_HOST = 'http://127.0.0.1:11434';
@@ -199,16 +200,17 @@ export function parseOllamaChatResponse(json, model) {
  * "slow to generate" without a lower-level HTTP client.
  */
 async function _fetchOllama(url, init, { connectTimeoutMs, requestTimeoutMs }) {
-  const controller = new AbortController();
-  const totalTimer = setTimeout(() => controller.abort('total-timeout'), requestTimeoutMs);
+  void connectTimeoutMs; // see the note above: the client exposes no connect-only phase to bound separately
   try {
-    const res = await fetch(url, { ...init, signal: controller.signal });
+    // the shared transport: no redirect is followed, the reply is capped while it is read, the deadline is the total timeout
+    const res = await modelFetch(url, init, { timeoutMs: requestTimeoutMs });
     return { ok: true, res };
   } catch (e) {
-    if (controller.signal.aborted) return _err('ollama-timeout', `Ollama request timed out after ${requestTimeoutMs}ms.`);
+    if (e?.code === 'timeout') return _err('ollama-timeout', `Ollama request timed out after ${requestTimeoutMs}ms.`);
+    if (e?.code === 'redirect') return _err('ollama-unreachable', `Ollama answered with a redirect, which is never followed: ${e.message}`);
+    if (e?.code === 'response-too-large') return _err('ollama-malformed-response', e.message);
+    if (e?.code === 'budget-exhausted') return _err('ollama-timeout', e.message);
     return _err('ollama-unreachable', e?.message || String(e));
-  } finally {
-    clearTimeout(totalTimer);
   }
 }
 

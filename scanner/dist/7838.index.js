@@ -34,11 +34,15 @@ function toRuntimeRule(ir) {
 
 const EXT = { javascript: 'x.js', typescript: 'x.ts', python: 'x.py', go: 'x.go', ruby: 'x.rb', java: 'x.java', rust: 'x.rs', csharp: 'x.cs', php: 'x.php', any: 'x.txt' };
 
-function buildCorpus(ir, { originalCode, patchedCode = null, nearbyCleanCode = [], protectedVariantsCode = [] } = {}) {
+function buildCorpus(ir, { originalCode, patchedCode = null, nearbyCleanCode = [], protectedVariantsCode = [], independentVulnerableCode = [], independentCleanCode = [] } = {}) {
   const positives = [{ label: 'original', code: originalCode }];
   for (const v of (0,_mutation_js__WEBPACK_IMPORTED_MODULE_0__/* .generateVariants */ .G4)(originalCode)) positives.push({ label: `sibling:${v.mutator}`, code: v.code });
+  // Independent examples (GA-07): vulnerable and safe code that is NOT the source finding and NOT a mutation of it, supplied by the
+  // reviewer from other places. They are never mutated, so they score as what they are: evidence from outside the rule's own material.
+  independentVulnerableCode.forEach((code, i) => positives.push({ label: `independent-vulnerable-${i}`, code }));
 
   const negatives = [];
+  independentCleanCode.forEach((code, i) => negatives.push({ label: `independent-clean-${i}`, code }));
   if (patchedCode) {
     negatives.push({ label: 'patched', code: patchedCode });
     for (const v of (0,_mutation_js__WEBPACK_IMPORTED_MODULE_0__/* .generateVariants */ .G4)(patchedCode)) negatives.push({ label: `patched-sibling:${v.mutator}`, code: v.code });
@@ -74,8 +78,12 @@ function scoreRule(ir, corpus) {
   const recall = corpus.positives.length === 0 ? null : tp / corpus.positives.length;
   // "Protected negative failures" per PRD 3: a rule firing on a sanitizer/guard-carrying variant specifically.
   const protectedFailures = negResults.filter((n) => n.label.startsWith('protected-') && n.fired).length;
+  // Independent evidence, counted apart: how many examples from outside the finding's own material there were, and how they scored.
+  const indPos = posResults.filter((p) => p.label.startsWith('independent-vulnerable-'));
+  const indNeg = negResults.filter((n) => n.label.startsWith('independent-clean-'));
+  const independent = { positives: indPos.length, negatives: indNeg.length, detected: indPos.filter((p) => p.fired).length, falseAlarms: indNeg.filter((n) => n.fired).length };
 
-  return { precision, recall, tp, fp, tn, fn, protectedFailures, positives: posResults, negatives: negResults };
+  return { precision, recall, tp, fp, tn, fn, protectedFailures, independent, positives: posResults, negatives: negResults };
 }
 
 
@@ -169,9 +177,18 @@ function validateRuleIR(ir) {
   return errs;
 }
 
+/** JSON with every object's keys sorted at every depth, so the digest does not depend on insertion order. */
+function stableStringify(v) {
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`;
+  if (v && typeof v === 'object') return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`).join(',')}}`;
+  return JSON.stringify(v);
+}
+
 function ruleIRDigest(ir) {
   const { state: _s, ...rest } = ir;
-  return (0,_proof_fabric_reproducer_js__WEBPACK_IMPORTED_MODULE_0__/* .sha256 */ .sc)(JSON.stringify(rest, Object.keys(rest).sort()));
+  // Until 0.195.23 this passed the TOP-LEVEL key list as the JSON replacer, which also filters nested objects: `match.pattern` and
+  // every structural regex were serialized as `{}`, so the digest never covered the one thing a rule is. Sorted at every depth now.
+  return (0,_proof_fabric_reproducer_js__WEBPACK_IMPORTED_MODULE_0__/* .sha256 */ .sc)(stableStringify(rest));
 }
 
 /** Build a DRAFT rule IR. Caller supplies the candidate pattern — this module never invents one. */
@@ -386,7 +403,11 @@ function mutatorCoverage(code) {
 // actually recorded, and nothing in this module writes to it.
 
 
-const PROMOTION_DEFAULTS = Object.freeze({ minPrecision: 0.95, minRecall: 0.80, maxProtectedFailures: 0 });
+// Since 0.195.23 (GA-07) promotion also needs independent evidence: at least one vulnerable and one safe example that are not the
+// source finding or a mutation of it, and the rule must detect every independent vulnerable example and stay quiet on every
+// independent safe one. The synthesis loop still scores attempts without them (`evaluateRule`); only the promotion decision
+// (`gatePromotion`) requires them, so a candidate can be proposed before a reviewer has gathered the outside examples.
+const PROMOTION_DEFAULTS = Object.freeze({ minPrecision: 0.95, minRecall: 0.80, maxProtectedFailures: 0, minIndependentVulnerable: 1, minIndependentClean: 1 });
 
 // Deliberately independent of posture/evaluation/custody.js: that module's term list and guard are reserved for
 // the evaluation custodian's sealed-label boundary (QA-002.AC03), and a test enforces that nothing outside
@@ -441,7 +462,13 @@ function gatePromotion({ ir, corpus, leakageCheck, thresholds } = {}) {
   const evalResult = evaluateRule(ir, corpus, thresholds);
   const reasons = [...evalResult.reasons];
   if (!leakageCheck || leakageCheck.ok !== true) reasons.push(leakageCheck ? `leakage check failed: ${leakageCheck.offendingTerms.join(', ')}` : 'leakage check was not run');
-  return { pass: reasons.length === 0, reasons, evaluation: evalResult };
+  const t = evalResult.thresholds;
+  const ind = evalResult.score.independent ?? { positives: 0, negatives: 0, detected: 0, falseAlarms: 0 };
+  if (ind.positives < t.minIndependentVulnerable) reasons.push(`${ind.positives} independent vulnerable example(s) beyond the source finding and its mutations (min ${t.minIndependentVulnerable}): supply independentVulnerableCode`);
+  else if (ind.detected < ind.positives) reasons.push(`misses ${ind.positives - ind.detected} of ${ind.positives} independent vulnerable example(s)`);
+  if (ind.negatives < t.minIndependentClean) reasons.push(`${ind.negatives} independent safe example(s) (min ${t.minIndependentClean}): supply independentCleanCode`);
+  else if (ind.falseAlarms > 0) reasons.push(`fires on ${ind.falseAlarms} of ${ind.negatives} independent safe example(s)`);
+  return { pass: reasons.length === 0, reasons, evaluation: evalResult, independent: ind };
 }
 
 

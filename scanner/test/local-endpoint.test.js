@@ -32,6 +32,11 @@ test('anything not literally loopback is refused', () => {
     'http://localhost.evil.com/v1',
     'http://127.0.0.1.evil.com/v1',
     'http://not-localhost/v1',
+    // The unspecified address, in every spelling the parser accepts: a connect to it reaches a local interface only by an
+    // operating-system convention, so it is not a literal loopback promise (GA-06.3; it used to be accepted).
+    'http://0.0.0.0:11434/v1',
+    'http://[::]:11434/v1',
+    'http://0/v1',
     'ftp://127.0.0.1/v1',
     'file:///etc/passwd',
     'not a url',

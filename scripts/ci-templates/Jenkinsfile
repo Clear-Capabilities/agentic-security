@@ -8,6 +8,8 @@ pipeline {
     stage('Security · agentic-security') {
       steps {
         sh 'npx --yes agentic-security ci . --fail-on high'
+        // promoted compiler rules are re-scored against their corpora and the shared false-positive corpus; exit 1 on a regression, 0 with none promoted
+        sh 'npx --yes agentic-security rules regress'
       }
       post {
         always {

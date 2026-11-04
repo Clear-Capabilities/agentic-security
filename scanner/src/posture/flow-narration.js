@@ -14,6 +14,8 @@
 // Fail-closed: any LLM error → template fallback, never a missing field.
 
 import { evaluateEgress } from '../egress/policy.js';
+import { modelFetch } from '../egress/transport.js';
+import { resolveProvider, buildProviderRequest } from '../llm-validator/providers.js';
 
 const TEMPLATES = {
   'sql-injection': (f) =>
@@ -63,14 +65,14 @@ function _renderTemplate(f) {
 // Optional LLM call. Disabled by default; opt-in via env. Falls back to the
 // template on any error.
 async function _renderLlm(f, scanRoot) {
-  const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
-  if (!endpoint) return null;
+  // GA-06.3: the provider is resolved like the validator's, so the `local` preset's loopback refusal applies here too, instead of the
+  // raw endpoint variable being called regardless of the preset. The Ollama protocol is not implemented here: treated as not configured.
+  const provider = resolveProvider({ role: 'explain' });
+  if (!provider.ok || provider.config.provider === 'ollama') return null;
+  const { endpoint } = provider.config;
   // FR-601: evaluated before the prompt below is built.
   const egressDecision = evaluateEgress({ scanRoot, purpose: 'flow-narration', endpoint });
   if (!egressDecision.allowed) return null;
-  const apiKey = process.env.AGENTIC_SECURITY_LLM_API_KEY;
-  const headers = { 'Content-Type': 'application/json' };
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
   const prompt = `You are explaining a security finding to a developer in one paragraph.
 Vuln: ${f.vuln}
 CWE: ${f.cwe}
@@ -80,11 +82,11 @@ Snippet: ${(f.snippet || '').slice(0, 200)}
 
 Write ONE paragraph (5-7 sentences) covering: (1) how an attacker reaches this code, (2) what they get if exploited, (3) typical recovery cost. Plain English, no marketing language, no emoji.`;
   try {
-    const r = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ prompt }) });
+    const req = buildProviderRequest(provider.config, prompt, 512);
+    const r = await modelFetch(endpoint, { method: 'POST', headers: req.headers, body: JSON.stringify(req.body) });
     if (!r.ok) return null;
     const j = await r.json().catch(() => null);
-    const text = j && (j.response || j.text || j.content || j.output ||
-                       j.choices?.[0]?.message?.content || j.message?.content);
+    const text = req.extractText(j);
     if (typeof text !== 'string' || text.length < 30) return null;
     // Sanitize: strip control chars, markdown fences, HTML metachars.
     return text.replace(/[\x00-\x1f\x7f]/g, ' ').replace(/[<>&]/g, ' ')

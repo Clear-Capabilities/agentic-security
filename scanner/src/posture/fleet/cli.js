@@ -15,7 +15,7 @@ import { rollupFleet, renderFleetSummary } from '../fleet.js';
 import { statePath, ensureStateDir, safeWriteState } from '../state-dir.js';
 import { createSqliteJobStore } from './job-store.js';
 import { planRun, runJobs, loadArtifacts, reclaimDeadWorkers, childScan } from './job-runner.js';
-import { computeOrgHealth, renderOrgHealth } from './org-health.js';
+import { computeOrgHealth, renderOrgHealth, applyArtifactProblems } from './org-health.js';
 import { discoverEdges, splitDeclared } from './discover-edges.js';
 import { buildEnterpriseGraph, finalizeGraph, validateEnterpriseGraph, attackPaths, vulnerableSet, componentBlastRadius, renderBlastRadius, INTERNET } from './enterprise-graph.js';
 
@@ -90,9 +90,7 @@ function runOfJob(store, id) {
 async function finishRun({ args, root, store, runId, manifest, manifestFile, interrupted }) {
   const { artifacts, problems } = loadArtifacts({ store, runId, root });
   const jobs = store.listJobs(runId);
-  const health = computeOrgHealth({ manifest, jobs });
-  for (const p of problems) { const r = health.repositories.find((x) => x.id === p.repoId); if (r) { r.state = 'failed'; r.error = p.problem; } }
-  if (problems.length) { health.counts.complete -= problems.filter((p) => health.repositories.find((x) => x.id === p.repoId)).length; health.counts.failed += problems.length; if (health.assurance !== 'red' && manifest.repositories.some((r) => r.required && problems.some((p) => p.repoId === r.id))) health.assurance = 'red'; health.reasons.push(`${problems.length} result(s) could not be verified: ${problems.map((p) => `${p.repoId} (${p.problem})`).join(', ')}`); }
+  const health = applyArtifactProblems(computeOrgHealth({ manifest, jobs }), manifest, problems);
 
   let previous = null;
   const rollupFile = statePath(root, ROLLUP_FILE);

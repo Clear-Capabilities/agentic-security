@@ -25,6 +25,9 @@
 
 import { candidateCommitsForLine, candidateCommitsForFiles, commitMeta, getBlobAtCommit, isAncestor } from './git-evidence.js';
 import { replayAt } from './predicate-replay.js';
+
+/** Test seam: a replacement `replayAt` (same signature) so a replay failure in a parent commit can be produced on demand. */
+export const _replayHooks = { replayAt: null };
 import { PROVENANCE_METHOD } from './schema.js';
 import { checkAbsentInSomeParent, detectRevert, detectCherryPick } from './dag-walk.js';
 import { loadRepoLineage } from './repo-lineage.js';
@@ -230,7 +233,7 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
   const replayCache = new Map();
   const replay = (sha) => {
     if (replayCache.has(sha)) return replayCache.get(sha);
-    const p = replayAt(scanRoot, sha, files, stableId, { deep: needsDeepReplay(finding) });
+    const p = (_replayHooks.replayAt || replayAt)(scanRoot, sha, files, stableId, { deep: needsDeepReplay(finding) });
     replayCache.set(sha, p);
     return p;
   };
@@ -286,13 +289,23 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
     }
 
     const presentInParent = await replay(parent);
-    const absentInParent = !presentInParent.present;
-    if (!absentInParent) continue; // predicate already true in parent — keep walking older candidates
+    if (presentInParent.present) continue; // predicate already true in parent — keep walking older candidates
+    // GA-05: `present: false` is proof of absence only when the parent WAS inspected and the predicate did not reproduce
+    // (`stableId-not-reproduced`), or the file did not exist there at all (`no-files-at-commit`: a file that is new in this
+    // commit). A parent the replay could not inspect (`replay-error`) proves nothing, so the boundary is not verified and the
+    // answer is `partial` with that reason, never `complete`.
+    if (presentInParent.reason === 'replay-error') {
+      return {
+        status: 'partial', reason: 'parent-not-inspectable', commitsConsidered,
+        findingOrigin: originFrom(meta, { absentInParents: [] }),
+        method: PROVENANCE_METHOD.SEMANTIC_REPLAY, parentBoundaryVerified: false,
+      };
+    }
 
     return {
       status: 'complete', method: PROVENANCE_METHOD.SEMANTIC_REPLAY, commitsConsidered,
       findingOrigin: originFrom(meta, { absentInParents: [parent] }),
-      parentBoundaryVerified: true,
+      parentBoundaryVerified: true, absenceEvidence: presentInParent.reason,
     };
   }
 

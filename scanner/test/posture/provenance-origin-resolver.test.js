@@ -21,7 +21,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
-import { resolveOrigin, tryCrossRepoLineage } from '../../src/posture/provenance/origin-resolver.js';
+import { resolveOrigin, tryCrossRepoLineage, _replayHooks } from '../../src/posture/provenance/origin-resolver.js';
+import { replayAt } from '../../src/posture/provenance/predicate-replay.js';
 import { runFullScan } from '../../src/engine.js';
 
 const SAFE_SRC = 'function h(id) {\n  return 1;\n}\n';
@@ -72,6 +73,54 @@ test('Scenario A: direct introduction resolves to that commit, high-confidence-e
     assert.equal(result.parentBoundaryVerified, true);
     assert.equal(result.findingOrigin.absentInParents.length, 1);
     assert.ok(result.commitsConsidered >= 1);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+// GA-05 (0.195.23): a parent the replay could not inspect proves nothing. Before this, `present: false` for ANY reason, including
+// `replay-error`, counted as verified absence and the result was `complete` with `parentBoundaryVerified: true`.
+test('a replay failure in the parent is not proof of absence: the result is partial (parent-not-inspectable), never complete', async () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('server.js', SAFE_SRC);
+    const shaSafe = fx.commit('safe baseline', { date: '2026-01-01T00:00:00Z', authorName: 'Alice' });
+    fx.writeFile('server.js', VULN_SRC);
+    fx.commit('introduce sqli', { date: '2026-01-02T00:00:00Z', authorName: 'Bob' });
+    const finding = await realSqlInjectionFinding(VULN_SRC, 'server.js', fx.root);
+
+    // the real replay for every commit except the parent, where it fails
+    _replayHooks.replayAt = (root, sha, ...rest) => (sha === shaSafe ? Promise.resolve({ present: false, reason: 'replay-error' }) : replayAt(root, sha, ...rest));
+    let result;
+    try { result = await resolveOrigin(fx.root, finding, { repoState: { shallow: false } }); } finally { _replayHooks.replayAt = null; }
+    assert.equal(result.status, 'partial', JSON.stringify(result));
+    assert.equal(result.reason, 'parent-not-inspectable');
+    assert.equal(result.parentBoundaryVerified, false);
+    assert.deepEqual(result.findingOrigin.absentInParents, []);
+
+    // and the positive direction: with the real replay the parent is inspected, and the evidence of absence is named
+    const real = await resolveOrigin(fx.root, finding, { repoState: { shallow: false } });
+    assert.equal(real.status, 'complete');
+    assert.equal(real.parentBoundaryVerified, true);
+    assert.equal(real.absenceEvidence, 'stableId-not-reproduced');
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('a file that did not exist in the parent is absent there: a new file is a verified introduction, with that evidence named', async () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('README.md', '# nothing yet\n');
+    fx.commit('empty project', { date: '2026-01-01T00:00:00Z', authorName: 'Alice' });
+    fx.writeFile('server.js', VULN_SRC);
+    const shaVuln = fx.commit('add the handler', { date: '2026-01-02T00:00:00Z', authorName: 'Bob' });
+    const finding = await realSqlInjectionFinding(VULN_SRC, 'server.js', fx.root);
+    const result = await resolveOrigin(fx.root, finding, { repoState: { shallow: false } });
+    assert.equal(result.status, 'complete', JSON.stringify(result));
+    assert.equal(result.findingOrigin.commit, shaVuln);
+    assert.equal(result.parentBoundaryVerified, true);
+    assert.equal(result.absenceEvidence, 'no-files-at-commit');
   } finally {
     fx.cleanup();
   }

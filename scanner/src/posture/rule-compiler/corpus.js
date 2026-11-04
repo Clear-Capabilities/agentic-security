@@ -20,11 +20,15 @@ function toRuntimeRule(ir) {
 
 const EXT = { javascript: 'x.js', typescript: 'x.ts', python: 'x.py', go: 'x.go', ruby: 'x.rb', java: 'x.java', rust: 'x.rs', csharp: 'x.cs', php: 'x.php', any: 'x.txt' };
 
-export function buildCorpus(ir, { originalCode, patchedCode = null, nearbyCleanCode = [], protectedVariantsCode = [] } = {}) {
+export function buildCorpus(ir, { originalCode, patchedCode = null, nearbyCleanCode = [], protectedVariantsCode = [], independentVulnerableCode = [], independentCleanCode = [] } = {}) {
   const positives = [{ label: 'original', code: originalCode }];
   for (const v of generateVariants(originalCode)) positives.push({ label: `sibling:${v.mutator}`, code: v.code });
+  // Independent examples (GA-07): vulnerable and safe code that is NOT the source finding and NOT a mutation of it, supplied by the
+  // reviewer from other places. They are never mutated, so they score as what they are: evidence from outside the rule's own material.
+  independentVulnerableCode.forEach((code, i) => positives.push({ label: `independent-vulnerable-${i}`, code }));
 
   const negatives = [];
+  independentCleanCode.forEach((code, i) => negatives.push({ label: `independent-clean-${i}`, code }));
   if (patchedCode) {
     negatives.push({ label: 'patched', code: patchedCode });
     for (const v of generateVariants(patchedCode)) negatives.push({ label: `patched-sibling:${v.mutator}`, code: v.code });
@@ -60,6 +64,10 @@ export function scoreRule(ir, corpus) {
   const recall = corpus.positives.length === 0 ? null : tp / corpus.positives.length;
   // "Protected negative failures" per PRD 3: a rule firing on a sanitizer/guard-carrying variant specifically.
   const protectedFailures = negResults.filter((n) => n.label.startsWith('protected-') && n.fired).length;
+  // Independent evidence, counted apart: how many examples from outside the finding's own material there were, and how they scored.
+  const indPos = posResults.filter((p) => p.label.startsWith('independent-vulnerable-'));
+  const indNeg = negResults.filter((n) => n.label.startsWith('independent-clean-'));
+  const independent = { positives: indPos.length, negatives: indNeg.length, detected: indPos.filter((p) => p.fired).length, falseAlarms: indNeg.filter((n) => n.fired).length };
 
-  return { precision, recall, tp, fp, tn, fn, protectedFailures, positives: posResults, negatives: negResults };
+  return { precision, recall, tp, fp, tn, fn, protectedFailures, independent, positives: posResults, negatives: negResults };
 }

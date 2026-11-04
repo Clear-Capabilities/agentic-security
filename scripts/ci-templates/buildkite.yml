@@ -6,6 +6,8 @@ steps:
     key: "security"
     command: |
       npx --yes agentic-security ci . --fail-on high
+      # promoted compiler rules are re-scored against their corpora and the shared false-positive corpus; exit 1 on a regression, 0 with none promoted
+      npx --yes agentic-security rules regress
     artifact_paths:
       - ".agentic-security/findings.json"
       - ".agentic-security/findings.sarif"
