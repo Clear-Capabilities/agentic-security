@@ -139,7 +139,13 @@ test('a real clean scan reports scanHealth.status === "complete"', async () => {
   }
   assert.ok(out.scanHealth, 'expected scanHealth to be present on a real scan');
   assert.equal(out.scanHealth.schemaVersion, SCAN_HEALTH_SCHEMA_VERSION);
-  assert.equal(out.scanHealth.status, 'complete', `expected complete, got conditions: ${JSON.stringify(out.scanHealth.conditions)}`);
+  // Since 0.195.22 an offline scan that looked dependencies up WITHOUT the KEV and EPSS feeds is `partial`, with the feed conditions as its
+  // only reasons (unknown freshness of a feed the scan consulted is a condition, like staleness). The SAST and analyzer dimension this test
+  // is about is still clean: every condition is a feed condition and nothing else demoted the status.
+  const feedCondition = (c) => /freshness is unknown|is stale/.test(c);
+  assert.ok(out.scanHealth.conditions.every(feedCondition), `expected only feed conditions, got: ${JSON.stringify(out.scanHealth.conditions)}`);
+  assert.equal(out.scanHealth.status, out.scanHealth.conditions.length ? 'partial' : 'complete', JSON.stringify(out.scanHealth.conditions));
+  assert.equal(out.scanHealth.analyzers.failed, 0);
   assert.equal(out.scanHealth.deepAnalysis.requested, false, 'deep mode should not be requested by default in an in-process test call');
 });
 
@@ -245,7 +251,19 @@ test('a real scan produces genuine kev/calibration freshness legs on scan.scanHe
   const { scan } = await runScan(root, { network: false });
   assert.ok(scan.scanHealth.freshness, 'expected a real freshness object, not null');
   assert.ok(scan.scanHealth.freshness.kev, 'kev catalog freshness must be computed for every scan');
-  assert.equal(typeof scan.scanHealth.freshness.kev.stale, 'boolean');
+  // Tri-state since 0.195.22: true or false when a catalog with a timestamp was loaded; null (unknown) when it was not, and then the
+  // scan carries a condition naming the source and is not `complete`, so strict mode fails closed on it.
+  const kev = scan.scanHealth.freshness.kev;
+  assert.ok(kev.stale === true || kev.stale === false || kev.stale === null, `stale is tri-state, got ${kev.stale}`);
+  if (kev.stale === null) {
+    assert.ok(['not-loaded', 'offline-skipped', 'unavailable', 'cache-stale'].includes(kev.source), kev.source);
+    // offline-skipped is the operator's declared configuration and is not a condition; unavailable, not-loaded and an untimed cache are, when consulted
+    const needed = Number(kev.consulted || 0) > 0 && kev.source !== 'offline-skipped';
+    assert.equal(scan.scanHealth.conditions.some((c) => /KEV catalog freshness is unknown/.test(c)), needed, JSON.stringify(scan.scanHealth.conditions));
+    if (needed) assert.notEqual(scan.scanHealth.status, 'complete');
+  } else {
+    assert.ok(!scan.scanHealth.conditions.some((c) => /KEV catalog freshness is unknown/.test(c)));
+  }
   assert.ok(scan.scanHealth.freshness.calibration, 'calibration freshness must be computed for every scan');
   assert.equal(typeof scan.scanHealth.freshness.calibration.stale, 'boolean');
 });

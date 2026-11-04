@@ -52,6 +52,8 @@ export const REQUIRED_AREAS = Object.freeze([
 export const FOUNDATION_FILES = Object.freeze([
   'test/posture/assurance-config.test.js', 'test/posture/assurance-contracts.test.js', 'test/posture/assurance-baseline.test.js',
   'test/evidence-issuer.test.js', 'test/trust-boundary.test.js',
+  // CORE-004 consumer (0.195.22): detector-spec synthesis through the shared bounded call, the feature's rollout suite
+  'test/discovery-spec-synthesis.test.js',
 ]);
 
 const npm = (script, extra = {}) => ({ run: { type: 'npm', script, expectTests: script.startsWith('test:') }, ...extra });

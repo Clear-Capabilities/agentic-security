@@ -53,7 +53,6 @@ const ALLOWLIST = new Set([
   // ── Validator internal helpers — kept on the `_internal` export ──────────
   // These are tested directly via `_internal` re-export, not imported by name.
   'llm-validator/index.js::sanitizeReasoning',
-  'llm-validator/index.js::parseLastJsonObject',
   'llm-validator/index.js::validateResponse',
   'path-predicates.js::_internalPredicateNames',
   // ── posture/* future-API surface (kept for API symmetry, no caller yet) ──

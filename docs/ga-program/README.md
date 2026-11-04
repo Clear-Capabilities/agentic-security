@@ -27,6 +27,10 @@ A **manual** record carries the status the ledger declares, in exactly the state
 
 Most of the PRD is work that needs data, hardware, people or weeks: licensed real-project populations with independent adjudication (GA-02), real Haskell and Nix projects and hosted NixOS legs (GA-04), model and hardware qualification (GA-06), Linux isolation probes (GA-08), fleet and detection-product qualification runs (GA-09, GA-10), a clean-machine verifier qualification and a compliance mapping review (GA-11), pilots on five repositories and a named maintainer (GA-12). Each of those appears in the ledger as a manual record with the PRD's dependency as its blocker, and on the status page as unmet. The first status page reports 0 of 36 verified GA and says why: no capability has a current-engine independent accuracy record with identity, and every owner is a role until a person is named.
 
+## A clean measurement
+
+`evidence-identity` passes only when the committed scorecard records a clean worktree. `release-prepare` regenerates the scorecard before the release commit exists, so a scorecard it writes always records a dirty tree. To make the record pass for a release: commit the prepared release, then run `npm run scorecard` on the now-clean tree and `node scripts/ga-program/ledger.mjs --render`, and commit the regenerated scorecard and status page before shipping. The scorecard-freshness release check accepts either; only this ledger record distinguishes them.
+
 ## Recording evidence
 
 1. Run the command that produces the evidence and keep its output in the repository (a results file, a report, a test file).

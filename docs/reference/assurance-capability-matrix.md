@@ -14,6 +14,7 @@ Scope of the verification, deployment, invariant and capability-enforcement feat
 | `invariant-scenarios` | high-risk-execution | linux, darwin | stateful scenarios execute target code and need the confinement sandbox |
 | `capability-enforcement` | high-risk-execution | linux | runner-level filesystem, network and process enforcement is only advertised on Linux; macOS can supervise but not enforce |
 | `model-routing` | model-network | linux, darwin, win32 | none |
+| `detector-spec-synthesis` | model-network | linux, darwin, win32 | none |
 | `portfolio-assurance` | passive | linux, darwin, win32 | none |
 
 ## Runtime oracles: class, prerequisites and platform status

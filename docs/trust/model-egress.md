@@ -28,6 +28,10 @@ Other policy keys narrow it further: `allowedProviders`, `deniedPaths`, `maxCont
 - A local-model request is refused before it is built if the endpoint is not a literal loopback address.
 - A failed or unavailable local model call never falls back to a cloud provider. The finding stays exactly as the deterministic scanner found it.
 
+## Every model path
+
+Each path that sends a prompt evaluates the policy before the prompt is built, redacts, bounds and audits the call. The release gate's GA programme ledger (`docs/ga-program/`) checks the source tree for a file that sends a prompt without doing so and names it. The paths: the finding validator (`scanner/src/llm-validator/`), its fix, explanation and proof proposals, discovery (`scanner/src/discovery/llm-invoke.js`), the dependency function extractor, model routing (`posture/routing/adapter.js`, through the shared bounded call), the autopilot's fix proposals (`scripts/autopilot.mjs`, since 0.195.22) and detector-spec synthesis (`scripts/synthesize-detector.mjs`, through the shared bounded call since 0.195.22: the policy is evaluated before any sample file is read, so a denied call reads nothing).
+
 ## What does not use a model
 
 `explore`, the Code Boundaries server, makes no model calls: it loads the already-scanned, already-signed graph and serves it on loopback. The scan step that builds the graph is the one covered by the egress policy.

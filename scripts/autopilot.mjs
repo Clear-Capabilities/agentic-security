@@ -54,6 +54,10 @@ const { sandboxAvailable } = await mod('sandbox/index.js');
 const { synthesizeDeterministicPatch } = await mod('posture/deterministic-fix.js');
 const { runProjectTests } = await mod('posture/fix-verify-loop.js');
 const { resolveProvider, buildProviderRequest } = await mod('llm-validator/providers.js');
+// Every prompt leaves through the egress policy (deny, local-only) and the redactor, and is audited, like every other model path (0.195.22).
+const { evaluateEgress } = await mod('egress/policy.js');
+const { redactPayload } = await mod('egress/redact.js');
+const { recordEgressCall, payloadMetrics } = await mod('egress/audit.js');
 
 // Flags that consume the next argument. Listed explicitly so a value can never
 // be mistaken for the scan path — `--max 25 .` and `--max 25` must not disagree
@@ -143,7 +147,13 @@ async function _modelPatch(config, finding, content) {
     content,
   ].filter(Boolean).join('\n');
 
-  const req = buildProviderRequest(config, prompt, 4096);
+  // The policy decides before the request exists; a denial is audited and the finding stays NEEDS_REVIEW (no patch is invented).
+  const egressCtx = { scanRoot: root, purpose: 'autopilot-fix', endpoint: config.endpoint, model: config.model || null, role: 'fix', path: finding.file };
+  const decision = evaluateEgress(egressCtx);
+  if (!decision.allowed) { recordEgressCall({ scanRoot: root, decision, ctx: egressCtx }); return null; }
+  const redacted = redactPayload({ text: prompt, filePath: finding.file, scanRoot: root });
+  recordEgressCall({ scanRoot: root, decision, ctx: egressCtx, metrics: payloadMetrics(redacted.text) });
+  const req = buildProviderRequest(config, redacted.text, 4096);
   let text;
   try {
     // This engine flags the call below as SSRF because `config.endpoint`

@@ -5,6 +5,7 @@ import { alertFace, approveFace } from './mascot.js';
 import { SCANNER_VERSION } from '../posture/version.js';
 import { proofBlock } from '../posture/proof-artifact.js';
 import { portfolioAssuranceEnabled, scanVerdictWording, NOT_A_GUARANTEE } from '../posture/portfolio/wording.js';
+import { assuranceDecision } from '../posture/assurance/decision.js';
 import { applyLegacyCompat, legacyFieldDeprecationNotice } from '../pipeline/legacy-compat.js';
 // Finding Provenance (M0/M1). NOTE the name: `findingProvenance` is the
 // git-origin record from posture/provenance/. It is NOT `finding.provenance`
@@ -1661,11 +1662,13 @@ export function toShipVerdict(scan, options = {}) {
   // findings on a scan that didn't finish cleanly is "we don't know," not
   // "safe."
   const scanIncomplete = scan.scanHealth && scan.scanHealth.status && scan.scanHealth.status !== 'complete';
+  // One decision for every surface (posture/assurance/decision.js, 0.195.22): a result with NO scan health is `unknown`, never clean.
+  const decision = assuranceDecision({ actionable: actionable.length, scanHealth: scan.scanHealth || null });
 
   const lines = [];
   const bar = '─────────────────────────────────────────';
   // Patch the mascot reacts to the result — APPROVE if clean, ALERT if findings.
-  const clean = actionable.length === 0 && !scanIncomplete;
+  const clean = decision.decision === 'deployable';
   lines.push(clean ? approveFace({ color }) : alertFace({ color }));
   lines.push(bar);
   // X-703.AC03: with the `portfolio-assurance` feature on, the headline is the bounded claim followed by scope and gaps. Off
@@ -1675,14 +1678,12 @@ export function toShipVerdict(scan, options = {}) {
     const w = scanVerdictWording({ clean, scanIncomplete: !!scanIncomplete, actionableCount: actionable.length });
     lines.push(c(`  ${w.icon}  ${w.headline}`, w.tier === 'ok' ? SEV_COLOR.low + BOLD : w.tier === 'incomplete' ? SEV_COLOR.high + BOLD : SEV_COLOR.critical + BOLD));
     lines.push(c(`  Scope: completed supported checks only${scanIncomplete ? '; gaps listed below' : '; no gaps recorded by scan health'}. ${NOT_A_GUARANTEE}`, DIM));
-  } else if (clean) {
-    lines.push(c('  ✅  Safe to deploy', SEV_COLOR.low + BOLD));
-  } else if (actionable.length === 0) {
-    lines.push(c('  ⚠️  Scan incomplete — cannot confirm safe to deploy', SEV_COLOR.high + BOLD));
   } else {
-    lines.push(c('  ❌  Not safe to deploy', SEV_COLOR.critical + BOLD));
+    const tone = decision.decision === 'deployable' ? SEV_COLOR.low : decision.decision === 'not_deployable' ? SEV_COLOR.critical : SEV_COLOR.high;
+    lines.push(c(`  ${decision.icon}  ${decision.headline}`, tone + BOLD));
   }
   lines.push(bar);
+  if (decision.decision === 'unknown') lines.push(c(`  ${decision.reason}`, SEV_COLOR.high));
   if (scanIncomplete) {
     const conditions = Array.isArray(scan.scanHealth.conditions) ? scan.scanHealth.conditions : [];
     lines.push(c(`  ${scan.scanHealth.status}: ${conditions[0] || 'analysis did not complete cleanly'}${conditions.length > 1 ? ` (+${conditions.length - 1} more)` : ''}`, SEV_COLOR.high));

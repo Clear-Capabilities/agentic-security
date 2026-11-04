@@ -75,7 +75,7 @@ test('toShipVerdict — footer points to /triage --explain and the html report w
 });
 
 test('toShipVerdict — clean scan shows no "want more detail" footer', () => {
-  const out = toShipVerdict({ findings: [] }, { color: false });
+  const out = toShipVerdict({ findings: [], scanHealth: { status: 'complete', conditions: [] } }, { color: false });
   assert.match(out, /Safe to deploy/);
   assert.doesNotMatch(out, /Want more detail\?/);
 });
@@ -159,7 +159,7 @@ test('toShipVerdict: below-floor findings are disclosed, not silently dropped', 
 });
 
 test('toShipVerdict: a genuinely clean scan (nothing filtered) still says Safe to deploy with no disclosure noise', () => {
-  const out = stripAnsi2(toShipVerdict({ findings: [] }, { color: false }));
+  const out = stripAnsi2(toShipVerdict({ findings: [], scanHealth: { status: 'complete', conditions: [] } }, { color: false }));
   assert.match(out, /Safe to deploy/);
   assert.doesNotMatch(out, /below.*confidence/i);
 });
@@ -186,9 +186,13 @@ test('toShipVerdict: zero findings AND scanHealth.status "complete" still says S
   assert.match(out, /Safe to deploy/);
 });
 
-test('toShipVerdict: no scanHealth field at all (older/synthetic scan object) does not regress — still says Safe to deploy on zero findings', () => {
+// Since 0.195.22 (the one assurance decision, posture/assurance/decision.js): a scan object with NO scan health cannot say the scan
+// completed, so zero findings read as "cannot confirm", never as "Safe to deploy". The earlier pin asserted the opposite.
+test('toShipVerdict: no scanHealth field at all (older/synthetic scan object) cannot confirm: never Safe to deploy on zero findings', () => {
   const out = stripAnsi2(toShipVerdict({ findings: [] }, { color: false }));
-  assert.match(out, /Safe to deploy/);
+  assert.match(out, /Cannot confirm safe to deploy — no scan health recorded/);
+  assert.doesNotMatch(out, /✅/);
+  assert.match(out, /whether the scan completed is unknown/);
 });
 
 test('toShipVerdict: actionable findings still say "Not safe to deploy" regardless of scanHealth (a real critical is never masked by a health caveat)', () => {

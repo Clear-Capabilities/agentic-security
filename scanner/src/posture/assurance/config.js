@@ -58,6 +58,8 @@ export const FEATURES = Object.freeze({
     platformNote: 'runner-level filesystem, network and process enforcement is only advertised on Linux; macOS can supervise but not enforce',
   },
   'model-routing': { risk: 'model-network', platforms: ['linux', 'darwin', 'win32'], platformNote: null },
+  // a detector-spec proposal drafted by a model for human review (Labs); the only route is guardedModelCall, with the egress policy evaluated before any sample file is read
+  'detector-spec-synthesis': { risk: 'model-network', platforms: ['linux', 'darwin', 'win32'], platformNote: null },
   'portfolio-assurance': { risk: 'passive', platforms: ['linux', 'darwin', 'win32'], platformNote: null },
 });
 

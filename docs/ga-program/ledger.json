@@ -3018,20 +3018,20 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded."
         },
         {
-          "sourceCommit": null,
+          "sourceCommit": "759828e2c258750e22bd96eea8cb87775475476b",
           "artifactDigest": null,
           "protocolDigest": null,
-          "platform": null,
-          "command": null,
-          "exitCode": null,
-          "evidencePath": null,
-          "recordedAt": null,
+          "platform": "darwin (maintainer host)",
+          "command": "cd scanner && node --test test/scan-health.test.js test/ignore-pragma.test.js",
+          "exitCode": 0,
+          "evidencePath": "scanner/test/scan-health.test.js",
+          "recordedAt": "2026-11-04T07:14:35Z",
           "id": "scan-health:UNKNOWN-IS-UNKNOWN",
           "kind": "manual",
           "workstream": "GA-11",
           "requirement": "Unknown feed freshness (a catalog never loaded, offline, no timestamp) is a recorded condition that keeps a result from being called complete, and strict mode fails closed on it.",
-          "status": "not-started",
-          "blocker": "release B of the GA programme (scan-health contract change) not shipped"
+          "status": "passed",
+          "blocker": null
         },
         {
           "sourceCommit": null,

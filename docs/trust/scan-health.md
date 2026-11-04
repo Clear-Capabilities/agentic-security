@@ -63,6 +63,7 @@ A scan that skipped a file because it was too large or too dense (minified bundl
 - It does not rate the code. `complete` means the analysis finished, not that the code is good.
 - It does not say the analyzers found everything. Recall is measured separately; see [benchmarking methodology](benchmarking-methodology.md).
 - A stale feed can only be detected relative to its own timestamp. A cache that is wrong but recent is not flagged.
+- `freshness.<feed>.stale` is tri-state: `true`, `false`, or `null` when the freshness is unknown because the feed was never loaded (`source` says why: `offline-skipped`, `unavailable`, `cache-stale` with no timestamp, `not-loaded`). Unknown is a condition like stale when the scan consulted the feed for at least one item: the result is `partial`, strict mode fails on it, and the absence of a finding that needed the feed is not evidence. `offline-skipped` is the operator's declared configuration and is recorded but not a condition. Since 0.195.22.
 
 ## Where it shows up
 
