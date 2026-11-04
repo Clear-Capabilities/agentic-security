@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAtVersion": "0.195.18",
+  "capturedAtVersion": "0.195.21",
   "surfaces": {
     "scanJson": {
       "shape": {
@@ -1103,7 +1103,7 @@
               },
               "annotatorErrorCount": "number",
               "conditions": {
-                "array": "string"
+                "array": "empty"
               },
               "deepAnalysis": {
                 "object": {
@@ -1144,15 +1144,16 @@
                   "compliance": "null",
                   "epss": {
                     "object": {
-                      "ageDays": "number",
+                      "ageDays": "null",
                       "cvesChecked": "number",
                       "source": "string",
-                      "stale": "boolean"
+                      "stale": "null"
                     }
                   },
                   "kev": {
                     "object": {
                       "ageDays": "number",
+                      "consulted": "number",
                       "entries": "number",
                       "fetchedAt": "string",
                       "meaning": "string",
@@ -2018,6 +2019,11 @@
       "at": "2026-11-03T18:13:33.360Z",
       "version": "0.195.18",
       "acceptedBreakingChange": "the shape merge is canonical: a key optional on both sides is optional once and the result no longer depends on the order of the elements (the old merge serialised nested optionals into text, so the same findings in another order gave a different shape and failed on another host); no public field changed"
+    },
+    {
+      "at": "2026-11-04T06:59:07.156Z",
+      "version": "0.195.21",
+      "acceptedBreakingChange": "scanHealth.freshness.epss.ageDays and .stale were always nullable (offline, unavailable, or no CVE to check: number|null and boolean|null, documented in docs/trust/scan-health.md); the 0.195.22 per-scan reset of the feed metadata made the contract scan see the null case instead of a value inherited from an earlier scan in the same process. The documented type is unchanged; the committed shape was "
     }
   ]
 }

@@ -15,6 +15,8 @@ import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 import { statePath } from '../posture/state-dir.js';
 import { portfolioAssuranceEnabled, HEADLINE, BLOCKED_HEADLINE } from '../posture/portfolio/wording.js';
+// One decision for every surface (0.195.22): a digest built from a findings file with no scan health says it cannot confirm, never "safe".
+import { assuranceDecision } from '../posture/assurance/decision.js';
 
 function _configPath(scanRoot) {
   return statePath(scanRoot, 'integrations.yml');
@@ -35,10 +37,10 @@ export function configHas(scanRoot, key) {
 // ─── Slack webhook (vibecoder) ───────────────────────────────────────────────
 export function buildSlackDigest(findings, summary, options = {}) {
   const project = options.project || 'project';
-  const status = (summary.critical || 0) === 0 && (summary.high || 0) === 0
-    ? '✅ safe to deploy' : '❌ not safe to deploy';
+  const d = assuranceDecision({ actionable: (summary.critical || 0) + (summary.high || 0), scanHealth: options.scanHealth || null });
+  const status = `${d.icon} ${d.headline.toLowerCase()}`;
   const statusLine = portfolioAssuranceEnabled({ option: options.portfolioAssurance })
-    ? (status.startsWith('✅') ? `✅ ${HEADLINE}` : `❌ ${BLOCKED_HEADLINE}`) + ' (completed supported checks only)' : status;
+    ? (d.decision === 'deployable' ? `✅ ${HEADLINE} (completed supported checks only)` : d.decision === 'not_deployable' ? `❌ ${BLOCKED_HEADLINE}` : status) : status;
   const top = (findings || []).slice(0, 3);
 
   const lines = [
@@ -63,13 +65,15 @@ export function buildSlackDigest(findings, summary, options = {}) {
 // ─── Discord webhook (vibecoder) ─────────────────────────────────────────────
 export function buildDiscordDigest(findings, summary, options = {}) {
   const project = options.project || 'project';
-  const safe = (summary.critical || 0) === 0 && (summary.high || 0) === 0;
+  const d = assuranceDecision({ actionable: (summary.critical || 0) + (summary.high || 0), scanHealth: options.scanHealth || null });
+  const safe = d.decision === 'deployable';
   const top = (findings || []).slice(0, 3);
+  const plain = `${d.icon} ${d.headline.toLowerCase()}`;
   return {
     embeds: [{
       title: `🛡 agentic-security — ${project}`,
-      color: safe ? 0x2ecc71 : 0xe74c3c,
-      description: portfolioAssuranceEnabled({ option: options.portfolioAssurance }) ? (safe ? `✅ ${HEADLINE} (completed supported checks only)` : `❌ ${BLOCKED_HEADLINE}`) : (safe ? '✅ safe to deploy' : '❌ not safe to deploy'),
+      color: safe ? 0x2ecc71 : d.decision === 'not_deployable' ? 0xe74c3c : 0xf1c40f,
+      description: portfolioAssuranceEnabled({ option: options.portfolioAssurance }) ? (safe ? `✅ ${HEADLINE} (completed supported checks only)` : d.decision === 'not_deployable' ? `❌ ${BLOCKED_HEADLINE}` : plain) : plain,
       fields: [
         { name: 'Critical', value: String(summary.critical || 0), inline: true },
         { name: 'High',     value: String(summary.high || 0),     inline: true },
@@ -252,10 +256,11 @@ export async function postPagerDutyEvent(finding) {
 // ─── Microsoft Teams (Adaptive Card via Incoming Webhook) ───────────────────
 // Activated by AGENTIC_SECURITY_TEAMS_WEBHOOK (a webhook URL from a Teams
 // channel's "Incoming Webhook" connector).
-export function buildTeamsCard(findings, summary) {
+export function buildTeamsCard(findings, summary, options = {}) {
   const sev = summary || {};
   const total = (sev.critical || 0) + (sev.high || 0) + (sev.medium || 0) + (sev.low || 0);
   const top = (findings || []).filter(f => /critical|high/.test(f.severity || '')).slice(0, 5);
+  const d = assuranceDecision({ actionable: (sev.critical || 0) + (sev.high || 0), scanHealth: options.scanHealth || null });
   const card = {
     type: 'message',
     attachments: [{
@@ -266,6 +271,7 @@ export function buildTeamsCard(findings, summary) {
         version: '1.4',
         body: [
           { type: 'TextBlock', size: 'Medium', weight: 'Bolder', text: '🛡 agentic-security scan' },
+          { type: 'TextBlock', wrap: true, text: `${d.icon} ${d.headline}` },
           { type: 'FactSet', facts: [
             { title: 'Critical', value: String(sev.critical || 0) },
             { title: 'High',     value: String(sev.high || 0) },
@@ -287,10 +293,10 @@ export function buildTeamsCard(findings, summary) {
   return card;
 }
 
-export async function postTeamsCard(findings, summary) {
+export async function postTeamsCard(findings, summary, options = {}) {
   const url = process.env.AGENTIC_SECURITY_TEAMS_WEBHOOK;
   if (!url) return { ok: false, reason: 'teams-not-configured' };
-  const card = buildTeamsCard(findings, summary);
+  const card = buildTeamsCard(findings, summary, options);
   try {
     const r = await fetch(url, {
       method: 'POST',
@@ -307,8 +313,11 @@ export async function postTeamsCard(findings, summary) {
 export function buildPrComment(findings, summary, options = {}) {
   const sev = summary;
   const top = (findings || []).filter(f => /critical|high/.test(f.severity)).slice(0, 10);
+  const d = assuranceDecision({ actionable: (sev.critical || 0) + (sev.high || 0), scanHealth: options.scanHealth || null });
   const body = [
     '## 🛡 agentic-security',
+    '',
+    `**${d.icon} ${d.headline}**`,
     '',
     '| Critical | High | Medium | Low | Info |',
     '|---:|---:|---:|---:|---:|',

@@ -5,6 +5,6 @@ import { relaySuite } from './relay.mjs';
 
 await relaySuite({
   suite: 'foundation',
-  files: ["test/posture/assurance-config.test.js","test/posture/assurance-contracts.test.js","test/posture/assurance-baseline.test.js","test/evidence-issuer.test.js","test/trust-boundary.test.js"],
+  files: ["test/posture/assurance-config.test.js","test/posture/assurance-contracts.test.js","test/posture/assurance-baseline.test.js","test/evidence-issuer.test.js","test/trust-boundary.test.js","test/discovery-spec-synthesis.test.js"],
   expectHelper: '437c578cf5938c881dd8a9d375a782ef84856e70b0392eaf83b5a477d1a13b97',
 });

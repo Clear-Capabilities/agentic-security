@@ -174,13 +174,14 @@ test('S7: labs.md --cross-repo with no finding-id prints usage', async () => {
   } finally { await p.cleanup(); }
 });
 
-test('S7: labs.md --synthesize-rule invokes the real synthesize-detector.mjs script and its own gate refuses without the LLM env vars', async () => {
+test('S7: labs.md --synthesize-rule invokes the real synthesize-detector.mjs script and its own gate refuses while the feature is off', async () => {
   const script = extractImplementationBlock();
   const p = await mkProject(FIXTURE);
   try {
+    // Since 0.195.22 the gate is the `detector-spec-synthesis` assurance feature (off by default), evaluated before any file is read.
     const r = runMode(script, ['--synthesize-rule', '--cwe', 'CWE-79', '--lang', 'java', '--files', 'x.java'], p.dir);
-    assert.equal(r.status, 2, `expected the real script's own gate exit code 2, got ${r.status}`);
-    assert.match(r.stderr, /AGENTIC_SECURITY_LLM_VALIDATE/);
+    assert.equal(r.status, 2, `expected the real script's own gate exit code 2, got ${r.status}: ${r.stderr}`);
+    assert.match(r.stderr, /disabled|detector-spec-synthesis/);
   } finally { await p.cleanup(); }
 });
 

@@ -173,3 +173,40 @@ test('deep mode: a pragma naming a DIFFERENT rule does not suppress the finding'
 // been a test that passed while proving nothing. Pinning it needs a fixture
 // built the way the bench harnesses build theirs; that belongs with the larger
 // change that gives struct findings a `line` in the first place.
+
+// Privacy-flow findings (dataflow/privacy-taint.js, family pii-exposure) are appended after the two passes above, so until 0.195.22 a
+// pragma on a credential-to-HTTP line was inert for them. The flow needs the IR (deep mode) and a credential that crosses a call:
+// the key read from the environment in one function and sent as a bearer header by another. Positive control first.
+const credFile = (suffix = '') => [
+  'export async function send({ endpoint, text, apiKey }) {',
+  '  const res = await fetch(endpoint, {' + suffix,
+  "    method: 'POST',",
+  "    headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },",
+  '    body: JSON.stringify({ text }),',
+  '  });',
+  '  return res.json();',
+  '}',
+  'export async function run(env, endpoint) {',
+  '  const apiKey = env.AGENTIC_SECURITY_LLM_API_KEY || null;',
+  "  return send({ endpoint, text: 'hello', apiKey });",
+  '}',
+].join('\n');
+async function scanDeepProject(name, content) {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pragma-deep-')));
+  try {
+    fs.writeFileSync(path.join(dir, 'package.json'), '{}');
+    fs.writeFileSync(path.join(dir, name), content);
+    const { scan } = await runScan(dir, { deep: true });
+    return { findings: normalizeFindings(scan), suppressions: scan.suppressions || [] };
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+test('a privacy-flow finding (credentials to an outbound HTTP sink) IS suppressed by a pragma on its line', async () => {
+  const privacy = (r) => r.findings.filter((f) => f.family === 'pii-exposure' || /Privacy/.test(f.vuln || ''));
+  const control = await scanDeepProject('cred.js', credFile());
+  assert.ok(privacy(control).length > 0, `positive control: the credential flow is reported without a pragma: ${JSON.stringify(control.findings.map((f) => [f.vuln, f.line]))}`);
+  const suppressed = await scanDeepProject('cred.js', credFile(' // agentic-security-ignore: CWE-359'));
+  assert.equal(privacy(suppressed).length, 0, JSON.stringify(privacy(suppressed).map((f) => [f.vuln, f.line])));
+  assert.ok(suppressed.suppressions.some((x) => /Privacy/.test(x.vuln || '')), 'the suppression is logged');
+  const other = await scanDeepProject('cred.js', credFile(' // agentic-security-ignore: CWE-78'));
+  assert.ok(privacy(other).length > 0, 'a pragma naming another rule does not suppress it');
+});

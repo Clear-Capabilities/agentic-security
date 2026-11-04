@@ -3578,14 +3578,17 @@ async function cmdDigest(args) {
   const summary = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const f of (last.findings || [])) summary[f.severity || 'medium']++;
   const project = args.flags.project || path.basename(target);
+  // The digest states the shared assurance decision, which needs the scan health the last scan recorded; a findings file alone says "cannot confirm".
+  let scanHealth = null;
+  try { const ls = statePath(target, 'last-scan.json'); if (fs.existsSync(ls)) scanHealth = JSON.parse(await fsp.readFile(ls, 'utf8')).scanHealth || null; } catch { scanHealth = null; }
   if (args.flags.slack) {
-    const payload = buildSlackDigest(findings, summary, { project });
+    const payload = buildSlackDigest(findings, summary, { project, scanHealth });
     const r = await postWebhook(args.flags.slack, payload);
     console.log(r.ok ? `✓ Slack digest sent` : `✗ Slack failed: ${r.reason || r.status}`);
     return r.ok ? 0 : 4;
   }
   if (args.flags.discord) {
-    const payload = buildDiscordDigest(findings, summary, { project });
+    const payload = buildDiscordDigest(findings, summary, { project, scanHealth });
     const r = await postWebhook(args.flags.discord, payload);
     console.log(r.ok ? `✓ Discord digest sent` : `✗ Discord failed: ${r.reason || r.status}`);
     return r.ok ? 0 : 4;

@@ -179,7 +179,7 @@ describe('[X-703.AC03] user-facing wording is bounded: no blocking findings in c
   });
 
   test('[X-703.AC03] the one-screen verdict: flag off keeps the pinned wording; flag on gives the bounded headline with scope and gaps', () => {
-    const clean = { findings: [] };
+    const clean = { findings: [], scanHealth: { status: 'complete', conditions: [] } };
     const off = strip(toShipVerdict(clean, { color: false, portfolioAssurance: false }));
     assert.match(off, /Safe to deploy/);
     const on = strip(toShipVerdict(clean, { color: false, portfolioAssurance: true }));
@@ -205,9 +205,12 @@ describe('[X-703.AC03] user-facing wording is bounded: no blocking findings in c
 
   test('[X-703.AC03] the chat digest keeps its wording off and uses the bounded wording on', () => {
     const summary = { critical: 0, high: 0, medium: 1 };
-    assert.match(buildSlackDigest([], summary, { portfolioAssurance: false }).text, /safe to deploy/);
-    const on = buildSlackDigest([], summary, { portfolioAssurance: true }).text;
+    const scanHealth = { status: 'complete', conditions: [] };
+    assert.match(buildSlackDigest([], summary, { portfolioAssurance: false, scanHealth }).text, /✅ safe to deploy/);
+    const on = buildSlackDigest([], summary, { portfolioAssurance: true, scanHealth }).text;
     assert.match(on, /No blocking findings in completed supported checks/);
     assert.doesNotMatch(on, /safe to deploy/);
+    // with no scan health the digest cannot confirm, whichever wording is on (0.195.22)
+    assert.match(buildSlackDigest([], summary, { portfolioAssurance: true }).text, /cannot confirm safe to deploy/);
   });
 });

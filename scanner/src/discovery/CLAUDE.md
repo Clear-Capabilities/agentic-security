@@ -15,6 +15,10 @@ panel · `judge.js` shapes findings and dedupes against the prior scan ·
 `hunter.js` and `disprove.js` (no other module may talk to an LLM directly) ·
 `index.js` composes them.
 
+## Detector-spec synthesis (`detector-spec-synthesis.js`, 0.195.22)
+
+The `detector-spec-synthesis` capability (Labs): a detector-spec PROPOSAL drafted by a model from sample vulnerable files, for a human to review and never incorporated automatically. `scripts/synthesize-detector.mjs` is a thin front over `synthesizeDetectorSpec`. Order: the assurance feature gate (`detector-spec-synthesis`, off by default), then `evaluateEgress` BEFORE any sample is read (a denied call reads nothing), bounded reads (`SYNTHESIS_LIMITS`), a CSPRNG nonce, `guardedModelCall` (redaction, request cap, deadline, audit, output cap), `parseLastJsonObject` from the validator, then `validateDetectorSpec`, closed-world: identifiers only, never patterns, unknown fields refused, the nonce echoed; raw model text is never returned. `proposalOutputPath` confines the written proposal to the working directory and never under `scanner/src`. Pins: `test/discovery-spec-synthesis.test.js` (in `test:discovery`) and the synthesis cases of `test/egress-policy.test.js`.
+
 ## Rules
 
 - **A hunter proposes; it never decides.** `confirm.js` sets a confirmation

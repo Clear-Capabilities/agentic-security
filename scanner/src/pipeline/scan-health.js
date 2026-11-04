@@ -185,9 +185,22 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
 // twice. Each leg is additive: a leg not present in `freshnessPartial`
 // leaves scanHealth's existing `freshness` object and conditions
 // untouched, exactly like every other optional input this module accepts.
+// A feed whose freshness is UNKNOWN (`stale: null` because the feed was unavailable, never loaded, or cached with no timestamp) AND
+// that the scan consulted for at least one item (`consulted` for the KEV catalog, `cvesChecked` for EPSS) is a condition exactly like
+// a stale one (0.195.22, the GA plan's "missing scan health must remain unknown"): the result reasoned without data it needed, so it
+// cannot be called complete, and strict mode fails closed on it through the status. Two things are deliberately NOT conditions: a feed
+// the scan had nothing to look up in (it changed no result), and `offline-skipped`, which is the operator's own declared configuration
+// (AGENTIC_SECURITY_OFFLINE=1), recorded as `stale: null` with its source and left to the scan-health contract's existing offline rule.
+// A loaded catalog always carries a boolean, so this never fires on one.
+const unknownFeed = (f, what) => {
+  if (!f || f.stale !== null || !f.source || ['cache-fresh', 'live', 'cache/live', 'network', 'offline-skipped'].includes(f.source)) return null;
+  const consulted = Number(f.consulted ?? f.cvesChecked ?? 0);
+  if (!(consulted > 0)) return null;
+  return `${what} freshness is unknown (${f.source}): ${consulted} item(s) were checked without it, and the absence of a finding that needs it is not evidence`;
+};
 const FRESHNESS_CONDITION_BUILDERS = {
-  kev: (f) => (f?.stale === true) ? `KEV catalog is stale (${f.ageDays} day(s) old) — recently-added CVEs may not be reflected` : null,
-  epss: (f) => (f?.stale === true) ? `EPSS exploit-probability data is stale (${f.ageDays} day(s) old)` : null,
+  kev: (f) => (f?.stale === true) ? `KEV catalog is stale (${f.ageDays} day(s) old) — recently-added CVEs may not be reflected` : unknownFeed(f, 'KEV catalog'),
+  epss: (f) => (f?.stale === true) ? `EPSS exploit-probability data is stale (${f.ageDays} day(s) old)` : unknownFeed(f, 'EPSS exploit-probability data'),
   calibration: (f) => (f?.stale === true) ? `calibration data is stale (${f.ageDays} day(s) old${f.generatedAt ? `, last generated ${f.generatedAt}` : ''})` : null,
   customRules: (f) => (f?.stale === true) ? `${f.staleFiles.length} custom rule file(s) exceed their configured review interval` : null,
   advisories: (f) => (Number(f?.unanswered) > 0) ? `${f.unanswered} of ${f.componentsChecked} dependencies were not checked against advisory data (${f.source}) — the absence of a vulnerable dependency finding is not evidence that the dependency is safe` : null,

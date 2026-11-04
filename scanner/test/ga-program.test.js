@@ -42,7 +42,7 @@ test('every registry capability that ships has a ledger entry, the baseline coun
   for (const c of ledger.capabilities) assert.ok(c.owner.role && c.owner.person === null, `${c.capabilityId}: owners are roles until a person is named`);
 });
 
-test('mechanical records are computed from the artifacts: the GA bar passes for a GA row, the independent record is historical, the egress check names the two unrouted scripts', () => {
+test('mechanical records are computed from the artifacts: the GA bar passes for a GA row, the independent record is historical, every model path evaluates the policy', () => {
   const model = evaluate(REPO);
   const ds = model.capabilities.find((c) => c.capabilityId === 'deterministic-scan');
   assert.equal(ds.records.find((r) => r.check === 'registry-ga-bar').status, 'passed');
@@ -56,10 +56,12 @@ test('mechanical records are computed from the artifacts: the GA bar passes for 
   // the sites the check sees: a transport module and a dashboard are exempt with a reason; the two scripts are the finding until release B
   const sites = modelCallSites(REPO, loadLedger(REPO).program.nonModelFetch);
   assert.ok(sites.some((s) => s.file === 'scanner/src/llm-validator/index.js' && s.guarded), 'the validator evaluates the policy');
-  // Today (0.195.21) exactly two scripts send a prompt without evaluating the policy; release B of the programme routes them. This pin
-  // moves to "none" with that release, and until then the mechanical record is honestly `failed`.
-  assert.deepEqual(sites.filter((s) => !s.guarded && !s.exempt).map((s) => s.file), ['scripts/autopilot.mjs', 'scripts/synthesize-detector.mjs']);
-  assert.equal(egress.status, 'failed');
+  // 0.195.21 found two scripts sending a prompt without evaluating the policy; 0.195.22 routed both (the synthesis module through the
+  // shared bounded call, the autopilot through the policy and the redactor), so no site is unguarded and the record passes.
+  assert.deepEqual(sites.filter((s) => !s.guarded && !s.exempt).map((s) => s.file), []);
+  assert.equal(egress.status, 'passed');
+  assert.ok(sites.some((s) => s.file === 'scanner/src/discovery/detector-spec-synthesis.js' && s.guarded));
+  assert.ok(sites.some((s) => s.file === 'scripts/autopilot.mjs' && s.guarded));
 });
 
 test('the headline is honest: verified GA is 0 of 36 until a current-engine independent record exists, and the milestone is not met', () => {

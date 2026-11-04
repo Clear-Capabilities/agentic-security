@@ -55,6 +55,7 @@ Each feature adds its own opt-in gate, taken from the targets in the product req
 | `invariant-scenarios` | `invariants` | `contract-approval-path` | Contracts are approved by an authorized reviewer, never by the generator that proposed them. |
 | `capability-enforcement` | `capabilities` | `backend-probes` | Every mandatory canary-secret and escape fixture is blocked on the advertised backend with zero canary leakage. macOS stays supervise-only. |
 | `model-routing` | `routing` | `promotion-thresholds` | At least 200 paired adjudicated tasks overall and 30 per promoted stratum, a quality lower bound above -0.02, and the cost and latency targets. |
+| `detector-spec-synthesis` | `foundation` | `proposal-validity` | At least 95% schema-valid proposal completion on the frozen supported samples, safe refusal of malformed and adversarial replies, zero automatic installation, zero requests under deny and zero remote requests under local-only. |
 | `portfolio-assurance` | `portfolio` | `interrupted-run-convergence` | Interrupted, duplicate-delivery and incremental runs converge to a fresh scoped result with no double-counted progress. |
 
 No feature has met its extra gate on real data. Several of them cannot yet, because the population or the Linux backend does not

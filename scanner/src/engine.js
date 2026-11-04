@@ -7670,6 +7670,8 @@ async function _enrichWithKEV(supplyChainResults){
   const out = supplyChainResults;
   let catalog = null;
   try { catalog = await _loadKEVCatalog(); } catch { catalog = null; }
+  // How many components the catalog was consulted for: a scan with nothing to look up is not degraded by a catalog it did not need.
+  _kevCatalogMeta = { ..._kevCatalogMeta, consulted: out.length };
   if (!catalog) {
     for (const r of out) { r.kev = false; r.weaponized = false; r.kevDateAdded = null; r.kevRansomware = false; }
     return out;
@@ -8973,6 +8975,9 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   const _tel = createTelemetry({ deterministic: isDeterministic() });
   setDetectorTimingSink((name, ms) => _tel.detector(name, ms));
   _tel.sample();
+  // The feed metadata is module state: reset it so one scan cannot inherit another's catalog freshness in the same process (0.195.22).
+  _kevCatalogMeta = { source: 'not-loaded', fetchedAt: null, ageDays: null, stale: null, entries: 0 };
+  _epssLiveMeta = { source: 'not-loaded', ageDays: null, stale: null, cvesChecked: 0 };
   _resetSuppressions();_tel.time('index', () => _buildProjectIndex(fileContents));await _tel.timeAsync('custom-rules', () => _loadCustomRules(scanRoot));
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
@@ -10272,6 +10277,10 @@ function _deterministicFileTimings(timings) {
         // above (this call also drives the DPIA artifact below), so the
         // thunk just hands back what's already there.
         collectProducerResult(finalFindings, _annotatorErrors, 'privacy-taint', () => (r && Array.isArray(r.findings)) ? r.findings : []);
+        // The privacy flows land AFTER both pragma passes, so an `agentic-security-ignore` on a credential-to-HTTP line was inert for
+        // them (found by the self-scan of 0.195.22): the documented rule is that a stage appending findings runs the pragma filter
+        // after itself. Idempotent for everything already filtered; the suppression is logged like every other.
+        try { _applyIgnorePragmas(finalFindings, fc); } catch (_) {}
         // Persist the DPIA scaffold for compliance review.
         if (r && r.piiFields) {
           try {

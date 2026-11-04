@@ -12,7 +12,7 @@
   },
   "records": {
     "required": 236,
-    "passed": 19
+    "passed": 20
   },
   "realCodeAccuracy": {
     "label": "historical (not this engine)",
@@ -2936,7 +2936,7 @@
         "GA-12"
       ],
       "status": "failed",
-      "passed": 1,
+      "passed": 2,
       "required": 8,
       "records": [
         {
@@ -2965,9 +2965,9 @@
           "workstream": null,
           "requirement": "Every file that sends a prompt to a model endpoint evaluates the egress policy before building the prompt or goes through the shared bounded call.",
           "check": "egress-all-model-paths",
-          "status": "failed",
-          "detail": "2 model-call site(s) bypass the egress policy: scripts/autopilot.mjs, scripts/synthesize-detector.mjs",
-          "evidencePath": null
+          "status": "passed",
+          "detail": "8 model-call site(s) evaluate the policy; 2 exempt with a reason",
+          "evidencePath": "scripts/ga-program/ledger.mjs (modelCallSites)"
         },
         {
           "id": "model-egress-policy:GA-01-001",
@@ -3508,7 +3508,7 @@
       "scan-health: owner unassigned (role language/supply-chain lead)",
       "assurance-modes: 1/5 acceptance records passed (failed); next: assurance-modes:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "assurance-modes: owner unassigned (role assurance engineer)",
-      "model-egress-policy: 1/8 acceptance records passed (failed); next: model-egress-policy:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "model-egress-policy: 2/8 acceptance records passed (failed); next: model-egress-policy:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "model-egress-policy: owner unassigned (role inference/evaluation engineer)",
       "agent-guardrails: 1/5 acceptance records passed (failed); next: agent-guardrails:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "agent-guardrails: owner unassigned (role platform security engineer)",

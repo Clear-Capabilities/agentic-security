@@ -174,3 +174,49 @@ test('evaluateEgress: a config file that parses to a non-object (e.g. a bare sca
     assert.equal(d.allowed, true);
   } finally { p.cleanup(); }
 });
+
+// ─── every model path: detector-spec synthesis (0.195.22) ────────────────────────────────────────────────────────────────────
+// The GA promise of this capability is "every model path". Detector-spec synthesis used to post its prompt with a bare fetch; it now
+// goes through the shared bounded call, and the policy is evaluated BEFORE any sample file is read.
+import { synthesizeDetectorSpec } from '../src/discovery/detector-spec-synthesis.js';
+import { mkdirSync as _mk, writeFileSync as _wf } from 'node:fs';
+import * as _p from 'node:path';
+import { mkTestTmp as _tmp } from './helpers/tmp.js';
+
+function _synthProject() {
+  const root = _tmp('egress-dss-');
+  _wf(_p.join(root, 'package.json'), '{}');
+  _mk(_p.join(root, 'samples'), { recursive: true });
+  const sample = _p.join(root, 'samples', 'Bad.java');
+  _wf(sample, 'class Bad { void run(String q) { stmt.executeQuery(q); } }\n');
+  return { root, sample };
+}
+const _synthEnv = { AGENTIC_SECURITY_ASSURANCE_DETECTOR_SPEC_SYNTHESIS: '1' };
+
+test('egress policy — detector-spec synthesis: deny reads no sample and sends nothing', async () => {
+  const { root, sample } = _synthProject();
+  const prev = { deny: process.env.AGENTIC_SECURITY_EGRESS_DENY, mode: process.env.AGENTIC_SECURITY_EGRESS_MODE };
+  process.env.AGENTIC_SECURITY_EGRESS_DENY = '1'; delete process.env.AGENTIC_SECURITY_EGRESS_MODE;
+  try {
+    let reads = 0, calls = 0;
+    const r = await synthesizeDetectorSpec({ cwe: 'CWE-89', lang: 'java', files: [sample], scanRoot: root, endpoint: 'https://api.example.com/v1', env: _synthEnv, transport: async () => { calls++; return '{}'; }, readFile: () => { reads++; return { status: 'ok', text: 'x' }; } });
+    assert.equal(r.code, 'egress-denied'); assert.equal(reads, 0); assert.equal(calls, 0);
+  } finally {
+    if (prev.deny === undefined) delete process.env.AGENTIC_SECURITY_EGRESS_DENY; else process.env.AGENTIC_SECURITY_EGRESS_DENY = prev.deny;
+    if (prev.mode === undefined) delete process.env.AGENTIC_SECURITY_EGRESS_MODE; else process.env.AGENTIC_SECURITY_EGRESS_MODE = prev.mode;
+  }
+});
+
+test('egress policy — detector-spec synthesis: local-only never reaches a remote endpoint', async () => {
+  const { root, sample } = _synthProject();
+  const prev = { deny: process.env.AGENTIC_SECURITY_EGRESS_DENY, mode: process.env.AGENTIC_SECURITY_EGRESS_MODE };
+  process.env.AGENTIC_SECURITY_EGRESS_MODE = 'local-only'; delete process.env.AGENTIC_SECURITY_EGRESS_DENY;
+  try {
+    let calls = 0;
+    const r = await synthesizeDetectorSpec({ cwe: 'CWE-89', lang: 'java', files: [sample], scanRoot: root, endpoint: 'https://api.example.com/v1', env: _synthEnv, transport: async () => { calls++; return '{}'; }, readFile: () => ({ status: 'ok', text: 'x' }) });
+    assert.equal(r.code, 'egress-denied'); assert.equal(calls, 0);
+  } finally {
+    if (prev.deny === undefined) delete process.env.AGENTIC_SECURITY_EGRESS_DENY; else process.env.AGENTIC_SECURITY_EGRESS_DENY = prev.deny;
+    if (prev.mode === undefined) delete process.env.AGENTIC_SECURITY_EGRESS_MODE; else process.env.AGENTIC_SECURITY_EGRESS_MODE = prev.mode;
+  }
+});

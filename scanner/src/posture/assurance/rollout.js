@@ -47,6 +47,8 @@ const FEATURE_SUITE = Object.freeze({
   'capability-enforcement': 'capabilities',
   'model-routing': 'routing',
   'portfolio-assurance': 'portfolio',
+  // the synthesis module is a CORE-004 consumer (the shared bounded call); its pins run in the foundation step
+  'detector-spec-synthesis': 'foundation',
 });
 
 // What each feature must show before opt-in. Feature specific, and quoted from the PRD's own targets
@@ -58,6 +60,7 @@ const OPT_IN_SPECIFIC = Object.freeze({
   'invariant-scenarios': [review('contract-approval-path', 'Invariant contracts are approved by an authorized reviewer, never by the generator that proposed them')],
   'capability-enforcement': [measure('backend-probes', 'Every mandatory canary-secret and escape fixture is blocked on the advertised backend with zero canary leakage; macOS stays supervise-only')],
   'model-routing': [measure('promotion-thresholds', 'At least 200 paired adjudicated tasks overall and 30 per promoted stratum, lower 95% quality bound above -0.02, median cost 20% lower or quality 0.05 higher at no higher median cost, p95 latency within 1.2x')],
+  'detector-spec-synthesis': [measure('proposal-validity', 'At least 95% schema-valid proposal completion on the frozen supported samples, safe refusal of malformed and adversarial replies, zero automatic installation, zero requests under deny and zero remote requests under local-only (the GA plan, GA-07)')],
   'portfolio-assurance': [measure('interrupted-run-convergence', 'Interrupted, duplicate-delivery and incremental runs converge to a fresh scoped result with no double-counted progress')],
 });
 
