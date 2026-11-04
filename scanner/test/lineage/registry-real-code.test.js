@@ -94,6 +94,7 @@ import assert from 'node:assert/strict';
 import { parseJsFile } from '../../src/ir/parser-js.js';
 import { CATALOG } from '../../src/dataflow/catalog.js';
 import { PRIVACY_SINK_CATALOG } from '../../src/dataflow/privacy-catalog.js';
+import { LINEAGE_SOURCE_CATALOG } from '../../src/lineage/lineage-source-catalog.js';
 import { reclassifySource } from '../../src/lineage/source-registry.js';
 import { reclassifySink, reclassifyPrivacySink } from '../../src/lineage/sink-registry.js';
 import { recognizeTransformation } from '../../src/lineage/transform-catalog.js';
@@ -243,44 +244,33 @@ function findEntry(catalog, id) {
 // representative is call-shaped and naturally flows into a variable).
 //
 // Four of the fourteen (http-upload, cli-argument, storage-read,
-// user-input) have NO `language: 'js'`-tagged catalog entry at all — the
-// catalog's only representatives for these categories are Python-tagged
-// (`py-django-request-FILES`, `py-sys-argv`, `py-open-read`, `py-input`).
-// This is a disclosed, deliberate judgment call (flagged again in this
-// task's own report): `parseJsFile` is JS/TS-only, so proving these four
-// categories via "real parsed code" necessarily means writing JS/TS SYNTAX
-// that mirrors the chosen entry's `match` field's object/prop/callee
-// strings verbatim, even though those identifiers are not real JS APIs —
-// this is legitimate for what this task proves (that the IR's structural
-// EXTRACTION genuinely corresponds to the entry's declared `match` shape),
-// since `source-registry.js`'s reclassification is itself entirely
-// language-agnostic (it reads `entry.provenance`/`entry.id`, never
-// `entry.language`) and Sub-project D4's own precedent
-// (`transform-catalog.js`, gap 8) already discloses catalog entries ahead
-// of this engine's JS/TS-only parsing scope.
-//
-// task review MF-1: name the sharper limit precisely, don't understate it.
-// The REAL matcher (`dataflow/catalog.js`'s `matchSource`) applies
-// `_languageAllowed` before ever consulting `match` — for a file the real
-// engine treats as JS (e.g. `scratch.js`), a `py-*`-tagged entry is
-// discarded by that language gate regardless of how well its `match`
-// shape corresponds to the parsed code. These four proofs therefore cover
-// EXTRACTION-SHAPE CORRESPONDENCE ONLY ("the IR extracts exactly what this
-// entry's `match` field declares") — not "real parsed JS/TS code would
-// reach this catalog entry through the real engine's matcher", which it
-// would not, for these four specifically. The other 20 proofs, all
-// `language: 'js'`-tagged, carry no such gap.
+// user-input) have NO `language: 'js'`-tagged entry in the main taint
+// catalog; until 0.195.24 their proofs below used the Python-tagged entries
+// (`py-django-request-FILES`, `py-sys-argv`, `py-open-read`, `py-input`)
+// with JS syntax mirroring those entries' `match` strings, and task review
+// MF-1 recorded that as extraction-shape correspondence only: the real
+// matcher's `_languageAllowed` discards a `py-*` entry for a JS file before
+// `match` is consulted. Since 0.195.24 the four categories have real
+// JavaScript entries in `lineage/lineage-source-catalog.js` (lineage-only
+// by design: a file's contents and a console prompt are collection points
+// for the lineage graph, not taint sources for the SAST engine), reached
+// through `source-seeding.js`'s `matchLineageSource` for a `.js` file, so
+// the four rows below are now proofs of the same strength as the other
+// twenty: real JS APIs, real entries, the language gate satisfied. The
+// Python entries are still what the main catalog offers for those
+// categories; `lineage-source-catalog.test.js` pins that the main matcher
+// returns null for these JS shapes, so the taint engine is unaffected.
 const SOURCE_PROOFS = [
   { category: 'http-body', entryId: 'js-req-body', extraction: 'member-read', src: 'const x = req.body;' },
   { category: 'http-query', entryId: 'js-req-query', extraction: 'member-read', src: 'const x = req.query;' },
   { category: 'http-route', entryId: 'js-req-params', extraction: 'member-read', src: 'const x = req.params;' },
   { category: 'http-header', entryId: 'js-req-headers', extraction: 'member-read', src: 'const x = req.headers;' },
   { category: 'http-cookie', entryId: 'js-req-cookies', extraction: 'member-read', src: 'const x = req.cookies;' },
-  { category: 'http-upload', entryId: 'py-django-request-FILES', extraction: 'member-read', src: 'const x = request.FILES;' },
-  { category: 'cli-argument', entryId: 'py-sys-argv', extraction: 'member-read', src: 'const x = sys.argv;' },
+  { category: 'http-upload', entryId: 'js-multer-req-files', extraction: 'member-read', src: 'const x = req.files;' },
+  { category: 'cli-argument', entryId: 'js-process-argv', extraction: 'member-read', src: 'const x = process.argv;' },
   { category: 'env-value', entryId: 'js-process-env', extraction: 'member-read', src: 'const x = process.env;' },
-  { category: 'storage-read', entryId: 'py-open-read', extraction: 'call-source', src: 'const x = open(path);' },
-  { category: 'user-input', entryId: 'py-input', extraction: 'call-source', src: 'const x = input();' },
+  { category: 'storage-read', entryId: 'js-fs-readFileSync', extraction: 'call-source', src: 'const x = readFileSync(path);' },
+  { category: 'user-input', entryId: 'js-window-prompt', extraction: 'call-source', src: "const x = prompt('q');" },
   { category: 'external-api-response', entryId: 'js-axios-data', extraction: 'member-read', src: 'const x = response.data;' },
   { category: 'ai-model-output', entryId: 'js-mcp-call-args', extraction: 'member-read', src: 'const x = params.arguments;' },
   { category: 'ai-tool-result', entryId: 'js-mcp-tool-result', extraction: 'member-read', src: 'const x = result.content;' },
@@ -296,8 +286,9 @@ test('D5/1: SOURCE_PROOFS covers exactly the 14 reachable source categories, no 
 
 for (const proof of SOURCE_PROOFS) {
   test(`D5/2 source real-code proof: ${proof.category} (${proof.entryId})`, () => {
-    const entry = findEntry(CATALOG, proof.entryId);
+    const entry = findEntry([...CATALOG, ...LINEAGE_SOURCE_CATALOG], proof.entryId);
     assert.equal(entry.kind, 'source', `${proof.entryId} must be a source entry`);
+    assert.equal(entry.language, 'js', `${proof.entryId}: every source proof is now a JavaScript-tagged entry (0.195.24)`);
 
     const fn = parseSnippet(proof.src);
     const assignNode = firstAssignNode(fn);

@@ -140,14 +140,31 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
   // seeding hook. `opts.seedEntryState(fn)` returns the entry state `fn` is
   // analyzed under; a falsy return means "no seed". With no hook, this IS
   // `emptyState()` and every output is byte-identical to the pre-hook driver.
-  const entryStateOf = (fn) => (opts.seedEntryState ? (opts.seedEntryState(fn) || emptyState()) : emptyState());
+  // GA-03.1 (0.195.24): the hook's answer is memoised per function, so it
+  // is still consulted exactly once per function even though the
+  // call-summary resolver below now reads it at every resolved call site.
+  const seedMemo = new Map();
+  const seedOf = opts.seedEntryState
+    ? (fn) => {
+        if (!seedMemo.has(fn.qid)) seedMemo.set(fn.qid, opts.seedEntryState(fn) || null);
+        return seedMemo.get(fn.qid);
+      }
+    : null;
+  const entryStateOf = (fn) => (seedOf ? (seedOf(fn) || emptyState()) : emptyState());
   const ctxFor = (fn) => {
     const lookupCallee = createCallGraphLookup(callGraph, fn.file);
-    const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
+    // GA-03.1 (0.195.24): the resolver receives the same seeding hook the
+    // driver uses, so a callee's own source seeds hold under every call
+    // context (summaries.js, createCallSummaryResolver). Without a hook the
+    // resolver is built exactly as before.
+    const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee, seedOf ? { seedEntryState: seedOf } : {});
     // Path provenance (Sub-project C, increment 3, section 13.7 item 14):
     // thread opts.recordHop CONDITIONALLY so a caller that supplies none gets
     // a byte-identical `{ resolveCallSummary }` object (Decision 7.2).
     const ctx = opts.recordHop ? { resolveCallSummary, recordHop: opts.recordHop } : { resolveCallSummary };
+    // GA-03.1: `opts.seedAfterNode(qid, nodeId)` (source-seeding.js's
+    // seedAfterNodeFactory), consulted by engine.js after every CFG node.
+    if (typeof opts.seedAfterNode === 'function') ctx.seedAfterNode = opts.seedAfterNode;
     // DAG-03: correlation version 2 labels hops with derivation, value-version
     // and invocation evidence. Off unless asked for; needs a recorder.
     if (opts.recordHop && resolveCorrelationVersion(opts.correlationVersion) === 2) ctx.correlationVersion = 2;

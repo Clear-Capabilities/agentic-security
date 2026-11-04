@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PII"],
+  "sourceCategory": "user-input",
+  "sinkCategory": "log",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "GROUND TRUTH: a social security number typed into a prompt is logged raw. MEASURED (0.195.24): the bare `prompt(...)` call matches the lineage-only catalog entry `js-window-prompt` (category user-input, coverage `partial` because the registry's stdin provenance broadens to the generic category). The call has no access path, so it is seeded as an `after-node` seed on the assignment target `ssn`, which classifies as PII. `console.log` is the log sink and the flow connects. Before 0.195.24 this fixture was `js-user-input-to-log-unclassified` and used Python's `input()`: no JavaScript entry, and a call-shaped match that was unseedable, so the element could not be classified. It was renamed when the element gained a real name and class."
+}

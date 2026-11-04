@@ -131,7 +131,7 @@ import { classifyHandling } from './handling-analyzer.js';
 import { emptyGraphEnvelope } from './schema.js';
 import { emptyProtection, aggregateVerdicts } from './protection.js';
 import * as ids from './ids.js';
-import { planSeeds, seedEntryStateFactory, exprRoots, walkExpr } from './source-seeding.js';
+import { planSeeds, seedEntryStateFactory, seedAfterNodeFactory, exprRoots, walkExpr } from './source-seeding.js';
 import { RECIPIENT_FACT_FIELDS } from './recipient-profile.js';
 import { pathEvidenceEnabled, evaluatePathEvidence, summarizeFlowEvidence } from './path-evidence.js';
 import { sinkFamilyOf } from './control-credit.js';
@@ -450,6 +450,8 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   const analysis = runFieldIdentityAnalysis(callGraph, {
     recordHop: (h) => hops.push(h),
     seedEntryState: seedEntryStateFactory(seeds),
+    // GA-03.1 (0.195.24): call-shaped sources assigned to a variable.
+    ...(seedAfterNodeFactory(seeds) ? { seedAfterNode: seedAfterNodeFactory(seeds) } : {}),
     ...(opts.maxContextsPerFn === undefined ? {} : { maxContextsPerFn: opts.maxContextsPerFn }),
     ...(opts.maxIterations === undefined ? {} : { maxIterations: opts.maxIterations }),
     // DAG-03: provenance correlation version 2 (off unless requested).

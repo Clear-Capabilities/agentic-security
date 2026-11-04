@@ -87,6 +87,52 @@ test('F1/9: scoreFixture never throws on a malformed expected object', () => {
   }
 });
 
+// F3 (0.195.24): the two contract extensions that made the last capability
+// fixtures scoreable. Each is proven in both directions.
+
+test('F3/1: an EMPTY dataClass label matches the flow on categories alone, and still fails when no flow connects', () => {
+  const connected = minimalGraph({
+    nodes: [{ id: 'n:src', subtype: 'storage-read' }, { id: 'n:snk', subtype: 'email' }],
+    dataElements: [{ id: 'd:1', dataClasses: [] }],
+    flows: [{ source: 'n:src', sink: 'n:snk', dataElementIds: ['d:1'], transformationIds: [] }],
+  });
+  assert.equal(scoreFixture(connected, { sourceCategory: 'storage-read', sinkCategory: 'email', dataClass: [], expectedTransformKind: null }).pass, true);
+  const disconnected = minimalGraph({ nodes: [{ id: 'n:src', subtype: 'storage-read' }, { id: 'n:snk', subtype: 'email' }] });
+  const r = scoreFixture(disconnected, { sourceCategory: 'storage-read', sinkCategory: 'email', dataClass: [] });
+  assert.equal(r.pass, false);
+  assert.ok(r.errors.some((e) => e.includes('connecting flow')));
+});
+
+test('F3/2: a NON-empty dataClass label is unchanged by F3/1: a flow carrying an unclassified element does not satisfy it', () => {
+  const graph = minimalGraph({
+    nodes: [{ id: 'n:src', subtype: 'http-body' }, { id: 'n:snk', subtype: 'log' }],
+    dataElements: [{ id: 'd:1', dataClasses: [] }],
+    flows: [{ source: 'n:src', sink: 'n:snk', dataElementIds: ['d:1'], transformationIds: [] }],
+  });
+  assert.equal(scoreFixture(graph, { sourceCategory: 'http-body', sinkCategory: 'log', dataClass: ['PCI'] }).pass, false);
+});
+
+test('F3/3: expectUnsupportedSink asserts a visible process-kind node with a reason, and fails on a missing node, a categorised node or a silent one', () => {
+  const ok = minimalGraph({ nodes: [{ id: 'n:p', kind: 'process', subtype: null, coverageStatus: 'unsupported', coverageReason: 'exec: the destination is the process itself' }] });
+  assert.equal(scoreFixture(ok, { sourceCategory: null, sinkCategory: null, expectUnsupportedSink: true }).pass, true);
+  const missing = scoreFixture(minimalGraph(), { expectUnsupportedSink: true });
+  assert.equal(missing.pass, false);
+  assert.ok(missing.errors.some((e) => e.includes("kind 'process'")));
+  const categorised = minimalGraph({ nodes: [{ id: 'n:p', kind: 'process', subtype: 'database', coverageStatus: 'unsupported', coverageReason: 'x' }] });
+  assert.equal(scoreFixture(categorised, { expectUnsupportedSink: true }).pass, false, 'an unsupported sink has no category');
+  const silent = minimalGraph({ nodes: [{ id: 'n:p', kind: 'process', subtype: null, coverageStatus: 'unsupported' }] });
+  const r = scoreFixture(silent, { expectUnsupportedSink: true });
+  assert.equal(r.pass, false);
+  assert.ok(r.errors.some((e) => e.includes('coverageReason')));
+});
+
+test('F3/4: the real exec fixture shape mints exactly the node expectUnsupportedSink asserts', () => {
+  const graph = buildFixtureGraph('t', 'function runDiagnostics(cmd) { exec(cmd); }');
+  const r = scoreFixture(graph, { sourceCategory: null, sinkCategory: null, expectUnsupportedSink: true });
+  assert.equal(r.pass, true, JSON.stringify(r.errors));
+  assert.equal(graph.nodes.filter((n) => n.kind === 'process').length, 1);
+});
+
 test('F1/10: buildFixtureGraph produces a real, validateGraph()-clean graph end to end', async () => {
   const { validateGraph } = await import('../../scanner/src/lineage/validate.js');
   const graph = buildFixtureGraph('t', "function h(req, res){ res.send(req.body.x); }");
@@ -133,6 +179,9 @@ test('F1/11: every regression-tier fixture in the real corpus scores clean end t
       if (!r.pass) assert.ok(r.errors.length > 0, `${id}: capability failure with no error text`);
     }
   }
-  assert.ok(regression >= 17, `expected at least 17 regression-tier fixtures, found ${regression}`);
-  assert.ok(capability >= 7, `expected at least 7 capability-tier fixtures, found ${capability}`);
+  // 0.195.24 (GA-03.1): the seven capability-tier fixtures moved to the
+  // regression tier once the engine and the runner contract satisfied
+  // them, so every fixture in the corpus now gates.
+  assert.ok(regression >= 24, `expected at least 24 regression-tier fixtures, found ${regression}`);
+  assert.equal(capability, 0, `expected no capability-tier fixtures, found ${capability}`);
 });

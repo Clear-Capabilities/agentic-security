@@ -42,6 +42,24 @@ export function buildFixtureGraph(fixtureId, sourceCode) {
  */
 export function scoreFixture(graph, expected) {
   const errors = [];
+
+  // `expectUnsupportedSink: true` (0.195.24): the fixture's sink is a
+  // DISCOVERED sink with no egress category (an interpreter, a process, a
+  // parser), which the builder mints as a `kind: 'process'` node with
+  // `subtype: null` and `coverageStatus: 'unsupported'`. AC-11's property
+  // is that it stays visible with a reason; there is no category to match
+  // by, so `sourceCategory`/`sinkCategory` are null and the flow checks
+  // below do not apply.
+  if (expected.expectUnsupportedSink === true) {
+    const unsupported = graph.nodes.filter((n) => n.kind === 'process' && n.coverageStatus === 'unsupported');
+    if (unsupported.length === 0) errors.push("expected an unsupported sink node (kind 'process', coverageStatus 'unsupported') but found none");
+    for (const n of unsupported) {
+      if (n.subtype !== null) errors.push(`unsupported sink node ${n.id} has subtype '${n.subtype}'; an unsupported sink has no category and must carry subtype null`);
+      if (!n.coverageReason) errors.push(`unsupported sink node ${n.id} has no coverageReason — AC-11 requires a discovered sink to disclose why it is unsupported`);
+    }
+    return { pass: errors.length === 0, errors };
+  }
+
   const sourceNodes = graph.nodes.filter((n) => n.subtype === expected.sourceCategory);
   const sinkNodes = graph.nodes.filter((n) => n.subtype === expected.sinkCategory);
   if (sourceNodes.length === 0) errors.push(`no node with subtype '${expected.sourceCategory}' (source category)`);
@@ -53,11 +71,17 @@ export function scoreFixture(graph, expected) {
   const dataElById = new Map(graph.dataElements.map((d) => [d.id, d]));
   const dataClasses = expected.dataClass ?? [];
 
+  // An EMPTY `dataClass` label (0.195.24) means the labelled data carries no
+  // class the classifier can name (a file's contents, a positional
+  // argument): the flow is then matched on the two categories alone. A
+  // non-empty label still requires a data element tagged with one of them,
+  // so a flow carrying the wrong data never satisfies a classified label.
+  const classMatches = (de) => dataClasses.length === 0 || (de.dataClasses ?? []).some((c) => dataClasses.includes(c));
   const matchingFlows = graph.flows.filter((f) =>
     sourceIds.has(f.source) && sinkIds.has(f.sink) &&
     f.dataElementIds.some((id) => {
       const de = dataElById.get(id);
-      return de && (de.dataClasses ?? []).some((c) => dataClasses.includes(c));
+      return de && classMatches(de);
     }));
 
   const expectConnected = expected.expectedConnected !== false; // default true

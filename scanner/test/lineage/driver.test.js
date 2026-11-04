@@ -613,9 +613,22 @@ test('E1/driver-2: the hook is real, opt-in, and per-function — a falsy return
     'and NOT under the empty-entry context it was never analyzed under');
 });
 
-test('E1/driver-3: the cache-key fix, proven in BOTH directions — the pre-fix keying fabricates a data element at a call site nothing tainted', () => {
+test('E1/driver-3: the cache-key rule, proven in BOTH directions — a seeded summary is never stored under the empty-entry key, while a callee\'s own seed reaches every caller because it is a fact about the callee\'s body (GA-03.1, 0.195.24)', () => {
   // `aaa.js` sorts before `zzz.js`, so the SEEDED helper is analyzed and
   // cached first, and the clean caller resolves it from the cache.
+  //
+  // What this test pins changed in 0.195.24. Before, the shipped driver
+  // resolved `helper(o)` under the call-derived entry state alone, so `v`
+  // carried nothing and the empty-entry key held an honestly empty
+  // summary; `DESIGN_GRAPH_BUILDER.md` §3.6 described that as the fix.
+  // The GA plan (GA-03.1) asks for field identity across calls: helper's
+  // seed is `req.body.secret`, a source read INSIDE helper's body, which
+  // is true wherever helper is called from, so the resolver now joins the
+  // callee's own seeds onto the call-derived state (§3.8). The rule §3.6
+  // actually established is about the KEY, and it still holds in both
+  // directions below: the mutant stores the seeded answer under the
+  // empty-entry key (a lie: "this is what helper does when nothing flows
+  // in"), the shipped driver never does.
   const files = {
     'aaa.js': 'function helper(req) { return req.body.secret; }',
     'zzz.js': 'function caller(o) { const v = helper(o); leak(v); }',
@@ -644,20 +657,20 @@ test('E1/driver-3: the cache-key fix, proven in BOTH directions — the pre-fix 
   assert.deepEqual(
     [...(mutantResults.get(callerQid).exitState.get('v') ?? [])],
     ['data:SEEDED'],
-    'PRE-FIX: a clean call to helper() is handed the DRIVER\'s own seed — a fabricated identity at a call site nothing tainted',
+    'the mutant hands the caller helper\'s seed through the EMPTY key: the right answer for the wrong reason',
   );
+  assert.deepEqual([...mutantCache.get(helperQid, emptyState()).returnFlat], ['data:SEEDED'],
+    'MUTANT: the seeded summary sits under the empty-entry key, claiming helper returns the secret when nothing flows in');
 
   // Direction 2 — the shipped driver, same inputs.
   const { results, cache } = runFieldIdentityAnalysis(callGraph, { seedEntryState });
   assert.deepEqual(
     [...(results.get(callerQid).exitState.get('v') ?? [])],
-    [],
-    'POST-FIX: the clean call resolves helper under an EMPTY callee entry state and correctly gets nothing',
+    ['data:SEEDED'],
+    'SHIPPED (0.195.24): the caller receives helper\'s own seed, because `req.body.secret` is read inside helper whoever calls it',
   );
-  const emptyKeyed = cache.get(helperQid, emptyState());
-  assert.ok(emptyKeyed, 'helper is still cached under the empty-entry context (written by the lazy call-site compute)');
-  assert.deepEqual([...emptyKeyed.returnFlat], [],
-    'and that entry honestly says "nothing flows out of helper when nothing flows in"');
+  assert.equal(cache.get(helperQid, emptyState()), undefined,
+    'SHIPPED: nothing is ever stored under the empty-entry key for a seeded function; the call site resolved helper under the JOINED state');
   assert.deepEqual([...cache.get(helperQid, seededState).returnFlat], ['data:SEEDED'],
-    'while the seeded context keeps the real answer, under its own key');
+    'the seeded context keeps the real answer under its own key, and the clean call site shared that one key (one summary, computed once)');
 });

@@ -954,6 +954,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "code-boundaries:LINEAGE-CORPUS",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "The labelled lineage corpus passes in full with every fixture gating: the four source categories without a JavaScript taint entry are served by a lineage-only catalog that adds no taint source, a container alias and a call return carry field identity, and an unsupported sink is asserted visible with a reason.",
+          "status": "passed",
+          "sourceCommit": "0f6818d4951e889ff74cb231ac0395603545a931",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "command": "cd scanner && node ../bench/data-lineage/runner.mjs --check && node --test test/lineage/seeding-across-calls.test.js",
+          "exitCode": 0,
+          "evidencePath": "scanner/test/lineage/seeding-across-calls.test.js",
+          "recordedAt": "2026-11-04T18:13:29Z",
+          "blocker": null
         }
       ]
     },

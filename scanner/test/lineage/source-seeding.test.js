@@ -178,19 +178,33 @@ test('E2/3: the dataElementId discriminator satisfies PRD §10.4 — same field 
 
 test('E2/4: a matched source expression with no access path is recorded in unseedable[], never silently dropped', () => {
   // `js-fetch-json` matches the CALL expression `res.json()` itself (a
-  // CALL-shaped source, R3), not a member read. Assigned straight to a
-  // variable, that call expression is its own exprRoot — there is no
-  // enclosing pure-member access to extend outward through, so
-  // accessPathOf(callExpr) is null (accessPathOf only resolves ident/member
-  // chains) and the match is recorded as unseedable, never dropped.
-  const callGraph = irOf({ 'fetcher.js': 'function h(res){ const data = res.json(); sink(data); }' });
+  // CALL-shaped source, R3), not a member read. Nested inside another
+  // call's arguments it has no access path and no assignment target, so
+  // the match is recorded as unseedable, never dropped. (Until 0.195.24
+  // this test used the ASSIGNED form `const data = res.json()`, which is
+  // now an `after-node` seed on `data`; see E2/4b.)
+  const callGraph = irOf({ 'fetcher.js': 'function h(res){ sink(res.json()); }' });
   const { seeds, unseedable } = planSeeds(callGraph, { repository: 'u' });
-  assert.equal(seeds.length, 0, 'the CALL-shaped match itself has no field-level access path to seed');
+  assert.equal(seeds.length, 0, 'the CALL-shaped match has no field-level access path and no assignment target to seed');
   assert.equal(unseedable.length, 1, 'the match is recorded, not dropped');
   assert.equal(unseedable[0].entryId, 'js-fetch-json');
   assert.equal(unseedable[0].reason, 'accessPathOf returned null for the matched expression');
   assert.equal(unseedable[0].file, 'fetcher.js');
   assert.ok(typeof unseedable[0].qid === 'string' && unseedable[0].qid.length > 0);
+});
+
+test('E2/4b (0.195.24): a CALL-shaped source assigned straight to a variable is an `after-node` seed on the target, no longer unseedable', () => {
+  const callGraph = irOf({ 'fetcher.js': 'function h(res){ const data = res.json(); sink(data); }' });
+  const { seeds, unseedable } = planSeeds(callGraph, { repository: 'u' });
+  assert.equal(unseedable.length, 0);
+  assert.equal(seeds.length, 1);
+  assert.equal(seeds[0].entryId, 'js-fetch-json');
+  assert.equal(seeds[0].seedKind, 'after-node');
+  assert.equal(seeds[0].seedPath, 'data', 'the seed lands on the assignment target, where the value exists once the node has run');
+  assert.equal(seeds[0].canonicalName, 'data');
+  const entry = seedEntryStateFactory(seeds);
+  const fn = [...callGraph.functions.values()].find((f) => f.name === 'h');
+  assert.equal(entry(fn), undefined, 'an after-node seed is never placed in the entry state (the assignment would kill it)');
 });
 
 // =========================================================================

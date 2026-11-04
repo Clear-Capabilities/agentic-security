@@ -10,7 +10,7 @@ export const modules = {
 /* harmony export */ });
 /* unused harmony export HS_SWEEP_VERSION */
 /* harmony import */ var _dataflow_catalog_haskell_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7225);
-/* harmony import */ var _lineage_source_seeding_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(88383);
+/* harmony import */ var _lineage_source_seeding_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(95174);
 // Root-cause sweep for Haskell (X-008). The generic sweep anchors on a `callee(args)` text shape, which Haskell's
 // juxtaposition syntax never produces, so a confirmed Haskell finding swept nothing. This sweep works on the IR: for
 // each confirmed finding it takes the RESOLVED sink callee from the model catalog and lists every other call of that
