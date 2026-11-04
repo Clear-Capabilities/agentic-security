@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/ga-program-status@1",
-  "engineVersion": "0.195.23",
+  "engineVersion": "0.195.24",
   "program": {
     "baselineCapabilities": 36,
     "capabilitiesInLedger": 36,
@@ -12,7 +12,7 @@
   },
   "records": {
     "required": 243,
-    "passed": 64
+    "passed": 28
   },
   "realCodeAccuracy": {
     "label": "historical (not this engine)",
@@ -169,8 +169,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 8,
       "records": [
         {
@@ -189,9 +189,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "agentic-discovery:INDEP-ACCURACY",
@@ -200,7 +200,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.24 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -272,8 +272,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 7,
       "records": [
         {
@@ -292,9 +292,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "context-intelligence:INDEP-ACCURACY",
@@ -303,7 +303,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.24 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -366,8 +366,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 8,
       "records": [
         {
@@ -386,9 +386,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "language-depth-haskell-nix:INDEP-ACCURACY",
@@ -397,7 +397,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.24 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -469,8 +469,8 @@
         "GA-06",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 7,
       "records": [
         {
@@ -489,9 +489,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "model-validation:INDEP-ACCURACY",
@@ -500,7 +500,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.24 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -563,8 +563,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 8,
       "records": [
         {
@@ -583,9 +583,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "rule-compiler:GA-01-001",
@@ -666,8 +666,8 @@
         "GA-07",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 6,
       "records": [
         {
@@ -686,9 +686,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "detector-spec-synthesis:GA-01-001",
@@ -749,8 +749,8 @@
         "GA-09",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -769,9 +769,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "fleet-scan:GA-01-001",
@@ -842,8 +842,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 8,
       "records": [
         {
@@ -862,9 +862,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "code-boundaries:INDEP-ACCURACY",
@@ -873,7 +873,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.24 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -945,8 +945,8 @@
         "GA-05",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -965,9 +965,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "finding-provenance:GA-01-001",
@@ -1038,8 +1038,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 7,
       "records": [
         {
@@ -1058,9 +1058,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "graph-precision:INDEP-ACCURACY",
@@ -1069,7 +1069,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.24 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -1132,8 +1132,8 @@
         "GA-10",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 7,
       "records": [
         {
@@ -1152,9 +1152,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "detection-and-response:GA-01-001",
@@ -1225,8 +1225,8 @@
         "GA-07",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -1245,9 +1245,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "local-models:GA-01-001",
@@ -1318,8 +1318,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 6,
       "records": [
         {
@@ -1338,9 +1338,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "compliance-evidence:GA-01-001",
@@ -1400,8 +1400,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 5,
       "records": [
         {
@@ -1420,9 +1420,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "capability-enforcement:GA-01-001",
@@ -1472,8 +1472,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 6,
       "records": [
         {
@@ -1492,9 +1492,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "strategic-metrics:GA-01-001",
@@ -1556,8 +1556,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 7,
       "records": [
         {
@@ -1576,9 +1576,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "eval-lab:GA-01-001",
@@ -1648,8 +1648,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 5,
       "records": [
         {
@@ -1668,9 +1668,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "release-assurance:GA-01-001",
@@ -1721,8 +1721,8 @@
         "GA-04",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -1741,9 +1741,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "deterministic-scan:INDEP-ACCURACY",
@@ -1752,7 +1752,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.24 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -1796,7 +1796,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "deterministic-scan:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
+      "nextAction": "deterministic-scan:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "dependency-risk",
@@ -1813,8 +1813,8 @@
         "GA-04",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -1833,9 +1833,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "dependency-risk:GA-01-001",
@@ -1868,7 +1868,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "dependency-risk:GA-01-001: owner unassigned"
+      "nextAction": "dependency-risk:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "taint-and-reachability",
@@ -1886,8 +1886,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -1906,9 +1906,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "taint-and-reachability:INDEP-ACCURACY",
@@ -1917,7 +1917,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.24 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -1961,7 +1961,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "taint-and-reachability:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
+      "nextAction": "taint-and-reachability:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "falsification",
@@ -1979,8 +1979,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -1999,9 +1999,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "falsification:INDEP-ACCURACY",
@@ -2010,7 +2010,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.24 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -2054,7 +2054,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "falsification:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
+      "nextAction": "falsification:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "exploit-proof",
@@ -2071,8 +2071,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -2091,9 +2091,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "exploit-proof:GA-01-001",
@@ -2126,7 +2126,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "exploit-proof:GA-01-001: owner unassigned"
+      "nextAction": "exploit-proof:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "root-cause-sweep",
@@ -2144,8 +2144,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -2164,9 +2164,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "root-cause-sweep:INDEP-ACCURACY",
@@ -2175,7 +2175,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.24 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -2219,7 +2219,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "root-cause-sweep:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
+      "nextAction": "root-cause-sweep:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "federation",
@@ -2237,8 +2237,8 @@
         "GA-09",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 6,
       "records": [
         {
@@ -2257,9 +2257,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "federation:GA-01-001",
@@ -2302,7 +2302,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "federation:GA-01-001: owner unassigned"
+      "nextAction": "federation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "runtime-corroboration",
@@ -2320,8 +2320,8 @@
         "GA-10",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 6,
       "records": [
         {
@@ -2340,9 +2340,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "runtime-corroboration:GA-01-001",
@@ -2385,7 +2385,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "runtime-corroboration:GA-01-001: owner unassigned"
+      "nextAction": "runtime-corroboration:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "blast-radius",
@@ -2403,8 +2403,8 @@
         "GA-09",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 6,
       "records": [
         {
@@ -2423,9 +2423,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "blast-radius:GA-01-001",
@@ -2468,7 +2468,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "blast-radius:GA-01-001: owner unassigned"
+      "nextAction": "blast-radius:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "artifact-provenance",
@@ -2487,8 +2487,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -2507,9 +2507,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "artifact-provenance:GA-01-001",
@@ -2562,7 +2562,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "artifact-provenance:GA-01-001: owner unassigned"
+      "nextAction": "artifact-provenance:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "safe-fix",
@@ -2580,8 +2580,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 6,
       "records": [
         {
@@ -2600,9 +2600,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "safe-fix:GA-01-001",
@@ -2645,7 +2645,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "safe-fix:GA-01-001: owner unassigned"
+      "nextAction": "safe-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "verified-remediation",
@@ -2664,8 +2664,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -2684,9 +2684,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "verified-remediation:GA-01-001",
@@ -2739,7 +2739,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "verified-remediation:GA-01-001: owner unassigned"
+      "nextAction": "verified-remediation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "proof-gated-fix",
@@ -2756,8 +2756,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -2776,9 +2776,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "proof-gated-fix:GA-01-001",
@@ -2811,7 +2811,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "proof-gated-fix:GA-01-001: owner unassigned"
+      "nextAction": "proof-gated-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "scan-health",
@@ -2829,8 +2829,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "failed",
+      "passed": 2,
       "required": 7,
       "records": [
         {
@@ -2849,9 +2849,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "scan-health:UNKNOWN-IS-UNKNOWN",
@@ -2904,7 +2904,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "scan-health:GA-01-001: owner unassigned"
+      "nextAction": "scan-health:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "assurance-modes",
@@ -2921,8 +2921,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -2941,9 +2941,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "assurance-modes:GA-01-001",
@@ -2976,7 +2976,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "assurance-modes:GA-01-001: owner unassigned"
+      "nextAction": "assurance-modes:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "model-egress-policy",
@@ -2995,8 +2995,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 4,
+      "status": "failed",
+      "passed": 3,
       "required": 9,
       "records": [
         {
@@ -3015,9 +3015,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "model-egress-policy:EGRESS-ALL-PATHS",
@@ -3090,7 +3090,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "model-egress-policy:GA-01-001: owner unassigned"
+      "nextAction": "model-egress-policy:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "agent-guardrails",
@@ -3107,8 +3107,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -3127,9 +3127,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "agent-guardrails:GA-01-001",
@@ -3162,7 +3162,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "agent-guardrails:GA-01-001: owner unassigned"
+      "nextAction": "agent-guardrails:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "mcp-server",
@@ -3179,8 +3179,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -3199,9 +3199,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "mcp-server:GA-01-001",
@@ -3234,7 +3234,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "mcp-server:GA-01-001: owner unassigned"
+      "nextAction": "mcp-server:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     },
     {
       "capabilityId": "ci-gating",
@@ -3251,8 +3251,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -3271,9 +3271,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.23 at bb04f9b33c9b, bundle c99c86a3f817",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
         },
         {
           "id": "ci-gating:GA-01-001",
@@ -3306,7 +3306,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "ci-gating:GA-01-001: owner unassigned"
+      "nextAction": "ci-gating:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
     }
   ],
   "subcapabilities": [
@@ -3514,77 +3514,77 @@
   "milestone": {
     "met": false,
     "reasons": [
-      "agentic-discovery: 1/8 acceptance records passed (blocked); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "agentic-discovery: 0/8 acceptance records passed (failed); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "agentic-discovery: owner unassigned (role security evaluation lead)",
-      "context-intelligence: 1/7 acceptance records passed (blocked); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "context-intelligence: 0/7 acceptance records passed (failed); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "context-intelligence: owner unassigned (role security evaluation lead)",
-      "language-depth-haskell-nix: 1/8 acceptance records passed (blocked); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "language-depth-haskell-nix: 0/8 acceptance records passed (failed); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
-      "model-validation: 1/7 acceptance records passed (blocked); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "model-validation: 0/7 acceptance records passed (failed); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "model-validation: owner unassigned (role security evaluation lead)",
-      "rule-compiler: 2/8 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "rule-compiler: 1/8 acceptance records passed (failed); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "rule-compiler: owner unassigned (role security evaluation lead)",
-      "detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "detector-spec-synthesis: 0/6 acceptance records passed (failed); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
-      "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "fleet-scan: 1/7 acceptance records passed (failed); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "fleet-scan: owner unassigned (role graph/analysis lead)",
-      "code-boundaries: 2/8 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "code-boundaries: 1/8 acceptance records passed (failed); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "code-boundaries: owner unassigned (role security evaluation lead)",
-      "finding-provenance: 2/7 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "finding-provenance: 1/7 acceptance records passed (failed); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "finding-provenance: owner unassigned (role security evaluation lead)",
-      "graph-precision: 1/7 acceptance records passed (blocked); next: graph-precision:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "graph-precision: 0/7 acceptance records passed (failed); next: graph-precision:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "graph-precision: owner unassigned (role security evaluation lead)",
-      "detection-and-response: 1/7 acceptance records passed (in-progress); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "detection-and-response: 0/7 acceptance records passed (failed); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "detection-and-response: owner unassigned (role analysis/platform engineer)",
-      "local-models: 2/7 acceptance records passed (in-progress); next: local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "local-models: 1/7 acceptance records passed (failed); next: local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "local-models: owner unassigned (role inference/evaluation engineer)",
-      "compliance-evidence: 1/6 acceptance records passed (in-progress); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "compliance-evidence: 0/6 acceptance records passed (failed); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "compliance-evidence: owner unassigned (role language/supply-chain lead)",
-      "capability-enforcement: 1/5 acceptance records passed (in-progress); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "capability-enforcement: 0/5 acceptance records passed (failed); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "capability-enforcement: owner unassigned (role platform security engineer)",
-      "strategic-metrics: 2/6 acceptance records passed (in-progress); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "strategic-metrics: 1/6 acceptance records passed (failed); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "strategic-metrics: owner unassigned (role assurance engineer)",
-      "eval-lab: 1/7 acceptance records passed (in-progress); next: eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "eval-lab: 0/7 acceptance records passed (failed); next: eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "eval-lab: owner unassigned (role security evaluation lead)",
-      "release-assurance: 1/5 acceptance records passed (in-progress); next: release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "release-assurance: 0/5 acceptance records passed (failed); next: release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "release-assurance: owner unassigned (role assurance engineer)",
-      "deterministic-scan: 2/7 acceptance records passed (blocked); next: deterministic-scan:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+      "deterministic-scan: 1/7 acceptance records passed (failed); next: deterministic-scan:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "deterministic-scan: owner unassigned (role security evaluation lead)",
-      "dependency-risk: 2/5 acceptance records passed (in-progress); next: dependency-risk:GA-01-001: owner unassigned",
+      "dependency-risk: 1/5 acceptance records passed (failed); next: dependency-risk:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "dependency-risk: owner unassigned (role language/supply-chain lead)",
-      "taint-and-reachability: 2/7 acceptance records passed (blocked); next: taint-and-reachability:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+      "taint-and-reachability: 1/7 acceptance records passed (failed); next: taint-and-reachability:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "taint-and-reachability: owner unassigned (role security evaluation lead)",
-      "falsification: 2/7 acceptance records passed (blocked); next: falsification:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+      "falsification: 1/7 acceptance records passed (failed); next: falsification:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "falsification: owner unassigned (role security evaluation lead)",
-      "exploit-proof: 2/5 acceptance records passed (in-progress); next: exploit-proof:GA-01-001: owner unassigned",
+      "exploit-proof: 1/5 acceptance records passed (failed); next: exploit-proof:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "exploit-proof: owner unassigned (role platform security engineer)",
-      "root-cause-sweep: 2/7 acceptance records passed (blocked); next: root-cause-sweep:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.23 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+      "root-cause-sweep: 1/7 acceptance records passed (failed); next: root-cause-sweep:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "root-cause-sweep: owner unassigned (role security evaluation lead)",
-      "federation: 2/6 acceptance records passed (in-progress); next: federation:GA-01-001: owner unassigned",
+      "federation: 1/6 acceptance records passed (failed); next: federation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "federation: owner unassigned (role graph/analysis lead)",
-      "runtime-corroboration: 2/6 acceptance records passed (in-progress); next: runtime-corroboration:GA-01-001: owner unassigned",
+      "runtime-corroboration: 1/6 acceptance records passed (failed); next: runtime-corroboration:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "runtime-corroboration: owner unassigned (role graph/analysis lead)",
-      "blast-radius: 2/6 acceptance records passed (in-progress); next: blast-radius:GA-01-001: owner unassigned",
+      "blast-radius: 1/6 acceptance records passed (failed); next: blast-radius:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "blast-radius: owner unassigned (role graph/analysis lead)",
-      "artifact-provenance: 2/7 acceptance records passed (in-progress); next: artifact-provenance:GA-01-001: owner unassigned",
+      "artifact-provenance: 1/7 acceptance records passed (failed); next: artifact-provenance:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "artifact-provenance: owner unassigned (role language/supply-chain lead)",
-      "safe-fix: 2/6 acceptance records passed (in-progress); next: safe-fix:GA-01-001: owner unassigned",
+      "safe-fix: 1/6 acceptance records passed (failed); next: safe-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "safe-fix: owner unassigned (role security evaluation lead)",
-      "verified-remediation: 2/7 acceptance records passed (in-progress); next: verified-remediation:GA-01-001: owner unassigned",
+      "verified-remediation: 1/7 acceptance records passed (failed); next: verified-remediation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "verified-remediation: owner unassigned (role security evaluation lead)",
-      "proof-gated-fix: 2/5 acceptance records passed (in-progress); next: proof-gated-fix:GA-01-001: owner unassigned",
+      "proof-gated-fix: 1/5 acceptance records passed (failed); next: proof-gated-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "proof-gated-fix: owner unassigned (role platform security engineer)",
-      "scan-health: 3/7 acceptance records passed (in-progress); next: scan-health:GA-01-001: owner unassigned",
+      "scan-health: 2/7 acceptance records passed (failed); next: scan-health:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "scan-health: owner unassigned (role language/supply-chain lead)",
-      "assurance-modes: 2/5 acceptance records passed (in-progress); next: assurance-modes:GA-01-001: owner unassigned",
+      "assurance-modes: 1/5 acceptance records passed (failed); next: assurance-modes:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "assurance-modes: owner unassigned (role assurance engineer)",
-      "model-egress-policy: 4/9 acceptance records passed (in-progress); next: model-egress-policy:GA-01-001: owner unassigned",
+      "model-egress-policy: 3/9 acceptance records passed (failed); next: model-egress-policy:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "model-egress-policy: owner unassigned (role inference/evaluation engineer)",
-      "agent-guardrails: 2/5 acceptance records passed (in-progress); next: agent-guardrails:GA-01-001: owner unassigned",
+      "agent-guardrails: 1/5 acceptance records passed (failed); next: agent-guardrails:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "agent-guardrails: owner unassigned (role platform security engineer)",
-      "mcp-server: 2/5 acceptance records passed (in-progress); next: mcp-server:GA-01-001: owner unassigned",
+      "mcp-server: 1/5 acceptance records passed (failed); next: mcp-server:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "mcp-server: owner unassigned (role platform security engineer)",
-      "ci-gating: 2/5 acceptance records passed (in-progress); next: ci-gating:GA-01-001: owner unassigned",
+      "ci-gating: 1/5 acceptance records passed (failed); next: ci-gating:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
       "ci-gating: owner unassigned (role assurance engineer)",
       "subcapability distribution (deterministic-scan): 0/1 passed (not-started)",
       "subcapability harness-manifests (agent-guardrails): 0/1 passed (not-started)",
