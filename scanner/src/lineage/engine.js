@@ -923,6 +923,18 @@ function step(node, stateIn, widenings, ctx) {
           }
         }
       }
+      // Known, disclosed gap (GA-03.1, 0.195.24, measured): a bare call
+      // statement is never resolved through `ctx.resolveCallSummary`, so a
+      // sink INSIDE the callee (`emit(logger, req.body.card_number)` with
+      // `logger.info(v)` in emit) never sees the argument's identity; the
+      // value is an escape here and nothing more. Resolving it was tried
+      // and reverted in 0.195.24: the extra callee analysis consumes a
+      // summary context per call site, and under a tight context cap that
+      // degrades a later resolution to an empty summary (the §13.2a hazard
+      // of DESIGN_PATH_PROVENANCE.md, in the unsound direction), moving
+      // seven pinned provenance measurements. Closing it needs the cap to
+      // exempt bare-call contexts or a separate budget; pinned as a gap by
+      // test/lineage/seeding-across-calls.test.js (IP/2).
       return { state: stateIn, returnFact: null };
     }
 
@@ -1068,7 +1080,18 @@ export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
           recordHop: stepRecord,
         }
       : ctx;
-    const { state: out, returnFact } = step(node, incoming, widenings, stepCtx);
+    let { state: out, returnFact } = step(node, incoming, widenings, stepCtx);
+    // GA-03.1 (0.195.24): `after-node` seeds (source-seeding.js, SEED_KINDS).
+    // A call-shaped source assigned to a variable produces its identity in
+    // the TARGET once this node has run; the assignment's own strong update
+    // has already cleared the target, so this is a plain add, idempotent on
+    // a worklist revisit. Keyed by `(scope, nid)` so the same hook serves a
+    // callee analysed through the call-summary resolver. No hop is recorded
+    // here: the first read of the target creates the path node, which then
+    // has no in-edges and reconstructs as an origin, exactly as an entry
+    // seed's first read does.
+    const after = ctx?.seedAfterNode ? ctx.seedAfterNode(scope, nid) : undefined;
+    if (after) for (const s of after) out = addIdentity(out, s.path, s.id);
     if (returnFact && returnFact.size > 0) {
       // Union onto any existing fact for this node rather than pushing a
       // new array entry every visit — see Fix 2 in the final whole-branch

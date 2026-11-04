@@ -215,6 +215,29 @@ empty one.
 `E1/driver-3` proves **both** directions: a local replica of the pre-fix loop
 (the mutant) fabricates; the shipped driver does not.
 
+### 3.8 Revision (GA-03.1, 0.195.24): a callee's seeds are facts about its body
+
+§3.6's table read "`[]` — correct" for the caller's local after
+`const v = helper(o)`. That was the right KEY and the wrong CONSEQUENCE.
+`helper`'s seed is `req.body.secret`, a source expression inside `helper`'s
+own body; it is read whoever calls `helper`, so the honest answer at every
+call site is that `v` carries it. Under the shipped resolver the caller
+resolved `helper` under the call-derived state alone, the seed was absent
+from it, and the lineage corpus's interprocedural fixture produced the right
+nodes, the right data element and zero flows.
+
+`createCallSummaryResolver` now joins the callee's own seeds
+(`seedEntryState(fn)`, the same hook the driver uses, memoised per function)
+onto the call-derived entry state before computing the summary. The rule
+§3.6 established is untouched: the cache key is the JOINED state, so nothing
+is ever written under the empty-entry key for a seeded function, and the
+driver's own analysis of the callee and a clean call site share one key and
+one summary. `E1/driver-3` now pins exactly that in both directions (the
+mutant still stores the seeded answer under the empty key; the shipped
+driver never does, and the caller receives the seed). Bind hops and the
+cap-degradation loss hops enumerate only the call-derived half: a seed is
+not an argument.
+
 ### 3.7 What real seeding measures
 
 | Project | seeds | hops | pnodes / pedges | node kinds reached |

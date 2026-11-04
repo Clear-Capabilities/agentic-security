@@ -1,4 +1,4 @@
-import { hashState, emptyState, addIdentity } from './field-identity.js';
+import { hashState, emptyState, addIdentity, joinStates } from './field-identity.js';
 import {
   resolveExprIdentities, residualFlat, analyzeFunctionFieldIdentity,
   argumentContext, callInvocationId, calleeRecorder,
@@ -425,7 +425,8 @@ export function applyAtCallSite(summary, paramNames, callArgs) {
 // integration will pass a resolver backed by `scanner/src/ir/callgraph.js`
 // instead, without this function (or `resolveExprIdentities`) needing to
 // change at all.
-export function createCallSummaryResolver(cache, lookupCallee) {
+export function createCallSummaryResolver(cache, lookupCallee, resolverOpts = {}) {
+  const seedEntryState = typeof resolverOpts.seedEntryState === 'function' ? resolverOpts.seedEntryState : null;
   return function resolveCallSummary(calleeExpr, callArgs, callerState, ctx) {
     const resolved = lookupCallee(calleeExpr);
     if (!resolved) return null;
@@ -435,7 +436,18 @@ export function createCallSummaryResolver(cache, lookupCallee) {
     // own header comment) — this call site forwards the caller's `ctx`
     // unmodified; the hazard cannot reappear here because the strip
     // happens one level down, not at each call site.
-    const entryState = entryStateFromCall(fn.params, callArgs, callerState, ctx);
+    const boundState = entryStateFromCall(fn.params, callArgs, callerState, ctx);
+    // GA-03.1 (0.195.24): the callee's OWN source seeds are facts about
+    // expressions in its body (`req.body.card_number` is a source wherever
+    // `extractCard` is called from), so they hold under every entry context,
+    // not only the driver's top-level one. Join them onto the call-derived
+    // state. The cache key is the JOINED state, so a clean call site and the
+    // driver's own analysis of the callee share one key and one summary;
+    // DESIGN_GRAPH_BUILDER.md §3.6's rule stands: no seeded summary is ever
+    // stored under the empty-entry key. The bind hops below enumerate only
+    // the call-derived half (`boundState`): a seed is not an argument.
+    const ownSeeds = seedEntryState ? seedEntryState(fn) : null;
+    const entryState = ownSeeds ? joinStates(boundState, ownSeeds) : boundState;
     // §13.2's first half: the callee's own entry context, computed once so
     // both the bind hop below and the return-direction wrapper at the
     // bottom of this function can reference the exact same value.
@@ -454,7 +466,7 @@ export function createCallSummaryResolver(cache, lookupCallee) {
     // C4 would collide this binding's target with any caller-local
     // variable of the same name (Decision 5's bug class).
     if (ctx?.recordHop) {
-      for (const [path, ids] of entryState) {
+      for (const [path, ids] of boundState) {
         for (const id of ids) {
           ctx.recordHop({
             kind: 'write-out', subKind: 'call-arg-bind',
@@ -508,6 +520,10 @@ export function createCallSummaryResolver(cache, lookupCallee) {
             ...(ctx.correlationVersion === 2 ? { correlationVersion: 2 } : null),
           }
         : { resolveCallSummary };
+      // GA-03.1 (0.195.24): the callee's after-node seeds are body facts
+      // too (source-seeding.js, SEED_KINDS); the hook is keyed by qid, so
+      // forwarding the caller's is exact.
+      if (ctx?.seedAfterNode) calleeCtx.seedAfterNode = ctx.seedAfterNode;
       const result = analyzeFunctionFieldIdentity(fn, es, calleeCtx);
       return summaryFromAnalysisResult(result);
     });
@@ -524,7 +540,7 @@ export function createCallSummaryResolver(cache, lookupCallee) {
     // under §2.2's rule (or, when there is no path-shaped argument, as
     // edge-forming in its own right) — never dropped either way.
     if (summary?.degradedReason && ctx?.recordHop) {
-      for (const [, ids] of entryState) {
+      for (const [, ids] of boundState) {
         for (const id of ids) {
           ctx.recordHop({
             kind: 'production', subKind: 'call-resolved',

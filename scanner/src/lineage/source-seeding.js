@@ -30,6 +30,25 @@ import { emptyState, addIdentity } from './field-identity.js';
 import { reclassifySource } from './source-registry.js';
 import { classifyDataElementName } from './classification.js';
 import { dataElementId } from './ids.js';
+import { matchLineageSource } from './lineage-source-catalog.js';
+
+// ── Seed kinds (GA-03.1, 0.195.24) ──────────────────────────────────────────
+//
+// `entry`: the identity is placed in the function's ENTRY state at
+// `seedPath` (a member-shaped source such as `req.body.card_number`, whose
+// path is stable for the whole function). This is §3's original mechanism.
+//
+// `after-node`: the identity is placed at `seedPath` in the state leaving
+// CFG node `nodeId`, by `engine.js`'s worklist through `ctx.seedAfterNode`.
+// Used for a CALL-shaped source assigned straight to a variable
+// (`const record = fs.readFileSync(p)`, `const ssn = prompt('SSN')`,
+// `const data = res.json()`): the call has no access path, so an entry seed
+// has nowhere to land, and the value only exists in the target variable
+// AFTER the assignment (an entry seed at the target would be killed by the
+// assignment's own strong update). Before 0.195.24 every such match was
+// recorded in `unseedable[]`; a call-shaped source anywhere else (nested
+// inside another call's arguments, returned directly) still is.
+export const SEED_KINDS = Object.freeze(['entry', 'after-node']);
 
 // ── §3.1: where the matched expressions come from ──────────────────────────
 //
@@ -169,6 +188,26 @@ export function planSeeds(callGraph, { repository, maxSeeds, maxNodes, signal, d
     if (seeds.length >= seedCap) { stopReason = 'seeding-limit'; continue; }
     if (nodesVisited >= nodeCap) { stopReason = 'seeding-limit'; continue; }
     functionsScanned += 1;
+    const fnSeeds = [];
+    const mint = ({ nid, node, entry, decision, seedPath, seedKind }) => {
+      const canonicalName = seedPath.slice(seedPath.lastIndexOf('.') + 1);
+      const seed = {
+        file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null,
+        entryId: entry.id, seedPath, canonicalName, seedKind,
+        category: decision.category, coverageStatus: decision.coverageStatus,
+        externality: decision.externality, reason: decision.reason,
+        // §3.4's minting rule. `canonicalName` alone is forbidden by
+        // PRD §10.4; the discriminator carries the system proxy
+        // (repository + file), the access path, and the category.
+        // Function scope (`qid`) is deliberately NOT in the
+        // discriminator (§3.4).
+        dataElementId: dataElementId(canonicalName, [repository, fn.file, seedPath, decision.category ?? '']),
+        dataClasses: classifyDataElementName(canonicalName).classes,
+      };
+      seeds.push(seed);
+      fnSeeds.push(seed);
+      return seed;
+    };
     for (const [nid, node] of Object.entries(fn.cfg?.nodes ?? {})) {
       nodesVisited += 1;
       if (seeds.length >= seedCap) { stopReason = 'seeding-limit'; break; }
@@ -176,10 +215,21 @@ export function planSeeds(callGraph, { repository, maxSeeds, maxNodes, signal, d
       for (const root of exprRoots(node)) walkExpr(root, (e, p) => { if (p) parentOf.set(e, p); });
       for (const root of exprRoots(node)) {
         walkExpr(root, (e) => {
-          const entry = matchSource(e, fn.file);
+          // The main taint catalog first (unchanged), then the lineage-only
+          // catalog for the JavaScript collection points the main catalog
+          // deliberately does not treat as taint sources.
+          const entry = matchSource(e, fn.file) ?? matchLineageSource(e, fn.file);
           if (!entry) return;
           const decision = reclassifySource(entry);
-          const seedPath = seedPathFor(e, parentOf);
+          let seedPath = seedPathFor(e, parentOf);
+          let seedKind = 'entry';
+          if (!seedPath && node.kind === 'assign' && node.source === e && typeof node.target === 'string') {
+            // A call-shaped source that IS the whole right-hand side of an
+            // assignment: the value lands in the target, so seed the target
+            // once the node has run (see SEED_KINDS).
+            seedPath = node.target;
+            seedKind = 'after-node';
+          }
           if (!seedPath) {
             unseedable.push({
               file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null,
@@ -187,23 +237,24 @@ export function planSeeds(callGraph, { repository, maxSeeds, maxNodes, signal, d
             });
             return;
           }
-          const canonicalName = seedPath.slice(seedPath.lastIndexOf('.') + 1);
-          seeds.push({
-            file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null,
-            entryId: entry.id, seedPath, canonicalName,
-            category: decision.category, coverageStatus: decision.coverageStatus,
-            externality: decision.externality, reason: decision.reason,
-            // §3.4's minting rule. `canonicalName` alone is forbidden by
-            // PRD §10.4; the discriminator carries the system proxy
-            // (repository + file), the access path, and the category.
-            // Function scope (`qid`) is deliberately NOT in the
-            // discriminator (§3.4).
-            dataElementId: dataElementId(canonicalName, [repository, fn.file, seedPath, decision.category ?? '']),
-            dataClasses: classifyDataElementName(canonicalName).classes,
-          });
+          mint({ nid, node, entry, decision, seedPath, seedKind });
         });
       }
     }
+    // GA-03.1 (0.195.24): a container seed read through an ALIAS. §3.2's
+    // rule extends a match outward only through member accesses enclosing
+    // it in the SAME statement, so `const body = req.body;` seeds the
+    // container `req.body` (data element `body`, no classes) and the later
+    // `body.card_number` read is a field nothing seeded. Follow the alias
+    // within the function: an assignment of a pure access path that starts
+    // at a container seed (or at an earlier alias of one) names an alias,
+    // and every outermost pure member read rooted at an alias mints the
+    // field seed on the ORIGINAL container path. The alias assignment's own
+    // byPath forwarding (`engine.js`, the structure-preserving `ident` and
+    // `member` cases) then carries the field identity through the hop.
+    // Bounded: the alias table is rebuilt at most four rounds (one per
+    // hop of chained aliases) and a wildcard segment is never seeded.
+    if (fnSeeds.length) extendThroughAliases(fn, fnSeeds, mint);
   }
   const notScanned = functionsTotal - functionsScanned;
   const completion = {
@@ -217,6 +268,61 @@ export function planSeeds(callGraph, { repository, maxSeeds, maxNodes, signal, d
     limits: { maxSeeds: seedCap, maxNodes: nodeCap, nodesVisited },
   };
   return { seeds, unseedable, completion };
+}
+
+const MAX_ALIAS_ROUNDS = 4;
+
+/** `(fn, fnSeeds, mint)`: see the comment at the call site in `planSeeds`. */
+function extendThroughAliases(fn, fnSeeds, mint) {
+  const nodes = Object.entries(fn.cfg?.nodes ?? {});
+  const containers = fnSeeds.filter((s) => s.seedKind === 'entry');
+  if (!containers.length) return;
+  const containerFor = (p) => containers.find((s) => p === s.seedPath || p.startsWith(`${s.seedPath}.`)) ?? null;
+  // ident -> { basePath, seed }: the container path the alias stands for.
+  const aliases = new Map();
+  const resolve = (p) => {
+    if (!p || p.includes('*')) return null;
+    const root = p.slice(0, p.indexOf('.') === -1 ? p.length : p.indexOf('.'));
+    const a = aliases.get(root);
+    if (a) return { basePath: a.basePath + p.slice(root.length), seed: a.seed };
+    const c = containerFor(p);
+    return c ? { basePath: p, seed: c } : null;
+  };
+  for (let round = 0; round < MAX_ALIAS_ROUNDS; round++) {
+    let changed = false;
+    for (const [, node] of nodes) {
+      if (node.kind !== 'assign' || typeof node.target !== 'string' || node.target.includes('.') || node.target.includes('*')) continue;
+      if (aliases.has(node.target)) continue;
+      const r = resolve(accessPathOf(node.source));
+      if (!r) continue;
+      aliases.set(node.target, r);
+      changed = true;
+    }
+    if (!changed) break;
+  }
+  if (!aliases.size) return;
+  const minted = new Set(fnSeeds.map((s) => s.seedPath));
+  for (const [, node] of nodes) {
+    const parentOf = new Map();
+    for (const root of exprRoots(node)) walkExpr(root, (e, p) => { if (p) parentOf.set(e, p); });
+    for (const root of exprRoots(node)) {
+      walkExpr(root, (e) => {
+        if (e.kind !== 'member') return;
+        const parent = parentOf.get(e);
+        if (parent && parent.kind === 'member' && parent.object === e) return; // not outermost
+        const p = accessPathOf(e);
+        if (!p || p.includes('*')) return;
+        const root = p.slice(0, p.indexOf('.'));
+        const a = aliases.get(root);
+        if (!a) return;
+        const fieldPath = a.basePath + p.slice(root.length);
+        if (fieldPath === a.seed.seedPath || minted.has(fieldPath)) return;
+        minted.add(fieldPath);
+        const site = fn.cfg.nodes[a.seed.nodeId];
+        mint({ nid: a.seed.nodeId, node: site ?? node, entry: { id: a.seed.entryId }, decision: a.seed, seedPath: fieldPath, seedKind: 'entry' });
+      });
+    }
+  }
 }
 
 // ── §3.5: seedEntryStateFactory — the driver.js opts.seedEntryState hook ──
@@ -233,6 +339,7 @@ export function planSeeds(callGraph, { repository, maxSeeds, maxNodes, signal, d
 export function seedEntryStateFactory(seeds) {
   const byQid = new Map();
   for (const s of seeds) {
+    if (s.seedKind === 'after-node') continue;
     if (!byQid.has(s.qid)) byQid.set(s.qid, []);
     byQid.get(s.qid).push(s);
   }
@@ -243,4 +350,23 @@ export function seedEntryStateFactory(seeds) {
     for (const s of list) st = addIdentity(st, s.seedPath, s.dataElementId);
     return st;
   };
+}
+
+/**
+ * Builds the `ctx.seedAfterNode(qid, nodeId) -> [{path, id}] | undefined`
+ * function `engine.js`'s worklist consults after every CFG node (GA-03.1,
+ * 0.195.24): the `after-node` seeds of that function, grouped by node.
+ * Keyed by `qid` rather than bound to one function so the same function
+ * works for a callee analysed through `createCallSummaryResolver`.
+ */
+export function seedAfterNodeFactory(seeds) {
+  const byKey = new Map();
+  for (const s of seeds) {
+    if (s.seedKind !== 'after-node') continue;
+    const k = `${s.qid}\u0000${s.nodeId}`;
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push({ path: s.seedPath, id: s.dataElementId });
+  }
+  if (!byKey.size) return undefined;
+  return (qid, nodeId) => byKey.get(`${qid}\u0000${nodeId}`);
 }

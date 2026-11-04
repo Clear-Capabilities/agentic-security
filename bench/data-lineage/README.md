@@ -119,9 +119,9 @@ analyzers' job to make it scoreable.
 
 ### Corpus state
 
-**24 fixtures — 17 `regression`-tier (all passing) and 7
-`capability`-tier (all failing, deliberately and with a documented
-reason each). `--check` exits 0.** Re-measure with
+**24 fixtures, all `regression`-tier and all passing since 0.195.24
+(GA-03.1); before that, 17 passed and 7 were `capability`-tier.
+`--check` exits 0.** Re-measure with
 `node bench/data-lineage/runner.mjs --check` rather than trusting this
 paragraph; it is a snapshot, not a gate.
 
@@ -133,61 +133,62 @@ AI-sink catalog bridge that made that category reachable landed with it.
 F2's 19:
 
 - **14 category-coverage fixtures**, one per reachable
-  `SOURCE_CATEGORIES` value. The 10 that are reachable from a JS-parsed
-  fixture pass, and between them exercise the 10 `SINK_CATEGORIES` that
-  were reachable at the time (`database`, `log`, `external-api`,
-  `analytics`, `http-response`, `queue`, `client-storage`,
-  `object-storage`, `file`, `email`). The 11th, `ai-model-provider`, was
-  not reachable until Sub-project H and is covered by that increment's
-  own fixture instead.
+  `SOURCE_CATEGORIES` value, exercising between them the 10
+  `SINK_CATEGORIES` that were reachable at the time (`database`, `log`,
+  `external-api`, `analytics`, `http-response`, `queue`,
+  `client-storage`, `object-storage`, `file`, `email`). The 11th,
+  `ai-model-provider`, was not reachable until Sub-project H and is
+  covered by that increment's own fixture instead.
 - **3 aliasing/interprocedural fixtures** —
-  `js-http-body-to-log-alias-of-field/` (passing),
+  `js-http-body-to-log-alias-of-field/`,
   `js-http-body-to-log-aliased/` and
-  `js-http-body-to-log-interprocedural/` (both capability-tier).
+  `js-http-body-to-log-interprocedural/`.
 - **2 negative/clean fixtures** —
-  `js-http-query-to-log-unclassified-clean/` (passing) and
-  `js-exec-unsupported-sink/` (capability-tier).
+  `js-http-query-to-log-unclassified-clean/` and
+  `js-exec-unsupported-sink/`.
 
-#### Why 7 fixtures are capability-tier
+#### How the last 7 fixtures became scoreable (0.195.24, GA-03.1)
 
-Every one of them records real ground truth the engine or the runner
-cannot satisfy today. Each fixture's own `notes` carries the measured
-evidence; the four causes are:
+Until 0.195.24 seven fixtures were `capability`-tier: real ground truth
+the engine or the runner could not satisfy. Each fixture's own `notes`
+records what changed and how it was measured; the four causes and their
+resolutions:
 
-1. **Four source categories have no `language: 'js'` catalog entry at
-   all** — `http-upload`, `cli-argument`, `storage-read` and
-   `user-input` are represented only by `py`/`php`/`cpp`-tagged entries.
-   `runner.mjs` parses every fixture with
-   `parseJsFile('source.js', …)`, so `dataflow/catalog.js`'s
-   `_languageAllowed` discards those entries before `match` is ever
-   consulted and no source node can be minted. Fixing this means a
-   multi-language runner — a real runner extension, deferred to F3+.
-   (`storage-read` and `user-input` have a second, independent blocker:
-   `open(path)`/`input()` are bare calls with no enclosing member
-   access, so `accessPathOf` returns `null` and the match lands in
-   `planSeeds`' `unseedable[]`.)
-2. **An aliased CONTAINER loses field-level classification.**
-   `const body = req.body; body.card_number` seeds the container path
-   (`source-seeding.js`'s `seedPathFor` only extends through member
-   accesses enclosing the matched expression in the same statement), so
-   the graph mints a dataElement literally named `body` with
-   `dataClasses: []`. The flow is built; it just carries nothing
-   classified. This is an extremely common Express shape, which is why
-   the fixture is kept visible rather than relabelled.
-3. **The projection does not span a call boundary.** An interprocedural
-   flow produces the source node, the sink node and a correctly
-   classified `card_number` `[PCI]` dataElement — and zero flows. Three
-   interprocedural shapes were measured and all behave identically. See
-   `DESIGN_GRAPH_BUILDER.md` §3.6 for why a call site deliberately does
-   not inherit the driver's seed.
-4. **`scoreFixture` cannot address an unsupported/process-kind sink.**
-   `js-exec-unsupported-sink/` mints exactly one node — `kind: 'process'`,
-   `subtype: null`, `coverageStatus: 'unsupported'`, with a non-empty
-   `coverageReason`, which is the AC-11 property that matters — but the
-   contract asserts by `subtype` category match and has no way to say
-   "an unsupported-kind node with `subtype: null` exists". Extending the
-   contract is F3+ work; the runner was confirmed to degrade to a clean
-   FAIL report rather than throwing.
+1. **Four source categories had no `language: 'js'` catalog entry**
+   (`http-upload`, `cli-argument`, `storage-read`, `user-input`), so the
+   four fixtures were written in Python syntax and could never mint a
+   source node. They are now real JavaScript (`process.argv`,
+   `req.files`, `fs.readFileSync`, `prompt()`), matched by
+   `scanner/src/lineage/lineage-source-catalog.js`, a lineage-only
+   catalog: a file's contents or a console prompt are collection points
+   for the graph, not attacker-controlled taint for the SAST engine, so
+   the main taint catalog is unchanged (pinned by
+   `test/lineage/seeding-across-calls.test.js`). The two call-shaped
+   ones (`readFileSync`, `prompt`) are seeded on the assignment target
+   after the node runs (`source-seeding.js`, `after-node` seeds); before
+   they would have landed in `unseedable[]`. The element named by a
+   positional index (`process.argv[2]`) and a file's contents carry no
+   data class, so those two fixtures label `dataClass: []`, which the
+   runner now reads as "match on the two categories alone".
+   `js-user-input-to-log-unclassified` became `js-user-input-to-log-pii`
+   once its element (`ssn`) had a name to classify.
+2. **An aliased CONTAINER lost field-level classification.**
+   `source-seeding.js` now follows the alias within the function and
+   mints the field seed on the original path, so `const body =
+   req.body; body.card_number` carries `card_number` `[PCI]` through the
+   hop.
+3. **The projection did not span a call boundary.** The call-summary
+   resolver joins the callee's own seeds onto the call-derived entry
+   state (`DESIGN_GRAPH_BUILDER.md` §3.8), so a field read in a helper
+   and returned reaches the caller's sink. **Still open, measured and
+   pinned:** a sink INSIDE the callee (`emit(logger, req.body.x)` with
+   the log call in `emit`) never sees the argument, because a bare call
+   statement is not resolved through the summary; see `engine.js`'s
+   bare `call` case for why the attempt was reverted.
+4. **`scoreFixture` could not address an unsupported/process-kind sink.**
+   `expectUnsupportedSink: true` now asserts the `kind: 'process'`,
+   `subtype: null`, `coverageStatus: 'unsupported'` node with a
+   `coverageReason`, which is the AC-11 property that matters.
 
 #### Authoring constraint: a scoreable sink call MUST be a bare statement
 
