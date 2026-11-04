@@ -11,8 +11,8 @@
     "milestoneDeclared": false
   },
   "records": {
-    "required": 242,
-    "passed": 63
+    "required": 243,
+    "passed": 64
   },
   "realCodeAccuracy": {
     "label": "historical (not this engine)",
@@ -83,8 +83,8 @@
     "GA-03": {
       "title": "Harden Code Boundaries, graph analysis and context intelligence",
       "accountableRole": "graph/analysis lead",
-      "required": 10,
-      "passed": 0,
+      "required": 11,
+      "passed": 1,
       "blocked": 0
     },
     "GA-04": {
@@ -843,8 +843,8 @@
         "GA-12"
       ],
       "status": "blocked",
-      "passed": 1,
-      "required": 7,
+      "passed": 2,
+      "required": 8,
       "records": [
         {
           "id": "code-boundaries:REG-BAR",
@@ -915,6 +915,16 @@
           "detail": "pilot repositories not selected; maintainer not named",
           "evidencePath": null,
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "code-boundaries:LINEAGE-CORPUS",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "The labelled lineage corpus passes in full with every fixture gating: the four source categories without a JavaScript taint entry are served by a lineage-only catalog that adds no taint source, a container alias and a call return carry field identity, and an unsupported sink is asserted visible with a reason.",
+          "status": "passed",
+          "detail": "cd scanner && node ../bench/data-lineage/runner.mjs --check && node --test test/lineage/seeding-across-calls.test.js (exit 0) at 0f6818d4951e: scanner/test/lineage/seeding-across-calls.test.js",
+          "evidencePath": "scanner/test/lineage/seeding-across-calls.test.js",
+          "blocker": null
         }
       ],
       "nextAction": "code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
@@ -3518,7 +3528,7 @@
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
       "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "fleet-scan: owner unassigned (role graph/analysis lead)",
-      "code-boundaries: 1/7 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "code-boundaries: 2/8 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "code-boundaries: owner unassigned (role security evaluation lead)",
       "finding-provenance: 2/7 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "finding-provenance: owner unassigned (role security evaluation lead)",
