@@ -70,6 +70,7 @@ import { loadObservations } from './observation-store.js';
 // (which owns only the REMOTE side).
 import { validateCrossRepoLink, CROSS_REPO_LINKS_FILENAME } from './cross-repo-link.js';
 import { contributeNixConfigLineage } from './nix-view.js';
+import { BOUNDARY_CONTRACTS_FILENAME } from './boundary-contract.js';
 import { adaptCallGraphForLineage } from './haskell-view.js';
 
 // A small, LOCAL, tolerant loader for the operator-declared
@@ -83,6 +84,31 @@ import { adaptCallGraphForLineage } from './haskell-view.js';
 // degrades to an empty/partial array with a console warning naming the
 // count skipped, mirroring `loadRecipientConfig`'s own per-entry
 // discipline.
+/**
+ * GA-03.3: the DAG-08 contracts file, `[]` when absent or malformed (the
+ * parse error is printed, never thrown). Read directly and absence taken
+ * from the read's own error, so there is no existence check before the open.
+ */
+function _loadBoundaryContracts(scanRoot) {
+  if (!scanRoot) return [];
+  const fp = statePath(scanRoot, BOUNDARY_CONTRACTS_FILENAME);
+  let raw;
+  try {
+    raw = fs.readFileSync(fp, 'utf8');
+  } catch (e) {
+    if (e && e.code === 'ENOENT') return [];
+    console.error(`agentic-security: cannot read boundary contracts file (${fp}); no declared handoffs will be joined (${e.message})`);
+    return [];
+  }
+  try {
+    const doc = JSON.parse(raw);
+    return Array.isArray(doc) ? doc : Array.isArray(doc && doc.contracts) ? doc.contracts : [];
+  } catch (e) {
+    console.error(`agentic-security: bad JSON in boundary contracts file (${fp}); no declared handoffs will be joined (${e.message})`);
+    return [];
+  }
+}
+
 function _loadCrossRepoLinkRecords(filePath) {
   let raw;
   try {
@@ -262,8 +288,19 @@ export function buildLineageGraph(callGraph, opts = {}) {
     // Haskell is rewritten into a lineage VIEW (source reads become seedable member reads, sinks become
     // statement-level calls); every other language, and the shared call graph itself, are untouched.
     const lineageCallGraph = adaptCallGraphForLineage(callGraph);
+    // GA-03.3: cross-service handoff joins, opt-in (`opts.boundaries`,
+    // from AGENTIC_SECURITY_LINEAGE_BOUNDARIES=1 in engine.js). The
+    // operator's DAG-08 boundary contracts are read once here, from the
+    // same state directory `dataflow contracts` reads, existence-gated like
+    // every other config load in this function; a malformed file is a
+    // recorded failure of the join step (an empty contract list with the
+    // error named), never a thrown scan.
+    const boundaries = opts.boundaries && opts.boundaries.enabled
+      ? { enabled: true, contracts: opts.boundaries.contracts ?? _loadBoundaryContracts(opts.scanRoot) }
+      : undefined;
     const built = buildGraphWithCoverage(lineageCallGraph, {
       repository: opts.repository,
+      ...(boundaries ? { boundaries } : {}),
       generatedAt: opts.deterministic ? undefined : new Date().toISOString(),
       perFile: opts.perFile,
       parseFailures: opts.parseFailures,

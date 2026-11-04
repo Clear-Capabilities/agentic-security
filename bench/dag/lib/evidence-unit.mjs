@@ -226,7 +226,7 @@ export function evidenceProbe(spec) {
   const fc = loadSources(spec.dir, spec.prefix);
   const t0 = Date.now();
   const { perFile, callGraph } = buildProjectIR(fc);
-  const lr = buildLineageGraph(callGraph, { deterministic: true, perFile, fileContents: fc, repository: 'bench' });
+  const lr = buildLineageGraph(callGraph, { deterministic: true, perFile, fileContents: fc, repository: 'bench', boundaries: { enabled: true, contracts: [] } });
   const graph = lr.graph || { graphId: 'dfg:bench:none', nodes: [], edges: [], flows: [], dataElements: [], coverage: {} };
   const { seeds } = planSeeds(callGraph, { repository: 'bench' });
   const v1 = analyse(callGraph, seeds, 1);

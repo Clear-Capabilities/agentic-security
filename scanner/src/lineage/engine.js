@@ -74,6 +74,13 @@ function isV2(ctx) {
 // the derivation path of the level that emitted it (the innermost stamp
 // wins, because an inner wrapper's fields are already on the hop when the
 // outer wrapper sees it).
+/** `JSON.parse` / `JSON.stringify` (GA-03.3): the one call pair the resolver treats as structure-preserving. */
+function isJsonRoundTrip(callee) {
+  if (typeof callee === 'string') return callee === 'JSON.parse' || callee === 'JSON.stringify';
+  return !!callee && callee.kind === 'member' && (callee.prop === 'parse' || callee.prop === 'stringify')
+    && callee.object?.kind === 'ident' && callee.object.name === 'JSON';
+}
+
 function sub(ctx, seg, stamp) {
   if (!isV2(ctx)) return ctx;
   const derivation = deriveChild(ctx.derivation, seg);
@@ -609,6 +616,19 @@ export function resolveExprIdentities(state, expr, ctx) {
           }
           return { flat, byPath, widened: false };
         }
+      }
+      // GA-03.3 (0.195.25): a JSON round trip is structure-PRESERVING.
+      // `JSON.stringify(v)` carries exactly v's fields (serialized) and
+      // `JSON.parse(s)` yields exactly the fields s was serialized from, so
+      // both forward the first argument's `{flat, byPath, widened}`
+      // unchanged, the way `assign-expr` forwards its source: the field a
+      // queue consumer reads off `JSON.parse(m.Body)` keeps the identity the
+      // producer put under that key instead of collapsing to the whole
+      // record's flat union. The argument's own recursion emits its hops;
+      // nothing is recorded for the call itself (there is no new value).
+      // The replacer/reviver/space arguments never carry the value.
+      if (isJsonRoundTrip(expr.callee) && (expr.args ?? []).length >= 1) {
+        return resolveExprIdentities(state, expr.args[0], sub(ctx, 'a0'));
       }
       const flat = new Set();
       // Hotfix (found during Sub-project E1's design spike; see

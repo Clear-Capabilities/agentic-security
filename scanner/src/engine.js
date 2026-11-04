@@ -9774,6 +9774,9 @@ function _deterministicFileTimings(timings) {
         deterministic: isDeterministic(),
         perFile,
         fileContents,
+        // GA-03.3 (0.195.25): cross-service handoff joins in the lineage
+        // graph, opt-in. Off, the graph is the one 0.195.24 built.
+        ...(process.env.AGENTIC_SECURITY_LINEAGE_BOUNDARIES === '1' ? { boundaries: { enabled: true } } : {}),
       };
       // DAG-07 R07.7: with AGENTIC_SECURITY_LINEAGE_DEADLINE_MS set, the build runs in an
       // owned worker with a watchdog. Unset: the in-process call, exactly as before.

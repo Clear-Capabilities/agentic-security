@@ -272,6 +272,13 @@ export function planSeeds(callGraph, { repository, maxSeeds, maxNodes, signal, d
 
 const MAX_ALIAS_ROUNDS = 4;
 
+/** `JSON.parse(x)` / `JSON.stringify(x)` → x (one level); anything else unchanged. */
+function unwrapJsonRoundTrip(e) {
+  if (e && e.kind === 'call' && e.callee && e.callee.kind === 'member' && (e.callee.prop === 'parse' || e.callee.prop === 'stringify')
+    && e.callee.object && e.callee.object.kind === 'ident' && e.callee.object.name === 'JSON' && Array.isArray(e.args) && e.args.length) return e.args[0];
+  return e;
+}
+
 /** `(fn, fnSeeds, mint)`: see the comment at the call site in `planSeeds`. */
 function extendThroughAliases(fn, fnSeeds, mint) {
   const nodes = Object.entries(fn.cfg?.nodes ?? {});
@@ -293,7 +300,10 @@ function extendThroughAliases(fn, fnSeeds, mint) {
     for (const [, node] of nodes) {
       if (node.kind !== 'assign' || typeof node.target !== 'string' || node.target.includes('.') || node.target.includes('*')) continue;
       if (aliases.has(node.target)) continue;
-      const r = resolve(accessPathOf(node.source));
+      // GA-03.3: a JSON round trip keeps the container's structure (the
+      // same rule engine.js applies), so `const s = JSON.stringify(req.body)`
+      // and `const back = JSON.parse(s)` are aliases of the container too.
+      const r = resolve(accessPathOf(unwrapJsonRoundTrip(node.source)));
       if (!r) continue;
       aliases.set(node.target, r);
       changed = true;

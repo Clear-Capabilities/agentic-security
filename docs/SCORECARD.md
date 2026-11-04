@@ -9,9 +9,9 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.195.24 |
-| Bundle SHA-256 | `7a00dab21c958eb07e821a422efc871b2ceee9c84e4405ae9754390ec874c165` |
-| Commit | `94dcc98876899b8bad46b755622ff0198d82e7da` |
+| Engine version | 0.195.25 |
+| Bundle SHA-256 | `ea2e63293cf62b7a65de89db1da0f32c8490a8b41c5d9bbfd20fba1c3acb284f` |
+| Commit | `d453ec113f6207622cc069fa5d7de9e28864ff7f` |
 | Worktree at measurement time | clean |
 | Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -19,7 +19,7 @@ that produced them.
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-04T18:39:52.582Z |
+| Generated (UTC) | 2026-11-04T22:17:28.515Z |
 
 ## What these numbers are, and what they are not
 
@@ -236,7 +236,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 273/565 (48.3%) |
+| 272/565 (48.1%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -378,7 +378,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.195.24), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.195.25), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both
