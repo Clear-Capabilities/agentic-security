@@ -193,12 +193,21 @@ const credFile = (suffix = '') => [
 ].join('\n');
 async function scanDeepProject(name, content) {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pragma-deep-')));
+  // Deep mode is skipped under CI unless DEEP_IN_CI is set (the hosted runners), exactly as scanDeep above does.
+  const prevDeep = process.env.AGENTIC_SECURITY_DEEP;
+  const prevCi = process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+  process.env.AGENTIC_SECURITY_DEEP = '1';
+  process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
   try {
     fs.writeFileSync(path.join(dir, 'package.json'), '{}');
     fs.writeFileSync(path.join(dir, name), content);
     const { scan } = await runScan(dir, { deep: true });
     return { findings: normalizeFindings(scan), suppressions: scan.suppressions || [] };
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (prevDeep === undefined) delete process.env.AGENTIC_SECURITY_DEEP; else process.env.AGENTIC_SECURITY_DEEP = prevDeep;
+    if (prevCi === undefined) delete process.env.AGENTIC_SECURITY_DEEP_IN_CI; else process.env.AGENTIC_SECURITY_DEEP_IN_CI = prevCi;
+  }
 }
 test('a privacy-flow finding (credentials to an outbound HTTP sink) IS suppressed by a pragma on its line', async () => {
   const privacy = (r) => r.findings.filter((f) => f.family === 'pii-exposure' || /Privacy/.test(f.vuln || ''));
