@@ -111,8 +111,9 @@
 // entry point), it does not wrap it.
 
 import { matchSinkOrSanitizer } from '../dataflow/catalog.js';
-import { matchPrivacySink } from '../dataflow/privacy-catalog.js';
+import { matchPrivacySink, PRIVACY_SINK_CATALOG } from '../dataflow/privacy-catalog.js';
 import { matchOrmWrite } from '../dataflow/orm-write-catalog.js';
+import { collectBoundaryEndpoints, planBoundaryJoins, queueCommandOf, MAX_BOUNDARY_ROUNDS } from './boundary-join.js';
 // Milestone 2, Sub-project G, increment 1 (FR-408/AC-09): `isSinkPermitted`/
 // `permittingRules` are pure, vocabulary-agnostic functions (no hardcoded
 // sink-name check anywhere in that module — confirmed by direct read) that
@@ -193,6 +194,19 @@ function resolveSinkAtCallSite(calleeExpr, file) {
     },
     ambiguity: { resolvedBy: 'plurality', alternatives: others },
   };
+}
+
+/**
+ * GA-03.3 (0.195.25): the registry decision for an AWS SDK v3 send command
+ * (`queueCommandOf` in boundary-join.js). Resolves through the privacy
+ * catalog's queue entry named by the command table, so the node is the same
+ * `queue` decision the v2 `sendMessage`/`publish` shapes get; never through
+ * the general catalog, whose bare `send` entry is a different sink.
+ */
+function resolveQueueCommandSite(cmd) {
+  const entry = PRIVACY_SINK_CATALOG.find((e) => e.id === cmd.entry);
+  if (!entry) return null;
+  return { entry, decision: reclassifyPrivacySink(entry), ambiguity: null, queueCommand: cmd.command };
 }
 
 /**
@@ -345,7 +359,17 @@ export function enumerateSinkSites(callGraph) {
   for (const fn of callGraph.functions.values()) {
     for (const [nid, node] of Object.entries(fn.cfg?.nodes ?? {})) {
       if (node.kind === 'call' && node.callee) {
-        const r = resolveSinkAtCallSite(node.callee, fn.file);
+        // GA-03.3 (0.195.25): the AWS SDK v3 command shape,
+        // `client.send(new SendMessageCommand(input))`. The general catalog's
+        // bare `send` entry (a koa-send path sink) used to claim this call as
+        // an unresolved file sink; it is a queue publish, resolved through the
+        // privacy catalog's own queue entry so the registry decision is the
+        // same one `sqs.sendMessage(input)` gets. A RECEIVE command is a read,
+        // not a sink: the site is skipped here and becomes a boundary
+        // consumer (boundary-join.js) instead.
+        const cmd = queueCommandOf(node.callee, node.args ?? []);
+        if (cmd && cmd.role === 'receive') continue;
+        const r = cmd ? resolveQueueCommandSite(cmd) : resolveSinkAtCallSite(node.callee, fn.file);
         if (r) {
           sites.push({ file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null, calleeExpr: node.callee, args: node.args ?? [], ...r });
           // Milestone 2, Sub-project E, increment 3: queue/topic identity
@@ -356,7 +380,7 @@ export function enumerateSinkSites(callGraph) {
           // only the queue category needs).
           if (r.decision.category === 'queue') {
             const site = sites[sites.length - 1];
-            site.queueDetail = extractQueueDetail(node.args ?? []);
+            site.queueDetail = extractQueueDetail(cmd ? [cmd.input] : (node.args ?? []));
           }
         }
         // Milestone 2, Sub-project E, increment 1: ORM-write recognition,
@@ -414,6 +438,27 @@ function calleeDescriptor(calleeExpr) {
 }
 const calleeDisplay = (d) => (!d ? null : d.type === 'member-call' ? `${d.object}.${d.method}` : d.callee);
 
+/**
+ * GA-03.3: the coverage record for handoff joins, the same for the builder's
+ * own sketch and coverage.js's finished ledger. Disabled builds say so;
+ * nothing is counted that was not attempted.
+ */
+export function boundaryCoverage(boundaries) {
+  if (!boundaries) return { enabled: false };
+  return {
+    enabled: true,
+    rounds: boundaries.rounds, maxRounds: MAX_BOUNDARY_ROUNDS, truncated: boundaries.truncated,
+    producers: boundaries.endpoints.producers, consumers: boundaries.endpoints.consumers,
+    joins: boundaries.joins.length,
+    joinedFields: boundaries.joins.reduce((n, j) => n + j.fields.length, 0),
+    declared: boundaries.joins.filter((j) => j.provenance === 'manual').length,
+    discovered: boundaries.joins.filter((j) => j.provenance === 'code').length,
+    unjoined: boundaries.unjoined.map((u) => ({ side: u.side, kind: u.kind, file: u.file, line: u.line, reason: u.reason })),
+    gaps: boundaries.gaps.length,
+    note: 'Every join is modeled from a declared contract or a literal identity both sides name; none is an observed message or row.',
+  };
+}
+
 const nodeLabel = (kind, category, reason) => (category
   ? `${category} (${kind})`
   : `unsupported ${kind}: ${String(reason).split(';')[0].slice(0, 80)}`);
@@ -446,20 +491,57 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     ...(opts.signal ? { signal: opts.signal } : {}),
     ...(opts.deadline === undefined ? {} : { deadline: opts.deadline }),
   });
-  const hops = [];
-  const analysis = runFieldIdentityAnalysis(callGraph, {
-    recordHop: (h) => hops.push(h),
-    seedEntryState: seedEntryStateFactory(seeds),
-    // GA-03.1 (0.195.24): call-shaped sources assigned to a variable.
-    ...(seedAfterNodeFactory(seeds) ? { seedAfterNode: seedAfterNodeFactory(seeds) } : {}),
-    ...(opts.maxContextsPerFn === undefined ? {} : { maxContextsPerFn: opts.maxContextsPerFn }),
-    ...(opts.maxIterations === undefined ? {} : { maxIterations: opts.maxIterations }),
-    // DAG-03: provenance correlation version 2 (off unless requested).
-    ...(opts.correlationVersion === undefined ? {} : { correlationVersion: opts.correlationVersion }),
-    ...(opts.signal ? { signal: opts.signal } : {}),
-    ...(opts.deadline === undefined ? {} : { deadline: opts.deadline }),
-    ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
-  });
+  const runAnalysis = (seedsNow) => {
+    const hopsNow = [];
+    const afterNode = seedAfterNodeFactory(seedsNow);
+    const analysisNow = runFieldIdentityAnalysis(callGraph, {
+      recordHop: (h) => hopsNow.push(h),
+      seedEntryState: seedEntryStateFactory(seedsNow),
+      // GA-03.1 (0.195.24): call-shaped sources assigned to a variable.
+      ...(afterNode ? { seedAfterNode: afterNode } : {}),
+      ...(opts.maxContextsPerFn === undefined ? {} : { maxContextsPerFn: opts.maxContextsPerFn }),
+      ...(opts.maxIterations === undefined ? {} : { maxIterations: opts.maxIterations }),
+      // DAG-03: provenance correlation version 2 (off unless requested).
+      ...(opts.correlationVersion === undefined ? {} : { correlationVersion: opts.correlationVersion }),
+      ...(opts.signal ? { signal: opts.signal } : {}),
+      ...(opts.deadline === undefined ? {} : { deadline: opts.deadline }),
+      ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
+    });
+    return { hops: hopsNow, analysis: analysisNow };
+  };
+  let { hops, analysis } = runAnalysis(seeds);
+  // Sink sites are enumerated once, here, because the boundary rounds below
+  // need the producer sites before the projection does. Pure over the call
+  // graph, so the order change is not observable.
+  const { sites, nonStatementSites } = enumerateSinkSites(callGraph);
+  // GA-03.3 (0.195.25): cross-service handoffs (boundary-join.js). Opt-in
+  // (`opts.boundaries.enabled`); a build that omits it is byte-identical to
+  // the build before this existed. A round plans the consumer seeds the
+  // current hop stream supports and, when it minted any, re-runs the field
+  // analysis so a chain of handoffs resolves; the round count is bounded and
+  // a still-productive last round is reported as truncated, never read as
+  // convergence.
+  let boundaries = null;
+  if (opts.boundaries && opts.boundaries.enabled) {
+    const endpoints = collectBoundaryEndpoints(callGraph, sites);
+    const contracts = Array.isArray(opts.boundaries.contracts) ? opts.boundaries.contracts : [];
+    const minted = new Set();
+    const joinsById = new Map();
+    boundaries = { enabled: true, rounds: 0, truncated: false, seeds: 0, joins: [], unjoined: endpoints.unjoined, gaps: [], endpoints: { producers: endpoints.producers.length, consumers: endpoints.consumers.length } };
+    for (let round = 0; round <= MAX_BOUNDARY_ROUNDS; round++) {
+      const r = planBoundaryJoins({ endpoints, hops, contracts, callGraph, minted });
+      for (const j of r.joins) if (!joinsById.has(j.joinId) || j.fields.length) joinsById.set(j.joinId, j);
+      boundaries.unjoined = r.unjoined;
+      boundaries.gaps = r.gaps;
+      if (!r.seeds.length) break;
+      if (round === MAX_BOUNDARY_ROUNDS) { boundaries.truncated = true; break; }
+      seeds.push(...r.seeds);
+      boundaries.seeds += r.seeds.length;
+      boundaries.rounds += 1;
+      ({ hops, analysis } = runAnalysis(seeds));
+    }
+    boundaries.joins = [...joinsById.values()].sort((a, b) => (a.joinId < b.joinId ? -1 : 1));
+  }
   const store = new PathStore({}, { correlationVersion: opts.correlationVersion });
   store.addHops(hops);
   // DAG-07 R07.2: an analysis unit that hit its budget has no hop
@@ -482,6 +564,10 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   for (const u of analysisCompletion.incomplete) {
     store.markTruncated(u.qid, u.context, u.reasons[0] ?? 'analysis-incomplete');
   }
+  if (boundaries && boundaries.truncated) {
+    analysisCompletion.boundaries = { rounds: boundaries.rounds, maxRounds: MAX_BOUNDARY_ROUNDS, truncated: true };
+    if (analysisCompletion.status === 'complete') analysisCompletion.status = 'partial';
+  }
 
   const cfgByQid = new Map();
   for (const fn of callGraph.functions.values()) cfgByQid.set(fn.qid, { fn, nodes: fn.cfg?.nodes ?? {} });
@@ -493,6 +579,20 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     if (!seedSitesByDe.has(s.dataElementId)) seedSitesByDe.set(s.dataElementId, []);
     seedSitesByDe.get(s.dataElementId).push(s);
   }
+  // GA-03.3: one data element can now be seeded in more than one function
+  // (its collection point and every consumer a handoff carried it into).
+  // The seed a path starts from is the one in the function the path's
+  // terminal node lives in; the first seed is the fallback for a path whose
+  // terminal is not a seeded location (unchanged behaviour when there is one
+  // seed per element, which is every build without boundaries).
+  const seedForPath = (p) => {
+    const cands = seedSitesByDe.get(p.dataElementId);
+    if (!cands || cands.length < 2) return seedByDe.get(p.dataElementId);
+    const scope = store.getNode(p.terminal?.nodeId)?.scope ?? store.getNode(p.hops?.[0]?.fromNodeId)?.scope ?? null;
+    return cands.find((s) => s.qid === scope) ?? cands[0];
+  };
+  const siteByKey = new Map();
+  for (const site of sites) siteByKey.set(`${site.qid}|${site.nodeId}`, site);
 
   const graph = emptyGraphEnvelope({
     graphId: ids.graphId({ repository, commit: opts.commit ?? 'uncommitted', configHash: opts.configHash ?? 'default' }),
@@ -570,11 +670,22 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     decisionsByNodeId.get(id).push({ kind, category, coverageStatus, externality });
     return n;
   };
-  const sourceNodeFor = (s) => mintNode({
-    kind: 'source', category: s.category, coverageStatus: s.coverageStatus, externality: s.externality,
-    coverageReason: s.reason, subtypeKey: s.category ?? `unsupported-source:${s.entryId}`,
-    lifecycleStages: ['collection'],
-  });
+  // GA-03.3: a seed a handoff minted has no collection point of its own; its
+  // source node IS the producer's sink node (the queue or the store), so the
+  // graph reads as one chain, HTTP to queue to store to HTTP response, with
+  // the handoff visible on the edge. The producer site always exists (a join
+  // is planned from a site in `sites`); the fallback below is defensive.
+  const sourceNodeFor = (s) => {
+    if (s.boundary) {
+      const psite = siteByKey.get(`${s.boundary.producer.qid}|${s.boundary.producer.nodeId}`);
+      if (psite) return sinkNodeFor(psite);
+    }
+    return mintNode({
+      kind: 'source', category: s.category, coverageStatus: s.coverageStatus, externality: s.externality,
+      coverageReason: s.reason, subtypeKey: s.category ?? `unsupported-source:${s.entryId}`,
+      lifecycleStages: ['collection'],
+    });
+  };
   const sinkNodeFor = (site) => mintNode({
     kind: site.decision.kind, category: site.decision.category,
     coverageStatus: site.decision.coverageStatus, externality: site.decision.externality,
@@ -585,9 +696,15 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     storeDetail: site.storeDetail ?? null,
     queueDetail: site.queueDetail ?? null,
   });
-  const mintDataElement = (s) => {
-    let d = deById.get(s.dataElementId);
+  const mintDataElement = (seedIn) => {
+    let d = deById.get(seedIn.dataElementId);
     if (!d) {
+      // GA-03.3: an element is named by its collection point, never by the
+      // key a handoff carried it under (`{contact: email}` is still the
+      // element `email` at the consumer). The first non-boundary seed of
+      // the element is that collection point; a boundary seed is the
+      // fallback only when nothing else minted the element.
+      const s = (seedSitesByDe.get(seedIn.dataElementId) ?? []).find((x) => !x.boundary) ?? seedIn;
       d = {
         id: s.dataElementId, name: s.canonicalName, aliases: [], declaredType: null,
         dataClasses: s.dataClasses, aiContexts: [], sourceLocations: [],
@@ -602,7 +719,6 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     return d;
   };
 
-  const { sites, nonStatementSites } = enumerateSinkSites(callGraph);
   // E4's FR-203 closure hook (DESIGN_GRAPH_BUILDER.md §9.4 item 5b): a
   // caller may substitute an adjusted decision for a site — e.g.
   // coverage.js's `resolveSiteDecision`, which reclassifies a sink whose
@@ -654,7 +770,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       if (r.truncated) stats.truncatedQueries += 1;
       stats.pathsEnumerated += r.enumeratedPathCount;
       for (const p of r.paths) {
-        const seed = seedByDe.get(p.dataElementId);
+        const seed = seedForPath(p);
         if (!seed) continue;
         connected = true;
         stats.pathsProjected += 1;
@@ -745,13 +861,18 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
             id: edgeIdStr, from: src.id, to: snk.id, relationship: 'data_flow',
             fieldMappings: [{ fromPath, toPath, dataElementIds: [de.id], mappingType, transformationIds: sortedT }],
             protocol: { name: 'in-process', destinationResolution: site.destination?.resolutionStatus ?? 'unknown' },
-            boundaryCrossings: [],
+            // GA-03.3: an edge from a handoff seed records the crossing it
+            // rests on. The connection is modeled (a declared contract or a
+            // literal identity both sides name), never observed.
+            boundaryCrossings: seed.boundary
+              ? [{ kind: seed.boundary.kind, identity: seed.boundary.identity, joinId: seed.boundary.joinId, contractId: seed.boundary.contractId, basis: seed.boundary.basis, modeledInput: true, observed: false }]
+              : [],
             // Milestone 2, Sub-project F, increment 1 (FR-304): which
-            // mechanism discovered this edge. Every edge minted here today
-            // is genuinely code-derived — this is an unconditional, honest
-            // literal, never a guess (see schema.js's EDGE_PROVENANCE_VALUES
-            // comment for the full rationale).
-            provenance: 'code',
+            // mechanism discovered this edge. An edge minted from code is
+            // `code`; an edge a boundary contract declared is `manual`
+            // (GA-03.3). Never a guess (see schema.js's
+            // EDGE_PROVENANCE_VALUES comment for the full rationale).
+            provenance: seed.boundary ? seed.boundary.provenance : 'code',
             // Milestone 2, Sub-project B, increment 2 (FR-401):
             // `opts.resolveTransitProtection(site) -> {verdict, evidenceGrade}
             // | undefined`, applied at this exact point — the same block
@@ -774,7 +895,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
         // key by design and therefore never splits a flow.
         const flowKey = [src.id, snk.id, de.id, p.shape, g.grade, sortedT.join(',')].join('|');
         if (!groupsByFlowKey.has(flowKey)) groupsByFlowKey.set(flowKey, []);
-        groupsByFlowKey.get(flowKey).push({ p, g, src, snk, de, edgeIdStr, sortedT, site, unattributed, truncated: r.truncated, truncationReasons: r.truncationReasons, result: r });
+        groupsByFlowKey.get(flowKey).push({ p, g, src, snk, de, seed, edgeIdStr, sortedT, site, unattributed, truncated: r.truncated, truncationReasons: r.truncationReasons, result: r });
       }
     }
     site.connected = connected;
@@ -810,6 +931,9 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       ...(g.complete ? [] : [`path incomplete: terminal reason ${p.terminal.reason}`]),
       ...(site.ambiguity && site.ambiguity.resolvedBy === 'plurality'
         ? [`sink category ambiguous at ${site.file}:${site.line}: also matches ${site.ambiguity.alternatives.join(', ')}`]
+        : []),
+      ...(group[0].seed?.boundary
+        ? [`crosses a ${group[0].seed.boundary.kind} handoff (${group[0].seed.boundary.provenance === 'manual' ? `contract ${group[0].seed.boundary.contractId}` : `literal identity ${group[0].seed.boundary.identity}`}) that is modeled, not observed: no message or row was seen`]
         : []),
     ])].sort();
     // Milestone 2, Sub-project D, increment 1 (FR-403): computed once,
@@ -1169,11 +1293,17 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       ...(store.correlationVersion() === 2 ? { correlationVersion: 2 } : null),
     },
     ...(analysisCompletion.status === 'complete' ? {} : { analysisCompletion }),
+    ...(boundaries ? { boundaries: boundaryCoverage(boundaries) } : {}),
   };
   graph.limitations = [
     'Protection verdicts are not assessed in Milestone 1: every edge carries not_assessed/none on all three dimensions.',
     'Policy verdicts are not evaluated in Milestone 1.',
     'External destinations are not resolved (FR-202 is Milestone 2); protocol.destinationResolution is "unknown" on every edge.',
+    // GA-03.3: only a build that opted in says anything here, so a build
+    // that did not is byte-identical to the build before joins existed.
+    ...(boundaries
+      ? [`Cross-service handoffs are joined from a declared boundary contract or from the same literal queue or collection identity on both sides (${boundaries.joins.length} join(s), ${boundaries.unjoined.length} endpoint(s) left unjoined with a reason); every join is modeled from code, never an observed message or row.`]
+      : []),
   ];
   graph.scanHealth = analysisCompletion.status === 'complete'
     ? { status: 'complete', reason: 'lineage-graph-builder', analysisCompletion }
@@ -1194,5 +1324,5 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   }
   graph.taxonomy = { version: '1.0.0', source: 'built-in + CONFIDENTIAL extension' };
 
-  return { graph, store, hops, analysisCompletion, seeds, unseedable, sites, nonStatementSites, degraded, stats, decisionsByNodeId };
+  return { graph, store, hops, analysisCompletion, seeds, unseedable, sites, nonStatementSites, degraded, stats, decisionsByNodeId, boundaries };
 }

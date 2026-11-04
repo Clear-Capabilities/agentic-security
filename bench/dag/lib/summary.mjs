@@ -78,7 +78,7 @@ export function renderSummary(out, manifest, { realLabels, fixtureLabelsDoc }) {
   p();
   const fx = { TP: 0, FP: 0, FN: 0, TN: 0 };
   for (const r of out.fixtureRows) fx[r.outcome]++;
-  p(`Fixture totals: TP ${fx.TP} FP ${fx.FP} FN ${fx.FN} TN ${fx.TN}. Recall ${frac(fx.TP, fx.TP + fx.FN)}, precision ${frac(fx.TP, fx.TP + fx.FP)}. ${fx.FN} missed positives are scanner gaps (for example boundary handoffs the lineage graph does not join), recorded rather than hidden.`);
+  p(`Fixture totals: TP ${fx.TP} FP ${fx.FP} FN ${fx.FN} TN ${fx.TN}. Recall ${frac(fx.TP, fx.TP + fx.FN)}, precision ${frac(fx.TP, fx.TP + fx.FP)}. ${fx.FN} missed positives are scanner gaps (a site label needs the taint engine to see the flow, a flow label needs the lineage graph to join it), recorded rather than hidden.`);
   p();
 
   p('## Synthetic injected mutants (verdict flips, not natural-code metrics)');

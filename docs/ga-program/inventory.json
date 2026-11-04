@@ -16,7 +16,7 @@
       "slash-command": 17,
       "ticket-provider": 3
     },
-    "environmentVariables": 225
+    "environmentVariables": 226
   },
   "surfaces": [
     {
@@ -1294,6 +1294,7 @@
     "AGENTIC_SECURITY_LANG_TIMEOUT_MS",
     "AGENTIC_SECURITY_LEARN",
     "AGENTIC_SECURITY_LEARN_QUORUM",
+    "AGENTIC_SECURITY_LINEAGE_BOUNDARIES",
     "AGENTIC_SECURITY_LINEAGE_CORRELATION",
     "AGENTIC_SECURITY_LINEAGE_DEADLINE_MS",
     "AGENTIC_SECURITY_LINEAGE_DEEP",

@@ -68,6 +68,9 @@ export async function runUnit(spec) {
   process.env.AGENTIC_SECURITY_DEEP = '1';
   process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
   process.env.AGENTIC_SECURITY_LINEAGE_DEEP = '1';
+  // GA-03.3: handoff joins are forced on for the same reason deep mode is;
+  // a unit with no queue or store handoff builds the same graph either way.
+  process.env.AGENTIC_SECURITY_LINEAGE_BOUNDARIES = '1';
   for (const [k, v] of Object.entries(spec.env || {})) process.env[k] = v;
   const t0 = process.hrtime.bigint();
   let scan;

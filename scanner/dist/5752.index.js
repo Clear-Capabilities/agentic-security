@@ -347,7 +347,7 @@ async function witnessBuild(args) {
   if (!f.out && !f['list-sinks']) { err(`Usage: ${who} [path] --out <dir> [--sink <pnodeId>] | --list-sinks`); return 2; }
 
   const program = await loadProgram(root);
-  const { buildDataFlowGraph } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 37746));
+  const { buildDataFlowGraph } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 36201));
   const { sinkCandidates, reconstructPaths } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 444));
   const { buildWitnessBundle, signWitnessBundle, exportProvenanceArtifact } = await __webpack_require__.e(/* import() */ 1128).then(__webpack_require__.bind(__webpack_require__, 91128));
   if (!program.callGraph || !program.callGraph.functions || program.callGraph.functions.size === 0) {

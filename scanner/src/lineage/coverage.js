@@ -56,7 +56,7 @@
 
 import { reclassifySink } from './sink-registry.js';
 import { DEFAULTS as PATH_QUERY_DEFAULTS } from './path-query.js';
-import { buildDataFlowGraph } from './graph-builder.js';
+import { buildDataFlowGraph, boundaryCoverage } from './graph-builder.js';
 // Milestone 2, Sub-project A, increment 1: `resolveDestination` composes
 // with `resolveSiteDecision` below the same way it's imported here — a real
 // ES module cycle (resolve-destination.js imports THREE things back from
@@ -438,6 +438,9 @@ export function buildCoverageLedger(built, opts = {}) {
 
     degradedTerminals: built.degraded.length,
     unresolvedDestinations,
+    // GA-03.3: present only when the build opted into handoff joins, so a
+    // ledger from a build that did not is unchanged.
+    ...(built.boundaries ? { boundaries: boundaryCoverage(built.boundaries) } : {}),
 
     paths: { enumerated: built.stats.pathsEnumerated, projected: built.stats.pathsProjected, truncatedQueries: built.stats.truncatedQueries },
     budgets: { ...PATH_QUERY_DEFAULTS, ...(opts.budget ?? {}) },
