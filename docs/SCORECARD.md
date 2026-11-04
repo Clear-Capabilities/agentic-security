@@ -11,15 +11,15 @@ that produced them.
 | --- | --- |
 | Engine version | 0.195.25 |
 | Bundle SHA-256 | `ea2e63293cf62b7a65de89db1da0f32c8490a8b41c5d9bbfd20fba1c3acb284f` |
-| Commit | `a2cb41e4973ab07f81c0de3de339572332f38207` |
-| Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
-| Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
+| Commit | `d453ec113f6207622cc069fa5d7de9e28864ff7f` |
+| Worktree at measurement time | clean |
+| Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
 | Node | v24.20.0 |
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-04T21:59:29.434Z |
+| Generated (UTC) | 2026-11-04T22:17:28.515Z |
 
 ## What these numbers are, and what they are not
 
@@ -236,7 +236,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 269/565 (47.6%) |
+| 272/565 (48.1%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
