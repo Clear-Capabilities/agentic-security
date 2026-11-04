@@ -25,6 +25,7 @@ import {
   pathFilterMatches,
   changedPathsOf,
   evaluateGaMilestone,
+  parseCheckRunLines,
   evaluateCommandGate,
   evaluateAttestationSelfCheck,
   extractVersionsFromSource,
@@ -949,4 +950,24 @@ test('ga-milestone-gate — the committed ledger is not met and not declared tod
   const r = evaluateGaMilestone({ model: JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'docs', 'ga-program', 'status.json'), 'utf8')) });
   assert.equal(r.ok, true);
   assert.match(r.warnings.join('\n'), /not declared/);
+});
+
+// The check-runs query is paginated (30 per page; the 0.195.21 release commit had 38 runs), so the facts come as one object per line.
+test('expected jobs — the paginated check-runs output is parsed line by line, and a broken line yields null (unverifiable), never a partial list', () => {
+  const lines = ['{"name":"ci","status":"completed","conclusion":"success"}', '', '{"name":"test-shard (5/8)","status":"completed","conclusion":"success"}', '{"name":"pending","status":"in_progress","conclusion":null}'].join('\n');
+  assert.deepEqual(parseCheckRunLines(lines), [
+    { name: 'ci', status: 'completed', conclusion: 'success' },
+    { name: 'test-shard (5/8)', status: 'completed', conclusion: 'success' },
+    { name: 'pending', status: 'in_progress', conclusion: null },
+  ]);
+  assert.deepEqual(parseCheckRunLines(''), []);
+  assert.equal(parseCheckRunLines('{"name":"ci"}\nnot json'), null);
+  assert.equal(parseCheckRunLines('[{"name":"ci"}]'), null, 'the old whole-array form is not the paginated form');
+});
+
+test('expected jobs — every check run name seen on a recent release commit is classified (CodeQL included)', () => {
+  const tiers = readCheckTiers();
+  for (const name of ['CodeQL', 'analyze (javascript-typescript)', 'test-shard (5/8)', 'telemetry-capture', 'language-stress', 'dependency-currency']) {
+    assert.ok(tiers.blocking.includes(name) || tiers.informational.includes(name), `${name} is classified`);
+  }
 });
