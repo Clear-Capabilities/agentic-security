@@ -82,6 +82,8 @@ export function planSteps({ tests = true } = {}) {
     { name: 'capture the language examples', ...npm('docs:capture-language') },
     { name: 'regenerate the assurance docs', ...npm('docs:assurance') },
     { name: 'regenerate the scorecard', ...npm('scorecard') },
+    { name: 'regenerate the shipped-surface inventory', ...node('scripts/ga-program/inventory.mjs', '--write') },
+    { name: 'render the GA programme status', ...node('scripts/ga-program/ledger.mjs', '--render') },
     { name: 'record inventory test runs', ...node('scripts/engineering-excellence/inventory.mjs', '--verify') },
     { name: 'render the inventory', ...node('scripts/engineering-excellence/inventory.mjs', '--render') },
     { name: 'regenerate the evidence contracts', ...npm('ee:evidence-contracts') },

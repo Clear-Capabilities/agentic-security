@@ -28,6 +28,10 @@
       "reason": "Dated internal implementation plans for finished subsystems, not user-facing capability documentation."
     },
     {
+      "prefix": "docs/ga-program/",
+      "reason": "The GA programme's acceptance ledger, shipped-surface inventory and generated status page (scripts/ga-program/): records about every registry capability's evidence, not capability documentation of Haskell or Nix behaviour. The capabilities they track are the registry's own, each already mapped here or documented under docs/capabilities.yaml."
+    },
+    {
       "prefix": "docs/engineering-excellence/",
       "reason": "Status, inventory, baseline, decision and report records of the Engineering Excellence program, generated from machine-readable state under scripts/engineering-excellence/. Not capability documentation; public documentation for any command the program adds is written under E8-04 and linked from the index."
     }
@@ -2299,6 +2303,39 @@
         "README.md",
         "docs/README.md",
         "docs/guides/release-assurance.md"
+      ]
+    },
+    {
+      "id": "CAP-127",
+      "kind": "doc-link",
+      "title": "GA programme ledger and status: the acceptance records of every registry capability, the shipped-surface inventory and the generated status page",
+      "sources": [
+        "docs/ga-program/README.md"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "not-applicable",
+        "justification": "A record of acceptance evidence for every registry capability; it adds no scanning capability, for Haskell or any other language. The Haskell capability it tracks is language-depth-haskell-nix, whose own entries are above."
+      },
+      "nix": {
+        "applicability": "not-applicable",
+        "justification": "A record of acceptance evidence; it adds no scanning capability. The Nix capability it tracks is language-depth-haskell-nix."
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "A record of acceptance evidence; it has no execution surface."
+      },
+      "entryPoints": [
+        "scripts/ga-program/ledger.mjs",
+        "scripts/ga-program/inventory.mjs"
+      ],
+      "suites": [
+        "language-discovery"
+      ],
+      "documents": [
+        "docs/README.md",
+        "docs/ga-program/README.md"
       ]
     },
     {

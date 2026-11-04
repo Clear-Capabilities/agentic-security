@@ -72,6 +72,9 @@ import { checkAllAssuranceDocs, formatFinding as formatAssuranceFinding } from '
 import { checkPositioningDocs, formatFinding as formatPositioningFinding } from './check-positioning-docs.mjs';
 // The compliance coverage maps are generated from the framework files; this finds one that is missing or stale, or a README count that is wrong.
 import { checkCoverage } from './compliance-coverage.mjs';
+// The GA programme's acceptance ledger: every registry capability has an entry, every shipped surface maps to a capability, a declared pass
+// carries its evidence, and the generated status page is what the ledger renders. Also in `--gate`; run alone with ga-program/ledger.mjs.
+import { validateLedger as checkGaProgram } from './ga-program/ledger.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -343,16 +346,18 @@ async function main() {
   const gate = args.includes('--gate');
 
   if (gate) {
-    // Release-gate mode: link integrity only (deterministic, low-FP).
+    // Release-gate mode: the deterministic, low-false-positive checks only (links, the assurance pages, positioning, compliance coverage, the GA programme ledger).
     const links = checkAllLinks(REPO);
     const assurance = await checkAllAssuranceDocs(REPO);
     const positioning = checkPositioningDocs(REPO);
     const coverage = checkCoverage(REPO);
-    if (!links.length && !assurance.length && !positioning.length && !coverage.length) {
+    const gaProgram = checkGaProgram(REPO);
+    if (!links.length && !assurance.length && !positioning.length && !coverage.length && !gaProgram.length) {
       console.log('doc-links: all user-facing markdown links resolve.');
       console.log('assurance-docs: referenced commands, scripts, schemas, variables and paths exist; no universal claim.');
       console.log('positioning-docs: capability registry valid, generated tables fresh, maturity consistent, commands and lifecycle order valid.');
       console.log('compliance-coverage: every bundled framework has a per-control map that matches its framework file.');
+      console.log('ga-program: ledger, shipped-surface inventory and status page are consistent; every surface is owned.');
       process.exit(0);
     }
     if (links.length) console.error(`doc-links: ${links.length} dangling link(s):`);
@@ -365,6 +370,8 @@ async function main() {
     for (const f of positioning) console.error(`  ${formatPositioningFinding(f)}`);
     if (coverage.length) console.error(`compliance-coverage: ${coverage.length} finding(s):`);
     for (const f of coverage) console.error(`  ${f.file}: ${f.message}`);
+    if (gaProgram.length) console.error(`ga-program: ${gaProgram.length} finding(s):`);
+    for (const f of gaProgram) console.error(`  ${f}`);
     process.exit(1);
   }
 

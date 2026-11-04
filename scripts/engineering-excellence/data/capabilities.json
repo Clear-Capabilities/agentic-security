@@ -624,7 +624,7 @@
     },
     {
       "id": "mcp-server",
-      "name": "MCP server (17 tools, 2 write)",
+      "name": "MCP server (25 tools, 2 write project files)",
       "epics": [
         "E3",
         "E6"

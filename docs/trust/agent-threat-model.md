@@ -33,7 +33,7 @@ Code written by an AI agent is checked before it reaches disk: the `bodyguard` p
 
 ## MCP and plugin attack surfaces
 
-The MCP server is hardened against the OWASP MCP Top 10. It exposes 17 tools, of which two write (`apply_fix`, `apply_sca_upgrade`); the write tools share the path-confinement contract with the edit-capable agents. The scanner also audits the MCP servers and agent tools a project itself exposes. See [MCP tool contract](../reference/mcp-tool-contract.md).
+The MCP server is hardened against the OWASP MCP Top 10. It exposes 25 tools, of which two write project files (`apply_fix`, `apply_sca_upgrade`); the write tools share the path-confinement contract with the edit-capable agents. The scanner also audits the MCP servers and agent tools a project itself exposes. See [MCP tool contract](../reference/mcp-tool-contract.md).
 
 Runner-level capability enforcement (filesystem, structured commands, outbound network) exists as a **Labs** capability. It is off by default and operator-only, and Linux is only partially verified, so do not treat it as a boundary you have verified.
 

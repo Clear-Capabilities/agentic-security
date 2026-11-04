@@ -22,6 +22,9 @@ import {
   evaluateRemoteCi,
   readCheckTiers,
   CHECK_TIERS_FILE,
+  pathFilterMatches,
+  changedPathsOf,
+  evaluateGaMilestone,
   evaluateCommandGate,
   evaluateAttestationSelfCheck,
   extractVersionsFromSource,
@@ -361,7 +364,9 @@ test('release-gate — full run plans all thirty-three checks in order', () => {
   // Wave 3 added release-assurance-gate (slow: it scans a project and builds, verifies and tampers with a package).
   // The Haskell real-code precision work added haskell-precision-gate (slow: the live half scans the 14 pinned projects) and haskell-precision-sealed-gate
   // (slow: it requires the recorded result of the once-per-release sealed measurement).
-  assert.equal(ids.length, 36);
+  // The GA programme (0.195.21) added ga-milestone-gate (fast: it evaluates the committed ledger, registry, scorecard and independent
+  // record; a warning until the milestone is declared in docs/ga-program/ledger.json, then an error per unmet reason).
+  assert.equal(ids.length, 37);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -388,7 +393,7 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
   assert.equal(slowIds.length, 19);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 17);
+  assert.equal(ids.length, 18);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
   // The four cheap correctness gates, the two new fast checks,
   // package-contents, both provenance gates, the doc-link gate, the two
@@ -402,7 +407,7 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
     'bundle-integrity', 'scorecard-freshness', 'attestation-self-check',
     'nist-catalog-freshness', 'nist-800-171-labels', 'package-contents',
     'head-pushed', 'remote-ci-green', 'doc-links', 'calibration-holdout',
-    'independent-population-gate',
+    'independent-population-gate', 'ga-milestone-gate',
   ]) {
     assert.ok(ids.includes(keep), `--fast must still run ${keep}`);
   }
@@ -551,7 +556,8 @@ test('release-check — the gate does not wait on the job it is running inside',
   assert.ok((tiers.self || []).includes('publish'),
     'the release workflow job must be classified self, or the gate deadlocks on itself');
 
-  const green = [done('test', 'success'), done('corpus', 'success')];
+  // Every blocking job reported green: since 0.195.21 a blocking job that did not report is itself an error (see the expected-jobs tests).
+  const green = tiers.blocking.map(n => done(n, 'success'));
   // Pending self — the exact deadlock.
   assert.equal(evaluateRemoteCi(ciFacts([...green, pending('publish')], tiers)).ok, true);
   // Failed self — the stale conclusion left behind by the deadlock.
@@ -835,4 +841,112 @@ test('CLI finds a real released version in the root CHANGELOG.md', () => {
   const r = spawnSync(process.execPath, [NOTES_SCRIPT, '0.188.0'], { encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Who controls the input/);
+});
+
+// ------------------------------------------- GA-01.3: every blocking job is EXPECTED
+//
+// Before 0.195.21 evaluateRemoteCi judged only the check runs that reported for the commit, so a blocking workflow that silently stopped
+// triggering could not turn the gate red (a local pure-function probe with one green job and one required-but-absent job returned ok).
+// Now a blocking name that did not report is an error unless the tiers file declares it path-filtered and none of the commit's changed
+// paths matches; unknown changed paths fail closed; --allow-unverified-ci downgrades it to the UNVERIFIED warning and records the bypass.
+
+const EXPECT = { blocking: ['ci', 'corpus', 'dependency-currency'], informational: ['realworld-bench'], self: [], applicability: { 'dependency-currency': { reason: 'path-filtered', paths: ['scanner/package.json', 'scanner/package-lock.json', '.github/workflows/dependency-currency.yml'] } } };
+
+test('expected jobs — a blocking job that never reported fails the gate by absence', () => {
+  const r = evaluateRemoteCi(ciFacts([done('ci', 'success'), done('dependency-currency', 'success')], EXPECT));
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join('\n'), /Expected hosted CI job "corpus" did not report/);
+});
+
+test('expected jobs — a path-filtered blocking job that did not report is skipped with a reason when no changed path matches', () => {
+  const r = evaluateRemoteCi({ ...ciFacts([done('ci', 'success'), done('corpus', 'success')], EXPECT), changedPaths: ['scanner/src/engine.js', 'docs/README.md'] });
+  assert.equal(r.ok, true, r.errors.join('\n'));
+  assert.match((r.notes || []).join('\n'), /"dependency-currency" did not report and is path-filtered/);
+});
+
+test('expected jobs — a path-filtered blocking job that did not report but was due to run (a changed path matches) fails', () => {
+  const r = evaluateRemoteCi({ ...ciFacts([done('ci', 'success'), done('corpus', 'success')], EXPECT), changedPaths: ['scanner/package.json'] });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join('\n'), /"dependency-currency" did not report .* due to run/);
+});
+
+test('expected jobs — unknown changed paths fail closed for a missing path-filtered job', () => {
+  const r = evaluateRemoteCi({ ...ciFacts([done('ci', 'success'), done('corpus', 'success')], EXPECT), changedPaths: null });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join('\n'), /fails closed/);
+});
+
+test('expected jobs — every blocking job reported green passes, and nothing is recorded as bypassed', () => {
+  const r = evaluateRemoteCi({ ...ciFacts([done('ci', 'success'), done('corpus', 'success'), done('dependency-currency', 'success')], EXPECT), changedPaths: [] });
+  assert.equal(r.ok, true);
+  assert.equal(r.bypassed, false);
+});
+
+test('expected jobs — --allow-unverified-ci downgrades a missing job to the UNVERIFIED warning and records the bypass', () => {
+  const r = evaluateRemoteCi({ ...ciFacts([done('ci', 'success')], EXPECT), changedPaths: [], allowUnverified: true });
+  assert.equal(r.ok, true);
+  assert.equal(r.bypassed, true);
+  assert.match(r.warnings.join('\n'), /UNVERIFIED: Expected hosted CI job "corpus"/);
+});
+
+test('expected jobs — without a tiers file nothing is expected (the pre-R2 behaviour), only what reported is judged', () => {
+  const r = evaluateRemoteCi({ cliAvailable: true, authenticated: true, checkRuns: [done('ci', 'success')], tiers: null });
+  assert.equal(r.ok, true);
+});
+
+test('expected jobs — the committed applicability paths equal the workflow\'s own path filter', () => {
+  const tiers = readCheckTiers();
+  const app = tiers.applicability['dependency-currency'];
+  assert.ok(app && Array.isArray(app.paths) && app.reason.length > 20, 'dependency-currency is path-filtered and must say so');
+  const wf = fs.readFileSync(path.join(REPO_ROOT, '.github', 'workflows', 'dependency-currency.yml'), 'utf8');
+  const pr = /pull_request:\s*\n\s*paths:\s*\n((?:\s*- .*\n)+)/.exec(wf);
+  assert.ok(pr, 'the workflow declares pull_request paths');
+  const wfPaths = pr[1].split('\n').map(l => l.trim().replace(/^- /, '').replace(/^'|'$/g, '')).filter(Boolean);
+  assert.deepEqual([...app.paths].sort(), [...wfPaths].sort());
+  // every other blocking job runs on every commit: no applicability entry names a job that is not blocking
+  for (const name of Object.keys(tiers.applicability)) assert.ok(tiers.blocking.includes(name), `${name} is path-filtered but not blocking`);
+});
+
+test('expected jobs — the path filter matcher: exact, one segment, any depth', () => {
+  assert.equal(pathFilterMatches('scanner/package.json', 'scanner/package.json'), true);
+  assert.equal(pathFilterMatches('scanner/package.json', 'scanner/package-lock.json'), false);
+  assert.equal(pathFilterMatches('ide/*/package.json', 'ide/vscode/package.json'), true);
+  assert.equal(pathFilterMatches('ide/*/package.json', 'ide/vscode/src/package.json'), false);
+  assert.equal(pathFilterMatches('docs/**', 'docs/guides/haskell.md'), true);
+  assert.equal(pathFilterMatches('docs/**', 'scanner/docs/x.md'), false);
+});
+
+test('expected jobs — changedPathsOf answers for HEAD of this repository (an array, never a throw)', () => {
+  const paths = changedPathsOf('HEAD', REPO_ROOT);
+  assert.ok(paths === null || Array.isArray(paths));
+  assert.equal(changedPathsOf('0000000000000000000000000000000000000000', REPO_ROOT), null);
+});
+
+// ------------------------------------------- GA-01.4 and GA-01.6: the all-GA milestone gate
+test('ga-milestone-gate — registered and fast', () => {
+  const check = CHECKS.find(c => c.id === 'ga-milestone-gate');
+  assert.ok(check); assert.equal(check.slow, false);
+  assert.ok(plannedCheckIds({ fast: true }).includes('ga-milestone-gate'));
+});
+
+test('ga-milestone-gate — not declared: every unmet reason is one warning, never an error', () => {
+  const r = evaluateGaMilestone({ model: { program: { milestoneDeclared: false }, milestone: { met: false, reasons: ['a: owner unassigned', 'b: 1/3 passed'] } } });
+  assert.equal(r.ok, true); assert.deepEqual(r.errors, []);
+  assert.match(r.warnings.join('\n'), /2 reason\(s\), not declared/);
+});
+
+test('ga-milestone-gate — declared: each unmet reason is an error, and a hosted-CI bypass is itself one', () => {
+  const r = evaluateGaMilestone({ model: { program: { milestoneDeclared: true }, milestone: { met: false, reasons: ['a: owner unassigned'] } } });
+  assert.equal(r.ok, false); assert.equal(r.errors.length, 1);
+  const bypass = evaluateGaMilestone({ model: { program: { milestoneDeclared: true }, milestone: { met: true, reasons: [] } }, allowUnverified: true });
+  assert.equal(bypass.ok, false); assert.match(bypass.errors[0], /allow-unverified-ci/);
+  const met = evaluateGaMilestone({ model: { program: { milestoneDeclared: true }, milestone: { met: true, reasons: [] } } });
+  assert.equal(met.ok, true); assert.deepEqual(met.warnings, []);
+});
+
+test('ga-milestone-gate — the committed ledger is not met and not declared today, so the gate warns and passes', () => {
+  // The real evaluation over the committed tree: the status page says 0 of 36 verified GA and why.
+  const r = evaluateGaMilestone({ model: JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'docs', 'ga-program', 'status.json'), 'utf8')) });
+  assert.equal(r.ok, true);
+  assert.match(r.warnings.join('\n'), /not declared/);
 });

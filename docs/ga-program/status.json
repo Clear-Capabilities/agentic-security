@@ -1,0 +1,3532 @@
+{
+  "schema": "agentic-security/ga-program-status@1",
+  "engineVersion": "0.195.21",
+  "program": {
+    "baselineCapabilities": 36,
+    "capabilitiesInLedger": 36,
+    "verifiedGa": 0,
+    "registryGa": 19,
+    "promotionCandidatesRemaining": 17,
+    "ownersUnassigned": 36,
+    "milestoneDeclared": false
+  },
+  "records": {
+    "required": 236,
+    "passed": 19
+  },
+  "realCodeAccuracy": {
+    "label": "historical (not this engine)",
+    "engineVersion": "0.172.0",
+    "measuredAt": "2026-10-16T17:28:34.519Z",
+    "sourceCommit": "2c0f0d13c6085580f920452a9866db5aae1dcc29",
+    "bundleSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
+    "denominators": {
+      "inScope": 283,
+      "scored": 278,
+      "unscored": 5,
+      "unscoredByClass": {
+        "timeout": 5
+      },
+      "unaccounted": 0,
+      "reconciles": true
+    },
+    "headline": {
+      "quotable": true,
+      "reason": null,
+      "precision": {
+        "n": 6,
+        "d": 19,
+        "value": 0.3157894736842105
+      },
+      "recall": {
+        "n": 6,
+        "d": 278,
+        "value": 0.02158273381294964
+      },
+      "f1": 0.04040404040404041,
+      "f1Interval": {
+        "method": "grouped-bootstrap-95",
+        "level": 0.95,
+        "replicates": 2000,
+        "groups": 155,
+        "units": 278,
+        "point": 0.04040404040404041,
+        "status": "measured",
+        "low": 0.012778535235343197,
+        "high": 0.07490870786516853,
+        "undefinedDraws": 0,
+        "seed": 2259309968
+      }
+    },
+    "currentEngineIndependentAccuracy": "unmeasured"
+  },
+  "surfaces": {
+    "inventoried": 193,
+    "mapped": 193,
+    "orphans": []
+  },
+  "byWorkstream": {
+    "GA-01": {
+      "title": "Complete the inventory and bind release evidence",
+      "accountableRole": "release/platform lead",
+      "required": 36,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-02": {
+      "title": "Establish independent accuracy and fix the measured misses",
+      "accountableRole": "security evaluation lead",
+      "required": 15,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-03": {
+      "title": "Harden Code Boundaries, graph analysis and context intelligence",
+      "accountableRole": "graph/analysis lead",
+      "required": 10,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-04": {
+      "title": "Qualify Haskell, Nix/NixOS, SCA, SBOM and AI-BOM",
+      "accountableRole": "language/supply-chain lead",
+      "required": 6,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-05": {
+      "title": "Make Git provenance accurate, bounded and explainable",
+      "accountableRole": "analysis/platform engineer",
+      "required": 2,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-06": {
+      "title": "Qualify local models, model validation, hunt and routing",
+      "accountableRole": "inference/evaluation engineer",
+      "required": 6,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-07": {
+      "title": "Promote the learning tools without circular grading",
+      "accountableRole": "detection engineering lead",
+      "required": 4,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-08": {
+      "title": "Prove execution isolation and every experimental execution surface",
+      "accountableRole": "platform security engineer",
+      "required": 13,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-09": {
+      "title": "Qualify fleet scheduling and organization-level answers",
+      "accountableRole": "platform engineer",
+      "required": 3,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-10": {
+      "title": "Qualify local detection generation, log hunting and exposure windows",
+      "accountableRole": "detection engineer",
+      "required": 2,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-11": {
+      "title": "Qualify compliance evidence, strategic metrics and release assurance",
+      "accountableRole": "assurance engineer",
+      "required": 10,
+      "passed": 0,
+      "blocked": 0
+    },
+    "GA-12": {
+      "title": "Finish distribution, developer interfaces, privacy and operations",
+      "accountableRole": "developer experience/release owner",
+      "required": 46,
+      "passed": 0,
+      "blocked": 0
+    }
+  },
+  "capabilities": [
+    {
+      "capabilityId": "agentic-discovery",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-06",
+        "GA-08",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 8,
+      "records": [
+        {
+          "id": "agentic-discovery:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "agentic-discovery:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "agentic-discovery:INDEP-ACCURACY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
+          "check": "independent-accuracy-current",
+          "status": "blocked",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.21 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "evidencePath": null
+        },
+        {
+          "id": "agentic-discovery:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "agentic-discovery:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "agentic-discovery:GA-06-001",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "Valid task completion at least 95% on the frozen task population within published hardware and time budgets; every advertised model and hardware configuration qualified.",
+          "status": "not-started",
+          "detail": "real-model hardware not reserved",
+          "evidencePath": null,
+          "blocker": "real-model hardware not reserved"
+        },
+        {
+          "id": "agentic-discovery:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "agentic-discovery:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "context-intelligence",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-03",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 7,
+      "records": [
+        {
+          "id": "context-intelligence:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "context-intelligence:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "context-intelligence:INDEP-ACCURACY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
+          "check": "independent-accuracy-current",
+          "status": "blocked",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.21 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "evidencePath": null
+        },
+        {
+          "id": "context-intelligence:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "context-intelligence:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "context-intelligence:GA-03-001",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Labelled lineage and multi-service positives and negatives pass; real-code graph precision and recall meet the frozen protocol; no truncated path is presented as exhaustive.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 protocol and population",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 protocol and population"
+        },
+        {
+          "id": "context-intelligence:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "context-intelligence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "language-depth-haskell-nix",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-04",
+        "GA-08",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 8,
+      "records": [
+        {
+          "id": "language-depth-haskell-nix:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "language-depth-haskell-nix:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "language-depth-haskell-nix:INDEP-ACCURACY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
+          "check": "independent-accuracy-current",
+          "status": "blocked",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.21 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "evidencePath": null
+        },
+        {
+          "id": "language-depth-haskell-nix:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "language-depth-haskell-nix:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "language-depth-haskell-nix:GA-04-001",
+          "kind": "manual",
+          "workstream": "GA-04",
+          "requirement": "Applicable layer targets pass on fresh real Haskell and Nix data; every promised evaluator and host leg has current evidence; SBOM identity agreement on independently enumerated fixtures.",
+          "status": "not-started",
+          "detail": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved",
+          "evidencePath": null,
+          "blocker": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved"
+        },
+        {
+          "id": "language-depth-haskell-nix:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "language-depth-haskell-nix:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "model-validation",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-06",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 7,
+      "records": [
+        {
+          "id": "model-validation:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "model-validation:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "model-validation:INDEP-ACCURACY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
+          "check": "independent-accuracy-current",
+          "status": "blocked",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.21 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "evidencePath": null
+        },
+        {
+          "id": "model-validation:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "model-validation:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "model-validation:GA-06-001",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "Valid task completion at least 95% on the frozen task population within published hardware and time budgets; every advertised model and hardware configuration qualified.",
+          "status": "not-started",
+          "detail": "real-model hardware not reserved",
+          "evidencePath": null,
+          "blocker": "real-model hardware not reserved"
+        },
+        {
+          "id": "model-validation:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "rule-compiler",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-07",
+        "GA-08",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 7,
+      "records": [
+        {
+          "id": "rule-compiler:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "rule-compiler:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "rule-compiler:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "rule-compiler:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "rule-compiler:GA-07-001",
+          "kind": "manual",
+          "workstream": "GA-07",
+          "requirement": "Schema-valid proposal completion at least 95% on frozen samples, safe refusal of adversarial replies, zero automatic installation, independent quality gates for promoted rules, zero requests under deny and zero remote requests under local-only.",
+          "status": "not-started",
+          "detail": "depends on GA-02 and GA-06; mutation execution needs GA-08",
+          "evidencePath": null,
+          "blocker": "depends on GA-02 and GA-06; mutation execution needs GA-08"
+        },
+        {
+          "id": "rule-compiler:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "rule-compiler:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "rule-compiler:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "detector-spec-synthesis",
+      "registryMaturity": "Labs",
+      "baselineMaturity": "Labs",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "inference/evaluation engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-06",
+        "GA-07",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 6,
+      "records": [
+        {
+          "id": "detector-spec-synthesis:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "detector-spec-synthesis:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "detector-spec-synthesis:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "detector-spec-synthesis:GA-06-001",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "Valid task completion at least 95% on the frozen task population within published hardware and time budgets; every advertised model and hardware configuration qualified.",
+          "status": "not-started",
+          "detail": "real-model hardware not reserved",
+          "evidencePath": null,
+          "blocker": "real-model hardware not reserved"
+        },
+        {
+          "id": "detector-spec-synthesis:GA-07-001",
+          "kind": "manual",
+          "workstream": "GA-07",
+          "requirement": "Schema-valid proposal completion at least 95% on frozen samples, safe refusal of adversarial replies, zero automatic installation, independent quality gates for promoted rules, zero requests under deny and zero remote requests under local-only.",
+          "status": "not-started",
+          "detail": "depends on GA-02 and GA-06; mutation execution needs GA-08",
+          "evidencePath": null,
+          "blocker": "depends on GA-02 and GA-06; mutation execution needs GA-08"
+        },
+        {
+          "id": "detector-spec-synthesis:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "fleet-scan",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "graph/analysis lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-03",
+        "GA-09",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 6,
+      "records": [
+        {
+          "id": "fleet-scan:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "fleet-scan:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "fleet-scan:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "fleet-scan:GA-03-001",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Labelled lineage and multi-service positives and negatives pass; real-code graph precision and recall meet the frozen protocol; no truncated path is presented as exhaustive.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 protocol and population",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 protocol and population"
+        },
+        {
+          "id": "fleet-scan:GA-09-001",
+          "kind": "manual",
+          "workstream": "GA-09",
+          "requirement": "A 100-repository qualification run and a 1000-repository scheduling stress test with no duplicate logical result, safe resume after each injected failure and published capacity.",
+          "status": "not-started",
+          "detail": "qualification repositories not pinned",
+          "evidencePath": null,
+          "blocker": "qualification repositories not pinned"
+        },
+        {
+          "id": "fleet-scan:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "code-boundaries",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-03",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 7,
+      "records": [
+        {
+          "id": "code-boundaries:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "code-boundaries:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "code-boundaries:INDEP-ACCURACY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
+          "check": "independent-accuracy-current",
+          "status": "blocked",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.21 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "evidencePath": null
+        },
+        {
+          "id": "code-boundaries:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "code-boundaries:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "code-boundaries:GA-03-001",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Labelled lineage and multi-service positives and negatives pass; real-code graph precision and recall meet the frozen protocol; no truncated path is presented as exhaustive.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 protocol and population",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 protocol and population"
+        },
+        {
+          "id": "code-boundaries:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "finding-provenance",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-05",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 6,
+      "records": [
+        {
+          "id": "finding-provenance:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "finding-provenance:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "finding-provenance:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "finding-provenance:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "finding-provenance:GA-05-001",
+          "kind": "manual",
+          "workstream": "GA-05",
+          "requirement": "Origin corpus cases maintained with adverse histories; eligible coverage at least 95% under a frozen eligibility definition; a frozen performance budget met.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 benchmarks",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 benchmarks"
+        },
+        {
+          "id": "finding-provenance:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "graph-precision",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-03",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 7,
+      "records": [
+        {
+          "id": "graph-precision:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "graph-precision:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "graph-precision:INDEP-ACCURACY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
+          "check": "independent-accuracy-current",
+          "status": "blocked",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.21 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "evidencePath": null
+        },
+        {
+          "id": "graph-precision:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "graph-precision:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "graph-precision:GA-03-001",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Labelled lineage and multi-service positives and negatives pass; real-code graph precision and recall meet the frozen protocol; no truncated path is presented as exhaustive.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 protocol and population",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 protocol and population"
+        },
+        {
+          "id": "graph-precision:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "graph-precision:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "detection-and-response",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "analysis/platform engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-05",
+        "GA-08",
+        "GA-10",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 7,
+      "records": [
+        {
+          "id": "detection-and-response:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "detection-and-response:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "detection-and-response:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "detection-and-response:GA-05-001",
+          "kind": "manual",
+          "workstream": "GA-05",
+          "requirement": "Origin corpus cases maintained with adverse histories; eligible coverage at least 95% under a frozen eligibility definition; a frozen performance budget met.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 benchmarks",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 benchmarks"
+        },
+        {
+          "id": "detection-and-response:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "detection-and-response:GA-10-001",
+          "kind": "manual",
+          "workstream": "GA-10",
+          "requirement": "Every advertised format parses in its declared target and version; labelled positive and negative fixtures behave as specified; unavailable telemetry stays unavailable.",
+          "status": "not-started",
+          "detail": "disposable validation products and official parsers not provisioned",
+          "evidencePath": null,
+          "blocker": "disposable validation products and official parsers not provisioned"
+        },
+        {
+          "id": "detection-and-response:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "local-models",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "inference/evaluation engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-06",
+        "GA-07",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 6,
+      "records": [
+        {
+          "id": "local-models:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "local-models:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "local-models:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "local-models:GA-06-001",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "Valid task completion at least 95% on the frozen task population within published hardware and time budgets; every advertised model and hardware configuration qualified.",
+          "status": "not-started",
+          "detail": "real-model hardware not reserved",
+          "evidencePath": null,
+          "blocker": "real-model hardware not reserved"
+        },
+        {
+          "id": "local-models:GA-07-001",
+          "kind": "manual",
+          "workstream": "GA-07",
+          "requirement": "Schema-valid proposal completion at least 95% on frozen samples, safe refusal of adversarial replies, zero automatic installation, independent quality gates for promoted rules, zero requests under deny and zero remote requests under local-only.",
+          "status": "not-started",
+          "detail": "depends on GA-02 and GA-06; mutation execution needs GA-08",
+          "evidencePath": null,
+          "blocker": "depends on GA-02 and GA-06; mutation execution needs GA-08"
+        },
+        {
+          "id": "local-models:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "compliance-evidence",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "language/supply-chain lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-04",
+        "GA-11",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 6,
+      "records": [
+        {
+          "id": "compliance-evidence:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "compliance-evidence:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "compliance-evidence:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "compliance-evidence:GA-04-001",
+          "kind": "manual",
+          "workstream": "GA-04",
+          "requirement": "Applicable layer targets pass on fresh real Haskell and Nix data; every promised evaluator and host leg has current evidence; SBOM identity agreement on independently enumerated fixtures.",
+          "status": "not-started",
+          "detail": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved",
+          "evidencePath": null,
+          "blocker": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved"
+        },
+        {
+          "id": "compliance-evidence:GA-11-001",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "Every control and metric denominator reconciles; external format validators pass; independent offline verification rejects all tampered fixtures.",
+          "status": "not-started",
+          "detail": "clean-machine verifier qualification not run; compliance mapping review not scheduled",
+          "evidencePath": null,
+          "blocker": "clean-machine verifier qualification not run; compliance mapping review not scheduled"
+        },
+        {
+          "id": "compliance-evidence:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "capability-enforcement",
+      "registryMaturity": "Labs",
+      "baselineMaturity": "Labs",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "platform security engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-08",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 5,
+      "records": [
+        {
+          "id": "capability-enforcement:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "capability-enforcement:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "capability-enforcement:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "capability-enforcement:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "capability-enforcement:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "strategic-metrics",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "assurance engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-11",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 5,
+      "records": [
+        {
+          "id": "strategic-metrics:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "strategic-metrics:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "strategic-metrics:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "strategic-metrics:GA-11-001",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "Every control and metric denominator reconciles; external format validators pass; independent offline verification rejects all tampered fixtures.",
+          "status": "not-started",
+          "detail": "clean-machine verifier qualification not run; compliance mapping review not scheduled",
+          "evidencePath": null,
+          "blocker": "clean-machine verifier qualification not run; compliance mapping review not scheduled"
+        },
+        {
+          "id": "strategic-metrics:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "eval-lab",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-06",
+        "GA-08",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 7,
+      "records": [
+        {
+          "id": "eval-lab:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "eval-lab:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "eval-lab:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "eval-lab:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "eval-lab:GA-06-001",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "Valid task completion at least 95% on the frozen task population within published hardware and time budgets; every advertised model and hardware configuration qualified.",
+          "status": "not-started",
+          "detail": "real-model hardware not reserved",
+          "evidencePath": null,
+          "blocker": "real-model hardware not reserved"
+        },
+        {
+          "id": "eval-lab:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "eval-lab:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "release-assurance",
+      "registryMaturity": "Preview",
+      "baselineMaturity": "Preview",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "assurance engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-11",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 0,
+      "required": 5,
+      "records": [
+        {
+          "id": "release-assurance:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "evidencePath": null
+        },
+        {
+          "id": "release-assurance:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "release-assurance:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "release-assurance:GA-11-001",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "Every control and metric denominator reconciles; external format validators pass; independent offline verification rejects all tampered fixtures.",
+          "status": "not-started",
+          "detail": "clean-machine verifier qualification not run; compliance mapping review not scheduled",
+          "evidencePath": null,
+          "blocker": "clean-machine verifier qualification not run; compliance mapping review not scheduled"
+        },
+        {
+          "id": "release-assurance:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+    },
+    {
+      "capabilityId": "deterministic-scan",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-04",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 7,
+      "records": [
+        {
+          "id": "deterministic-scan:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate corpus-gate)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "deterministic-scan:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "deterministic-scan:INDEP-ACCURACY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
+          "check": "independent-accuracy-current",
+          "status": "blocked",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.21 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "evidencePath": null
+        },
+        {
+          "id": "deterministic-scan:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "deterministic-scan:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "deterministic-scan:GA-04-001",
+          "kind": "manual",
+          "workstream": "GA-04",
+          "requirement": "Applicable layer targets pass on fresh real Haskell and Nix data; every promised evaluator and host leg has current evidence; SBOM identity agreement on independently enumerated fixtures.",
+          "status": "not-started",
+          "detail": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved",
+          "evidencePath": null,
+          "blocker": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved"
+        },
+        {
+          "id": "deterministic-scan:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "deterministic-scan:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "dependency-risk",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "language/supply-chain lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-04",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 5,
+      "records": [
+        {
+          "id": "dependency-risk:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate sca-replay-gate)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "dependency-risk:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "dependency-risk:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "dependency-risk:GA-04-001",
+          "kind": "manual",
+          "workstream": "GA-04",
+          "requirement": "Applicable layer targets pass on fresh real Haskell and Nix data; every promised evaluator and host leg has current evidence; SBOM identity agreement on independently enumerated fixtures.",
+          "status": "not-started",
+          "detail": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved",
+          "evidencePath": null,
+          "blocker": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved"
+        },
+        {
+          "id": "dependency-risk:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "dependency-risk:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "taint-and-reachability",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-03",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 7,
+      "records": [
+        {
+          "id": "taint-and-reachability:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate layer-recall-gate)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "taint-and-reachability:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "taint-and-reachability:INDEP-ACCURACY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
+          "check": "independent-accuracy-current",
+          "status": "blocked",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.21 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "evidencePath": null
+        },
+        {
+          "id": "taint-and-reachability:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "taint-and-reachability:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "taint-and-reachability:GA-03-001",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Labelled lineage and multi-service positives and negatives pass; real-code graph precision and recall meet the frozen protocol; no truncated path is presented as exhaustive.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 protocol and population",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 protocol and population"
+        },
+        {
+          "id": "taint-and-reachability:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "taint-and-reachability:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "falsification",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-03",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 7,
+      "records": [
+        {
+          "id": "falsification:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate mutation-gate)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "falsification:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "falsification:INDEP-ACCURACY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
+          "check": "independent-accuracy-current",
+          "status": "blocked",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.21 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "evidencePath": null
+        },
+        {
+          "id": "falsification:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "falsification:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "falsification:GA-03-001",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Labelled lineage and multi-service positives and negatives pass; real-code graph precision and recall meet the frozen protocol; no truncated path is presented as exhaustive.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 protocol and population",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 protocol and population"
+        },
+        {
+          "id": "falsification:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "falsification:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "exploit-proof",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "platform security engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-08",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 5,
+      "records": [
+        {
+          "id": "exploit-proof:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.183.1, gate remote-ci-green)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "exploit-proof:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "exploit-proof:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "exploit-proof:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "exploit-proof:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "exploit-proof:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "root-cause-sweep",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-03",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 7,
+      "records": [
+        {
+          "id": "root-cause-sweep:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.181.0, gate sibling-sweep-gate)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "root-cause-sweep:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "root-cause-sweep:INDEP-ACCURACY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
+          "check": "independent-accuracy-current",
+          "status": "blocked",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.21 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "evidencePath": null
+        },
+        {
+          "id": "root-cause-sweep:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "root-cause-sweep:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "root-cause-sweep:GA-03-001",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Labelled lineage and multi-service positives and negatives pass; real-code graph precision and recall meet the frozen protocol; no truncated path is presented as exhaustive.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 protocol and population",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 protocol and population"
+        },
+        {
+          "id": "root-cause-sweep:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "root-cause-sweep:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "federation",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "graph/analysis lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-03",
+        "GA-09",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 6,
+      "records": [
+        {
+          "id": "federation:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.181.0, gate contract-conformance)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "federation:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "federation:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "federation:GA-03-001",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Labelled lineage and multi-service positives and negatives pass; real-code graph precision and recall meet the frozen protocol; no truncated path is presented as exhaustive.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 protocol and population",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 protocol and population"
+        },
+        {
+          "id": "federation:GA-09-001",
+          "kind": "manual",
+          "workstream": "GA-09",
+          "requirement": "A 100-repository qualification run and a 1000-repository scheduling stress test with no duplicate logical result, safe resume after each injected failure and published capacity.",
+          "status": "not-started",
+          "detail": "qualification repositories not pinned",
+          "evidencePath": null,
+          "blocker": "qualification repositories not pinned"
+        },
+        {
+          "id": "federation:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "federation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "runtime-corroboration",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "graph/analysis lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-03",
+        "GA-10",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 6,
+      "records": [
+        {
+          "id": "runtime-corroboration:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.184.0, gate contract-conformance)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "runtime-corroboration:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "runtime-corroboration:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "runtime-corroboration:GA-03-001",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Labelled lineage and multi-service positives and negatives pass; real-code graph precision and recall meet the frozen protocol; no truncated path is presented as exhaustive.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 protocol and population",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 protocol and population"
+        },
+        {
+          "id": "runtime-corroboration:GA-10-001",
+          "kind": "manual",
+          "workstream": "GA-10",
+          "requirement": "Every advertised format parses in its declared target and version; labelled positive and negative fixtures behave as specified; unavailable telemetry stays unavailable.",
+          "status": "not-started",
+          "detail": "disposable validation products and official parsers not provisioned",
+          "evidencePath": null,
+          "blocker": "disposable validation products and official parsers not provisioned"
+        },
+        {
+          "id": "runtime-corroboration:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "runtime-corroboration:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "blast-radius",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "graph/analysis lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-03",
+        "GA-09",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 6,
+      "records": [
+        {
+          "id": "blast-radius:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.181.0, gate blast-radius-gate)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "blast-radius:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "blast-radius:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "blast-radius:GA-03-001",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Labelled lineage and multi-service positives and negatives pass; real-code graph precision and recall meet the frozen protocol; no truncated path is presented as exhaustive.",
+          "status": "not-started",
+          "detail": "depends on the GA-02 protocol and population",
+          "evidencePath": null,
+          "blocker": "depends on the GA-02 protocol and population"
+        },
+        {
+          "id": "blast-radius:GA-09-001",
+          "kind": "manual",
+          "workstream": "GA-09",
+          "requirement": "A 100-repository qualification run and a 1000-repository scheduling stress test with no duplicate logical result, safe resume after each injected failure and published capacity.",
+          "status": "not-started",
+          "detail": "qualification repositories not pinned",
+          "evidencePath": null,
+          "blocker": "qualification repositories not pinned"
+        },
+        {
+          "id": "blast-radius:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "blast-radius:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "artifact-provenance",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "language/supply-chain lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-04",
+        "GA-08",
+        "GA-11",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 7,
+      "records": [
+        {
+          "id": "artifact-provenance:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.183.1, gate remote-ci-green)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "artifact-provenance:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "artifact-provenance:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "artifact-provenance:GA-04-001",
+          "kind": "manual",
+          "workstream": "GA-04",
+          "requirement": "Applicable layer targets pass on fresh real Haskell and Nix data; every promised evaluator and host leg has current evidence; SBOM identity agreement on independently enumerated fixtures.",
+          "status": "not-started",
+          "detail": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved",
+          "evidencePath": null,
+          "blocker": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved"
+        },
+        {
+          "id": "artifact-provenance:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "artifact-provenance:GA-11-001",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "Every control and metric denominator reconciles; external format validators pass; independent offline verification rejects all tampered fixtures.",
+          "status": "not-started",
+          "detail": "clean-machine verifier qualification not run; compliance mapping review not scheduled",
+          "evidencePath": null,
+          "blocker": "clean-machine verifier qualification not run; compliance mapping review not scheduled"
+        },
+        {
+          "id": "artifact-provenance:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "artifact-provenance:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "safe-fix",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-08",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 6,
+      "records": [
+        {
+          "id": "safe-fix:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate fix-verification-gate)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "safe-fix:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "safe-fix:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "safe-fix:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "safe-fix:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "safe-fix:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "safe-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "verified-remediation",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "security evaluation lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-02",
+        "GA-08",
+        "GA-11",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 7,
+      "records": [
+        {
+          "id": "verified-remediation:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate fix-verification-gate)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "verified-remediation:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "verified-remediation:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "verified-remediation:GA-02-001",
+          "kind": "manual",
+          "workstream": "GA-02",
+          "requirement": "All applicable frozen real-code quality gates pass on a sufficient independent sealed population with clean artifact identity and denominator reconciliation; no threshold reduction.",
+          "status": "not-started",
+          "detail": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)",
+          "evidencePath": null,
+          "blocker": "independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy)"
+        },
+        {
+          "id": "verified-remediation:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "verified-remediation:GA-11-001",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "Every control and metric denominator reconciles; external format validators pass; independent offline verification rejects all tampered fixtures.",
+          "status": "not-started",
+          "detail": "clean-machine verifier qualification not run; compliance mapping review not scheduled",
+          "evidencePath": null,
+          "blocker": "clean-machine verifier qualification not run; compliance mapping review not scheduled"
+        },
+        {
+          "id": "verified-remediation:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "verified-remediation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "proof-gated-fix",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "platform security engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-08",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 5,
+      "records": [
+        {
+          "id": "proof-gated-fix:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.183.1, gate remote-ci-green)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "proof-gated-fix:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "proof-gated-fix:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "proof-gated-fix:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "proof-gated-fix:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "proof-gated-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "scan-health",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "language/supply-chain lead",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-04",
+        "GA-11",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 7,
+      "records": [
+        {
+          "id": "scan-health:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate contract-conformance)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "scan-health:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "scan-health:UNKNOWN-IS-UNKNOWN",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "Unknown feed freshness (a catalog never loaded, offline, no timestamp) is a recorded condition that keeps a result from being called complete, and strict mode fails closed on it.",
+          "status": "not-started",
+          "detail": "release B of the GA programme (scan-health contract change) not shipped",
+          "evidencePath": null,
+          "blocker": "release B of the GA programme (scan-health contract change) not shipped"
+        },
+        {
+          "id": "scan-health:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "scan-health:GA-04-001",
+          "kind": "manual",
+          "workstream": "GA-04",
+          "requirement": "Applicable layer targets pass on fresh real Haskell and Nix data; every promised evaluator and host leg has current evidence; SBOM identity agreement on independently enumerated fixtures.",
+          "status": "not-started",
+          "detail": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved",
+          "evidencePath": null,
+          "blocker": "fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved"
+        },
+        {
+          "id": "scan-health:GA-11-001",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "Every control and metric denominator reconciles; external format validators pass; independent offline verification rejects all tampered fixtures.",
+          "status": "not-started",
+          "detail": "clean-machine verifier qualification not run; compliance mapping review not scheduled",
+          "evidencePath": null,
+          "blocker": "clean-machine verifier qualification not run; compliance mapping review not scheduled"
+        },
+        {
+          "id": "scan-health:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "scan-health:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "assurance-modes",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "assurance engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-11",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 5,
+      "records": [
+        {
+          "id": "assurance-modes:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate contract-conformance)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "assurance-modes:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "assurance-modes:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "assurance-modes:GA-11-001",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "Every control and metric denominator reconciles; external format validators pass; independent offline verification rejects all tampered fixtures.",
+          "status": "not-started",
+          "detail": "clean-machine verifier qualification not run; compliance mapping review not scheduled",
+          "evidencePath": null,
+          "blocker": "clean-machine verifier qualification not run; compliance mapping review not scheduled"
+        },
+        {
+          "id": "assurance-modes:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "assurance-modes:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "model-egress-policy",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "inference/evaluation engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-06",
+        "GA-07",
+        "GA-11",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 8,
+      "records": [
+        {
+          "id": "model-egress-policy:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate contract-conformance)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "model-egress-policy:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "model-egress-policy:EGRESS-ALL-PATHS",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "Every file that sends a prompt to a model endpoint evaluates the egress policy before building the prompt or goes through the shared bounded call.",
+          "check": "egress-all-model-paths",
+          "status": "failed",
+          "detail": "2 model-call site(s) bypass the egress policy: scripts/autopilot.mjs, scripts/synthesize-detector.mjs",
+          "evidencePath": null
+        },
+        {
+          "id": "model-egress-policy:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "model-egress-policy:GA-06-001",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "Valid task completion at least 95% on the frozen task population within published hardware and time budgets; every advertised model and hardware configuration qualified.",
+          "status": "not-started",
+          "detail": "real-model hardware not reserved",
+          "evidencePath": null,
+          "blocker": "real-model hardware not reserved"
+        },
+        {
+          "id": "model-egress-policy:GA-07-001",
+          "kind": "manual",
+          "workstream": "GA-07",
+          "requirement": "Schema-valid proposal completion at least 95% on frozen samples, safe refusal of adversarial replies, zero automatic installation, independent quality gates for promoted rules, zero requests under deny and zero remote requests under local-only.",
+          "status": "not-started",
+          "detail": "depends on GA-02 and GA-06; mutation execution needs GA-08",
+          "evidencePath": null,
+          "blocker": "depends on GA-02 and GA-06; mutation execution needs GA-08"
+        },
+        {
+          "id": "model-egress-policy:GA-11-001",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "Every control and metric denominator reconciles; external format validators pass; independent offline verification rejects all tampered fixtures.",
+          "status": "not-started",
+          "detail": "clean-machine verifier qualification not run; compliance mapping review not scheduled",
+          "evidencePath": null,
+          "blocker": "clean-machine verifier qualification not run; compliance mapping review not scheduled"
+        },
+        {
+          "id": "model-egress-policy:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "model-egress-policy:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "agent-guardrails",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "platform security engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-08",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 5,
+      "records": [
+        {
+          "id": "agent-guardrails:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate contract-conformance)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "agent-guardrails:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "agent-guardrails:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "agent-guardrails:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "agent-guardrails:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "agent-guardrails:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "mcp-server",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "platform security engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-08",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 5,
+      "records": [
+        {
+          "id": "mcp-server:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate contract-conformance)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "mcp-server:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "mcp-server:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "mcp-server:GA-08-001",
+          "kind": "manual",
+          "workstream": "GA-08",
+          "requirement": "Every control advertised as enforced passes positive and negative probes on its supported Linux backend; no target code executes without isolation; all supported runtime oracles have hosted evidence.",
+          "status": "not-started",
+          "detail": "hosted Linux confinement capacity not reserved",
+          "evidencePath": null,
+          "blocker": "hosted Linux confinement capacity not reserved"
+        },
+        {
+          "id": "mcp-server:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "mcp-server:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    },
+    {
+      "capabilityId": "ci-gating",
+      "registryMaturity": "GA",
+      "baselineMaturity": "GA",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "assurance engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-11",
+        "GA-12"
+      ],
+      "status": "failed",
+      "passed": 1,
+      "required": 5,
+      "records": [
+        {
+          "id": "ci-gating:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "passed",
+          "detail": "GA bar met (since 0.178.0, gate contract-conformance)",
+          "evidencePath": "docs/capabilities.yaml"
+        },
+        {
+          "id": "ci-gating:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "failed",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "evidencePath": null
+        },
+        {
+          "id": "ci-gating:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "ci-gating:GA-11-001",
+          "kind": "manual",
+          "workstream": "GA-11",
+          "requirement": "Every control and metric denominator reconciles; external format validators pass; independent offline verification rejects all tampered fixtures.",
+          "status": "not-started",
+          "detail": "clean-machine verifier qualification not run; compliance mapping review not scheduled",
+          "evidencePath": null,
+          "blocker": "clean-machine verifier qualification not run; compliance mapping review not scheduled"
+        },
+        {
+          "id": "ci-gating:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ],
+      "nextAction": "ci-gating:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+    }
+  ],
+  "subcapabilities": [
+    {
+      "id": "distribution",
+      "parent": "deterministic-scan",
+      "title": "npm CLI, bundled executable, source checkout, Nix flake",
+      "status": "not-started",
+      "passed": 0,
+      "required": 1,
+      "records": [
+        {
+          "id": "subcapability:distribution:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Clean-machine install, exact artifact contents, optional dependency behavior, default and strict CI invocation, upgrade and rollback, build/source/hash consistency.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ]
+    },
+    {
+      "id": "harness-manifests",
+      "parent": "agent-guardrails",
+      "title": "Claude, Codex, Cursor, Gemini manifests and hooks",
+      "status": "not-started",
+      "passed": 0,
+      "required": 1,
+      "records": [
+        {
+          "id": "subcapability:harness-manifests:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Supported-host install, reload and update, root discovery, paths with spaces, empty and large projects, bounded hooks, denial behavior, failed-scan visibility; each host tested on its actually supported interface.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ]
+    },
+    {
+      "id": "editor-plugins",
+      "parent": "deterministic-scan",
+      "title": "VS Code, Neovim, JetBrains, LSP",
+      "status": "not-started",
+      "passed": 0,
+      "required": 1,
+      "records": [
+        {
+          "id": "subcapability:editor-plugins:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Packaged install and real-editor diagnostics, save and cancellation smoke tests; current resolver behavior; supported editor, JDK and LSP versions; stale diagnostics cleared; only implemented fix actions advertised.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ]
+    },
+    {
+      "id": "explorer-views",
+      "parent": "code-boundaries",
+      "title": "Explorer server and the interactive views",
+      "status": "not-started",
+      "passed": 0,
+      "required": 1,
+      "records": [
+        {
+          "id": "subcapability:explorer-views:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Real scanned data for architecture, privacy, trace/evidence and inventory; auth token, loopback, path traversal and XSS, graph identity, empty, partial and error states, keyboard access, large-graph responsiveness, offline exports, bundled asset parity.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ]
+    },
+    {
+      "id": "reports-and-attestations",
+      "parent": "deterministic-scan",
+      "title": "Reports and attestations",
+      "status": "not-started",
+      "passed": 0,
+      "required": 1,
+      "records": [
+        {
+          "id": "subcapability:reports-and-attestations:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "JSON, SARIF, JUnit, CSV, Markdown, HTML, SBOM, AI-BOM, OSCAL and every other exposed format retains schema, identity, provenance, partial states, escaping and bounded verdicts.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ]
+    },
+    {
+      "id": "integrations-and-tickets",
+      "parent": "ci-gating",
+      "title": "Integrations, notifications, tickets, PR helpers",
+      "status": "not-started",
+      "passed": 0,
+      "required": 1,
+      "records": [
+        {
+          "id": "subcapability:integrations-and-tickets:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Each adapter inventoried with payload-only distinguished from network-changing behavior; contract, credential and redaction tests; controlled service qualification where supported; retry, idempotency and rate-limit behavior; preview and approval boundaries for writes.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ]
+    },
+    {
+      "id": "state-governance",
+      "parent": "deterministic-scan",
+      "title": "State governance, retention, encryption, exports, legal holds",
+      "status": "not-started",
+      "passed": 0,
+      "required": 1,
+      "records": [
+        {
+          "id": "subcapability:state-governance:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Crash-safe migrations, atomic updates, permissions, redaction, tenant and repository separation, retention exclusions under holds, key loss, backup and recovery, testable deletion and export semantics.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ]
+    },
+    {
+      "id": "economics-and-memory",
+      "parent": "strategic-metrics",
+      "title": "Risk dollars, estimated fix time, authorship and cross-repo memory",
+      "status": "not-started",
+      "passed": 0,
+      "required": 1,
+      "records": [
+        {
+          "id": "subcapability:economics-and-memory:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Formula and data-source contracts, uncertainty, scenario-default disclosure, missing-input behavior, no unsupported causal attribution, configured privacy boundary, benchmark tests of computation rather than invented prediction accuracy.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ]
+    },
+    {
+      "id": "operator-modules",
+      "parent": "graph-precision",
+      "title": "Deployment boundaries, invariants, control planning, portfolio modes",
+      "status": "not-started",
+      "passed": 0,
+      "required": 1,
+      "records": [
+        {
+          "id": "subcapability:operator-modules:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Optional and operator-only modules mapped to owners; passive artifacts and active execution validated separately, with GA-08 isolation for any executed code; inferred architecture is not exploit proof.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ]
+    },
+    {
+      "id": "product-shell",
+      "parent": "deterministic-scan",
+      "title": "Product shell: help, version, banner, persona, the secure router and setup",
+      "status": "not-started",
+      "passed": 0,
+      "required": 1,
+      "records": [
+        {
+          "id": "subcapability:product-shell:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "First-run and install behaviour recorded under the distribution acceptance; the router and setup never write outside the project and say what they changed.",
+          "status": "not-started",
+          "detail": "pilot repositories not selected; maintainer not named",
+          "evidencePath": null,
+          "blocker": "pilot repositories not selected; maintainer not named"
+        }
+      ]
+    }
+  ],
+  "milestone": {
+    "met": false,
+    "reasons": [
+      "agentic-discovery: 0/8 acceptance records passed (failed); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "agentic-discovery: owner unassigned (role security evaluation lead)",
+      "context-intelligence: 0/7 acceptance records passed (failed); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "context-intelligence: owner unassigned (role security evaluation lead)",
+      "language-depth-haskell-nix: 0/8 acceptance records passed (failed); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
+      "model-validation: 0/7 acceptance records passed (failed); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "model-validation: owner unassigned (role security evaluation lead)",
+      "rule-compiler: 0/7 acceptance records passed (failed); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "rule-compiler: owner unassigned (role security evaluation lead)",
+      "detector-spec-synthesis: 0/6 acceptance records passed (failed); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
+      "fleet-scan: 0/6 acceptance records passed (failed); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "fleet-scan: owner unassigned (role graph/analysis lead)",
+      "code-boundaries: 0/7 acceptance records passed (failed); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "code-boundaries: owner unassigned (role security evaluation lead)",
+      "finding-provenance: 0/6 acceptance records passed (failed); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "finding-provenance: owner unassigned (role security evaluation lead)",
+      "graph-precision: 0/7 acceptance records passed (failed); next: graph-precision:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "graph-precision: owner unassigned (role security evaluation lead)",
+      "detection-and-response: 0/7 acceptance records passed (failed); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "detection-and-response: owner unassigned (role analysis/platform engineer)",
+      "local-models: 0/6 acceptance records passed (failed); next: local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "local-models: owner unassigned (role inference/evaluation engineer)",
+      "compliance-evidence: 0/6 acceptance records passed (failed); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "compliance-evidence: owner unassigned (role language/supply-chain lead)",
+      "capability-enforcement: 0/5 acceptance records passed (failed); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "capability-enforcement: owner unassigned (role platform security engineer)",
+      "strategic-metrics: 0/5 acceptance records passed (failed); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "strategic-metrics: owner unassigned (role assurance engineer)",
+      "eval-lab: 0/7 acceptance records passed (failed); next: eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "eval-lab: owner unassigned (role security evaluation lead)",
+      "release-assurance: 0/5 acceptance records passed (failed); next: release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "release-assurance: owner unassigned (role assurance engineer)",
+      "deterministic-scan: 1/7 acceptance records passed (failed); next: deterministic-scan:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "deterministic-scan: owner unassigned (role security evaluation lead)",
+      "dependency-risk: 1/5 acceptance records passed (failed); next: dependency-risk:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "dependency-risk: owner unassigned (role language/supply-chain lead)",
+      "taint-and-reachability: 1/7 acceptance records passed (failed); next: taint-and-reachability:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "taint-and-reachability: owner unassigned (role security evaluation lead)",
+      "falsification: 1/7 acceptance records passed (failed); next: falsification:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "falsification: owner unassigned (role security evaluation lead)",
+      "exploit-proof: 1/5 acceptance records passed (failed); next: exploit-proof:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "exploit-proof: owner unassigned (role platform security engineer)",
+      "root-cause-sweep: 1/7 acceptance records passed (failed); next: root-cause-sweep:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "root-cause-sweep: owner unassigned (role security evaluation lead)",
+      "federation: 1/6 acceptance records passed (failed); next: federation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "federation: owner unassigned (role graph/analysis lead)",
+      "runtime-corroboration: 1/6 acceptance records passed (failed); next: runtime-corroboration:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "runtime-corroboration: owner unassigned (role graph/analysis lead)",
+      "blast-radius: 1/6 acceptance records passed (failed); next: blast-radius:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "blast-radius: owner unassigned (role graph/analysis lead)",
+      "artifact-provenance: 1/7 acceptance records passed (failed); next: artifact-provenance:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "artifact-provenance: owner unassigned (role language/supply-chain lead)",
+      "safe-fix: 1/6 acceptance records passed (failed); next: safe-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "safe-fix: owner unassigned (role security evaluation lead)",
+      "verified-remediation: 1/7 acceptance records passed (failed); next: verified-remediation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "verified-remediation: owner unassigned (role security evaluation lead)",
+      "proof-gated-fix: 1/5 acceptance records passed (failed); next: proof-gated-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "proof-gated-fix: owner unassigned (role platform security engineer)",
+      "scan-health: 1/7 acceptance records passed (failed); next: scan-health:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "scan-health: owner unassigned (role language/supply-chain lead)",
+      "assurance-modes: 1/5 acceptance records passed (failed); next: assurance-modes:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "assurance-modes: owner unassigned (role assurance engineer)",
+      "model-egress-policy: 1/8 acceptance records passed (failed); next: model-egress-policy:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "model-egress-policy: owner unassigned (role inference/evaluation engineer)",
+      "agent-guardrails: 1/5 acceptance records passed (failed); next: agent-guardrails:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "agent-guardrails: owner unassigned (role platform security engineer)",
+      "mcp-server: 1/5 acceptance records passed (failed); next: mcp-server:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "mcp-server: owner unassigned (role platform security engineer)",
+      "ci-gating: 1/5 acceptance records passed (failed); next: ci-gating:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "ci-gating: owner unassigned (role assurance engineer)",
+      "subcapability distribution (deterministic-scan): 0/1 passed (not-started)",
+      "subcapability harness-manifests (agent-guardrails): 0/1 passed (not-started)",
+      "subcapability editor-plugins (deterministic-scan): 0/1 passed (not-started)",
+      "subcapability explorer-views (code-boundaries): 0/1 passed (not-started)",
+      "subcapability reports-and-attestations (deterministic-scan): 0/1 passed (not-started)",
+      "subcapability integrations-and-tickets (ci-gating): 0/1 passed (not-started)",
+      "subcapability state-governance (deterministic-scan): 0/1 passed (not-started)",
+      "subcapability economics-and-memory (strategic-metrics): 0/1 passed (not-started)",
+      "subcapability operator-modules (graph-precision): 0/1 passed (not-started)",
+      "subcapability product-shell (deterministic-scan): 0/1 passed (not-started)",
+      "no current-engine independent accuracy record (the scorecard says unmeasured; the independent record is historical)"
+    ]
+  }
+}
