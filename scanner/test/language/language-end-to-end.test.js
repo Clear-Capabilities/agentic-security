@@ -661,6 +661,16 @@ MATRIX['CAP-122'] = {
   },
 };
 
+// CAP-127 (the GA programme ledger, 0.195.21): acceptance records about every registry capability, the shipped-surface inventory and a generated status
+// page. Language-agnostic: the ledger is read and rendered by scripts/ga-program/ on any checkout; the Haskell and Nix capability it tracks is
+// language-depth-haskell-nix, whose own rows carry the executed behaviour.
+MATRIX['CAP-127'] = {
+  na: {
+    reason: 'the GA programme ledger is a set of acceptance records and a generated status page; it adds no scanning capability, so there is nothing to execute per ecosystem.',
+    behavior: 'ledger.mjs --check and --render read the committed registry, scorecard, independent record and source tree on any checkout, independent of the ecosystem being scanned; the Haskell and Nix evidence it tracks is produced by the language suites themselves.',
+  },
+};
+
 // CAP-123 (dnr) and CAP-124 (eval lab, model router): consume proof records, reproducers and datasets that carry no ecosystem; their code has no Haskell or Nix branch.
 MATRIX['CAP-123'] = {
   na: {

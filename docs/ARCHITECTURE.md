@@ -67,7 +67,7 @@
       /chain, /trend, /badge)    pipeline integrations      Linear / Jira)
 
        Sideband interfaces:
-         mcp/        JSON-RPC 2.0 server — 17 tools any MCP-speaking agent
+         mcp/        JSON-RPC 2.0 server — 25 tools any MCP-speaking agent
                      (Claude Code / Cursor / Cline / Aider / Codex) can call.
                      Hash-chained audit log; OWASP MCP top-10 hardened.
          lsp/        Language-Server-Protocol — powers JetBrains, Neovim, and

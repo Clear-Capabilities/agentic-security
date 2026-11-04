@@ -6,7 +6,7 @@
 // ---------------
 // A release is not one artifact, it is a set of artifacts that must agree:
 // five files carrying the version string, two changelogs, a built bundle
-// and its hash sidecar, a committed accuracy scorecard, three gates, and a
+// and its hash sidecar, a committed accuracy scorecard, the slow gates (suites and benches), and a
 // commit that the public can actually fetch. Historically the failure mode
 // was never "the code was wrong" — it was a half-done release: the version
 // bumped in four of five places, a changelog entry written for the previous
@@ -67,6 +67,7 @@ import { spawnSync } from 'node:child_process';
 import { evaluateScorecardFreshness, countCorpusEntries } from './scorecard-check.mjs';
 import { runDependencyCurrencyCheck } from './dependency-currency.mjs';
 import { runPackageContentsCheck } from './package-contents-check.mjs';
+import { evaluate as evaluateGaProgram } from './ga-program/ledger.mjs';
 import { signLastScan } from '../scanner/src/posture/integrity.js';
 import { computeRunAttestation, verifyRunAttestation } from '../scanner/src/posture/attestation.js';
 import {
@@ -88,7 +89,7 @@ const FORGE_CLI = 'gh';
 
 // ---------------------------------------------------------------------------
 // Check registry. Order is the printed order and the execution order; `slow`
-// marks the three gates `--fast` skips. `remedy` is what a human should do.
+// marks the slow gates `--fast` skips (the suites and benches; 20 of 37 at 0.195.21). `remedy` is what a human should do.
 // ---------------------------------------------------------------------------
 
 export const CHECKS = [
@@ -403,6 +404,17 @@ export const CHECKS = [
       'then either fix the regression, run `node scripts/independent-population-gate.mjs ' +
       '--update-baseline` if the drop is understood and intended, or record a dated ' +
       'exception in .independent-population-waiver.json.',
+  },
+  {
+    id: 'ga-milestone-gate',
+    title: 'The all-GA milestone (docs/ga-program/ledger.json) is met when it is declared',
+    slow: false,
+    // Fast: it evaluates the committed ledger, registry, scorecard and independent record. Not declared (the normal state), every unmet
+    // reason is a warning so the distance to the milestone is visible on every release; declared, each is an error, and a release
+    // published with --allow-unverified-ci cannot claim the milestone at all.
+    remedy: 'Run `node scripts/ga-program/ledger.mjs --milestone` for every unmet reason. Record evidence in ' +
+      'docs/ga-program/ledger.json (a source commit, a command and an evidence path per passed record), assign owners, map every ' +
+      'shipped surface, and measure the current engine on an independent population before declaring the milestone.',
   },
   {
     id: 'head-pushed',
@@ -751,11 +763,19 @@ export function readCheckTiers(repo = REPO) {
   try {
     const doc = JSON.parse(raw);
     if (!Array.isArray(doc?.blocking) || !Array.isArray(doc?.informational)) return null;
-    // `self` is optional: an older file without it simply classifies nothing as self.
-    return { blocking: doc.blocking, informational: doc.informational, self: Array.isArray(doc.self) ? doc.self : [] };
+    // `self` is optional: an older file without it simply classifies nothing as self. `applicability` (0.195.21) names the blocking jobs
+    // that legitimately do not run on every commit (a path-filtered workflow) and the paths that trigger them.
+    const applicability = doc.applicability && typeof doc.applicability === 'object' ? doc.applicability : {};
+    return { blocking: doc.blocking, informational: doc.informational, self: Array.isArray(doc.self) ? doc.self : [], applicability };
   } catch {
     return null;
   }
+}
+
+/** A workflow `paths:` filter entry against one changed path: exact, or a glob with `*` (one segment) and `**` (any depth). */
+export function pathFilterMatches(pattern, changedPath) {
+  const re = new RegExp(`^${String(pattern).split('**').map((part) => part.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')).join('.*')}$`);
+  return re.test(changedPath);
 }
 
 export function partitionCheckRuns(checkRuns, tiers) {
@@ -782,17 +802,25 @@ export function partitionCheckRuns(checkRuns, tiers) {
  * `tiers` is the parsed .github/required-checks.json. When it is absent every
  * check is blocking — the pre-R2 behaviour — because a missing classification
  * must never be the thing that lets a red check through.
+ *
+ * Since 0.195.21 every BLOCKING name in the tiers file is EXPECTED (the GA plan, GA-01.3): a job that never reported for the commit used to
+ * be invisible to this gate, so a workflow that silently stopped triggering could not turn it red. A missing expected job is an error
+ * unless the tiers file declares its `applicability` (a path-filtered workflow) and none of `changedPaths` matches; when the changed
+ * paths could not be resolved the gate fails closed. `--allow-unverified-ci` downgrades a missing job, like any other unverifiable
+ * state, to the loud UNVERIFIED warning and the result records `bypassed: true`, which the GA milestone gate refuses.
  */
 export function evaluateRemoteCi({
-  cliAvailable, authenticated, checkRuns, allowUnverified = false, headSha = 'HEAD', tiers = null,
+  cliAvailable, authenticated, checkRuns, allowUnverified = false, headSha = 'HEAD', tiers = null, changedPaths = null,
 }) {
   const errors = [];
   const warnings = [];
+  const notes = [];
+  let bypassed = false;
   const unverifiable = (reason) => {
     if (allowUnverified) {
       warnings.push(`UNVERIFIED: hosted CI status for ${headSha} was NOT checked (${reason}). ` +
         'This release is being published without proof that it builds anywhere but this machine.');
-      return result([], warnings);
+      return { ...result([], warnings), bypassed: true };
     }
     return result([`${reason} — hosted CI for ${headSha} is unverifiable, which is not the same ` +
       'as green. Remedy: authenticate the forge CLI, or pass --allow-unverified-ci deliberately.'], warnings);
@@ -807,6 +835,30 @@ export function evaluateRemoteCi({
       'commit green. Remedy: confirm the workflows triggered for this commit.');
   }
   const split = partitionCheckRuns(checkRuns, tiers);
+
+  // Expected jobs: every blocking name must have reported, or be path-filtered away from this commit's changed paths.
+  const reported = new Set(checkRuns.map(r => r.name));
+  for (const name of tiers?.blocking || []) {
+    if (reported.has(name)) continue;
+    const app = tiers.applicability?.[name];
+    if (app && Array.isArray(app.paths) && Array.isArray(changedPaths)) {
+      const hit = changedPaths.filter(p => app.paths.some(pat => pathFilterMatches(pat, p)));
+      if (!hit.length) {
+        notes.push(`expected hosted job "${name}" did not report and is path-filtered (${app.reason || 'no reason given'}); ` +
+          `none of the ${changedPaths.length} changed path(s) matches its paths, so it was not due to run.`);
+        continue;
+      }
+      errors.push(`Expected hosted CI job "${name}" did not report for ${headSha}, and it was due to run: ` +
+        `the changed path(s) ${hit.slice(0, 3).join(', ')} match its path filter. Remedy: confirm the workflow triggered, then wait for it.`);
+      continue;
+    }
+    const why = app
+      ? 'it is path-filtered, but the changed paths of this commit could not be resolved, so the gate fails closed'
+      : 'a blocking job that never ran has proved nothing';
+    const message = `Expected hosted CI job "${name}" did not report for ${headSha} (${why}). ` +
+      'Remedy: confirm the workflow triggered for this commit and wait for it; or pass --allow-unverified-ci deliberately, accepting that this job went unproven.';
+    if (allowUnverified) { warnings.push(`UNVERIFIED: ${message}`); bypassed = true; } else errors.push(message);
+  }
 
   for (const run of split.unclassified) {
     warnings.push(`Hosted CI check "${run.name}" is not listed in .github/required-checks.json ` +
@@ -834,7 +886,22 @@ export function evaluateRemoteCi({
     }
   }
 
-  return result(errors, warnings);
+  return { ...result(errors, warnings), notes, bypassed };
+}
+
+/**
+ * The all-GA milestone gate (the GA plan, GA-01.4 and GA-01.6). `model` is the evaluated ledger (scripts/ga-program/ledger.mjs). Not
+ * declared, the unmet reasons are one warning so every release shows the distance; declared, each reason is an error, and a hosted-CI
+ * bypass is itself an error because an unverified build cannot be an all-GA release.
+ */
+export function evaluateGaMilestone({ model, allowUnverified = false }) {
+  const reasons = [...(model?.milestone?.reasons || [])];
+  const declared = !!model?.program?.milestoneDeclared;
+  if (declared && allowUnverified) reasons.unshift('the milestone is declared and --allow-unverified-ci was passed: a release published with hosted CI unproven cannot claim the all-GA milestone');
+  if (!reasons.length) return result([], []);
+  if (declared) return result(reasons.map(r => `all-GA milestone: ${r}`), []);
+  const shown = reasons.slice(0, 5).join(' | ');
+  return result([], [`all-GA milestone not met: ${reasons.length} reason(s), not declared so this does not block. ${shown}${reasons.length > 5 ? ' | ...' : ''} (full list: node scripts/ga-program/ledger.mjs --milestone)`]);
 }
 
 /** Checks 6-8: a gated command is satisfied only by a literal exit code 0. */
@@ -1002,10 +1069,26 @@ function remoteCiFacts(headSha) {
       cliAvailable: true,
       authenticated: true,
       checkRuns: Array.isArray(parsed) ? parsed : null,
+      changedPaths: changedPathsOf(headSha),
     };
   } catch {
     return { cliAvailable: true, authenticated: true, checkRuns: null };
   }
+}
+
+/**
+ * The paths a commit changed, for the path-filtered expected jobs: against its merge base with origin/main for a branch head, or
+ * against its first parent when the commit is already on main (the merge commit of the pull request, or a release commit). Null when
+ * git cannot answer, and the gate then fails closed on a missing path-filtered job.
+ */
+export function changedPathsOf(headSha, repo = REPO) {
+  const git = (args) => { const r = run('git', args, { cwd: repo }); return r.status === 0 ? r.stdout.trim() : null; };
+  const self = git(['rev-parse', `${headSha}^{commit}`]);
+  if (!self) return null;
+  const base = git(['merge-base', 'origin/main', headSha]);
+  const against = base && base !== self ? base : `${headSha}^1`;
+  const out = git(['diff', '--name-only', against, headSha]);
+  return out === null ? null : out.split('\n').map(l => l.trim()).filter(Boolean);
 }
 
 // ---------------------------------------------------------------------------
@@ -1196,11 +1279,16 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
     return { ok: r.ok, errors: r.ok ? [] : [r.detail], warnings: r.warnings || [], detail: r.detail };
   });
 
+  evaluate('ga-milestone-gate', () => evaluateGaMilestone({ model: evaluateGaProgram(REPO), allowUnverified }));
+
   evaluate('head-pushed', () =>
     evaluateHeadPushed({ headSha, remoteRefsContainingHead: remoteRefsContainingHead() }));
 
-  evaluate('remote-ci-green', () =>
-    evaluateRemoteCi({ ...remoteCiFacts(headSha), allowUnverified, headSha, tiers: readCheckTiers() }));
+  evaluate('remote-ci-green', () => {
+    const r = evaluateRemoteCi({ ...remoteCiFacts(headSha), allowUnverified, headSha, tiers: readCheckTiers() });
+    for (const n of r.notes || []) process.stderr.write(`  note: ${n}\n`);
+    return r;
+  });
 
   evaluate('dependency-currency', () => {
     process.stderr.write('  querying the package registry for advisories and newer ' +

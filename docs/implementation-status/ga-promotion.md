@@ -4,6 +4,8 @@
 
 This page is the promotion record. A capability is promoted only when its row here shows evidence for every criterion, and the registry change is the same commit.
 
+Since 0.195.21 the programme to bring every shipped capability to GA is tracked in a machine-checked acceptance ledger, [`docs/ga-program/`](../ga-program/README.md): one record per capability and workstream, mechanical checks computed from the committed artifacts, and a generated status page ([`STATUS.md`](../ga-program/STATUS.md)) that reports verified GA against the registry's GA. This page stays the record of each promotion; the ledger is where the evidence for the next ones accumulates.
+
 ## Phases
 
 | Phase | Content | Status |
