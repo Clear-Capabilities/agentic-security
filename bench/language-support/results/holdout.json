@@ -1,7 +1,7 @@
 {
   "schema": "agentic-security/language-support-measurement@2",
   "split": "holdout",
-  "measuredAt": "2026-11-03",
+  "measuredAt": "2026-11-04",
   "corpusVersion": "qa001-v2",
   "ecosystems": {
     "haskell": {
@@ -291,7 +291,7 @@
         "crashed": [],
         "withErrors": 4,
         "boundaryDisclosed": 5,
-        "maxMs": 2,
+        "maxMs": 1,
         "validFixturesParsedCleanly": 156,
         "validFixtures": 156
       },

@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.195.20 - Haskell remediation: the password-hash migration over the SHA package, and every refused class names its decision
+
+**Measured, 0.195.19:** `TIMINGS preflight=3s push=7s pr=5s checks=683s merge=5s verify=5s tag=2s release=315s npm=145s total=1170s release-clock=327s`, shipped in 21 min 10 s (the npm check was re-run once with `--resume`; the registry listed the version on the second check).
+
+The remediation survey after 0.195.19 (`bench/dag/dev-haskell/fix-real.mjs <project> --all` over the five projects holding labelled true positives) left one class of real true positive refused that a deterministic patch can cover: gitit's password hash (`src/Network/Gitit/State.hs:69`, three labelled sites carried on it), which hashes with the `SHA` package and declares no KDF library. The migration fixer required cryptonite or crypton in the file.
+
+- **`hs-password-kdf-migrate` gains a second backend.** When the file hashes with `Data.Digest.Pure.SHA` and imports no cryptonite/crypton module, PBKDF2-HMAC-SHA256 for one 32-byte block (RFC 8018 section 5.2) is written out in the file as `hashPasswordPbkdf2` over that package's `hmacSha256` (SHA 1.6.4.4, lazy bytes); the bytes of a `String` come from utf8-string when the file imports it, else from `text`. The tag, the kept legacy function, `NeedsRehash`, `Verify` and the comparison rewrite are the same migration as before. The construction is checked against the RFC 7914 section 11 vectors with the real package (the generated definition, count literal replaced; the test skips loudly where the package is absent, and ran on the measuring host). One hash at 600000 iterations measured 4.3 s of CPU on the maintainer's host with this pure-Haskell HMAC: the plan's consequences say seconds, not tenths, and that lowering the count weakens the hash. MITIGATION, as before.
+- **The rule recognises the construction.** `legacyVerifierOnly` counts a project function as a password KDF when it is the written-out derivation: an HMAC of a modelled module, `iterate`, and `xor` among its calls and its where-bound definitions, decided from the calls, never from a name (an iterated HMAC with no xor fold keeps the full finding, pinned). The SHA package's HMACs and digest readers are registered as rule APIs.
+- **Every refused class names its decision.** `CLASS_REASONS` gained CWE-248 (partial function on caller input), CWE-327 (broken cipher or ECB) and CWE-329 (static IV); the four IHP `!!` sites and the crypto rules now get a class reason instead of the generic refusal. Pinned over eleven classes.
+- **Real sites.** gitit `State.hs:69` verifies (syntax, rescan with the kept hash lowered to `info` as a legacy verifier, effective check; the compile gate did not run on that clone, as before, because its original does not type-check on this host). Labelled true positives with a verified patch: 20 of 27 (17 before). The 51 flagged fresh sites are unchanged (`bench:haskell-precision:check` passes unchanged).
+
 ## 0.195.19 - The end-of-programme measurement of the two untouched Haskell splits, recorded as measured
 
 **Measured, 0.195.18:** `TIMINGS preflight=3s push=26s pr=10s checks=360s merge=7s verify=5s tag=3s release=223s npm=359s total=996s release-clock=238s`, shipped in 18 min 18 s. The first attempt stopped in the hosted checks on the public-contract test (fixed in that release, see its entry); the second passed, and the npm check was re-run once with `--resume`. The release clock (merge to published release) was 238 s.

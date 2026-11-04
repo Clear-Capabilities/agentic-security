@@ -9,9 +9,9 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.195.19 |
-| Bundle SHA-256 | `fbfc495f2f9efeff41f494d4d3428b580737f5aa9f5f72d597393a7c103a3ff2` |
-| Commit | `073ded6788faed866742013f0658286d2637bddf` |
+| Engine version | 0.195.20 |
+| Bundle SHA-256 | `60f87190cb5ccfffcc3fbe658229ca0a510ee96ea2877f0856dae461e7c98de0` |
+| Commit | `203fd6c29cbaae1029e9de18645775c22cdf1b47` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -19,7 +19,7 @@ that produced them.
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-03T19:05:41.943Z |
+| Generated (UTC) | 2026-11-04T02:43:49.747Z |
 
 ## What these numbers are, and what they are not
 
@@ -378,7 +378,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.195.19), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.195.20), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both

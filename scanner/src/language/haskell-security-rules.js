@@ -68,6 +68,10 @@ const SET_COOKIE_HEADER = new Set(['Network.HTTP.Types.Header.hSetCookie', 'Netw
 const REQUEST_LENGTH = new Set(['Network.Wai.requestBodyLength']);
 const RELATIONAL = new Set(['<', '<=', '>', '>=']);
 const PBKDF2_CALLS = new Set(['Crypto.KDF.PBKDF2.generate', 'Crypto.KDF.PBKDF2.fastPBKDF2_SHA1', 'Crypto.KDF.PBKDF2.fastPBKDF2_SHA256', 'Crypto.KDF.PBKDF2.fastPBKDF2_SHA512']);
+// The HMACs a written-out PBKDF2 may be built on (SHA 1.6.4.4: `hmacSha256 :: ByteString -> ByteString -> Digest SHA256State`, lazy bytes;
+// crypton/cryptonite `Crypto.MAC.HMAC.hmac`), and the names of Prelude's `iterate` the resolver records.
+const HMAC_CALLS = new Set(['Data.Digest.Pure.SHA.hmacSha224', 'Data.Digest.Pure.SHA.hmacSha256', 'Data.Digest.Pure.SHA.hmacSha384', 'Data.Digest.Pure.SHA.hmacSha512', 'Crypto.MAC.HMAC.hmac']);
+const ITERATE_CALLS = new Set(['iterate', 'Prelude.iterate', 'Data.List.iterate']);
 const STRONG_KDF = /^(?:Crypto\.KDF\.BCrypt\.|Crypto\.Argon2\.|Crypto\.Scrypt\.|Crypto\.KDF\.Scrypt\.|Crypto\.PasswordStore\.|Crypto\.BCrypt\.)/;
 const UNSAFE_CALLS = { 'System.IO.Unsafe.unsafePerformIO': 'unsafePerformIO', 'System.IO.Unsafe.unsafeInterleaveIO': 'unsafeInterleaveIO', 'System.IO.Unsafe.unsafeDupablePerformIO': 'unsafeDupablePerformIO', 'Unsafe.Coerce.unsafeCoerce': 'unsafeCoerce' };
 
@@ -396,8 +400,16 @@ function legacyVerifierOnly(fn, ir, memo) {
   const allFns = Object.values(ir.perFile).flatMap((x) => x.functions || []);
   const byQid = new Map(allFns.map((x) => [x.qid, x]));
   const usesF = (e) => !!e.hs && ((e.kind === 'call' && e.hs.target === fn.qid) || e.hs.inlinedFrom === fn.qid);
+  // A project function that IS the PBKDF2 construction written out (RFC 8018 section 5.2) counts as a KDF call: an HMAC of a modelled module,
+  // repeated with `iterate`, folded with `xor`, in the function or its local (where-bound) definitions. Decided from the calls the IR recorded,
+  // never from a name; a function that only calls an HMAC once, or iterates without the xor fold, is not a derivation and keeps the full finding.
+  const writtenOutKdf = (g) => {
+    const own = allFns.filter((h) => h.file === g.file && (h.qid === g.qid || (typeof h.name === 'string' && h.name.startsWith(`${g.name}.`))));
+    const calls = own.flatMap((h) => (h.calls || []).map((c) => c.callee));
+    return calls.some((c) => HMAC_CALLS.has(c)) && calls.some((c) => ITERATE_CALLS.has(c)) && calls.some((c) => c === 'Data.Bits.xor');
+  };
   const kdfCall = (c) => typeof c === 'string' && (STRONG_KDF.test(c) || PBKDF2_CALLS.has(c));
-  const hasKdf = (g, depth) => (g.calls || []).some((c) => kdfCall(c.callee) || (depth < 1 && c.hs && c.hs.target && c.hs.target !== g.qid && byQid.has(c.hs.target) && hasKdf(byQid.get(c.hs.target), depth + 1)));
+  const hasKdf = (g, depth) => writtenOutKdf(g) || (g.calls || []).some((c) => kdfCall(c.callee) || (c.hs && c.hs.target && c.hs.target !== g.qid && byQid.has(c.hs.target) && (writtenOutKdf(byQid.get(c.hs.target)) || (depth < 1 && hasKdf(byQid.get(c.hs.target), depth + 1)))));
   let uses = 0; let compared = 0; let besideKdf = false;
   const visit = (e, parent, g, depth) => {
     if (!e || typeof e !== 'object' || depth > 60) return;
