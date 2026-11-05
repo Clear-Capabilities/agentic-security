@@ -222,6 +222,7 @@ import { createStringMemo } from './util/string-memo.js';
 import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
 import { buildLineageGraph } from './lineage/index.js';
+import { getRepoState, worktreeDirtyExcluding } from './posture/provenance/git-evidence.js';
 import { buildLineageGraphOwned, resolveLineageDeadlineMs } from './lineage/owned-build.js';
 import { completionOfGraph, summarizeForHealth as summarizeCompletionForHealth } from './lineage/completion.js';
 // v3 next-gen — Pillars 1, 4, 5, 6, 8, 9.
@@ -9747,6 +9748,12 @@ function _deterministicFileTimings(timings) {
       const _lineageDeadlineMs = resolveLineageDeadlineMs();
       const { perFile, callGraph } = _lineageDeadlineMs ? {} : (_sharedIR || (_sharedIR = await _buildIR()));
       const _lineageT0 = Date.now();
+      let _lineageRepo = null;
+      try {
+        _lineageRepo = scanRoot ? getRepoState(scanRoot) : null;
+        // The scanner's own state directory must not make an unchanged tree read as dirty between two scans.
+        if (_lineageRepo) _lineageRepo = { ..._lineageRepo, dirty: worktreeDirtyExcluding(scanRoot) };
+      } catch { _lineageRepo = null; }
       setProgress({ phase: 'Lineage graph', current: 0, total: 0, file: `starting (budget ${Math.round(_lineageBudgetMs / 1000)}s)` });
       const _lineageOpts = {
         // Live per-function progress from the field-identity driver's own
@@ -9777,6 +9784,9 @@ function _deterministicFileTimings(timings) {
         // GA-03.3 (0.195.25): cross-service handoff joins in the lineage
         // graph, opt-in. Off, the graph is the one 0.195.24 built.
         ...(process.env.AGENTIC_SECURITY_LINEAGE_BOUNDARIES === '1' ? { boundaries: { enabled: true } } : {}),
+        // GA-03.7 (0.195.26): the revision the graph is built from, so a
+        // consumer can refuse a graph from another one. Null outside git.
+        ...(_lineageRepo && _lineageRepo.head ? { commit: _lineageRepo.head, worktreeDirty: _lineageRepo.dirty } : {}),
       };
       // DAG-07 R07.7: with AGENTIC_SECURITY_LINEAGE_DEADLINE_MS set, the build runs in an
       // owned worker with a watchdog. Unset: the in-process call, exactly as before.

@@ -6745,6 +6745,15 @@ async function cmdFederateDeclare(args) {
   // hash-equivalent to a graph that never had the field at all,
   // regardless of how the hashing internals treat undefined values.
   const { crossRepoLinks: _omitForDigest, ...localGraphForDigest } = local.graph;
+  // GA-03.7 (0.195.26): the graph also records the scanned revision
+  // (`scope.revision`, with a dirty flag that flips on any untracked
+  // file). The commit is already part of the graph id; the dirty flag is
+  // not part of what the link names, so the revision record is left out of
+  // this digest for the same reason crossRepoLinks is.
+  if (localGraphForDigest.scope && localGraphForDigest.scope.revision) {
+    const { revision: _omitRevision, ...scopeForDigest } = localGraphForDigest.scope;
+    localGraphForDigest.scope = scopeForDigest;
+  }
   const localGraphDigest = computeGraphDigest(localGraphForDigest);
   const idInputs = {
     localGraphId: local.graph.graphId, localGraphDigest, localNodeId: localNodeFlag,

@@ -17,7 +17,7 @@ import * as path from 'node:path';
 
 const JS_EXTS = ['', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '/index.js', '/index.mjs', '/index.ts', '/index.tsx'];
 
-function resolveJsModule(fromFile, source, files) {
+export function resolveJsModule(fromFile, source, files) {
   if (!source.startsWith('.')) return { kind: 'third-party', target: null };
   const base = path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), source));
   for (const ext of JS_EXTS) if (files.has(base + ext)) return { kind: 'repo', target: base + ext };

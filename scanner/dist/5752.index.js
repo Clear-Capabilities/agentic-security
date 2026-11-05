@@ -98,7 +98,7 @@ async function loadProgram(root) {
 // ---------------------------------------------------------------------------------------------------------------------
 
 /**
- * agentic-security dataflow view [path] [--node <id> [--direction in|out|both] [--relations a,b] [--origins a,b]] [--output <file>]
+ * agentic-security dataflow view [path] [--node <id> [--direction in|out|both] [--relations a,b] [--origins a,b]] [--expect-revision <sha|HEAD>] [--output <file>]
  * Read-only over the signed lineage graph. Without --node it reports the view identity, counts, completion and the SCC
  * condensation of the data-flow relation. With --node it lists the neighbours the filter allows.
  */
@@ -114,7 +114,18 @@ async function cmdDataflowView(args) {
   if (f.node === undefined && (f.direction || f.relations || f.origins)) { err(`${who}: --direction, --relations and --origins apply to --node.`); return 2; }
 
   const { loadSignedGraph } = await __webpack_require__.e(/* import() */ 8218).then(__webpack_require__.bind(__webpack_require__, 78218));
-  const loaded = loadSignedGraph(root);
+  // GA-03.7: `--expect-revision <sha|HEAD>` refuses a graph built from another revision (or from none).
+  let expectRevision = null;
+  if (f['expect-revision'] !== undefined) {
+    if (typeof f['expect-revision'] !== 'string' || !f['expect-revision']) { err(`${who}: --expect-revision needs a commit or HEAD.`); return 2; }
+    if (f['expect-revision'] === 'HEAD') {
+      const { getRepoState } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 83543));
+      const st = getRepoState(root);
+      if (!st || !st.head) { err(`${who}: --expect-revision HEAD needs a git repository at ${root}.`); return 2; }
+      expectRevision = st.head;
+    } else expectRevision = f['expect-revision'];
+  }
+  const loaded = loadSignedGraph(root, { expectRevision });
   if (!loaded.ok) { err(`${who}: ${loaded.message}`); return 1; }
   const { dataflowView, GraphViewError } = await __webpack_require__.e(/* import() */ 8158).then(__webpack_require__.bind(__webpack_require__, 88158));
   const { computeScc, verifyScc } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 41418));
@@ -126,6 +137,8 @@ async function cmdDataflowView(args) {
     schema: 'agentic-security/graph-view-report@1',
     maturity: 'preview',
     identity: view.identity,
+    revision: loaded.graph.scope && loaded.graph.scope.revision ? loaded.graph.scope.revision : null,
+    expectedRevision: expectRevision,
     metadata: view.metadata(),
     viewCompletion: view.completion(),
     note: 'A view is a read-only lens over the signed graph. An absent edge means the model has no such edge, not that the software has none.',

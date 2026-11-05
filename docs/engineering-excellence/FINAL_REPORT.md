@@ -54,7 +54,7 @@ localized precision 6/19 = 31.6%
 localized recall    6/278 = 2.2%
 localized F1        0.040 (95% interval 0.013 to 0.075)
 
-39 routes: TP 12, FP 0, FN 0, TN 25, unresolved 2; precision 100% (12/12), recall 100% (12/12)
+39 routes: TP 12, FP 0, FN 0, TN 26, unresolved 1; precision 100% (12/12), recall 100% (12/12)
 
 small: P95 236 ms, peak RSS 218 MB, within budget
 medium: P95 3002 ms, peak RSS 563 MB, within budget
@@ -108,8 +108,8 @@ Every command below was run in this programme. Each names the artifact it produc
 | `node ../bench/independent/forensics.mjs --run a72968195aa1` | `bench/independent/runs/a72968195aa1/forensics.json` | `sha256:7e8ced1ea4ffbe32` |
 | `npm run ee:perf-budget` | `docs/engineering-excellence/data/perf-budget.json` | `sha256:951f433fa06ea2fd` |
 | `npm run ee:e2e-demo` | `docs/engineering-excellence/data/e2e-demo-outline.json` | `sha256:8f04806b6aaa5bd3` |
-| `npm run bench:dci-real-app` | `docs/engineering-excellence/data/dci-real-app.json` | `sha256:f3ed31fcde19d788` |
-| `npm run ee:regression-report` | `docs/engineering-excellence/REGRESSION_REPORT.md` | `sha256:3642acaf5b796765` |
-| `npm run ee:doc-captures` | `docs/engineering-excellence/README.md` | `sha256:e000d3fad936f2a3` |
+| `npm run bench:dci-real-app` | `docs/engineering-excellence/data/dci-real-app.json` | `sha256:3d3796a2a85e71f0` |
+| `npm run ee:regression-report` | `docs/engineering-excellence/REGRESSION_REPORT.md` | `sha256:c5f3fee487498b98` |
+| `npm run ee:doc-captures` | `docs/engineering-excellence/README.md` | `sha256:efd7cf672b6392ff` |
 
 Resume from disk: `node scripts/engineering-excellence/status.mjs --resume` prints the next step, and `node scripts/engineering-excellence/status.mjs --markdown` regenerates `STATUS.md` (it carries a revision number and timestamp, so it has no digest here); `docs/engineering-excellence/STATUS.md` and `unresolved.json` hold the same state.

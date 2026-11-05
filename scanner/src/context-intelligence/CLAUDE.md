@@ -23,3 +23,7 @@ See the module table in the architecture doc. Tests: `test/context-intelligence/
 ## Reuse, do not fork
 
 Model calls go through `discovery/llm-invoke.js` and the egress policy. Confirmation, refutation and judging are `discovery/{confirm,disprove,judge}.js`. Grouped intervals come from `posture/evaluation/interval.js`. State paths come from `posture/state-dir.js`.
+
+## Router mounts and stale citations (GA-03.2, 0.195.26)
+
+`entrypoints.js` composes router mounts: `router.get('/:id')` with `app.use('/api', auth, router)` is the entry point `/api/:id` (`pathTemplate`), with `registeredPath` keeping `/:id` and `mount` recording the chain (root first) and the number of alternatives. A mount is found in the same file, through the import map (`import users from './users.js'`, `const users = require('./users')`) or an inline `require('./users')`, when the target module's `module.exports` / `export default` receiver registers routes or mounts; mounts compose through intermediate routers (depth 4, at most 8 paths); a router mounted at several prefixes is one entry point per prefix; the mount statement's other identifier arguments are inherited middleware scoped to that mount (`viaMount: true`), per chain. A dynamic prefix (`app.use(prefixFor(), router)`) mounts nothing and the route keeps `router-mount-not-resolved`. `review.js`'s `resolveCitation` refuses `stale-context` when the cited lines sit in a segment whose current text no longer hashes to the segment's `spanHash`. Tests: `test/context-intelligence/route-mounts.test.js`.
