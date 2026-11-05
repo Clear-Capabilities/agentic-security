@@ -11,8 +11,8 @@
     "milestoneDeclared": false
   },
   "records": {
-    "required": 245,
-    "passed": 66
+    "required": 247,
+    "passed": 68
   },
   "realCodeAccuracy": {
     "label": "historical (not this engine)",
@@ -83,8 +83,8 @@
     "GA-03": {
       "title": "Harden Code Boundaries, graph analysis and context intelligence",
       "accountableRole": "graph/analysis lead",
-      "required": 13,
-      "passed": 3,
+      "required": 15,
+      "passed": 5,
       "blocked": 0
     },
     "GA-04": {
@@ -273,8 +273,8 @@
         "GA-12"
       ],
       "status": "blocked",
-      "passed": 1,
-      "required": 7,
+      "passed": 2,
+      "required": 8,
       "records": [
         {
           "id": "context-intelligence:REG-BAR",
@@ -345,6 +345,16 @@
           "detail": "pilot repositories not selected; maintainer not named",
           "evidencePath": null,
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "context-intelligence:ROUTE-MOUNTS",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Route-mount composition: a route registered on a router is an entry point at its composed path through same-file, imported and inline-required mounts, through intermediate routers, once per mount prefix, with the mount statement's middleware inherited per mount; a dynamic prefix mounts nothing and keeps the honest reason. Citations are hash-bound to the exact scanned spans: a citation in a segment whose lines changed is refused as stale. Measured on bench/dci-real-app: the mounted-router case GET /api/orders/:id moved from unresolved to resolved (26 resolved, 1 unresolved), precision and recall unchanged at 100%.",
+          "status": "passed",
+          "detail": "cd scanner && node --test test/context-intelligence/route-mounts.test.js && npm run bench:dci-real-app:check (exit 0) at d3a10e27e20f: scanner/test/context-intelligence/route-mounts.test.js",
+          "evidencePath": "scanner/test/context-intelligence/route-mounts.test.js",
+          "blocker": null
         }
       ],
       "nextAction": "context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms"
@@ -843,8 +853,8 @@
         "GA-12"
       ],
       "status": "blocked",
-      "passed": 3,
-      "required": 9,
+      "passed": 4,
+      "required": 10,
       "records": [
         {
           "id": "code-boundaries:REG-BAR",
@@ -934,6 +944,16 @@
           "status": "passed",
           "detail": "cd scanner && node --test test/lineage/boundary-join.test.js && cd .. && node bench/dag/run.mjs --check (exit 0) at fd2fbcace1fc: scanner/test/lineage/boundary-join.test.js",
           "evidencePath": "scanner/test/lineage/boundary-join.test.js",
+          "blocker": null
+        },
+        {
+          "id": "code-boundaries:ARTIFACT-CONTRACTS",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Frozen contracts for the graph artifacts (signed graph, witness bundles, boundary contracts, context bundles, sink query keys, cut plans): every field table held in both directions; signatures and digests, replay, wrong-revision refusal (the graph records the scanned revision and a consumer expecting another, or any when none is recorded, is refused) and partial-state propagation each exercised with a real tamper, a real wrong revision and a real partial analysis. Run by check-ga-contracts through the registry rows' contractTest.",
+          "status": "passed",
+          "detail": "cd scanner && node --test test/contracts/code-boundaries.contract.test.js test/cli/dag-commands.test.js && node ../scripts/check-ga-contracts.mjs --list (exit 0) at d3a10e27e20f: scanner/test/contracts/code-boundaries.contract.test.js",
+          "evidencePath": "scanner/test/contracts/code-boundaries.contract.test.js",
           "blocker": null
         }
       ],
@@ -3536,7 +3556,7 @@
     "reasons": [
       "agentic-discovery: 1/8 acceptance records passed (blocked); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "agentic-discovery: owner unassigned (role security evaluation lead)",
-      "context-intelligence: 1/7 acceptance records passed (blocked); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms",
+      "context-intelligence: 2/8 acceptance records passed (blocked); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "context-intelligence: owner unassigned (role security evaluation lead)",
       "language-depth-haskell-nix: 1/8 acceptance records passed (blocked); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
@@ -3548,7 +3568,7 @@
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
       "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "fleet-scan: owner unassigned (role graph/analysis lead)",
-      "code-boundaries: 3/9 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms",
+      "code-boundaries: 4/10 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "code-boundaries: owner unassigned (role security evaluation lead)",
       "finding-provenance: 2/7 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "finding-provenance: owner unassigned (role security evaluation lead)",

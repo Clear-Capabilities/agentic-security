@@ -306,6 +306,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "kind": "manual",
+          "workstream": "GA-03",
+          "status": "passed",
+          "sourceCommit": "d3a10e27e20feff18d28307d63cde12f8c6b8ab6",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "exitCode": 0,
+          "recordedAt": "2026-11-05T00:31:55Z",
+          "blocker": null,
+          "id": "context-intelligence:ROUTE-MOUNTS",
+          "requirement": "Route-mount composition: a route registered on a router is an entry point at its composed path through same-file, imported and inline-required mounts, through intermediate routers, once per mount prefix, with the mount statement's middleware inherited per mount; a dynamic prefix mounts nothing and keeps the honest reason. Citations are hash-bound to the exact scanned spans: a citation in a segment whose lines changed is refused as stale. Measured on bench/dci-real-app: the mounted-router case GET /api/orders/:id moved from unresolved to resolved (26 resolved, 1 unresolved), precision and recall unchanged at 100%.",
+          "command": "cd scanner && node --test test/context-intelligence/route-mounts.test.js && npm run bench:dci-real-app:check",
+          "evidencePath": "scanner/test/context-intelligence/route-mounts.test.js"
         }
       ]
     },
@@ -986,6 +1002,22 @@
           "requirement": "Cross-service boundary joins reach the documented opt-in scan path: a queue publish and its receive, or a store write and its read, are joined in the lineage graph when both name the same literal identity or a boundary contract declares the edge; the consumer is seeded on the fields that reached the producer with the record keys mapped; a computed identity stays unjoined with a reason; every join is modeled, never observed. Measured on the multi-service fixture: every flow label passes (6 of 6 positive, 3 of 3 negative), from 3 of 6.",
           "command": "cd scanner && node --test test/lineage/boundary-join.test.js && cd .. && node bench/dag/run.mjs --check",
           "evidencePath": "scanner/test/lineage/boundary-join.test.js"
+        },
+        {
+          "kind": "manual",
+          "workstream": "GA-03",
+          "status": "passed",
+          "sourceCommit": "d3a10e27e20feff18d28307d63cde12f8c6b8ab6",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "exitCode": 0,
+          "recordedAt": "2026-11-05T00:31:55Z",
+          "blocker": null,
+          "id": "code-boundaries:ARTIFACT-CONTRACTS",
+          "requirement": "Frozen contracts for the graph artifacts (signed graph, witness bundles, boundary contracts, context bundles, sink query keys, cut plans): every field table held in both directions; signatures and digests, replay, wrong-revision refusal (the graph records the scanned revision and a consumer expecting another, or any when none is recorded, is refused) and partial-state propagation each exercised with a real tamper, a real wrong revision and a real partial analysis. Run by check-ga-contracts through the registry rows' contractTest.",
+          "command": "cd scanner && node --test test/contracts/code-boundaries.contract.test.js test/cli/dag-commands.test.js && node ../scripts/check-ga-contracts.mjs --list",
+          "evidencePath": "scanner/test/contracts/code-boundaries.contract.test.js"
         }
       ]
     },
