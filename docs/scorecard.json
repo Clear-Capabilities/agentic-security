@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.195.26",
     "bundleSha256": "ee0c77de1bba97155580cc7647e6723e10bde63e9944dbc5050f1db7b54d46a2",
-    "commit": "38a43b71cd44b200492d56b7045b4f957460040a",
-    "worktreeClean": false,
+    "commit": "b9110990914301d79f43908723817d8c8c240096",
+    "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-05T00:42:08.860Z",
+    "generatedAt": "2026-11-05T01:02:10.228Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -996,7 +996,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 318,
+    "n": 242,
     "d": 565
   },
   "taintRecall": {
@@ -2251,10 +2251,10 @@
   },
   "measurement": {
     "engineVersion": "0.195.26",
-    "commit": "38a43b71cd44b200492d56b7045b4f957460040a",
+    "commit": "b9110990914301d79f43908723817d8c8c240096",
     "bundleSha256": "ee0c77de1bba97155580cc7647e6723e10bde63e9944dbc5050f1db7b54d46a2",
-    "cleanMeasurement": false,
-    "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
+    "cleanMeasurement": true,
+    "identity": "the commit and bundle below identify exactly the tree that was measured",
     "currentEngineIndependentAccuracy": "unmeasured",
     "currentEngineIndependentReason": "the latest independent run (a72968195aa1) measured engine 0.172.0, not the engine above; it is a historical record",
     "independentRun": {
