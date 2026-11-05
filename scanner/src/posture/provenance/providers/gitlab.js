@@ -21,7 +21,9 @@ export async function fetchPRMetadata(scanRoot, commitSha, remoteUrl, config) {
       headers: { 'PRIVATE-TOKEN': config.token },
       signal: AbortSignal.timeout(8000),
     });
-    if (!r.ok) return null;
+    // GA-05 (0.195.27): an error reply or no reply is UNAVAILABLE (recorded as a limitation by the coordinator), which is a
+    // different fact from "no merge request names this commit" (null). See providers/github.js for the reasoning.
+    if (!r.ok) return { unavailable: true, reason: `http-${r.status}` };
     const mrs = await r.json();
     if (!Array.isArray(mrs) || mrs.length === 0) return null;
     const mr = mrs[0];
@@ -31,8 +33,8 @@ export async function fetchPRMetadata(scanRoot, commitSha, remoteUrl, config) {
       approvals: typeof mr.upvotes === 'number' ? mr.upvotes : null,
       mergedAt: mr.merged_at || null,
     };
-  } catch {
-    return null;
+  } catch (e) {
+    return { unavailable: true, reason: e && e.name === 'TimeoutError' ? 'timeout' : 'network' };
   }
 }
 

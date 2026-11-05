@@ -436,6 +436,7 @@ export async function runRuleTests(scanRoot, fixtureGlob) {
   const files = await globFiles(fixtureGlob);
   console.log(`Loaded ${rules.length} rule(s); testing against ${files.length} file(s).\n`);
   let fired = 0;
+  let failures = 0;
   for (const fp of files) {
     let content = '';
     try { content = fs.readFileSync(fp, 'utf8'); } catch { continue; }
@@ -446,12 +447,16 @@ export async function runRuleTests(scanRoot, fixtureGlob) {
       if (findings.length) {
         fired++;
         const verdict = expectClean ? 'FAIL (false positive)' : 'PASS';
+        if (expectClean) failures++;
         console.log(`  [${verdict}] ${r.id} → ${fp}:${findings[0].line}`);
       } else if (expectFire) {
+        failures++;
         console.log(`  [FAIL (missed)] ${r.id} → ${fp}`);
       }
     }
   }
-  console.log(`\n${fired} match(es) across ${files.length} file(s).`);
-  return { ok: true, rules: rules.length, fired };
+  // GA-07 §3 (0.195.27): `ok` reports the verdicts, not merely that the run finished. It used to be `true` whatever the fixtures
+  // said, so `rule test` could never fail a build; a missed vulnerable fixture or a hit on a clean one is now a failure.
+  console.log(`\n${fired} match(es) across ${files.length} file(s)${failures ? `, ${failures} FAILED` : ''}.`);
+  return { ok: failures === 0, rules: rules.length, fired, failures };
 }

@@ -9,6 +9,13 @@ jobs:
       - image: cimg/node:24.10
     steps:
       - checkout
+      # promoted compiler rules are re-scored against their corpora and the shared false-positive corpus before the
+      # scan gate, so a failing gate cannot hide a rule regression; exit 1 on a regression, 0 with none promoted.
+      # Set AGENTIC_SECURITY_RULES_PUBLIC_KEY in the project's environment so the committed rule ledger's author
+      # signature verifies here (the per-install key that also signs it is not on this executor).
+      - run:
+          name: Promoted rule regressions
+          command: npx --yes agentic-security rules regress
       - run:
           name: Run agentic-security scan + gate
           command: npx --yes agentic-security ci . --fail-on high

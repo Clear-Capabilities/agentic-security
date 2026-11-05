@@ -30,11 +30,11 @@ Status is the rollup of the acceptance records: `passed` only when every require
 | `context-intelligence` | Preview | unassigned (security evaluation lead) | blocked | 2 / 8 | context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms |
 | `language-depth-haskell-nix` | Preview | unassigned (security evaluation lead) | blocked | 1 / 8 | language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | `model-validation` | Preview | unassigned (security evaluation lead) | blocked | 1 / 7 | model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
-| `rule-compiler` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | rule-compiler:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
+| `rule-compiler` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms |
 | `detector-spec-synthesis` | Labs | unassigned (inference/evaluation engineer) | in-progress | 1 / 6 | detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | `fleet-scan` | Preview | unassigned (graph/analysis lead) | in-progress | 2 / 7 | fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
 | `code-boundaries` | Preview | unassigned (security evaluation lead) | blocked | 4 / 10 | code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms |
-| `finding-provenance` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 7 | finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
+| `finding-provenance` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 7 | finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms |
 | `graph-precision` | Preview | unassigned (security evaluation lead) | blocked | 2 / 8 | graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms |
 | `detection-and-response` | Preview | unassigned (analysis/platform engineer) | in-progress | 1 / 7 | detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
 | `local-models` | Preview | unassigned (inference/evaluation engineer) | in-progress | 2 / 7 | local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
@@ -154,7 +154,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| rule-compiler:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, limits, since, platforms |
+| rule-compiler:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
 | rule-compiler:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba |
 | rule-compiler:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | rule-compiler:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -205,7 +205,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| finding-provenance:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
+| finding-provenance:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
 | finding-provenance:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba |
 | finding-provenance:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | finding-provenance:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -586,7 +586,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 - language-depth-haskell-nix: owner unassigned (role security evaluation lead)
 - model-validation: 1/7 acceptance records passed (blocked); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms
 - model-validation: owner unassigned (role security evaluation lead)
-- rule-compiler: 2/8 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms
+- rule-compiler: 2/8 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms
 - rule-compiler: owner unassigned (role security evaluation lead)
 - detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms
 - detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)
@@ -594,7 +594,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 - fleet-scan: owner unassigned (role graph/analysis lead)
 - code-boundaries: 4/10 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms
 - code-boundaries: owner unassigned (role security evaluation lead)
-- finding-provenance: 2/7 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms
+- finding-provenance: 2/7 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms
 - finding-provenance: owner unassigned (role security evaluation lead)
 - graph-precision: 2/8 acceptance records passed (blocked); next: graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms
 - graph-precision: owner unassigned (role security evaluation lead)

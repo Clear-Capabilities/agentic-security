@@ -83,6 +83,8 @@ test('contract: the evaluation, the score and the provenance record have the doc
   sameFields(provenance, fieldsUnder(PAGE, 'Provenance record'), 'provenance record');
   assert.equal(provenance.schema, 'agentic-security/rule-provenance');
   assert.ok(provenance.promotionEvent && provenance.promotionEvent.actor, 'promotion is recorded in the provenance');
+  sameFields(provenance.promotionEvent.evidence, fieldsUnder(PAGE, 'Promotion evidence'), 'promotion evidence');
+  assert.equal(provenance.promotionEvent.scope, 'the fixture project');
   assert.deepEqual(ev.evaluation.thresholds, PROMOTION_DEFAULTS);
   assert.equal(PROMOTION_DEFAULTS.minPrecision, 0.95);
   assert.equal(PROMOTION_DEFAULTS.minRecall, 0.8);

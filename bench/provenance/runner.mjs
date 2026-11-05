@@ -99,6 +99,32 @@ const HISTORY = path.join(HERE, 'history.jsonl');
 // tightly. A ratio-of-a-ratio tolerance is wide on purpose.
 const REGRESSION_FACTOR = 1.6;
 
+// THE ABSOLUTE LATENCY BUDGET (GA-05, 0.195.27). The ratios above are kept
+// because they cancel host noise, but a ratio against a 44 ms base scan says
+// nothing about what provenance costs on a project where the base scan is
+// 40 s: the GA plan asks for an absolute figure, frozen before the benchmark
+// is run. The budgeted quantity is the ADDED wall time of the with-provenance
+// arm over the without-provenance arm of the SAME iteration (same fixture,
+// same moment), at the nearest-rank p95 over the N iterations, on this
+// 15-finding, 45-commit fixture:
+//
+//   cold (empty provenance cache): 2000 ms. Measured p95 on the maintainer
+//     host before the budget was set: about 1160 ms, 77 ms per finding, which
+//     is the five git processes and two historical blob replays each finding
+//     costs at this host's 10 to 15 ms per git spawn. The budget is 1.7x that
+//     figure: room for a slower host, not for a doubling of per-finding git
+//     work, which is the regression it exists to catch.
+//   warm (second pass, cache hit): 250 ms. Measured p95 about 35 ms. The
+//     arm is tens of milliseconds and its noise is milliseconds, so the budget
+//     is wide; it still fails the one warm regression that matters, a cache
+//     that stops hitting, which costs the cold figure.
+//
+// A budget is a ceiling the engine must stay under, never a target the
+// baseline is adjusted toward: raising it needs a measured reason in the
+// commit, and lowering it is free. The per-finding figure, not the fixture
+// total, is what to carry to a larger project (the guide says so).
+const BUDGET_MS = Object.freeze({ coldAddedP95: 2000, warmAddedP95: 250 });
+
 // Repeated-measurement sample size and reliability threshold — same values
 // and same rationale as posture/fix-metrics.js's RELIABLE_N (see that
 // module's header). Kept as a literal here rather than importing fix-metrics
@@ -257,7 +283,7 @@ function roundDist(d) {
 }
 
 async function measure() {
-  const samples = { without: { ms: [], rss: [] }, cold: { ms: [], rss: [], timeRatio: [], memRatio: [] }, warm: { ms: [], rss: [], timeRatio: [], memRatio: [] } };
+  const samples = { without: { ms: [], rss: [] }, cold: { ms: [], rss: [], addedMs: [], timeRatio: [], memRatio: [] }, warm: { ms: [], rss: [], addedMs: [], timeRatio: [], memRatio: [] } };
   let findings = null;
   for (let i = 0; i < N; i++) {
     const { without, cold, warm } = await measureIteration();
@@ -268,6 +294,11 @@ async function measure() {
     samples.cold.rss.push(cold.rssDeltaBytes);
     samples.warm.ms.push(warm.ms);
     samples.warm.rss.push(warm.rssDeltaBytes);
+    // The absolute budget's quantity (GA-05): wall time ADDED by provenance in this same iteration. A negative value
+    // (the with-provenance arm happened to run faster than the without arm, pure noise at this size) is clamped to 0 so
+    // it cannot pull the distribution below what provenance really costs.
+    samples.cold.addedMs.push(Math.max(0, cold.ms - without.ms));
+    samples.warm.addedMs.push(Math.max(0, warm.ms - without.ms));
     // Per-iteration ratio (not ratio-of-aggregates) so the cold/warm pass and
     // the without-provenance pass that same iteration's ratio is built from
     // share the SAME fixture instance and the same moment on the host —
@@ -289,12 +320,14 @@ async function measure() {
     cold: {
       ms: dist(samples.cold.ms),
       rssDeltaBytes: dist(samples.cold.rss),
+      addedMs: dist(samples.cold.addedMs),
       timeOverheadRatio: dist(samples.cold.timeRatio),
       memOverheadRatio: dist(samples.cold.memRatio),
     },
     warm: {
       ms: dist(samples.warm.ms),
       rssDeltaBytes: dist(samples.warm.rss),
+      addedMs: dist(samples.warm.addedMs),
       timeOverheadRatio: dist(samples.warm.timeRatio),
       memOverheadRatio: dist(samples.warm.memRatio),
     },
@@ -309,12 +342,14 @@ function roundRun(run) {
     cold: {
       ms: roundDist(run.cold.ms),
       rssDeltaBytes: roundDist(run.cold.rssDeltaBytes),
+      addedMs: roundDist(run.cold.addedMs),
       timeOverheadRatio: roundDist(run.cold.timeOverheadRatio),
       memOverheadRatio: roundDist(run.cold.memOverheadRatio),
     },
     warm: {
       ms: roundDist(run.warm.ms),
       rssDeltaBytes: roundDist(run.warm.rssDeltaBytes),
+      addedMs: roundDist(run.warm.addedMs),
       timeOverheadRatio: roundDist(run.warm.timeOverheadRatio),
       memOverheadRatio: roundDist(run.warm.memOverheadRatio),
     },
@@ -331,13 +366,18 @@ try { fs.appendFileSync(HISTORY, JSON.stringify(record) + '\n'); } catch { /* hi
 
 function summaryLine(label, d) {
   return `${label}: p50 ${d.timeOverheadRatio.p50}x / p95 ${d.timeOverheadRatio.p95}x time` +
-    ` (${d.ms.p50}ms with, ${run.without.ms.p50}ms without), ` +
+    ` (${d.ms.p50}ms with, ${run.without.ms.p50}ms without; added p50 ${d.addedMs.p50}ms / p95 ${d.addedMs.p95}ms), ` +
     `mem p50 ${d.memOverheadRatio.p50}x / p95 ${d.memOverheadRatio.p95}x`;
 }
 
 if (isUpdate) {
   fs.writeFileSync(BASELINE, JSON.stringify({
-    schema: 'provenance/v3',
+    schema: 'provenance/v4',
+    budgetMs: BUDGET_MS,
+    budgetNote: 'GA-05 absolute latency budget: the p95 over the iterations of the wall time provenance ADDED to the same ' +
+      'iteration\'s provenance-disabled scan (cold: empty cache; warm: cache hit) must stay under budgetMs.coldAddedP95 and ' +
+      'budgetMs.warmAddedP95. The budget is frozen in runner.mjs with its derivation and is not read from this file; the ' +
+      'measured addedMs distributions are recorded here so a reader can see the headroom. Checked beside the ratio gates.',
     note: 'Wall-clock and peak-RSS overhead of provenance annotation vs. a provenance-disabled scan, on a ' +
       'synthetic 15-file/3-commit-each git fixture. cold = fresh provenance cache; warm = second with-provenance ' +
       'pass against the same fixture/HEAD, so the on-disk provenance cache is hit. Each dimension is a ' +
@@ -377,12 +417,28 @@ try {
   process.exit(1);
 }
 const base = JSON.parse(baseRaw);
-if (base.schema !== 'provenance/v3') {
-  console.error(`✗ baseline schema is ${JSON.stringify(base.schema)}, expected 'provenance/v3' — ` +
-    're-baseline with `npm run bench:provenance:update-baseline` after the schema change (Task 8: ' +
-    'warm memory overhead is no longer gated, and cold memory overhead dropped its additive margin — ' +
-    'see this file\'s header).');
+if (base.schema !== 'provenance/v4') {
+  console.error(`✗ baseline schema is ${JSON.stringify(base.schema)}, expected 'provenance/v4': ` +
+    're-baseline with `npm run bench:provenance:update-baseline` after the schema change (v4, 0.195.27: ' +
+    'the absolute latency budget and the added-ms distributions it is checked against; see BUDGET_MS in this file).');
   process.exit(1);
+}
+
+// THE ABSOLUTE BUDGET CHECK (GA-05). Independent of the baseline: the budget is a constant of this file, so a re-baseline
+// cannot loosen it. A dimension that could not be measured reliably fails, same rule as checkDim below.
+function checkBudget(label, runDist, budget) {
+  if (!runDist.reliable || runDist.p95 == null) {
+    console.error(`✗ ${label}: only ${runDist.n}/${N} iterations produced a usable sample (need >= ${RELIABLE_N}); an unmeasurable budget is a failure, not a pass.`);
+    failed = true;
+    return;
+  }
+  if (runDist.p95 > budget) {
+    console.error(`✗ ${label} over budget: p95 ${runDist.p95}ms added, budget ${budget}ms (p50 ${runDist.p50}ms, max ${runDist.max}ms)`);
+    console.error('  The budget is frozen in bench/provenance/runner.mjs (BUDGET_MS) with its derivation; raising it needs a measured reason in the commit.');
+    failed = true;
+  } else {
+    console.log(`✓ ${label} within budget: p95 ${runDist.p95}ms added of ${budget}ms (p50 ${runDist.p50}ms)`);
+  }
 }
 
 // Task 8 fix #2 (Task 6 review, second finding): `checkDim` used to only
@@ -419,6 +475,8 @@ function checkDim(label, runDist, baseDist) {
 checkDim('cold time overhead', run.cold.timeOverheadRatio, base.cold.timeOverheadRatio);
 checkDim('warm time overhead', run.warm.timeOverheadRatio, base.warm.timeOverheadRatio);
 checkDim('cold memory overhead', run.cold.memOverheadRatio, base.cold.memOverheadRatio);
+checkBudget('cold added latency', run.cold.addedMs, BUDGET_MS.coldAddedP95);
+checkBudget('warm added latency', run.warm.addedMs, BUDGET_MS.warmAddedP95);
 // warm memory overhead is DELIBERATELY NOT GATED — see the "WARM MEMORY
 // OVERHEAD IS RECORDED BUT NOT GATED" note at the top of this file. It is
 // still measured and appended to history.jsonl/BASELINE.json every run.

@@ -23,7 +23,10 @@ export async function fetchPRMetadata(scanRoot, commitSha, remoteUrl, config) {
       headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/vnd.github+json' },
       signal: AbortSignal.timeout(8000),
     });
-    if (!r.ok) return null;
+    // GA-05 (0.195.27): a provider that answered with an error, or did not answer, is reported as UNAVAILABLE, which the
+    // coordinator records as a limitation on the finding. It is a different fact from "no pull request names this commit"
+    // (null), and folding the two together hid every outage, bad token and wrong base URL behind an empty enrichment.
+    if (!r.ok) return { unavailable: true, reason: `http-${r.status}` };
     const prs = await r.json();
     if (!Array.isArray(prs) || prs.length === 0) return null;
     const pr = prs[0];
@@ -33,8 +36,8 @@ export async function fetchPRMetadata(scanRoot, commitSha, remoteUrl, config) {
       approvals: null, // GitHub's PR-list-by-commit endpoint doesn't include review state; a real approvals count needs a second call, deliberately not made here to keep this a single-request enrichment.
       mergedAt: pr.merged_at || null,
     };
-  } catch {
-    return null;
+  } catch (e) {
+    return { unavailable: true, reason: e && e.name === 'TimeoutError' ? 'timeout' : 'network' };
   }
 }
 

@@ -1790,7 +1790,7 @@ async function cmdRules(args) {
   // Self-learning finding-to-rule compiler (PRD 3): synthesize/evaluate/promote/status/rollback a DETECTION rule
   // from one confirmed finding — distinct from validate/lock below (rules.yml override linting and pack locking).
   // Dispatches to its own module rather than inlining here, same convention as `triage exploit`/`proof`.
-  if (sub === 'synthesize' || sub === 'evaluate' || sub === 'promote' || sub === 'status' || sub === 'rollback' || sub === 'cost' || sub === 'regress') {
+  if (sub === 'synthesize' || sub === 'evaluate' || sub === 'promote' || sub === 'status' || sub === 'rollback' || sub === 'deprecate' || sub === 'cost' || sub === 'regress') {
     return (await import('../src/posture/rule-compiler/cli.js')).cmdRules(args, path.resolve(args.flags.root || '.'));
   }
   const target = path.resolve(args._[2] || '.');
@@ -1807,7 +1807,7 @@ async function cmdRules(args) {
     console.log(`  scanner: ${lock.scannerVersion}  rulePackHash: ${lock.rulePackHash}`);
     return 0;
   }
-  console.error('rules validate | rules lock | rules synthesize <finding-id> --spec <file.json> [--auto] | rules evaluate|promote|status|rollback|cost <rule-id>'); return 4;
+  console.error('rules validate | rules lock | rules synthesize <finding-id> --spec <file.json> [--auto] | rules evaluate|promote|status|rollback|deprecate|cost <rule-id> | rules regress [rule-id]'); return 4;
 }
 
 // `agentic-security secure [--launch]` — smart router. One command picks the
@@ -1970,7 +1970,8 @@ async function cmdRule(args) {
     if (!glob) { console.error('Usage: agentic-security rule test <fixture-glob>'); return 4; }
     const target = path.resolve(args.flags.root || '.');
     const r = await runRuleTests(target, glob);
-    return r.ok ? 0 : 4;
+    // GA-07 §3 (0.195.27): a missed vulnerable fixture or a false positive on a clean one is a failed test (exit 1); it used to exit 0 always.
+    return r.ok ? 0 : 1;
   }
   if (sub === 'list') {
     const target = path.resolve(args.flags.root || '.');

@@ -584,7 +584,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs platforms",
           "evidencePath": null
         },
         {
@@ -658,7 +658,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "rule-compiler:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms"
     },
     {
       "capabilityId": "detector-spec-synthesis",
@@ -986,7 +986,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs platforms",
           "evidencePath": null
         },
         {
@@ -1050,7 +1050,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+      "nextAction": "finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms"
     },
     {
       "capabilityId": "graph-precision",
@@ -3562,7 +3562,7 @@
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
       "model-validation: 1/7 acceptance records passed (blocked); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "model-validation: owner unassigned (role security evaluation lead)",
-      "rule-compiler: 2/8 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "rule-compiler: 2/8 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms",
       "rule-compiler: owner unassigned (role security evaluation lead)",
       "detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
@@ -3570,7 +3570,7 @@
       "fleet-scan: owner unassigned (role graph/analysis lead)",
       "code-boundaries: 4/10 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "code-boundaries: owner unassigned (role security evaluation lead)",
-      "finding-provenance: 2/7 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "finding-provenance: 2/7 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms",
       "finding-provenance: owner unassigned (role security evaluation lead)",
       "graph-precision: 2/8 acceptance records passed (blocked); next: graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "graph-precision: owner unassigned (role security evaluation lead)",

@@ -29,7 +29,7 @@ const SPEC = {
   originalCode: VULN, patchedCode: PATCHED, nearbyCleanCode: ['const n = items.length;'], protectedVariantsCode: [],
   independentVulnerableCode: [IND_VULN], independentCleanCode: [IND_CLEAN],
 };
-const REVIEWED = ['--reviewed-by', 'a reviewer'];
+const REVIEWED = ['--reviewed-by', 'a reviewer', '--scope', 'the fixture project'];
 
 function project({ spec = SPEC, git = false } = {}) {
   const dir = mkTestTmp('rc-gates-');

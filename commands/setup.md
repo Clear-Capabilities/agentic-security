@@ -187,6 +187,17 @@ jobs:
             if(bad.length){console.error(bad.length+' \${severity}+ finding(s)');process.exit(1);}
             console.log('Security gate passed.');
           \"
+
+      # Promoted compiler rules (rules promote) are re-scored against their own corpora and the shared
+      # false-positive corpus on every run; exit 1 on a regression, 0 when nothing is promoted. The rule
+      # state under .agentic-security/rule-compiler and .agentic-security/rules must be committed, and the
+      # ledger's author signature is checked against AGENTIC_SECURITY_RULES_PUBLIC_KEY (a CI variable, not
+      # a file in the repository) because the per-install key that also signs it does not exist here.
+      - name: Promoted rule regressions
+        if: always()
+        env:
+          AGENTIC_SECURITY_RULES_PUBLIC_KEY: \\\${{ vars.AGENTIC_SECURITY_RULES_PUBLIC_KEY }}
+        run: npx --yes agentic-security rules regress
 \`;
 
 console.log('');

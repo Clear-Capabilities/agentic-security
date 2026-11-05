@@ -103,6 +103,8 @@ scan with `AGENTIC_SECURITY_DEBUG=1` to see which passes ran.
 |---|---|
 | `AGENTIC_SECURITY_HMAC_KEY` | Override the per-install HMAC key (hex) used to sign `last-scan.json`. Default is a random per-install key at `$XDG_CONFIG_HOME/agentic-security/scan-key`. |
 | `AGENTIC_SECURITY_RULES_UNSIGNED` | Allow `rules.yml` `disable:` entries without a verified signature (see below). |
+| `AGENTIC_SECURITY_RULES_PUBLIC_KEY` | One or more base64 Ed25519 public keys (comma separated) the rule compiler's ledger author signature may verify against, so `rules regress` on a machine without this install's HMAC key (a CI runner) can accept a ledger that `rules promote --sign-key` signed. Set it as a CI variable, never as a file in the repository. Since 0.195.27. |
+| `AGENTIC_SECURITY_RULES_FP_CORPUS` | Directories of safe code (path-separator joined) shared across repositories that every rule-compiler evaluation, promotion and regression is held to, beside the scanner's shipped negative corpus and the project's `.agentic-security/rule-compiler/fp-corpus/`. Since 0.195.27. |
 
 ### Notifications
 

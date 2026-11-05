@@ -69,5 +69,26 @@ export function gatePromotion({ ir, corpus, leakageCheck, thresholds } = {}) {
   else if (ind.detected < ind.positives) reasons.push(`misses ${ind.positives - ind.detected} of ${ind.positives} independent vulnerable example(s)`);
   if (ind.negatives < t.minIndependentClean) reasons.push(`${ind.negatives} independent safe example(s) (min ${t.minIndependentClean}): supply independentCleanCode`);
   else if (ind.falseAlarms > 0) reasons.push(`fires on ${ind.falseAlarms} of ${ind.negatives} independent safe example(s)`);
+  for (const dup of dependentExamples(corpus)) reasons.push(`${dup.label} is not independent: it is the same code as ${dup.sameAs} (the source finding, its patch or a generated mutation), so it grades nothing the source did not`);
   return { pass: reasons.length === 0, reasons, evaluation: evalResult, independent: ind };
+}
+
+// GA-07 §2 (0.195.27): an "independent" example that is the original snippet, its patch, or one of the compiler's own mutations
+// (whitespace aside) is circular grading, which the independent-example rule exists to prevent. Compared after collapsing
+// whitespace so a re-indented copy is caught; a genuinely different example with the same shape is not (that is what a rule is for).
+const squash = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+export function dependentExamples(corpus) {
+  const known = new Map();
+  for (const item of [...(corpus?.positives ?? []), ...(corpus?.negatives ?? [])]) {
+    if (item.label.startsWith('independent-')) continue;
+    const k = squash(item.code);
+    if (k && !known.has(k)) known.set(k, item.label);
+  }
+  const out = [];
+  for (const item of [...(corpus?.positives ?? []), ...(corpus?.negatives ?? [])]) {
+    if (!item.label.startsWith('independent-')) continue;
+    const sameAs = known.get(squash(item.code));
+    if (sameAs) out.push({ label: item.label, sameAs });
+  }
+  return out;
 }

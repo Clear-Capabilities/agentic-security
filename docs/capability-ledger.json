@@ -486,6 +486,7 @@
       "sources": [
         "docs/walkthroughs/finding-evidence.md",
         "docs/guides/finding-provenance.md",
+        "docs/reference/finding-provenance-contract.md",
         "docs/workflows/one-findings-journey.md"
       ],
       "haskell": {

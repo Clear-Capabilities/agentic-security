@@ -39,6 +39,7 @@ const EXCLUDED_FILES = new Map([
   ['src/posture/poc-generator.js', 'generated PoC harness fetches the SCANNED application under test, not a model provider'],
   ['src/posture/secret-live-check.js', 'checks whether a leaked credential is live against ITS OWN provider API (AWS/Stripe/GitHub/etc.) — a different, already-scoped security check, not LLM egress'],
   ['src/posture/schema-aware-bridge.js', "`fetch(` appears only inside a comment describing a JS client call pattern to name-match against a server route — no real network call in this file"],
+  ['src/posture/rule-compiler/negative-corpus.js', "`fetch(` appears only inside a string literal: a safe code snippet of the rule compiler's shipped negative corpus (0.195.27), data a promoted rule is scored against, never executed; no network call in this file"],
   ['src/privacy/ir-adapter.js', "`fetch(` appears only inside comments describing example source code this module adapts IR for — no real network call in this file"],
   ['src/dataflow/async-sequencing.js', "`fetch(` appears only inside comments describing a taint pattern this module recognizes — no real network call in this file"],
   ['src/dataflow/string-domain.js', "`fetch(` appears only inside a comment describing a string-domain example — no real network call in this file"],

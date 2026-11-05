@@ -55,6 +55,20 @@ function relevantFiles(finding) {
   return [...files];
 }
 
+// GA-05 (0.195.27): revert and cherry-pick detection used to run only in deep mode's retry loop, which the standard walk reaches
+// only after it has MISSED. A standard-walk hit (the common case: the origin commit's first parent lacks the finding) therefore
+// never carried `revertOf` or `cherryPickOf`, even in deep mode. Whether the origin commit is a revert or a cherry-pick is a
+// property of that commit, not of which walk found it, so a deep-mode result is annotated the same way wherever it was resolved.
+// Standard mode is unchanged (the detection costs git processes, which is what the mode exists to make optional).
+function annotateNonLinear(scanRoot, origin, sha, candidates, mode) {
+  if (mode !== 'deep') return origin;
+  const { isRevert, revertsCommit } = detectRevert(scanRoot, sha, candidates);
+  const { isCherryPick, originalCommit } = detectCherryPick(scanRoot, sha);
+  origin.revertOf = isRevert ? revertsCommit : null;
+  origin.cherryPickOf = isCherryPick ? originalCommit : null;
+  return origin;
+}
+
 function originFrom(meta, { absentInParents }) {
   return {
     commit: meta.commit, authorName: meta.authorName, authorEmail: meta.authorEmail,
@@ -283,7 +297,7 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
       // and confidence.js will cap this at MEDIUM.
       return {
         status: 'complete', method: PROVENANCE_METHOD.SEMANTIC_REPLAY, commitsConsidered,
-        findingOrigin: originFrom(meta, { absentInParents: [] }),
+        findingOrigin: annotateNonLinear(scanRoot, originFrom(meta, { absentInParents: [] }), sha, candidates, mode),
         parentBoundaryVerified: false,
       };
     }
@@ -304,7 +318,7 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
 
     return {
       status: 'complete', method: PROVENANCE_METHOD.SEMANTIC_REPLAY, commitsConsidered,
-      findingOrigin: originFrom(meta, { absentInParents: [parent] }),
+      findingOrigin: annotateNonLinear(scanRoot, originFrom(meta, { absentInParents: [parent] }), sha, candidates, mode),
       parentBoundaryVerified: true, absenceEvidence: presentInParent.reason,
     };
   }
