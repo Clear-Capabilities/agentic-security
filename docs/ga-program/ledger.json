@@ -666,6 +666,22 @@
           "evidencePath": "scanner/test/rule-compiler/gates.test.js",
           "recordedAt": "2026-11-04T14:58:52Z",
           "blocker": null
+        },
+        {
+          "kind": "manual",
+          "workstream": "GA-07",
+          "status": "passed",
+          "sourceCommit": "c8df764122a4fd3d47c66c90c511febd75182c7b",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "exitCode": 0,
+          "recordedAt": "2026-11-05T15:05:38Z",
+          "blocker": null,
+          "id": "rule-compiler:CI-REGRESSION",
+          "requirement": "Promoted-rule regressions run from every CI template and the generated GitHub workflow, before the scan gate, on a machine that never promoted the rule: the lifecycle ledger is author-signed at promotion and verified elsewhere against a public key set outside the repository, with a dropped last entry refused. A shared negative corpus ships with the scanner and is held to by evaluation, promotion and regression, with fleet-shared directories added by environment. Promotion requires the reviewed scope and records digests of the evaluation, the provenance and both corpus halves; regress reports a corpus changed after the review. An independent example that is the original, its patch or a generated mutation is refused. Deprecation and re-entry after rollback are reachable; rule test fails on a missed or false fixture. A model recommendation still promotes nothing.",
+          "command": "cd scanner && node --test test/rule-compiler/ci-regression.test.js test/ci-templates.test.js test/contracts/rule-compiler.contract.test.js",
+          "evidencePath": "scanner/test/rule-compiler/ci-regression.test.js"
         }
       ]
     },
@@ -1095,7 +1111,7 @@
           "workstream": "GA-05",
           "requirement": "Origin corpus cases maintained with adverse histories; eligible coverage at least 95% under a frozen eligibility definition; a frozen performance budget met.",
           "status": "not-started",
-          "blocker": "depends on the GA-02 benchmarks"
+          "blocker": "adverse histories, the frozen contract and the absolute budget are recorded (finding-provenance:ADVERSE-HISTORIES); eligible coverage on this project is 83.8% against the 95% target (whole-project analyses need a project-scoped replay), and the accuracy half depends on the GA-02 benchmarks"
         },
         {
           "sourceCommit": null,
@@ -1128,6 +1144,22 @@
           "evidencePath": "scanner/test/posture/provenance-origin-resolver.test.js",
           "recordedAt": "2026-11-04T14:58:52Z",
           "blocker": null
+        },
+        {
+          "kind": "manual",
+          "workstream": "GA-05",
+          "status": "passed",
+          "sourceCommit": "c8df764122a4fd3d47c66c90c511febd75182c7b",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "exitCode": 0,
+          "recordedAt": "2026-11-05T15:05:38Z",
+          "blocker": null,
+          "id": "finding-provenance:ADVERSE-HISTORIES",
+          "requirement": "The origin corpus holds adverse histories (a revert of a fix with revertOf named, a cherry-pick with -x with cherryPickOf named, a squash merge, an amended introducing commit, a git mv after introduction, a dirty file with a committed vulnerable line, a merge whose first parent carries the flaw, a conflict resolution that writes the flaw, a transitive lockfile bump with the chain re-derived, an unreachable forge provider recorded as a limitation) beside the existing cases, 23 of 23 resolved, gated in the pre-push gate. The provenance record, its terminal states, confidence reasons, eligibility definition, identity rules, default behaviour and shared timeout are frozen in a contract page held by a contract test that check-ga-contracts runs. The overhead bench holds the wall time provenance adds to a frozen absolute budget (cold 2000 ms, warm 250 ms at p95 on the 15-finding fixture) beside its ratio gates; the 1.3x ratio target is withdrawn with the reason recorded.",
+          "command": "cd scanner && npm run bench:provenance-accuracy:check && node --test test/contracts/finding-provenance.contract.test.js && npm run bench:provenance:check",
+          "evidencePath": "scanner/test/contracts/finding-provenance.contract.test.js"
         }
       ]
     },

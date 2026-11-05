@@ -11,8 +11,8 @@
     "milestoneDeclared": false
   },
   "records": {
-    "required": 247,
-    "passed": 68
+    "required": 249,
+    "passed": 70
   },
   "realCodeAccuracy": {
     "label": "historical (not this engine)",
@@ -97,8 +97,8 @@
     "GA-05": {
       "title": "Make Git provenance accurate, bounded and explainable",
       "accountableRole": "analysis/platform engineer",
-      "required": 3,
-      "passed": 1,
+      "required": 4,
+      "passed": 2,
       "blocked": 0
     },
     "GA-06": {
@@ -111,8 +111,8 @@
     "GA-07": {
       "title": "Promote the learning tools without circular grading",
       "accountableRole": "detection engineering lead",
-      "required": 5,
-      "passed": 1,
+      "required": 6,
+      "passed": 2,
       "blocked": 0
     },
     "GA-08": {
@@ -574,8 +574,8 @@
         "GA-12"
       ],
       "status": "in-progress",
-      "passed": 2,
-      "required": 8,
+      "passed": 3,
+      "required": 9,
       "records": [
         {
           "id": "rule-compiler:REG-BAR",
@@ -655,6 +655,16 @@
           "status": "passed",
           "detail": "cd scanner && node --test test/rule-compiler/gates.test.js test/contracts/rule-compiler.contract.test.js test/cli/rule-compiler-cli.test.js test/ci-templates.test.js (exit 0) at cee423df8f84: scanner/test/rule-compiler/gates.test.js",
           "evidencePath": "scanner/test/rule-compiler/gates.test.js",
+          "blocker": null
+        },
+        {
+          "id": "rule-compiler:CI-REGRESSION",
+          "kind": "manual",
+          "workstream": "GA-07",
+          "requirement": "Promoted-rule regressions run from every CI template and the generated GitHub workflow, before the scan gate, on a machine that never promoted the rule: the lifecycle ledger is author-signed at promotion and verified elsewhere against a public key set outside the repository, with a dropped last entry refused. A shared negative corpus ships with the scanner and is held to by evaluation, promotion and regression, with fleet-shared directories added by environment. Promotion requires the reviewed scope and records digests of the evaluation, the provenance and both corpus halves; regress reports a corpus changed after the review. An independent example that is the original, its patch or a generated mutation is refused. Deprecation and re-entry after rollback are reachable; rule test fails on a missed or false fixture. A model recommendation still promotes nothing.",
+          "status": "passed",
+          "detail": "cd scanner && node --test test/rule-compiler/ci-regression.test.js test/ci-templates.test.js test/contracts/rule-compiler.contract.test.js (exit 0) at c8df764122a4: scanner/test/rule-compiler/ci-regression.test.js",
+          "evidencePath": "scanner/test/rule-compiler/ci-regression.test.js",
           "blocker": null
         }
       ],
@@ -976,8 +986,8 @@
         "GA-12"
       ],
       "status": "in-progress",
-      "passed": 2,
-      "required": 7,
+      "passed": 3,
+      "required": 8,
       "records": [
         {
           "id": "finding-provenance:REG-BAR",
@@ -1025,9 +1035,9 @@
           "workstream": "GA-05",
           "requirement": "Origin corpus cases maintained with adverse histories; eligible coverage at least 95% under a frozen eligibility definition; a frozen performance budget met.",
           "status": "not-started",
-          "detail": "depends on the GA-02 benchmarks",
+          "detail": "adverse histories, the frozen contract and the absolute budget are recorded (finding-provenance:ADVERSE-HISTORIES); eligible coverage on this project is 83.8% against the 95% target (whole-project analyses need a project-scoped replay), and the accuracy half depends on the GA-02 benchmarks",
           "evidencePath": null,
-          "blocker": "depends on the GA-02 benchmarks"
+          "blocker": "adverse histories, the frozen contract and the absolute budget are recorded (finding-provenance:ADVERSE-HISTORIES); eligible coverage on this project is 83.8% against the 95% target (whole-project analyses need a project-scoped replay), and the accuracy half depends on the GA-02 benchmarks"
         },
         {
           "id": "finding-provenance:GA-12-001",
@@ -1047,6 +1057,16 @@
           "status": "passed",
           "detail": "cd scanner && node --test test/posture/provenance-origin-resolver.test.js test/posture/provenance-coordinator.test.js (exit 0) at cee423df8f84: scanner/test/posture/provenance-origin-resolver.test.js",
           "evidencePath": "scanner/test/posture/provenance-origin-resolver.test.js",
+          "blocker": null
+        },
+        {
+          "id": "finding-provenance:ADVERSE-HISTORIES",
+          "kind": "manual",
+          "workstream": "GA-05",
+          "requirement": "The origin corpus holds adverse histories (a revert of a fix with revertOf named, a cherry-pick with -x with cherryPickOf named, a squash merge, an amended introducing commit, a git mv after introduction, a dirty file with a committed vulnerable line, a merge whose first parent carries the flaw, a conflict resolution that writes the flaw, a transitive lockfile bump with the chain re-derived, an unreachable forge provider recorded as a limitation) beside the existing cases, 23 of 23 resolved, gated in the pre-push gate. The provenance record, its terminal states, confidence reasons, eligibility definition, identity rules, default behaviour and shared timeout are frozen in a contract page held by a contract test that check-ga-contracts runs. The overhead bench holds the wall time provenance adds to a frozen absolute budget (cold 2000 ms, warm 250 ms at p95 on the 15-finding fixture) beside its ratio gates; the 1.3x ratio target is withdrawn with the reason recorded.",
+          "status": "passed",
+          "detail": "cd scanner && npm run bench:provenance-accuracy:check && node --test test/contracts/finding-provenance.contract.test.js && npm run bench:provenance:check (exit 0) at c8df764122a4: scanner/test/contracts/finding-provenance.contract.test.js",
+          "evidencePath": "scanner/test/contracts/finding-provenance.contract.test.js",
           "blocker": null
         }
       ],
@@ -3562,7 +3582,7 @@
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
       "model-validation: 1/7 acceptance records passed (blocked); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "model-validation: owner unassigned (role security evaluation lead)",
-      "rule-compiler: 2/8 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms",
+      "rule-compiler: 3/9 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms",
       "rule-compiler: owner unassigned (role security evaluation lead)",
       "detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
@@ -3570,7 +3590,7 @@
       "fleet-scan: owner unassigned (role graph/analysis lead)",
       "code-boundaries: 4/10 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "code-boundaries: owner unassigned (role security evaluation lead)",
-      "finding-provenance: 2/7 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms",
+      "finding-provenance: 3/8 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms",
       "finding-provenance: owner unassigned (role security evaluation lead)",
       "graph-precision: 2/8 acceptance records passed (blocked); next: graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "graph-precision: owner unassigned (role security evaluation lead)",
