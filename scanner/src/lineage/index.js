@@ -301,6 +301,8 @@ export function buildLineageGraph(callGraph, opts = {}) {
     const built = buildGraphWithCoverage(lineageCallGraph, {
       repository: opts.repository,
       ...(boundaries ? { boundaries } : {}),
+      // GA-03.7: the scanned revision, recorded in `graph.scope.revision` and in the graph id.
+      ...(typeof opts.commit === 'string' && opts.commit ? { commit: opts.commit, worktreeDirty: opts.worktreeDirty } : {}),
       generatedAt: opts.deterministic ? undefined : new Date().toISOString(),
       perFile: opts.perFile,
       parseFailures: opts.parseFailures,

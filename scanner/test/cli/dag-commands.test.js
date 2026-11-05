@@ -87,6 +87,29 @@ test('dataflow view: no signed graph is unavailable (exit 1) with the loader mes
   assert.match(r.stderr, /No lineage graph found/);
 });
 
+test('dataflow view --expect-revision: a graph that records another revision, or none, is refused (exit 1); the recorded one is accepted and reported', () => {
+  const root = project({ 'package.json': '{"name":"t"}' });
+  writeSignedGraph(root);
+  const none = run(['dataflow', 'view', root, '--expect-revision', 'a'.repeat(40)]);
+  assert.equal(none.status, 1);
+  assert.match(none.stderr, /records no revision/);
+  const graphPath = statePath(root, 'lineage-graph.json');
+  const g = JSON.parse(fs.readFileSync(graphPath, 'utf8'));
+  g.scope.revision = { commit: 'b'.repeat(40), worktreeDirty: false };
+  const body = JSON.stringify(g, null, 2);
+  fs.writeFileSync(graphPath, body); fs.writeFileSync(graphPath + '.sig', signLastScan(body));
+  const wrong = run(['dataflow', 'view', root, '--expect-revision', 'a'.repeat(40)]);
+  assert.equal(wrong.status, 1);
+  assert.match(wrong.stderr, /built from revision b+, not the expected a+/);
+  const ok = run(['dataflow', 'view', root, '--expect-revision', 'b'.repeat(40)]);
+  assert.equal(ok.status, 0, ok.stderr);
+  const rep = json(ok);
+  assert.equal(rep.revision.commit, 'b'.repeat(40));
+  assert.equal(rep.expectedRevision, 'b'.repeat(40));
+  const bad = run(['dataflow', 'view', root, '--expect-revision']);
+  assert.equal(bad.status, 2);
+});
+
 // ---- dataflow plan-cuts completion contract --------------------------------------------------------------------------
 const cand = (type, id, cost) => ({ location: { type, id }, semantics: type === 'node' ? 'handling' : 'transit_protection', owner: 'team-a', cost });
 

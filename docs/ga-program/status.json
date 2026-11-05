@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/ga-program-status@1",
-  "engineVersion": "0.195.25",
+  "engineVersion": "0.195.26",
   "program": {
     "baselineCapabilities": 36,
     "capabilitiesInLedger": 36,
@@ -11,8 +11,8 @@
     "milestoneDeclared": false
   },
   "records": {
-    "required": 245,
-    "passed": 66
+    "required": 247,
+    "passed": 68
   },
   "realCodeAccuracy": {
     "label": "historical (not this engine)",
@@ -83,8 +83,8 @@
     "GA-03": {
       "title": "Harden Code Boundaries, graph analysis and context intelligence",
       "accountableRole": "graph/analysis lead",
-      "required": 13,
-      "passed": 3,
+      "required": 15,
+      "passed": 5,
       "blocked": 0
     },
     "GA-04": {
@@ -190,7 +190,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -200,7 +200,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -273,8 +273,8 @@
         "GA-12"
       ],
       "status": "blocked",
-      "passed": 1,
-      "required": 7,
+      "passed": 2,
+      "required": 8,
       "records": [
         {
           "id": "context-intelligence:REG-BAR",
@@ -283,7 +283,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs gate, platforms",
           "evidencePath": null
         },
         {
@@ -293,7 +293,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -303,7 +303,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -345,9 +345,19 @@
           "detail": "pilot repositories not selected; maintainer not named",
           "evidencePath": null,
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "context-intelligence:ROUTE-MOUNTS",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Route-mount composition: a route registered on a router is an entry point at its composed path through same-file, imported and inline-required mounts, through intermediate routers, once per mount prefix, with the mount statement's middleware inherited per mount; a dynamic prefix mounts nothing and keeps the honest reason. Citations are hash-bound to the exact scanned spans: a citation in a segment whose lines changed is refused as stale. Measured on bench/dci-real-app: the mounted-router case GET /api/orders/:id moved from unresolved to resolved (26 resolved, 1 unresolved), precision and recall unchanged at 100%.",
+          "status": "passed",
+          "detail": "cd scanner && node --test test/context-intelligence/route-mounts.test.js && npm run bench:dci-real-app:check (exit 0) at d3a10e27e20f: scanner/test/context-intelligence/route-mounts.test.js",
+          "evidencePath": "scanner/test/context-intelligence/route-mounts.test.js",
+          "blocker": null
         }
       ],
-      "nextAction": "context-intelligence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+      "nextAction": "context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms"
     },
     {
       "capabilityId": "language-depth-haskell-nix",
@@ -387,7 +397,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -397,7 +407,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -490,7 +500,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -500,7 +510,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -584,7 +594,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -687,7 +697,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -770,7 +780,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -843,8 +853,8 @@
         "GA-12"
       ],
       "status": "blocked",
-      "passed": 3,
-      "required": 9,
+      "passed": 4,
+      "required": 10,
       "records": [
         {
           "id": "code-boundaries:REG-BAR",
@@ -853,7 +863,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs gate, platforms",
           "evidencePath": null
         },
         {
@@ -863,7 +873,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -873,7 +883,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -935,9 +945,19 @@
           "detail": "cd scanner && node --test test/lineage/boundary-join.test.js && cd .. && node bench/dag/run.mjs --check (exit 0) at fd2fbcace1fc: scanner/test/lineage/boundary-join.test.js",
           "evidencePath": "scanner/test/lineage/boundary-join.test.js",
           "blocker": null
+        },
+        {
+          "id": "code-boundaries:ARTIFACT-CONTRACTS",
+          "kind": "manual",
+          "workstream": "GA-03",
+          "requirement": "Frozen contracts for the graph artifacts (signed graph, witness bundles, boundary contracts, context bundles, sink query keys, cut plans): every field table held in both directions; signatures and digests, replay, wrong-revision refusal (the graph records the scanned revision and a consumer expecting another, or any when none is recorded, is refused) and partial-state propagation each exercised with a real tamper, a real wrong revision and a real partial analysis. Run by check-ga-contracts through the registry rows' contractTest.",
+          "status": "passed",
+          "detail": "cd scanner && node --test test/contracts/code-boundaries.contract.test.js test/cli/dag-commands.test.js && node ../scripts/check-ga-contracts.mjs --list (exit 0) at d3a10e27e20f: scanner/test/contracts/code-boundaries.contract.test.js",
+          "evidencePath": "scanner/test/contracts/code-boundaries.contract.test.js",
+          "blocker": null
         }
       ],
-      "nextAction": "code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+      "nextAction": "code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms"
     },
     {
       "capabilityId": "finding-provenance",
@@ -976,7 +996,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1059,7 +1079,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs gate, platforms",
           "evidencePath": null
         },
         {
@@ -1069,7 +1089,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1079,7 +1099,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -1133,7 +1153,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "graph-precision:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+      "nextAction": "graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms"
     },
     {
       "capabilityId": "detection-and-response",
@@ -1173,7 +1193,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1266,7 +1286,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1359,7 +1379,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1441,7 +1461,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1513,7 +1533,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1597,7 +1617,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1689,7 +1709,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1762,7 +1782,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1772,7 +1792,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -1816,7 +1836,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "deterministic-scan:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
+      "nextAction": "deterministic-scan:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
     },
     {
       "capabilityId": "dependency-risk",
@@ -1854,7 +1874,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1927,7 +1947,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1937,7 +1957,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -1981,7 +2001,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "taint-and-reachability:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
+      "nextAction": "taint-and-reachability:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
     },
     {
       "capabilityId": "falsification",
@@ -2020,7 +2040,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2030,7 +2050,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -2074,7 +2094,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "falsification:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
+      "nextAction": "falsification:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
     },
     {
       "capabilityId": "exploit-proof",
@@ -2112,7 +2132,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2185,7 +2205,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2195,7 +2215,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -2239,7 +2259,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "root-cause-sweep:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
+      "nextAction": "root-cause-sweep:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)"
     },
     {
       "capabilityId": "federation",
@@ -2278,7 +2298,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2361,7 +2381,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2444,7 +2464,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2528,7 +2548,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2621,7 +2641,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2705,7 +2725,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2797,7 +2817,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2870,7 +2890,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2962,7 +2982,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3036,7 +3056,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3148,7 +3168,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3220,7 +3240,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3292,7 +3312,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.25 at d453ec113f62, bundle ea2e63293cf6",
+          "detail": "clean measurement of 0.195.26 at b91109909143, bundle ee0c77de1bba",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3536,7 +3556,7 @@
     "reasons": [
       "agentic-discovery: 1/8 acceptance records passed (blocked); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "agentic-discovery: owner unassigned (role security evaluation lead)",
-      "context-intelligence: 1/7 acceptance records passed (blocked); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "context-intelligence: 2/8 acceptance records passed (blocked); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "context-intelligence: owner unassigned (role security evaluation lead)",
       "language-depth-haskell-nix: 1/8 acceptance records passed (blocked); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
@@ -3548,11 +3568,11 @@
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
       "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "fleet-scan: owner unassigned (role graph/analysis lead)",
-      "code-boundaries: 3/9 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "code-boundaries: 4/10 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "code-boundaries: owner unassigned (role security evaluation lead)",
       "finding-provenance: 2/7 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "finding-provenance: owner unassigned (role security evaluation lead)",
-      "graph-precision: 2/8 acceptance records passed (blocked); next: graph-precision:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "graph-precision: 2/8 acceptance records passed (blocked); next: graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "graph-precision: owner unassigned (role security evaluation lead)",
       "detection-and-response: 1/7 acceptance records passed (in-progress); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "detection-and-response: owner unassigned (role analysis/platform engineer)",
@@ -3568,17 +3588,17 @@
       "eval-lab: owner unassigned (role security evaluation lead)",
       "release-assurance: 1/5 acceptance records passed (in-progress); next: release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "release-assurance: owner unassigned (role assurance engineer)",
-      "deterministic-scan: 2/7 acceptance records passed (blocked); next: deterministic-scan:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+      "deterministic-scan: 2/7 acceptance records passed (blocked); next: deterministic-scan:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
       "deterministic-scan: owner unassigned (role security evaluation lead)",
       "dependency-risk: 2/5 acceptance records passed (in-progress); next: dependency-risk:GA-01-001: owner unassigned",
       "dependency-risk: owner unassigned (role language/supply-chain lead)",
-      "taint-and-reachability: 2/7 acceptance records passed (blocked); next: taint-and-reachability:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+      "taint-and-reachability: 2/7 acceptance records passed (blocked); next: taint-and-reachability:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
       "taint-and-reachability: owner unassigned (role security evaluation lead)",
-      "falsification: 2/7 acceptance records passed (blocked); next: falsification:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+      "falsification: 2/7 acceptance records passed (blocked); next: falsification:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
       "falsification: owner unassigned (role security evaluation lead)",
       "exploit-proof: 2/5 acceptance records passed (in-progress); next: exploit-proof:GA-01-001: owner unassigned",
       "exploit-proof: owner unassigned (role platform security engineer)",
-      "root-cause-sweep: 2/7 acceptance records passed (blocked); next: root-cause-sweep:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.25 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+      "root-cause-sweep: 2/7 acceptance records passed (blocked); next: root-cause-sweep:INDEP-ACCURACY: the independent record was measured on engine 0.141.0, not 0.195.26 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
       "root-cause-sweep: owner unassigned (role security evaluation lead)",
       "federation: 2/6 acceptance records passed (in-progress); next: federation:GA-01-001: owner unassigned",
       "federation: owner unassigned (role graph/analysis lead)",

@@ -45,7 +45,7 @@ These cases are written and labelled by the programme's author, so this is **not
 
 <!-- capture: dci-real-app-overall -->
 ```text
-39 routes: TP 12, FP 0, FN 0, TN 25, unresolved 2; precision 100% (12/12), recall 100% (12/12)
+39 routes: TP 12, FP 0, FN 0, TN 26, unresolved 1; precision 100% (12/12), recall 100% (12/12)
 ```
 
 ### Performance on three project sizes (E6-08)

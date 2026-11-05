@@ -7,8 +7,8 @@
     "tp": 12,
     "fp": 0,
     "fn": 0,
-    "tn": 25,
-    "unresolved": 2,
+    "tn": 26,
+    "unresolved": 1,
     "routes": 39,
     "precision": 1,
     "recall": 1,
@@ -20,8 +20,8 @@
       "tp": 9,
       "fp": 0,
       "fn": 0,
-      "tn": 18,
-      "unresolved": 2,
+      "tn": 19,
+      "unresolved": 1,
       "routes": 29,
       "precision": 1,
       "recall": 1,
@@ -70,8 +70,8 @@
       "tp": 3,
       "fp": 0,
       "fn": 0,
-      "tn": 8,
-      "unresolved": 2,
+      "tn": 9,
+      "unresolved": 1,
       "routes": 13,
       "precision": 1,
       "recall": 1,
@@ -120,8 +120,8 @@
       "tp": 4,
       "fp": 0,
       "fn": 0,
-      "tn": 5,
-      "unresolved": 2,
+      "tn": 6,
+      "unresolved": 1,
       "routes": 11,
       "precision": 1,
       "recall": 1,
@@ -222,8 +222,8 @@
         {
           "route": "GET /api/orders/:id",
           "label": "safe",
-          "verdict": "not_found",
-          "outcome": "unresolved"
+          "verdict": "satisfied",
+          "outcome": "tn"
         },
         {
           "route": "GET /api/health",
@@ -576,15 +576,6 @@
     }
   ],
   "misses": [
-    {
-      "case": "js-mw-5",
-      "stack": "express",
-      "family": "missing-middleware",
-      "route": "GET /api/orders/:id",
-      "label": "safe",
-      "verdict": "not_found",
-      "outcome": "unresolved"
-    },
     {
       "case": "js-mw-5",
       "stack": "express",

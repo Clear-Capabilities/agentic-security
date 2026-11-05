@@ -602,6 +602,14 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     // module ever passed `undefined`/omitted the key entirely).
     generatedAt: opts.generatedAt ?? '1970-01-01T00:00:00.000Z',
   });
+  // GA-03.7 (0.195.26): the revision the graph was built from, when the
+  // caller knows it (a scan passes the repository head). A consumer can then
+  // refuse a graph built from another revision (`loadSignedGraph`'s
+  // `expectRevision`). Absent when no commit was given, so a build without
+  // one is byte-identical to before.
+  if (typeof opts.commit === 'string' && opts.commit) {
+    graph.scope.revision = { commit: opts.commit, worktreeDirty: typeof opts.worktreeDirty === 'boolean' ? opts.worktreeDirty : null };
+  }
 
   const nodesById = new Map();
   const edgesById = new Map();

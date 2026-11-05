@@ -13,8 +13,8 @@ __webpack_require__.d(__webpack_exports__, {
 
 // EXTERNAL MODULE: ./src/ir/index.js + 11 modules
 var ir = __webpack_require__(98297);
-// EXTERNAL MODULE: ./src/context-intelligence/graph-schema.js + 1 modules
-var graph_schema = __webpack_require__(44287);
+// EXTERNAL MODULE: ./src/context-intelligence/graph-schema.js
+var graph_schema = __webpack_require__(50152);
 ;// CONCATENATED MODULE: ./src/context-intelligence/adapters/existing-ir.js
 //
 // Adapter: shared IR (`buildProjectIR`) -> symbol-graph/1.
@@ -1667,9 +1667,10 @@ function looksLikeTelemetry(name) { return TELEMETRY_NAME.test(String(name || ''
 /* harmony export */ });
 /* unused harmony export DISPOSITIONS */
 /* harmony import */ var _canonical_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(44652);
-/* harmony import */ var _spans_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(77311);
+/* harmony import */ var _spans_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(77311);
 /* harmony import */ var _controls_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(17202);
 /* harmony import */ var _posture_entrypoint_inventory_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(11366);
+/* harmony import */ var _imports_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(86588);
 //
 // Entry points -> exact handler symbols.
 //
@@ -1684,6 +1685,7 @@ function looksLikeTelemetry(name) { return TELEMETRY_NAME.test(String(name || ''
 //                        not resolve, a handler matched by name only, a router whose mount point is not visible
 //   unresolved           no handler could be identified; the manifest still exists and says so
 //   excluded_by_policy   deliberately not processed (operator exclusion, or the entry-point cap)
+
 
 
 
@@ -1753,15 +1755,18 @@ function collectUses(fileContents) {
     for (let i = 0; i < lines.length; i++) {
       const m = /^\s*([A-Za-z_$][\w$]*)\.use\s*\(/.exec(lines[i]);
       if (!m) continue;
-      const st = (0,_spans_js__WEBPACK_IMPORTED_MODULE_3__/* .callStatement */ .yP)(lines, i + 1);
+      const st = (0,_spans_js__WEBPACK_IMPORTED_MODULE_4__/* .callStatement */ .yP)(lines, i + 1);
       if (!st) continue;
-      const args = (0,_spans_js__WEBPACK_IMPORTED_MODULE_3__/* .splitArgs */ .sG)(st.text);
+      const args = (0,_spans_js__WEBPACK_IMPORTED_MODULE_4__/* .splitArgs */ .sG)(st.text);
       let prefix = '/';
       let rest = args;
       const q = args[0] && /^(['"`])(.*)\1$/.exec(args[0]);
       if (q) { prefix = q[2]; rest = args.slice(1); }
+      // GA-03.2: a first argument that is a call, a template with interpolation or a concatenation is a prefix
+      // the scan cannot read; the use still records its middleware, but nothing is mounted under a guessed '/'.
+      const prefixDynamic = !q && !!args[0] && (/^[A-Za-z_$][\w$.]*\s*\(/.test(args[0]) && !/^require\s*\(/.test(args[0]) || /\$\{|\+/.test(args[0]));
       const names = rest.map(a => { const id = IDENT_CHAIN.exec(a.replace(/^\[|\]$/g, '')); return id ? { name: id[0], text: a } : { name: null, text: a }; });
-      uses.push({ file, line: i + 1, receiver: m[1], prefix, args: names });
+      uses.push({ file, line: i + 1, receiver: m[1], prefix, prefixDynamic, args: names });
     }
   }
   return uses;
@@ -1805,7 +1810,7 @@ function resolveHandler(route, ctx) {
       else reasons.push(`handler-${r.resolution}`);
     } else if (h.kind === 'inline') {
       out.handlerKind = 'inline';
-      out.rootSpan = { file: route.file, ...(0,_spans_js__WEBPACK_IMPORTED_MODULE_3__/* .inlineBlockSpan */ .$X)(lines, route.line) };
+      out.rootSpan = { file: route.file, ...(0,_spans_js__WEBPACK_IMPORTED_MODULE_4__/* .inlineBlockSpan */ .$X)(lines, route.line) };
       const enclosing = fileSyms.filter(s => s.kind === 'function' && s.startLine <= route.line && s.endLine >= route.line).sort((a, b) => (b.startLine - a.startLine))[0];
       out.handlerSymbol = enclosing ? enclosing.id : null;
       out.confidence = enclosing ? 'inline-block' : 'none';
@@ -1813,7 +1818,7 @@ function resolveHandler(route, ctx) {
     } else {
       reasons.push('handler-not-statically-known');
       // the manifest still shows where the route is registered, so the gap is inspectable rather than absent
-      out.rootSpan = { file: route.file, ...(0,_spans_js__WEBPACK_IMPORTED_MODULE_3__/* .inlineBlockSpan */ .$X)(lines, route.line) };
+      out.rootSpan = { file: route.file, ...(0,_spans_js__WEBPACK_IMPORTED_MODULE_4__/* .inlineBlockSpan */ .$X)(lines, route.line) };
     }
     return out;
   }
@@ -1836,7 +1841,7 @@ function resolveHandler(route, ctx) {
     return out;
   }
 
-  const st = JS_FILE.test(route.file) ? (0,_spans_js__WEBPACK_IMPORTED_MODULE_3__/* .callStatement */ .yP)(lines, route.line) : null;
+  const st = JS_FILE.test(route.file) ? (0,_spans_js__WEBPACK_IMPORTED_MODULE_4__/* .callStatement */ .yP)(lines, route.line) : null;
   if (!st) {
     // not a call-style registration we can parse: fall back to the enclosing declaration, flagged
     const enclosing = fileSyms.filter(s => s.kind === 'function' && s.startLine <= route.line && s.endLine >= route.line).sort((a, b) => b.startLine - a.startLine)[0];
@@ -1845,10 +1850,10 @@ function resolveHandler(route, ctx) {
     return out;
   }
   out.rootSpan = { file: route.file, startLine: route.line, endLine: st.endLine, precision: 'brace' };
-  const args = (0,_spans_js__WEBPACK_IMPORTED_MODULE_3__/* .splitArgs */ .sG)(st.text).slice(1); // drop the path
+  const args = (0,_spans_js__WEBPACK_IMPORTED_MODULE_4__/* .splitArgs */ .sG)(st.text).slice(1); // drop the path
   const flat = [];
   for (const a of args) {
-    if (a.startsWith('[') && a.endsWith(']')) flat.push(...(0,_spans_js__WEBPACK_IMPORTED_MODULE_3__/* .splitArgs */ .sG)(`(${a.slice(1, -1)})`));
+    if (a.startsWith('[') && a.endsWith(']')) flat.push(...(0,_spans_js__WEBPACK_IMPORTED_MODULE_4__/* .splitArgs */ .sG)(`(${a.slice(1, -1)})`));
     else flat.push(a);
   }
   if (!flat.length) { reasons.push('registration-has-no-handler-argument'); return out; }
@@ -1884,6 +1889,107 @@ function resolveHandler(route, ctx) {
   return out;
 }
 
+// ── Router mounts (GA-03.2, 0.195.26) ──────────────────────────────────────
+//
+// `router.get('/:id', h)` is reachable at `/users/:id` only through `app.use('/users', router)`, and that mount
+// can sit in another file (`app.use('/users', require('./users'))`, `import users from './users.js'`). Before
+// this, every route on a router-looking receiver was `partially_resolved` with `router-mount-not-resolved` and
+// its path was the local one. Now a mount is found when the mounted argument is (a) a receiver with routes in
+// the same file, (b) a name imported from a file whose `module.exports` / `export default` is that file's
+// router receiver, or (c) an inline `require('./x')` of such a file. Mounts compose: `app.use('/api', v1)` and
+// `v1.use('/users', users)` make `/api/users/:id`. A router mounted at several prefixes is reachable at each,
+// so it yields one entry point per prefix (sorted; at most MAX_MOUNT_PATHS). Depth is bounded; a cycle stops.
+// A mount's other identifier arguments (`app.use('/api', auth, router)`) are middleware every mounted route
+// inherits, recorded with the mount's prefix as their scope. What stays unresolved: a router passed through a
+// variable the import map cannot follow, a mount whose prefix is not a string literal, a dynamic
+// `app.use(prefixVar, router)`, and anything registered outside the scanned files.
+const MAX_MOUNT_DEPTH = 4;
+const MAX_MOUNT_PATHS = 8;
+const ROUTE_RECEIVER_RE = /([A-Za-z_$][\w$]*)\.(?:get|post|put|patch|delete|all|options|head|route)\s*\(/;
+const ROUTER_NAME_RE = /^(?:router|routes?|r|api|\w*Router)$/i;
+
+function routeReceiver(fileContents, route) {
+  if (!JS_FILE.test(route.file)) return null;
+  const line = (fileContents[route.file] || '').split('\n')[route.line - 1] || '';
+  const m = ROUTE_RECEIVER_RE.exec(line);
+  return m ? m[1] : null;
+}
+
+/** The receiver a file exports as its module (`module.exports = router`, `export default router`), or null. */
+function exportedReceiver(text) {
+  const t = String(text || '');
+  const m = /\bmodule\.exports\s*=\s*([A-Za-z_$][\w$]*)\s*;?/.exec(t) || /\bexport\s+default\s+([A-Za-z_$][\w$]*)\s*;?/.exec(t);
+  return m ? m[1] : null;
+}
+
+function joinMountPath(prefix, routePath) {
+  const p = String(prefix || '/').replace(/\/+$/, '');
+  const r = String(routePath || '');
+  if (!p) return r.startsWith('/') ? r : '/' + r;
+  if (!r || r === '/') return p;
+  return p + (r.startsWith('/') ? r : '/' + r);
+}
+
+/**
+ * Every mount of a router: key `${file}|${receiver}` -> [{ prefix, file, line, receiver, middleware }], where
+ * `receiver` is the receiver the router was mounted ON (so a chain can be followed upward).
+ */
+function buildMountIndex(fileContents, uses, routes) {
+  const files = new Set(Object.keys(fileContents));
+  const imports = (0,_imports_js__WEBPACK_IMPORTED_MODULE_3__/* .buildImportMap */ .kB)(fileContents);
+  const receiversByFile = new Map();
+  for (const r of routes) {
+    const recv = routeReceiver(fileContents, r);
+    if (!recv) continue;
+    if (!receiversByFile.has(r.file)) receiversByFile.set(r.file, new Set());
+    receiversByFile.get(r.file).add(recv);
+  }
+  // a receiver that mounts something is a router too (an intermediate `v1.use('/users', users)`)
+  for (const u of uses) { if (!receiversByFile.has(u.file)) receiversByFile.set(u.file, new Set()); receiversByFile.get(u.file).add(u.receiver); }
+  const index = new Map();
+  const add = (file, receiver, mount) => { const k = `${file}|${receiver}`; if (!index.has(k)) index.set(k, []); index.get(k).push(mount); };
+  // a module is a router module only when its exported receiver registers routes or mounts in that file
+  const isRouter = (file, receiver) => !!receiver && (receiversByFile.get(file) || new Set()).has(receiver);
+  for (const u of uses) {
+    if (u.prefixDynamic) continue;
+    const middleware = [];
+    for (const a of u.args) {
+      let target = null;
+      const req = /^require\(\s*(['"])([^'"]+)\1\s*\)$/.exec(String(a.text || '').trim());
+      if (req) {
+        const res = (0,_imports_js__WEBPACK_IMPORTED_MODULE_3__/* .resolveJsModule */ .iC)(u.file, req[2], files);
+        const recv = res && res.target && files.has(res.target) ? exportedReceiver(fileContents[res.target]) : null;
+        if (recv && isRouter(res.target, recv)) target = { file: res.target, receiver: recv };
+      } else if (a.name && a.name !== u.receiver && isRouter(u.file, a.name)) {
+        target = { file: u.file, receiver: a.name };
+      } else if (a.name) {
+        const via = (0,_imports_js__WEBPACK_IMPORTED_MODULE_3__/* .resolveViaImports */ .xU)(imports, u.file, a.name);
+        const recv = via && via.kind === 'exact-import' && via.targetFile && files.has(via.targetFile) ? exportedReceiver(fileContents[via.targetFile]) : null;
+        if (recv && isRouter(via.targetFile, recv)) target = { file: via.targetFile, receiver: recv };
+      }
+      if (target) add(target.file, target.receiver, { prefix: u.prefix, file: u.file, line: u.line, receiver: u.receiver, middleware: [...middleware] });
+      else if (a.name && !req) middleware.push(a.name);
+    }
+  }
+  return index;
+}
+
+/** The mount chains (root first) through which (file, receiver) is reachable; [] when it is mounted nowhere. */
+function mountChains(index, file, receiver, depth = 0, seen = new Set()) {
+  const key = `${file}|${receiver}`;
+  const mounts = index.get(key) || [];
+  if (!mounts.length || depth >= MAX_MOUNT_DEPTH || seen.has(key)) return [];
+  const out = [];
+  const next = new Set(seen); next.add(key);
+  for (const m of mounts) {
+    const parents = mountChains(index, m.file, m.receiver, depth + 1, next);
+    if (!parents.length) out.push([m]);
+    else for (const pc of parents) out.push([...pc, m]);
+    if (out.length >= MAX_MOUNT_PATHS) break;
+  }
+  return out.slice(0, MAX_MOUNT_PATHS);
+}
+
 function pathMatchesPrefix(routePath, prefix) {
   if (prefix === '/' || prefix === '') return true;
   const p = prefix.replace(/\/+$/, '');
@@ -1898,23 +2004,24 @@ async function collectEntrypoints({ fileContents, graph, config = {} }) {
   const kinds = new Set(config.entrypointKinds && config.entrypointKinds.length ? config.entrypointKinds : ['http']);
   const idx = symbolIndexes(graph);
   const uses = collectUses(fileContents);
+  const routes = (kinds.has('http') || kinds.has('webhook')) ? await collectRoutes(fileContents) : [];
+  const mountIndex = buildMountIndex(fileContents, uses, routes);
   const exclude = (config.exclude || []).map(globToRe);
   const cap = Number.isInteger(config.maxEntrypoints) && config.maxEntrypoints > 0 ? config.maxEntrypoints : 5000;
   const ctx = { fileContents, idx, graph };
   const records = [];
 
   if (kinds.has('http') || kinds.has('webhook')) {
-    for (const route of await collectRoutes(fileContents)) {
+    for (const route of routes) {
       const isWebhook = /webhook/i.test(route.path || '');
       if (isWebhook && !kinds.has('webhook') && !kinds.has('http')) continue;
       const h = resolveHandler(route, ctx);
       const reasons = [...h.reasons];
       const middleware = [...h.middleware];
+      const receiver = routeReceiver(fileContents, route);
+      const chains = receiver ? mountChains(mountIndex, route.file, receiver) : [];
       // inherited middleware registered with `X.use(...)` on the same receiver, earlier in the same file
       if (JS_FILE.test(route.file)) {
-        const lines = fileContents[route.file].split('\n');
-        const recvM = /([A-Za-z_$][\w$]*)\.(?:get|post|put|patch|delete|all|options|head|route)\s*\(/.exec(lines[route.line - 1] || '');
-        const receiver = recvM ? recvM[1] : null;
         for (const u of uses) {
           if (u.file !== route.file || u.line >= route.line || u.receiver !== receiver) continue;
           if (!pathMatchesPrefix(String(route.path || ''), u.prefix)) continue;
@@ -1925,17 +2032,35 @@ async function collectEntrypoints({ fileContents, graph, config = {} }) {
             if (!r.symbol) reasons.push(`inherited-middleware-${r.resolution}:${a.name}`);
           }
         }
-        if (receiver && /^(?:router|routes?|r|api|\w*Router)$/i.test(receiver) && !uses.some(u => u.receiver !== receiver && u.args.some(a => a.name === receiver))) {
-          reasons.push('router-mount-not-resolved');
-        }
+        if (receiver && !chains.length && ROUTER_NAME_RE.test(receiver)) reasons.push('router-mount-not-resolved');
       }
+      // middleware the mount statements apply to everything mounted under them (`app.use('/api', auth, router)`):
+      // per chain, so a router mounted twice inherits each mount's own middleware and not the other's
+      const chainMiddleware = (chain) => {
+        const mw = []; const why = [];
+        for (const hop of chain) {
+          for (const name of hop.middleware) {
+            const r = resolveName(name, hop.file, idx);
+            mw.push({ name, symbolId: r.symbol ? r.symbol.id : null, resolution: r.resolution, line: hop.line, scope: hop.prefix, inherited: true, viaMount: true });
+            if (!r.symbol) why.push(`inherited-middleware-${r.resolution}:${name}`);
+          }
+        }
+        return { mw, why };
+      };
       const authScheme = route.webModel
         ? { status: route.webModel.auth.status, kind: route.webModel.auth.kind || null, basis: 'haskell-web-model', role: route.webModel.role.status, ownership: route.webModel.ownership || null, idLookups: route.webModel.idLookups || [], csrf: !!route.webModel.csrf }
         : { status: route.hasAuth ? 'authenticated' : 'none', basis: 'route-scan-heuristic', note: 'authentication seen near the registration; says nothing about ownership' };
+      const mountsOf = chains.map(chain => ({
+        prefix: chain.reduce((acc, hop) => joinMountPath(acc, hop.prefix), '/'),
+        chain: chain.map(hop => ({ file: hop.file, line: hop.line, receiver: hop.receiver, prefix: hop.prefix })),
+        ...chainMiddleware(chain),
+      })).sort((a, b) => (a.prefix < b.prefix ? -1 : a.prefix > b.prefix ? 1 : 0));
       const base = {
         kind: isWebhook ? 'webhook' : 'http',
         method: String(route.method || 'GET'),
         pathTemplate: String(route.path || ''),
+        registeredPath: String(route.path || ''),
+        mount: null,
         framework: route.framework || null,
         language: route.language === 'haskell' ? 'haskell' : (JS_FILE.test(route.file) ? 'javascript' : (route.file.split('.').pop())),
         registrationSite: { file: route.file, line: route.line },
@@ -1948,7 +2073,15 @@ async function collectEntrypoints({ fileContents, graph, config = {} }) {
         externalDependencies: [],
         resolutionReasons: [...new Set(reasons)].sort(),
       };
-      records.push(base);
+      if (!mountsOf.length) { records.push(base); continue; }
+      for (const m of mountsOf) {
+        const { mw, why, ...mount } = m;
+        records.push({
+          ...base, pathTemplate: joinMountPath(mount.prefix, base.registeredPath), mount: { ...mount, alternatives: mountsOf.length },
+          middleware: [...base.middleware.map(x => ({ ...x })), ...mw],
+          resolutionReasons: [...new Set([...base.resolutionReasons, ...why])].sort(),
+        });
+      }
     }
   }
 
@@ -2108,151 +2241,18 @@ function readGitSnapshot(root, ref, { maxFiles = 3000 } = {}) {
 
 /***/ }),
 
-/***/ 44287:
+/***/ 50152:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
-
-// EXPORTS
-__webpack_require__.d(__webpack_exports__, {
-  U2: () => (/* binding */ MATERIAL_REASONS),
-  Nk: () => (/* binding */ buildSymbolGraph),
-  dC: () => (/* binding */ validateGraph)
-});
-
-// UNUSED EXPORTS: CONTINUATIONS, EDGE_KINDS, GRAPH_SCHEMA_VERSION, RESOLVERS, conditionalityOf
-
-// EXTERNAL MODULE: ./src/context-intelligence/canonical.js
-var canonical = __webpack_require__(44652);
-// EXTERNAL MODULE: ./src/context-intelligence/spans.js
-var spans = __webpack_require__(77311);
-// EXTERNAL MODULE: external "node:path"
-var external_node_path_ = __webpack_require__(76760);
-;// CONCATENATED MODULE: ./src/context-intelligence/imports.js
-//
-// Import maps (JS/TS and Python): which local name in a file refers to which module, and which declaration in it.
-//
-// The shared IR resolves a call to a declaration only for the shapes it models; a destructured `require` or a named
-// ES import is not one of them, so a call such as `getReport(id)` arrives as an edge to nowhere. Left alone, nearly
-// every Express/Node route would be reported as having an unresolved call. This module recovers those edges from the
-// import statements themselves and records HOW each was resolved, so the result is still evidence and not a guess:
-//
-//   exact-import   the local name is bound by an import of a module in the repository, and that module declares a
-//                  function of that name (or, for a namespace, of the member name)
-//   third-party    the module is a package, not a repository file: a boundary, not first-party code
-//   unresolved     a relative import that no repository file satisfies
-//
-// Scope, stated plainly: this is statement-level pattern matching. Re-export chains, `import()` expressions,
-// computed `require` arguments and package-relative aliases (tsconfig paths) are not followed.
-
-
-const JS_EXTS = ['', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '/index.js', '/index.mjs', '/index.ts', '/index.tsx'];
-
-function resolveJsModule(fromFile, source, files) {
-  if (!source.startsWith('.')) return { kind: 'third-party', target: null };
-  const base = external_node_path_.posix.normalize(external_node_path_.posix.join(external_node_path_.posix.dirname(fromFile), source));
-  for (const ext of JS_EXTS) if (files.has(base + ext)) return { kind: 'repo', target: base + ext };
-  return { kind: 'unresolved', target: null };
-}
-
-function resolvePyModule(fromFile, dotted, files) {
-  let dir = external_node_path_.posix.dirname(fromFile);
-  let mod = dotted;
-  const lead = /^\.+/.exec(mod);
-  const candidatesBase = [];
-  if (lead) {
-    for (let i = 1; i < lead[0].length; i++) dir = external_node_path_.posix.dirname(dir);
-    mod = mod.slice(lead[0].length);
-    candidatesBase.push(dir === '.' ? '' : dir);
-  } else {
-    candidatesBase.push('', external_node_path_.posix.dirname(fromFile) === '.' ? '' : external_node_path_.posix.dirname(fromFile));
-  }
-  for (const b of candidatesBase) {
-    const rel = mod.replace(/\./g, '/');
-    for (const cand of [rel ? `${rel}.py` : '__init__.py', rel ? `${rel}/__init__.py` : '__init__.py']) {
-      const full = b ? external_node_path_.posix.join(b, cand) : cand;
-      if (files.has(full)) return { kind: 'repo', target: full };
-    }
-  }
-  return { kind: lead ? 'unresolved' : 'third-party', target: null };
-}
-
-function stripComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/(^|[^:'"`\\])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length));
-}
-
-function names(list) {
-  return list.split(',').map(s => s.trim()).filter(Boolean).map(s => {
-    const m = /^(?:\w+\s+as\s+)?([\w$]+)$/.exec(s.replace(/^type\s+/, '').replace(/^([\w$]+)\s*:\s*([\w$]+)$/, '$1 as $2'));
-    const parts = s.replace(/^type\s+/, '').split(/\s+as\s+|\s*:\s*/).map(x => x.trim()).filter(Boolean);
-    void m;
-    if (parts.length === 2) return { imported: parts[0], local: parts[1] };
-    if (parts.length === 1) return { imported: parts[0], local: parts[0] };
-    return null;
-  }).filter(Boolean).filter(n => /^[\w$]+$/.test(n.imported) && /^[\w$]+$/.test(n.local));
-}
-
-/** Import entries for one JS/TS file. */
-function jsImports(file, text, files) {
-  const t = stripComments(text);
-  const out = [];
-  const add = (local, source, member) => out.push({ file, local, source, member, ...resolveJsModule(file, source, files) });
-  for (const m of t.matchAll(/\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:await\s+)?require\(\s*['"]([^'"]+)['"]\s*\)/g)) for (const n of names(m[1])) add(n.local, m[2], n.imported);
-  for (const m of t.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=\s*(?:await\s+)?require\(\s*['"]([^'"]+)['"]\s*\)/g)) add(m[1], m[2], '*');
-  for (const m of t.matchAll(/\bimport\s+(?:type\s+)?([\w$]+)?\s*,?\s*(?:\{([^}]*)\}|\*\s+as\s+([\w$]+))?\s*from\s*['"]([^'"]+)['"]/g)) {
-    if (m[1]) add(m[1], m[4], 'default');
-    if (m[2]) for (const n of names(m[2])) add(n.local, m[4], n.imported);
-    if (m[3]) add(m[3], m[4], '*');
-  }
-  return out;
-}
-
-function pyImports(file, text, files) {
-  const out = [];
-  const add = (local, source, member) => out.push({ file, local, source, member, ...resolvePyModule(file, source, files) });
-  // the unparenthesised form ends at the line end; only the parenthesised form may span lines
-  for (const m of text.matchAll(/^[ \t]*from[ \t]+([.\w]+)[ \t]+import[ \t]+(?:\(([\w\s,]+)\)|([\w \t,]+))/gm)) {
-    for (const n of (m[2] ?? m[3]).split(',').map(s => s.trim()).filter(Boolean)) {
-      const p = n.split(/\s+as\s+/);
-      add(p[1] || p[0], m[1], p[0]);
-    }
-  }
-  for (const m of text.matchAll(/^[ \t]*import\s+([.\w]+)(?:\s+as\s+(\w+))?\s*$/gm)) add(m[2] || m[1].split('.')[0], m[1], '*');
-  return out;
-}
-
-/** All import entries, deterministically ordered. */
-function buildImportMap(fileContents) {
-  const files = new Set(Object.keys(fileContents));
-  const out = [];
-  for (const file of [...files].sort()) {
-    if (/\.(?:js|jsx|mjs|cjs|ts|tsx)$/i.test(file)) out.push(...jsImports(file, fileContents[file], files));
-    else if (/\.py$/i.test(file)) out.push(...pyImports(file, fileContents[file], files));
-  }
-  return out.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0) || (a.local < b.local ? -1 : a.local > b.local ? 1 : 0) || (a.source < b.source ? -1 : 1));
-}
-
-/**
- * Resolve a callee name used in `file` against the import map.
- * Returns { kind:'exact-import', targetFile, member } | { kind:'third-party' } | { kind:'unresolved-import' } | null.
- */
-function resolveViaImports(imports, file, calleeName) {
-  const parts = String(calleeName || '').split('.');
-  const head = parts[0];
-  const imp = imports.filter(i => i.file === file && i.local === head);
-  if (!imp.length) return null;
-  const i = imp[0];
-  if (i.kind === 'third-party') return { kind: 'third-party' };
-  if (i.kind === 'unresolved') return { kind: 'unresolved-import' };
-  if (parts.length === 1) {
-    const member = i.member === '*' || i.member === 'default' ? head : i.member;
-    return { kind: 'exact-import', targetFile: i.target, member, namespaceCall: i.member === '*' || i.member === 'default' };
-  }
-  if (i.member === '*' || i.member === 'default') return { kind: 'exact-import', targetFile: i.target, member: parts[parts.length - 1], namespaceCall: false };
-  // `db.query()` where `db` is a NAMED import: a method of an imported object, not a function of that module
-  return { kind: 'imported-object-method' };
-}
-
-;// CONCATENATED MODULE: ./src/context-intelligence/graph-schema.js
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Nk: () => (/* binding */ buildSymbolGraph),
+/* harmony export */   U2: () => (/* binding */ MATERIAL_REASONS),
+/* harmony export */   dC: () => (/* binding */ validateGraph)
+/* harmony export */ });
+/* unused harmony exports GRAPH_SCHEMA_VERSION, CONTINUATIONS, EDGE_KINDS, RESOLVERS, conditionalityOf */
+/* harmony import */ var _canonical_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(44652);
+/* harmony import */ var _spans_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(77311);
+/* harmony import */ var _imports_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(86588);
 //
 // Versioned, typed declaration/reference graph (symbol-graph/1).
 //
@@ -2355,8 +2355,8 @@ function buildSymbolGraph({ fileContents, functions, edges }) {
     ordinal.set(base, k + 1);
     const id = !anon && k === 0 ? base : (anon ? base : `${base}#${k + 1}`);
     idByQid.set(fn.qid, id);
-    const span = (0,spans/* spanFor */.Wc)(fn.file, lines(fn.file), fn.line, cfgMaxLine(fn));
-    const text = (0,canonical/* sliceLines */.iq)(fileContents[fn.file], span.startLine, span.endLine);
+    const span = (0,_spans_js__WEBPACK_IMPORTED_MODULE_2__/* .spanFor */ .Wc)(fn.file, lines(fn.file), fn.line, cfgMaxLine(fn));
+    const text = (0,_canonical_js__WEBPACK_IMPORTED_MODULE_0__/* .sliceLines */ .iq)(fileContents[fn.file], span.startLine, span.endLine);
     symbols.push({
       id,
       name: fn.name || '<anon>',
@@ -2366,7 +2366,7 @@ function buildSymbolGraph({ fileContents, functions, edges }) {
       endLine: span.endLine,
       declLine: fn.line,
       spanPrecision: span.precision,
-      spanHash: (0,canonical/* sha256 */.sc)(text),
+      spanHash: (0,_canonical_js__WEBPACK_IMPORTED_MODULE_0__/* .sha256 */ .sc)(text),
       params: Array.isArray(fn.params) ? fn.params.map(String) : [],
       resolver: 'source-static',
     });
@@ -2381,7 +2381,7 @@ function buildSymbolGraph({ fileContents, functions, edges }) {
     byLastName.get(key).push(s.id);
   }
 
-  const imports = buildImportMap(fileContents);
+  const imports = (0,_imports_js__WEBPACK_IMPORTED_MODULE_1__/* .buildImportMap */ .kB)(fileContents);
   const symbolsByFileName = new Map();
   for (const s of symbols) {
     if (s.kind !== 'function' || s.id.includes('::<anon>@')) continue;
@@ -2429,7 +2429,7 @@ function buildSymbolGraph({ fileContents, functions, edges }) {
       if (q.length === 1) { graphEdges.push({ ...base, to: q[0], kind: 'call', confidence: 'high', unresolvedReason: null, candidates: [], resolution: 'qualified-name' }); continue; }
     }
 
-    const imp = resolveViaImports(imports, callerFile, name);
+    const imp = (0,_imports_js__WEBPACK_IMPORTED_MODULE_1__/* .resolveViaImports */ .xU)(imports, callerFile, name);
     if (imp && imp.kind === 'exact-import') {
       const ids = (symbolsByFileName.get(`${imp.targetFile}\0${imp.member}`) || []).filter(id => id !== from);
       if (ids.length === 1) { graphEdges.push({ ...base, to: ids[0], kind: 'call', confidence: 'high', unresolvedReason: null, candidates: [], resolution: 'import' }); continue; }
@@ -2450,9 +2450,9 @@ function buildSymbolGraph({ fileContents, functions, edges }) {
   graphEdges.sort((a, b) =>
     (a.from < b.from ? -1 : a.from > b.from ? 1 : 0) || (a.line - b.line) || (a.calleeName < b.calleeName ? -1 : a.calleeName > b.calleeName ? 1 : 0) || ((a.to || '') < (b.to || '') ? -1 : 1));
 
-  const snapshotHash = (0,canonical/* hashOf */.qQ)(Object.keys(fileContents).sort().map(f => [f, (0,canonical/* sha256 */.sc)(fileContents[f])]));
+  const snapshotHash = (0,_canonical_js__WEBPACK_IMPORTED_MODULE_0__/* .hashOf */ .qQ)(Object.keys(fileContents).sort().map(f => [f, (0,_canonical_js__WEBPACK_IMPORTED_MODULE_0__/* .sha256 */ .sc)(fileContents[f])]));
   const body = { schemaVersion: GRAPH_SCHEMA_VERSION, snapshotHash, symbols, edges: graphEdges, imports: imports.map(i => ({ file: i.file, local: i.local, source: i.source, member: i.member, kind: i.kind, target: i.target })) };
-  return { ...body, hash: (0,canonical/* hashOf */.qQ)(body) };
+  return { ...body, hash: (0,_canonical_js__WEBPACK_IMPORTED_MODULE_0__/* .hashOf */ .qQ)(body) };
 }
 
 /**
@@ -2469,7 +2469,7 @@ function validateGraph(graph, fileContents) {
     if (typeof text !== 'string') { problems.push(`missing-file:${s.file}`); continue; }
     const n = text.split('\n').length;
     if (!(s.startLine >= 1 && s.endLine >= s.startLine && s.endLine <= n)) { problems.push(`span-out-of-range:${s.id}`); continue; }
-    if ((0,canonical/* sha256 */.sc)((0,canonical/* sliceLines */.iq)(text, s.startLine, s.endLine)) !== s.spanHash) problems.push(`stale-span-hash:${s.id}`);
+    if ((0,_canonical_js__WEBPACK_IMPORTED_MODULE_0__/* .sha256 */ .sc)((0,_canonical_js__WEBPACK_IMPORTED_MODULE_0__/* .sliceLines */ .iq)(text, s.startLine, s.endLine)) !== s.spanHash) problems.push(`stale-span-hash:${s.id}`);
   }
   for (const e of graph.edges) {
     if (!ids.has(e.from)) problems.push(`dangling-from:${e.from}`);
@@ -2477,8 +2477,144 @@ function validateGraph(graph, fileContents) {
     for (const c of e.candidates || []) if (!ids.has(c)) problems.push(`dangling-candidate:${c}`);
   }
   const { hash, ...rest } = graph;
-  if ((0,canonical/* hashOf */.qQ)(rest) !== hash) problems.push('graph-hash-mismatch');
+  if ((0,_canonical_js__WEBPACK_IMPORTED_MODULE_0__/* .hashOf */ .qQ)(rest) !== hash) problems.push('graph-hash-mismatch');
   return problems;
+}
+
+
+/***/ }),
+
+/***/ 86588:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   iC: () => (/* binding */ resolveJsModule),
+/* harmony export */   kB: () => (/* binding */ buildImportMap),
+/* harmony export */   xU: () => (/* binding */ resolveViaImports)
+/* harmony export */ });
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(76760);
+//
+// Import maps (JS/TS and Python): which local name in a file refers to which module, and which declaration in it.
+//
+// The shared IR resolves a call to a declaration only for the shapes it models; a destructured `require` or a named
+// ES import is not one of them, so a call such as `getReport(id)` arrives as an edge to nowhere. Left alone, nearly
+// every Express/Node route would be reported as having an unresolved call. This module recovers those edges from the
+// import statements themselves and records HOW each was resolved, so the result is still evidence and not a guess:
+//
+//   exact-import   the local name is bound by an import of a module in the repository, and that module declares a
+//                  function of that name (or, for a namespace, of the member name)
+//   third-party    the module is a package, not a repository file: a boundary, not first-party code
+//   unresolved     a relative import that no repository file satisfies
+//
+// Scope, stated plainly: this is statement-level pattern matching. Re-export chains, `import()` expressions,
+// computed `require` arguments and package-relative aliases (tsconfig paths) are not followed.
+
+
+const JS_EXTS = ['', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '/index.js', '/index.mjs', '/index.ts', '/index.tsx'];
+
+function resolveJsModule(fromFile, source, files) {
+  if (!source.startsWith('.')) return { kind: 'third-party', target: null };
+  const base = node_path__WEBPACK_IMPORTED_MODULE_0__.posix.normalize(node_path__WEBPACK_IMPORTED_MODULE_0__.posix.join(node_path__WEBPACK_IMPORTED_MODULE_0__.posix.dirname(fromFile), source));
+  for (const ext of JS_EXTS) if (files.has(base + ext)) return { kind: 'repo', target: base + ext };
+  return { kind: 'unresolved', target: null };
+}
+
+function resolvePyModule(fromFile, dotted, files) {
+  let dir = node_path__WEBPACK_IMPORTED_MODULE_0__.posix.dirname(fromFile);
+  let mod = dotted;
+  const lead = /^\.+/.exec(mod);
+  const candidatesBase = [];
+  if (lead) {
+    for (let i = 1; i < lead[0].length; i++) dir = node_path__WEBPACK_IMPORTED_MODULE_0__.posix.dirname(dir);
+    mod = mod.slice(lead[0].length);
+    candidatesBase.push(dir === '.' ? '' : dir);
+  } else {
+    candidatesBase.push('', node_path__WEBPACK_IMPORTED_MODULE_0__.posix.dirname(fromFile) === '.' ? '' : node_path__WEBPACK_IMPORTED_MODULE_0__.posix.dirname(fromFile));
+  }
+  for (const b of candidatesBase) {
+    const rel = mod.replace(/\./g, '/');
+    for (const cand of [rel ? `${rel}.py` : '__init__.py', rel ? `${rel}/__init__.py` : '__init__.py']) {
+      const full = b ? node_path__WEBPACK_IMPORTED_MODULE_0__.posix.join(b, cand) : cand;
+      if (files.has(full)) return { kind: 'repo', target: full };
+    }
+  }
+  return { kind: lead ? 'unresolved' : 'third-party', target: null };
+}
+
+function stripComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/(^|[^:'"`\\])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length));
+}
+
+function names(list) {
+  return list.split(',').map(s => s.trim()).filter(Boolean).map(s => {
+    const m = /^(?:\w+\s+as\s+)?([\w$]+)$/.exec(s.replace(/^type\s+/, '').replace(/^([\w$]+)\s*:\s*([\w$]+)$/, '$1 as $2'));
+    const parts = s.replace(/^type\s+/, '').split(/\s+as\s+|\s*:\s*/).map(x => x.trim()).filter(Boolean);
+    void m;
+    if (parts.length === 2) return { imported: parts[0], local: parts[1] };
+    if (parts.length === 1) return { imported: parts[0], local: parts[0] };
+    return null;
+  }).filter(Boolean).filter(n => /^[\w$]+$/.test(n.imported) && /^[\w$]+$/.test(n.local));
+}
+
+/** Import entries for one JS/TS file. */
+function jsImports(file, text, files) {
+  const t = stripComments(text);
+  const out = [];
+  const add = (local, source, member) => out.push({ file, local, source, member, ...resolveJsModule(file, source, files) });
+  for (const m of t.matchAll(/\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:await\s+)?require\(\s*['"]([^'"]+)['"]\s*\)/g)) for (const n of names(m[1])) add(n.local, m[2], n.imported);
+  for (const m of t.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=\s*(?:await\s+)?require\(\s*['"]([^'"]+)['"]\s*\)/g)) add(m[1], m[2], '*');
+  for (const m of t.matchAll(/\bimport\s+(?:type\s+)?([\w$]+)?\s*,?\s*(?:\{([^}]*)\}|\*\s+as\s+([\w$]+))?\s*from\s*['"]([^'"]+)['"]/g)) {
+    if (m[1]) add(m[1], m[4], 'default');
+    if (m[2]) for (const n of names(m[2])) add(n.local, m[4], n.imported);
+    if (m[3]) add(m[3], m[4], '*');
+  }
+  return out;
+}
+
+function pyImports(file, text, files) {
+  const out = [];
+  const add = (local, source, member) => out.push({ file, local, source, member, ...resolvePyModule(file, source, files) });
+  // the unparenthesised form ends at the line end; only the parenthesised form may span lines
+  for (const m of text.matchAll(/^[ \t]*from[ \t]+([.\w]+)[ \t]+import[ \t]+(?:\(([\w\s,]+)\)|([\w \t,]+))/gm)) {
+    for (const n of (m[2] ?? m[3]).split(',').map(s => s.trim()).filter(Boolean)) {
+      const p = n.split(/\s+as\s+/);
+      add(p[1] || p[0], m[1], p[0]);
+    }
+  }
+  for (const m of text.matchAll(/^[ \t]*import\s+([.\w]+)(?:\s+as\s+(\w+))?\s*$/gm)) add(m[2] || m[1].split('.')[0], m[1], '*');
+  return out;
+}
+
+/** All import entries, deterministically ordered. */
+function buildImportMap(fileContents) {
+  const files = new Set(Object.keys(fileContents));
+  const out = [];
+  for (const file of [...files].sort()) {
+    if (/\.(?:js|jsx|mjs|cjs|ts|tsx)$/i.test(file)) out.push(...jsImports(file, fileContents[file], files));
+    else if (/\.py$/i.test(file)) out.push(...pyImports(file, fileContents[file], files));
+  }
+  return out.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0) || (a.local < b.local ? -1 : a.local > b.local ? 1 : 0) || (a.source < b.source ? -1 : 1));
+}
+
+/**
+ * Resolve a callee name used in `file` against the import map.
+ * Returns { kind:'exact-import', targetFile, member } | { kind:'third-party' } | { kind:'unresolved-import' } | null.
+ */
+function resolveViaImports(imports, file, calleeName) {
+  const parts = String(calleeName || '').split('.');
+  const head = parts[0];
+  const imp = imports.filter(i => i.file === file && i.local === head);
+  if (!imp.length) return null;
+  const i = imp[0];
+  if (i.kind === 'third-party') return { kind: 'third-party' };
+  if (i.kind === 'unresolved') return { kind: 'unresolved-import' };
+  if (parts.length === 1) {
+    const member = i.member === '*' || i.member === 'default' ? head : i.member;
+    return { kind: 'exact-import', targetFile: i.target, member, namespaceCall: i.member === '*' || i.member === 'default' };
+  }
+  if (i.member === '*' || i.member === 'default') return { kind: 'exact-import', targetFile: i.target, member: parts[parts.length - 1], namespaceCall: false };
+  // `db.query()` where `db` is a NAMED import: a method of an imported object, not a function of that module
+  return { kind: 'imported-object-method' };
 }
 
 
@@ -3320,7 +3456,7 @@ function importBatch(root, batchId, resultsText, ctx) {
 /* unused harmony exports DEFAULT_LIMITS, PROTECTION_DIMENSIONS */
 /* harmony import */ var _controls_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(17202);
 /* harmony import */ var _canonical_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(44652);
-/* harmony import */ var _graph_schema_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(44287);
+/* harmony import */ var _graph_schema_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(50152);
 //
 // Deterministic, bounded reachability from an entry point's handler.
 //
@@ -3791,8 +3927,13 @@ function resolveCitation(c, segments, fileContents) {
   if (typeof text !== 'string') return 'file-not-in-snapshot';
   const fileLines = text.split('\n');
   if (c.endLine > fileLines.length) return 'beyond-end-of-file';
-  const inside = segments.some(s => s.file === c.file && c.startLine >= s.startLine && c.endLine <= s.endLine);
-  if (!inside) return 'outside-provided-context';
+  const inside = segments.filter(s => s.file === c.file && c.startLine >= s.startLine && c.endLine <= s.endLine);
+  if (!inside.length) return 'outside-provided-context';
+  // GA-03.2 (0.195.26): the citation is bound to the exact lines the bundle was built from. A segment carries the
+  // hash of its span at build time; if the snapshot's lines no longer hash to it, the model reviewed text that is
+  // not what is on disk now, and the citation is stale rather than evidence. A segment with no recorded hash
+  // (a hand-built one) cannot be judged and is not refused for that reason.
+  if (inside.every(s => typeof s.spanHash === 'string' && (0,_canonical_js__WEBPACK_IMPORTED_MODULE_5__/* .sha256 */ .sc)((0,_canonical_js__WEBPACK_IMPORTED_MODULE_5__/* .sliceLines */ .iq)(text, s.startLine, s.endLine)) !== s.spanHash)) return 'stale-context';
   return claimGrounded(c.claim, fileLines.slice(c.startLine - 1, c.endLine).join('\n')) ? null : 'claim-not-grounded-in-cited-lines';
 }
 

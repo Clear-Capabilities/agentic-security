@@ -20,7 +20,7 @@ import { redactPayload } from '../egress/redact.js';
 import { evaluateEgress } from '../egress/policy.js';
 import { resolveProvider } from '../llm-validator/providers.js';
 import { resolveLlmInvokeWithDecision } from '../discovery/llm-invoke.js';
-import { hashOf, safeLabel, safeRelPath, sha256 } from './canonical.js';
+import { hashOf, safeLabel, safeRelPath, sha256, sliceLines } from './canonical.js';
 import { estimateTokens } from './packer.js';
 import { REVIEW_SCHEMA_VERSION, packRef } from './prompts/packs.js';
 
@@ -249,8 +249,13 @@ export function resolveCitation(c, segments, fileContents) {
   if (typeof text !== 'string') return 'file-not-in-snapshot';
   const fileLines = text.split('\n');
   if (c.endLine > fileLines.length) return 'beyond-end-of-file';
-  const inside = segments.some(s => s.file === c.file && c.startLine >= s.startLine && c.endLine <= s.endLine);
-  if (!inside) return 'outside-provided-context';
+  const inside = segments.filter(s => s.file === c.file && c.startLine >= s.startLine && c.endLine <= s.endLine);
+  if (!inside.length) return 'outside-provided-context';
+  // GA-03.2 (0.195.26): the citation is bound to the exact lines the bundle was built from. A segment carries the
+  // hash of its span at build time; if the snapshot's lines no longer hash to it, the model reviewed text that is
+  // not what is on disk now, and the citation is stale rather than evidence. A segment with no recorded hash
+  // (a hand-built one) cannot be judged and is not refused for that reason.
+  if (inside.every(s => typeof s.spanHash === 'string' && sha256(sliceLines(text, s.startLine, s.endLine)) !== s.spanHash)) return 'stale-context';
   return claimGrounded(c.claim, fileLines.slice(c.startLine - 1, c.endLine).join('\n')) ? null : 'claim-not-grounded-in-cited-lines';
 }
 

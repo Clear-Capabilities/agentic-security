@@ -1,4 +1,5 @@
 import * as cp from 'node:child_process';
+import { STATE_DIR_NAME } from '../state-dir.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { hardenGitArgs, hardenGitEnv } from '../../util/git-hardening.js';
@@ -93,6 +94,26 @@ export function isGitRepo(scanRoot) {
 export function getRemoteUrl(scanRoot) {
   const r = _run(scanRoot, ['remote', 'get-url', 'origin']);
   return r.ok ? r.stdout.trim() : null;
+}
+
+/**
+ * Whether the working tree has changes OUTSIDE the given path prefixes (default: the scanner's own state
+ * directory). `getRepoState().dirty` counts the scanner's own untracked state directory as dirty, which would make the
+ * lineage graph's recorded revision flip between two scans of an unchanged tree merely because the first
+ * scan created that directory. Null when not a git repository or when git fails.
+ */
+export function worktreeDirtyExcluding(scanRoot, ignorePrefixes = [`${STATE_DIR_NAME}/`]) {
+  if (!isGitRepo(scanRoot)) return null;
+  const r = _run(scanRoot, ['status', '--porcelain', '--untracked-files=all']);
+  if (!r.ok) return null;
+  for (const line of r.stdout.split('\n')) {
+    if (!line.trim()) continue;
+    const p = line.slice(3).replace(/^"|"$/g, '');
+    const renamedTo = p.includes(' -> ') ? p.split(' -> ')[1] : p;
+    if (ignorePrefixes.some((pre) => p.startsWith(pre) || renamedTo.startsWith(pre))) continue;
+    return true;
+  }
+  return false;
 }
 
 export function getRepoState(scanRoot) {

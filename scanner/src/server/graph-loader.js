@@ -19,7 +19,7 @@ import { verifyLastScan } from '../posture/integrity.js';
 
 /**
  * @param {string} scanRoot
- * @returns {{ok:true, graph:object} | {ok:false, reason:'missing'|'unsigned'|'tampered'|'malformed', message:string}}
+ * @returns {{ok:true, graph:object} | {ok:false, reason:'missing'|'unsigned'|'tampered'|'malformed'|'wrong-revision', message:string}}
  *
  * Four, and only four, distinct failure reasons — each with its own clear
  * message so an operator knows exactly what to do next:
@@ -36,7 +36,7 @@ import { verifyLastScan } from '../posture/integrity.js';
  *                  valid JSON. Should not happen from a normal scan; the
  *                  file may be corrupted on disk after signing.
  */
-export function loadSignedGraph(scanRoot) {
+export function loadSignedGraph(scanRoot, { expectRevision = null } = {}) {
   const graphPath = statePath(scanRoot, 'lineage-graph.json');
   const sigPath = graphPath + '.sig';
 
@@ -86,6 +86,23 @@ export function loadSignedGraph(scanRoot) {
     };
   }
 
+  // GA-03.7 (0.195.26): wrong-revision refusal. A caller that knows which
+  // revision it expects (`dataflow view --expect-revision`) gets a graph
+  // only when the graph records that revision; a graph that records none
+  // cannot prove it and is refused for the same reason, never served on
+  // the hope that it matches.
+  if (expectRevision) {
+    const have = graph && graph.scope && graph.scope.revision ? graph.scope.revision.commit : null;
+    if (have !== expectRevision) {
+      return {
+        ok: false,
+        reason: 'wrong-revision',
+        message: have
+          ? `Lineage graph at ${graphPath} was built from revision ${have}, not the expected ${expectRevision}. Re-run the scan on the expected revision.`
+          : `Lineage graph at ${graphPath} records no revision, so it cannot be shown to match the expected ${expectRevision}. Re-run the scan inside the repository (AGENTIC_SECURITY_LINEAGE_DEEP=1) so the graph records its revision.`,
+      };
+    }
+  }
   return { ok: true, graph };
 }
 
