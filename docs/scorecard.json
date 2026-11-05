@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.195.25",
-    "bundleSha256": "ea2e63293cf62b7a65de89db1da0f32c8490a8b41c5d9bbfd20fba1c3acb284f",
-    "commit": "d453ec113f6207622cc069fa5d7de9e28864ff7f",
-    "worktreeClean": true,
+    "engineVersion": "0.195.26",
+    "bundleSha256": "ee0c77de1bba97155580cc7647e6723e10bde63e9944dbc5050f1db7b54d46a2",
+    "commit": "38a43b71cd44b200492d56b7045b4f957460040a",
+    "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-04T22:17:28.515Z",
+    "generatedAt": "2026-11-05T00:42:08.860Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -996,7 +996,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 272,
+    "n": 318,
     "d": 565
   },
   "taintRecall": {
@@ -2250,11 +2250,11 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.195.25",
-    "commit": "d453ec113f6207622cc069fa5d7de9e28864ff7f",
-    "bundleSha256": "ea2e63293cf62b7a65de89db1da0f32c8490a8b41c5d9bbfd20fba1c3acb284f",
-    "cleanMeasurement": true,
-    "identity": "the commit and bundle below identify exactly the tree that was measured",
+    "engineVersion": "0.195.26",
+    "commit": "38a43b71cd44b200492d56b7045b4f957460040a",
+    "bundleSha256": "ee0c77de1bba97155580cc7647e6723e10bde63e9944dbc5050f1db7b54d46a2",
+    "cleanMeasurement": false,
+    "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",
     "currentEngineIndependentReason": "the latest independent run (a72968195aa1) measured engine 0.172.0, not the engine above; it is a historical record",
     "independentRun": {
