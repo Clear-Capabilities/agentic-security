@@ -812,6 +812,7 @@ async function cmdScan(args) {
     changedSince,
     onProgress: scanProgressReporter(),
     ...(scopeFlags.active ? { gitScope: true, scope: scopeFlags.scope } : {}),
+    ...(args.flags['haskell-source-map'] ? { haskellSourceMap: String(args.flags['haskell-source-map']) } : {}),
   });
   // --require-provenance: flag (never fail) any finding whose provenance
   // isn't resolved, via scanHealth — deliberately independent of the

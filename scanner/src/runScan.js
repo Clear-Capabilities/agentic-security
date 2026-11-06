@@ -3,6 +3,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
+import * as fsSync from 'node:fs';
 import { listFiles } from './util/glob.js';
 import { buildScanInventory } from './scope/inventory.js';
 import { hardenGitArgs, hardenGitEnv } from './util/git-hardening.js';
@@ -190,6 +191,16 @@ export async function languageFilesIgnoredByPolicy(root, fileContents, depFileCo
   return all.filter((rel) => (isLanguageSource(rel) || isLanguageManifest(rel)) && !isLanguageExcludedPath(rel) && !seen.has(rel)).sort().slice(0, 500);
 }
 
+// FR 02: an explicit package layout for Buck or custom builds, `{ "packages": { "name": ["dir", ...] } }`.
+// Read as data only; nothing in the map is executed and the build is not run.
+function loadHaskellSourceMap(file, root) {
+  if (!file) return null;
+  const abs = path.resolve(root, file);
+  const doc = JSON.parse(fsSync.readFileSync(abs, 'utf8'));
+  if (!doc || typeof doc !== 'object' || !doc.packages || typeof doc.packages !== 'object') throw new Error(`Haskell source map ${file} must be {"packages": {"<name>": ["<dir>", ...]}}`);
+  return { packages: doc.packages, file: path.relative(root, abs) };
+}
+
 export async function runScan(rootDir, opts = {}) {
   const root = path.resolve(rootDir);
   const startedAt = new Date().toISOString();
@@ -271,7 +282,7 @@ export async function runScan(rootDir, opts = {}) {
 
   // R8: `resume` is opt-in. Left undefined here, runFullScan falls back to the
   // AGENTIC_SECURITY_RESUME=1 env var, which is off by default.
-  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume, deep: opts.deep, deepInCi: opts.deepInCi, completeScan, policyExcluded, sizeSkipped }, opts.onProgress || (()=>{}));
+  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume, deep: opts.deep, deepInCi: opts.deepInCi, completeScan, policyExcluded, sizeSkipped, haskellSourceMap: loadHaskellSourceMap(opts.haskellSourceMap, root) }, opts.onProgress || (()=>{}));
   // Premortem 2R4.2: stamp ruleset version + source on the scan result, and
   // notify if the operator pinned a different version than what's installed.
   try { stampScan(root, scan); } catch {}

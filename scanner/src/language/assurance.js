@@ -23,6 +23,8 @@ import { deriveCppContext } from './haskell-cpp.js';
 import { createNixAdapter } from './nix-adapter.js';
 import { analyzeHaskellManifests } from './haskell-manifests.js';
 import { packageOfModule } from './haskell-models.js';
+import { buildHaskellCoverage } from './haskell-coverage.js';
+import { buildHaskellIR } from './haskell-ir.js';
 
 export const ASSURANCE_VERSION = 'language-assurance/1';
 
@@ -75,7 +77,9 @@ export async function assessLanguageAssurance(input = {}) {
   const DISCLOSED_KINDS = new Set(['cpp', 'ffi', 'th-safe-splice', 'quasiquote-inert']);
   const disclosed = new Map();   // boundary kind -> {count, files:Set}
   const projectModules = new Set(); const importedModules = new Map();   // module -> files
+  const parsesByFile = new Map();
   const onParse = (file, parse) => {
+    parsesByFile.set(file, parse);
     if (parse && parse.module && parse.module.name) projectModules.add(parse.module.name);
     for (const i of (parse && parse.imports) || []) if (i && i.module) { const e = importedModules.get(i.module) || new Set(); e.add(file); importedModules.set(i.module, e); }
     for (const b of (parse && parse.boundaries) || []) {
@@ -188,6 +192,25 @@ export async function assessLanguageAssurance(input = {}) {
     }
   }
 
+  // 5b. Haskell coverage accounting (FR 02): per-file stages, rates against the eligible denominator, rule families executed.
+  let haskellCoverage = null;
+  if (present.has('haskell')) {
+    try {
+      let ir = null;
+      if (input.deepEnabled !== false) {
+        try { const hs = Object.fromEntries(Object.entries(files).filter(([f]) => /\.hs$/i.test(f))); if (Object.keys(hs).length) ir = buildHaskellIR(hs); } catch { ir = null; }
+      }
+      haskellCoverage = buildHaskellCoverage({
+        files, parses: parsesByFile, ir, deepEnabled: input.deepEnabled !== false && !disabled.has('haskell:taint'),
+        ruleRuns: input.ruleRuns || null, sizeSkipped: input.sizeSkipped, policyExcluded: input.policyExcluded,
+        excludedPaths: run.ledger.excludedFiles, sourceMap: input.sourceMap || null,
+      });
+      // Only a measured shortfall is a condition. A parse-only form is a stated limitation, not a gap in what was asked.
+      for (const r of haskellCoverage.capability.reasons) if (!/deep analysis is disabled/.test(r)) conditions.push(`Haskell coverage: ${r}`);
+      for (const l of haskellCoverage.capability.limitations) limitations.push({ kind: 'haskell-parse-only', note: l });
+    } catch (e) { conditions.push(`Haskell coverage accounting failed: ${String((e && e.message) || e).slice(0, 160)}`); }
+  }
+
   // 6. optional modes
   const optionalModes = {};
   for (const name of OPTIONAL_MODES) {
@@ -198,7 +221,7 @@ export async function assessLanguageAssurance(input = {}) {
 
   return {
     version: ASSURANCE_VERSION,
-    languageCoverage: { totals: base.totals, byKind, conditions, limitations, capabilities, optionalModes },
+    languageCoverage: { totals: base.totals, byKind, conditions, limitations, capabilities, optionalModes, ...(haskellCoverage ? { haskell: haskellCoverage } : {}) },
     ledger: { reconciled: reconcile.ok, errors: reconcile.errors, byAnalyzer: run.ledger.byAnalyzer },
     outcomes: run.outcomes,
     retained: { findings: findings.length, findingsRef: findings },

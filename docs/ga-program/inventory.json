@@ -16,7 +16,7 @@
       "slash-command": 17,
       "ticket-provider": 3
     },
-    "environmentVariables": 228
+    "environmentVariables": 229
   },
   "surfaces": [
     {
@@ -1274,6 +1274,7 @@
     "AGENTIC_SECURITY_GATE_NO_CACHE",
     "AGENTIC_SECURITY_GITHUB_TOKEN",
     "AGENTIC_SECURITY_GITLAB_TOKEN",
+    "AGENTIC_SECURITY_GIT_SCOPE",
     "AGENTIC_SECURITY_HACKAGE_ADVISORIES",
     "AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE",
     "AGENTIC_SECURITY_HACKAGE_ADVISORIES_SHA256",

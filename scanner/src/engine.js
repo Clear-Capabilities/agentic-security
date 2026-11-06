@@ -8971,7 +8971,7 @@ function _gcHint(minHeapMiB) {
   _gcFn();
 }
 
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[]}, setProgress=()=>{}){
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[], haskellSourceMap=null}, setProgress=()=>{}){
   // E6-01: local, aggregate telemetry for this scan (see pipeline/telemetry.js). Nothing is sent anywhere; the snapshot is a field of the result.
   const _tel = createTelemetry({ deterministic: isDeterministic() });
   setDetectorTimingSink((name, ms) => _tel.detector(name, ms));
@@ -9881,12 +9881,14 @@ function _deterministicFileTimings(timings) {
   // An `unsafePerformIO` / `unsafeCoerce` / `unsafeInterleaveIO` boundary note says (in its own text) that it claims no vulnerability class: it marks where the
   // type system is stepped around. In a scan it is information, not a finding that gates a release; the rules module keeps emitting it at `low` (its contract),
   // and the severity is lowered here with the original kept.
-  try{aF.push(...analyzeHaskellRules(fc,{reachability:_hsReachCtx()}).findings.map((f)=>f&&f.rule==='hs-unsafe-io-boundary'?{...f,originalSeverity:f.severity,severity:'info'}:f));}catch(_){}
-  try{aF.push(...analyzeHaskellLlmRules(fc));}catch(_){}
+  // FR 02: which Haskell rule families really executed (a thrown family is recorded as failed, never as clean).
+  const _hsRuleRuns={};
+  try{const _r=analyzeHaskellRules(fc,{reachability:_hsReachCtx()}).findings.map((f)=>f&&f.rule==='hs-unsafe-io-boundary'?{...f,originalSeverity:f.severity,severity:'info'}:f);aF.push(..._r);_hsRuleRuns['hs-security-rules']={ran:true,findings:_r.length};}catch(e){_hsRuleRuns['hs-security-rules']={ran:false,failed:String((e&&e.message)||e).slice(0,120)};}
+  try{const _r=analyzeHaskellLlmRules(fc);aF.push(..._r);_hsRuleRuns['hs-llm']={ran:true,findings:_r.length};}catch(e){_hsRuleRuns['hs-llm']={ran:false,failed:String((e&&e.message)||e).slice(0,120)};}
   try{const{analyzeLanguageFindings}=await import('./language/engine-pass.js');aF.push(...analyzeLanguageFindings(allFileContents).findings);}catch(_){}
   let _languageBridges=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$/i.test(f))){const{analyzePolyglotBridges}=await import('./language/bridges.js');_languageBridges=analyzePolyglotBridges(allFileContents);}}catch(_){}
   try{for(const[_p,_t]of Object.entries(allFileContents))if(typeof _t==='string')aF.push(...scanDependencyUrlCredentials(_p,_t));}catch(_){}
-  try{const _hw=analyzeHaskellWeb(fc,{reachability:_hsReachCtx()});aF.push(..._hw.findings);aR.push(...toEngineRoutes(_hw));}catch(_){}
+  try{const _hw=analyzeHaskellWeb(fc,{reachability:_hsReachCtx()});aF.push(..._hw.findings);aR.push(...toEngineRoutes(_hw));_hsRuleRuns['hs-web']={ran:true,findings:_hw.findings.length};}catch(e){_hsRuleRuns['hs-web']={ran:false,failed:String((e&&e.message)||e).slice(0,120)};}
   let finalFindings;try{finalFindings=dedupeFindingsWithEvidence(aF);}catch(_){finalFindings=dd(aF,f=>f.id);}
   // Inline `agentic-security-ignore` pragmas, pass 1 of 2. This covers every
   // finding that exists BY THIS POINT — the pattern detectors, the cross-file
@@ -11376,6 +11378,9 @@ function _deterministicFileTimings(timings) {
         ...(() => { const a = configuredAdvisoryDb(scanRoot); return { advisoryDb: a.db, advisoryReason: a.db ? null : a.reason }; })(),
         policyExcluded,
         sizeSkipped,
+        deepEnabled: _deepEnabled,
+        sourceMap: haskellSourceMap,
+        ruleRuns: { ..._hsRuleRuns, 'ir-taint': { ran: _deepEnabled, findings: finalFindings.filter((f) => f && f.parser === 'IR-TAINT' && /\.l?hs$/i.test(f.file || '')).length }, 'hs-sca': { ran: true } },
         supplyGaps: _languageSupplyGaps,
         licenseUnavailable: ((_languageBom && _languageBom.components) || []).filter((c) => c && !c.license && !(Array.isArray(c.licenses) && c.licenses.length)).length,
         optional: { 'nix-eval': { selected: env.AGENTIC_SECURITY_NIX_EVAL === '1', result: _nixEvalResult }, 'cabal-plan': { selected: false }, 'hackage-live': liveFeedOptionalState(env)},
