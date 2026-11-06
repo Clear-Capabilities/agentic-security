@@ -148,14 +148,16 @@ test('a reject cannot delete a taint-proven finding', () => {
   }
 });
 
-test('a reject still drops a weakly-provenanced finding — the feature is not removed', () => {
-  // If reject never dropped anything the validator would be pointless. The
-  // guarantee is scoped to findings real analysis produced.
+test('a reject no longer drops a weakly-provenanced finding by default (PRD FR 05); the old drop is an explicit opt-in', () => {
   const f = finding({ parser: 'REGEX', validator_verdict: 'reject' });
   const { kept, dropped } = applyValidatorVerdicts([f]);
-  assert.equal(dropped.length, 1);
-  assert.equal(kept.length, 0);
-  assert.equal(dropped[0]._droppedBy, 'llm-validator');
+  assert.equal(dropped.length, 0);
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].validator_reject_retained, true);
+  const g = finding({ parser: 'REGEX', validator_verdict: 'reject' });
+  const legacy = applyValidatorVerdicts([g], { legacyRejectSuppress: true });
+  assert.equal(legacy.dropped.length, 1);
+  assert.equal(legacy.dropped[0]._droppedBy, 'llm-validator');
 });
 
 test('accept and escalate are unaffected by the provenance rule', () => {

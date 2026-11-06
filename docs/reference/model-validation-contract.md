@@ -34,6 +34,7 @@ A compatibility test (`scanner/test/contracts/model-validation.contract.test.js`
 | `llmValidationStatus` | One of the statuses below. Absent when the finding was skipped for a reason that is not about the model |
 | `unvalidated` | `true` when no verdict was obtained |
 | `validator_skipped_reason` | Why a call was not made, such as a spend ceiling |
+| `validator_reject_retained` | `true` when a `reject` was kept in the actionable list because a model opinion alone does not remove a finding |
 | `validator_reject_refused` | Present when a `reject` was turned into `escalate` because the finding is too strongly established to delete |
 
 **Verdicts**
@@ -60,10 +61,24 @@ A compatibility test (`scanner/test/contracts/model-validation.contract.test.js`
 
 - **The verdict is recorded, the severity is not touched.** No verdict changes a finding's `severity`. An `accept` can raise the finding's confidence; nothing else about it changes.
 - **A model cannot delete a strongly established finding.** A `reject` on a finding from the taint engine, from a multi-sink correlation or with an execution-proven result becomes `escalate`, with `validator_reject_refused` set.
-- **A reject on any other finding is a suppression, not a deletion.** The finding leaves the main list and appears in the suppression ledger with the reason `llm-validator:reject:`, so `--include-suppressed` shows it.
+- **A reject is an opinion, not a suppression.** Since the disposition rules below, a `reject` on any finding keeps it in the actionable list as `needs-review` with `validator_reject_retained` set. Only an evidence-backed refutation or a reviewed suppression removes a finding, and it is then retained in the suppression ledger with its reason and evidence. `AGENTIC_SECURITY_LLM_REJECT_SUPPRESS=1` restores the earlier behavior of moving a rejected finding to the ledger.
 - **An untrusted reply keeps the finding.** A reply with the wrong challenge, file or line, no JSON, an unknown verdict, or reasoning that reports an injection attempt becomes `escalate`. A reply is never read from the first JSON object, only the last.
 - **No answer is not a clean answer.** A finding the model did not judge is `unvalidated` or `escalate` with a status that names the reason. It is never `accept`.
 - **Nothing is called without an endpoint.** With none configured the validator makes no network call.
+
+## Dispositions
+
+Each finding also carries `disposition` and `dispositionDetail` (reason, evidence, missing evidence, next check), assigned after validation by `scanner/src/llm-validator/disposition.js`. The model's verdict is one input and never the deciding one.
+
+| Disposition | What assigns it |
+|---|---|
+| `confirmed` | An executed test (`proofTier: execution-proven`) or a reviewer verdict that names the reviewer and cites evidence. A model `accept` cannot assign it |
+| `needs-review` | A model accept without independent evidence, a model escalate, or conflicting evidence. The detail names the missing evidence and the next check |
+| `refuted` | A refutation with a kind that disproves the claim, cited evidence, a verifier and a source hash matching the current file, or a reviewed suppression with rationale, owner, scope, expiry and a content fingerprint that still match |
+| `hardening` | A finding marked as an improvement with no claimed exploitable weakness |
+| `unvalidated` | Review not attempted or failed (no endpoint, a model error, a spend ceiling), or the finding no longer matches the file (deleted, line outside the file, changed hash). Never converted to `refuted` |
+
+A refutation that rests on where the code lives (a test, a developer tool, a private repository, member-only use) or on the absence of a proof of exploit is not accepted. An expired suppression, or one whose source or rule changed, reopens the finding.
 
 ## What this does not do
 

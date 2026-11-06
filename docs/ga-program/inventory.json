@@ -16,7 +16,7 @@
       "slash-command": 17,
       "ticket-provider": 3
     },
-    "environmentVariables": 229
+    "environmentVariables": 230
   },
   "surfaces": [
     {
@@ -1315,6 +1315,7 @@
     "AGENTIC_SECURITY_LLM_MODEL_VERIFY",
     "AGENTIC_SECURITY_LLM_PRESET",
     "AGENTIC_SECURITY_LLM_PRICE_USD_PER_MTOK",
+    "AGENTIC_SECURITY_LLM_REJECT_SUPPRESS",
     "AGENTIC_SECURITY_LLM_SCA",
     "AGENTIC_SECURITY_LLM_TIMEOUT_MS",
     "AGENTIC_SECURITY_LLM_VALIDATE",

@@ -47,6 +47,9 @@ test('contract: the fields added to a finding are exactly the documented ones, a
   const strong = await judge(CASES.find(c => c.name === 'reject'), base({ parser: 'IR-TAINT' }));
   applyValidatorVerdicts([strong]);
   for (const k of added(strong)) seen.add(k);
+  const retained = await judge(CASES.find(c => c.name === 'reject'));
+  applyValidatorVerdicts([retained]);
+  for (const k of added(retained)) seen.add(k);
   const documented = fieldsUnder(PAGE, 'Finding fields');
   // the spend-ceiling field only appears with a ledger that refuses; it is exercised in its own test below
   sameFields(Object.fromEntries([...seen].map(k => [k, 1])), documented, 'finding fields', ['validator_skipped_reason']);
@@ -86,7 +89,9 @@ test('contract: a reject on a strongly established finding becomes escalate and 
     assert.ok(kept[0].validator_reject_refused);
   }
   const weak = await judge(reject);
-  assert.equal(applyValidatorVerdicts([weak]).dropped.length, 1, 'a weakly established finding is dropped from the main list, into the suppression ledger');
+  assert.equal(applyValidatorVerdicts([weak]).dropped.length, 0, 'a model reject alone no longer removes a finding from the actionable list (PRD FR 05)');
+  const w2 = await judge(reject);
+  assert.equal(applyValidatorVerdicts([w2], { legacyRejectSuppress: true }).dropped.length, 1, 'the old behavior stays available as an explicit opt-in');
 });
 
 test('contract: with no endpoint nothing is called and the status is model-disabled; with VALIDATE=0 nothing is called either', async () => {

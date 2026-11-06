@@ -790,8 +790,9 @@ function _stronglyProvenanced(f) {
   return _STRONG_PARSERS.has(f?.parser) || f?.proofTier === 'execution-proven';
 }
 
-// Apply validator verdicts: reject → drop, escalate → keep but mark, accept →
-// boost confidence. Returns { kept, dropped }.
+// Apply validator verdicts: reject → keep as needs-review (since FR 05; the old
+// drop is opt-in via AGENTIC_SECURITY_LLM_REJECT_SUPPRESS=1), escalate → keep
+// but mark, accept → boost confidence. Returns { kept, dropped }.
 //
 // THE ASYMMETRY, AND WHY IT USED TO BE OVERSTATED. Only `reject` drops;
 // `escalate` and `accept` keep. This comment previously concluded from that
@@ -809,7 +810,7 @@ function _stronglyProvenanced(f) {
 // a `reject` can never delete a strongly-provenanced finding. For those, the
 // worst any verdict can do is demote to `escalate`, which keeps them. The claim
 // and the code now agree.
-export function applyValidatorVerdicts(findings) {
+export function applyValidatorVerdicts(findings, { legacyRejectSuppress = process.env.AGENTIC_SECURITY_LLM_REJECT_SUPPRESS === '1' } = {}) {
   const kept = [];
   const dropped = [];
   for (const f of findings) {
@@ -823,8 +824,16 @@ export function applyValidatorVerdicts(findings) {
       continue;
     }
     if (f.validator_verdict === 'reject') {
-      f._droppedBy = 'llm-validator';
-      dropped.push(f);
+      if (legacyRejectSuppress) {
+        f._droppedBy = 'llm-validator';
+        dropped.push(f);
+        continue;
+      }
+      // A reject is a model opinion (PRD FR 05). It stays in the actionable
+      // queue as needs-review; only evidence-backed refutation or a reviewed
+      // suppression (see disposition.js) removes a finding.
+      f.validator_reject_retained = true;
+      kept.push(f);
       continue;
     }
     if (f.validator_verdict === 'accept' && typeof f.llm_confidence === 'number') {
