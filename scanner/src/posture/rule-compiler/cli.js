@@ -11,8 +11,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { statePath } from '../state-dir.js';
-import { packTrust, signPublishedRule } from './store.js';
-import { sharedFalsePositiveCorpus, falsePositiveHits, regressRules, promotedRuleIds } from './regression.js';
+import { packTrust, signPublishedRule, publicKeyOf } from './store.js';
+import { sharedFalsePositiveCorpus, falsePositiveHits, regressRules, promotedRuleIds, corpusHash } from './regression.js';
 import { draftRuleIR, validateRuleIR, ruleIRDigest } from './ir.js';
 import { checkEligibility } from './eligibility.js';
 import { buildCorpus } from './corpus.js';
@@ -39,7 +39,7 @@ export async function cmdRules(args, root) {
   const sub = args._[1];
   // GA-07: a ledger that failed its integrity check (broken chain, bad or missing signature) refuses EVERY command, not only the
   // ones that change state; nothing below can read a tampered history as fact or write over it.
-  if (['synthesize', 'evaluate', 'promote', 'status', 'rollback', 'cost', 'regress'].includes(sub)) {
+  if (['synthesize', 'evaluate', 'promote', 'status', 'rollback', 'deprecate', 'cost', 'regress'].includes(sub)) {
     const guard = loadLedger(root);
     if (guard.tampered) { console.error(`Refusing: rule lifecycle ledger failed its integrity check (${guard.tamperReason}).`); return 4; }
   }
@@ -48,10 +48,23 @@ export async function cmdRules(args, root) {
   if (sub === 'promote') return cmdPromote(args, root);
   if (sub === 'status') return cmdStatus(args, root);
   if (sub === 'rollback') return cmdRollback(args, root);
+  if (sub === 'deprecate') return cmdDeprecate(args, root);
   if (sub === 'cost') return cmdCost(args, root);
   if (sub === 'regress') return cmdRegress(args, root);
-  console.error('usage: rules synthesize <finding-id> --spec <file.json> [--auto] [--max-attempts N] | evaluate <rule-id> | promote <rule-id> --reviewed-by <person> [--scope <text>] | status [rule-id] | rollback <rule-id> | cost <rule-id> | regress [rule-id]');
+  console.error('usage: rules synthesize <finding-id> --spec <file.json> [--auto] [--max-attempts N] | evaluate <rule-id> | promote <rule-id> --reviewed-by <person> --scope <text> [--sign-key <base64>] | status [rule-id] | rollback <rule-id> | deprecate <rule-id> | cost <rule-id> | regress [rule-id]');
   return 4;
+}
+
+/** The operator's Ed25519 key, when given: it signs the published rule AND the ledger, so a clone without this install's HMAC key can
+ * still verify the lifecycle history (store.js loadLedger). Never stored. */
+function authorKeyFrom(args) { return args.flags['sign-key'] ?? process.env.AGENTIC_SECURITY_PRIVATE_KEY ?? null; }
+
+/** Every command that changes the ledger saves it through here, so an author signature made at promotion is renewed by a later
+ * rollback or evaluation run with the same key instead of going stale (a stale one would read as tampering on the next clone). */
+function persistLedger(root, ledger, args) {
+  const r = saveLedger(root, ledger, { authorKey: authorKeyFrom(args) });
+  if (!r.ok && r.reason) console.error(r.reason);
+  return r;
 }
 
 // `--spec` carries exactly what a model or a human proposed: id/title/severity/cwe/family/languages/match/
@@ -86,10 +99,16 @@ async function cmdSynthesize(args, root) {
   if (errs.length) { console.error(`Invalid rule: ${errs.join('; ')}`); return 4; }
 
   const ledger = loadLedger(root);
-  const draft = recordTransition(ledger, { ruleId: ir.id, from: null, to: 'DRAFT', reason: `drafted from ${findingId}`, actor: args.flags.actor || 'agent' });
-  if (!draft.ok) { console.error(draft.reason); return 4; }
-  const cand = recordTransition(ledger, { ruleId: ir.id, from: 'DRAFT', to: 'CANDIDATE', reason: 'eligibility passed', evidence: { eligibility: elig }, actor: args.flags.actor || 'agent' });
-  saveLedger(root, ledger);
+  // GA-07 (0.195.27): a rule that was rolled back re-enters as a CANDIDATE (the ledger's ROLLED_BACK -> CANDIDATE edge), keeping its
+  // history; any other existing state refuses, so a promoted or validated rule cannot be silently re-drafted over.
+  const current = stateOf(ledger, ir.id);
+  if (current !== null && current !== 'ROLLED_BACK') { console.error(`Rule ${ir.id} already exists in state ${current}; roll it back first, or choose another id.`); return 4; }
+  if (current === null) {
+    const draft = recordTransition(ledger, { ruleId: ir.id, from: null, to: 'DRAFT', reason: `drafted from ${findingId}`, actor: args.flags.actor || 'agent' });
+    if (!draft.ok) { console.error(draft.reason); return 4; }
+  }
+  const cand = recordTransition(ledger, { ruleId: ir.id, from: current === null ? 'DRAFT' : 'ROLLED_BACK', to: 'CANDIDATE', reason: current === null ? 'eligibility passed' : `re-entered after rollback; eligibility passed (drafted again from ${findingId})`, evidence: { eligibility: elig }, actor: args.flags.actor || 'agent' });
+  persistLedger(root, ledger, args);
   saveIR(root, { ...ir, state: 'CANDIDATE' });
   saveCorpus(root, ir.id, { ...corpusSpec, fileNames: spec.fileNames ?? [], discoveryCost: spec.discoveryCost ?? (args.flags['discovery-cost-usd'] ? { usd: Number(args.flags['discovery-cost-usd']), tokens: Number(args.flags['discovery-tokens']) || null, model: spec.model ?? null } : null) });
   if (synthesis) saveSynthesis(root, ir.id, { attempts: synthesis.attempts, best: synthesis.best });
@@ -119,9 +138,8 @@ async function cmdEvaluate(args, root) {
   if (fpHits.length) { gate.pass = false; gate.reasons.push(`fires on ${fpHits.length} of ${fpItems.length} item(s) in the shared false-positive corpus: ${fpHits.slice(0, 3).map((h) => h.label).join(', ')}${fpHits.length > 3 ? ', ...' : ''}`); }
   const cur = stateOf(ledger, id);
   if (gate.pass && cur === 'CANDIDATE') recordTransition(ledger, { ruleId: id, from: 'CANDIDATE', to: 'VALIDATED', reason: 'promotion gate passed', evidence: { score: gate.evaluation.score }, actor: args.flags.actor || 'agent' });
-  saveLedger(root, ledger);
+  persistLedger(root, ledger, args);
   saveEvaluation(root, id, gate);
-  const corpusHash = (list) => sha256(JSON.stringify(list.map((x) => [x.label, x.code]).sort()));
   const prev = loadProvenance(root, id);
   saveProvenance(root, id, {
     schema: 'agentic-security/rule-provenance', version: 1, ruleId: id, ruleVersion: 1, ruleHash: ruleIRDigest(ir),
@@ -159,7 +177,13 @@ async function cmdPromote(args, root) {
   if (!id) { console.error('usage: rules promote <rule-id> --reviewed-by <person> [--scope <text>] [--reason <text>]'); return 4; }
   const reviewer = args.flags['reviewed-by'];
   if (!isStr(reviewer) || NOT_A_REVIEWER.test(reviewer.trim())) {
-    console.error('usage: rules promote <rule-id> --reviewed-by <person>. A promotion records the person who reviewed the rule and its scope; a model or agent recommendation is not a review, so nothing is promoted without a named reviewer.');
+    console.error('usage: rules promote <rule-id> --reviewed-by <person> --scope <text>. A promotion records the person who reviewed the rule and its scope; a model or agent recommendation is not a review, so nothing is promoted without a named reviewer.');
+    return 4;
+  }
+  // GA-07 §3 (0.195.27): the reviewed SCOPE (what the rule is for, where it applies, what it must not flag) is part of the review
+  // record, not an optional note; a promotion without one records nothing a later reader could hold the rule to.
+  if (!isStr(args.flags.scope)) {
+    console.error('usage: rules promote <rule-id> --reviewed-by <person> --scope <text>. The reviewed scope is recorded with the promotion; state what the rule covers and where it applies.');
     return 4;
   }
   const ledger = loadLedger(root);
@@ -196,16 +220,32 @@ async function cmdPromote(args, root) {
   if (fpNow.length) { console.error(`Promotion refused: ${id} fires on ${fpNow.length} item(s) of the shared false-positive corpus (${fpNow.slice(0, 3).map((h) => h.label).join(', ')}). Re-evaluate or narrow the rule.`); return 1; }
   const pub = publishCustomRule(root, ir);
   if (!pub.ok) { console.error(`Promotion refused: ${pub.reason}`); return 4; }
-  const scope = isStr(args.flags.scope) ? args.flags.scope : null;
-  const review = { reviewer: reviewer.trim(), scope, independent: prov.benchmarkResults?.independent ?? null };
-  const t = recordTransition(ledger, { ruleId: id, from: 'VALIDATED', to: 'PROMOTED', reason: args.flags.reason || 'promoted', evidence: review, actor: args.flags.actor || reviewer.trim() });
-  saveLedger(root, ledger);
-  saveProvenance(root, id, { ...prov, promotionEvent: { at: new Date().toISOString(), actor: args.flags.actor || reviewer.trim(), reviewer: reviewer.trim(), scope, reason: args.flags.reason || 'promoted', ruleHash: ruleIRDigest(ir) } });
+  const scope = args.flags.scope.trim();
+  // GA-07 §3 (0.195.27): the evidence the reviewer looked at, digested into the promotion: the evaluation and provenance records
+  // as they stood, and the two corpus halves. `rules regress` re-derives the corpus digests and reports a rule whose corpus moved
+  // after the review as no longer the reviewed one.
+  const corpusNow = buildCorpus(ir, loadCorpus(root, id) ?? {});
+  const evidence = {
+    reviewer: reviewer.trim(), scope, independent: prov.benchmarkResults?.independent ?? null, ruleHash: ruleIRDigest(ir),
+    evaluationDigest: sha256(JSON.stringify(readJsonArg(path.join(statePath(root, 'rule-compiler', id), 'evaluation.json')))),
+    provenanceDigest: sha256(JSON.stringify({ ...prov, promotionEvent: undefined })),
+    positiveCorpusHash: corpusHash(corpusNow.positives), negativeCorpusHash: corpusHash(corpusNow.negatives),
+    sharedFalsePositiveItems: sharedFalsePositiveCorpus(root, ledger, id).length,
+  };
+  const t = recordTransition(ledger, { ruleId: id, from: 'VALIDATED', to: 'PROMOTED', reason: args.flags.reason || 'promoted', evidence, actor: args.flags.actor || reviewer.trim() });
+  const saved = persistLedger(root, ledger, args);
+  saveProvenance(root, id, { ...prov, promotionEvent: { at: new Date().toISOString(), actor: args.flags.actor || reviewer.trim(), reviewer: reviewer.trim(), scope, reason: args.flags.reason || 'promoted', ruleHash: ruleIRDigest(ir), evidence } });
   console.log(`Rule ${id}: VALIDATED -> PROMOTED. Published to ${pub.file}.`);
   // Publishing is not trusting. Rule packs are signature-checked so a rule dropped into a repository cannot run in someone's CI; sign this
-  // one with the operator's key when there is one, and say plainly whether the scanner will load it.
-  const key = args.flags['sign-key'] ?? process.env.AGENTIC_SECURITY_PRIVATE_KEY;
-  if (key) { const sg = signPublishedRule(pub.file, key); console.log(sg.ok ? `  signed: ${pub.file}.sig` : `  could not sign (${sg.reason}); the rule is published unsigned`); }
+  // one with the operator's key when there is one, and say plainly whether the scanner will load it. The same key author-signs the
+  // ledger, which is what lets `rules regress` on another machine (CI) verify the history without this install's HMAC key.
+  const key = authorKeyFrom(args);
+  if (key) {
+    const sg = signPublishedRule(pub.file, key); console.log(sg.ok ? `  signed: ${pub.file}.sig` : `  could not sign (${sg.reason}); the rule is published unsigned`);
+    console.log(saved.authorSigned ? `  ledger author-signed; another machine verifies it with AGENTIC_SECURITY_RULES_PUBLIC_KEY=${publicKeyOf(key)}` : '  ledger NOT author-signed; rules regress on another machine will refuse it');
+  } else {
+    console.log('  no --sign-key: the ledger carries only this install\'s signature, so rules regress on another machine (CI) will refuse it; promote with --sign-key <base64> to make it portable');
+  }
   const trust = packTrust(root, id);
   console.log(trust.live ? `  The scanner will load it (${trust.via}).` : `  NOT LIVE YET: the scanner will refuse this rule (${trust.reason}). To make it live: ${trust.remediation}.`);
   if (!t.ok) console.error(t.reason);
@@ -218,9 +258,10 @@ async function cmdRegress(args, root) {
   if (ledger.tampered) { console.error(`Refusing: rule lifecycle ledger failed its integrity check (${ledger.tamperReason}).`); return 4; }
   const only = args._[2] ?? null;
   const results = regressRules(root, ledger, { only, thresholds: args.flags.thresholds ? readJsonArg(args.flags.thresholds) : undefined });
-  if (args.flags.json) console.log(JSON.stringify({ results }, null, 2));
+  if (args.flags.json) console.log(JSON.stringify({ ledgerVerifiedBy: ledger.verifiedBy ?? null, results }, null, 2));
   else if (!results.length) console.log(only ? `No promoted rule ${only}.` : 'No rule is PROMOTED; nothing to regress.');
   else for (const r of results) { console.log(`${r.id}: ${r.status.toUpperCase()}${r.precision != null ? `  precision ${fmtPct(r.precision)}  recall ${fmtPct(r.recall)}  false-positive corpus hits ${r.fpCorpusHits}` : ''}`); for (const m of r.reasons) console.log(`  - ${m}`); }
+  if (!args.flags.json && results.length) console.log(`ledger verified by ${ledger.verifiedBy === 'author-key' ? `the author key (${ledger.authorKeyId})` : ledger.verifiedBy === 'install-key' ? 'this install\'s key' : 'nothing (unsigned, accepted by AGENTIC_SECURITY_RULES_UNSIGNED=1)'}`);
   if (only && !results.length) return 4;
   return results.every((r) => r.status === 'ok') ? 0 : 1;
 }
@@ -233,8 +274,22 @@ async function cmdRollback(args, root) {
   if (cur !== 'PROMOTED') { console.error(`Rule ${id} is not PROMOTED (current: ${cur ?? 'unknown'}); nothing to roll back.`); return 4; }
   const un = unpublishCustomRule(root, id);
   const t = recordTransition(ledger, { ruleId: id, from: 'PROMOTED', to: 'ROLLED_BACK', reason: args.flags.reason || 'operator rollback', actor: args.flags.actor || 'operator' });
-  saveLedger(root, ledger);
+  persistLedger(root, ledger, args);
   console.log(`Rule ${id}: PROMOTED -> ROLLED_BACK.${un.ok ? '' : ` (warning: could not remove published rule file: ${un.reason})`}`);
+  return t.ok ? 0 : 1;
+}
+
+/** `rules deprecate <rule-id>`: retire a promoted rule for good (PROMOTED -> DEPRECATED, a terminal state); the published file is removed. */
+async function cmdDeprecate(args, root) {
+  const id = args._[2];
+  if (!id) { console.error('usage: rules deprecate <rule-id> [--reason text]'); return 4; }
+  const ledger = loadLedger(root);
+  const cur = stateOf(ledger, id);
+  if (cur !== 'PROMOTED') { console.error(`Rule ${id} is not PROMOTED (current: ${cur ?? 'unknown'}); only a promoted rule can be deprecated (roll back a candidate instead).`); return 4; }
+  const un = unpublishCustomRule(root, id);
+  const t = recordTransition(ledger, { ruleId: id, from: 'PROMOTED', to: 'DEPRECATED', reason: args.flags.reason || 'operator deprecation', actor: args.flags.actor || 'operator' });
+  persistLedger(root, ledger, args);
+  console.log(`Rule ${id}: PROMOTED -> DEPRECATED (terminal).${un.ok ? '' : ` (warning: could not remove published rule file: ${un.reason})`}`);
   return t.ok ? 0 : 1;
 }
 

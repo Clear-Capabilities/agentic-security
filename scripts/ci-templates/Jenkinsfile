@@ -3,13 +3,15 @@
 
 pipeline {
   agent any
-  tools { nodejs 'node20' }
+  tools { nodejs 'node24' }
   stages {
     stage('Security · agentic-security') {
       steps {
-        sh 'npx --yes agentic-security ci . --fail-on high'
-        // promoted compiler rules are re-scored against their corpora and the shared false-positive corpus; exit 1 on a regression, 0 with none promoted
+        // promoted compiler rules are re-scored against their corpora and the shared false-positive corpus BEFORE the scan gate, so a
+        // failing gate cannot hide a rule regression; exit 1 on a regression, 0 with none promoted. Set AGENTIC_SECURITY_RULES_PUBLIC_KEY
+        // in the job's environment so the committed rule ledger's author signature verifies on this agent.
         sh 'npx --yes agentic-security rules regress'
+        sh 'npx --yes agentic-security ci . --fail-on high'
       }
       post {
         always {

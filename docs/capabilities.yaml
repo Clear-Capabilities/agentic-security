@@ -213,7 +213,10 @@ capabilities:
     maturity: Preview
     contract: docs/reference/rule-compiler-contract.md
     contractTest: scanner/test/contracts/rule-compiler.contract.test.js
-    contractNote: Rule format and records are frozen at version 1; the rule is text matching with structure, not a syntax-tree pattern; reviewed 2026-10-19.
+    contractNote: Rule format and records are frozen at version 1; the rule is text matching with structure, not a syntax-tree pattern; the promotion evidence, the portable ledger and the shared negative corpus are frozen at 0.195.27; reviewed 2026-11-05.
+    gate: contract-conformance
+    limits: docs/reference/rule-compiler-contract.md#what-the-compiler-does-not-do
+    since: 0.195.27
     establishes: Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence.
     docs:
       - docs/guides/rule-compiler.md
@@ -357,7 +360,12 @@ capabilities:
     name: Finding provenance from Git history
     lifecycleStages: [trace]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/finding-provenance-contract.md
+    contractTest: scanner/test/contracts/finding-provenance.contract.test.js
+    contractNote: The record, its terminal states, the confidence reasons, the eligibility definition, the identity rules, the default behaviour, the shared timeout and the absolute latency budget are frozen (0.195.27); reviewed 2026-11-05.
+    gate: provenance-gate
+    limits: docs/reference/finding-provenance-contract.md#limits
+    since: 0.195.27
     establishes: Which commit introduced a finding, resolved from Git history, with the resolution quality stated.
     docs:
       - docs/guides/finding-provenance.md

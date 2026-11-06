@@ -15,18 +15,22 @@ import { statePath } from '../state-dir.js';
 import { buildCorpus, scoreRule } from './corpus.js';
 import { evaluateRule } from './promotion.js';
 import { runRule, normalizeCustomRule } from '../custom-rules.js';
+import { createHash } from 'node:crypto';
 import { compileToCustomRule } from './ir.js';
 import { loadIR, loadCorpus, loadProvenance } from './store.js';
 import { stateOf } from './lifecycle.js';
+import { SHIPPED_NEGATIVE_CORPUS } from './negative-corpus.js';
 
 const FP_DIR = 'rule-compiler/fp-corpus';
 const MAX_FP_FILE = 256 * 1024;
 const MAX_FP_FILES = 500;
 const EXT_OF = { '.js': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript', '.ts': 'typescript', '.py': 'python', '.go': 'go', '.rb': 'ruby', '.java': 'java', '.rs': 'rust', '.cs': 'csharp', '.php': 'php' };
 
-/** Operator-supplied false positives (real code a rule should never flag). Plain files; symlinks and oversized files are ignored. */
-function operatorFalsePositives(root) {
-  const dir = statePath(root, ...FP_DIR.split('/'));
+// GA-07 §3 (0.195.27): one or more directories of safe code shared ACROSS repositories (a fleet's common false-positive corpus),
+// named by path-separator-joined entries in this variable. Same rules as the project directory: plain files, size and count caps.
+const SHARED_FP_ENV = 'AGENTIC_SECURITY_RULES_FP_CORPUS';
+
+function falsePositiveFiles(dir, prefix) {
   const out = [];
   let names = [];
   try { names = fs.readdirSync(dir).sort(); } catch { return out; }
@@ -35,8 +39,17 @@ function operatorFalsePositives(root) {
     try {
       const st = fs.lstatSync(f);
       if (!st.isFile() || st.isSymbolicLink() || st.size > MAX_FP_FILE) continue;
-      out.push({ label: `operator-fp:${n}`, file: n, language: EXT_OF[path.extname(n).toLowerCase()] ?? 'any', code: fs.readFileSync(f, 'utf8') });
+      out.push({ label: `${prefix}:${n}`, file: n, language: EXT_OF[path.extname(n).toLowerCase()] ?? 'any', code: fs.readFileSync(f, 'utf8') });
     } catch { /* unreadable: skipped */ }
+  }
+  return out;
+}
+
+/** Operator-supplied false positives (real code a rule should never flag): the project's own directory, then every shared directory. */
+function operatorFalsePositives(root, env = process.env) {
+  const out = falsePositiveFiles(statePath(root, ...FP_DIR.split('/')), 'operator-fp');
+  for (const dir of String(env[SHARED_FP_ENV] || '').split(path.delimiter).map((s) => s.trim()).filter(Boolean)) {
+    out.push(...falsePositiveFiles(path.resolve(dir), `shared-fp:${path.basename(dir)}`));
   }
   return out;
 }
@@ -45,9 +58,13 @@ export function promotedRuleIds(ledger) {
   return [...new Set(ledger.entries.map((e) => e.ruleId))].filter((id) => stateOf(ledger, id) === 'PROMOTED');
 }
 
-/** The shared false-positive corpus as seen by `exceptId`: the safe code of every OTHER promoted rule, plus the operator's files. */
-export function sharedFalsePositiveCorpus(root, ledger, exceptId = null) {
-  const items = [];
+/**
+ * The shared false-positive corpus as seen by `exceptId`: the safe code shipped with the scanner (`negative-corpus.js`, the same on
+ * every machine and in every repository), the safe code of every OTHER promoted rule, the operator's project files, and any
+ * directories shared across repositories through AGENTIC_SECURITY_RULES_FP_CORPUS.
+ */
+export function sharedFalsePositiveCorpus(root, ledger, exceptId = null, env = process.env) {
+  const items = SHIPPED_NEGATIVE_CORPUS.map((s) => ({ label: `shipped-fp:${s.name}`, language: s.language, code: s.code }));
   for (const id of promotedRuleIds(ledger)) {
     if (id === exceptId) continue;
     const ir = loadIR(root, id); const spec = loadCorpus(root, id);
@@ -55,7 +72,12 @@ export function sharedFalsePositiveCorpus(root, ledger, exceptId = null) {
     let corpus; try { corpus = buildCorpus(ir, spec); } catch { continue; }
     for (const n of corpus.negatives) items.push({ label: `rule:${id}:${n.label}`, language: ir.languages[0] ?? 'any', code: n.code });
   }
-  return [...items, ...operatorFalsePositives(root)];
+  return [...items, ...operatorFalsePositives(root, env)];
+}
+
+/** The digest of a corpus half, as `rules evaluate` records it in the provenance record and `rules regress` re-derives it. */
+export function corpusHash(list) {
+  return createHash('sha256').update(JSON.stringify(list.map((x) => [x.label, x.code]).sort())).digest('hex');
 }
 
 const FILE_FOR_LANG = { javascript: 'x.js', typescript: 'x.ts', python: 'x.py', go: 'x.go', ruby: 'x.rb', java: 'x.java', rust: 'x.rs', csharp: 'x.cs', php: 'x.php', any: 'x.txt' };
@@ -85,8 +107,16 @@ export function regressRules(root, ledger, { only = null, thresholds } = {}) {
     let ev; let corpus;
     try { corpus = buildCorpus(ir, spec); ev = evaluateRule(ir, corpus, thresholds); } catch (e) { results.push({ id, status: 'broken', reasons: [`cannot be scored: ${String(e.message).slice(0, 120)}`] }); continue; }
     const fp = falsePositiveHits(ir, sharedFalsePositiveCorpus(root, ledger, id));
-    const baseline = loadProvenance(root, id)?.benchmarkResults ?? null;
+    const prov = loadProvenance(root, id);
+    const baseline = prov?.benchmarkResults ?? null;
     const reasons = [...ev.reasons];
+    // GA-07 §3 (0.195.27): the promotion was a review of ONE rule against ONE corpus, both digested into the promotion event. A
+    // corpus edited after the review (an independent example dropped, a protected variant softened) can still clear the gate, so
+    // the gate alone would not notice; the digests do. Such a rule is `review-stale`: not regressed, but no longer the reviewed one.
+    const reviewed = prov?.promotionEvent?.evidence ?? null;
+    if (reviewed) {
+      if (reviewed.positiveCorpusHash !== corpusHash(corpus.positives) || reviewed.negativeCorpusHash !== corpusHash(corpus.negatives)) reasons.push('the corpus changed since the reviewed promotion (its digests no longer match the promotion event); re-evaluate and promote again');
+    }
     if (fp.length) reasons.push(`fires on ${fp.length} item(s) of the shared false-positive corpus: ${fp.slice(0, 3).map((h) => h.label).join(', ')}${fp.length > 3 ? ', ...' : ''}`);
     if (baseline && ev.score.recall != null && baseline.recall != null && ev.score.recall < baseline.recall) reasons.push(`recall fell from ${(baseline.recall * 100).toFixed(1)}% to ${(ev.score.recall * 100).toFixed(1)}% since promotion`);
     results.push({ id, status: reasons.length ? 'regressed' : 'ok', reasons, precision: ev.score.precision, recall: ev.score.recall, protectedFailures: ev.score.protectedFailures, fpCorpusHits: fp.length });

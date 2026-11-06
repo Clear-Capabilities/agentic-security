@@ -5,6 +5,7 @@
 // using the SAME filename convention `runRuleTests` already reads (`vulnerable`/`clean` in the path).
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { statePath, ensureStateDir, safeWriteState } from '../state-dir.js';
 import { newLedger, verifyLedger } from './lifecycle.js';
 import { signLastScan, verifyLastScan } from '../integrity.js';
@@ -35,20 +36,85 @@ export function loadLedger(scanRoot, env = process.env) {
   const v = verifyLedger(ledger);
   if (!v.ok) return { ...ledger, tampered: true, tamperReason: v.reason };
   const sig = verifyLastScan(text, `${f}.sig`);
-  if (sig === false) return { ...ledger, tampered: true, tamperReason: 'the ledger signature does not verify under this install key' };
+  if (sig === true) return { ...ledger, verifiedBy: 'install-key' };
+  // GA-07 §3 (0.195.27): the install key never leaves the machine that promoted the rule, so on a CI runner (or any other
+  // clone) the HMAC cannot verify. A ledger that `promote --sign-key` also signed with the operator's Ed25519 key is accepted
+  // when that signature verifies against a key the environment trusts: AGENTIC_SECURITY_RULES_PUBLIC_KEY (set outside the
+  // repository, a CI variable) or the trusted-keys store the rule packs already use. The chain check above still applies, and
+  // the signature covers the whole file, so a dropped last entry fails it like any other edit. A project-local key file alone
+  // is not trust (an author who can write .agentic-security/ could add one), which is why the env variable is the CI route.
+  const author = verifyAuthorSignature(text, `${f}${AUTHOR_SIG_SUFFIX}`, authorKeysFrom(scanRoot, env));
+  if (author.ok) return { ...ledger, verifiedBy: 'author-key', authorKeyId: author.keyId };
+  if (sig === false) return { ...ledger, tampered: true, tamperReason: `the ledger signature does not verify under this install key${author.present ? ` and its author signature does not verify against any trusted key (${author.reason})` : ' and it carries no author signature (promote with --sign-key to make it portable)'}` };
   if (sig === null && ledger.entries.length && env.AGENTIC_SECURITY_RULES_UNSIGNED !== '1') {
     return { ...ledger, tampered: true, tamperReason: 'the ledger is unsigned (written before 0.195.23 or by another tool); set AGENTIC_SECURITY_RULES_UNSIGNED=1 once to accept and re-sign it' };
   }
-  return ledger;
+  return { ...ledger, verifiedBy: sig === null ? 'unsigned-accepted' : 'install-key' };
 }
 
-export function saveLedger(scanRoot, ledger) {
+const AUTHOR_SIG_SUFFIX = '.author.sig';
+const PUBLIC_KEY_ENV = 'AGENTIC_SECURITY_RULES_PUBLIC_KEY';
+
+/** The Ed25519 public keys a ledger's author signature may verify against: the environment variable (one or more base64 raw keys,
+ * comma separated) first, then the rule-pack trust store (bundled keys, and the project file only when the operator honours it). */
+function authorKeysFrom(scanRoot, env) {
+  const keys = [];
+  for (const k of String(env[PUBLIC_KEY_ENV] || '').split(',').map((s) => s.trim()).filter(Boolean)) keys.push({ id: 'env', publicKey: k, alg: 'ed25519' });
+  const origErr = console.error; console.error = () => {};
+  try { keys.push(...loadTrustedKeys(scanRoot)); } catch { /* no trust store */ } finally { console.error = origErr; }
+  return keys;
+}
+
+function verifyAuthorSignature(text, sigPath, keys) {
+  let sig;
+  try { sig = fs.readFileSync(sigPath); } catch { return { ok: false, present: false, reason: 'no author signature' }; }
+  if (!keys.length) return { ok: false, present: true, reason: `no trusted key (set ${PUBLIC_KEY_ENV})` };
+  const body = Buffer.from(text, 'utf8');
+  for (const k of keys) {
+    try {
+      const keyBytes = Buffer.from(k.publicKey, 'base64');
+      if (keyBytes.length !== 32) continue;
+      const keyObj = crypto.createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x: keyBytes.toString('base64url') }, format: 'jwk' });
+      if (crypto.verify(null, body, keyObj, sig)) return { ok: true, present: true, keyId: k.id || '(unnamed)' };
+    } catch { /* next key */ }
+  }
+  return { ok: false, present: true, reason: 'bad signature' };
+}
+
+function signWithAuthorKey(text, privateKeyB64) {
+  const privBytes = Buffer.from(privateKeyB64, 'base64');
+  if (privBytes.length !== 32) throw new Error('private key must be 32 bytes (raw ed25519)');
+  const keyObj = crypto.createPrivateKey({ key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), privBytes]), format: 'der', type: 'pkcs8' });
+  return crypto.sign(null, Buffer.from(text, 'utf8'), keyObj);
+}
+
+/** The public key (base64 raw) that pairs with a raw Ed25519 private key; printed by `promote` so the operator can set it in CI. */
+export function publicKeyOf(privateKeyB64) {
+  const privBytes = Buffer.from(privateKeyB64, 'base64');
+  if (privBytes.length !== 32) return null;
+  const keyObj = crypto.createPrivateKey({ key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), privBytes]), format: 'der', type: 'pkcs8' });
+  return Buffer.from(crypto.createPublicKey(keyObj).export({ format: 'jwk' }).x, 'base64url').toString('base64');
+}
+
+/**
+ * Write the ledger with its install-key signature and, when the operator's Ed25519 key is given, an author signature beside it
+ * (`ledger.json.author.sig`) that another machine can verify (see loadLedger). Without a key an existing author signature is
+ * removed rather than left stale: a signature that no longer matches the file would read as tampering on the next clone.
+ */
+export function saveLedger(scanRoot, ledger, { authorKey = null } = {}) {
   if (ledger?.tampered) return { ok: false, reason: `refusing to overwrite a ledger that failed its integrity check (${ledger.tamperReason})` };
   if (!ensureStateDir(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = statePath(scanRoot, DIR, 'ledger.json');
-  const text = JSON.stringify(ledger, null, 2);
-  const ok = safeWriteState(f, text) && safeWriteState(`${f}.sig`, signLastScan(text));
-  return { ok };
+  const { verifiedBy, authorKeyId, ...body } = ledger;
+  const text = JSON.stringify(body, null, 2);
+  let ok = safeWriteState(f, text) && safeWriteState(`${f}.sig`, signLastScan(text));
+  let authorSigned = false;
+  if (ok && authorKey) {
+    try { ok = safeWriteState(`${f}${AUTHOR_SIG_SUFFIX}`, signWithAuthorKey(text, authorKey)); authorSigned = ok; } catch (e) { return { ok: false, reason: `cannot author-sign the ledger: ${String(e.message).slice(0, 120)}` }; }
+  } else if (ok) {
+    try { fs.unlinkSync(`${f}${AUTHOR_SIG_SUFFIX}`); } catch { /* none to remove */ }
+  }
+  return { ok, authorSigned };
 }
 
 export function saveIR(scanRoot, ir) {

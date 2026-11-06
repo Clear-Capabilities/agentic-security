@@ -304,6 +304,30 @@ Per-rule unit tests remain the fixtures written at evaluation (the existing `rul
 per-rule test cannot see. This does not wire a promoted rule into this repository's own `bench/` corpora: those live in the project's
 source tree, not in an operator's `.agentic-security/`.
 
+## Regressions in CI (since 0.195.27)
+
+Every CI template (`scripts/ci-templates/`, GitLab, CircleCI, Buildkite, Jenkins) and the GitHub Actions workflow `/setup --ci`
+generates run `agentic-security rules regress` on every pipeline, before the scan gate so a failing gate cannot hide a rule regression
+(the GitHub step runs with `if: always()` after the gate for the same reason). Three things make that work on a machine that is not the
+one that promoted the rule:
+
+1. **Commit the rule state.** `.agentic-security/rule-compiler/` (the ledger, each rule's record, corpus, evaluation, provenance and
+   fixtures) and `.agentic-security/rules/` (the published rule and its signature) must be in the repository; without them a runner finds
+   nothing to regress and exits 0 with "No rule is PROMOTED".
+2. **Promote with `--sign-key`.** The ledger is signed with this install's HMAC key, which never leaves the machine, so another clone
+   cannot verify it. `rules promote --sign-key <base64>` (or `AGENTIC_SECURITY_PRIVATE_KEY`) also signs the ledger with your Ed25519 key
+   (`ledger.json.author.sig`) and prints the public key to set; a later `rollback`, `deprecate` or `evaluate` run with the same key renews
+   it. Without the key the promotion says so, and `regress` elsewhere refuses the ledger.
+3. **Set `AGENTIC_SECURITY_RULES_PUBLIC_KEY` in CI**, as a pipeline variable, never as a file in the checkout: a key file in the
+   repository would let whoever can write it sign their own ledger. `rules regress` accepts the ledger when its chain verifies and the
+   author signature verifies against that key (or the rule-pack trust store), and reports `ledger verified by the author key`.
+
+A fleet can share one false-positive corpus by pointing `AGENTIC_SECURITY_RULES_FP_CORPUS` at one or more directories (path-separator
+joined) of safe code; they are held to beside the scanner's own shipped negative corpus (27 safe snippets across nine languages, the same
+everywhere) and the project's `fp-corpus/`. The promotion records what the reviewer looked at (the scope, which is now required, and
+digests of the evaluation, the provenance and both corpus halves); `regress` re-derives the corpus digests and reports a rule whose
+corpus changed after the review, so the reviewed rule and the rule in CI are the same one.
+
 ## Anti-cheating
 
 The synthesis material is checked before anything is written, and a hit fails closed (exit 4, nothing stored): benchmark names
@@ -324,10 +348,11 @@ outside `posture/evaluation/`.
   it survives every one. `bench/mutation/` (the engine-wide verdict-flip gate) is a different, much larger thing and is untouched.
 - **Benchmark leakage is a pattern check on the synthesis material**, not a connection to any real benchmark population.
 - **No MCP tool** exposes synthesis.
-- **Regression is per installation.** Fixtures and the false-positive corpus live in the operator's own `.agentic-security/`, in the
-  existing `vulnerable`/`clean` convention `agentic-security rule test` reads. A promoted rule is not added to this repository's `bench/`
-  corpora automatically (they are the project's gated regression net, and a rule that lives in operator state is not part of the engine
-  those benches scan with).
+- **Regression travels only with committed state.** Fixtures and the false-positive corpus live in the project's `.agentic-security/`,
+  in the existing `vulnerable`/`clean` convention `agentic-security rule test` reads (which fails, since 0.195.27, on a missed vulnerable
+  fixture or a hit on a clean one); CI sees them only if they are committed and the ledger was author-signed (the section above). A
+  promoted rule is not added to this repository's `bench/` corpora automatically (they are the project's gated regression net, and a rule
+  that lives in operator state is not part of the engine those benches scan with).
 
 ## Output schema
 

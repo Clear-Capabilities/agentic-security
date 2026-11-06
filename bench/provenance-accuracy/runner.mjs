@@ -139,23 +139,53 @@ function scoreExpectation(manifest, findingProvenance, trueOrigin) {
 }
 
 function unpackBuildResult(built) {
-  if (typeof built === 'string') return { commit: built, root: null, cleanup: null };
+  if (typeof built === 'string') return { commit: built, root: null, cleanup: null, env: {}, facts: {} };
   if (built && typeof built === 'object') {
-    return { commit: built.commit ?? null, root: built.root || null, cleanup: built.cleanup || null };
+    return {
+      commit: built.commit ?? null, root: built.root || null, cleanup: built.cleanup || null,
+      // GA-05 (0.195.27): a fixture may need the scan to run with a provenance setting that depends on what it built (a
+      // `--provenance-since` boundary at one of its own commits), and may hand `facts` (other commit SHAs) to its `verify`.
+      env: built.env && typeof built.env === 'object' ? built.env : {},
+      facts: built.facts && typeof built.facts === 'object' ? built.facts : {},
+    };
   }
-  return { commit: null, root: null, cleanup: null };
+  return { commit: null, root: null, cleanup: null, env: {}, facts: {} };
+}
+
+// GA-05 (0.195.27): the environment a fixture's scan runs under. `mode: 'deep'` on the manifest selects `--provenance deep`
+// (the corpus used to run every fixture in standard mode, so the deep-mode code that handles reverts, cherry-picks and
+// non-first-parent merges was exercised only by unit tests); `env` from the build result adds any other setting.
+function scanEnvFor(manifest, built) {
+  return { ...(manifest.mode ? { AGENTIC_SECURITY_PROVENANCE_MODE: manifest.mode } : {}), ...built.env };
+}
+
+async function withEnv(overrides, fn) {
+  const prior = {};
+  for (const [k, v] of Object.entries(overrides)) { prior[k] = process.env[k]; process.env[k] = v; }
+  try { return await fn(); } finally {
+    for (const [k, v] of Object.entries(prior)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+}
+
+// A fixture's optional `verify(findingProvenance, facts)` returns null when the record carries what the scenario requires
+// beyond the origin commit (a cherry-pick source, a revert target, a dependency chain, a limitation naming an unavailable
+// provider), or a sentence saying what is missing. It runs only after the origin expectation passed, so a wrong commit is
+// still reported as the wrong commit, never as a missing annotation.
+function verifyExtra(manifest, fp, facts) {
+  if (typeof manifest.verify !== 'function') return null;
+  try { return manifest.verify(fp || {}, facts) || null; } catch (e) { return `verify threw: ${e && e.message}`; }
 }
 
 async function scoreSastFixture(manifest) {
   const fx = createGitFixture();
   let extraCleanup = null;
   try {
-    const built = await manifest.build(fx);
-    const { commit: trueOrigin, root: rootOverride, cleanup } = unpackBuildResult(built);
+    const built = unpackBuildResult(await manifest.build(fx));
+    const { commit: trueOrigin, root: rootOverride, cleanup } = built;
     extraCleanup = cleanup;
     const root = rootOverride || fx.root;
 
-    const { scan } = await runScan(root, { network: false });
+    const { scan } = await withEnv(scanEnvFor(manifest, built), () => runScan(root, { network: false }));
     const candidates = SAST_CHANNELS.flatMap((ch) => (Array.isArray(scan[ch]) ? scan[ch] : []));
     const matches = candidates.filter((f) => sastLocatorMatches(f, manifest.finding));
 
@@ -166,7 +196,8 @@ async function scoreSastFixture(manifest) {
       };
     }
     const { pass, detail } = scoreExpectation(manifest, matches[0].findingProvenance, trueOrigin);
-    return { id: manifest.id, verdict: pass ? 'pass' : 'fail', detail };
+    const extra = pass ? verifyExtra(manifest, matches[0].findingProvenance, built.facts) : null;
+    return { id: manifest.id, verdict: pass && !extra ? 'pass' : 'fail', detail: extra ? { ...detail, verify: extra } : detail };
   } catch (e) {
     return { id: manifest.id, verdict: 'env-error', reason: String((e && e.stack) || e) };
   } finally {
@@ -179,8 +210,8 @@ async function scoreScaFixture(manifest) {
   const fx = createGitFixture();
   let home = null;
   try {
-    const built = await manifest.build(fx);
-    const { commit: trueOrigin } = unpackBuildResult(built);
+    const built = unpackBuildResult(await manifest.build(fx));
+    const { commit: trueOrigin } = built;
 
     home = fs.mkdtempSync(path.join(os.tmpdir(), 'as-provenance-accuracy-home-'));
     seedAdvisory(home, manifest.sca);
@@ -190,6 +221,7 @@ async function scoreScaFixture(manifest) {
       env: {
         ...process.env, HOME: home,
         AGENTIC_SECURITY_OFFLINE: '1', AGENTIC_SECURITY_NO_STATE: '1',
+        ...scanEnvFor(manifest, built),
       },
     });
     const supplyChain = JSON.parse(r);
@@ -202,7 +234,8 @@ async function scoreScaFixture(manifest) {
       };
     }
     const { pass, detail } = scoreExpectation(manifest, matches[0].findingProvenance, trueOrigin);
-    return { id: manifest.id, verdict: pass ? 'pass' : 'fail', detail };
+    const extra = pass ? verifyExtra(manifest, matches[0].findingProvenance, built.facts) : null;
+    return { id: manifest.id, verdict: pass && !extra ? 'pass' : 'fail', detail: extra ? { ...detail, verify: extra } : detail };
   } catch (e) {
     return { id: manifest.id, verdict: 'env-error', reason: String((e && e.stack) || e) };
   } finally {

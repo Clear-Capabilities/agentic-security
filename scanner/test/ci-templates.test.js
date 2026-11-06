@@ -59,6 +59,17 @@ for (const name of TEMPLATE_FILES) {
         `${name} must reference .agentic-security/${artifact}, which 'ci' writes unconditionally`);
     }
   });
+
+  // GA-07 §3 (0.195.27): every template runs the promoted-rule regression, and runs it BEFORE the scan gate so a failing gate
+  // cannot hide a rule regression; the public key the committed ledger's author signature is checked against is named.
+  test(`S4: ${name} runs 'rules regress' before the ci gate and names the public key variable`, () => {
+    const content = readTemplate(name);
+    const regress = content.search(/agentic-security\s+rules\s+regress\b/);
+    const gate = content.search(/agentic-security\s+ci\s+\.\s+--fail-on/);
+    assert.ok(regress >= 0, `${name} must run 'agentic-security rules regress'`);
+    assert.ok(regress < gate, `${name} must run the regression before the scan gate`);
+    assert.match(content, /AGENTIC_SECURITY_RULES_PUBLIC_KEY/, `${name} must say how the ledger's author signature is verified`);
+  });
 }
 
 for (const name of ['.gitlab-ci.yml', '.circleci-config.yml', 'buildkite.yml']) {
@@ -113,4 +124,11 @@ test('S4: setup.md\'s inline GitHub Actions generator produces valid, correctly-
   assert.match(scanStep.run, /agentic-security scan \. --format json --output security-results\.json/);
   const gateStep = parsed.jobs.security.steps.find((s) => /Fail on/.test(s.name));
   assert.match(gateStep.run, /node -e "/);
+  // GA-07 §3 (0.195.27): the generated workflow runs the promoted-rule regression on every run (even after a failed gate) and
+  // takes the ledger's public key from a repository variable, never from a file in the checkout.
+  const regressStep = parsed.jobs.security.steps.find((s) => s.name === 'Promoted rule regressions');
+  assert.ok(regressStep, 'generated workflow must have the regression step');
+  assert.match(regressStep.run, /agentic-security rules regress/);
+  assert.equal(regressStep.if, 'always()');
+  assert.equal(regressStep.env.AGENTIC_SECURITY_RULES_PUBLIC_KEY, '${{ vars.AGENTIC_SECURITY_RULES_PUBLIC_KEY }}');
 });

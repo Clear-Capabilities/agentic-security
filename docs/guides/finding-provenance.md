@@ -83,7 +83,12 @@ The default (`standard`) walk only follows a commit's first parent. Deep mode
 which can resolve an origin standard mode misses (the introducing change
 entered through a non-first-parent branch of a merge), and detects reverts
 and cherry-picks — surfaced as `findingOrigin.revertOf` / `.cherryPickOf`.
-Deep mode costs more — it does real extra git work, not just a flag flip.
+Since 0.195.27 those two fields are filled for every origin deep mode
+resolves, not only the ones the non-first-parent retry found; a revert is
+recognised by diff inversion against an earlier candidate (a `Reapply` commit,
+git's name for a revert of a revert, counts), and a cherry-pick by its `-x`
+trailer. Deep mode costs more — it does real extra git work, not just a flag
+flip.
 
 ## Only a complete scan can close a finding
 
@@ -221,11 +226,16 @@ per scan.
   introduced it. The labelled corpus includes a rename scenario and it passes.
   Rename detection is git's own, so a file rewritten so heavily that git does not
   see it as the same file is not followed.
-- **Known-origin accuracy: 13 of 13** fixtures in the labelled corpus resolve to
-  their documented origin (`bench/provenance-accuracy`). The corpus is small and
-  written by the project's own authors, so this is a regression check on thirteen
-  scenarios, not an accuracy rate on real repositories. The earlier figure of
-  12 of 13 was the rename scenario, which has since been fixed.
+- **Known-origin accuracy: 23 of 23** fixtures in the labelled corpus resolve to
+  their documented origin (`bench/provenance-accuracy`). Since 0.195.27 the corpus
+  includes ten adverse histories: a revert of a fix (the origin is the revert and
+  the record names what it reverted), a cherry-pick with `-x` (the record names the
+  source commit), a squash merge, an amended introducing commit, a `git mv` after
+  the introduction, a dirty file whose vulnerable line is committed, a merge whose
+  first parent carries the flaw, a conflict resolution that writes the flaw, a
+  transitive lockfile bump and a configured forge provider that cannot be reached.
+  The corpus is written by the project's own authors, so this is a regression check
+  on twenty-three scenarios, not an accuracy rate on real repositories.
 - **Provenance coverage: 83.8% of eligible findings (393 of 469)** on this
   project's own `scanner/src` in deep mode, against a target of 95% that is not
   met. 64 of the unattributed findings come from whole-project analyses (a
@@ -234,13 +244,19 @@ per scan.
   reproduce, so the history walk never confirms them. They resolve to `partial`:
   reduced confidence, not a pipeline failure. The method and the causes are in
   [Provenance coverage](../engineering-excellence/PROVENANCE_COVERAGE.md).
-- **Performance overhead is real.** On a 15-finding fixture a scan with
-  provenance and a cold cache took about 1.06 seconds against 44 milliseconds
-  without it (24 times at the median, 26 times at the 95th percentile); with a
-  warm cache it took 75 milliseconds (1.7 times). The cost is the git processes
-  the history walk starts, roughly 70 milliseconds per file with findings, so the
-  ratio is large on a small project and the absolute cost is what to budget for on
-  a large one. The target of 1.3 times is not met and cannot be on a cold cache.
+- **Performance overhead is real, and budgeted in absolute terms.** On the
+  15-finding, 45-commit overhead fixture (`bench/provenance`, 60 iterations,
+  recorded 2026-11-05) provenance with a cold cache added about 1.2 seconds at
+  the 95th percentile to a scan that took 189 milliseconds without it; with a
+  warm cache it added 49 milliseconds. The cost is the git processes and the two
+  historical replays each finding costs, roughly 80 milliseconds per finding on
+  the maintainer's machine, so the ratio is large on a small project and the
+  per-finding figure is what to budget for on a large one. Since 0.195.27 the
+  bench holds the added time to a frozen absolute budget (2000 milliseconds cold,
+  250 warm, at the 95th percentile on this fixture; the derivation is in the
+  [contract](../reference/finding-provenance-contract.md)) beside its ratio gates;
+  the earlier 1.3 times ratio target is withdrawn, since it was never met on a cold
+  cache and a ratio against a sub-second base scan says nothing about a large one.
   If you provenance-scan a large repository on every CI run with a cold cache,
   keep the cache directory between runs.
 - **Shallow clones degrade to `partial`, and say so.** The status carries

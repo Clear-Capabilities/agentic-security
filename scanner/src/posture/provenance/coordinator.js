@@ -101,7 +101,7 @@ const MAX_CONCURRENCY = 4;
 // quotient: a 200-finding scan under a 60s global budget divides to 300ms,
 // which is less than a single `git blame`'s own 2s timeout and would starve
 // every finding equally instead of a few. 2s is one blame's worth of work.
-const MIN_PER_FINDING_BUDGET_MS = 2000;
+export const MIN_PER_FINDING_BUDGET_MS = 2000;
 
 // FR-PROV-022: an 8s-timeout-capped network call per finding is not
 // automatically bounded by the scan's own deadlineAt -- N findings x up to
@@ -563,7 +563,11 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
       const fetchPRFn = ctx.providerName === 'github' ? fetchPRMetadataGithub : fetchPRMetadataGitlab;
       const fetchCodeownersFn = ctx.providerName === 'github' ? fetchCodeownersGithub : fetchCodeownersGitlab;
       const pr = await fetchPRFn(scanRoot, originResult.findingOrigin.commit, ctx.remoteUrl, ctx.providerConfig);
-      if (pr) {
+      if (pr && pr.unavailable) {
+        // GA-05 (0.195.27): forge metadata that could not be fetched is recorded, never silently absent. The origin,
+        // status and confidence above are unaffected: they come from local history, which the provider cannot change.
+        provenance.limitations.push(`provider metadata unavailable (${ctx.providerName}: ${pr.reason}); the origin commit is unaffected, only the pull request and code owner enrichment is missing`);
+      } else if (pr) {
         const codeowners = await fetchCodeownersFn(scanRoot, ctx.remoteUrl, ctx.providerConfig);
         provenance.providerEnrichment = {
           provider: ctx.providerName,

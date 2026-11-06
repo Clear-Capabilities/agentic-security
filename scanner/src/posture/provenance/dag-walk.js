@@ -81,9 +81,13 @@ export async function checkAbsentInSomeParent(scanRoot, sha, replay) {
 }
 
 // git's own convention when using `git revert` (no -n/--no-edit override):
-// "Revert \"<original subject>\"". Message alone is spoofable, so this is
-// only the FIRST half of detection — see detectRevert.
-const REVERT_MESSAGE_RE = /^Revert "/;
+// "Revert \"<original subject>\"". Since git 2.43 a revert of a revert is
+// titled "Reapply \"<original subject>\"" instead (GA-05, 0.195.27: found by
+// the corpus case `revert-reintroduces`, whose origin commit is exactly that
+// shape); it is still a revert, and the diff inversion below still decides.
+// Message alone is spoofable, so this is only the FIRST half of detection —
+// see detectRevert.
+const REVERT_MESSAGE_RE = /^(?:Revert|Reapply) "/;
 
 /**
  * A commit is a real revert only when its message matches git's own Revert
