@@ -1,3 +1,4 @@
+import { analyzeWorkflow } from './workflow-flow.js';
 // 0.7.0 Feat-9: Pipeline / GitHub Actions integrity detector with PBOM emitter.
 //
 // Catches the canonical CI/CD security mistakes:
@@ -135,6 +136,14 @@ const PIPELINE_PATTERNS = [
   },
 ];
 
+// Rules the YAML-aware analyzer (workflow-flow.js) now owns. They are kept as line
+// patterns only as the fallback for a file that does not parse as workflow YAML.
+const STRUCTURAL_VULNS = new Set([
+  'Pipeline: pull_request_target checks out untrusted pull request code',
+  'Pipeline: untrusted github.event input interpolated into shell context',
+  'Pipeline: OIDC id-token: write without explicit aud restriction',
+]);
+
 export function scanPipeline(fp, raw) {
   if (!_GH_WORKFLOW_RE.test(fp.replace(/\\/g, '/'))) return [];
   if (_NONPROD_RE.test(fp.replace(/\\/g, '/'))) return [];
@@ -142,7 +151,10 @@ export function scanPipeline(fp, raw) {
   const lines = raw.split('\n');
   const findings = [];
   const seen = new Set();
+  const structural = analyzeWorkflow(fp, raw);
+  if (structural) for (const f of structural) { seen.add(f.id); findings.push(f); }
   for (const p of PIPELINE_PATTERNS) {
+    if (structural && STRUCTURAL_VULNS.has(p.vuln)) continue;
     if (p.contextRe) {
       const present = p.contextRe.test(raw);
       if (p.contextNeg && present) continue; // suppress: required context exists
