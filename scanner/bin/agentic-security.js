@@ -11,6 +11,8 @@ const PKG_VERSION = __require('../package.json').version;
 import { signLastScan as _signLastScan, verifyLastScan as _verifyLastScanShared } from '../src/posture/integrity.js';
 import { isProvenanceHealthy, sanitizeForTerminal } from '../src/posture/provenance/schema.js';
 import { runScan } from '../src/runScan.js';
+import { parseScopeFlags, renderScopePreview } from '../src/scope/flags.js';
+import { buildScanInventory } from '../src/scope/inventory.js';
 import { persistGraphSnapshot, loadSnapshots, loadSnapshot, mostRecentPriorSnapshot } from '../src/lineage/graph-snapshot.js';
 
 // Every command is dispatched as `process.exit(await cmdX(args))`, and
@@ -551,6 +553,7 @@ async function writeMachineOutput(targetAbs, scan, meta, profile, args) {
   }
 }
 
+const SCOPE_BOOLEAN_FLAGS = new Set(['explain-scope', 'respect-gitignore', 'no-respect-gitignore']);
 function parseArgs(argv) {
   const args = { _: [], flags: {} };
   for (let i = 0; i < argv.length; i++) {
@@ -559,6 +562,8 @@ function parseArgs(argv) {
       const [k, v] = a.slice(2).split('=', 2);
       if (v !== undefined) { args.flags[k] = v; continue; }
       const next = argv[i + 1];
+      // Scope switches never take a value, so `--explain-scope .` keeps `.` as the target.
+      if (SCOPE_BOOLEAN_FLAGS.has(k)) { args.flags[k] = true; continue; }
       if (next && !next.startsWith('--')) { args.flags[k] = next; i++; }
       else args.flags[k] = true;
     } else {
@@ -688,6 +693,14 @@ async function cmdScan(args) {
     console.error(`agentic-security scan: "${target}" does not exist (resolved to ${targetAbs}); nothing was scanned.`);
     process.exit(4);
   }
+  // FR 01: Git-aware scope flags. Any of them opts this run into the inventory-based scope;
+  // --explain-scope previews it and exits before any analysis or file read.
+  const scopeFlags = parseScopeFlags(process.argv.slice(2));
+  if (scopeFlags.errors.length) { for (const e of scopeFlags.errors) process.stderr.write(`agentic-security scan: ${e}\n`); return 2; }
+  if (scopeFlags.explain) {
+    process.stdout.write(renderScopePreview(buildScanInventory(targetAbs, scopeFlags.scope)));
+    return 0;
+  }
   // Load persona profile (R1). Persona-aware defaults flow from here.
   const profile = loadPersonaProfile(targetAbs, args);
   const format = args.flags.format || (profile.profile === 'pro' ? 'cli' : 'ship');
@@ -798,6 +811,7 @@ async function cmdScan(args) {
   const { scan, meta } = await runScan(target, {
     changedSince,
     onProgress: scanProgressReporter(),
+    ...(scopeFlags.active ? { gitScope: true, scope: scopeFlags.scope } : {}),
   });
   // --require-provenance: flag (never fail) any finding whose provenance
   // isn't resolved, via scanHealth — deliberately independent of the
