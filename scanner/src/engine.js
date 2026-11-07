@@ -850,7 +850,9 @@ export function isInstructionFile(relPath) {
   return typeof relPath === 'string' && _INSTRUCTION_FILE_ADMIT_RE.test(relPath);
 }
 
-function shouldScan(p){if(/\.(test|spec|mock)\./i.test(p))return false;if(/_test\.go$/i.test(p))return false;if(/_spec\.rb$/i.test(p))return false;if(/Test\.(?:java|cs|kt|scala)$/i.test(p))return false;if(/\.min\.[mc]?js$/i.test(p))return false;for(const x of p.split("/"))if(IGNORE_DIRS.has(x))return false;
+// `scoped` (PRD FR 01): the Git-aware inventory already decided eligibility, so a tracked file is not dropped merely because its
+// folder is named test, bin or vendor, or because its name looks like a test. Minified bundles are still not source.
+function shouldScan(p,scoped=false){if(/\.min\.[mc]?js$/i.test(p))return false;if(!scoped){if(/\.(test|spec|mock)\./i.test(p))return false;if(/_test\.go$/i.test(p))return false;if(/_spec\.rb$/i.test(p))return false;if(/Test\.(?:java|cs|kt|scala)$/i.test(p))return false;for(const x of p.split("/"))if(IGNORE_DIRS.has(x))return false;}else{for(const x of p.split("/"))if(x==="node_modules"||x===".git"||x===".agentic-security")return false;}
   // Mobile + framework manifest files needed by the v4 detectors.
   const base=p.split('/').pop();
   if (/(?:^|[\\/])AndroidManifest\.xml$/i.test(p)) return true;
@@ -8989,7 +8991,7 @@ function _gcHint(minHeapMiB) {
   _gcFn();
 }
 
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[], haskellSourceMap=null}, setProgress=()=>{}){
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[], haskellSourceMap=null, gitScope=false}, setProgress=()=>{}){
   // E6-01: local, aggregate telemetry for this scan (see pipeline/telemetry.js). Nothing is sent anywhere; the snapshot is a field of the result.
   const _tel = createTelemetry({ deterministic: isDeterministic() });
   setDetectorTimingSink((name, ms) => _tel.detector(name, ms));
@@ -9032,7 +9034,7 @@ function _deterministicFileTimings(timings) {
 
   const _fileTimings = [];
   let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0, _filesOversizeSkipped = 0;
-  const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f]) || isCloudFormationTemplate(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];const _detectorErrors=[];
+  const files=Object.keys(fileContents).filter(f=>(shouldScan(f,gitScope) || isKubernetesManifest(f, fileContents[f]) || isCloudFormationTemplate(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];const _detectorErrors=[];
   // ---- R8: opt-in per-file checkpointing (AGENTIC_SECURITY_RESUME=1, or
   // runScan({resume:true})). Default OFF, so existing behaviour is untouched.
   // Only this loop is checkpointed; every cross-file pass below re-runs, so

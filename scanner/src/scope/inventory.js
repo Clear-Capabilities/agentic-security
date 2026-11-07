@@ -95,11 +95,21 @@ function gitSelection(root, mode) {
   // --directory collapses an ignored directory to one entry instead of walking it.
   const ign = git(root, ['ls-files', '-z', '--others', '--ignored', '--directory', ...ignoreArgs], { env });
   const tracked = git(root, ['ls-files', '-z', '--cached'], { env });
+  // Gitlinks (submodules) are index entries with mode 160000.
+  const staged = git(root, ['ls-files', '-z', '--stage'], { env });
+  const gitlinks = new Set((staged ? nulList(staged) : []).filter((l) => l.startsWith('160000 ')).map((l) => norm(l.slice(l.indexOf('\t') + 1))));
   return {
+    gitlinks,
     candidates: nulList(cands).map(norm),
     ignored: ign ? nulList(ign).map((d) => d.replace(/^\.\//, '')) : [],
     tracked: new Set(tracked ? nulList(tracked).map(norm) : []),
   };
+}
+
+function unitKind(abs, isGitlink) {
+  if (isGitlink) return 'submodule';
+  try { if (fs.lstatSync(abs).isDirectory() && fs.existsSync(path.join(abs, '.git'))) return 'nested-repository'; } catch { /* gone */ }
+  return null;
 }
 
 function lstatKind(abs) {
@@ -177,7 +187,12 @@ export function buildScanInventory(root, o = {}) {
     const kind = lstatKind(abs);
     if (kind === 'missing') { skipped.push({ path: rel, reason: 'missing-tracked-file', coverageCondition: true }); continue; }
     if (kind === 'symlink') { skipped.push({ path: rel, reason: 'symlink' }); continue; }
-    if (kind === 'other') { skipped.push({ path: rel, reason: 'unsupported-entry', coverageCondition: true }); continue; }
+    if (kind === 'other') {
+      // A directory that Git lists as one entry is a submodule or a nested repository: a separate scan unit that was not scanned.
+      const unit = unitKind(abs, sel && sel.gitlinks.has(rel));
+      skipped.push({ path: rel, reason: unit || 'unsupported-entry', coverageCondition: true, ...(unit ? { note: 'separate repository: declare it as its own scan target to cover it' } : {}) });
+      continue;
+    }
     if (!underRoot(root, abs)) { skipped.push({ path: rel, reason: 'outside-root' }); continue; }
     if (exclude.some((e) => rel === e || rel.startsWith(e + '/'))) { skipped.push({ path: rel, reason: 'explicit-exclude' }); continue; }
     const seg = segmentOf(rel, generatedSegments);

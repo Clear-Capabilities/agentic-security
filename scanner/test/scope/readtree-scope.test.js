@@ -45,3 +45,21 @@ test('legacy mode unchanged: test/ is still ignored', async () => {
   const { fileContents } = await readTree(dir, { gitScope: false });
   assert.ok(!('test/keep.js' in fileContents));
 });
+
+test('in Git scope a tracked file under test, vendor or bin is scanned, and the default walk still skips them', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const cp = await import('node:child_process');
+  const { runScan } = await import('../../src/runScan.js');
+  const { mkTestTmp } = await import('../helpers/tmp.js');
+  const d = mkTestTmp('agsec-scope-tests-');
+  const body = "const cp = require('child_process');\nmodule.exports = (r) => cp.exec('ls ' + r.query.d);\n";
+  fs.writeFileSync(path.join(d, 'package.json'), '{}');
+  for (const rel of ['src/app.js', 'vendor/lib.js', 'bin/run.js', 'test/helper.js']) { fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true }); fs.writeFileSync(path.join(d, rel), body); }
+  cp.spawnSync('git', ['init', '-q'], { cwd: d });
+  const files = (scan) => [...new Set(scan.findings.filter((f) => f.kind !== 'sca').map((f) => f.file))].sort();
+  const scoped = await runScan(d, { gitScope: true });
+  assert.deepEqual(files(scoped.scan), ['bin/run.js', 'src/app.js', 'test/helper.js', 'vendor/lib.js']);
+  const legacy = await runScan(d, {});
+  assert.deepEqual(files(legacy.scan), ['src/app.js']);
+});

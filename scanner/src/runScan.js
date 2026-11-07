@@ -133,7 +133,7 @@ export async function readTree(root, { ignore = [], gitScope = process.env.AGENT
     // A CloudFormation template is a `.yaml`/`.json` that no path predicate can
     // recognise — same problem as a Kubernetes manifest, same fix, and the same
     // requirement that BOTH gates open: runFullScan re-filters this exact list.
-    if (shouldScan(rel) || isKubernetesManifest(rel, content) || isCloudFormationTemplate(rel, content) || isInstructionFile(rel)) fileContents[rel] = content;
+    if (shouldScan(rel, !!gitScope) || isKubernetesManifest(rel, content) || isCloudFormationTemplate(rel, content) || isInstructionFile(rel)) fileContents[rel] = content;
     // Auxiliary files: .properties files are referenced by Java rules
     // (e.g. OWASP Benchmark's benchmark.properties resolves algorithm
     // aliases). They are not scannable for vulns themselves, but the
@@ -285,7 +285,7 @@ export async function runScan(rootDir, opts = {}) {
 
   // R8: `resume` is opt-in. Left undefined here, runFullScan falls back to the
   // AGENTIC_SECURITY_RESUME=1 env var, which is off by default.
-  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume, deep: opts.deep, deepInCi: opts.deepInCi, completeScan, policyExcluded, sizeSkipped, haskellSourceMap: loadHaskellSourceMap(opts.haskellSourceMap, root) }, opts.onProgress || (()=>{}));
+  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume, deep: opts.deep, deepInCi: opts.deepInCi, completeScan, policyExcluded, sizeSkipped, haskellSourceMap: loadHaskellSourceMap(opts.haskellSourceMap, root), gitScope: !!scopeInventory }, opts.onProgress || (()=>{}));
   // Premortem 2R4.2: stamp ruleset version + source on the scan result, and
   // notify if the operator pinned a different version than what's installed.
   try { stampScan(root, scan); } catch {}

@@ -97,3 +97,22 @@ test('non-git directory discloses missing tracked-file semantics', () => {
   assert.equal(inv.policy.trackedFileSemantics, false);
   assert.ok(inv.policy.disclosures.length);
 });
+
+test('a nested repository is a declared, unscanned unit and a coverage condition', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const cp = await import('node:child_process');
+  const { mkTestTmp } = await import('../helpers/tmp.js');
+  const { buildScanInventory } = await import('../../src/scope/inventory.js');
+  const d = mkTestTmp('agsec-nested-');
+  fs.writeFileSync(path.join(d, 'a.js'), 'x\n');
+  fs.mkdirSync(path.join(d, 'inner'));
+  fs.writeFileSync(path.join(d, 'inner', 'b.js'), 'y\n');
+  cp.spawnSync('git', ['init', '-q'], { cwd: d });
+  cp.spawnSync('git', ['init', '-q'], { cwd: path.join(d, 'inner') });
+  const inv = buildScanInventory(d);
+  assert.deepEqual(inv.included, ['a.js']);
+  const s = inv.skipped.find((x) => x.path === 'inner');
+  assert.equal(s.reason, 'nested-repository');
+  assert.equal(s.coverageCondition, true);
+});
