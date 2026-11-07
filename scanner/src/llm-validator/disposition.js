@@ -28,6 +28,10 @@ export const REFUTATION_KINDS = Object.freeze([
 
 const HARDENING_UNTIL_ESTABLISHED = /\b(?:missing timeout|timing (?:attack|comparison|side)|non-constant[- ]time)\b/i;
 
+const _DETERMINISTIC_PARSERS = new Set(['IR-TAINT', 'MULTI-SINK']);
+// A structural rule over a modelled API (the Haskell rule families) is a deterministic detector claim without a taint path.
+const _STRUCTURAL_PARSERS = new Set(['HS-RULES']);
+
 /** Reasons that are not evidence. A refutation resting on one of these is rejected. */
 const NON_EVIDENCE = /\b(?:test|tests|spec|fixture|dev(?:eloper)?[- ]tool|internal|private repo(?:sitory)?|member[- ]only|trusted users?|no (?:known )?exploit|no proof|not exploitable in practice)\b/i;
 
@@ -161,6 +165,7 @@ export function assignDisposition(f, { fileContents = null, now = Date.now() } =
   const executed = f.proofTier === 'execution-proven';
   const reviewed = Array.isArray(f.reviewerVerdicts) && f.reviewerVerdicts.some((r) => r && r.verdict === 'confirmed' && r.reviewer && Array.isArray(r.evidenceRefs) && r.evidenceRefs.length);
   const conflicting = f.validator_verdict === 'reject' || f.falsification?.verdict === 'blocked'
+    || (f.proof && /^proven-/.test(String(f.proof.verdict || '')))
     || (Array.isArray(f.reviewerVerdicts) && f.reviewerVerdicts.some((r) => r && r.verdict === 'refuted'));
   if ((executed || reviewed) && !conflicting) {
     return done(DISPOSITIONS.CONFIRMED, executed ? 'reproduced by an executed test' : 'source path confirmed by an independent reviewer', {
@@ -186,6 +191,24 @@ export function assignDisposition(f, { fileContents = null, now = Date.now() } =
     return done(DISPOSITIONS.NEEDS_REVIEW, 'validation could not decide', {
       missingEvidence: missingEvidenceFor(f, detail.missingEvidence),
       nextCheck: 'review the cited span and its callers',
+    });
+  }
+
+  // Deterministic corroboration (PRD FR 05 flow): a taint path the engine itself traced from a source to a sink, with no control
+  // found on it, is a plausible issue awaiting independent review. It is needs-review, not confirmed, and not unvalidated.
+  if (_DETERMINISTIC_PARSERS.has(f.parser) && f.source && f.sink && f.validator_verdict !== 'accept') {
+    return done(DISPOSITIONS.NEEDS_REVIEW, 'the engine traced a source-to-sink path with no control found; no independent review yet', {
+      evidence: [{ kind: 'deterministic-taint-path', parser: f.parser }],
+      missingEvidence: missingEvidenceFor(f, [...detail.missingEvidence, 'a reproducible test or an independent reviewer']),
+      nextCheck: 'reproduce with a test or have a reviewer trace the path and confirm the callers',
+    });
+  }
+
+  if (_STRUCTURAL_PARSERS.has(f.parser) && Number.isInteger(f.line) && f.validator_verdict !== 'accept') {
+    return done(DISPOSITIONS.NEEDS_REVIEW, 'a structural rule matched a modelled API; no independent review yet', {
+      evidence: [{ kind: 'structural-rule', parser: f.parser }],
+      missingEvidence: missingEvidenceFor(f, [...detail.missingEvidence, 'whether the flagged value is security-relevant in this context']),
+      nextCheck: 'confirm the value is security-relevant and the operation is reachable',
     });
   }
 

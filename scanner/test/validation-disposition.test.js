@@ -168,3 +168,19 @@ test('missing-timeout and timing findings are hardening until attacker influence
   assignDisposition(timing, { fileContents: FILES });
   assert.notEqual(timing.disposition, D.HARDENING);
 });
+
+test('a deterministic detector claim is needs-review without a model; a heuristic one stays unvalidated', () => {
+  const taint = base({ parser: 'IR-TAINT' });
+  assignDisposition(taint, { fileContents: FILES });
+  assert.equal(taint.disposition, D.NEEDS_REVIEW);
+  assert.equal(taint.dispositionDetail.evidence[0].kind, 'deterministic-taint-path');
+  const rule = base({ parser: 'HS-RULES', source: undefined, sink: undefined });
+  assignDisposition(rule, { fileContents: FILES });
+  assert.equal(rule.disposition, D.NEEDS_REVIEW);
+  const regex = base({ parser: 'REGEX' });
+  assignDisposition(regex, { fileContents: FILES });
+  assert.equal(regex.disposition, D.UNVALIDATED);
+  const discharged = base({ parser: 'IR-TAINT', proof: { verdict: 'proven-sanitized' } });
+  assignDisposition(discharged, { fileContents: FILES });
+  assert.equal(discharged.dispositionDetail.conflict, true);
+});

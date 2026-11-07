@@ -60,7 +60,8 @@ export function buildScanRecord({ root, scan, meta, argv = [], engineVersion, mo
     model: model ? { provider: model.provider, model: model.model, egress: model.egress, stages: model.stages } : { configured: false },
     capability: { status: h.status || null, conditions: Array.isArray(h.conditions) ? h.conditions.length : 0 },
     fileCounts: { scanned: scan.filesScanned ?? null, skipped: scan.scope ? scan.scope.skippedCount : null, included: scan.scope ? scan.scope.includedCount : null },
-    elapsedMs: meta && meta.durationMs != null ? meta.durationMs : null,
+    // Wall-clock time differs on every run, so deterministic mode leaves it out and the record stays byte-identical.
+    elapsedMs: process.env.AGENTIC_SECURITY_DETERMINISTIC === '1' ? null : (meta && meta.durationMs != null ? meta.durationMs : null),
   };
 }
 

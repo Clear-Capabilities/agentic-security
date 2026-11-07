@@ -1,0 +1,330 @@
+{
+ "schema": "haskell-core-families/1",
+ "note": "author-seed cases prove the harness; the PRD requires 25 vulnerable + 25 safe independent cases per family",
+ "cases": [
+  {
+   "family": "sql",
+   "label": "vulnerable",
+   "group": "sql-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/sql/C101.hs",
+   "cwe": null
+  },
+  {
+   "family": "sql",
+   "label": "vulnerable",
+   "group": "sql-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/sql/C102.hs",
+   "cwe": null
+  },
+  {
+   "family": "sql",
+   "label": "vulnerable",
+   "group": "sql-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/sql/C103.hs",
+   "cwe": null
+  },
+  {
+   "family": "sql",
+   "label": "safe",
+   "group": "sql-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/sql/C104.hs",
+   "cwe": null
+  },
+  {
+   "family": "sql",
+   "label": "safe",
+   "group": "sql-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/sql/C105.hs",
+   "cwe": null
+  },
+  {
+   "family": "sql",
+   "label": "safe",
+   "group": "sql-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/sql/C106.hs",
+   "cwe": null
+  },
+  {
+   "family": "cmd",
+   "label": "vulnerable",
+   "group": "cmd-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/cmd/C201.hs",
+   "cwe": null
+  },
+  {
+   "family": "cmd",
+   "label": "vulnerable",
+   "group": "cmd-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/cmd/C202.hs",
+   "cwe": null
+  },
+  {
+   "family": "cmd",
+   "label": "vulnerable",
+   "group": "cmd-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/cmd/C203.hs",
+   "cwe": null
+  },
+  {
+   "family": "cmd",
+   "label": "safe",
+   "group": "cmd-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/cmd/C204.hs",
+   "cwe": null
+  },
+  {
+   "family": "cmd",
+   "label": "safe",
+   "group": "cmd-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/cmd/C205.hs",
+   "cwe": null
+  },
+  {
+   "family": "cmd",
+   "label": "safe",
+   "group": "cmd-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/cmd/C206.hs",
+   "cwe": null
+  },
+  {
+   "family": "path",
+   "label": "vulnerable",
+   "group": "path-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/path/C301.hs",
+   "cwe": null
+  },
+  {
+   "family": "path",
+   "label": "vulnerable",
+   "group": "path-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/path/C302.hs",
+   "cwe": null
+  },
+  {
+   "family": "path",
+   "label": "vulnerable",
+   "group": "path-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/path/C303.hs",
+   "cwe": null
+  },
+  {
+   "family": "path",
+   "label": "safe",
+   "group": "path-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/path/C304.hs",
+   "cwe": null
+  },
+  {
+   "family": "path",
+   "label": "safe",
+   "group": "path-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/path/C305.hs",
+   "cwe": null
+  },
+  {
+   "family": "path",
+   "label": "safe",
+   "group": "path-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/path/C306.hs",
+   "cwe": null
+  },
+  {
+   "family": "ssrf",
+   "label": "vulnerable",
+   "group": "ssrf-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/ssrf/C401.hs",
+   "cwe": null
+  },
+  {
+   "family": "ssrf",
+   "label": "vulnerable",
+   "group": "ssrf-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/ssrf/C402.hs",
+   "cwe": null
+  },
+  {
+   "family": "ssrf",
+   "label": "vulnerable",
+   "group": "ssrf-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/ssrf/C403.hs",
+   "cwe": null
+  },
+  {
+   "family": "ssrf",
+   "label": "safe",
+   "group": "ssrf-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/ssrf/C404.hs",
+   "cwe": null
+  },
+  {
+   "family": "ssrf",
+   "label": "safe",
+   "group": "ssrf-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/ssrf/C405.hs",
+   "cwe": null
+  },
+  {
+   "family": "ssrf",
+   "label": "safe",
+   "group": "ssrf-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/ssrf/C406.hs",
+   "cwe": null
+  },
+  {
+   "family": "exposure",
+   "label": "vulnerable",
+   "group": "exp-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/exposure/C501.hs",
+   "cwe": null
+  },
+  {
+   "family": "exposure",
+   "label": "vulnerable",
+   "group": "exp-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/exposure/C502.hs",
+   "cwe": null
+  },
+  {
+   "family": "exposure",
+   "label": "vulnerable",
+   "group": "exp-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/exposure/C503.hs",
+   "cwe": null
+  },
+  {
+   "family": "exposure",
+   "label": "safe",
+   "group": "exp-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/exposure/C504.hs",
+   "cwe": null
+  },
+  {
+   "family": "exposure",
+   "label": "safe",
+   "group": "exp-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/exposure/C505.hs",
+   "cwe": null
+  },
+  {
+   "family": "exposure",
+   "label": "safe",
+   "group": "exp-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/exposure/C506.hs",
+   "cwe": null
+  },
+  {
+   "family": "crypto",
+   "label": "vulnerable",
+   "group": "cry-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/crypto/C601.hs",
+   "cwe": null
+  },
+  {
+   "family": "crypto",
+   "label": "vulnerable",
+   "group": "cry-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/crypto/C602.hs",
+   "cwe": null
+  },
+  {
+   "family": "crypto",
+   "label": "vulnerable",
+   "group": "cry-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/crypto/C603.hs",
+   "cwe": null
+  },
+  {
+   "family": "crypto",
+   "label": "safe",
+   "group": "cry-1",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/crypto/C604.hs",
+   "cwe": null
+  },
+  {
+   "family": "crypto",
+   "label": "safe",
+   "group": "cry-2",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/crypto/C605.hs",
+   "cwe": null
+  },
+  {
+   "family": "crypto",
+   "label": "safe",
+   "group": "cry-3",
+   "split": "dev",
+   "origin": "author-seed",
+   "file": "cases/crypto/C606.hs",
+   "cwe": null
+  }
+ ]
+}
