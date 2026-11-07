@@ -201,6 +201,8 @@ import { applyFeedback as applyLearnedFeedback } from './posture/learning.js';
 import { validateMany as llmValidateMany, applyValidatorVerdicts } from './llm-validator/index.js';
 import { applyDispositions } from './llm-validator/disposition.js';
 import { annotateScaBasis, dedupeAdvisoryAliases } from './sca/basis.js';
+import { readProjectModelFile, loadProjectModels, projectFileExists } from './language/haskell-project-models.js';
+import { registerProjectCatalogEntries, unregisterProjectCatalogEntries } from './dataflow/catalog.js';
 import { MODEL_STATUS, stageSummaryFromModelStatus } from './llm-validator/model-status.js';
 import { resolveProvider as resolveLlmProvider, otherRemoteRoles as llmOtherRemoteRoles, NO_CLOUD_FALLBACK } from './llm-validator/providers.js';
 import { scanCrossLangOpenAPI } from './posture/cross-lang-openapi.js';
@@ -8995,6 +8997,14 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // The feed metadata is module state: reset it so one scan cannot inherit another's catalog freshness in the same process (0.195.22).
   _kevCatalogMeta = { source: 'not-loaded', fetchedAt: null, ageDays: null, stale: null, entries: 0 };
   _epssLiveMeta = { source: 'not-loaded', ageDays: null, stale: null, cvesChecked: 0 };
+  // PRD FR 03: reviewed project models for Haskell wrappers. Registered for this scan only; a model without provenance or paired tests is rejected and reported.
+  let _projectModels = { present: false, accepted: [], rejected: [], catalog: [] };
+  try {
+    if (scanRoot) {
+      _projectModels = loadProjectModels(readProjectModelFile(scanRoot), projectFileExists(scanRoot));
+      if (_projectModels.catalog.length) registerProjectCatalogEntries(scanRoot, _projectModels.catalog);
+    }
+  } catch (e) { _projectModels = { present: true, accepted: [], rejected: [{ id: '(file)', reason: String((e && e.message) || e) }], catalog: [] }; }
   _resetSuppressions();_tel.time('index', () => _buildProjectIndex(fileContents));await _tel.timeAsync('custom-rules', () => _loadCustomRules(scanRoot));
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
@@ -11412,6 +11422,7 @@ function _deterministicFileTimings(timings) {
         policyExcluded,
         sizeSkipped,
         deepEnabled: _deepEnabled,
+        projectModels: _projectModels,
         sourceMap: haskellSourceMap,
         ruleRuns: { ..._hsRuleRuns, 'ir-taint': { ran: _deepEnabled, findings: finalFindings.filter((f) => f && f.parser === 'IR-TAINT' && /\.l?hs$/i.test(f.file || '')).length }, 'hs-sca': { ran: true } },
         supplyGaps: _languageSupplyGaps,
@@ -11448,6 +11459,7 @@ function _deterministicFileTimings(timings) {
   setDetectorTimingSink(null);
   attributeErrors(_tel, { annotatorErrors: _annotatorErrors, detectorErrors: (typeof _detectorErrors !== 'undefined' ? _detectorErrors : []), deepFailure: _deepFailure, filesTimedOut: (_scanMeta && _scanMeta.filesTimedOut) || 0 });
   _tel.set('files.scanned', (_scanMeta && _scanMeta.filesScanned) || 0); _tel.set('files.skipped', (_scanMeta && _scanMeta.filesSkipped) || 0);
+  try { unregisterProjectCatalogEntries(scanRoot); } catch (_) {}
   return{telemetry:_tel.snapshot(),entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance,dispositionCounts:_dispositionCounts};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".

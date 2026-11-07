@@ -121,6 +121,7 @@ export async function readTree(root, { ignore = [], gitScope = process.env.AGENT
     else if (/\.proto$/i.test(base)) depFileContents[rel] = content;
     else if (/\.(?:graphql|gql)$/i.test(base)) depFileContents[rel] = content;
     else if (/\.tf$/i.test(base)) depFileContents[rel] = content;
+    else if (/^(?:BUCK|TARGETS)(?:\.v2)?$/.test(base) && /\bhaskell_|prebuilt_haskell_library/.test(content)) depFileContents[rel] = content;
     // A Kubernetes manifest is admitted on CONTENT, not on living under a
     // directory named k8s/ — see isKubernetesManifest. Without this the
     // k8s-admission detector is wired into the dispatch and never invoked by it.

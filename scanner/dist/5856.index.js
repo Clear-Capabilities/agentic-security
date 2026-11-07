@@ -488,6 +488,18 @@ async function assessLanguageAssurance(input = {}) {
   if (ociFiles.length) limitations.push({ kind: 'container-image-scan', files: ociFiles.sort(), note: 'Nix-built images and declared OCI services are analysed as configuration only: image layers and base-image vulnerabilities are NOT scanned' });
   if (!reconcile.ok) conditions.push(`language ledger does not reconcile with the inputs: ${reconcile.errors[0]}`);
 
+  // Buck-built Haskell: its dependency graph is not resolved by this scanner, so version-based advisory matching has nothing to match.
+  // Stated as a coverage gap (PRD FR 08) rather than left looking like "no vulnerable dependencies".
+  const buckHaskell = Object.entries(files).filter(([f, t]) => /(?:^|\/)(?:BUCK|TARGETS)(?:\.v2)?$/.test(f) && typeof t === 'string' && /\bhaskell_(?:library|binary|test|ghci)\b|\bprebuilt_haskell_library\b/.test(t)).map(([f]) => f).sort();
+  if (present.has('haskell') && buckHaskell.length) conditions.push(`${buckHaskell.length} Buck target file(s) declare Haskell dependencies this scan does not resolve (${buckHaskell.slice(0, 3).join(', ')}): dependency advisories were not matched for them`);
+
+  // Declared project models (PRD FR 03): a rejected declaration means a wrapper the project meant to model is still opaque.
+  const pm = input.projectModels;
+  if (pm && pm.present) {
+    if (pm.rejected.length) conditions.push(`${pm.rejected.length} Haskell project model(s) were rejected and have no effect: ${pm.rejected.slice(0, 3).map((r) => `${r.id} (${r.reason})`).join('; ')}`);
+    if (pm.accepted.length) limitations.push({ kind: 'project-models', count: pm.accepted.length, ids: pm.accepted.map((m) => m.id).sort(), note: 'wrappers modelled by reviewed project declarations (.agentic-security/haskell-models.json); each carries provenance and a paired positive and negative test' });
+  }
+
   // 2. manifests
   if (manifests.length) {
     let m = null;

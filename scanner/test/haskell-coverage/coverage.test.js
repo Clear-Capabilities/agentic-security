@@ -109,3 +109,11 @@ test('--haskell-source-map assigns files to a Buck-style package without running
   const { scan } = await runScan(dir, { haskellSourceMap: 'map.json' });
   assert.equal(scan.scanHealth.languageCoverage.haskell.byFile['buck/svc/A.hs'].package, 'svc-api');
 });
+
+test('Buck-declared Haskell dependencies are a coverage gap, not a clean result (PRD FR 08)', async () => {
+  const dir = proj({ 'svc/Lib.hs': GOOD, 'svc/BUCK': 'haskell_library(name = "lib", srcs = ["Lib.hs"], deps = ["//third-party:aeson"])\n' });
+  const { scan } = await runScan(dir);
+  const conds = scan.scanHealth.conditions || [];
+  const lc = scan.scanHealth.languageCoverage.conditions || [];
+  assert.ok([...conds, ...lc].some((c) => /Buck target file/.test(c)), JSON.stringify(lc));
+});

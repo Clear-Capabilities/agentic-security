@@ -107,7 +107,9 @@ function validatedBeforeUse(script, v, useIdx) {
 
 export function analyzeWorkflow(fp, raw) {
   let doc;
-  try { doc = load(raw); } catch { return null; }
+  // js-yaml is quadratic on a long run of blank lines. A run that long carries no meaning, so collapse it for parsing only;
+  // lines are located in `raw`, not in the collapsed text.
+  try { doc = load(raw.replace(/(?:[ \t]*\r?\n){20,}/g, '\n')); } catch { return null; }
   if (!doc || typeof doc !== 'object' || typeof doc.jobs !== 'object') return null;
   const { on, inputs } = collectInputs(doc);
   const trig = triggers(on);

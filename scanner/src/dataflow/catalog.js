@@ -2759,3 +2759,37 @@ export function matchAnnotationParamSources(paramAnnotations, file) {
 
 // For tests and reflection.
 export function _catalogSize() { return CATALOG.length; }
+
+// Project-declared models (PRD FR 03). Registered for the duration of one scan and removed afterwards, so a project's own wrapper
+// declarations never become part of the shipped catalog. Entries are tagged `source: 'project'`, which the official-only mode excludes.
+const _PROJECT_ENTRIES = new Map();
+export function registerProjectCatalogEntries(owner, entries) {
+  unregisterProjectCatalogEntries(owner);
+  const added = [];
+  for (const e of entries || []) {
+    if (!e || !e.match || e.match.type !== 'call' || !e.match.callee) continue;
+    const entry = { ...e, source: 'project' };
+    CATALOG.push(entry);
+    const k = entry.match.callee;
+    if (!CALLEE_INDEX.has(k)) CALLEE_INDEX.set(k, []);
+    CALLEE_INDEX.get(k).push(entry);
+    added.push(entry);
+  }
+  _PROJECT_ENTRIES.set(owner, added);
+  return added.length;
+}
+export function unregisterProjectCatalogEntries(owner) {
+  const added = _PROJECT_ENTRIES.get(owner);
+  if (!added) return;
+  for (const e of added) {
+    const i = CATALOG.indexOf(e);
+    if (i >= 0) CATALOG.splice(i, 1);
+    const list = CALLEE_INDEX.get(e.match.callee);
+    if (list) {
+      const j = list.indexOf(e);
+      if (j >= 0) list.splice(j, 1);
+      if (!list.length) CALLEE_INDEX.delete(e.match.callee);
+    }
+  }
+  _PROJECT_ENTRIES.delete(owner);
+}

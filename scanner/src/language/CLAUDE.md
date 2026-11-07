@@ -203,3 +203,7 @@ at the use site that shares one of the names disables the expansion (it stays th
 the alias's call-graph edge is kept via `inlinedCalls`; arguments are lowered in the CALLER's module. Pinned both ways in
 `test/haskell/haskell-alias-taint.test.js`. Haskell verdict-flip cases live in `bench/mutation/cases-haskell.mjs`; the 8
 `bench/cve-replay/deep/hs-*-shape` entries are synthetic (self-authored, not from advisories).
+
+## Project models for Haskell wrappers (PRD FR 03)
+
+`haskell-project-models.js` loads `.agentic-security/haskell-models.json` (schema `haskell-project-models/1`). A model declares a source, sink or sanitizer by module and function name and is accepted only with provenance (reviewer, date, reason), an argument position for a sink, an explicit family list for a sanitizer (`*` is refused), and a paired positive and negative test file that exists inside the project. A rejected model is a scan-health condition and has no effect. Accepted models are registered into the taint catalog for one scan (`registerProjectCatalogEntries`, tagged `source: 'project'`) and removed before `runFullScan` returns; a scan that throws leaves them until the next scan of the same root replaces them, and two scans of different roots in one process see only their own names unless the module names collide.
