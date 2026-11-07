@@ -25,12 +25,12 @@ const SEVERITY_DEMOTE = {
 // keeps full severity. route-reachable-via-function and function-reachable
 // both keep full severity because the vulnerable function is provably
 // called; import-reachable also keeps full severity (imported = uncertain
-// but plausible). The lower three tiers get demoted.
+// but plausible). manifest-only and transitive-only record only that no use was
+// observed, which is unknown reachability, and unknown reachability cannot lower
+// severity (PRD FR 08). Only positive evidence (unreachable, build-only) demotes.
 const DEMOTE_SCA_TIERS = new Set([
   'unreachable',       // function never called from project
   'build-only',        // dev/build-time dependency only
-  'manifest-only',     // declared, but no use observed
-  'transitive-only',   // transitive dep, scope unclear
 ]);
 
 export function demoteUnreachable(findings, opts = {}) {

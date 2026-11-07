@@ -9435,7 +9435,6 @@ function _deterministicFileTimings(timings) {
     } else {
       sc.reachabilityTier = 'transitive-only';
     }
-    if (sc.reachabilityTier === 'transitive-only') { sc.unreachable = true; sc._reachabilityDemoted = true; }
     // Mark as the strongest "vulnerable function actually invoked" signal so
     // posture/reachability-filter can preserve full severity on this tier
     // while demoting lower tiers.

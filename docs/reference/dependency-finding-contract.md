@@ -72,7 +72,7 @@ A compatibility test (`scanner/test/contracts/dependency-finding.contract.test.j
 | `import-reachable` | The package is imported, and the advisory names no function to check |
 | `build-only` | The package is optional or build-time and not imported. Severity is lowered one step |
 | `manifest-only` | The package is required and declared, and nothing imports it |
-| `transitive-only` | The package is only a dependency of a dependency, and nothing imports it. It is marked unreachable |
+| `transitive-only` | The package is only a dependency of a dependency, and nothing imports it. This is unknown reachability: severity is kept |
 
 **Triage verdicts**
 
