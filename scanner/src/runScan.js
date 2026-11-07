@@ -298,6 +298,9 @@ export async function runScan(rootDir, opts = {}) {
       schema: 1,
       policy: scopeInventory.policy,
       includedCount: scopeInventory.included.length,
+      // The included list itself lets a later comparison tell "no longer reported because it was fixed" from "no longer reported
+      // because a narrower scan did not look". Kept only when small enough not to bloat the record.
+      ...(scopeInventory.included.length <= 5000 ? { included: scopeInventory.included } : { includedOmitted: true }),
       skippedCount: scopeInventory.skipped.length,
       skippedByReason: reasons,
       skipped: scopeInventory.skipped.slice(0, 500),

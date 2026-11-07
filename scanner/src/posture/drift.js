@@ -79,6 +79,18 @@ export function driftBetween(scanA, scanB) {
   const allFindingsA = [...(scanA.findings || []), ...(scanA.logicVulns || [])];
   const allFindingsB = [...(scanB.findings || []), ...(scanB.logicVulns || [])];
   const findings = _diffSets(allFindingsA, allFindingsB, _findingKey);
+  // PRD FR 01: a finding that disappeared because the newer scan did not cover its file is out of scope, never fixed.
+  const outOfScope = [];
+  if (scanB.scope && Array.isArray(scanB.scope.included)) {
+    const inB = new Set(scanB.scope.included);
+    const keep = [];
+    for (const f of findings.removed) (f && f.file && !inB.has(f.file) ? outOfScope : keep).push(f);
+    findings.removed = keep;
+    findings.outOfScope = outOfScope;
+  } else {
+    findings.outOfScope = [];
+    findings.scopeUnknown = !!(scanB.scope && scanB.scope.includedOmitted);
+  }
   const severity = _severityDelta(allFindingsA, allFindingsB);
   const authBoundaries = _authBoundaryDelta(scanA.routes || [], scanB.routes || []);
   const dataClasses = _dataClassDelta(scanA.routes || [], scanB.routes || []);
@@ -161,6 +173,10 @@ export function driftToMarkdown(drift) {
   }
   if (drift.findings.removed.length) {
     lines.push(`**Findings fixed: ${drift.findings.removed.length}**`);
+    lines.push('');
+  }
+  if (drift.findings.outOfScope && drift.findings.outOfScope.length) {
+    lines.push(`**Findings not covered by this scan (out of scope, not fixed): ${drift.findings.outOfScope.length}**`);
     lines.push('');
   }
   if (drift.dataClasses.newlyExposed.length) {
