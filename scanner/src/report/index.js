@@ -291,6 +291,10 @@ export function normalizeFindings(scan){
       blastRadius: f.blastRadius || null,
       // Sentinel-parity (FR-PREC, FR-L3) preserved fields.
       stableId: f.stableId || null,
+      // FR 05 / FR 10: the final disposition, why, and the evidence record. Present only when the engine computed them.
+      ...(f.disposition ? { disposition: f.disposition, dispositionDetail: f.dispositionDetail || null } : {}),
+      ...(f.record ? { record: f.record } : {}),
+      ...(f.validator_reject_retained ? { validator_reject_retained: true } : {}),
       confidenceTier: f.confidenceTier || null,
       exploitability: typeof f.exploitability === 'number' ? f.exploitability : null,
       exploitabilityTier: f.exploitabilityTier || null,
@@ -570,6 +574,8 @@ export function normalizeFindings(scan){
       version: sc.version,
       cveAliases: sc.cveAliases || [],
       osvId: sc.osvId || null,
+      ...(sc.basis ? { basis: sc.basis } : {}),
+      ...(sc.advisoryIds ? { advisoryIds: sc.advisoryIds, occurrences: sc.occurrences } : {}),
       advisory: sc.advisory || sc.description || sc.summary || '',
       // Hackage (and any matcher that decides from ranges): WHY the dependency matched. Without these a `possibly-affected` finding
       // (only a declared range is known) reads exactly like an `affected` one (the resolved version is inside the range).
@@ -765,6 +771,7 @@ export function toJSON(scan, meta={}, opts={}){
     // "analysis complete". Null when the engine did not compute one (e.g. a
     // hand-built `scan` object in a test), same convention as the S7 fields
     // above; a real scan always computes it.
+     ...(scan.scanRecord ? { scanRecord: scan.scanRecord } : {}),
      ...(scan.reportView ? { reportView: scan.reportView } : {}),
      ...(scan.dispositionCounts ? { dispositionCounts: scan.dispositionCounts } : {}),
     scanHealth: scan.scanHealth || null,

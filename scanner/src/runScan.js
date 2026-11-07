@@ -11,6 +11,8 @@ import { runFullScan, shouldScan, isKubernetesManifest, isCloudFormationTemplate
 import { appendScanSnapshot } from './posture/security-trend.js';
 import { recover as recoverFixHistory } from './posture/fix-history.js';
 import { stampScan } from './posture/ruleset-version.js';
+import { annotateFindingRecords, buildScanRecord } from './pipeline/evidence-record.js';
+import { SCANNER_VERSION } from './posture/version.js';
 import { isLanguageManifest, isLanguageExcludedPath, isLanguageSource, readExplicitExports, WALK_IGNORE_GLOBS, impactedFiles, buildImportGraph, importClosure } from './language/discovery.js';
 
 const DEP_FILE_NAMES = new Set([
@@ -303,6 +305,10 @@ export async function runScan(rootDir, opts = {}) {
       coverageConditions: scopeInventory.skipped.filter((x) => x.coverageCondition).slice(0, 100),
     };
   }
+  // FR 10: additive evidence contract. Finding records carry the source hash and span; the scan record ties the run to a commit,
+  // dirty-file digests, the ignore-policy digest and the invocation. Neither replaces an existing field.
+  try { annotateFindingRecords(scan.findings, fileContents, { engineVersion: SCANNER_VERSION }); } catch {}
+  try { scan.scanRecord = buildScanRecord({ root, scan, meta: { mode: opts.changedSince ? 'incremental' : 'full', durationMs: Date.now() - t0 }, argv: opts.invocation || [], engineVersion: SCANNER_VERSION }); } catch {}
   // Append snapshot to history for /security-trend (non-blocking, never throws)
   try { appendScanSnapshot(scan, root); } catch {}
   return {

@@ -814,6 +814,7 @@ async function cmdScan(args) {
 
   const { scan, meta } = await runScan(target, {
     changedSince,
+    invocation: process.argv.slice(2),
     onProgress: scanProgressReporter(),
     ...(scopeFlags.active ? { gitScope: true, scope: scopeFlags.scope } : {}),
     ...(args.flags['haskell-source-map'] ? { haskellSourceMap: String(args.flags['haskell-source-map']) } : {}),
