@@ -63,3 +63,35 @@ test('in Git scope a tracked file under test, vendor or bin is scanned, and the 
   const legacy = await runScan(d, {});
   assert.deepEqual(files(legacy.scan), ['src/app.js']);
 });
+
+test('a Git-ignored file is never opened by the scan, whatever opens files (PRD FR 01 acceptance)', async () => {
+  const { createRequire, syncBuiltinESMExports } = await import('node:module');
+  const req = createRequire(import.meta.url);
+  const fs = req('node:fs');
+  const fsp = req('node:fs/promises');
+  const path = await import('node:path');
+  const cp = await import('node:child_process');
+  const { runScan } = await import('../../src/runScan.js');
+  const { mkTestTmp } = await import('../helpers/tmp.js');
+  const d = mkTestTmp('agsec-scope-reads-');
+  fs.writeFileSync(path.join(d, '.gitignore'), 'secret-out/\n*.private.hs\n');
+  fs.writeFileSync(path.join(d, 'package.json'), '{}');
+  fs.mkdirSync(path.join(d, 'secret-out', 'deep'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'secret-out', 'deep', 'a.js'), "require('child_process').exec(process.argv[2])\n");
+  fs.writeFileSync(path.join(d, 'x.private.hs'), 'module X where\n');
+  fs.writeFileSync(path.join(d, 'ok.js'), 'module.exports = 1\n');
+  cp.spawnSync('git', ['init', '-q'], { cwd: d });
+  const opened = [];
+  const real = { rfs: fs.readFileSync, ofs: fs.openSync, rp: fsp.readFile, op: fsp.open };
+  const note = (p) => { if (typeof p === 'string') opened.push(p); };
+  fs.readFileSync = function (p, ...a) { note(p); return real.rfs.call(this, p, ...a); };
+  fs.openSync = function (p, ...a) { note(p); return real.ofs.call(this, p, ...a); };
+  fsp.readFile = function (p, ...a) { note(p); return real.rp.call(this, p, ...a); };
+  fsp.open = function (p, ...a) { note(p); return real.op.call(this, p, ...a); };
+  syncBuiltinESMExports();
+  try { await runScan(d, { gitScope: true }); }
+  finally { fs.readFileSync = real.rfs; fs.openSync = real.ofs; fsp.readFile = real.rp; fsp.open = real.op; syncBuiltinESMExports(); }
+  const touched = opened.filter((p) => p.startsWith(d) && /secret-out|\.private\.hs/.test(p));
+  assert.deepEqual(touched, [], 'an ignored path was opened');
+  assert.ok(opened.some((p) => p.endsWith('ok.js')), 'the instrumentation sees ordinary reads');
+});
