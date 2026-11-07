@@ -1,4 +1,5 @@
 // Report writers — JSON / Markdown / SARIF.
+import { viewLine } from './disposition-view.js';
 import * as crypto from 'node:crypto';
 import { _isCustomSuppressed } from '../engine.js';
 import { alertFace, approveFace } from './mascot.js';
@@ -764,6 +765,8 @@ export function toJSON(scan, meta={}, opts={}){
     // "analysis complete". Null when the engine did not compute one (e.g. a
     // hand-built `scan` object in a test), same convention as the S7 fields
     // above; a real scan always computes it.
+     ...(scan.reportView ? { reportView: scan.reportView } : {}),
+     ...(scan.dispositionCounts ? { dispositionCounts: scan.dispositionCounts } : {}),
     scanHealth: scan.scanHealth || null,
     // X-207: advisory hypotheses a caller put in the finding list; excluded from `findings`, listed here so it is never silent.
     ...(Array.isArray(scan.advisoryExcluded) && scan.advisoryExcluded.length ? { advisoryExcluded: scan.advisoryExcluded } : {}),
@@ -1152,6 +1155,7 @@ export function toSARIF(scan, meta={}){
         // changes vs. code changes.
         properties: {
           ...(haskellCoverageSummary(scan) ? { haskellCoverage: haskellCoverageSummary(scan) } : {}),
+          ...(scan.reportView ? { reportView: scan.reportView } : {}),
           ...(scan && scan._rulesetVersion ? { rulesetVersion: scan._rulesetVersion } : {}),
           ...(scan && scan._rulesetVersionSource ? { rulesetVersionSource: scan._rulesetVersionSource } : {}),
           ...(scan && scan._rulesetVersionMismatch ? { rulesetVersionMismatch: scan._rulesetVersionMismatch } : {}),
@@ -1400,6 +1404,7 @@ export function toHTML(scan, meta = {}) {
     <div class="card"><h2>STRIDE coverage</h2><table><tbody>${strideRows}</tbody></table></div>
     <div class="card"><h2>Top files</h2><table><tbody>${hotRows}</tbody></table></div>
   </div>
+  ${(() => { const vl = viewLine(scan.reportView); return vl ? `<div class="card" style="margin-bottom:24px"><h2>Findings by disposition</h2><div class="meta">${_esc(vl)}</div></div>` : ''; })()}
   ${(() => { const h = haskellCoverageSummary(scan); if (!h) return ''; return `<div class="card" style="margin-bottom:24px"><h2>Haskell coverage &mdash; ${_esc(h.status)}</h2><div class="meta">${_esc(haskellCoverageLine(scan))}</div><div class="meta">Rule families: ${h.ruleFamilies.map((f) => `${_esc(f.id)} (${_esc(f.status)})`).join(', ')}</div>${h.reasons.map((r) => `<div class="meta">&bull; ${_esc(r)}</div>`).join('')}${h.limitations.map((r) => `<div class="meta">&bull; ${_esc(r)}</div>`).join('')}</div>`; })()}
   <div class="filters">
     <input id="q" placeholder="Filter by file, vuln, CWE&hellip;" />
@@ -1714,6 +1719,7 @@ export function toShipVerdict(scan, options = {}) {
     lines.push(c(`  ${scan.scanHealth.status}: ${conditions[0] || 'analysis did not complete cleanly'}${conditions.length > 1 ? ` (+${conditions.length - 1} more)` : ''}`, SEV_COLOR.high));
   }
   { const hl = haskellCoverageLine(scan); if (hl) lines.push(c(`  ${hl}`, DIM)); }
+  { const vl = viewLine(scan.reportView); if (vl) lines.push(c(`  ${vl}`, DIM)); }
   lines.push(`  • ${sev.critical} critical · ${sev.high} high · ${advisoryCount} advisory`);
   // Per-category 0..100 score bars — Secrets / Permissions / Hooks / MCP / Agents.
   // Only render when at least one category has been contributed to (skip the

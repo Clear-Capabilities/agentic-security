@@ -12,6 +12,7 @@ import { signLastScan as _signLastScan, verifyLastScan as _verifyLastScanShared 
 import { isProvenanceHealthy, sanitizeForTerminal } from '../src/posture/provenance/schema.js';
 import { runScan } from '../src/runScan.js';
 import { parseScopeFlags, renderScopePreview } from '../src/scope/flags.js';
+import { buildDispositionView, parseExcludeKinds } from '../src/report/disposition-view.js';
 import { buildScanInventory } from '../src/scope/inventory.js';
 import { persistGraphSnapshot, loadSnapshots, loadSnapshot, mostRecentPriorSnapshot } from '../src/lineage/graph-snapshot.js';
 
@@ -341,6 +342,9 @@ Options:
   --pr [ref]                   Diff-aware: scan only files changed since ref (auto-detects PR base)
   --deterministic              Reproducible scan: stable sort, no-network, lockfile-checked
   --incremental                Reuse taint summaries from prior scans (speeds up deep mode in CI)
+  --explain-scope              Preview included/skipped paths and ignore reasons, then exit (also --include-path, --exclude-path, --include-ignored-path, --ignore-source all|repository, --no-respect-gitignore)
+  --exclude-kind <k[,k]>       Hide sca, generated, secrets or logic findings from the report view only (still stored; not marked assessed)
+  --view-category/-language/-package/-path/-disposition <v>, --view-min-confidence <n>   Filter the report view
   --set-baseline               Save current findings as baseline (suppresses pre-existing issues)
   --since-baseline             Only show findings NOT in the saved baseline
   --hide-proven-safe           Drop findings discharged by a flow proof (provably safe)
@@ -977,6 +981,13 @@ async function cmdScan(args) {
       if (_line) process.stderr.write(`⚠️  agentic-security: ${_line}\n`);
     }
   } catch { /* reporting must never fail a scan */ }
+  // PRD FR 09: disposition view. Display only; stored buckets are not touched.
+  { const ek = parseExcludeKinds(args.flags['exclude-kind']);
+    if (ek.errors.length) { for (const e of ek.errors) process.stderr.write(`agentic-security scan: ${e}\n`); return 2; }
+    const flt = {};
+    for (const k of ['category', 'language', 'package', 'path', 'disposition']) if (args.flags[`view-${k}`]) flt[k] = String(args.flags[`view-${k}`]);
+    if (args.flags['view-min-confidence'] !== undefined) flt.minConfidence = Number(args.flags['view-min-confidence']);
+    scan.reportView = buildDispositionView(scan, { excludeKinds: ek.kinds, filters: flt }); }
 
   // Curated rule packs: --pack <name> (repeatable). Narrows findings to the
   // CWEs covered by the requested pack(s).
