@@ -200,6 +200,7 @@ import { annotateExploitability, detectProjectContext } from './posture/exploita
 import { applyFeedback as applyLearnedFeedback } from './posture/learning.js';
 import { validateMany as llmValidateMany, applyValidatorVerdicts } from './llm-validator/index.js';
 import { applyDispositions } from './llm-validator/disposition.js';
+import { annotateScaBasis, dedupeAdvisoryAliases } from './sca/basis.js';
 import { MODEL_STATUS, stageSummaryFromModelStatus } from './llm-validator/model-status.js';
 import { resolveProvider as resolveLlmProvider, otherRemoteRoles as llmOtherRemoteRoles, NO_CLOUD_FALLBACK } from './llm-validator/providers.js';
 import { scanCrossLangOpenAPI } from './posture/cross-lang-openapi.js';
@@ -8573,6 +8574,9 @@ async function queryOSV(components,allFileContents){
         fixedVersions: [...fixedVersions].sort(),
         aliases: (d.aliases || []).filter(a => a.startsWith('CVE-')),
         osvVulnFunctions: [...new Set(osvVulnFunctions)],
+        // PRD FR 08: the advisory's own timestamps and affected ranges, so a finding can say what it matched and when that was published.
+        advisoryModified: d.modified || null, advisoryPublished: d.published || null,
+        affectedRanges: (d.affected || []).flatMap((aff) => (aff.ranges || []).map((r) => ({ type: r.type, events: (r.events || []).map((ev) => ({ ...ev })) }))),
         severity, cvssVector, hasKnownAttackRef };
       _osvCacheSet('vuln:' + vid, vuln);
       return [vid, vuln];
@@ -8593,6 +8597,7 @@ async function queryOSV(components,allFileContents){
       results.push({ type: 'vulnerable_dep', name: comp.name, version: comp.version, ecosystem: comp.ecosystem,
         purl: comp.purl, osvId: vid, cveAliases: vuln.aliases, description: vuln.description,
         fixedVersions: vuln.fixedVersions, severity: vuln.severity, cvssVector: vuln.cvssVector,
+        advisoryModified: vuln.advisoryModified || null, advisoryPublished: vuln.advisoryPublished || null, affectedRanges: vuln.affectedRanges || null,
         hasKnownAttackRef: vuln.hasKnownAttackRef, osvVulnFunctions: vuln.osvVulnFunctions || [], reachable: comp.reachable, scope: comp.scope,
         file: comp.filePath,
         // `isDirect` is backfilled onto every component just above the queryOSV
@@ -9424,6 +9429,8 @@ function _deterministicFileTimings(timings) {
       sc.routeReachableViaFunction = true;
     }
   }
+  // PRD FR 08: record the basis of every dependency finding, kept apart from reachability.
+  try { const _merged = dedupeAdvisoryAliases(supplyChain); supplyChain.length = 0; supplyChain.push(..._merged); annotateScaBasis(supplyChain); } catch (_) {}
   // Early dedup: collapse duplicates BEFORE the annotation pipeline to reduce work.
   try{const _earlyMap=new Map();for(const f of aF){const k=`${f.file||''}:${f.line||0}:${f.vuln||''}`;if(!_earlyMap.has(k))_earlyMap.set(k,f);}aF.length=0;aF.push(..._earlyMap.values());}catch(_){}
   // Sort findings: critical first, then structural patterns last within same severity
