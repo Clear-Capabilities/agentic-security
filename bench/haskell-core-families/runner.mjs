@@ -75,7 +75,7 @@ export async function runCases(manifest, { split = null, scanner } = {}) {
       let scan = null; let error = null;
       try { scan = (await runScan(dir, {})).scan; } catch (e) { error = String(e && e.message || e); }
       const cwes = new Set(FAMILIES[c.family]);
-      const hits = scan ? scan.findings.filter((f) => f.file === rel && cwes.has(f.cwe) && ACTIONABLE.has(f.disposition)) : [];
+      const hits = scan ? scan.findings.filter((f) => f.file === rel && cwes.has(f.cwe) && ACTIONABLE.has(f.disposition) && f.provablySafe !== true) : [];
       results.push({ id: path.basename(c.file, '.hs'), family: c.family, label: c.label, group: c.group, split: c.split, origin: c.origin,
         detected: hits.length > 0, confirmed: hits.some((f) => f.disposition === 'confirmed'), cwes: [...new Set(hits.map((f) => f.cwe))], error });
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
