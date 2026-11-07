@@ -19,6 +19,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -60,6 +61,7 @@ export function summarize(results, { minRecall = 0.8 } = {}) {
 }
 
 export async function runCases(manifest, { split = null, scanner } = {}) {
+  await disableStateWrites();
   const { runScan } = scanner || await import(pathToFileURL(path.join(REPO, 'scanner', 'src', 'runScan.js')).href);
   const results = [];
   for (const c of manifest.cases) {

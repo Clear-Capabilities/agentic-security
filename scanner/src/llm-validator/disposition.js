@@ -22,7 +22,7 @@ export const DISPOSITIONS = Object.freeze({
 });
 
 /** Refutation kinds that disprove a claim. Context alone (where the code lives) never does. */
-export const REFUTATION_KINDS = Object.freeze([
+const REFUTATION_KINDS = Object.freeze([
   'guard-proven', 'sanitizer-proven', 'unreachable-proven', 'constant-input', 'already-patched', 'not-the-claimed-weakness',
 ]);
 
@@ -65,7 +65,7 @@ function staleReason(f, fileContents) {
  * A refutation must name a kind, cite evidence, name who or what verified it,
  * and match the snapshot the finding was raised on.
  */
-export function judgeRefutation(r, f, fileContents) {
+function judgeRefutation(r, f, fileContents) {
   if (!r || typeof r !== 'object') return { ok: false, reason: 'no refutation recorded' };
   if (!REFUTATION_KINDS.includes(r.kind)) return { ok: false, reason: `refutation kind "${r.kind}" does not disprove a claim` };
   if (!Array.isArray(r.evidenceRefs) || r.evidenceRefs.length === 0) return { ok: false, reason: 'refutation cites no evidence' };
@@ -85,7 +85,7 @@ export function judgeRefutation(r, f, fileContents) {
  * content fingerprint; reopens on expiry or when the relevant source changes.
  * Returns { active, reopened, reason }.
  */
-export function judgeSuppression(s, f, fileContents, now = Date.now()) {
+function judgeSuppression(s, f, fileContents, now = Date.now()) {
   if (!s || typeof s !== 'object') return { active: false, reason: 'no suppression recorded' };
   for (const k of ['rationale', 'owner', 'scope', 'expires', 'fingerprint']) {
     if (!s[k]) return { active: false, reason: `suppression is missing ${k}` };
@@ -237,7 +237,7 @@ export function assignDisposition(f, { fileContents = null, now = Date.now() } =
   });
 }
 
-export function annotateDispositions(findings, opts = {}) {
+function annotateDispositions(findings, opts = {}) {
   const counts = {};
   for (const f of findings) {
     if (!f || f.kind === 'sca') continue;

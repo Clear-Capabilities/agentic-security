@@ -17,9 +17,9 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { statePath } from '../posture/state-dir.js';
 
 export const PROJECT_MODEL_SCHEMA = 'haskell-project-models/1';
-export const PROJECT_MODEL_FILE = path.join('.agentic-security', 'haskell-models.json');
 
 const FAMILIES = Object.freeze({
   sql: 'CWE-89', cmd: 'CWE-78', path: 'CWE-22', ssrf: 'CWE-918', xss: 'CWE-79', log: 'CWE-532', code: 'CWE-94', redirect: 'CWE-601',
@@ -72,7 +72,7 @@ export function projectFileExists(scanRoot) {
 /** Read the model file from the scan root (an exact path, never a traversal). Returns the parsed document or null. */
 export function readProjectModelFile(scanRoot) {
   try {
-    const fp = path.join(scanRoot, PROJECT_MODEL_FILE);
+    const fp = statePath(scanRoot, 'haskell-models.json');
     return JSON.parse(fs.readFileSync(fp, 'utf8'));
   } catch { return null; }
 }
