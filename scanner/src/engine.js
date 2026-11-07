@@ -6309,17 +6309,27 @@ const _SECURITY_WORD_RE=/\b(?:auth|authn|authz|authenticat(?:e|ed|es|ion|or)|aut
 function _splitIdentifierWords(text){
   return text.replace(/([a-z0-9])([A-Z])/g,"$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g,"$1 $2").replace(/[_\-.]+/g," ");
 }
+// PRD FR 07: a marker is a developer note only when it sits in comment text, either as the first word of the comment or written as a
+// label (`XXX:`, `FIXME(name)`). A Roman numeral or prose word that happens to read XXX, or a marker inside a string, is not a note.
+function _isMarkerComment(ln){
+  const m=/(?:\/\/+|#+|--+|\/\*+|^\s*\*+|;+|%+|<!--)\s*(.*)$/.exec(ln);
+  if(!m)return false;
+  const text=m[1];
+  return /^(?:TODO|FIXME|HACK|XXX|BUG|TEMP)\b/.test(text)||/\b(?:TODO|FIXME|HACK|XXX|BUG|TEMP)(?::|\()/.test(text);
+}
 function scanTodosNearSecurity(fp,raw){
   const lines=raw.split("\n");
   const out=[];
   for(let i=0;i<lines.length;i++){
     const ln=lines[i];
-    if(!/\b(?:TODO|FIXME|HACK|XXX|BUG|TEMP)\b/.test(ln))continue;
+    if(!_isMarkerComment(ln))continue;
     const window=lines.slice(Math.max(0,i-3),Math.min(lines.length,i+4)).join(" ");
     if(!_SECURITY_WORD_RE.test(_splitIdentifierWords(window)))continue;
     out.push({
       vuln:"Known-Broken Code Marker Near Security-Sensitive Logic",
-      severity:"medium",cwe:"CWE-1077",stride:"Tampering",
+      // A developer note is a code-quality note, not a vulnerability, unless it is tied to a present weakness (PRD FR 07).
+      kind:"hardening",hardeningAdvice:true,
+      severity:"low",cwe:"CWE-1077",stride:"Tampering",
       fix:"Review the TODO/FIXME. Known-broken comments next to auth/crypto code often indicate unfinished hardening.",
       code:`// File: ${fp}:${i+1}\n// ${ln.trim()}`,
       file:fp,line:i+1,snippet:ln.trim()

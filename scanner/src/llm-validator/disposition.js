@@ -26,6 +26,8 @@ export const REFUTATION_KINDS = Object.freeze([
   'guard-proven', 'sanitizer-proven', 'unreachable-proven', 'constant-input', 'already-patched', 'not-the-claimed-weakness',
 ]);
 
+const HARDENING_UNTIL_ESTABLISHED = /\b(?:missing timeout|timing (?:attack|comparison|side)|non-constant[- ]time)\b/i;
+
 /** Reasons that are not evidence. A refutation resting on one of these is rejected. */
 const NON_EVIDENCE = /\b(?:test|tests|spec|fixture|dev(?:eloper)?[- ]tool|internal|private repo(?:sitory)?|member[- ]only|trusted users?|no (?:known )?exploit|no proof|not exploitable in practice)\b/i;
 
@@ -114,8 +116,13 @@ export function assignDisposition(f, { fileContents = null, now = Date.now() } =
     return disposition;
   };
 
+  // PRD FR 07: these families describe a missing control, not an exploitable weakness, until the finding
+  // establishes attacker influence (a taint source) or a secret-dependent comparison.
+  if (HARDENING_UNTIL_ESTABLISHED.test(String(f.vuln || '')) && !f.source && !f.secretDependent && f.proofTier !== 'execution-proven') {
+    return done(DISPOSITIONS.HARDENING, 'missing-control advice: no attacker-controlled input or secret-dependent comparison is established');
+  }
   // Hardening: an improvement with no claim of an exploitable weakness.
-  if (f.kind === 'hardening' || f.hardeningAdvice === true || f.disposition === DISPOSITIONS.HARDENING) {
+  if (f.kind === 'hardening' || f.hardeningAdvice === true) {
     return done(DISPOSITIONS.HARDENING, 'improvement without a demonstrated exploitable weakness');
   }
 

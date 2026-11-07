@@ -155,3 +155,16 @@ test('an acceptance bound to a fingerprint reopens when the file changes', async
     assert.match(kept[0]._suppressionReopened, /changed/);
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
+
+test('missing-timeout and timing findings are hardening until attacker influence or a secret-dependent comparison is established', () => {
+  const t = { id: 't', vuln: 'Missing Timeout on Outbound HTTP Request (DoS)', file: 'app/Main.hs', line: 1, severity: 'medium' };
+  assignDisposition(t, { fileContents: FILES });
+  assert.equal(t.disposition, D.HARDENING);
+  assert.equal(t.severity, 'medium');
+  const tainted = { ...t, id: 't2', source: { line: 1 } };
+  assignDisposition(tainted, { fileContents: FILES });
+  assert.notEqual(tainted.disposition, D.HARDENING);
+  const timing = { id: 't3', vuln: 'Timing comparison of token', file: 'app/Main.hs', line: 1, secretDependent: true };
+  assignDisposition(timing, { fileContents: FILES });
+  assert.notEqual(timing.disposition, D.HARDENING);
+});
