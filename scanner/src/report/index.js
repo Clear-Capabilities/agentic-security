@@ -293,6 +293,7 @@ export function normalizeFindings(scan){
       stableId: f.stableId || null,
       // FR 05 / FR 10: the final disposition, why, and the evidence record. Present only when the engine computed them.
       ...(f.disposition ? { disposition: f.disposition, dispositionDetail: f.dispositionDetail || null } : {}),
+      ...(Array.isArray(f.claims) && f.claims.length > 1 ? { claims: f.claims } : {}),
       ...(f.record ? { record: f.record } : {}),
       // FR 06: every workflow finding names the workflow, job, step, input origin, sensitive operation and privilege boundary.
       ...(f.workflow ? { workflow: f.workflow, job: f.job ?? null, step: f.step ?? null, inputOrigin: f.inputOrigin ?? null, inputOriginKind: f.inputOriginKind ?? null, sensitiveOperation: f.sensitiveOperation ?? null, privilegeBoundary: f.privilegeBoundary ?? null, guards: f.guards ?? [], missingEvidence: f.missingEvidence ?? (f.dispositionDetail && f.dispositionDetail.missingEvidence) ?? [] } : {}),
@@ -777,6 +778,10 @@ export function toJSON(scan, meta={}, opts={}){
      ...(scan.scanRecord ? { scanRecord: scan.scanRecord } : {}),
      ...(scan.reportView ? { reportView: scan.reportView } : {}),
      ...(scan.dispositionCounts ? { dispositionCounts: scan.dispositionCounts } : {}),
+     // PRD FR 05: every candidate stays discoverable. Equivalent claims grouped under a primary are listed here, and the
+     // reconciliation shows raw, grouped, refuted and active counts with nothing counted twice.
+     ...(scan.candidateReconciliation ? { candidateReconciliation: scan.candidateReconciliation } : {}),
+     ...(Array.isArray(scan.groupedClaims) && scan.groupedClaims.length ? { groupedClaims: scan.groupedClaims.map((g) => ({ id: g.id ?? null, stableId: g.stableId ?? null, parser: g.parser ?? null, vuln: g.vuln ?? null, cwe: g.cwe ?? null, severity: g.severity ?? null, file: g.file ?? null, line: g.line ?? null, groupedInto: g.groupedInto ?? null, disposition: g.disposition ?? null })) } : {}),
     scanHealth: scan.scanHealth || null,
     // X-207: advisory hypotheses a caller put in the finding list; excluded from `findings`, listed here so it is never silent.
     ...(Array.isArray(scan.advisoryExcluded) && scan.advisoryExcluded.length ? { advisoryExcluded: scan.advisoryExcluded } : {}),

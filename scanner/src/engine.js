@@ -199,7 +199,8 @@ import { demoteUnreachable } from './posture/reachability-filter.js';
 import { annotateExploitability, detectProjectContext } from './posture/exploitability.js';
 import { applyFeedback as applyLearnedFeedback } from './posture/learning.js';
 import { validateMany as llmValidateMany, applyValidatorVerdicts } from './llm-validator/index.js';
-import { applyDispositions } from './llm-validator/disposition.js';
+import { applyDispositions, assignDisposition } from './llm-validator/disposition.js';
+import { groupEquivalentClaims, reconcileCounts } from './llm-validator/claim-groups.js';
 import { annotateScaBasis, dedupeAdvisoryAliases } from './sca/basis.js';
 import { applyOidcTrust } from './sast/oidc-trust.js';
 import { readProjectModelFile, loadProjectModels, projectFileExists } from './language/haskell-project-models.js';
@@ -10071,6 +10072,8 @@ function _deterministicFileTimings(timings) {
   let _scanMeta = null;
   let _aiAssistance = null;
   let _dispositionCounts = null;
+  let _groupedClaims = [];
+  let _candidateReconciliation = null;
   let _entrypointInventory = {};
   let _rootCauseSweep = null;
   let _proofCoverage = null;
@@ -10561,9 +10564,18 @@ function _deterministicFileTimings(timings) {
   // hardening, refuted or unvalidated. Only an evidence-backed refutation or a
   // reviewed suppression leaves the list, and it is retained in the ledger.
   try {
+    // Equivalent detector claims are grouped first (one weakness, one actionable result naming every detector); the grouped
+    // claims are kept for the raw export, never deleted.
+    const _suppressedBefore = _suppressionLog.length;
+    const _raw = finalFindings.filter((x) => x && x.kind !== 'sca').length;
+    const cg = groupEquivalentClaims(finalFindings);
+    finalFindings = cg.kept;
+    for (const g of cg.grouped) { try { assignDisposition(g, { fileContents: fc }); } catch (_) {} }
+    _groupedClaims = cg.grouped;
     const dr = applyDispositions(finalFindings, { fileContents: fc });
     finalFindings = dr.kept;
     _dispositionCounts = dr.counts;
+    _candidateReconciliation = reconcileCounts({ raw: _raw, grouped: cg.grouped.length, refuted: dr.refuted.length, dispositionCounts: dr.counts, suppressed: _suppressedBefore });
     for (const d of dr.refuted) _suppressionLog.push({
       vuln: d.vuln, file: d.file, line: d.line, snippet: d.snippet,
       reason: 'refuted:' + (d.dispositionDetail?.reason || '').slice(0, 80),
@@ -11465,7 +11477,7 @@ function _deterministicFileTimings(timings) {
   attributeErrors(_tel, { annotatorErrors: _annotatorErrors, detectorErrors: (typeof _detectorErrors !== 'undefined' ? _detectorErrors : []), deepFailure: _deepFailure, filesTimedOut: (_scanMeta && _scanMeta.filesTimedOut) || 0 });
   _tel.set('files.scanned', (_scanMeta && _scanMeta.filesScanned) || 0); _tel.set('files.skipped', (_scanMeta && _scanMeta.filesSkipped) || 0);
   try { unregisterProjectCatalogEntries(scanRoot); } catch (_) {}
-  return{telemetry:_tel.snapshot(),entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance,dispositionCounts:_dispositionCounts};}
+  return{telemetry:_tel.snapshot(),entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance,dispositionCounts:_dispositionCounts,groupedClaims:_groupedClaims,candidateReconciliation:_candidateReconciliation};}
 
 // A scan runs inside its own owner scope, so project-declared catalog entries registered for one root are matched only by the scan of that
 // root, even when scans overlap in one process, and are removed on every exit, including a thrown error.

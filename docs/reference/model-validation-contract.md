@@ -80,6 +80,12 @@ Each finding also carries `disposition` and `dispositionDetail` (reason, evidenc
 
 A refutation that rests on where the code lives (a test, a developer tool, a private repository, member-only use) or on the absence of a proof of exploit is not accepted. An expired suppression, or one whose source or rule changed, reopens the finding.
 
+### Equivalent claims and count reconciliation
+
+Before dispositions are assigned, `scanner/src/llm-validator/claim-groups.js` groups claims that two detectors made about one weakness: same report category, same file, same line and same CWE, from different detectors, with no conflicting sink lines. The primary is the claim that locates the most of the path (source and sink, then the sink alone), then one the IR taint engine produced over a lexical rule, then the highest severity, then the lowest identifier. It carries `claims`, which lists every detector in the group. The other claims leave the actionable list and are kept in the scan's `groupedClaims` (and the JSON report), each with `groupedInto` naming its primary and its own disposition. Two claims from one detector, claims about different sinks, composite chain claims and dependency findings are never grouped. Severity and confidence are not changed, and drift treats a grouped claim as still present.
+
+`candidateReconciliation` in the JSON report states the counts once: `raw` (candidates reaching this stage), `grouped`, `refuted`, `deduplicated` (`raw` minus `grouped`), and `confirmed`, `needsReview`, `hardening` and `unvalidated`. `balanced` is true when `raw` equals `grouped` plus `refuted` plus the four active dispositions. `suppressedBeforeValidation` counts candidates removed earlier by a pragma, a rule or accepted risk; it is reported beside `raw`, not inside it. Stale findings are counted in `unvalidated`.
+
 ## What this does not do
 
 <!-- limits-verified: 2026-10-20 -->

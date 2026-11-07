@@ -11,7 +11,7 @@
   "bench/dag/fixtures/callreturn",
   "bench/dag/fixtures/multiservice"
  ],
- "total": 84,
+ "total": 81,
  "records": [
   {
    "root": "bench/dag/fixtures/multiservice",
@@ -84,15 +84,6 @@
    "severity": "high",
    "family": "idor",
    "parser": "REGEX"
-  },
-  {
-   "root": "scanner/test/fixtures/business-logic",
-   "file": "safe-state-guarded.js",
-   "line": 3,
-   "vuln": "markPaid() looks up or mutates by request-supplied 'id' with no ownership check",
-   "severity": "high",
-   "family": "broken-access-control",
-   "parser": "OWNERSHIP-AUTHZ"
   },
   {
    "root": "scanner/test/fixtures/business-logic",
@@ -192,15 +183,6 @@
    "severity": "high",
    "family": "idor",
    "parser": "REGEX"
-  },
-  {
-   "root": "scanner/test/fixtures/business-logic",
-   "file": "vuln-state.js",
-   "line": 3,
-   "vuln": "markPaid() looks up or mutates by request-supplied 'id' with no ownership check",
-   "severity": "high",
-   "family": "broken-access-control",
-   "parser": "OWNERSHIP-AUTHZ"
   },
   {
    "root": "scanner/test/fixtures/business-logic",
@@ -597,15 +579,6 @@
    "severity": "medium",
    "family": "crypto-weak-hash",
    "parser": "CRYPTO-PROTO"
-  },
-  {
-   "root": "scanner/test/fixtures/vulnerable-js",
-   "file": "app.js",
-   "line": 24,
-   "vuln": "Weak Password Hashing — createHash with weak algorithm for password without salt",
-   "severity": "critical",
-   "family": "weak-password-hash",
-   "parser": "WEAK-PW-HASH"
   },
   {
    "root": "scanner/test/fixtures/vulnerable-js",

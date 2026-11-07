@@ -62,7 +62,9 @@ test('every FINDING_FIELD_GROUPS field name is a real key normalizeFindings can 
     const { scan } = await runScan(root, { network: false });
     const normalized = normalizeFindings(scan);
     assert.ok(normalized.length > 0, 'fixture should produce at least one finding');
-    const sample = normalized[0];
+    // A code finding: dependency findings have their own shape, and one can sort first when its severity is not demoted.
+    const sample = normalized.find((f) => f.kind === 'sast');
+    assert.ok(sample, 'fixture should produce at least one code finding');
     const sampleKeys = new Set(Object.keys(sample));
     const allNamedFields = Object.values(FINDING_FIELD_GROUPS).flatMap(g => [...g.required, ...g.optional]);
     const unknown = allNamedFields.filter(field => !sampleKeys.has(field));
