@@ -136,3 +136,22 @@ test('a real scan stamps every code finding with a disposition and reports count
     assert.ok(scan.dispositionCounts && Object.keys(scan.dispositionCounts).length > 0);
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
+
+test('an acceptance bound to a fingerprint reopens when the file changes', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { addSoftAcceptance, applySuppressions } = await import('../src/posture/suppressions.js');
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-supp-'));
+  try {
+    fs.writeFileSync(path.join(d, 'package.json'), '{}');
+    fs.writeFileSync(path.join(d, 'a.js'), 'x\n');
+    const f = { id: 'f1', file: 'a.js', line: 1, vuln: 'v', severity: 'high' };
+    addSoftAcceptance(d, f, 'reviewed');
+    assert.equal(applySuppressions([{ ...f }], d, { profile: 'vibecoder' }).length, 0);
+    fs.writeFileSync(path.join(d, 'a.js'), 'changed\n');
+    const kept = applySuppressions([{ ...f }], d, { profile: 'vibecoder' });
+    assert.equal(kept.length, 1);
+    assert.match(kept[0]._suppressionReopened, /changed/);
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});

@@ -39,6 +39,7 @@ import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 import { statePath, safeWriteState } from './state-dir.js';
 import { loadApproverRegistry, verifyApprover, requiredRolesFor } from '../fix/approver-registry.js';
+import { contentFingerprint } from '../llm-validator/disposition.js';
 
 const MS_PER_DAY = 86400000;
 const SOFT_TTL_DAYS = 30;
@@ -63,6 +64,15 @@ export function saveSoftAccepted(scanRoot, items) {
   safeWriteState(fp, JSON.stringify({ accepted: items }, null, 2));
 }
 
+// Content fingerprint of a scanned file, or null when it cannot be read.
+function _diskFingerprint(scanRoot, file) {
+  try {
+    const abs = path.resolve(scanRoot, file);
+    if (abs !== path.resolve(scanRoot) && !abs.startsWith(path.resolve(scanRoot) + path.sep)) return null;
+    return contentFingerprint(fs.readFileSync(abs, 'utf8'));
+  } catch { return null; }
+}
+
 export function addSoftAcceptance(scanRoot, finding, reason) {
   const items = loadSoftAccepted(scanRoot);
   const expires = new Date(_now() + SOFT_TTL_DAYS * MS_PER_DAY).toISOString().slice(0, 10);
@@ -74,6 +84,8 @@ export function addSoftAcceptance(scanRoot, finding, reason) {
     reason: reason || 'vibecoded for now',
     accepted_at: new Date().toISOString().slice(0, 10),
     expires_at: expires,
+    // PRD FR 05: bind the acceptance to the code it was made on, so a changed file reopens it.
+    fingerprint: _diskFingerprint(scanRoot, finding.file),
   });
   saveSoftAccepted(scanRoot, items);
   return expires;
@@ -155,6 +167,15 @@ export function applySuppressions(findings, scanRoot, profile) {
       if (Number.isFinite(exp) && exp < now) {
         kept.push({ ...f, _suppressionExpired: true });
         continue;
+      }
+      // PRD FR 05: an entry bound to a content fingerprint reopens when the
+      // file changes or disappears. Entries without one keep the legacy behaviour.
+      if (matched.fingerprint) {
+        const now_fp = _diskFingerprint(scanRoot, f.file);
+        if (now_fp !== matched.fingerprint) {
+          kept.push({ ...f, _suppressionReopened: now_fp ? 'source changed since the suppression was recorded' : 'suppressed source is no longer available' });
+          continue;
+        }
       }
       // Pro: validate the entry still passes
       if (isPro) {
