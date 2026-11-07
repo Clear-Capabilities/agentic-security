@@ -294,6 +294,9 @@ export function normalizeFindings(scan){
       // FR 05 / FR 10: the final disposition, why, and the evidence record. Present only when the engine computed them.
       ...(f.disposition ? { disposition: f.disposition, dispositionDetail: f.dispositionDetail || null } : {}),
       ...(f.record ? { record: f.record } : {}),
+      // FR 06: every workflow finding names the workflow, job, step, input origin, sensitive operation and privilege boundary.
+      ...(f.workflow ? { workflow: f.workflow, job: f.job ?? null, step: f.step ?? null, inputOrigin: f.inputOrigin ?? null, inputOriginKind: f.inputOriginKind ?? null, sensitiveOperation: f.sensitiveOperation ?? null, privilegeBoundary: f.privilegeBoundary ?? null, guards: f.guards ?? [], missingEvidence: f.missingEvidence ?? (f.dispositionDetail && f.dispositionDetail.missingEvidence) ?? [] } : {}),
+      ...(f.oidcTrust ? { oidcTrust: f.oidcTrust } : {}),
       ...(f.validator_reject_retained ? { validator_reject_retained: true } : {}),
       confidenceTier: f.confidenceTier || null,
       exploitability: typeof f.exploitability === 'number' ? f.exploitability : null,

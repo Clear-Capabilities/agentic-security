@@ -11,7 +11,8 @@ import { analyzeWorkflow } from './workflow-flow.js';
 //
 // Same finding shape as scanIaC; produced separately so the rule set is small and tunable.
 
-const _GH_WORKFLOW_RE = /(?:^|\/)\.github\/workflows\/.*\.ya?ml$/i;
+// Workflows, and composite actions kept in the repository (`.github/actions/<name>/action.yml`, or an action.yml at any depth).
+const _GH_WORKFLOW_RE = /(?:^|\/)\.github\/workflows\/.*\.ya?ml$|(?:^|\/)\.github\/actions\/.*\.ya?ml$|(?:^|\/)action\.ya?ml$/i;
 const _NONPROD_RE = /(?:^|\/)(?:tests?|examples?|fixtures?)\//i;
 
 

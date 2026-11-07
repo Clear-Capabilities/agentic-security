@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { scanPipeline } from '../src/sast/pipeline.js';
+import { analyzeWorkflow } from '../src/sast/workflow-flow.js';
 
 const FP = '.github/workflows/w.yml';
 const scan = (y) => scanPipeline(FP, y);
@@ -81,4 +82,115 @@ test('untrusted PR head checkout under pull_request_target carries job and step'
 test('non-YAML-parseable workflow falls back to line rules', () => {
   const y = 'on: issues\njobs:\n  j:\n    steps:\n      - run: echo ${{ github.event.issue.title }}\n  : : bad: [\n';
   assert.equal(inj(scan(y)).length >= 0, true); // must not throw
+});
+
+// ---- FR 06 remaining scenarios -------------------------------------------------------------------
+const wy = (yml) => analyzeWorkflow('.github/workflows/x.yml', yml) || [];
+
+test('a composite action interpolating an input is needs-review; an event field in it is critical', () => {
+  const a = analyzeWorkflow('.github/actions/greet/action.yml', `name: greet
+inputs:
+  who:
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo "hello \${{ inputs.who }}"
+    - shell: bash
+      run: echo "\${{ github.event.issue.title }}"
+`);
+  assert.ok(a);
+  const input = a.find((f) => f.inputOrigin === 'inputs.who');
+  assert.equal(input.disposition, 'needs-review');
+  assert.equal(input.job, '(composite action)');
+  const ev = a.find((f) => f.inputOrigin === 'github.event.issue.title');
+  assert.equal(ev.severity, 'critical');
+});
+
+test('an untrusted value in github-script source is critical; in an unknown action input it is needs-review', () => {
+  const f = wy(`on: issues
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            console.log("\${{ github.event.issue.title }}")
+      - uses: someorg/unknown-action@main
+        with:
+          note: \${{ github.event.issue.body }}
+`);
+  const gs = f.find((x) => /github-script source/.test(x.vuln));
+  assert.equal(gs.severity, 'critical'); assert.equal(gs.disposition, 'detected');
+  const unk = f.find((x) => /cannot inspect/.test(x.vuln));
+  assert.equal(unk.disposition, 'needs-review');
+  assert.match(unk.missingEvidence[0], /someorg\/unknown-action/);
+});
+
+test('a local action call is not treated as unknown, and a fixed value to a remote action is not flagged', () => {
+  const f = wy(`on: pull_request
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/local
+        with:
+          note: \${{ github.event.pull_request.title }}
+      - uses: someorg/tool@v1
+        with:
+          mode: fast
+`);
+  assert.equal(f.filter((x) => /cannot inspect/.test(x.vuln)).length, 0);
+});
+
+test('workflow_run that downloads an artifact is needs-review with the missing facts named', () => {
+  const f = wy(`on:
+  workflow_run:
+    workflows: [build]
+    types: [completed]
+permissions:
+  contents: write
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+`);
+  const art = f.find((x) => /consumes an artifact/.test(x.vuln));
+  assert.equal(art.disposition, 'needs-review'); assert.equal(art.severity, 'medium');
+  assert.ok(art.missingEvidence.some((m) => /fork/.test(m)));
+});
+
+test('an agent action with write permission on an issue trigger is a review item; read-only is not flagged', () => {
+  const body = (perm) => `on: issue_comment
+permissions:
+  contents: ${perm}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+`;
+  assert.equal(wy(body('write')).filter((x) => /AI agent with write/.test(x.vuln)).length, 1);
+  assert.equal(wy(body('read')).filter((x) => /AI agent with write/.test(x.vuln)).length, 0);
+});
+
+test('YAML anchors, multiline scalars and a commented-out permission are read as YAML, not as text', () => {
+  const f = wy(`on: pull_request_target
+x-env: &untrusted
+  TITLE: \${{ github.event.pull_request.title }}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    # permissions:
+    #   id-token: write
+    env: *untrusted
+    steps:
+      - run: |
+          eval "$TITLE"
+`);
+  assert.equal(f.filter((x) => /OIDC/.test(x.vuln)).length, 0);
+  assert.equal(f.filter((x) => /env value later evaluated/.test(x.vuln)).length, 1);
 });

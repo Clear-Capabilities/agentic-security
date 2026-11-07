@@ -212,6 +212,15 @@ export function assignDisposition(f, { fileContents = null, now = Date.now() } =
     });
   }
 
+  // Pipeline findings from the structural workflow analysis carry their own input origin, privilege boundary and missing evidence.
+  if (typeof f.workflow === 'string' && f.disposition !== undefined) {
+    return done(DISPOSITIONS.NEEDS_REVIEW, f.disposition === 'detected' ? 'the workflow analysis traced an untrusted input into a sensitive operation; no independent review yet' : 'the workflow analysis found a plausible issue with unresolved facts', {
+      evidence: [{ kind: 'workflow-analysis', workflow: f.workflow, job: f.job ?? null, step: f.step ?? null, inputOrigin: f.inputOrigin ?? null }],
+      missingEvidence: missingEvidenceFor(f, detail.missingEvidence),
+      nextCheck: 'confirm the privilege boundary and who controls the input',
+    });
+  }
+
   // Model errors, no endpoint, spend ceilings: review was not attempted or failed.
   if (['unvalidated', 'not-applicable'].includes(f.validator_verdict) || f.unvalidated === true || !f.validator_verdict) {
     const why = f.validator_skipped_reason || (f.llmValidationStatus ? `model validation ${f.llmValidationStatus}` : 'no review attempted');

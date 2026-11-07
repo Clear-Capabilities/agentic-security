@@ -201,6 +201,7 @@ import { applyFeedback as applyLearnedFeedback } from './posture/learning.js';
 import { validateMany as llmValidateMany, applyValidatorVerdicts } from './llm-validator/index.js';
 import { applyDispositions } from './llm-validator/disposition.js';
 import { annotateScaBasis, dedupeAdvisoryAliases } from './sca/basis.js';
+import { applyOidcTrust } from './sast/oidc-trust.js';
 import { readProjectModelFile, loadProjectModels, projectFileExists } from './language/haskell-project-models.js';
 import { registerProjectCatalogEntries, unregisterProjectCatalogEntries } from './dataflow/catalog.js';
 import { MODEL_STATUS, stageSummaryFromModelStatus } from './llm-validator/model-status.js';
@@ -788,6 +789,7 @@ function _isIaCFile(p){
   // `isKubernetesManifest` below, because a path predicate cannot see content.
   if (/(?:^|\/)k8s(?:\/|$)/.test(p) && /\.ya?ml$/i.test(base)) return true;
   if (/(?:^|\/)\.github\/workflows\/.*\.ya?ml$/.test(p)) return true;
+  if (/(?:^|\/)\.github\/actions\/.*\.ya?ml$/.test(p)) return true; // composite actions kept in the repository
   if (/(?:^|\/)\.gitlab-ci\.ya?ml$/.test(p)) return true;
   if (/(?:^|\/)values\.ya?ml$/.test(p)) return true;
   // MCP server config files (Claude Code agent host configuration)
@@ -10553,6 +10555,8 @@ function _deterministicFileTimings(timings) {
     // upstream of it still need to run before validation, same as before).
     try { annotateVerifierVerdicts(finalFindings, { fileContents: fc }); } catch (_) {}
   } catch(_) {}
+  // PRD FR 06: trust-policy evidence kept in the repository adjusts OIDC findings; absence there never closes one.
+  try { applyOidcTrust(finalFindings, depFileContents && Object.keys(depFileContents).length ? { ...allFileContents, ...depFileContents } : allFileContents); } catch (e) { _annotatorErrors.push({ phase: 'applyOidcTrust', err: String((e && e.message) || e) }); }
   // PRD FR 05: final disposition. Runs whether or not a model was configured,
   // so every actionable finding says why it is confirmed, needs review,
   // hardening, refuted or unvalidated. Only an evidence-backed refutation or a

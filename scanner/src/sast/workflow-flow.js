@@ -38,6 +38,9 @@ const EVAL_SINKS = (v) => [
   new RegExp(`\\bpwsh\\s+-(?:c|command)\\b[^\\n]*\\$(?:env:)?${v}\\b`, 'i'),
 ];
 
+const AGENT_ACTION = /(?:^|\/)(?:claude-code|claude|codex|copilot|gemini|openhands|aider|swe-agent)[\w-]*(?:-action|-agent)?@/i;
+const UNTRUSTED_TRIGGERS = ['issues', 'issue_comment', 'pull_request_target', 'pull_request_review', 'pull_request_review_comment', 'discussion', 'discussion_comment'];
+
 function isUntrustedEvent(expr) { return UNTRUSTED_EVENT.some((re) => re.test(expr)); }
 
 function untrustedIn(text, inputs) {
@@ -110,8 +113,11 @@ export function analyzeWorkflow(fp, raw) {
   // js-yaml is quadratic on a long run of blank lines. A run that long carries no meaning, so collapse it for parsing only;
   // lines are located in `raw`, not in the collapsed text.
   try { doc = load(raw.replace(/(?:[ \t]*\r?\n){20,}/g, '\n')); } catch { return null; }
-  if (!doc || typeof doc !== 'object' || typeof doc.jobs !== 'object') return null;
-  const { on, inputs } = collectInputs(doc);
+  if (!doc || typeof doc !== 'object') return null;
+  // A composite action (`runs.using: composite`) has steps but no jobs; its `inputs.*` come from whichever workflow calls it.
+  const composite = !doc.jobs && doc.runs && doc.runs.using === 'composite' && Array.isArray(doc.runs.steps);
+  if (!composite && typeof doc.jobs !== 'object') return null;
+  const { on, inputs } = composite ? { on: {}, inputs: (doc.inputs && typeof doc.inputs === 'object') ? doc.inputs : {} } : collectInputs(doc);
   const trig = triggers(on);
   const wfPerm = permissionsOf(doc.permissions);
   const wfEnv = doc.env && typeof doc.env === 'object' ? doc.env : {};
@@ -122,7 +128,8 @@ export function analyzeWorkflow(fp, raw) {
   const privilegedTrigger = trig.includes('pull_request_target') || trig.includes('workflow_run');
   const dispatch = trig.includes('workflow_dispatch') || trig.includes('workflow_call');
 
-  for (const [jobId, job] of Object.entries(doc.jobs || {})) {
+  const jobEntries = composite ? [['(composite action)', { steps: doc.runs.steps }]] : Object.entries(doc.jobs || {});
+  for (const [jobId, job] of jobEntries) {
     if (!job || typeof job !== 'object') continue;
     const jobPerm = job.permissions !== undefined ? permissionsOf(job.permissions) : wfPerm;
     const jobEnv = { ...wfEnv, ...(job.env && typeof job.env === 'object' ? job.env : {}) };
@@ -162,6 +169,56 @@ export function analyzeWorkflow(fp, raw) {
             inputOrigin: ref, sensitiveOperation: 'checkout of attacker-controlled code', privilegeBoundary: `trigger ${trig.join(', ')}; permissions: ${writes.join(', ') || 'default'}`,
           });
         }
+      }
+
+      // Remote and unknown actions: a value the analysis cannot follow into the action.
+      if (typeof step.uses === 'string' && !step.uses.startsWith('./') && step.with && typeof step.with === 'object') {
+        for (const [wk, wv] of Object.entries(step.with)) {
+          for (const u of untrustedIn(String(wv), inputs)) {
+            const line = lineOf(raw, String(wv).trim().split('\n')[0].slice(0, 40));
+            const scriptInput = /^actions\/github-script@/.test(step.uses) && wk === 'script';
+            push({
+              id: `pipeline:${fp}:${line}:action-input:${jobId}:${idx}:${wk}:${u.expr}`, kind: 'iac',
+              severity: scriptInput && u.kind === 'event-field' ? 'critical' : 'low',
+              vuln: scriptInput ? 'Pipeline: untrusted github.event input interpolated into github-script source' : 'Pipeline: untrusted input passed to an action this analysis cannot inspect',
+              cwe: scriptInput ? 'CWE-94' : 'CWE-20', stride: 'Tampering', file: fp, line, snippet: `${wk}: ${String(wv).trim().split('\n')[0].slice(0, 80)}`,
+              fix: scriptInput ? 'Pass the value through `env:` and read it as data (process.env.NAME); never substitute it into the script text.' : 'Confirm how the action uses this input (shell, script or URL) and pin the action to a commit.',
+              workflow: fp, job: jobId, step: stepName, inputOrigin: u.origin, inputOriginKind: u.kind,
+              sensitiveOperation: scriptInput ? 'JavaScript executed by github-script' : `input "${wk}" of ${step.uses}`,
+              privilegeBoundary: `trigger ${trig.join(', ') || 'composite action (caller decides)'}; permissions: ${writes.join(', ') || 'default'}`,
+              disposition: scriptInput && u.kind === 'event-field' ? 'detected' : 'needs-review',
+              ...(scriptInput && u.kind === 'event-field' ? {} : { missingEvidence: [`source and handling of ${step.uses.split('@')[0]}`] }),
+            });
+          }
+        }
+      }
+
+      // Artifacts produced by an untrusted run are attacker-controlled data once a privileged workflow_run consumes them.
+      if (typeof step.uses === 'string' && /^actions\/download-artifact@/.test(step.uses) && trig.includes('workflow_run')) {
+        const line = lineOf(raw, 'download-artifact');
+        push({
+          id: `pipeline:${fp}:${line}:artifact:${jobId}:${idx}`, kind: 'iac', severity: writes.length ? 'medium' : 'low',
+          vuln: 'Pipeline: workflow_run consumes an artifact built by the triggering run',
+          cwe: 'CWE-829', stride: 'Tampering', file: fp, line, snippet: step.uses,
+          fix: 'Treat artifact content as untrusted data: validate it before use and never execute or source it in a job with write permissions or secrets.',
+          workflow: fp, job: jobId, step: stepName, inputOrigin: 'artifact from the triggering workflow run', inputOriginKind: 'artifact',
+          sensitiveOperation: 'use of artifact contents in a privileged workflow', privilegeBoundary: `trigger workflow_run; permissions: ${writes.join(', ') || 'default'}`,
+          disposition: 'needs-review', missingEvidence: ['whether the triggering run can be started from a fork', 'how the artifact contents are used after download'],
+        });
+      }
+
+      // Agent scenario: model-driven action with write authority and attacker-supplied prompt content.
+      if (typeof step.uses === 'string' && AGENT_ACTION.test(step.uses) && writes.length && trig.some((t) => UNTRUSTED_TRIGGERS.includes(t))) {
+        const line = lineOf(raw, step.uses.slice(0, 30));
+        push({
+          id: `pipeline:${fp}:${line}:agent:${jobId}:${idx}`, kind: 'iac', severity: 'medium',
+          vuln: 'Pipeline: AI agent with write permissions runs on attacker-supplied content',
+          cwe: 'CWE-77', stride: 'Elevation of privilege', file: fp, line, snippet: step.uses,
+          fix: 'Restrict the agent to read-only permissions, require an approval before it can write, or run it only for trusted authors. Prompt content from issues, comments and pull requests is untrusted.',
+          workflow: fp, job: jobId, step: stepName, inputOrigin: `event content from ${trig.filter((t) => UNTRUSTED_TRIGGERS.includes(t)).join(', ')}`, inputOriginKind: 'agent-prompt',
+          sensitiveOperation: `agent actions with ${writes.join(', ')} write authority`, privilegeBoundary: `permissions: ${writes.join(', ')}`,
+          disposition: 'needs-review', missingEvidence: ['which authors can trigger the workflow', 'whether the agent has an approval step or tool restrictions'],
+        });
       }
 
       if (typeof step.run !== 'string') return;
