@@ -117,3 +117,14 @@ test('Buck-declared Haskell dependencies are a coverage gap, not a clean result 
   const lc = scan.scanHealth.languageCoverage.conditions || [];
   assert.ok([...conds, ...lc].some((c) => /Buck target file/.test(c)), JSON.stringify(lc));
 });
+
+test('budget section names completed and remaining files deterministically (PRD FR 02)', async () => {
+  const dir = proj({ 'demo.cabal': CABAL, 'src/Lib.hs': GOOD, 'src/B.hs': GOOD.replace('Lib', 'B') });
+  const a = (await runScan(dir)).scan.scanHealth.languageCoverage.haskell.budget;
+  const b = (await runScan(dir)).scan.scanHealth.languageCoverage.haskell.budget;
+  assert.deepEqual(a, b);
+  assert.equal(a.completedFiles + a.remainingFiles, 2);
+  assert.match(a.resume, /--resume/);
+  const off = (await runScan(dir, { deep: false })).scan.scanHealth.languageCoverage.haskell.budget;
+  assert.equal(off.remainingFiles, 2, 'with deep analysis off nothing completed flow analysis, and that is stated, not hidden');
+});

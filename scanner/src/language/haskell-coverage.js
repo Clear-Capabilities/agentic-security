@@ -187,6 +187,19 @@ export function buildHaskellCoverage(i) {
     for (const f of ir.callGraph.functions.values()) if (/\.main$/.test(f.name || '') && byFile[f.file] && byFile[f.file].flowAnalysis !== 'completed') mains.push({ name: f.name, file: f.file, flowAnalysis: byFile[f.file].flowAnalysis });
   }
 
+  // Work completed and work remaining when a limit stopped the analysis (PRD FR 02). A file is remaining when its parse hit a
+  // budget or its flow analysis did not complete. Nothing is sampled: the lists are exhaustive up to the cap, in path order, so a
+  // rerun over the same inputs names the same files. `resume` says only what the scanner can do today.
+  const remaining = eligibleHs.filter(([, r]) => r.parse === 'budget_exceeded' || (r.parse === 'parsed' && r.flowAnalysis !== 'completed' && r.flowAnalysis !== 'not-applicable'))
+    .map(([file, r]) => ({ file, parse: r.parse, flowAnalysis: r.flowAnalysis })).sort((a, b) => (a.file < b.file ? -1 : 1));
+  const budget = {
+    exhausted: eligibleHs.some(([, r]) => r.parse === 'budget_exceeded'),
+    completedFiles: eligibleHs.length - remaining.length,
+    remainingFiles: remaining.length,
+    remaining: remaining.slice(0, 500),
+    remainingTruncated: remaining.length > 500,
+    resume: 'rerun with --resume to reuse the files already analysed; the remaining files are not skipped silently and the capability stays incomplete until they are analysed',
+  };
   const hasHaskell = present.length + sizeSkipped.size + policy.size + excl.size > 0;
   return {
     schema: COVERAGE_SCHEMA,
@@ -206,6 +219,7 @@ export function buildHaskellCoverage(i) {
     meetsThresholds: hasHaskell ? ((rate(parsedHs, eligibleHs.length) ?? 1) >= th.parseRate && (rate(semanticHs, eligibleHs.length) ?? 1) >= th.semanticRate) : null,
     incompleteEntries,
     incompleteMains: mains,
+    budget,
     skipped: skipped.slice(0, 500),
     byFile,
   };
