@@ -203,7 +203,7 @@ import { applyDispositions } from './llm-validator/disposition.js';
 import { annotateScaBasis, dedupeAdvisoryAliases } from './sca/basis.js';
 import { applyOidcTrust } from './sast/oidc-trust.js';
 import { readProjectModelFile, loadProjectModels, projectFileExists } from './language/haskell-project-models.js';
-import { registerProjectCatalogEntries, unregisterProjectCatalogEntries } from './dataflow/catalog.js';
+import { registerProjectCatalogEntries, unregisterProjectCatalogEntries, scanOwner } from './dataflow/catalog.js';
 import { MODEL_STATUS, stageSummaryFromModelStatus } from './llm-validator/model-status.js';
 import { resolveProvider as resolveLlmProvider, otherRemoteRoles as llmOtherRemoteRoles, NO_CLOUD_FALLBACK } from './llm-validator/providers.js';
 import { scanCrossLangOpenAPI } from './posture/cross-lang-openapi.js';
@@ -8993,7 +8993,7 @@ function _gcHint(minHeapMiB) {
   _gcFn();
 }
 
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[], haskellSourceMap=null, gitScope=false}, setProgress=()=>{}){
+async function _runFullScanBody({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[], haskellSourceMap=null, gitScope=false}, setProgress=()=>{}){
   // E6-01: local, aggregate telemetry for this scan (see pipeline/telemetry.js). Nothing is sent anywhere; the snapshot is a field of the result.
   const _tel = createTelemetry({ deterministic: isDeterministic() });
   setDetectorTimingSink((name, ms) => _tel.detector(name, ms));
@@ -11466,6 +11466,16 @@ function _deterministicFileTimings(timings) {
   _tel.set('files.scanned', (_scanMeta && _scanMeta.filesScanned) || 0); _tel.set('files.skipped', (_scanMeta && _scanMeta.filesSkipped) || 0);
   try { unregisterProjectCatalogEntries(scanRoot); } catch (_) {}
   return{telemetry:_tel.snapshot(),entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance,dispositionCounts:_dispositionCounts};}
+
+// A scan runs inside its own owner scope, so project-declared catalog entries registered for one root are matched only by the scan of that
+// root, even when scans overlap in one process, and are removed on every exit, including a thrown error.
+async function runFullScan(args = {}, setProgress) {
+  const owner = args.scanRoot ?? null;
+  return scanOwner.run(owner, async () => {
+    try { return await _runFullScanBody(args, setProgress); }
+    finally { try { unregisterProjectCatalogEntries(owner); } catch (_) {} }
+  });
+}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

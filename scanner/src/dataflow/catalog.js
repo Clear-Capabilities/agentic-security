@@ -2194,6 +2194,7 @@ export const CATALOG = [
 // ~450 additional entries across JS / Python / Java / Ruby / PHP / Go.
 // Lives in catalog-expanded.js to keep the diff reviewable. Merged into
 // the main CATALOG below so the indexer treats them identically.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { EXPANDED_SANITIZERS } from './catalog-expanded.js';
 import { HASKELL_CATALOG } from './catalog-haskell.js';
 import { cppExtRe } from '../ir/parser-cpp.js';
@@ -2490,7 +2491,12 @@ let _lastMode = null;
 const _filterCache = new WeakMap();
 function filterByProvenance(entries) {
   const mode = isOfficialOnlyMode();
-  if (!mode) return entries;
+  if (!mode) {
+    // Project-declared entries belong to the scan that registered them (see scanOwner); another scan in the same process never matches them.
+    if (_PROJECT_ENTRIES.size === 0) return entries;
+    const me = scanOwner.getStore();
+    return entries.some((e) => e.source === 'project' && e.owner !== me) ? entries.filter((e) => e.source !== 'project' || e.owner === me) : entries;
+  }
   if (mode !== _lastMode) {
     _modeGeneration++;
     _lastMode = mode;
@@ -2763,12 +2769,13 @@ export function _catalogSize() { return CATALOG.length; }
 // Project-declared models (PRD FR 03). Registered for the duration of one scan and removed afterwards, so a project's own wrapper
 // declarations never become part of the shipped catalog. Entries are tagged `source: 'project'`, which the official-only mode excludes.
 const _PROJECT_ENTRIES = new Map();
+export const scanOwner = new AsyncLocalStorage();
 export function registerProjectCatalogEntries(owner, entries) {
   unregisterProjectCatalogEntries(owner);
   const added = [];
   for (const e of entries || []) {
     if (!e || !e.match || e.match.type !== 'call' || !e.match.callee) continue;
-    const entry = { ...e, source: 'project' };
+    const entry = { ...e, source: 'project', owner };
     CATALOG.push(entry);
     const k = entry.match.callee;
     if (!CALLEE_INDEX.has(k)) CALLEE_INDEX.set(k, []);

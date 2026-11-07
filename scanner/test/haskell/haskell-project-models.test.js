@@ -69,3 +69,22 @@ test('a sanitizer model applies only to the families it names', () => {
   assert.equal(r.accepted.length, 1);
   assert.deepEqual(r.catalog[0].appliesTo, ['sql']);
 });
+
+test('overlapping scans in one process: a project entry is matched only inside the scope of its own root', async () => {
+  const { registerProjectCatalogEntries, unregisterProjectCatalogEntries, scanOwner } = await import('../../src/dataflow/catalog.js');
+  const entry = { kind: 'sink', id: 'x-owner-test', language: 'hs', match: { type: 'call', callee: 'Owner.Test.run' }, vuln: 'x', cwe: 'CWE-89', family: 'sql', severity: 'high' };
+  registerProjectCatalogEntries('/root/a', [entry]);
+  try {
+    const call = { kind: 'ident', name: 'Owner.Test.run' };
+    assert.ok(scanOwner.run('/root/a', () => matchSinkOrSanitizer(call, 'x.hs')), 'the owning scan matches it');
+    assert.equal(scanOwner.run('/root/b', () => matchSinkOrSanitizer(call, 'x.hs')), null, 'another root in the same process does not');
+  } finally { unregisterProjectCatalogEntries('/root/a'); }
+});
+
+test('after a scan, its project models are gone from the shared catalog and no scan scope leaks', async () => {
+  const { scanOwner } = await import('../../src/dataflow/catalog.js');
+  assert.equal(scanOwner.getStore(), undefined, 'no scan scope leaks outside a scan');
+  const dir = proj([model()]);
+  await runScan(dir);
+  assert.equal(matchSinkOrSanitizer({ kind: 'ident', name: 'Acme.Sql.runRaw' }, 'x.hs'), null);
+});
