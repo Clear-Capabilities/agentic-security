@@ -5,8 +5,13 @@
 // condition for the GitHub OIDC issuer:
 //   restrictive  every subject pins an exact repository and a ref or environment, with no wildcard beyond the ref part
 //   permissive   a wildcard repository or owner, or a trust statement for the issuer with no subject condition at all
-//   mismatched   the policy pins a repository other than the one named by `ownRepository` (when it is known)
+//   mismatched   no subject pins this repository (`ownRepository`, when it is known); a policy that trusts this repository and
+//                others as well is not a mismatch, since one role is often shared by several repositories
 //   absent       no policy for the GitHub issuer exists in the scanned files
+
+import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { hardenGitArgs, hardenGitEnv } from '../util/git-hardening.js';
 
 const ISSUER = /token\.actions\.githubusercontent\.com/;
 const SUB_RE = /token\.actions\.githubusercontent\.com(?::|"\s*:\s*\{?\s*")?\s*sub["']?\s*[:=]?\s*[\[\{]?\s*["']([^"'\]\}]+)["']/gi;
@@ -27,8 +32,12 @@ export function classifyOidcTrust(files, { ownRepository = null } = {}) {
   const bad = subjects.find(({ subject }) => /^\*$|^repo:\*|^repo:[^/:*]+\/\*(?::|$)|:\*$/.test(subject) && !/^repo:[^/:*]+\/[^/:*]+:(?:ref|environment|pull_request)/.test(subject));
   if (bad) return { status: 'permissive', policies, evidence: bad, note: `subject "${bad.subject}" admits more than one repository or any ref` };
   if (ownRepository) {
-    const other = subjects.find(({ subject }) => { const m = /^repo:([^/:*]+\/[^/:*]+)/.exec(subject); return m && m[1].toLowerCase() !== ownRepository.toLowerCase(); });
-    if (other) return { status: 'mismatched', policies, evidence: other, note: `subject "${other.subject}" pins a repository other than ${ownRepository}` };
+    const repoOf = (subject) => { const m = /^repo:([^/:*]+\/[^/:*]+)/.exec(subject); return m ? m[1].toLowerCase() : null; };
+    const mine = subjects.some(({ subject }) => repoOf(subject) === ownRepository.toLowerCase());
+    if (!mine) {
+      const other = subjects.find(({ subject }) => repoOf(subject));
+      return { status: 'mismatched', policies, evidence: other || subjects[0], note: `no subject pins ${ownRepository}; the policy in the repository is not the one this workflow's token is checked against` };
+    }
   }
   return { status: 'restrictive', policies, note: 'every subject pins one repository and a ref or environment' };
 }
@@ -38,10 +47,28 @@ export function applyOidcTrust(findings, files, opts = {}) {
   const c = classifyOidcTrust(files, opts);
   for (const f of findings || []) {
     if (!f || !/^Pipeline: OIDC id-token: write/.test(String(f.vuln || ''))) continue;
-    f.oidcTrust = { status: c.status, note: c.note, ...(c.evidence ? { evidence: c.evidence } : {}) };
+    f.oidcTrust = { status: c.status, note: c.note, ...(c.evidence ? { evidence: c.evidence } : {}), ownRepository: opts.ownRepository || null, ownRepositoryBasis: opts.ownRepositoryBasis || (opts.ownRepository ? 'supplied' : 'unknown: the mismatched check was not made') };
     if (c.status === 'permissive' || c.status === 'mismatched') { f.severity = 'high'; f.disposition = 'needs-review'; f.missingEvidence = ['confirm the deployed trust policy matches the one in the repository']; }
     else if (c.status === 'restrictive') { f.missingEvidence = ['confirm the deployed trust policy matches the one in the repository']; f.severity = 'low'; }
     // absent: unchanged, the cloud-side policy is simply not verifiable from here
   }
   return c;
+}
+
+/**
+ * This repository's GitHub name (`owner/repo`), with the basis it came from: the `origin` remote of the scanned tree, else
+ * `GITHUB_REPOSITORY` when the scan runs inside GitHub Actions on its own checkout. Null when neither names a GitHub repository;
+ * the mismatched check is then not made, and the report says so.
+ */
+export function resolveOwnRepository(scanRoot, env = process.env) {
+  if (scanRoot) {
+    const r = spawnSync('git', hardenGitArgs(['config', '--get', 'remote.origin.url']), { cwd: scanRoot, env: hardenGitEnv({}), encoding: 'utf8' });
+    const url = r.status === 0 ? String(r.stdout || '').trim() : '';
+    const m = /^(?:https?:\/\/(?:[^@/]+@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?\/?$/.exec(url);
+    if (m) return { name: m[1], basis: 'git remote origin' };
+  }
+  if (env.GITHUB_ACTIONS === 'true' && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(env.GITHUB_REPOSITORY || '') && env.GITHUB_WORKSPACE && scanRoot && path.resolve(env.GITHUB_WORKSPACE) === path.resolve(scanRoot)) {
+    return { name: env.GITHUB_REPOSITORY, basis: 'GITHUB_REPOSITORY (GitHub Actions)' };
+  }
+  return null;
 }

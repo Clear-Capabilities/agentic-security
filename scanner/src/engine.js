@@ -202,7 +202,7 @@ import { validateMany as llmValidateMany, applyValidatorVerdicts } from './llm-v
 import { applyDispositions, assignDisposition } from './llm-validator/disposition.js';
 import { groupEquivalentClaims, reconcileCounts } from './llm-validator/claim-groups.js';
 import { annotateScaBasis, dedupeAdvisoryAliases } from './sca/basis.js';
-import { applyOidcTrust } from './sast/oidc-trust.js';
+import { applyOidcTrust, resolveOwnRepository } from './sast/oidc-trust.js';
 import { readProjectModelFile, loadProjectModels, projectFileExists } from './language/haskell-project-models.js';
 import { parseBudgetOverrides as parseHaskellBudgetOverrides } from './language/haskell-budget-state.js';
 import { registerProjectCatalogEntries, unregisterProjectCatalogEntries, scanOwner } from './dataflow/catalog.js';
@@ -10559,7 +10559,7 @@ function _deterministicFileTimings(timings) {
     try { annotateVerifierVerdicts(finalFindings, { fileContents: fc }); } catch (_) {}
   } catch(_) {}
   // PRD FR 06: trust-policy evidence kept in the repository adjusts OIDC findings; absence there never closes one.
-  try { applyOidcTrust(finalFindings, depFileContents && Object.keys(depFileContents).length ? { ...allFileContents, ...depFileContents } : allFileContents); } catch (e) { _annotatorErrors.push({ phase: 'applyOidcTrust', err: String((e && e.message) || e) }); }
+  try { const _own = finalFindings.some((x) => x && /^Pipeline: OIDC id-token: write/.test(String(x.vuln || ''))) ? resolveOwnRepository(scanRoot) : null; applyOidcTrust(finalFindings, depFileContents && Object.keys(depFileContents).length ? { ...allFileContents, ...depFileContents } : allFileContents, _own ? { ownRepository: _own.name, ownRepositoryBasis: _own.basis } : {}); } catch (e) { _annotatorErrors.push({ phase: 'applyOidcTrust', err: String((e && e.message) || e) }); }
   // PRD FR 05: final disposition. Runs whether or not a model was configured,
   // so every actionable finding says why it is confirmed, needs review,
   // hardening, refuted or unvalidated. Only an evidence-backed refutation or a

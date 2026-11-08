@@ -927,7 +927,8 @@
       "title": "CI setup, severity and assurance gates, predeploy gate",
       "sources": [
         "docs/guides/ci-setup.md",
-        "docs/workflows/ci-gating.md"
+        "docs/workflows/ci-gating.md",
+        "docs/reference/workflow-analysis.md"
       ],
       "haskell": {
         "applicability": "applicable",
