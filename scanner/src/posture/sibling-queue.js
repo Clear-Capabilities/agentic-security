@@ -18,7 +18,7 @@
 import crypto from 'node:crypto';
 import { validateVerificationRecord } from './assurance/verification-record.js';
 
-export const SIBLING_STATES = Object.freeze(['detector-reported', 'candidate', 'independently-confirmed', 'repair-proposed', 'repaired', 'verified']);
+const SIBLING_STATES = Object.freeze(['detector-reported', 'candidate', 'independently-confirmed', 'repair-proposed', 'repaired', 'verified']);
 const RANK = Object.fromEntries(SIBLING_STATES.map((s, i) => [s, i]));
 const MAX_QUEUE = 100;
 
