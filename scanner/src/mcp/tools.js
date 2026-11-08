@@ -640,7 +640,26 @@ export const explain_finding = {
 // FR-307/FR-1002/FR-1003: the high-impact-change approval gate (approval evidence, approver identity, separation of duties),
 // shared by the caller-patch branch and the multi-file plan branch so the two cannot drift. Returns a refusal result, or null
 // when the change is not high-impact or is properly approved.
-function _highImpactApprovalRefusal(ctx, materialClassification, fixMeta) {
+// Threat-model PRD FR-06.3: an approval is bound to what it approved. With a `scope` it names the tool, the action, the target finding
+// and the change (the digest of the exact edits), and with `expires` it lapses. Under the restricted execution profile
+// (AGENTIC_SECURITY_EGRESS_PROFILE=restricted) both are required; elsewhere a supplied scope or expiry is still enforced. An approval
+// copied to another finding, another change or another tool, or used after it expired, is refused.
+export function approvalBindingRefusal(approval, expected, { now = Date.now(), restricted = process.env.AGENTIC_SECURITY_EGRESS_PROFILE === 'restricted' } = {}) {
+  if (restricted && (!approval.expires || !approval.scope)) return 'under the restricted profile an approval must carry an expiry and a scope {tool, action, target, change}';
+  if (approval.expires !== undefined) {
+    const t = Date.parse(approval.expires);
+    if (!Number.isFinite(t)) return 'the approval expiry is not a date';
+    if (!(t > now)) return 'the approval has expired';
+  }
+  if (approval.scope !== undefined) {
+    const sc = approval.scope;
+    if (!sc || typeof sc !== 'object') return 'the approval scope is not an object';
+    for (const k of ['tool', 'action', 'target', 'change']) if (sc[k] !== expected[k]) return `the approval was issued for another ${k}`;
+  }
+  return null;
+}
+
+function _highImpactApprovalRefusal(ctx, materialClassification, fixMeta, expected = null) {
   if (!materialClassification.highImpactCategories.length) return null;
   const cats = materialClassification.highImpactCategories.join(', ');
   const approval = fixMeta && typeof fixMeta === 'object' ? fixMeta.approval : null;
@@ -653,6 +672,10 @@ function _highImpactApprovalRefusal(ctx, materialClassification, fixMeta) {
       reason: `high-impact change (${cats}) requires approval evidence — pass fixMeta.approval: {approvedBy, reason} — before it can be applied`,
       materialClassification,
     };
+  }
+  if (expected) {
+    const bound = approvalBindingRefusal(approval, expected);
+    if (bound) return { _meta: META, applied: false, reason: `high-impact change (${cats}) approval rejected: ${bound}`, materialClassification };
   }
   const approverRegistry = loadApproverRegistry(ctx.sessionRoot);
   const requiredRoles = requiredRolesFor(approverRegistry, materialClassification.highImpactCategories);
@@ -739,7 +762,7 @@ async function _applyMultiFilePlan({ f, planDigest, dryRun, fixMeta, ctx, status
   if (!targets.ok) return refuse(targets.reason);
   const classification = classifyFixMaterialRisk(Object.fromEntries(plan.edits.map((e) => [e.file, { before: e.before, after: e.after }])));
   if (!dryRun) {
-    const approvalRefusal = _highImpactApprovalRefusal(ctx, classification, fixMeta);
+    const approvalRefusal = _highImpactApprovalRefusal(ctx, classification, fixMeta, { tool: 'apply_fix', action: 'apply-plan', target: f.stableId || f.id, change: planDigest });
     if (approvalRefusal) return { ...approvalRefusal, multiFile: true };
   }
   // The verification gates (syntax, rescan with no new finding, effective value changed as intended) run inside the lifecycle,
@@ -942,7 +965,8 @@ export const apply_fix = {
       if (dry_run) {
         return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...verificationFields(verdict.verificationRecord), materialClassification, ...(fixVerification ? additiveFields(fixVerification) : {}) };
       }
-      const approvalRefusal = _highImpactApprovalRefusal(ctx, materialClassification, fixMeta);
+      const changeDigest = _sha256(JSON.stringify(Object.entries(filesForMaterialClassification).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, _sha256(v.before), _sha256(v.after)])));
+      const approvalRefusal = _highImpactApprovalRefusal(ctx, materialClassification, fixMeta, { tool: 'apply_fix', action: 'apply-patch', target: f.stableId || f.id, change: changeDigest });
       if (approvalRefusal) return approvalRefusal;
       const written = [];
       try {

@@ -50,7 +50,7 @@ A finding drives a sweep when `confirmed === true` or its `confidenceTier` is `h
 
 - **Exact accounting.** `found === candidates + mitigated` for every sweep, always. The counts are accumulated exactly; only the `instances` list is bounded, and `instancesTruncated` says so.
 - **The finding's own site is never reported** as its own sibling, per sweep and never globally: two findings that share a pattern each exclude only their own location.
-- **Nothing is dropped.** A match that already has a finding is `mitigated-or-known`, not removed.
+- **Nothing is dropped.** A match that already has a finding is `mitigated-or-known`, not removed. `mitigated` means a detector already covers that location; it is detector coverage, not a repair.
 - **Garbage in, empty out.** Non-array findings, null entries and missing file contents produce an empty sweep, not an exception.
 
 ## What the sweep does not do
@@ -64,3 +64,17 @@ These are measured by `bench/sibling-sweep` and gated by the `sibling-sweep-gate
 - **It does not say a sibling is exploitable.** A candidate is a place to look. Prove it with the [exploit proof](../guides/exploit-proof-fabric.md) path or triage it like any finding.
 - **A different receiver is not a sibling.** `logger.query(x)` is not `db.query(x)`. The bench's look-alike cases (different receiver, different method name, a related method on the same object) were rejected 17 of 17 times.
 - **Counts are exact but the list is a sample.** Read `found` and `remaining`, not the length of `instances`.
+
+## The sibling review queue
+
+`posture/sibling-queue.js` turns one sweep into a bounded review queue. Each item carries the predicate that found it (the root finding, the sink pattern and the source pattern), its file and line, and a stable id derived from them. It is in exactly one of six states:
+
+| State | Raised by |
+|---|---|
+| `detector-reported` | a detector reports the location (the sweep's `mitigated-or-known`) |
+| `candidate` | nothing yet |
+| `independently-confirmed` | a confirmation from a party other than the producer |
+| `repair-proposed`, `repaired` | a proposal, an applied fix |
+| `verified` | a valid verification record whose hypothesis id is THIS sibling's id and whose repair status is `replay-verified` |
+
+Evidence naming another sibling changes nothing, so the record for one corrected sibling never closes another. A record that fails validation, or that is not a replay-verified repair, is listed under the item's `rejected`. `totals` takes `found` from the sweep, so `sampled + unsampled === found` holds even when the sweep capped its list.

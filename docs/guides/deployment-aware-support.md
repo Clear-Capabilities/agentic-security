@@ -81,6 +81,8 @@ The decided subset is small, and anything outside it is unresolved and disclosed
 - the condition operators `StringEquals`, `StringNotEquals`, `Bool` and `ArnEquals`, evaluated against a request context the caller supplies (a key the context does not supply is unknown);
 - not decided: `...IfExists` and set operators, policy variables, `NotAction`/`NotResource`/`NotPrincipal` (skipped, as before), a clipped action list, and a deny that records no action list.
 
+The graph decides at the granularity of resource PATTERNS: a grant on `arn:aws:s3:::records/*` is one node, and it is not expanded into the objects it covers. A deny narrower than an allow in the same bucket therefore leaves the bucket path possible (true for the objects it does not cover) and cannot say which object a request names; ask whether a reachable pattern covers the object instead (`resourceMatches`). The local PILOT-12 fixture compares that prediction with an object store that adjudicates the request itself.
+
 A path search records why it stopped (`truncation.reasons`: `depth`, `result-count`, `expansion`, with a bounded frontier sample for depth). Reaching the depth limit on a node with nowhere left to go is not a cutoff. A boundary context at `schemaVersion` `1.1.0` carries the reasons; a `1.0.0` context stays readable. A truncated search never certifies that a path is absent.
 
 ## What is not claimed

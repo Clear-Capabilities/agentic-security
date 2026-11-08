@@ -3080,7 +3080,7 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Wi: () => (/* binding */ ALL_TOOLS)
 /* harmony export */ });
-/* unused harmony exports _internals, scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, query_triage_memory, query_findings_memory, lookup_cve, query_cache_telemetry, synthesize_sca_upgrade, apply_sca_upgrade */
+/* unused harmony exports _internals, scan_diff, query_taint, explain_finding, approvalBindingRefusal, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, query_triage_memory, query_findings_memory, lookup_cve, query_cache_telemetry, synthesize_sca_upgrade, apply_sca_upgrade */
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
 /* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(51455);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
@@ -3749,7 +3749,26 @@ const explain_finding = {
 // FR-307/FR-1002/FR-1003: the high-impact-change approval gate (approval evidence, approver identity, separation of duties),
 // shared by the caller-patch branch and the multi-file plan branch so the two cannot drift. Returns a refusal result, or null
 // when the change is not high-impact or is properly approved.
-function _highImpactApprovalRefusal(ctx, materialClassification, fixMeta) {
+// Threat-model PRD FR-06.3: an approval is bound to what it approved. With a `scope` it names the tool, the action, the target finding
+// and the change (the digest of the exact edits), and with `expires` it lapses. Under the restricted execution profile
+// (AGENTIC_SECURITY_EGRESS_PROFILE=restricted) both are required; elsewhere a supplied scope or expiry is still enforced. An approval
+// copied to another finding, another change or another tool, or used after it expired, is refused.
+function approvalBindingRefusal(approval, expected, { now = Date.now(), restricted = process.env.AGENTIC_SECURITY_EGRESS_PROFILE === 'restricted' } = {}) {
+  if (restricted && (!approval.expires || !approval.scope)) return 'under the restricted profile an approval must carry an expiry and a scope {tool, action, target, change}';
+  if (approval.expires !== undefined) {
+    const t = Date.parse(approval.expires);
+    if (!Number.isFinite(t)) return 'the approval expiry is not a date';
+    if (!(t > now)) return 'the approval has expired';
+  }
+  if (approval.scope !== undefined) {
+    const sc = approval.scope;
+    if (!sc || typeof sc !== 'object') return 'the approval scope is not an object';
+    for (const k of ['tool', 'action', 'target', 'change']) if (sc[k] !== expected[k]) return `the approval was issued for another ${k}`;
+  }
+  return null;
+}
+
+function _highImpactApprovalRefusal(ctx, materialClassification, fixMeta, expected = null) {
   if (!materialClassification.highImpactCategories.length) return null;
   const cats = materialClassification.highImpactCategories.join(', ');
   const approval = fixMeta && typeof fixMeta === 'object' ? fixMeta.approval : null;
@@ -3762,6 +3781,10 @@ function _highImpactApprovalRefusal(ctx, materialClassification, fixMeta) {
       reason: `high-impact change (${cats}) requires approval evidence — pass fixMeta.approval: {approvedBy, reason} — before it can be applied`,
       materialClassification,
     };
+  }
+  if (expected) {
+    const bound = approvalBindingRefusal(approval, expected);
+    if (bound) return { _meta: META, applied: false, reason: `high-impact change (${cats}) approval rejected: ${bound}`, materialClassification };
   }
   const approverRegistry = (0,_fix_approver_registry_js__WEBPACK_IMPORTED_MODULE_7__.loadApproverRegistry)(ctx.sessionRoot);
   const requiredRoles = (0,_fix_approver_registry_js__WEBPACK_IMPORTED_MODULE_7__/* .requiredRolesFor */ .K)(approverRegistry, materialClassification.highImpactCategories);
@@ -3848,7 +3871,7 @@ async function _applyMultiFilePlan({ f, planDigest, dryRun, fixMeta, ctx, status
   if (!targets.ok) return refuse(targets.reason);
   const classification = (0,_posture_material_change_js__WEBPACK_IMPORTED_MODULE_6__/* .classifyFixMaterialRisk */ .kz)(Object.fromEntries(plan.edits.map((e) => [e.file, { before: e.before, after: e.after }])));
   if (!dryRun) {
-    const approvalRefusal = _highImpactApprovalRefusal(ctx, classification, fixMeta);
+    const approvalRefusal = _highImpactApprovalRefusal(ctx, classification, fixMeta, { tool: 'apply_fix', action: 'apply-plan', target: f.stableId || f.id, change: planDigest });
     if (approvalRefusal) return { ...approvalRefusal, multiFile: true };
   }
   // The verification gates (syntax, rescan with no new finding, effective value changed as intended) run inside the lifecycle,
@@ -4051,7 +4074,8 @@ const apply_fix = {
       if (dry_run) {
         return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(verdict.verificationRecord), materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .additiveFields */ .Y)(fixVerification) : {}) };
       }
-      const approvalRefusal = _highImpactApprovalRefusal(ctx, materialClassification, fixMeta);
+      const changeDigest = _sha256(JSON.stringify(Object.entries(filesForMaterialClassification).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, _sha256(v.before), _sha256(v.after)])));
+      const approvalRefusal = _highImpactApprovalRefusal(ctx, materialClassification, fixMeta, { tool: 'apply_fix', action: 'apply-patch', target: f.stableId || f.id, change: changeDigest });
       if (approvalRefusal) return approvalRefusal;
       const written = [];
       try {
