@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { computeAttackPaths, analyzeFindingBoundaries, bindFindingToService, assessVerification, exposureReach } from '../../src/lineage/deployment/attack-paths.js';
 import { validateBoundaryGraph } from '../../src/lineage/deployment/boundary-graph.js';
 import { ingestOne } from './helpers.js';
-import { node, edge, graphOf, baseline, FINDING, BINDINGS, recordFor, SRC } from './path-helpers.js';
+import { node, edge, graphOf, baseline, FINDING, BINDINGS, recordFor, SRC, bindingFor, TRUST_ROOT } from './path-helpers.js';
 
 const OBS = (start, end) => ({ start, end });
 
@@ -155,10 +155,14 @@ describe('[X-305.AC02] every path lists edges, assumptions, blockers and environ
     }
   });
 
-  test('[X-305.AC02] a trusted runtime-confirmed record for the same hypothesis labels a reachable path exploitable-confirmed', () => {
+  test('[X-305.AC02] a trusted runtime-confirmed record for the same hypothesis labels a reachable path exploitable-confirmed once an issued binding ties it to that path', () => {
     const { graph } = deployed();
     const rec = recordFor('trusted');
-    const ctx = analyzeFindingBoundaries({ graph, finding: FINDING, bindings: BINDINGS, records: [rec] }).context;
+    const first = analyzeFindingBoundaries({ graph, finding: FINDING, bindings: BINDINGS, records: [rec] }).context;
+    // threat-model FR-04.1: the record alone proves the component; each path needs its own issued binding
+    assert.ok(first.paths.every((p) => p.exploitability.label === 'not-established' && p.exploitability.componentProof.recordId === rec.id && p.exploitability.componentProof.code === 'component-only'));
+    const proofBindings = first.paths.map((p) => bindingFor(rec, graph, p, p.kind));
+    const ctx = analyzeFindingBoundaries({ graph, finding: FINDING, bindings: BINDINGS, records: [rec], proofBindings, trustRoot: TRUST_ROOT }).context;
     assert.ok(ctx.paths.every((p) => p.exploitability.label === 'exploitable-confirmed' && p.exploitability.recordId === rec.id));
     assert.equal(ctx.verification[0].applicable, true);
     assert.equal(ctx.verification[0].recordId, rec.id, 'the context shares the verification record id');
@@ -203,7 +207,7 @@ describe('[X-305.AC02] every path lists edges, assumptions, blockers and environ
     const impact = ctx.paths.find((p) => p.kind === 'impact');
     assert.equal(impact.state, 'blocked');
     assert.equal(impact.exploitability.label, 'oracle-confirmed-path-blocked');
-    assert.ok(ctx.paths.filter((p) => p.kind === 'exposure').every((p) => p.exploitability.label === 'exploitable-confirmed'));
+    assert.ok(ctx.paths.filter((p) => p.kind === 'exposure').every((p) => p.exploitability.label === 'not-established' && p.exploitability.componentProof.recordId === rec.id), 'without a binding the exposure path is not promoted');
     const route = node('route', 'edge/x', { trustZone: 'public' });
     const api = node('service', 'shop/api', { tenant: 'acme' });
     const other = node('service', 'shop/other', { tenant: 'globex' });

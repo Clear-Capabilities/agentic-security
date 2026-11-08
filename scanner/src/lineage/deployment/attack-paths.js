@@ -27,6 +27,7 @@ import { semanticId, hypothesisIdFromFinding } from '../../posture/assurance/ide
 import { validateVerificationRecord, deriveConfirmationLevel } from '../../posture/assurance/verification-record.js';
 import { nonTaintClassOf, SCENARIO_CLASSES } from '../../posture/oracles/scenario-classes.js';
 import { decideAction, resourceMatches, UNKNOWN_ACTION } from './iam-eval.js';
+import { judgePathPromotion } from './proof-binding.js';
 
 export const BOUNDARY_CONTEXT_SCHEMA = 'agentic-security/boundary-context';
 // 1.1.0 (threat-model FR-03.3): optional `truncation` (why a search stopped) and `action` (the action a query asked about).
@@ -386,7 +387,7 @@ export function exposureReach(graph, { entries } = {}) {
  * own claim: the record is validated, its confirmation level is recomputed from its evidence, and its oracle must be the one the
  * finding's class names (a finding of an unsupported class has no applicable oracle).
  */
-export function assessVerification(finding, records, hypothesisId = hypothesisIdFromFinding(finding)) {
+export function assessVerification(finding, records, hypothesisId = hypothesisIdFromFinding(finding), { revision = null } = {}) {
   const out = [];
   const cls = nonTaintClassOf(finding);
   for (const rec of Array.isArray(records) ? records : []) {
@@ -402,12 +403,16 @@ export function assessVerification(finding, records, hypothesisId = hypothesisId
       const adapter = SCENARIO_CLASSES.find((c) => c.id === cls.classId)?.adapterId;
       if (!rec.oracle || rec.oracle.id !== adapter) reasons.push(`the record's oracle is not '${adapter}', the oracle for class '${cls.classId}'`);
     }
-    out.push({ recordId: rec.id, outcome: rec.outcome, applicable: reasons.length === 0, reasons });
+    // threat-model FR-04.1: an exact matching commit is the minimum for a CURRENT component proof; a record for another revision is
+    // kept, with the reason, as historical evidence and never applied to this graph
+    let historical = false;
+    if (revision && rec.commit !== revision) { historical = true; reasons.push(`the record was made at ${String(rec.commit).slice(0, 12)}, not this graph's revision ${String(revision).slice(0, 12)}; it is historical evidence for that revision only`); }
+    out.push({ recordId: rec.id, outcome: rec.outcome, applicable: reasons.length === 0, reasons, ...(historical ? { historical: true, commit: rec.commit } : {}) });
   }
   return out.sort((a, b) => String(a.recordId).localeCompare(String(b.recordId)));
 }
 
-function labelPath(path, assessments) {
+function labelPath(path, assessments, pc = null) {
   const ok = assessments.find((a) => a.applicable);
   if (!ok) {
     const why = assessments.length ? assessments.flatMap((a) => a.reasons).slice(0, 3).join('; ') : 'no verification record for this hypothesis was supplied';
@@ -415,7 +420,12 @@ function labelPath(path, assessments) {
   }
   if (path.state === 'blocked') return { label: 'oracle-confirmed-path-blocked', recordId: ok.recordId, reason: 'the oracle confirmed the effect in its declared scenario, but configuration explicitly denies a hop on this path' };
   if (path.state === 'unresolved') return { label: 'oracle-confirmed-path-unresolved', recordId: ok.recordId, reason: 'the oracle confirmed the effect in its declared scenario, but deployment reachability along this path is unresolved' };
-  return { label: 'exploitable-confirmed', recordId: ok.recordId, reason: 'a trusted oracle confirmed the effect in its declared scenario; deployment reachability comes from configuration or sampled observation, not from a production probe' };
+  // threat-model FR-04.1 (TM-05): promotion to exploitable needs an issued binding of this proof to THIS path; a component proof alone
+  // is reported beside the path and does not promote it
+  const record = pc && pc.records.find((r) => r && r.id === ok.recordId);
+  const j = record ? judgePathPromotion({ path, kind: pc.kind, graph: pc.graph, record, bindings: pc.proofBindings, trustRoot: pc.trustRoot, now: pc.now, expect: pc.expect }) : { promote: false, code: 'component-only', reason: 'no binding was supplied', diagnostics: [] };
+  if (!j.promote) return { label: 'not-established', recordId: null, reason: `a trusted oracle confirmed the component, but it is not shown on this ${pc ? pc.kind : 'deployed'} path: ${j.reason}`, componentProof: { recordId: ok.recordId, code: j.code, diagnostics: j.diagnostics } };
+  return { label: 'exploitable-confirmed', recordId: ok.recordId, reason: 'a trusted oracle confirmed the effect in its declared scenario, and an issued binding ties that proof to this path; deployment reachability comes from configuration or sampled observation, not from a production probe', bindingId: j.bindingId };
 }
 
 // ------------------------------------------------------------ the per-finding context
@@ -446,12 +456,14 @@ function summarizeExposure(paths) {
  * @param {Array} [args.records]   version-1 verification records
  * @param {number|string} [args.now]
  */
-export function analyzeFindingBoundaries({ graph, finding, bindings = [], records = [], now, maxHops, maxPaths, action, context: requestContext } = {}) {
+export function analyzeFindingBoundaries({ graph, finding, bindings = [], records = [], now, maxHops, maxPaths, action, context: requestContext, proofBindings = [], trustRoot = {}, expect = {} } = {}) {
   const v = validateBoundaryGraph(graph);
   if (!v.ok) return { ok: false, context: null, errors: v.errors };
   const hypothesisId = hypothesisIdFromFinding(finding);
   const binding = bindFindingToService(finding, bindings, graph);
-  const assessments = assessVerification(finding, records, hypothesisId);
+  const assessments = assessVerification(finding, records, hypothesisId, { revision: graph.revision ?? null });
+  const clock = now === undefined || now === null ? Date.now() : (typeof now === 'number' ? now : Date.parse(now));
+  const pc = (kind) => ({ kind, graph, records: Array.isArray(records) ? records : [], proofBindings, trustRoot, now: clock, expect });
   const paths = [];
   let truncated = false;
   const truncationReasons = new Set();
@@ -461,8 +473,8 @@ export function analyzeFindingBoundaries({ graph, finding, bindings = [], record
     const impact = computeAttackPaths(graph, { ...popts, entries: [binding.service.id] });
     truncated = exposure.truncated || impact.truncated;
     for (const r of [...exposure.truncation.reasons, ...impact.truncation.reasons]) truncationReasons.add(r);
-    for (const p of exposure.paths) paths.push({ kind: 'exposure', ...p, exploitability: labelPath(p, assessments) });
-    for (const p of impact.paths) paths.push({ kind: 'impact', ...p, exploitability: labelPath(p, assessments) });
+    for (const p of exposure.paths) paths.push({ kind: 'exposure', ...p, exploitability: labelPath(p, assessments, pc('exposure')) });
+    for (const p of impact.paths) paths.push({ kind: 'impact', ...p, exploitability: labelPath(p, assessments, pc('impact')) });
   }
   const exposurePaths = paths.filter((p) => p.kind === 'exposure');
   const exposure = binding.status === 'bound' ? summarizeExposure(exposurePaths)

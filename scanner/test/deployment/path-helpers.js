@@ -92,3 +92,17 @@ export function recordFor(kind, o = {}) {
   }
   throw new Error(`unknown record kind ${kind}`);
 }
+
+// Threat-model FR-04: an issuer key pair and a signed binding of a verification record to one path. Promotion to exploitable needs one.
+import crypto from 'node:crypto';
+import { signProofBinding } from '../../src/lineage/deployment/proof-binding.js';
+export const ISSUER = (() => { const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519'); return { name: 'trusted-runner', publicKey: publicKey.export({ type: 'spki', format: 'pem' }), privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }) }; })();
+export const TRUST_ROOT = Object.freeze({ [ISSUER.name]: ISSUER.publicKey });
+export function bindingFor(rec, graph, path, kind, over = {}) {
+  return signProofBinding({
+    recordId: rec.id, commit: rec.commit, artifactDigest: 'sha256:artifact', policyDigest: graph.digest, environment: path.environments[0] ?? 'prod',
+    tenant: path.tenants[0] ?? null, actor: 'anonymous', route: 'GET /orders', action: 'invoke', pathId: path.id, claim: kind,
+    oracleVersion: String(rec.oracle?.version ?? ''), effect: 'command-executed', issuer: ISSUER.name,
+    issuedAt: '2026-11-08T00:00:00Z', expires: '2099-01-01T00:00:00Z', ...over,
+  }, over.privateKey ?? ISSUER.privateKey);
+}

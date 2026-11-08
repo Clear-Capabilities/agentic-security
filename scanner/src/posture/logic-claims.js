@@ -40,7 +40,7 @@
 // lenses live here in deterministic code rather than in the agent's prompt: a
 // reviewer asked to double-check itself is the same party voting twice.
 
-import { recordProducer, recordVerdict, consensusOf } from './verification-separation.js';
+import { recordProducer, recordVerdict, consensusOf, refutationRemoves } from './verification-separation.js';
 import { inferredInvariant } from './invariants/lifecycle.js';
 
 export const PRODUCER = 'agent:logic-reviewer';
@@ -132,7 +132,7 @@ export function verifyLogicClaim(claim, fileContents) {
   // ── citation ──────────────────────────────────────────────────────────────
   if (content === null) {
     recordVerdict(finding, {
-      verifierId: VERIFIER_CITATION, lens: 'citation', verdict: 'refuted',
+      verifierId: VERIFIER_CITATION, lens: 'citation', verdict: 'refuted', evidence: { kind: 'deterministic' },
       reason: `no file '${claim.file}' was scanned, so the cited location does not exist`,
     });
     finding.consensus = consensusOf(finding);
@@ -143,12 +143,12 @@ export function verifyLogicClaim(claim, fileContents) {
   const line = Number(claim.line);
   if (!Number.isInteger(line) || line < 1 || line > total) {
     recordVerdict(finding, {
-      verifierId: VERIFIER_CITATION, lens: 'citation', verdict: 'refuted',
+      verifierId: VERIFIER_CITATION, lens: 'citation', verdict: 'refuted', evidence: { kind: 'deterministic' },
       reason: `cited line ${claim.line} is outside ${claim.file} (${total} lines)`,
     });
   } else {
     recordVerdict(finding, {
-      verifierId: VERIFIER_CITATION, lens: 'citation', verdict: 'upheld',
+      verifierId: VERIFIER_CITATION, lens: 'citation', verdict: 'upheld', evidence: { kind: 'deterministic' },
       reason: `${claim.file}:${line} exists`,
     });
   }
@@ -158,7 +158,7 @@ export function verifyLogicClaim(claim, fileContents) {
   // snippet is UNDECIDED here, not upheld — silence is not corroboration.
   if (!claim.snippet || !String(claim.snippet).trim()) {
     recordVerdict(finding, {
-      verifierId: VERIFIER_QUOTATION, lens: 'quotation', verdict: 'undecided',
+      verifierId: VERIFIER_QUOTATION, lens: 'quotation', verdict: 'undecided', evidence: { kind: 'deterministic' },
       reason: 'the claim quotes no source, so there is nothing to check it against',
     });
   } else {
@@ -170,19 +170,19 @@ export function verifyLogicClaim(claim, fileContents) {
     const anywhere = _normalize(content);
     if (window.includes(want)) {
       recordVerdict(finding, {
-        verifierId: VERIFIER_QUOTATION, lens: 'quotation', verdict: 'upheld',
+        verifierId: VERIFIER_QUOTATION, lens: 'quotation', verdict: 'upheld', evidence: { kind: 'deterministic' },
         reason: 'the quoted source appears at the cited line',
       });
     } else if (anywhere.includes(want)) {
       // Right file, wrong line. Not a fabrication, but the location is not
       // usable as-is, so it is not corroboration either.
       recordVerdict(finding, {
-        verifierId: VERIFIER_QUOTATION, lens: 'quotation', verdict: 'undecided',
+        verifierId: VERIFIER_QUOTATION, lens: 'quotation', verdict: 'undecided', evidence: { kind: 'deterministic' },
         reason: 'the quoted source is in the file but not at the cited line',
       });
     } else {
       recordVerdict(finding, {
-        verifierId: VERIFIER_QUOTATION, lens: 'quotation', verdict: 'refuted',
+        verifierId: VERIFIER_QUOTATION, lens: 'quotation', verdict: 'refuted', evidence: { kind: 'deterministic' },
         reason: 'the quoted source does not appear in the cited file',
       });
     }
@@ -193,30 +193,31 @@ export function verifyLogicClaim(claim, fileContents) {
   if (finding.kind === 'missing-authentication') {
     const hit = AUTH_HINTS.find((re) => re.test(block));
     recordVerdict(finding, hit
-      ? { verifierId: VERIFIER_CORROBORATION, lens: 'authz', verdict: 'refuted',
+      ? { verifierId: VERIFIER_CORROBORATION, lens: 'authz', verdict: 'refuted', evidence: { kind: 'deterministic' },
         reason: `the handler around this line does authenticate (${hit.source})` }
-      : { verifierId: VERIFIER_CORROBORATION, lens: 'authz', verdict: 'upheld',
+      : { verifierId: VERIFIER_CORROBORATION, lens: 'authz', verdict: 'upheld', evidence: { kind: 'deterministic' },
         reason: 'no authentication marker anywhere in the enclosing handler' });
   } else if (finding.kind === 'missing-authorization' || finding.kind === 'missing-ownership-check') {
     const hit = OWNERSHIP_HINTS.find((re) => re.test(block));
     recordVerdict(finding, hit
-      ? { verifierId: VERIFIER_CORROBORATION, lens: 'authz', verdict: 'refuted',
+      ? { verifierId: VERIFIER_CORROBORATION, lens: 'authz', verdict: 'refuted', evidence: { kind: 'deterministic' },
         reason: `the handler around this line does scope the record to a user (${hit.source})` }
-      : { verifierId: VERIFIER_CORROBORATION, lens: 'authz', verdict: 'upheld',
+      : { verifierId: VERIFIER_CORROBORATION, lens: 'authz', verdict: 'upheld', evidence: { kind: 'deterministic' },
         reason: 'no ownership scoping in the enclosing handler' });
   } else {
     // No deterministic lens exists for this kind. Said out loud rather than
     // counted as agreement — an unchecked claim and a corroborated one must
     // not read the same in the consensus.
     recordVerdict(finding, {
-      verifierId: VERIFIER_CORROBORATION, lens: 'authz', verdict: 'undecided',
+      verifierId: VERIFIER_CORROBORATION, lens: 'authz', verdict: 'undecided', evidence: { kind: 'deterministic' },
       reason: `no deterministic lens covers claim kind '${finding.kind}'`,
     });
   }
 
   finding.consensus = consensusOf(finding);
   // Quarantine, not deletion — the same contract falsification uses.
-  finding.quarantined = finding.consensus.verdict === 'refuted';
+  // threat-model FR-04.3: a critical claim is quarantined only on a refutation with sufficient independent authority
+  finding.quarantined = refutationRemoves(finding, finding.consensus);
   return finding;
 }
 

@@ -55,6 +55,13 @@ records its verdict through `posture/verification-separation.js`'s
 producer/verdict API, which is what populates `verification.producer`,
 `.verdicts[]`, and `.consensus`: the structural guarantee that the party
 who found a finding cannot be the same party who clears it.
+`.consensus` counts independent evidence, not lenses: votes that share an
+observation, a generator or a lineage are one vote, and two lenses from one
+verifier are one vote (the per-lens counts are kept beside it). It reports
+`conflict` when independent groups disagree, and a `refutationAuthority`. A
+refutation can take a critical finding out of the actionable queue only with
+`sufficient` authority: no conflict, and an effect or deterministic check
+behind it. A correlated majority, or reasoning alone, is `advisory`.
 (`posture/verifier.js`'s `annotateVerifierVerdicts` is a separate,
 unrelated pass — the optional live/sandboxed PoC-execution check; it sets
 `verifier_verdict`/`verifier_reason`/`verifier_runner` and never touches

@@ -1643,8 +1643,8 @@ function applyCorrelation(graph, correlation) {
   return (0,boundary_graph/* buildBoundaryGraph */.v4)({ repository: graph.repository, revision: graph.revision, nodes, edges, gaps: graph.gaps, sources: graph.sources });
 }
 
-// EXTERNAL MODULE: ./src/lineage/deployment/projection.js + 1 modules
-var projection = __webpack_require__(73596);
+// EXTERNAL MODULE: ./src/lineage/deployment/projection.js + 2 modules
+var projection = __webpack_require__(83929);
 ;// CONCATENATED MODULE: ./src/lineage/deployment/boundaries-run.js
 // boundaries-run.js: the operator entry point that builds a boundary context for scanned findings (X-308 wiring).
 //
