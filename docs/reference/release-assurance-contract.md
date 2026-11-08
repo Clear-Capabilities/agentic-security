@@ -167,6 +167,14 @@ The verdict is a function of the package alone: no clock and no environment, so 
 - **An unsigned or tampered scan is not used as evidence.** `build` exits `1` and writes nothing.
 - **The release gate exercises this path.** The `release-assurance-gate` check builds a package from a scan of a project the repository ships, requires the independent verifier to accept it, and requires it to refuse a lowered severity, a restated verdict and an unsigned scan.
 
+## Candidate qualification
+
+`posture/assurance/candidate-qualification.js` qualifies a stated capability for an exact scanner bundle, target artifact, policy, deployment profile and observation window, and only for the cases it passes. The packet (`agentic-security/candidate-packet`, version 1, Ed25519-signed) carries those identities, the scope reconciliation (`scope/release-scope.js`), the runner attestation, the independent evaluation status, the telemetry feeds, and one record per required case: requirement, gate, expected outcome (`positive`, `negative`, `legitimate`), the observation, the artifact and policy digests, an expiry and an owner.
+
+`evaluateCandidate` recomputes every gate from that evidence. A case is `met` or `violated` from its observation against its expectation, so a vulnerable fixture that reproduces the forbidden effect meets its positive control, and a fixed artifact showing the same effect violates. A case is `unresolved` when its evidence is missing, expired, or bound to another artifact, policy or scanner bundle, and `blocked` when a prerequisite is unavailable. At gate level, a scope that is not `satisfied` keeps G-02 open, an unattested runner blocks G-04, an unmeasured population blocks G-06, and a stale feed keeps G-05 open. A gate with no evidence is unresolved, never met. The candidate is `qualified` only when every required gate is met, and the decision write is atomic and idempotent.
+
+The local two-tenant pilot (`scanner/test/pilot/`) supplies real positive, negative and legitimate cases. Staging, owner approval and independent measurement are separate qualifications. A local result is never reported as one of them.
+
 ## What release assurance does not do
 
 <!-- limits-verified: 2026-10-19 -->
