@@ -9691,7 +9691,7 @@ function _deterministicFileTimings(timings) {
         f.unvalidated = true;
         f.validator_verdict = 'unvalidated';
       }
-      try { applyHaskellGuards(irFindings, perFile); applyTrustBoundary(irFindings, perFile); try { applyHaskellReachability(irFindings, perFile); } catch (_) { /* the verdict is metadata; the finding stands without it */ } consolidateFlowSinks(irFindings, perFile); annotateUnresolvedTargets(irFindings, perFile); attachEvidenceChains(irFindings, perFile); annotateHaskellFindings(irFindings, fc); annotateHaskellLlm(irFindings, fc); } catch (_) { /* metadata only; the finding stands without it */ }
+      try { applyHaskellGuards(irFindings, perFile, fc); applyTrustBoundary(irFindings, perFile); try { applyHaskellReachability(irFindings, perFile); } catch (_) { /* the verdict is metadata; the finding stands without it */ } consolidateFlowSinks(irFindings, perFile); annotateUnresolvedTargets(irFindings, perFile); attachEvidenceChains(irFindings, perFile); annotateHaskellFindings(irFindings, fc); annotateHaskellLlm(irFindings, fc); } catch (_) { /* metadata only; the finding stands without it */ }
       aF.push(...irFindings);
     } catch (e) {
       // Deep mode is best-effort. A parser blowup in one file shouldn't kill
