@@ -230,11 +230,17 @@ const MAX_POLICY_BYTES = 256 * 1024;
 export function loadPolicyState(fp) {
   if (!fp) return { status: 'absent', doc: null, digest: null };
   let raw;
+  // one open, then the size and type checks and the read on that same descriptor: the file cannot be swapped between check and use
+  let fd = null;
   try {
-    const st = fs.statSync(fp);
+    fd = fs.openSync(fp, 'r');
+    const st = fs.fstatSync(fd);
     if (!st.isFile() || st.size > MAX_POLICY_BYTES) return { status: 'unreadable', doc: null, digest: null };
-    raw = fs.readFileSync(fp, 'utf8');
+    const buf = Buffer.alloc(st.size);
+    fs.readSync(fd, buf, 0, st.size, 0);
+    raw = buf.toString('utf8');
   } catch (e) { return { status: e && e.code === 'ENOENT' ? 'absent' : 'unreadable', doc: null, digest: null }; }
+  finally { if (fd !== null) try { fs.closeSync(fd); } catch { /* already closed */ } }
   const digest = `sha256:${crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16)}`;
   let doc;
   try { doc = loadYaml(raw); } catch { return { status: 'malformed', doc: null, digest }; }

@@ -14,8 +14,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const CANDIDATE_SCHEMA = 'agentic-security/candidate-packet';
-export const CANDIDATE_VERSION = 1;
+const CANDIDATE_SCHEMA = 'agentic-security/candidate-packet';
+const CANDIDATE_VERSION = 1;
 export const GATES = Object.freeze({
   'G-01': 'code regression', 'G-02': 'scan and graph coverage', 'G-03': 'prevention and repair', 'G-04': 'evidence and harness integrity',
   'G-05': 'detection and response', 'G-06': 'independent accuracy', 'G-07': 'operability',
