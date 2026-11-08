@@ -547,6 +547,22 @@ and an inert quasi-quote are neutralised in place before it parses the file, so 
 syntax error, a finding in a dead branch is not reported, and a finding in an undecided branch **is** (nothing is dropped because a
 condition could not be decided).
 
+### When a parse budget is hit
+
+The parser stops a file at a named bound (bytes, tokens, nesting depth, comment nesting, steps, a wall-clock deadline) and reports
+it as `budget_exceeded`. That file is not analysed, and the Haskell capability stays incomplete until it is. The `budget` section of
+`scanHealth.languageCoverage.haskell` names every file left, the bound it hit, and the budgets in effect.
+
+Raise a bound with `AGENTIC_SECURITY_HASKELL_PARSE_BUDGETS`, for example `deadlineMs=20000,maxTokens=800000`. Only the parser's own
+budget names are accepted, as positive integers. A malformed or unknown entry is refused and reported as a scan-health condition,
+never applied.
+
+Each scan that has Haskell work left writes `.agentic-security/haskell-budget.json`: the budgets, the completed count, and every
+remaining file with a digest of its content. The next scan compares against it and reports `sinceLast`: files now complete, files
+still remaining on the same content and budgets (a fixed bound will be hit again, so raise it), files still remaining after a change,
+and files that are gone. The scan does not resume. Every eligible file is parsed on every scan, so nothing is skipped because an
+earlier run analysed it. `deadlineMs` is wall-clock time, so a file can finish on one machine and exceed the deadline on another.
+
 ## What needs a tool
 
 | Capability | Needs | Without it |

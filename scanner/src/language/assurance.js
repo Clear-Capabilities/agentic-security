@@ -24,6 +24,8 @@ import { createNixAdapter } from './nix-adapter.js';
 import { analyzeHaskellManifests } from './haskell-manifests.js';
 import { packageOfModule } from './haskell-models.js';
 import { buildHaskellCoverage } from './haskell-coverage.js';
+import { budgetRecord, loadBudgetState, saveBudgetState } from './haskell-budget-state.js';
+import { DEFAULT_PARSE_BUDGETS } from './haskell-parser.js';
 import { buildHaskellIR } from './haskell-ir.js';
 
 export const ASSURANCE_VERSION = 'language-assurance/1';
@@ -90,7 +92,7 @@ export async function assessLanguageAssurance(input = {}) {
       disclosed.set(b.kind, e);
     }
   };
-  const adapters = input.adapters || [createHaskellAdapter({ onParse, cpp: deriveCppContext(files) }), createNixAdapter()];
+  const adapters = input.adapters || [createHaskellAdapter({ onParse, cpp: deriveCppContext(files), budgets: input.parseBudgets || undefined }), createNixAdapter()];
   const run = await runLanguageAnalysis({ files, adapters, timeoutMs: input.timeoutMs || 0 });
   const reconcile = reconcileLanguageLedger(run.ledger, files);
   const base = languageHealth({ ledger: run.ledger, outcomes: run.outcomes });
@@ -217,6 +219,20 @@ export async function assessLanguageAssurance(input = {}) {
         ruleRuns: input.ruleRuns || null, sizeSkipped: input.sizeSkipped, policyExcluded: input.policyExcluded,
         excludedPaths: run.ledger.excludedFiles, sourceMap: input.sourceMap || null,
       });
+      // Effective parse budgets, operator overrides that were refused, and the persisted record of work left (haskell-budget-state.js).
+      const b = haskellCoverage.budget;
+      b.budgets = { ...DEFAULT_PARSE_BUDGETS, ...(input.parseBudgets || {}) };
+      if (Array.isArray(input.parseBudgetRejected) && input.parseBudgetRejected.length) {
+        b.rejectedOverrides = input.parseBudgetRejected;
+        conditions.push(`Haskell parse budget override refused: ${input.parseBudgetRejected.map((r) => `${r.entry} (${r.reason})`).join('; ')}`);
+      }
+      const budgetOf = (file) => { const p = parsesByFile.get(file); return p && p.budget ? { budgetName: p.budget.name } : {}; };
+      const remainingAll = (b.remainingAll || []).map((r) => ({ ...r, ...budgetOf(r.file) }));
+      const previous = loadBudgetState(input.scanRoot);
+      const { record, sinceLast } = budgetRecord({ remaining: remainingAll, completedFiles: b.completedFiles, budgets: b.budgets, files, previous });
+      b.remaining = b.remaining.map((r) => ({ ...r, ...budgetOf(r.file) }));
+      b.sinceLast = sinceLast;
+      if (record.remainingFiles || previous) b.recorded = saveBudgetState(input.scanRoot, record);
       // Only a measured shortfall is a condition. A parse-only form is a stated limitation, not a gap in what was asked.
       for (const r of haskellCoverage.capability.reasons) if (!/deep analysis is disabled/.test(r)) conditions.push(`Haskell coverage: ${r}`);
       for (const l of haskellCoverage.capability.limitations) limitations.push({ kind: 'haskell-parse-only', note: l });

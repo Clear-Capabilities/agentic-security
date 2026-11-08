@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-07T02:14:03.695Z",
-  "commit": "fe20585adc9bb44334499124d2a50d9fe26c147c",
+  "generatedAt": "2026-11-08T01:07:37.510Z",
+  "commit": "5370151158d41e908c5aa874420c73440e990c52",
   "targets": {
     "hooks": {
       "total": 21,
@@ -62,7 +62,7 @@
       }
     },
     "scanner/src": {
-      "total": 683,
+      "total": 684,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -131,6 +131,7 @@
         "language/bridges.js": 1,
         "language/context.js": 2,
         "language/discovery.js": 1,
+        "language/haskell-budget-state.js": 1,
         "language/haskell-cpp.js": 3,
         "language/haskell-fix.js": 2,
         "language/haskell-llm.js": 1,

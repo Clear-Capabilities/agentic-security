@@ -253,6 +253,7 @@ export const ARTIFACT_REGISTRY = [
   { name: 'integrations.yml', kind: 'file', classification: 'operator-config' },
   { name: 'profile.yml', kind: 'file', classification: 'operator-config' },
   { name: 'sca-policy.yml', kind: 'file', classification: 'operator-config' },
+  { name: 'haskell-budget.json', kind: 'file', classification: 'generated', retentionClass: 'scan', source: 'src/language/haskell-budget-state.js (saveBudgetState)', note: 'Haskell parse budgets in effect and every file left unanalysed when one was hit, with a content digest, so the next scan can say what finished since. Rewritten by every scan that has Haskell work left.' },
   { name: 'haskell-models.json', kind: 'file', classification: 'operator-config', note: 'reviewed project models for Haskell wrappers; only ever loaded by language/haskell-project-models.js' },
   { name: 'suppressions.yml', kind: 'file', classification: 'operator-config', note: 'audit-tier suppression config; only ever loaded, never saved, by posture/suppressions.js' },
   { name: 'network-policy.json', kind: 'file', classification: 'operator-config', note: 'documented as an Inputs-section artifact in posture/network-policy-import.js, not a scanner-written digest' },

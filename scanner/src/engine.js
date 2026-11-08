@@ -204,6 +204,7 @@ import { groupEquivalentClaims, reconcileCounts } from './llm-validator/claim-gr
 import { annotateScaBasis, dedupeAdvisoryAliases } from './sca/basis.js';
 import { applyOidcTrust } from './sast/oidc-trust.js';
 import { readProjectModelFile, loadProjectModels, projectFileExists } from './language/haskell-project-models.js';
+import { parseBudgetOverrides as parseHaskellBudgetOverrides } from './language/haskell-budget-state.js';
 import { registerProjectCatalogEntries, unregisterProjectCatalogEntries, scanOwner } from './dataflow/catalog.js';
 import { MODEL_STATUS, stageSummaryFromModelStatus } from './llm-validator/model-status.js';
 import { resolveProvider as resolveLlmProvider, otherRemoteRoles as llmOtherRemoteRoles, NO_CLOUD_FALLBACK } from './llm-validator/providers.js';
@@ -11439,6 +11440,8 @@ function _deterministicFileTimings(timings) {
         policyExcluded,
         sizeSkipped,
         deepEnabled: _deepEnabled,
+        scanRoot,
+        ...(() => { const o = parseHaskellBudgetOverrides(env.AGENTIC_SECURITY_HASKELL_PARSE_BUDGETS); return { parseBudgets: o.budgets, parseBudgetRejected: o.rejected }; })(),
         projectModels: _projectModels,
         sourceMap: haskellSourceMap,
         ruleRuns: { ..._hsRuleRuns, 'ir-taint': { ran: _deepEnabled, findings: finalFindings.filter((f) => f && f.parser === 'IR-TAINT' && /\.l?hs$/i.test(f.file || '')).length }, 'hs-sca': { ran: true } },

@@ -189,7 +189,8 @@ export function buildHaskellCoverage(i) {
 
   // Work completed and work remaining when a limit stopped the analysis (PRD FR 02). A file is remaining when its parse hit a
   // budget or its flow analysis did not complete. Nothing is sampled: the lists are exhaustive up to the cap, in path order, so a
-  // rerun over the same inputs names the same files. `resume` says only what the scanner can do today.
+  // rerun over the same inputs names the same files. `resume` says only what the scanner can do today (assurance.js adds the
+  // effective budgets and the comparison with the previous scan's record, language/haskell-budget-state.js).
   const remaining = eligibleHs.filter(([, r]) => r.parse === 'budget_exceeded' || (r.parse === 'parsed' && r.flowAnalysis !== 'completed' && r.flowAnalysis !== 'not-applicable'))
     .map(([file, r]) => ({ file, parse: r.parse, flowAnalysis: r.flowAnalysis })).sort((a, b) => (a.file < b.file ? -1 : 1));
   const budget = {
@@ -198,8 +199,11 @@ export function buildHaskellCoverage(i) {
     remainingFiles: remaining.length,
     remaining: remaining.slice(0, 500),
     remainingTruncated: remaining.length > 500,
-    resume: 'rerun with --resume to reuse the files already analysed; the remaining files are not skipped silently and the capability stays incomplete until they are analysed',
+    // The Haskell pass parses every eligible file on every scan: nothing is reused from a previous run, so there is no resume.
+    resume: { supported: false, toFinish: 'raise the named parse budget with AGENTIC_SECURITY_HASKELL_PARSE_BUDGETS (name=value,...) and rescan; a file whose flow analysis did not run needs deep analysis on. The remaining files are never skipped silently, and the capability stays incomplete until they are analysed' },
   };
+  // The full list (not capped) for the persisted record in haskell-budget-state.js; non-enumerable so the report shape is unchanged.
+  Object.defineProperty(budget, 'remainingAll', { value: remaining, enumerable: false });
   const hasHaskell = present.length + sizeSkipped.size + policy.size + excl.size > 0;
   return {
     schema: COVERAGE_SCHEMA,

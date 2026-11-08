@@ -321,7 +321,8 @@ function buildHaskellCoverage(i) {
 
   // Work completed and work remaining when a limit stopped the analysis (PRD FR 02). A file is remaining when its parse hit a
   // budget or its flow analysis did not complete. Nothing is sampled: the lists are exhaustive up to the cap, in path order, so a
-  // rerun over the same inputs names the same files. `resume` says only what the scanner can do today.
+  // rerun over the same inputs names the same files. `resume` says only what the scanner can do today (assurance.js adds the
+  // effective budgets and the comparison with the previous scan's record, language/haskell-budget-state.js).
   const remaining = eligibleHs.filter(([, r]) => r.parse === 'budget_exceeded' || (r.parse === 'parsed' && r.flowAnalysis !== 'completed' && r.flowAnalysis !== 'not-applicable'))
     .map(([file, r]) => ({ file, parse: r.parse, flowAnalysis: r.flowAnalysis })).sort((a, b) => (a.file < b.file ? -1 : 1));
   const budget = {
@@ -330,8 +331,11 @@ function buildHaskellCoverage(i) {
     remainingFiles: remaining.length,
     remaining: remaining.slice(0, 500),
     remainingTruncated: remaining.length > 500,
-    resume: 'rerun with --resume to reuse the files already analysed; the remaining files are not skipped silently and the capability stays incomplete until they are analysed',
+    // The Haskell pass parses every eligible file on every scan: nothing is reused from a previous run, so there is no resume.
+    resume: { supported: false, toFinish: 'raise the named parse budget with AGENTIC_SECURITY_HASKELL_PARSE_BUDGETS (name=value,...) and rescan; a file whose flow analysis did not run needs deep analysis on. The remaining files are never skipped silently, and the capability stays incomplete until they are analysed' },
   };
+  // The full list (not capped) for the persisted record in haskell-budget-state.js; non-enumerable so the report shape is unchanged.
+  Object.defineProperty(budget, 'remainingAll', { value: remaining, enumerable: false });
   const hasHaskell = present.length + sizeSkipped.size + policy.size + excl.size > 0;
   return {
     schema: COVERAGE_SCHEMA,
@@ -357,6 +361,8 @@ function buildHaskellCoverage(i) {
   };
 }
 
+// EXTERNAL MODULE: ./src/language/haskell-budget-state.js
+var haskell_budget_state = __webpack_require__(80291);
 // EXTERNAL MODULE: ./src/language/haskell-ir.js + 1 modules
 var haskell_ir = __webpack_require__(18821);
 ;// CONCATENATED MODULE: ./src/language/assurance.js
@@ -378,6 +384,8 @@ var haskell_ir = __webpack_require__(18821);
 //
 // Independent findings are never dropped here: this module only produces health inputs and returns the findings it
 // was given by reference, with a count, so a caller can prove retention.
+
+
 
 
 
@@ -452,7 +460,7 @@ async function assessLanguageAssurance(input = {}) {
       disclosed.set(b.kind, e);
     }
   };
-  const adapters = input.adapters || [createHaskellAdapter({ onParse, cpp: (0,haskell_cpp/* deriveCppContext */.uP)(files) }), createNixAdapter()];
+  const adapters = input.adapters || [createHaskellAdapter({ onParse, cpp: (0,haskell_cpp/* deriveCppContext */.uP)(files), budgets: input.parseBudgets || undefined }), createNixAdapter()];
   const run = await (0,contracts/* runLanguageAnalysis */.i5)({ files, adapters, timeoutMs: input.timeoutMs || 0 });
   const reconcile = (0,contracts/* reconcileLanguageLedger */.SA)(run.ledger, files);
   const base = (0,contracts/* languageHealth */.bX)({ ledger: run.ledger, outcomes: run.outcomes });
@@ -579,6 +587,20 @@ async function assessLanguageAssurance(input = {}) {
         ruleRuns: input.ruleRuns || null, sizeSkipped: input.sizeSkipped, policyExcluded: input.policyExcluded,
         excludedPaths: run.ledger.excludedFiles, sourceMap: input.sourceMap || null,
       });
+      // Effective parse budgets, operator overrides that were refused, and the persisted record of work left (haskell-budget-state.js).
+      const b = haskellCoverage.budget;
+      b.budgets = { ...haskell_parser/* DEFAULT_PARSE_BUDGETS */.$e, ...(input.parseBudgets || {}) };
+      if (Array.isArray(input.parseBudgetRejected) && input.parseBudgetRejected.length) {
+        b.rejectedOverrides = input.parseBudgetRejected;
+        conditions.push(`Haskell parse budget override refused: ${input.parseBudgetRejected.map((r) => `${r.entry} (${r.reason})`).join('; ')}`);
+      }
+      const budgetOf = (file) => { const p = parsesByFile.get(file); return p && p.budget ? { budgetName: p.budget.name } : {}; };
+      const remainingAll = (b.remainingAll || []).map((r) => ({ ...r, ...budgetOf(r.file) }));
+      const previous = (0,haskell_budget_state/* loadBudgetState */.p6)(input.scanRoot);
+      const { record, sinceLast } = (0,haskell_budget_state/* budgetRecord */.Zg)({ remaining: remainingAll, completedFiles: b.completedFiles, budgets: b.budgets, files, previous });
+      b.remaining = b.remaining.map((r) => ({ ...r, ...budgetOf(r.file) }));
+      b.sinceLast = sinceLast;
+      if (record.remainingFiles || previous) b.recorded = (0,haskell_budget_state/* saveBudgetState */.Qg)(input.scanRoot, record);
       // Only a measured shortfall is a condition. A parse-only form is a stated limitation, not a gap in what was asked.
       for (const r of haskellCoverage.capability.reasons) if (!/deep analysis is disabled/.test(r)) conditions.push(`Haskell coverage: ${r}`);
       for (const l of haskellCoverage.capability.limitations) limitations.push({ kind: 'haskell-parse-only', note: l });
