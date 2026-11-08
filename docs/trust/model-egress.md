@@ -18,6 +18,17 @@ Model use is optional. The deterministic scanner never needs a model. When you d
 
 Other policy keys narrow it further: `allowedProviders`, `deniedPaths`, `maxContextTokens`, `proprietaryPaths`, and a regulated profile that requires approved providers. The policy file is `.agentic-security/egress-policy.yml`.
 
+### Execution profiles
+
+`AGENTIC_SECURITY_EGRESS_PROFILE` selects how a policy that cannot be read is treated.
+
+| Profile | Policy | When the policy is missing or invalid |
+|---|---|---|
+| `standard` (default) | the repository file, as above | the documented default applies (allow), and the decision carries `configurationWarning` and `policyState` saying the file is `malformed`, `unreadable` or `unsupported` |
+| `restricted` | the operator's file, named by `AGENTIC_SECURITY_EGRESS_POLICY`, is authoritative; the repository file can only narrow it | every request is denied before transport, with `reasonCode` `operator-policy-absent`, `-malformed`, `-unreadable` or `-unsupported`, or `repository-policy-...` for an invalid repository file |
+
+Under `restricted`, a deny in either file denies, and a repository `mode: allow` cannot lift an operator `local-only`. An unknown profile, or an unknown `AGENTIC_SECURITY_EGRESS_MODE`, denies under any profile. `AGENTIC_SECURITY_EGRESS_DENY=1` always wins. Every decision records `profile`, `policyState`, `reasonCode`, `enforcement` (`enforced` or `legacy-default`) and, under `restricted`, `policyIdentity` (a digest of the operator policy, never its path). The decision is made before the prompt is built, so a denied request reaches no network client.
+
 ## Redaction
 
 `egress/redact.js` decides what is in a call once it is allowed: PII (`redactPii`), configured customer-data patterns and proprietary paths are removed or masked first. The two gates are separate; only the first can produce a `deny`.

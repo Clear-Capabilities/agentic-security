@@ -64,6 +64,7 @@ import { strengthOfControl as _strengthOfControl } from './coverage-strength.js'
 // visible regression on common real-world author names, not a fix.
 import { sanitizeForTerminal, pseudonymizeAuthor, PROVENANCE_COMPLIANCE_DISCLAIMER } from './provenance/schema.js';
 import { evaluateGraphFlowPredicate, buildObligationMappingFromGraphPredicate } from '../lineage/obligation-predicates.js';
+import { pastDecisionApplies } from './triage-memory.js';
 
 // Fix-round item 4b: this renderer had `sanitizeForTerminal` (injection
 // safety) but never honoured `--pseudonymize-authors` at all — an operator
@@ -597,7 +598,7 @@ export function evaluateFramework(scanRoot, fw, scan) {
           .flatMap(k => families.get(k) || []);
         const scoped = subfam ? candidates.filter(f => !f.subfamily || f.subfamily === subfam) : candidates;
         const minRank = SEVERITY_RANK[minSeverity];
-        const open = scoped.filter(f => !f.intentSuppressed && !f.pastDecision && (SEVERITY_RANK[f.severity] ?? 0) >= minRank);
+        const open = scoped.filter(f => !f.intentSuppressed && !pastDecisionApplies(f.pastDecision) && (SEVERITY_RANK[f.severity] ?? 0) >= minRank);
         if (open.length) {
           allCleared = false;
           contributingFindings.push(...open);

@@ -65,6 +65,7 @@
 // functionality nobody configured it to disable.
 
 import * as fs from 'node:fs';
+import * as crypto from 'node:crypto';
 import { load as loadYaml } from '../util/yaml.js';
 import { statePath } from '../posture/state-dir.js';
 import { isLoopbackUrl } from '../llm-validator/local-endpoint.js';
@@ -211,10 +212,81 @@ export function evaluateEgress(ctx = {}) {
     return { allowed: false, decision: 'deny', reason: "AGENTIC_SECURITY_EGRESS_DENY=1 is set", provider, policySource: 'env', purpose };
   }
 
+  return _withProfile(ctx, provider);
+}
+
+// ── execution profiles (threat-model PRD FR-06.1, TM-08) ────────────────────────────────────────────────────────────────────────────
+// `AGENTIC_SECURITY_EGRESS_PROFILE=restricted` makes the operator's policy authoritative: the file named by
+// AGENTIC_SECURITY_EGRESS_POLICY must exist and be valid, or every model request is denied before transport. The repository's own
+// `.agentic-security/egress-policy.yml` can only narrow it (a deny in either denies; a repository `mode: allow` cannot widen an
+// operator `local-only`), and an invalid repository file also denies. An unknown profile or an unknown operator mode always fails
+// closed. Outside the restricted profile the documented legacy default holds (no valid policy means allow), and an invalid policy
+// file that is present is reported on the decision instead of being silently ignored. AGENTIC_SECURITY_EGRESS_DENY=1 always wins.
+export const EGRESS_PROFILES = Object.freeze(['standard', 'restricted']);
+export const EGRESS_MODES = Object.freeze(['allow', 'deny', 'local-only']);
+const MAX_POLICY_BYTES = 256 * 1024;
+
+/** Read a policy file and classify it: absent | valid | malformed | unreadable | unsupported. Never throws. */
+export function loadPolicyState(fp) {
+  if (!fp) return { status: 'absent', doc: null, digest: null };
+  let raw;
+  try {
+    const st = fs.statSync(fp);
+    if (!st.isFile() || st.size > MAX_POLICY_BYTES) return { status: 'unreadable', doc: null, digest: null };
+    raw = fs.readFileSync(fp, 'utf8');
+  } catch (e) { return { status: e && e.code === 'ENOENT' ? 'absent' : 'unreadable', doc: null, digest: null }; }
+  const digest = `sha256:${crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16)}`;
+  let doc;
+  try { doc = loadYaml(raw); } catch { return { status: 'malformed', doc: null, digest }; }
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return { status: 'malformed', doc: null, digest };
+  if (doc.mode !== undefined && !EGRESS_MODES.includes(doc.mode)) return { status: 'unsupported', doc, digest };
+  return { status: 'valid', doc, digest };
+}
+
+function _withProfile(ctx, provider) {
+  const purpose = ctx.purpose ?? 'unknown';
+  const profile = process.env.AGENTIC_SECURITY_EGRESS_PROFILE || 'standard';
   const envMode = process.env.AGENTIC_SECURITY_EGRESS_MODE;
-  const cfg = loadPolicyConfig(scanRoot);
+  const deny = (reasonCode, reason, extra = {}) => ({ allowed: false, decision: 'deny', reason, reasonCode, provider, policySource: 'operator', purpose, profile, enforcement: 'enforced', ...extra });
+  if (!EGRESS_PROFILES.includes(profile)) return deny('profile-unknown', 'the egress profile set by the operator is not recognised, so every request is denied');
+  if (envMode !== undefined && envMode !== '' && !EGRESS_MODES.includes(envMode)) return deny('operator-mode-unknown', 'the egress mode set by the operator is not recognised, so every request is denied');
+  let repoPath = null;
+  try { repoPath = statePath(ctx.scanRoot, POLICY_FILE); } catch { repoPath = null; }
+  const repo = loadPolicyState(repoPath);
+
+  if (profile === 'restricted') {
+    const op = loadPolicyState(process.env.AGENTIC_SECURITY_EGRESS_POLICY || null);
+    const policyState = { operator: op.status, repository: repo.status };
+    if (op.status !== 'valid') return deny(`operator-policy-${op.status}`, `the restricted profile requires a valid operator egress policy, and it is ${op.status}`, { policyState, policyIdentity: op.digest });
+    if (repo.status !== 'valid' && repo.status !== 'absent') return deny(`repository-policy-${repo.status}`, `the repository egress policy is ${repo.status}; under the restricted profile that denies`, { policyState, policyIdentity: op.digest });
+    const first = _decideOne(ctx, provider, op.doc, envMode || op.doc.mode || 'allow', envMode ? 'env' : 'operator');
+    const stamp = (d) => ({ ...d, reasonCode: d.allowed ? 'allowed' : (d.reasonCode || 'policy-deny'), profile, enforcement: 'enforced', policyState, policyIdentity: op.digest });
+    if (!first.allowed) return stamp(first);
+    if (repo.status === 'valid') {
+      const second = _decideOne(ctx, provider, repo.doc, repo.doc.mode || 'allow', 'config');
+      if (!second.allowed) return stamp(second);
+    }
+    return stamp(first);
+  }
+
+  const cfg = repo.status === 'valid' ? repo.doc : null;
   const mode = envMode || (cfg && cfg.mode) || 'allow';
   const policySource = envMode ? 'env' : ((cfg && cfg.mode) ? 'config' : 'default');
+  const d = _decideOne(ctx, provider, cfg, mode, policySource);
+  const invalid = repo.status !== 'valid' && repo.status !== 'absent';
+  return {
+    ...d, reasonCode: d.allowed ? (invalid ? 'allowed-legacy-default' : 'allowed') : (d.reasonCode || 'policy-deny'), profile, enforcement: 'legacy-default', policyState: { repository: repo.status },
+    ...(invalid ? { configurationWarning: `the repository egress policy is ${repo.status} and was ignored; under the standard profile the legacy default applies (select AGENTIC_SECURITY_EGRESS_PROFILE=restricted to fail closed)` } : {}),
+  };
+}
+
+/** The checks of one policy document, unchanged from before profiles existed. */
+function _decideOne(ctx, provider, cfg, mode, policySource) {
+  const {
+    purpose = 'unknown', endpoint,
+    model = null, role = null, region = null, repository = null,
+    path: filePath = null, dataClass = null, contextTokens = null,
+  } = ctx;
 
   if (mode === 'deny') {
     return { allowed: false, decision: 'deny', reason: "egress mode is 'deny'", provider, policySource, purpose };

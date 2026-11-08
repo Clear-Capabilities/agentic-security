@@ -48,15 +48,29 @@ test('triage-memory: recordDecision ignores non-wontfix transitions', async () =
   } finally { await p.cleanup(); }
 });
 
-test('triage-memory: suppressByPastDecisions demotes confidence + tags', async () => {
+test('triage-memory: a same-bucket decision is advisory history and never demotes a distinct finding (threat-model TM-07)', async () => {
   const p = await mkProject();
   try {
     recordDecision(p.dir, F(), 'wont-fix', 'Admin-only route');
-    const fresh = [F({ id: 'F-2', line: 25 })];  // same family + same dir
+    const fresh = [F({ id: 'F-2', line: 25 })];  // same family + same dir, a DIFFERENT finding
+    const r = suppressByPastDecisions(p.dir, fresh);
+    assert.equal(r.applied, 0);
+    assert.equal(r.advisory, 1);
+    assert.equal(fresh[0].pastDecision.status, 'advisory');
+    assert.equal(fresh[0].pastDecision.decision, 'wont-fix');
+    assert.ok(fresh[0].tags.includes('past-decision-advisory'));
+    assert.equal(fresh[0].confidence, 0.9, 'confidence is unchanged');
+  } finally { await p.cleanup(); }
+});
+
+test('triage-memory: an exact decision on a medium finding applies, demotes confidence and tags', async () => {
+  const p = await mkProject();
+  try {
+    recordDecision(p.dir, F({ severity: 'medium' }), 'wont-fix', 'Admin-only route');
+    const fresh = [F({ severity: 'medium' })];
     const r = suppressByPastDecisions(p.dir, fresh);
     assert.equal(r.applied, 1);
-    assert.ok(fresh[0].pastDecision);
-    assert.equal(fresh[0].pastDecision.decision, 'wont-fix');
+    assert.equal(fresh[0].pastDecision.status, 'applied');
     assert.ok(fresh[0].tags.includes('past-decision'));
     assert.ok(fresh[0].confidence < 0.9, 'confidence demoted');
   } finally { await p.cleanup(); }

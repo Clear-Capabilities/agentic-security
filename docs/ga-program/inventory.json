@@ -16,7 +16,7 @@
       "slash-command": 17,
       "ticket-provider": 3
     },
-    "environmentVariables": 231
+    "environmentVariables": 233
   },
   "surfaces": [
     {
@@ -1262,6 +1262,8 @@
     "AGENTIC_SECURITY_DISCORD_WEBHOOK",
     "AGENTIC_SECURITY_EGRESS_DENY",
     "AGENTIC_SECURITY_EGRESS_MODE",
+    "AGENTIC_SECURITY_EGRESS_POLICY",
+    "AGENTIC_SECURITY_EGRESS_PROFILE",
     "AGENTIC_SECURITY_ENCRYPTION_KEY",
     "AGENTIC_SECURITY_ENGINEERING_EXCELLENCE_MASTER",
     "AGENTIC_SECURITY_ENVIRONMENT",
