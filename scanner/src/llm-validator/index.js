@@ -90,7 +90,7 @@ const MAX_OUTPUT_TOKENS = 512;
 // reads as a refusal rather than as "no endpoint configured".
 let _localPresetRefusal = null;
 
-export const PROMPT_VERSION = 'v2.1-cited';
+export const PROMPT_VERSION = 'v2.2-callers-config';
 
 // System preamble — embeds a per-request challenge token the model MUST
 // echo, and a strict instruction-priority frame. {{challenge}} and {{nonce}}

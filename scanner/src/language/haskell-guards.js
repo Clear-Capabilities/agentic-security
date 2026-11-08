@@ -17,6 +17,7 @@
 // has the prefix. A weak guard is reported as a note on the finding and does not refute it.
 
 const CANON_CALLS = new Set(['System.Directory.canonicalizePath', 'System.Directory.makeAbsolute', 'System.FilePath.normalise']);
+import { createHash } from 'node:crypto';
 import { HS_SANITIZERS } from './haskell-models.js';
 // the catalog's HTML escapers (blaze, lucid): the same list the taint catalog is generated from
 const CATALOG_HTML_ESCAPERS = new Set(HS_SANITIZERS.filter((s) => (s.appliesTo || []).includes('xss')).map((s) => `${s.module}.${s.name}`));
@@ -570,6 +571,11 @@ const REQUEST_BUILDERS = /(?:^|\.)(?:parseRequest|parseRequest_|parseUrlThrow|pa
 const REQUEST_MODIFIERS = /(?:^|\.)(?:setRequestQueryString|setRequestQuery|setQueryString|setRequestPath|setRequestBody|setRequestBodyLBS|setRequestBodyJSON|setRequestBodyURLEncoded|setRequestBodyFile|setRequestBodySource|setRequestHeader|setRequestHeaders|addRequestHeader|setRequestMethod|setRequestBasicAuth|setRequestBearerAuth|setRequestIgnoreStatus|setRequestResponseTimeout|setRequestCheckStatus|setRequestManager|urlEncodedBody|applyBasicAuth|applyBearerAuth)$/;
 const PEEL_WRAPPERS = /(?:^|\.)(?:liftIO|pure|return|unpack|pack|fromString|toStrict|fromStrict|encodeUtf8|decodeUtf8|toText|fromText)$/;
 const HOST_FIELD = /^(?:host|port|secure|url|uri|requestHost)$/i;
+// Record fields and modifiers that leave the destination exactly as the literal names it. Anything else on the way (a concatenation, a
+// path setter, a custom manager, which can carry a proxy, an unknown field) leaves the PATH or the route open, and then the finding is
+// only lowered, never refuted.
+const DESTINATION_NEUTRAL_FIELD = /^(?:method|requestHeaders|requestBody|queryString|responseTimeout|checkResponse|redirectCount|decompress|requestVersion|cookieJar)$/;
+const PATH_OPENING_MODIFIER = /(?:^|\.)(?:setRequestPath|setRequestManager)$/;
 
 function fixedHostRequest(f, perFile) {
   if (!f || f.cwe !== 'CWE-918') return null;
@@ -593,6 +599,7 @@ function fixedHostRequest(f, perFile) {
     return rets.length === 1 ? rets[0].value : null;
   };
   let evidence = null;
+  let open = false;
   const fixed = (e, seen, depth) => {
     if (!e || typeof e !== 'object' || depth > 24) return false;
     if (e.kind === 'literal') { const ok = typeof e.value === 'string' && HOST_ANCHORED.test(e.value); if (ok) evidence = e.value.replace(/^([a-z][a-z0-9+.-]*:\/\/[^/@?#\s]+\/).*$/i, '$1'); return ok; }
@@ -606,15 +613,16 @@ function fixedHostRequest(f, perFile) {
     if (e.kind === 'object' && Array.isArray(e.props)) {
       // a record update: `{ method = "POST" }` joined (as a union) with its base; a field that names the host makes it unknown
       if (e.props.some((p) => HOST_FIELD.test(String(p.key || p.name || '')))) return false;
+      if (e.props.some((p) => !DESTINATION_NEUTRAL_FIELD.test(String(p.key || p.name || '')))) open = true;
       return e.object ? fixed(e.object, seen, depth + 1) : true;
     }
-    if (e.kind === 'binary' && (e.op === '<>' || e.op === '++' || (e.hs && e.hs.concat))) return fixed(e.left, seen, depth + 1);
+    if (e.kind === 'binary' && (e.op === '<>' || e.op === '++' || (e.hs && e.hs.concat))) { open = true; return fixed(e.left, seen, depth + 1); }
     if (e.kind === 'call' && typeof e.callee === 'string') {
       const args = e.args || [];
       if (PEEL_WRAPPERS.test(e.callee) && args.length === 1) return fixed(args[0], seen, depth + 1);
       if (REQUEST_BUILDERS.test(e.callee) && args.length >= 1) return fixed(args[args.length - 1], seen, depth + 1);
-      if (REQUEST_MODIFIERS.test(e.callee) && args.length >= 1) return fixed(args[args.length - 1], seen, depth + 1);
-      if (/(?:^|\.)(?:<\/>|combine|joinPath)$/.test(e.callee) && args.length === 2) return fixed(args[0], seen, depth + 1);
+      if (REQUEST_MODIFIERS.test(e.callee) && args.length >= 1) { if (PATH_OPENING_MODIFIER.test(e.callee)) open = true; return fixed(args[args.length - 1], seen, depth + 1); }
+      if (/(?:^|\.)(?:<\/>|combine|joinPath)$/.test(e.callee) && args.length === 2) { open = true; return fixed(args[0], seen, depth + 1); }
     }
     return false;
   };
@@ -625,10 +633,10 @@ function fixedHostRequest(f, perFile) {
     // update alone, which is fixed when it names no host field, so the base branch decides
     if (!fixed(arg, new Set(), 0)) return null;
   }
-  return { kind: 'fixed-host-request', base: evidence };
+  return { kind: 'fixed-host-request', base: evidence, destinationFixed: !open };
 }
 
-export function applyHaskellGuards(findings, perFile) {
+export function applyHaskellGuards(findings, perFile, fileContents = null) {
   const stats = { refuted: 0, weak: 0 };
   for (const f of findings || []) {
     if (!f || f.parser !== 'IR-TAINT') continue;
@@ -656,6 +664,19 @@ export function applyHaskellGuards(findings, perFile) {
         f._fixedHost = true; f.severity = 'info';
         f.controls = [...(f.controls || []), { kind: 'fixed-host-request', evidenceKind: 'source' }];
         f.guardNote = { kind: 'fixed-host-request', reason: `the request's host is fixed by the literal${fh.base ? ` "${fh.base}"` : ''} the URL or base request starts from; the client's text can only choose the path, query or fragment, which is not a server-side request forgery (a path it chooses on that host is still worth a look)` };
+        // When the whole destination (scheme, host and path) is the literal and the client's text reaches only the query, headers, body,
+        // method or authentication, the claim that the client chooses where the request goes is disproved by the code itself: an
+        // evidence-backed refutation, tied to this file's content. A path the client can still choose is lowered only (above).
+        const text = fileContents && typeof fileContents[f.file] === 'string' ? fileContents[f.file] : null;
+        if (fh.destinationFixed && text !== null) {
+          f.refutation = {
+            kind: 'constant-input', verifier: 'haskell-guards/fixed-host-request', version: 1,
+            // the host goes in the evidence, not the reason: a host name such as `internal.example.com` is not a context excuse
+            evidenceRefs: [`${f.file}:${f.line}`, ...(fh.base ? [`destination:${fh.base}`] : [])],
+            reason: 'the request\'s destination is a literal in full (scheme, host and path); the client\'s text reaches only the query, headers, body, method or authentication',
+            sourceHash: createHash('sha256').update(text).digest('hex'),
+          };
+        }
         stats.weak++;
         continue;
       }

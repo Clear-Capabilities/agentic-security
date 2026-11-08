@@ -14,12 +14,18 @@
 // Only cases with origin other than `author-seed` count toward the 25 vulnerable + 25 safe per family requirement. A family below that
 // reports `insufficient-cases` and is never claimable, whatever its recall.
 //
+// Recall and the safe-clean rate carry a 95% Wilson interval, so a small family's figure shows how little it says.
+//
+// The holdout split is scored only when adjudicate.mjs --freeze recorded the manifest and these definitions and neither has changed since;
+// every holdout run is appended to holdout-uses.jsonl.
+//
 // usage: node bench/haskell-core-families/runner.mjs [--split dev|holdout] [--json] [--min-recall 0.8]
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { disableStateWrites } from '../_lib/tree-integrity.mjs';
+import { FREEZE_FILE, HOLDOUT_USES, freezeDigests, holdoutRefusal } from './adjudicate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -37,6 +43,15 @@ export const FAMILIES = Object.freeze({
 export const REQUIRED_PER_LABEL = 25;
 const ACTIONABLE = new Set(['confirmed', 'needs-review']);
 
+/** 95% Wilson score interval for k successes in n trials, or null when n is 0. */
+export function wilson(k, n, z = 1.96) {
+  if (!n) return null;
+  const p = k / n; const d = 1 + (z * z) / n;
+  const c = (p + (z * z) / (2 * n)) / d;
+  const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+  return [Math.max(0, c - h), Math.min(1, c + h)];
+}
+
 export function summarize(results, { minRecall = 0.8 } = {}) {
   const out = {};
   for (const fam of Object.keys(FAMILIES)) {
@@ -52,7 +67,7 @@ export function summarize(results, { minRecall = 0.8 } = {}) {
     out[fam] = {
       vulnerable: vuln.length, safe: safe.length, independentVulnerable: indep('vulnerable'), independentSafe: indep('safe'),
       detected, confirmed, misses: vuln.length - detected, falsePositives: fp,
-      recall, safeCleanRate: safe.length ? (safe.length - fp) / safe.length : null,
+      recall, recallCi95: wilson(detected, vuln.length), safeCleanRate: safe.length ? (safe.length - fp) / safe.length : null, safeCleanCi95: wilson(safe.length - fp, safe.length),
       status: !vuln.length ? 'unsupported' : !enough ? 'insufficient-cases' : recall >= minRecall ? 'meets-recall-target' : 'below-recall-target',
       claimable: enough && recall !== null && recall >= minRecall,
     };
@@ -84,14 +99,22 @@ export async function runCases(manifest, { split = null, scanner } = {}) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const manifest = JSON.parse(fs.readFileSync(path.join(HERE, 'manifest.json'), 'utf8'));
+  const manifestText = fs.readFileSync(path.join(HERE, 'manifest.json'), 'utf8');
+  const manifest = JSON.parse(manifestText);
+  if (opt('split') === 'holdout') {
+    const freeze = fs.existsSync(FREEZE_FILE) ? JSON.parse(fs.readFileSync(FREEZE_FILE, 'utf8')) : null;
+    const why = holdoutRefusal(freeze, freezeDigests({ manifestText, runnerText: fs.readFileSync(fileURLToPath(import.meta.url), 'utf8') }));
+    if (why) { console.error(`refused: ${why}`); process.exit(2); }
+    fs.appendFileSync(HOLDOUT_USES, JSON.stringify({ at: new Date().toISOString(), manifest: freeze.manifest.slice(0, 12) }) + '\n');
+  }
   const results = await runCases(manifest, { split: opt('split') });
   const summary = summarize(results, { minRecall: Number(opt('min-recall', '0.8')) });
   if (argv.includes('--json')) process.stdout.write(JSON.stringify({ schema: 'haskell-core-families-result/1', summary, results }, null, 1) + '\n');
   else {
     const pct = (x) => (x == null ? 'n/a' : `${(x * 100).toFixed(0)}%`);
-    console.log('family     vuln safe  indep(v/s)  detected confirmed recall  FP  status');
-    for (const [f, s] of Object.entries(summary)) console.log(`${f.padEnd(10)} ${String(s.vulnerable).padStart(4)} ${String(s.safe).padStart(4)}  ${`${s.independentVulnerable}/${s.independentSafe}`.padStart(9)}  ${String(s.detected).padStart(8)} ${String(s.confirmed).padStart(9)} ${pct(s.recall).padStart(6)} ${String(s.falsePositives).padStart(3)}  ${s.status}`);
+    const ci = (x) => (x ? `${(x[0] * 100).toFixed(0)}-${(x[1] * 100).toFixed(0)}%` : 'n/a');
+    console.log('family     vuln safe  indep(v/s)  detected confirmed recall  (95% CI)  FP  status');
+    for (const [f, s] of Object.entries(summary)) console.log(`${f.padEnd(10)} ${String(s.vulnerable).padStart(4)} ${String(s.safe).padStart(4)}  ${`${s.independentVulnerable}/${s.independentSafe}`.padStart(9)}  ${String(s.detected).padStart(8)} ${String(s.confirmed).padStart(9)} ${pct(s.recall).padStart(6)} ${ci(s.recallCi95).padStart(9)} ${String(s.falsePositives).padStart(3)}  ${s.status}`);
     const total = Object.values(summary).reduce((a, s) => a + s.independentVulnerable + s.independentSafe, 0);
     console.log(`\nIndependent cases: ${total} of 300 required. Claimable families: ${Object.values(summary).filter((s) => s.claimable).length} of 6.`);
   }

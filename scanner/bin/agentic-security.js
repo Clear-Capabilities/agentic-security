@@ -748,6 +748,7 @@ async function cmdScan(args) {
     const seed = await runScan(targetAbs, { onProgress: scanProgressReporter(), ..._watchScanOpts });
     clearScanProgressLine();
     let prevFindings = seed.scan.findings || [];
+    process.stderr.write(`[watch] first scan done (${prevFindings.length} finding(s)); watching for changes${_watchScoped ? ' in the scan scope' : ''}\n`);
     await watchProject(targetAbs, async () => {
       try {
         const { scan } = await runScan(targetAbs, { onProgress: scanProgressReporter(), ..._watchScanOpts });
@@ -761,7 +762,12 @@ async function cmdScan(args) {
         process.stderr.write(`[watch] rescan failed: ${e.message}\n`);
       }
     }, _watchScoped ? { isEligible: createScopeFilter(targetAbs, scopeFlags.active ? scopeFlags.scope : {}) } : {});
-    return 0; // watchProject blocks until aborted
+    // watchProject does NOT block: it starts its loop and returns. The dispatch is `process.exit(await cmdScan(args))`, so returning here
+    // exited right after the first scan and `scan --watch` never watched anything. Stay pending until Ctrl-C or SIGTERM.
+    return await new Promise((resolve) => {
+      process.once('SIGINT', () => resolve(130));
+      process.once('SIGTERM', () => resolve(143));
+    });
   }
 
   // --incremental : reuse taint summaries from prior scans for faster deep mode.
