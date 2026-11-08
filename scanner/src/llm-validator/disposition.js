@@ -231,8 +231,11 @@ export function assignDisposition(f, { fileContents = null, now = Date.now() } =
   }
 
   // Model accepted: plausible, but a model alone cannot confirm.
+  // The model's citations (bounded-context.js) say which supplied lines it relied on; with none, that is missing evidence too.
+  const cited = f.validator_citation_status === 'valid' && Array.isArray(f.validator_citations) && f.validator_citations.length;
   return done(DISPOSITIONS.NEEDS_REVIEW, 'a model judged it plausible; no independent evidence yet', {
-    missingEvidence: missingEvidenceFor(f, [...detail.missingEvidence, 'a reproducible test or an independent reviewer']),
+    missingEvidence: missingEvidenceFor(f, [...detail.missingEvidence, ...(cited ? [] : ['the model cited no line of the context it was shown']), 'a reproducible test or an independent reviewer']),
+    ...(cited ? { evidence: [{ kind: 'model-citations', refs: f.validator_citations.map((c) => `${c.file}:${c.line}`) }] } : {}),
     nextCheck: 'reproduce with a test or have a second reviewer trace the source path',
   });
 }

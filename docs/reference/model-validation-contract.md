@@ -36,6 +36,9 @@ A compatibility test (`scanner/test/contracts/model-validation.contract.test.js`
 | `validator_skipped_reason` | Why a call was not made, such as a spend ceiling |
 | `validator_reject_retained` | `true` when a `reject` was kept in the actionable list because a model opinion alone does not remove a finding |
 | `validator_reject_refused` | Present when a `reject` was turned into `escalate` because the finding is too strongly established to delete |
+| `validator_context` | The spans the model was shown (`id`, `role`, `file`, `start`, `end`, never the text) and `gaps`, what was not collected |
+| `validator_citation_status` | `valid` (every citation names a span line that was sent), `none` (the reply cited nothing) |
+| `validator_citations` | The cited lines resolved to `span`, `file` and `line` |
 
 **Verdicts**
 
@@ -54,7 +57,7 @@ A compatibility test (`scanner/test/contracts/model-validation.contract.test.js`
 | `model-disabled` | No endpoint is configured. Nothing was attempted |
 | `policy-blocked` | An endpoint was configured and a rule refused to use it: the egress policy, the local preset's loopback rule or a spend ceiling |
 | `unavailable` | The call was attempted and failed: a network error, a timeout or an error status |
-| `malformed` | A reply came back that was not usable: no JSON, a wrong challenge, file or line, or a verdict that is not one of the three |
+| `malformed` | A reply came back that was not usable: no JSON, a wrong challenge, file or line, a verdict that is not one of the three, or a citation of a span or line that was not sent |
 | `completed` | A real, checked verdict was obtained, including one reused from the cache |
 
 ## Rules that hold
@@ -79,6 +82,12 @@ Each finding also carries `disposition` and `dispositionDetail` (reason, evidenc
 | `unvalidated` | Review not attempted or failed (no endpoint, a model error, a spend ceiling), or the finding no longer matches the file (deleted, line outside the file, changed hash). Never converted to `refuted` |
 
 A refutation that rests on where the code lives (a test, a developer tool, a private repository, member-only use) or on the absence of a proof of exploit is not accepted. An expired suppression, or one whose source or rule changed, reopens the finding.
+
+### Bounded context and citations
+
+The model is shown numbered spans, each with an id, a role and exact line bounds (`scanner/src/llm-validator/bounded-context.js`): the code around the finding, the source and the sink when they lie outside it, each traced path step, and the related files on a Haskell or Nix evidence chain. Each span is redacted under its own file's path. Guards the scanner saw are listed beside the path, and what was not collected is stated in the prompt: this tier has no call graph, so the callers of the enclosing function are not included, and configuration files are not included.
+
+The reply lists `citations`, the span lines its verdict rests on (`"S1:42"`). A citation that names a span or a line that was not sent voids the reply: it becomes `escalate` with status `malformed`, because the model reasoned about code it was not shown. A reply with no citations keeps its verdict and is recorded as `none`; a model `accept` without citations still lists the missing citation in the disposition. Citations never make a finding `confirmed`.
 
 ### Equivalent claims and count reconciliation
 
