@@ -42,6 +42,17 @@ export const SCAN_HEALTH_SCHEMA_VERSION = 1;
  *   never a fabricated all-zero summary.
  * @returns {object} scanHealth per PRD §10.3, additive fields only.
  */
+// The per-file table travels with the record up to this many files; beyond it only the count is kept
+// (the aggregate stages, rates and incomplete lists above are always present).
+const HASKELL_BYFILE_INLINE_MAX = 2000;
+function summarizeHaskellCoverage(h) {
+  if (!h) return null;
+  const n = h.byFile ? Object.keys(h.byFile).length : 0;
+  if (n <= HASKELL_BYFILE_INLINE_MAX) return { ...h, byFileCount: n };
+  const { byFile, ...rest } = h;
+  return { ...rest, byFileCount: n, byFileOmitted: true };
+}
+
 export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engineErrors = null, deepStatus = null, analyzerCoverage = null, lineageStatus = null, languageCoverage = null, supplyChain = null } = {}) {
   const conditions = [];
   const safeAnnotatorErrors = Array.isArray(annotatorErrors) ? annotatorErrors : [];
@@ -130,7 +141,7 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
     schemaVersion: SCAN_HEALTH_SCHEMA_VERSION,
     status,
     ...(trustFindings.length ? { buildTrust: { findings: trustFindings.length, uncertain: trustUncertain } } : {}),
-    ...(languageCoverage ? { languageCoverage: { totals: languageCoverage.totals ?? null, byKind: languageCoverage.byKind ?? null, ...(languageCoverage.limitations ? { limitations: languageCoverage.limitations } : {}), ...(languageCoverage.capabilities ? { capabilities: languageCoverage.capabilities } : {}), ...(languageCoverage.optionalModes ? { optionalModes: languageCoverage.optionalModes } : {}) } } : {}),
+    ...(languageCoverage ? { languageCoverage: { totals: languageCoverage.totals ?? null, byKind: languageCoverage.byKind ?? null, ...(languageCoverage.limitations ? { limitations: languageCoverage.limitations } : {}), ...(languageCoverage.capabilities ? { capabilities: languageCoverage.capabilities } : {}), ...(languageCoverage.optionalModes ? { optionalModes: languageCoverage.optionalModes } : {}), ...(languageCoverage.haskell ? { haskell: summarizeHaskellCoverage(languageCoverage.haskell) } : {}) } } : {}),
     files: {
       expected: scanMeta?.checkpoint?.total ?? null,
       scanned: scanMeta?.filesScanned ?? null,

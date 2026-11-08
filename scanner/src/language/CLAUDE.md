@@ -203,3 +203,9 @@ at the use site that shares one of the names disables the expansion (it stays th
 the alias's call-graph edge is kept via `inlinedCalls`; arguments are lowered in the CALLER's module. Pinned both ways in
 `test/haskell/haskell-alias-taint.test.js`. Haskell verdict-flip cases live in `bench/mutation/cases-haskell.mjs`; the 8
 `bench/cve-replay/deep/hs-*-shape` entries are synthetic (self-authored, not from advisories).
+
+## Project models for Haskell wrappers (PRD FR 03)
+
+`haskell-project-models.js` loads `.agentic-security/haskell-models.json` (schema `haskell-project-models/1`). A model declares a source, sink or sanitizer by module and function name and is accepted only with provenance (reviewer, date, reason), an argument position for a sink, an explicit family list for a sanitizer (`*` is refused), and a paired positive and negative test file that exists inside the project. A rejected model is a scan-health condition and has no effect. Accepted models are registered into the taint catalog for one scan (`registerProjectCatalogEntries`, tagged `source: 'project'`) and removed when `runFullScan` returns or throws. Each scan runs in its own owner scope (`scanOwner`, an AsyncLocalStorage in `dataflow/catalog.js`), so overlapping scans of different roots in one process never match each other's project entries.
+
+`haskell-budget-state.js` reads operator parse budgets from `AGENTIC_SECURITY_HASKELL_PARSE_BUDGETS` (`name=value,...`, parser budget names only; anything else is refused as a condition), and writes `.agentic-security/haskell-budget.json` with the effective budgets and every remaining file plus a content digest. The next scan reports `budget.sinceLast` (completed, still remaining on the same inputs, still remaining after a change, gone, newly remaining). It records work left; it does not resume, because the assurance pass parses every eligible file on every scan.

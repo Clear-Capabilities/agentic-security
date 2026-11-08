@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-04T14:32:39.427Z",
-  "commit": "c23f4c6d2472622fc6a5bd93d69929a446282aa2",
+  "generatedAt": "2026-11-08T01:07:37.510Z",
+  "commit": "5370151158d41e908c5aa874420c73440e990c52",
   "targets": {
     "hooks": {
       "total": 21,
@@ -18,7 +18,7 @@
       }
     },
     "scripts": {
-      "total": 106,
+      "total": 105,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -56,13 +56,13 @@
         "run-unit-tests.mjs": 1,
         "self-test-runner.mjs": 2,
         "ship.mjs": 2,
-        "ship/run.mjs": 2,
+        "ship/run.mjs": 1,
         "ship/run.mjs -> ship/lib.mjs": 1,
         "verification-replay-example.mjs": 2
       }
     },
     "scanner/src": {
-      "total": 683,
+      "total": 684,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -131,10 +131,12 @@
         "language/bridges.js": 1,
         "language/context.js": 2,
         "language/discovery.js": 1,
+        "language/haskell-budget-state.js": 1,
         "language/haskell-cpp.js": 3,
         "language/haskell-fix.js": 2,
         "language/haskell-llm.js": 1,
         "language/haskell-manifests.js": 8,
+        "language/haskell-project-models.js": 1,
         "language/haskell-resolved-graph.js": 3,
         "language/haskell-sca.js": 1,
         "language/haskell-supply.js": 1,
@@ -143,7 +145,6 @@
         "language/nix-ir.js": 2,
         "language/nix-script-taint.js": 2,
         "language/nixos-hardening.js": 1,
-        "language/secrets.js": 1,
         "language/support-registry.js": 1,
         "language/witness.js": 2,
         "leaderboard.js": 3,
@@ -172,6 +173,7 @@
         "mcp/server.js": 1,
         "mcp/tools.js": 7,
         "pipeline/cascade-worker-pool.js": 2,
+        "pipeline/evidence-record.js": 1,
         "pipeline/supervised-analyzers.js": 1,
         "poc-video.js": 1,
         "posture/adversarial-self-test.js": 1,
@@ -204,7 +206,7 @@
         "posture/cross-repo-memory.js": 2,
         "posture/custom-rules.js": 2,
         "posture/cve-alert-daemon.js": 5,
-        "posture/cve-lookup.js": 4,
+        "posture/cve-lookup.js": 3,
         "posture/dag-commands.js": 2,
         "posture/dead-code.js": 1,
         "posture/dep-add-guard.js": 8,
@@ -342,7 +344,7 @@
         "posture/workflow-installer.js": 2,
         "pr-comment.js": 1,
         "report/index.js": 2,
-        "runScan.js": 1,
+        "runScan.js": 2,
         "sandbox/backend-namespace.js": 1,
         "sandbox/backend-userspace.js": 1,
         "sandbox/control-probes.js": 2,
@@ -351,9 +353,8 @@
         "sast/cpp-dataflow.js": 2,
         "sast/crypto-protocol.js": 2,
         "sast/db-taint.js": 1,
-        "sast/fastapi-hardening.js": 1,
         "sast/host-header.js": 1,
-        "sast/java-bench-extras.js": 5,
+        "sast/java-bench-extras.js": 3,
         "sast/java-deserialization.js": 2,
         "sast/k8s-admission.js": 1,
         "sast/llm-app.js": 2,
@@ -369,6 +370,7 @@
         "sast/springboot-hardening.js": 1,
         "sast/ssrf-cloud-metadata.js": 2,
         "sast/weak-randomness.js": 2,
+        "sast/workflow-flow.js": 1,
         "sast/zip-slip.js": 1,
         "sca/binary-metadata.js": 5,
         "sca/container.js": 2,
@@ -376,6 +378,7 @@
         "sca/llm-function-extract.js": 1,
         "sca/py-package-functions.js": 1,
         "sca/sigstore-verify.js": 7,
+        "scope/inventory.js": 1,
         "server/CLAUDE.md": 1,
         "server/graph-loader.js": 2,
         "server/http-server.js": 1,

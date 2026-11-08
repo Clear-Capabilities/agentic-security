@@ -85,3 +85,17 @@ test('Drift — identical scans produce info tier with no changes', () => {
   assert.equal(d.tier, 'info');
   assert.equal(d.totalChanged, 0);
 });
+
+test('a finding the newer scan did not cover is out of scope, not fixed (PRD FR 01)', async () => {
+  const { driftBetween, driftToMarkdown } = await import('../src/posture/drift.js');
+  const f = (file) => ({ kind: 'sast', file, line: 1, vuln: 'x', severity: 'high' });
+  const a = { findings: [f('a.js'), f('b.js')], routes: [], components: [], supplyChain: [] };
+  const b = { findings: [], routes: [], components: [], supplyChain: [], scope: { included: ['a.js'], includedCount: 1 } };
+  const d = driftBetween(a, b);
+  assert.deepEqual(d.findings.removed.map((x) => x.file), ['a.js']);
+  assert.deepEqual(d.findings.outOfScope.map((x) => x.file), ['b.js']);
+  assert.match(driftToMarkdown(d), /out of scope, not fixed\): 1/);
+  const unknown = driftBetween(a, { ...b, scope: { includedOmitted: true } });
+  assert.equal(unknown.findings.removed.length, 2);
+  assert.equal(unknown.findings.scopeUnknown, true);
+});

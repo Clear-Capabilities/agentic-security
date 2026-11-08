@@ -11,6 +11,9 @@ const PKG_VERSION = __require('../package.json').version;
 import { signLastScan as _signLastScan, verifyLastScan as _verifyLastScanShared } from '../src/posture/integrity.js';
 import { isProvenanceHealthy, sanitizeForTerminal } from '../src/posture/provenance/schema.js';
 import { runScan } from '../src/runScan.js';
+import { parseScopeFlags, renderScopePreview } from '../src/scope/flags.js';
+import { buildDispositionView, parseExcludeKinds } from '../src/report/disposition-view.js';
+import { buildScanInventory } from '../src/scope/inventory.js';
 import { persistGraphSnapshot, loadSnapshots, loadSnapshot, mostRecentPriorSnapshot } from '../src/lineage/graph-snapshot.js';
 
 // Every command is dispatched as `process.exit(await cmdX(args))`, and
@@ -339,6 +342,9 @@ Options:
   --pr [ref]                   Diff-aware: scan only files changed since ref (auto-detects PR base)
   --deterministic              Reproducible scan: stable sort, no-network, lockfile-checked
   --incremental                Reuse taint summaries from prior scans (speeds up deep mode in CI)
+  --explain-scope              Preview included/skipped paths and ignore reasons, then exit (also --include-path, --exclude-path, --include-ignored-path, --ignore-source all|repository, --no-respect-gitignore)
+  --exclude-kind <k[,k]>       Hide sca, generated, secrets or logic findings from the report view only (still stored; not marked assessed)
+  --view-category/-language/-package/-path/-disposition <v>, --view-min-confidence <n>   Filter the report view
   --set-baseline               Save current findings as baseline (suppresses pre-existing issues)
   --since-baseline             Only show findings NOT in the saved baseline
   --hide-proven-safe           Drop findings discharged by a flow proof (provably safe)
@@ -551,6 +557,7 @@ async function writeMachineOutput(targetAbs, scan, meta, profile, args) {
   }
 }
 
+const SCOPE_BOOLEAN_FLAGS = new Set(['explain-scope', 'respect-gitignore', 'no-respect-gitignore']);
 function parseArgs(argv) {
   const args = { _: [], flags: {} };
   for (let i = 0; i < argv.length; i++) {
@@ -559,6 +566,8 @@ function parseArgs(argv) {
       const [k, v] = a.slice(2).split('=', 2);
       if (v !== undefined) { args.flags[k] = v; continue; }
       const next = argv[i + 1];
+      // Scope switches never take a value, so `--explain-scope .` keeps `.` as the target.
+      if (SCOPE_BOOLEAN_FLAGS.has(k)) { args.flags[k] = true; continue; }
       if (next && !next.startsWith('--')) { args.flags[k] = next; i++; }
       else args.flags[k] = true;
     } else {
@@ -688,6 +697,14 @@ async function cmdScan(args) {
     console.error(`agentic-security scan: "${target}" does not exist (resolved to ${targetAbs}); nothing was scanned.`);
     process.exit(4);
   }
+  // FR 01: Git-aware scope flags. Any of them opts this run into the inventory-based scope;
+  // --explain-scope previews it and exits before any analysis or file read.
+  const scopeFlags = parseScopeFlags(process.argv.slice(2));
+  if (scopeFlags.errors.length) { for (const e of scopeFlags.errors) process.stderr.write(`agentic-security scan: ${e}\n`); return 2; }
+  if (scopeFlags.explain) {
+    process.stdout.write(renderScopePreview(buildScanInventory(targetAbs, scopeFlags.scope)));
+    return 0;
+  }
   // Load persona profile (R1). Persona-aware defaults flow from here.
   const profile = loadPersonaProfile(targetAbs, args);
   const format = args.flags.format || (profile.profile === 'pro' ? 'cli' : 'ship');
@@ -722,14 +739,18 @@ async function cmdScan(args) {
   // normal one-shot scan.
   if (args.flags['watch']) {
     process.env.AGENTIC_SECURITY_INCREMENTAL = '1';
-    const { watchProject, computeDelta, persistStatus, renderStatusLine } = await import('../src/posture/watch-mode.js');
+    const { watchProject, computeDelta, persistStatus, renderStatusLine, createScopeFilter } = await import('../src/posture/watch-mode.js');
     process.stderr.write(`[watch] scanning ${targetAbs} on change — Ctrl-C to stop. Status → .agentic-security/watch-status.md\n`);
-    const seed = await runScan(targetAbs, { onProgress: scanProgressReporter() });
+    // The scope flags apply to the first scan, every rescan and the watcher itself (PRD FR 01): the watcher asks the same
+    // inventory, so an ignored file never triggers a rescan and an eligible one always does.
+    const _watchScoped = scopeFlags.active || process.env.AGENTIC_SECURITY_GIT_SCOPE === '1';
+    const _watchScanOpts = scopeFlags.active ? { gitScope: true, scope: scopeFlags.scope } : {};
+    const seed = await runScan(targetAbs, { onProgress: scanProgressReporter(), ..._watchScanOpts });
     clearScanProgressLine();
     let prevFindings = seed.scan.findings || [];
     await watchProject(targetAbs, async () => {
       try {
-        const { scan } = await runScan(targetAbs, { onProgress: scanProgressReporter() });
+        const { scan } = await runScan(targetAbs, { onProgress: scanProgressReporter(), ..._watchScanOpts });
         clearScanProgressLine();
         const curr = scan.findings || [];
         const delta = computeDelta(prevFindings, curr);
@@ -739,7 +760,7 @@ async function cmdScan(args) {
       } catch (e) {
         process.stderr.write(`[watch] rescan failed: ${e.message}\n`);
       }
-    });
+    }, _watchScoped ? { isEligible: createScopeFilter(targetAbs, scopeFlags.active ? scopeFlags.scope : {}) } : {});
     return 0; // watchProject blocks until aborted
   }
 
@@ -797,7 +818,10 @@ async function cmdScan(args) {
 
   const { scan, meta } = await runScan(target, {
     changedSince,
+    invocation: process.argv.slice(2),
     onProgress: scanProgressReporter(),
+    ...(scopeFlags.active ? { gitScope: true, scope: scopeFlags.scope } : {}),
+    ...(args.flags['haskell-source-map'] ? { haskellSourceMap: String(args.flags['haskell-source-map']) } : {}),
   });
   // --require-provenance: flag (never fail) any finding whose provenance
   // isn't resolved, via scanHealth — deliberately independent of the
@@ -962,6 +986,13 @@ async function cmdScan(args) {
       if (_line) process.stderr.write(`⚠️  agentic-security: ${_line}\n`);
     }
   } catch { /* reporting must never fail a scan */ }
+  // PRD FR 09: disposition view. Display only; stored buckets are not touched.
+  { const ek = parseExcludeKinds(args.flags['exclude-kind']);
+    if (ek.errors.length) { for (const e of ek.errors) process.stderr.write(`agentic-security scan: ${e}\n`); return 2; }
+    const flt = {};
+    for (const k of ['category', 'language', 'package', 'path', 'disposition']) if (args.flags[`view-${k}`]) flt[k] = String(args.flags[`view-${k}`]);
+    if (args.flags['view-min-confidence'] !== undefined) flt.minConfidence = Number(args.flags['view-min-confidence']);
+    scan.reportView = buildDispositionView(scan, { excludeKinds: ek.kinds, filters: flt }); }
 
   // Curated rule packs: --pack <name> (repeatable). Narrows findings to the
   // CWEs covered by the requested pack(s).

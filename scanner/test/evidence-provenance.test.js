@@ -74,7 +74,10 @@ test('every RAW_OBSERVED_FIELDS name is a real key a live scan actually produces
   const { scan } = await runScan(root, { network: false });
   const normalized = normalizeFindings(scan);
   assert.ok(normalized.length > 0, 'fixture should produce at least one finding');
-  const sampleKeys = new Set(Object.keys(normalized[0]));
+  // A code finding: dependency findings have their own shape, and one can sort first when its severity is not demoted.
+  const sample = normalized.find((f) => f.kind === 'sast');
+  assert.ok(sample, 'fixture should produce at least one code finding');
+  const sampleKeys = new Set(Object.keys(sample));
   const unknown = RAW_OBSERVED_FIELDS.filter(field => !sampleKeys.has(field));
   assert.deepEqual(unknown, [], `evidence-provenance.js names field(s) a real normalized finding does not produce: ${JSON.stringify(unknown)}`);
 });

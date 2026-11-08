@@ -7,6 +7,7 @@ export const modules = {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   computeDelta: () => (/* binding */ computeDelta),
+/* harmony export */   createScopeFilter: () => (/* binding */ createScopeFilter),
 /* harmony export */   persistStatus: () => (/* binding */ persistStatus),
 /* harmony export */   renderStatusLine: () => (/* binding */ renderStatusLine),
 /* harmony export */   watchProject: () => (/* binding */ watchProject)
@@ -17,6 +18,7 @@ export const modules = {
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
 /* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(31174);
 /* harmony import */ var _language_discovery_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(30951);
+/* harmony import */ var _scope_inventory_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(58585);
 // Watch mode — continuous incremental scan as the developer edits.
 //
 // Spawns a long-running scan watcher that:
@@ -44,6 +46,7 @@ export const modules = {
 
 
 
+
 const STATUS_MD   = 'watch-status.md';
 const STATUS_JSON = 'watch-status.json';
 const DEBOUNCE_MS = 350;
@@ -51,6 +54,25 @@ const MAX_BURST   = 50; // ignore beyond this # of rapid events
 
 const SCAN_EXT_RE = /\.(?:[jt]sx?|mjs|cjs|py|java|kt|go|rb|php|cs|c|cc|cpp|h|hpp|rs|sol|vy|swift|dart|toml|yml|yaml|json|tf|tfvars|bicep)$/i;
 const IGNORE_DIR_RE = /(?:^|\/)(?:\.git|node_modules|\.bench-cache|dist|build|\.next|coverage|\.agentic-security)(?:$|\/)/;
+
+// Under Git scope (PRD FR 01) the watcher asks the same inventory the scan uses, so a change to a Git-ignored file does not
+// trigger a rescan, and a tracked file under a directory the default list would skip (`dist/`, `build/`) still does. A change
+// to an ignore source rebuilds the inventory. A path the inventory has not seen (a new file) rebuilds it, at most once a second.
+const IGNORE_SOURCE = /(?:^|\/)\.gitignore$|^\.git\/info\/exclude$/;
+function createScopeFilter(scanRoot, scope = {}, { build = _scope_inventory_js__WEBPACK_IMPORTED_MODULE_5__/* .buildScanInventory */ .mP, now = Date.now } = {}) {
+  let included = null;
+  let builtAt = -Infinity;
+  const rebuild = () => { included = new Set(build(scanRoot, scope).included); builtAt = now(); };
+  rebuild();
+  return (rel) => {
+    if (!rel || /^\.agentic-security(?:\/|$)/.test(rel)) return false;
+    if (IGNORE_SOURCE.test(rel)) { rebuild(); return true; }
+    if (/^\.git(?:\/|$)/.test(rel)) return false;
+    if (included.has(rel)) return true;
+    if (now() - builtAt >= 1000) rebuild();
+    return included.has(rel);
+  };
+}
 
 function _isScanable(rel) {
   if (!rel) return false;
@@ -181,6 +203,7 @@ function readStatus(scanRoot) {
 async function watchProject(scanRoot, onChange, opts = {}) {
   if (process.env.AGENTIC_SECURITY_NO_WATCH === '1') return { stop: async () => {}, _disabled: true };
   const recursive = opts.recursive !== false;
+  const eligible = typeof opts.isEligible === 'function' ? opts.isEligible : _isScanable;
   const ac = new AbortController();
   let timer = null;
   const pending = new Set();
@@ -202,7 +225,7 @@ async function watchProject(scanRoot, onChange, opts = {}) {
       for await (const evt of node_fs_promises__WEBPACK_IMPORTED_MODULE_0__.watch(scanRoot, { recursive, signal: ac.signal })) {
         if (stopped) break;
         const rel = String(evt.filename || '').replace(/\\/g, '/');
-        if (!_isScanable(rel)) continue;
+        if (!eligible(rel)) continue;
         pending.add(node_path__WEBPACK_IMPORTED_MODULE_2__.join(scanRoot, rel));
         if (timer) clearTimeout(timer);
         timer = setTimeout(flush, DEBOUNCE_MS);

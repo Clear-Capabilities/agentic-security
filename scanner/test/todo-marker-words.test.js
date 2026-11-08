@@ -23,3 +23,17 @@ test('todo-marker: a marker next to security logic is still reported, in comment
 test('todo-marker: a marker with no security word in its window is not reported', () => {
   assert.equal(hits('// TODO rename\nconst total = 1\n', 'a.js'), 0);
 });
+
+test('todo-marker: prose, Roman numerals and strings are not developer notes (PRD FR 07)', () => {
+  assert.equal(hits('// see chapter XXX of the token specification\nfoo()\n', 'a.js'), 0);
+  assert.equal(hits('const s = "TODO: login";\nfoo()\n', 'a.js'), 0);
+  assert.equal(hits('// Henry XXX signed the password policy\n', 'a.js'), 0);
+  assert.equal(hits('// XXX: password check is bypassed\n', 'a.js'), 1);
+  assert.equal(hits('// FIXME(bob) verify the session\n', 'a.js'), 1);
+});
+
+test('todo-marker: a note is hardening advice, not a vulnerability', () => {
+  const f = scanTodosNearSecurity('a.js', '// TODO validate the JWT\n')[0];
+  assert.equal(f.kind, 'hardening');
+  assert.equal(f.severity, 'low');
+});

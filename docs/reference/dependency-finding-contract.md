@@ -35,6 +35,12 @@ A compatibility test (`scanner/test/contracts/dependency-finding.contract.test.j
 | `line` | A line in the file, or 0 |
 | `depChain` | The chain from your manifest to the component |
 | `advisory` | The advisory text with its identifier |
+| `advisoryIds` | Every identifier of the advisory after alias merging, such as the OSV, GHSA and CVE ids |
+| `advisoryModified` | When the advisory source last modified the record, or `null` for a cached record that predates the field |
+| `advisoryPublished` | When the advisory was published, or `null` |
+| `affectedRanges` | The advisory's affected ranges as recorded by the source, or `null` |
+| `occurrences` | Each manifest or lock entry where the same advisory and version were found; merging aliases never drops one |
+| `basis` | Why the finding exists: ecosystem, package, resolved version, whether the version is a declared constraint or a locked entry, the source file and line, the advisory identity, the match basis, reachability recorded separately, deployment evidence (always `none` from a repository scan) and a list of gaps |
 | `range` | The affected version range |
 | `kev` | Whether the advisory is in the CISA catalog of exploited vulnerabilities |
 | `weaponized` | Whether a public exploit is known |
@@ -66,7 +72,7 @@ A compatibility test (`scanner/test/contracts/dependency-finding.contract.test.j
 | `import-reachable` | The package is imported, and the advisory names no function to check |
 | `build-only` | The package is optional or build-time and not imported. Severity is lowered one step |
 | `manifest-only` | The package is required and declared, and nothing imports it |
-| `transitive-only` | The package is only a dependency of a dependency, and nothing imports it. It is marked unreachable |
+| `transitive-only` | The package is only a dependency of a dependency, and nothing imports it. This is unknown reachability: severity is kept |
 
 **Triage verdicts**
 

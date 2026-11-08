@@ -425,8 +425,10 @@ export AGENTIC_SECURITY_NIX_TARGET=nixosConfigurations.<host>.config.system.buil
 agentic-security scan .
 ```
 
-It runs only when a sandbox (macOS `sandbox-exec`, Linux namespaces) **proves its isolation** with a probe, with the pure,
-offline, no-lock-update flags, a deadline, an output cap and a memory cap. Whatever happens is a scan-health field:
+It runs only when a sandbox (macOS `sandbox-exec`, Linux namespaces through `bwrap` with a seccomp filter that denies creating
+processes while allowing threads, on x86_64 and arm64) **proves its isolation** with a probe, with the pure, offline,
+no-lock-update flags, a deadline, an output cap and a memory cap counted over the whole process tree. On another Linux
+architecture there is no filter, the probe sees the spawn, and the evaluation reports `blocked`. Whatever happens is a scan-health field:
 `not_selected`, `ok`, `unsupported` (no `nix` binary, no sandbox, no suitable evaluator), `blocked` (no target, probe
 failed), `failed` or `timed_out`. Static findings are kept in every case, and `ci --assurance strict` fails a scan that
 selected the evaluation and did not get it. On a host without Nix the evaluation reports `unsupported` and the project's code

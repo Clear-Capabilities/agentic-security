@@ -3,12 +3,16 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
+import * as fsSync from 'node:fs';
 import { listFiles } from './util/glob.js';
+import { buildScanInventory } from './scope/inventory.js';
 import { hardenGitArgs, hardenGitEnv } from './util/git-hardening.js';
 import { runFullScan, shouldScan, isKubernetesManifest, isCloudFormationTemplate, isInstructionFile } from './engine.js';
 import { appendScanSnapshot } from './posture/security-trend.js';
 import { recover as recoverFixHistory } from './posture/fix-history.js';
 import { stampScan } from './posture/ruleset-version.js';
+import { annotateFindingRecords, buildScanRecord } from './pipeline/evidence-record.js';
+import { SCANNER_VERSION } from './posture/version.js';
 import { isLanguageManifest, isLanguageExcludedPath, isLanguageSource, readExplicitExports, WALK_IGNORE_GLOBS, impactedFiles, buildImportGraph, importClosure } from './language/discovery.js';
 
 const DEP_FILE_NAMES = new Set([
@@ -77,8 +81,23 @@ const DEFAULT_IGNORE = [
   ...WALK_IGNORE_GLOBS,
 ];
 
-export async function readTree(root, { ignore = [] } = {}) {
-  const entries = await listFiles(root, { ignore: [...DEFAULT_IGNORE, ...ignore] });
+// Directory names a Git-scoped scan still refuses regardless of Git state:
+// dependency trees and Git's own metadata. The broader DEFAULT_IGNORE list
+// (vendor, test, bin, ...) does NOT apply in Git-scoped mode: tracked code is
+// not discarded because of its folder name (PRD FR 01).
+const GIT_SCOPE_SAFETY_IGNORE = ['**/node_modules/**', '**/.git/**'];
+
+export async function readTree(root, { ignore = [], gitScope = process.env.AGENTIC_SECURITY_GIT_SCOPE === '1', scope = {} } = {}) {
+  let entries;
+  let inventory = null;
+  if (gitScope) {
+    // One inventory decides eligibility before any content is read.
+    inventory = buildScanInventory(root, scope);
+    const drop = [...GIT_SCOPE_SAFETY_IGNORE, ...ignore];
+    entries = inventory.included.filter((rel) => !drop.some((g) => path.matchesGlob(rel, g)));
+  } else {
+    entries = await listFiles(root, { ignore: [...DEFAULT_IGNORE, ...ignore] });
+  }
   const fileContents = {};
   const depFileContents = {};
   const oversize = [];
@@ -104,6 +123,7 @@ export async function readTree(root, { ignore = [] } = {}) {
     else if (/\.proto$/i.test(base)) depFileContents[rel] = content;
     else if (/\.(?:graphql|gql)$/i.test(base)) depFileContents[rel] = content;
     else if (/\.tf$/i.test(base)) depFileContents[rel] = content;
+    else if (/^(?:BUCK|TARGETS)(?:\.v2)?$/.test(base) && /\bhaskell_|prebuilt_haskell_library/.test(content)) depFileContents[rel] = content;
     // A Kubernetes manifest is admitted on CONTENT, not on living under a
     // directory named k8s/ — see isKubernetesManifest. Without this the
     // k8s-admission detector is wired into the dispatch and never invoked by it.
@@ -113,7 +133,7 @@ export async function readTree(root, { ignore = [] } = {}) {
     // A CloudFormation template is a `.yaml`/`.json` that no path predicate can
     // recognise — same problem as a Kubernetes manifest, same fix, and the same
     // requirement that BOTH gates open: runFullScan re-filters this exact list.
-    if (shouldScan(rel) || isKubernetesManifest(rel, content) || isCloudFormationTemplate(rel, content) || isInstructionFile(rel)) fileContents[rel] = content;
+    if (shouldScan(rel, !!gitScope) || isKubernetesManifest(rel, content) || isCloudFormationTemplate(rel, content) || isInstructionFile(rel)) fileContents[rel] = content;
     // Auxiliary files: .properties files are referenced by Java rules
     // (e.g. OWASP Benchmark's benchmark.properties resolves algorithm
     // aliases). They are not scannable for vulns themselves, but the
@@ -127,7 +147,7 @@ export async function readTree(root, { ignore = [] } = {}) {
     const { contents } = readExplicitExports(root, manifests);
     for (const [rel, text] of Object.entries(contents)) depFileContents[rel] = text;
   } catch { /* exports are best-effort evidence */ }
-  return { fileContents, depFileContents, oversize };
+  return { fileContents, depFileContents, oversize, inventory };
 }
 
 // Feat-10: incremental scan via `--changed-since <git-ref>`. Returns the set of
@@ -174,6 +194,16 @@ export async function languageFilesIgnoredByPolicy(root, fileContents, depFileCo
   return all.filter((rel) => (isLanguageSource(rel) || isLanguageManifest(rel)) && !isLanguageExcludedPath(rel) && !seen.has(rel)).sort().slice(0, 500);
 }
 
+// FR 02: an explicit package layout for Buck or custom builds, `{ "packages": { "name": ["dir", ...] } }`.
+// Read as data only; nothing in the map is executed and the build is not run.
+function loadHaskellSourceMap(file, root) {
+  if (!file) return null;
+  const abs = path.resolve(root, file);
+  const doc = JSON.parse(fsSync.readFileSync(abs, 'utf8'));
+  if (!doc || typeof doc !== 'object' || !doc.packages || typeof doc.packages !== 'object') throw new Error(`Haskell source map ${file} must be {"packages": {"<name>": ["<dir>", ...]}}`);
+  return { packages: doc.packages, file: path.relative(root, abs) };
+}
+
 export async function runScan(rootDir, opts = {}) {
   const root = path.resolve(rootDir);
   const startedAt = new Date().toISOString();
@@ -202,6 +232,7 @@ export async function runScan(rootDir, opts = {}) {
   // false claim of coverage.
   let completeScan = true;
   let sizeSkipped = [];
+  let scopeInventory = null;
   if (opts.fileContents) {
     // Caller-supplied file list (MCP `scan_diff`, the LSP's on-save scan): by
     // construction a subset of the tree, not a scan of it.
@@ -209,7 +240,7 @@ export async function runScan(rootDir, opts = {}) {
     depFileContents = opts.depFileContents || {};
     completeScan = false;
   } else {
-    ({ fileContents, depFileContents, oversize: sizeSkipped } = await readTree(root, opts));
+    ({ fileContents, depFileContents, oversize: sizeSkipped, inventory: scopeInventory } = await readTree(root, opts));
   }
 
   // Haskell/Nix sources under a default-ignored directory (tests, specs, mocks, bin, build, dist, vendor) are not
@@ -254,10 +285,33 @@ export async function runScan(rootDir, opts = {}) {
 
   // R8: `resume` is opt-in. Left undefined here, runFullScan falls back to the
   // AGENTIC_SECURITY_RESUME=1 env var, which is off by default.
-  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume, deep: opts.deep, deepInCi: opts.deepInCi, completeScan, policyExcluded, sizeSkipped }, opts.onProgress || (()=>{}));
+  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume, deep: opts.deep, deepInCi: opts.deepInCi, completeScan, policyExcluded, sizeSkipped, haskellSourceMap: loadHaskellSourceMap(opts.haskellSourceMap, root), gitScope: !!scopeInventory }, opts.onProgress || (()=>{}));
   // Premortem 2R4.2: stamp ruleset version + source on the scan result, and
   // notify if the operator pinned a different version than what's installed.
   try { stampScan(root, scan); } catch {}
+  // FR 01: additive scope record (never replaces an existing field). Skipped paths are
+  // capped; the counts are exact.
+  if (scopeInventory) {
+    const reasons = {};
+    for (const x of scopeInventory.skipped) reasons[x.reason] = (reasons[x.reason] || 0) + 1;
+    scan.scope = {
+      schema: 1,
+      policy: scopeInventory.policy,
+      includedCount: scopeInventory.included.length,
+      // The included list itself lets a later comparison tell "no longer reported because it was fixed" from "no longer reported
+      // because a narrower scan did not look". Kept only when small enough not to bloat the record.
+      ...(scopeInventory.included.length <= 5000 ? { included: scopeInventory.included } : { includedOmitted: true }),
+      skippedCount: scopeInventory.skipped.length,
+      skippedByReason: reasons,
+      skipped: scopeInventory.skipped.slice(0, 500),
+      overrides: scopeInventory.overrides,
+      coverageConditions: scopeInventory.skipped.filter((x) => x.coverageCondition).slice(0, 100),
+    };
+  }
+  // FR 10: additive evidence contract. Finding records carry the source hash and span; the scan record ties the run to a commit,
+  // dirty-file digests, the ignore-policy digest and the invocation. Neither replaces an existing field.
+  try { annotateFindingRecords(scan.findings, fileContents, { engineVersion: SCANNER_VERSION }); } catch {}
+  try { scan.scanRecord = buildScanRecord({ root, scan, meta: { mode: opts.changedSince ? 'incremental' : 'full', durationMs: Date.now() - t0 }, argv: opts.invocation || [], engineVersion: SCANNER_VERSION }); } catch {}
   // Append snapshot to history for /security-trend (non-blocking, never throws)
   try { appendScanSnapshot(scan, root); } catch {}
   return {

@@ -23,6 +23,10 @@ import { deriveCppContext } from './haskell-cpp.js';
 import { createNixAdapter } from './nix-adapter.js';
 import { analyzeHaskellManifests } from './haskell-manifests.js';
 import { packageOfModule } from './haskell-models.js';
+import { buildHaskellCoverage } from './haskell-coverage.js';
+import { budgetRecord, loadBudgetState, saveBudgetState } from './haskell-budget-state.js';
+import { DEFAULT_PARSE_BUDGETS } from './haskell-parser.js';
+import { buildHaskellIR } from './haskell-ir.js';
 
 export const ASSURANCE_VERSION = 'language-assurance/1';
 
@@ -75,7 +79,9 @@ export async function assessLanguageAssurance(input = {}) {
   const DISCLOSED_KINDS = new Set(['cpp', 'ffi', 'th-safe-splice', 'quasiquote-inert']);
   const disclosed = new Map();   // boundary kind -> {count, files:Set}
   const projectModules = new Set(); const importedModules = new Map();   // module -> files
+  const parsesByFile = new Map();
   const onParse = (file, parse) => {
+    parsesByFile.set(file, parse);
     if (parse && parse.module && parse.module.name) projectModules.add(parse.module.name);
     for (const i of (parse && parse.imports) || []) if (i && i.module) { const e = importedModules.get(i.module) || new Set(); e.add(file); importedModules.set(i.module, e); }
     for (const b of (parse && parse.boundaries) || []) {
@@ -86,7 +92,7 @@ export async function assessLanguageAssurance(input = {}) {
       disclosed.set(b.kind, e);
     }
   };
-  const adapters = input.adapters || [createHaskellAdapter({ onParse, cpp: deriveCppContext(files) }), createNixAdapter()];
+  const adapters = input.adapters || [createHaskellAdapter({ onParse, cpp: deriveCppContext(files), budgets: input.parseBudgets || undefined }), createNixAdapter()];
   const run = await runLanguageAnalysis({ files, adapters, timeoutMs: input.timeoutMs || 0 });
   const reconcile = reconcileLanguageLedger(run.ledger, files);
   const base = languageHealth({ ledger: run.ledger, outcomes: run.outcomes });
@@ -135,6 +141,18 @@ export async function assessLanguageAssurance(input = {}) {
   const ociFiles = Object.entries(files).filter(([f, t]) => /\.nix$/i.test(f) && typeof t === 'string' && /oci-containers|dockerTools\.(?:buildImage|buildLayeredImage|streamLayeredImage)|virtualisation\.(?:docker|podman)/.test(t)).map(([f]) => f);
   if (ociFiles.length) limitations.push({ kind: 'container-image-scan', files: ociFiles.sort(), note: 'Nix-built images and declared OCI services are analysed as configuration only: image layers and base-image vulnerabilities are NOT scanned' });
   if (!reconcile.ok) conditions.push(`language ledger does not reconcile with the inputs: ${reconcile.errors[0]}`);
+
+  // Buck-built Haskell: its dependency graph is not resolved by this scanner, so version-based advisory matching has nothing to match.
+  // Stated as a coverage gap (PRD FR 08) rather than left looking like "no vulnerable dependencies".
+  const buckHaskell = Object.entries(files).filter(([f, t]) => /(?:^|\/)(?:BUCK|TARGETS)(?:\.v2)?$/.test(f) && typeof t === 'string' && /\bhaskell_(?:library|binary|test|ghci)\b|\bprebuilt_haskell_library\b/.test(t)).map(([f]) => f).sort();
+  if (present.has('haskell') && buckHaskell.length) conditions.push(`${buckHaskell.length} Buck target file(s) declare Haskell dependencies this scan does not resolve (${buckHaskell.slice(0, 3).join(', ')}): dependency advisories were not matched for them`);
+
+  // Declared project models (PRD FR 03): a rejected declaration means a wrapper the project meant to model is still opaque.
+  const pm = input.projectModels;
+  if (pm && pm.present) {
+    if (pm.rejected.length) conditions.push(`${pm.rejected.length} Haskell project model(s) were rejected and have no effect: ${pm.rejected.slice(0, 3).map((r) => `${r.id} (${r.reason})`).join('; ')}`);
+    if (pm.accepted.length) limitations.push({ kind: 'project-models', count: pm.accepted.length, ids: pm.accepted.map((m) => m.id).sort(), note: 'wrappers modelled by reviewed project declarations (.agentic-security/haskell-models.json); each carries provenance and a paired positive and negative test' });
+  }
 
   // 2. manifests
   if (manifests.length) {
@@ -188,6 +206,39 @@ export async function assessLanguageAssurance(input = {}) {
     }
   }
 
+  // 5b. Haskell coverage accounting (FR 02): per-file stages, rates against the eligible denominator, rule families executed.
+  let haskellCoverage = null;
+  if (present.has('haskell')) {
+    try {
+      let ir = null;
+      if (input.deepEnabled !== false) {
+        try { const hs = Object.fromEntries(Object.entries(files).filter(([f]) => /\.hs$/i.test(f))); if (Object.keys(hs).length) ir = buildHaskellIR(hs); } catch { ir = null; }
+      }
+      haskellCoverage = buildHaskellCoverage({
+        files, parses: parsesByFile, ir, deepEnabled: input.deepEnabled !== false && !disabled.has('haskell:taint'),
+        ruleRuns: input.ruleRuns || null, sizeSkipped: input.sizeSkipped, policyExcluded: input.policyExcluded,
+        excludedPaths: run.ledger.excludedFiles, sourceMap: input.sourceMap || null,
+      });
+      // Effective parse budgets, operator overrides that were refused, and the persisted record of work left (haskell-budget-state.js).
+      const b = haskellCoverage.budget;
+      b.budgets = { ...DEFAULT_PARSE_BUDGETS, ...(input.parseBudgets || {}) };
+      if (Array.isArray(input.parseBudgetRejected) && input.parseBudgetRejected.length) {
+        b.rejectedOverrides = input.parseBudgetRejected;
+        conditions.push(`Haskell parse budget override refused: ${input.parseBudgetRejected.map((r) => `${r.entry} (${r.reason})`).join('; ')}`);
+      }
+      const budgetOf = (file) => { const p = parsesByFile.get(file); return p && p.budget ? { budgetName: p.budget.name } : {}; };
+      const remainingAll = (b.remainingAll || []).map((r) => ({ ...r, ...budgetOf(r.file) }));
+      const previous = loadBudgetState(input.scanRoot);
+      const { record, sinceLast } = budgetRecord({ remaining: remainingAll, completedFiles: b.completedFiles, budgets: b.budgets, files, previous });
+      b.remaining = b.remaining.map((r) => ({ ...r, ...budgetOf(r.file) }));
+      b.sinceLast = sinceLast;
+      if (record.remainingFiles || previous) b.recorded = saveBudgetState(input.scanRoot, record);
+      // Only a measured shortfall is a condition. A parse-only form is a stated limitation, not a gap in what was asked.
+      for (const r of haskellCoverage.capability.reasons) if (!/deep analysis is disabled/.test(r)) conditions.push(`Haskell coverage: ${r}`);
+      for (const l of haskellCoverage.capability.limitations) limitations.push({ kind: 'haskell-parse-only', note: l });
+    } catch (e) { conditions.push(`Haskell coverage accounting failed: ${String((e && e.message) || e).slice(0, 160)}`); }
+  }
+
   // 6. optional modes
   const optionalModes = {};
   for (const name of OPTIONAL_MODES) {
@@ -198,7 +249,7 @@ export async function assessLanguageAssurance(input = {}) {
 
   return {
     version: ASSURANCE_VERSION,
-    languageCoverage: { totals: base.totals, byKind, conditions, limitations, capabilities, optionalModes },
+    languageCoverage: { totals: base.totals, byKind, conditions, limitations, capabilities, optionalModes, ...(haskellCoverage ? { haskell: haskellCoverage } : {}) },
     ledger: { reconciled: reconcile.ok, errors: reconcile.errors, byAnalyzer: run.ledger.byAnalyzer },
     outcomes: run.outcomes,
     retained: { findings: findings.length, findingsRef: findings },

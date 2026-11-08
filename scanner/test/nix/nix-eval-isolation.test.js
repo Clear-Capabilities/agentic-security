@@ -230,3 +230,21 @@ test('[NIX-011.AC01] the isolation probe settles when the temporary directory is
   }
   assert.equal(readdirSync('/tmp').filter((f) => f.startsWith('nep-')).length, leftoverBefore, 'the fallback socket directory was removed');
 });
+
+test('[NIX-011.AC02] the bwrap command denies process creation itself and sets the clean environment inside', () => {
+  // Found the first time a CI runner had bwrap installed (Ubuntu 26.04): namespaces alone let the probe spawn /bin/echo, and --clearenv
+  // dropped the clean environment the supervisor passed, so the evaluator ran with no HOME, PATH or LANG.
+  const spec = { execFile: process.execPath, args: ['x'], readOnly: [], writable: [mkTestTmp('nix-eval-bwrap-')], cwd: '/', env: { LANG: 'C', HOME: '/w' } };
+  for (const [arch, words] of [['x64', 14], ['arm64', 11]]) {
+    const cmd = sandboxCommand({ backend: 'bwrap', path: '/usr/bin/bwrap', arch }, spec);
+    const i = cmd.args.indexOf('--seccomp');
+    assert.ok(i > 0 && cmd.args[i + 1] === '3', `${arch}: the filter is passed on fd 3`);
+    assert.equal(cmd.fd3.length, words * 8, `${arch}: a whole sock_filter program`);
+    assert.ok(i < cmd.args.indexOf(process.execPath), 'every option precedes the command');
+    const s = cmd.args.indexOf('--setenv');
+    assert.deepEqual(cmd.args.slice(s, s + 6), ['--setenv', 'LANG', 'C', '--setenv', 'HOME', '/w']);
+    assert.ok(cmd.args.indexOf('--clearenv') < s, 'set after the environment is cleared');
+  }
+  const other = sandboxCommand({ backend: 'bwrap', path: '/usr/bin/bwrap', arch: 'ia32' }, spec);
+  assert.ok(!other.args.includes('--seccomp') && other.fd3 === null, 'no filter for an architecture it does not know: the probe then decides');
+});

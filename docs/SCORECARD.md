@@ -9,17 +9,17 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.195.27 |
-| Bundle SHA-256 | `b1cf360cafbd8aeec59db25fb8e523f29104e005863aff5d6d00be22d3c1c58f` |
-| Commit | `c78da69b4867d455acb3456cb26eb79d0ff5f027` |
-| Worktree at measurement time | clean |
-| Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
+| Engine version | 0.195.28 |
+| Bundle SHA-256 | `d61dba15693817b199249d076741a3dd1e3dff5f70f8c37b6c39fb9b20e2744c` |
+| Commit | `0917aa2199cfc3006ee9b597b893dd0d2614a65f` |
+| Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
+| Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
 | Node | v24.20.0 |
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-05T15:39:12.711Z |
+| Generated (UTC) | 2026-11-08T13:50:47.179Z |
 
 ## What these numbers are, and what they are not
 
@@ -212,14 +212,14 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 21 |
-| `scripts` | 106 |
+| `scripts` | 105 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 683 |
+| `scanner/src` | 684 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -236,7 +236,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 245/565 (43.4%) |
+| 343/570 (60.2%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -378,7 +378,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.195.27), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.195.28), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both

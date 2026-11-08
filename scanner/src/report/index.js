@@ -1,4 +1,5 @@
 // Report writers — JSON / Markdown / SARIF.
+import { viewLine } from './disposition-view.js';
 import * as crypto from 'node:crypto';
 import { _isCustomSuppressed } from '../engine.js';
 import { alertFace, approveFace } from './mascot.js';
@@ -290,6 +291,14 @@ export function normalizeFindings(scan){
       blastRadius: f.blastRadius || null,
       // Sentinel-parity (FR-PREC, FR-L3) preserved fields.
       stableId: f.stableId || null,
+      // FR 05 / FR 10: the final disposition, why, and the evidence record. Present only when the engine computed them.
+      ...(f.disposition ? { disposition: f.disposition, dispositionDetail: f.dispositionDetail || null } : {}),
+      ...(Array.isArray(f.claims) && f.claims.length > 1 ? { claims: f.claims } : {}),
+      ...(f.record ? { record: f.record } : {}),
+      // FR 06: every workflow finding names the workflow, job, step, input origin, sensitive operation and privilege boundary.
+      ...(f.workflow ? { workflow: f.workflow, job: f.job ?? null, step: f.step ?? null, inputOrigin: f.inputOrigin ?? null, inputOriginKind: f.inputOriginKind ?? null, sensitiveOperation: f.sensitiveOperation ?? null, privilegeBoundary: f.privilegeBoundary ?? null, guards: f.guards ?? [], missingEvidence: f.missingEvidence ?? (f.dispositionDetail && f.dispositionDetail.missingEvidence) ?? [] } : {}),
+      ...(f.oidcTrust ? { oidcTrust: f.oidcTrust } : {}),
+      ...(f.validator_reject_retained ? { validator_reject_retained: true } : {}),
       confidenceTier: f.confidenceTier || null,
       exploitability: typeof f.exploitability === 'number' ? f.exploitability : null,
       exploitabilityTier: f.exploitabilityTier || null,
@@ -569,6 +578,8 @@ export function normalizeFindings(scan){
       version: sc.version,
       cveAliases: sc.cveAliases || [],
       osvId: sc.osvId || null,
+      ...(sc.basis ? { basis: sc.basis } : {}),
+      ...(sc.advisoryIds ? { advisoryIds: sc.advisoryIds, occurrences: sc.occurrences } : {}),
       advisory: sc.advisory || sc.description || sc.summary || '',
       // Hackage (and any matcher that decides from ranges): WHY the dependency matched. Without these a `possibly-affected` finding
       // (only a declared range is known) reads exactly like an `affected` one (the resolved version is inside the range).
@@ -764,6 +775,13 @@ export function toJSON(scan, meta={}, opts={}){
     // "analysis complete". Null when the engine did not compute one (e.g. a
     // hand-built `scan` object in a test), same convention as the S7 fields
     // above; a real scan always computes it.
+     ...(scan.scanRecord ? { scanRecord: scan.scanRecord } : {}),
+     ...(scan.reportView ? { reportView: scan.reportView } : {}),
+     ...(scan.dispositionCounts ? { dispositionCounts: scan.dispositionCounts } : {}),
+     // PRD FR 05: every candidate stays discoverable. Equivalent claims grouped under a primary are listed here, and the
+     // reconciliation shows raw, grouped, refuted and active counts with nothing counted twice.
+     ...(scan.candidateReconciliation ? { candidateReconciliation: scan.candidateReconciliation } : {}),
+     ...(Array.isArray(scan.groupedClaims) && scan.groupedClaims.length ? { groupedClaims: scan.groupedClaims.map((g) => ({ id: g.id ?? null, stableId: g.stableId ?? null, parser: g.parser ?? null, vuln: g.vuln ?? null, cwe: g.cwe ?? null, severity: g.severity ?? null, file: g.file ?? null, line: g.line ?? null, groupedInto: g.groupedInto ?? null, disposition: g.disposition ?? null })) } : {}),
     scanHealth: scan.scanHealth || null,
     // X-207: advisory hypotheses a caller put in the finding list; excluded from `findings`, listed here so it is never silent.
     ...(Array.isArray(scan.advisoryExcluded) && scan.advisoryExcluded.length ? { advisoryExcluded: scan.advisoryExcluded } : {}),
@@ -1079,6 +1097,29 @@ export const TOOL_CAVEATS = Object.freeze([
   },
 ]);
 
+// FR 02: one reading of the Haskell coverage record, shared by the CLI, HTML and SARIF outputs so they cannot disagree.
+export function haskellCoverageSummary(scan) {
+  const h = scan && scan.scanHealth && scan.scanHealth.languageCoverage && scan.scanHealth.languageCoverage.haskell;
+  if (!h || !h.present) return null;
+  const pct = (r) => (r == null ? 'n/a' : `${(r * 100).toFixed(1)}%`);
+  return {
+    status: h.capability.status,
+    discovered: h.totals.discovered, eligible: h.totals.eligible, eligibleHs: h.totals.eligibleHs,
+    parseRate: h.stages.parse.rate, semanticRate: h.stages.semantic.rate,
+    parseText: pct(h.stages.parse.rate), semanticText: pct(h.stages.semantic.rate),
+    functions: h.functions, unresolvedCalls: h.unresolvedCalls,
+    ruleFamilies: h.ruleFamilies.map((f) => ({ id: f.id, status: f.status, findings: f.findings })),
+    reasons: h.capability.reasons, limitations: h.capability.limitations,
+    incompleteEntries: h.incompleteEntries.length,
+  };
+}
+
+function haskellCoverageLine(scan) {
+  const h = haskellCoverageSummary(scan);
+  if (!h) return null;
+  return `Haskell coverage: ${h.status}; ${h.eligibleHs} eligible .hs file(s), parsed ${h.parseText}, semantic analysis completed ${h.semanticText}; ${h.functions.lowered}/${h.functions.discovered} function(s) analysed, ${h.unresolvedCalls == null ? 'n/a' : h.unresolvedCalls} unresolved call(s)`;
+}
+
 export function toSARIF(scan, meta={}){
   const findings = normalizeFindings(scan);
   const ruleMap = new Map();
@@ -1128,6 +1169,8 @@ export function toSARIF(scan, meta={}){
         // /security-trend regression analysis can attribute deltas to rule
         // changes vs. code changes.
         properties: {
+          ...(haskellCoverageSummary(scan) ? { haskellCoverage: haskellCoverageSummary(scan) } : {}),
+          ...(scan.reportView ? { reportView: scan.reportView } : {}),
           ...(scan && scan._rulesetVersion ? { rulesetVersion: scan._rulesetVersion } : {}),
           ...(scan && scan._rulesetVersionSource ? { rulesetVersionSource: scan._rulesetVersionSource } : {}),
           ...(scan && scan._rulesetVersionMismatch ? { rulesetVersionMismatch: scan._rulesetVersionMismatch } : {}),
@@ -1376,6 +1419,8 @@ export function toHTML(scan, meta = {}) {
     <div class="card"><h2>STRIDE coverage</h2><table><tbody>${strideRows}</tbody></table></div>
     <div class="card"><h2>Top files</h2><table><tbody>${hotRows}</tbody></table></div>
   </div>
+  ${(() => { const vl = viewLine(scan.reportView); return vl ? `<div class="card" style="margin-bottom:24px"><h2>Findings by disposition</h2><div class="meta">${_esc(vl)}</div></div>` : ''; })()}
+  ${(() => { const h = haskellCoverageSummary(scan); if (!h) return ''; return `<div class="card" style="margin-bottom:24px"><h2>Haskell coverage &mdash; ${_esc(h.status)}</h2><div class="meta">${_esc(haskellCoverageLine(scan))}</div><div class="meta">Rule families: ${h.ruleFamilies.map((f) => `${_esc(f.id)} (${_esc(f.status)})`).join(', ')}</div>${h.reasons.map((r) => `<div class="meta">&bull; ${_esc(r)}</div>`).join('')}${h.limitations.map((r) => `<div class="meta">&bull; ${_esc(r)}</div>`).join('')}</div>`; })()}
   <div class="filters">
     <input id="q" placeholder="Filter by file, vuln, CWE&hellip;" />
     <select id="sev"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
@@ -1688,6 +1733,8 @@ export function toShipVerdict(scan, options = {}) {
     const conditions = Array.isArray(scan.scanHealth.conditions) ? scan.scanHealth.conditions : [];
     lines.push(c(`  ${scan.scanHealth.status}: ${conditions[0] || 'analysis did not complete cleanly'}${conditions.length > 1 ? ` (+${conditions.length - 1} more)` : ''}`, SEV_COLOR.high));
   }
+  { const hl = haskellCoverageLine(scan); if (hl) lines.push(c(`  ${hl}`, DIM)); }
+  { const vl = viewLine(scan.reportView); if (vl) lines.push(c(`  ${vl}`, DIM)); }
   lines.push(`  • ${sev.critical} critical · ${sev.high} high · ${advisoryCount} advisory`);
   // Per-category 0..100 score bars — Secrets / Permissions / Hooks / MCP / Agents.
   // Only render when at least one category has been contributed to (skip the

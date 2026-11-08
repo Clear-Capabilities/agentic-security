@@ -37,7 +37,7 @@ globalThis.fetch = async (url) => {
 
 const { runFullScan } = await import('../src/engine.js');
 
-test('engine wiring: a manifest-only critical SCA dependency is demoted by a real scan, not left at full severity', async () => {
+test('engine wiring: a manifest-only critical SCA dependency keeps its severity in a real scan (unknown reachability cannot demote)', async () => {
   const depFileContents = {
     'package.json': JSON.stringify({
       name: 'demo', version: '1.0.0',
@@ -63,9 +63,9 @@ test('engine wiring: a manifest-only critical SCA dependency is demoted by a rea
     const result = await runFullScan({ fileContents, depFileContents, scanRoot: '/tmp/agentic-security-sca-wiring-test' });
     const sc = (result.supplyChain || []).find(s => s.type === 'vulnerable_dep' && s.name === 'agentic-security-wiring-test-pkg');
     assert.ok(sc, 'expected the synthetic vulnerable dependency to be found');
-    assert.equal(sc.reachabilityTier, 'manifest-only', 'precondition: this dependency must land in a DEMOTE_SCA_TIERS tier');
-    assert.equal(sc.severity, 'medium', 'a manifest-only critical SCA finding must be demoted, same as demoteUnreachable does in isolation');
-    assert.equal(sc.unreachable, true);
+    assert.equal(sc.reachabilityTier, 'manifest-only', 'precondition: no use observed lands in manifest-only');
+    assert.equal(sc.severity, 'critical', 'no observed use is unknown reachability and must not lower severity');
+    assert.notEqual(sc.unreachable, true);
   } finally {
     delete process.env.AGENTIC_SECURITY_NO_STATE;
   }
@@ -102,19 +102,18 @@ test('reachability-filter: import-reachable tier KEEPS severity', () => {
   assert.equal(f.severity, 'high');
 });
 
-test('reachability-filter: manifest-only tier DEMOTES severity', () => {
+test('reachability-filter: manifest-only tier keeps severity (unknown reachability)', () => {
   const f = makeScaFinding('manifest-only', 'critical');
   demoteUnreachable([f], { routes: [{}] });
-  assert.equal(f.severity, 'medium');
-  assert.equal(f.unreachable, true);
-  assert.equal(f._reachabilityDemoteReason, 'tier:manifest-only');
+  assert.equal(f.severity, 'critical');
+  assert.notEqual(f.unreachable, true);
 });
 
-test('reachability-filter: transitive-only tier DEMOTES severity', () => {
+test('reachability-filter: transitive-only tier keeps severity (unknown reachability)', () => {
   const f = makeScaFinding('transitive-only', 'high');
   demoteUnreachable([f], { routes: [{}] });
-  assert.equal(f.severity, 'low');
-  assert.equal(f.unreachable, true);
+  assert.equal(f.severity, 'high');
+  assert.notEqual(f.unreachable, true);
 });
 
 test('reachability-filter: unreachable tier DEMOTES severity', () => {
@@ -158,7 +157,7 @@ test('reachability-filter: missing reachabilityTier on SCA = no demotion', () =>
 
 test('reachability-filter: SCA + SAST findings demote independently', () => {
   const findings = [
-    makeScaFinding('manifest-only', 'critical'),
+    makeScaFinding('unreachable', 'critical'),
     { vuln: 'SQL Injection', severity: 'high', reachable: false }, // SAST, unreachable
     { vuln: 'XSS', severity: 'high', reachable: true },             // SAST, reachable
   ];

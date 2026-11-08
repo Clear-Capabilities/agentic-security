@@ -25,6 +25,7 @@ import * as path from 'node:path';
 
 import { stateDir, statePath, stateWritesEnabled } from './state-dir.js';
 import { isLanguageSource, isLanguageManifest, isLanguageExcludedPath, isExplicitExport, impactedFiles } from '../language/discovery.js';
+import { buildScanInventory } from '../scope/inventory.js';
 const STATUS_MD   = 'watch-status.md';
 const STATUS_JSON = 'watch-status.json';
 const DEBOUNCE_MS = 350;
@@ -32,6 +33,25 @@ const MAX_BURST   = 50; // ignore beyond this # of rapid events
 
 const SCAN_EXT_RE = /\.(?:[jt]sx?|mjs|cjs|py|java|kt|go|rb|php|cs|c|cc|cpp|h|hpp|rs|sol|vy|swift|dart|toml|yml|yaml|json|tf|tfvars|bicep)$/i;
 const IGNORE_DIR_RE = /(?:^|\/)(?:\.git|node_modules|\.bench-cache|dist|build|\.next|coverage|\.agentic-security)(?:$|\/)/;
+
+// Under Git scope (PRD FR 01) the watcher asks the same inventory the scan uses, so a change to a Git-ignored file does not
+// trigger a rescan, and a tracked file under a directory the default list would skip (`dist/`, `build/`) still does. A change
+// to an ignore source rebuilds the inventory. A path the inventory has not seen (a new file) rebuilds it, at most once a second.
+const IGNORE_SOURCE = /(?:^|\/)\.gitignore$|^\.git\/info\/exclude$/;
+export function createScopeFilter(scanRoot, scope = {}, { build = buildScanInventory, now = Date.now } = {}) {
+  let included = null;
+  let builtAt = -Infinity;
+  const rebuild = () => { included = new Set(build(scanRoot, scope).included); builtAt = now(); };
+  rebuild();
+  return (rel) => {
+    if (!rel || /^\.agentic-security(?:\/|$)/.test(rel)) return false;
+    if (IGNORE_SOURCE.test(rel)) { rebuild(); return true; }
+    if (/^\.git(?:\/|$)/.test(rel)) return false;
+    if (included.has(rel)) return true;
+    if (now() - builtAt >= 1000) rebuild();
+    return included.has(rel);
+  };
+}
 
 function _isScanable(rel) {
   if (!rel) return false;
@@ -162,6 +182,7 @@ export function readStatus(scanRoot) {
 export async function watchProject(scanRoot, onChange, opts = {}) {
   if (process.env.AGENTIC_SECURITY_NO_WATCH === '1') return { stop: async () => {}, _disabled: true };
   const recursive = opts.recursive !== false;
+  const eligible = typeof opts.isEligible === 'function' ? opts.isEligible : _isScanable;
   const ac = new AbortController();
   let timer = null;
   const pending = new Set();
@@ -183,7 +204,7 @@ export async function watchProject(scanRoot, onChange, opts = {}) {
       for await (const evt of fs.watch(scanRoot, { recursive, signal: ac.signal })) {
         if (stopped) break;
         const rel = String(evt.filename || '').replace(/\\/g, '/');
-        if (!_isScanable(rel)) continue;
+        if (!eligible(rel)) continue;
         pending.add(path.join(scanRoot, rel));
         if (timer) clearTimeout(timer);
         timer = setTimeout(flush, DEBOUNCE_MS);

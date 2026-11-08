@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.195.27",
-    "bundleSha256": "b1cf360cafbd8aeec59db25fb8e523f29104e005863aff5d6d00be22d3c1c58f",
-    "commit": "c78da69b4867d455acb3456cb26eb79d0ff5f027",
-    "worktreeClean": true,
+    "engineVersion": "0.195.28",
+    "bundleSha256": "d61dba15693817b199249d076741a3dd1e3dff5f70f8c37b6c39fb9b20e2744c",
+    "commit": "0917aa2199cfc3006ee9b597b893dd0d2614a65f",
+    "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-05T15:39:12.711Z",
+    "generatedAt": "2026-11-08T13:50:47.179Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -624,7 +624,7 @@
         }
       },
       "scanner/src": {
-        "total": 683,
+        "total": 684,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -693,10 +693,12 @@
           "language/bridges.js": 1,
           "language/context.js": 2,
           "language/discovery.js": 1,
+          "language/haskell-budget-state.js": 1,
           "language/haskell-cpp.js": 3,
           "language/haskell-fix.js": 2,
           "language/haskell-llm.js": 1,
           "language/haskell-manifests.js": 8,
+          "language/haskell-project-models.js": 1,
           "language/haskell-resolved-graph.js": 3,
           "language/haskell-sca.js": 1,
           "language/haskell-supply.js": 1,
@@ -705,7 +707,6 @@
           "language/nix-ir.js": 2,
           "language/nix-script-taint.js": 2,
           "language/nixos-hardening.js": 1,
-          "language/secrets.js": 1,
           "language/support-registry.js": 1,
           "language/witness.js": 2,
           "leaderboard.js": 3,
@@ -734,6 +735,7 @@
           "mcp/server.js": 1,
           "mcp/tools.js": 7,
           "pipeline/cascade-worker-pool.js": 2,
+          "pipeline/evidence-record.js": 1,
           "pipeline/supervised-analyzers.js": 1,
           "poc-video.js": 1,
           "posture/adversarial-self-test.js": 1,
@@ -766,7 +768,7 @@
           "posture/cross-repo-memory.js": 2,
           "posture/custom-rules.js": 2,
           "posture/cve-alert-daemon.js": 5,
-          "posture/cve-lookup.js": 4,
+          "posture/cve-lookup.js": 3,
           "posture/dag-commands.js": 2,
           "posture/dead-code.js": 1,
           "posture/dep-add-guard.js": 8,
@@ -904,7 +906,7 @@
           "posture/workflow-installer.js": 2,
           "pr-comment.js": 1,
           "report/index.js": 2,
-          "runScan.js": 1,
+          "runScan.js": 2,
           "sandbox/backend-namespace.js": 1,
           "sandbox/backend-userspace.js": 1,
           "sandbox/control-probes.js": 2,
@@ -913,9 +915,8 @@
           "sast/cpp-dataflow.js": 2,
           "sast/crypto-protocol.js": 2,
           "sast/db-taint.js": 1,
-          "sast/fastapi-hardening.js": 1,
           "sast/host-header.js": 1,
-          "sast/java-bench-extras.js": 5,
+          "sast/java-bench-extras.js": 3,
           "sast/java-deserialization.js": 2,
           "sast/k8s-admission.js": 1,
           "sast/llm-app.js": 2,
@@ -931,6 +932,7 @@
           "sast/springboot-hardening.js": 1,
           "sast/ssrf-cloud-metadata.js": 2,
           "sast/weak-randomness.js": 2,
+          "sast/workflow-flow.js": 1,
           "sast/zip-slip.js": 1,
           "sca/binary-metadata.js": 5,
           "sca/container.js": 2,
@@ -938,6 +940,7 @@
           "sca/llm-function-extract.js": 1,
           "sca/py-package-functions.js": 1,
           "sca/sigstore-verify.js": 7,
+          "scope/inventory.js": 1,
           "server/CLAUDE.md": 1,
           "server/graph-loader.js": 2,
           "server/http-server.js": 1,
@@ -945,7 +948,7 @@
         }
       },
       "scripts": {
-        "total": 106,
+        "total": 105,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -983,7 +986,7 @@
           "run-unit-tests.mjs": 1,
           "self-test-runner.mjs": 2,
           "ship.mjs": 2,
-          "ship/run.mjs": 2,
+          "ship/run.mjs": 1,
           "ship/run.mjs -> ship/lib.mjs": 1,
           "verification-replay-example.mjs": 2
         }
@@ -996,8 +999,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 245,
-    "d": 565
+    "n": 343,
+    "d": 570
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2250,11 +2253,11 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.195.27",
-    "commit": "c78da69b4867d455acb3456cb26eb79d0ff5f027",
-    "bundleSha256": "b1cf360cafbd8aeec59db25fb8e523f29104e005863aff5d6d00be22d3c1c58f",
-    "cleanMeasurement": true,
-    "identity": "the commit and bundle below identify exactly the tree that was measured",
+    "engineVersion": "0.195.28",
+    "commit": "0917aa2199cfc3006ee9b597b893dd0d2614a65f",
+    "bundleSha256": "d61dba15693817b199249d076741a3dd1e3dff5f70f8c37b6c39fb9b20e2744c",
+    "cleanMeasurement": false,
+    "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",
     "currentEngineIndependentReason": "the latest independent run (a72968195aa1) measured engine 0.172.0, not the engine above; it is a historical record",
     "independentRun": {

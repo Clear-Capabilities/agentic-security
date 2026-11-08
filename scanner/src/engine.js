@@ -199,6 +199,13 @@ import { demoteUnreachable } from './posture/reachability-filter.js';
 import { annotateExploitability, detectProjectContext } from './posture/exploitability.js';
 import { applyFeedback as applyLearnedFeedback } from './posture/learning.js';
 import { validateMany as llmValidateMany, applyValidatorVerdicts } from './llm-validator/index.js';
+import { applyDispositions, assignDisposition } from './llm-validator/disposition.js';
+import { groupEquivalentClaims, reconcileCounts } from './llm-validator/claim-groups.js';
+import { annotateScaBasis, dedupeAdvisoryAliases } from './sca/basis.js';
+import { applyOidcTrust, resolveOwnRepository } from './sast/oidc-trust.js';
+import { readProjectModelFile, loadProjectModels, projectFileExists } from './language/haskell-project-models.js';
+import { parseBudgetOverrides as parseHaskellBudgetOverrides } from './language/haskell-budget-state.js';
+import { registerProjectCatalogEntries, unregisterProjectCatalogEntries, scanOwner } from './dataflow/catalog.js';
 import { MODEL_STATUS, stageSummaryFromModelStatus } from './llm-validator/model-status.js';
 import { resolveProvider as resolveLlmProvider, otherRemoteRoles as llmOtherRemoteRoles, NO_CLOUD_FALLBACK } from './llm-validator/providers.js';
 import { scanCrossLangOpenAPI } from './posture/cross-lang-openapi.js';
@@ -784,6 +791,7 @@ function _isIaCFile(p){
   // `isKubernetesManifest` below, because a path predicate cannot see content.
   if (/(?:^|\/)k8s(?:\/|$)/.test(p) && /\.ya?ml$/i.test(base)) return true;
   if (/(?:^|\/)\.github\/workflows\/.*\.ya?ml$/.test(p)) return true;
+  if (/(?:^|\/)\.github\/actions\/.*\.ya?ml$/.test(p)) return true; // composite actions kept in the repository
   if (/(?:^|\/)\.gitlab-ci\.ya?ml$/.test(p)) return true;
   if (/(?:^|\/)values\.ya?ml$/.test(p)) return true;
   // MCP server config files (Claude Code agent host configuration)
@@ -846,7 +854,9 @@ export function isInstructionFile(relPath) {
   return typeof relPath === 'string' && _INSTRUCTION_FILE_ADMIT_RE.test(relPath);
 }
 
-function shouldScan(p){if(/\.(test|spec|mock)\./i.test(p))return false;if(/_test\.go$/i.test(p))return false;if(/_spec\.rb$/i.test(p))return false;if(/Test\.(?:java|cs|kt|scala)$/i.test(p))return false;if(/\.min\.[mc]?js$/i.test(p))return false;for(const x of p.split("/"))if(IGNORE_DIRS.has(x))return false;
+// `scoped` (PRD FR 01): the Git-aware inventory already decided eligibility, so a tracked file is not dropped merely because its
+// folder is named test, bin or vendor, or because its name looks like a test. Minified bundles are still not source.
+function shouldScan(p,scoped=false){if(/\.min\.[mc]?js$/i.test(p))return false;if(!scoped){if(/\.(test|spec|mock)\./i.test(p))return false;if(/_test\.go$/i.test(p))return false;if(/_spec\.rb$/i.test(p))return false;if(/Test\.(?:java|cs|kt|scala)$/i.test(p))return false;for(const x of p.split("/"))if(IGNORE_DIRS.has(x))return false;}else{for(const x of p.split("/"))if(x==="node_modules"||x===".git"||x===".agentic-security")return false;}
   // Mobile + framework manifest files needed by the v4 detectors.
   const base=p.split('/').pop();
   if (/(?:^|[\\/])AndroidManifest\.xml$/i.test(p)) return true;
@@ -6308,17 +6318,27 @@ const _SECURITY_WORD_RE=/\b(?:auth|authn|authz|authenticat(?:e|ed|es|ion|or)|aut
 function _splitIdentifierWords(text){
   return text.replace(/([a-z0-9])([A-Z])/g,"$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g,"$1 $2").replace(/[_\-.]+/g," ");
 }
+// PRD FR 07: a marker is a developer note only when it sits in comment text, either as the first word of the comment or written as a
+// label (`XXX:`, `FIXME(name)`). A Roman numeral or prose word that happens to read XXX, or a marker inside a string, is not a note.
+function _isMarkerComment(ln){
+  const m=/(?:\/\/+|#+|--+|\/\*+|^\s*\*+|;+|%+|<!--)\s*(.*)$/.exec(ln);
+  if(!m)return false;
+  const text=m[1];
+  return /^(?:TODO|FIXME|HACK|XXX|BUG|TEMP)\b/.test(text)||/\b(?:TODO|FIXME|HACK|XXX|BUG|TEMP)(?::|\()/.test(text);
+}
 function scanTodosNearSecurity(fp,raw){
   const lines=raw.split("\n");
   const out=[];
   for(let i=0;i<lines.length;i++){
     const ln=lines[i];
-    if(!/\b(?:TODO|FIXME|HACK|XXX|BUG|TEMP)\b/.test(ln))continue;
+    if(!_isMarkerComment(ln))continue;
     const window=lines.slice(Math.max(0,i-3),Math.min(lines.length,i+4)).join(" ");
     if(!_SECURITY_WORD_RE.test(_splitIdentifierWords(window)))continue;
     out.push({
       vuln:"Known-Broken Code Marker Near Security-Sensitive Logic",
-      severity:"medium",cwe:"CWE-1077",stride:"Tampering",
+      // A developer note is a code-quality note, not a vulnerability, unless it is tied to a present weakness (PRD FR 07).
+      kind:"hardening",hardeningAdvice:true,
+      severity:"low",cwe:"CWE-1077",stride:"Tampering",
       fix:"Review the TODO/FIXME. Known-broken comments next to auth/crypto code often indicate unfinished hardening.",
       code:`// File: ${fp}:${i+1}\n// ${ln.trim()}`,
       file:fp,line:i+1,snippet:ln.trim()
@@ -8562,6 +8582,9 @@ async function queryOSV(components,allFileContents){
         fixedVersions: [...fixedVersions].sort(),
         aliases: (d.aliases || []).filter(a => a.startsWith('CVE-')),
         osvVulnFunctions: [...new Set(osvVulnFunctions)],
+        // PRD FR 08: the advisory's own timestamps and affected ranges, so a finding can say what it matched and when that was published.
+        advisoryModified: d.modified || null, advisoryPublished: d.published || null,
+        affectedRanges: (d.affected || []).flatMap((aff) => (aff.ranges || []).map((r) => ({ type: r.type, events: (r.events || []).map((ev) => ({ ...ev })) }))),
         severity, cvssVector, hasKnownAttackRef };
       _osvCacheSet('vuln:' + vid, vuln);
       return [vid, vuln];
@@ -8582,6 +8605,7 @@ async function queryOSV(components,allFileContents){
       results.push({ type: 'vulnerable_dep', name: comp.name, version: comp.version, ecosystem: comp.ecosystem,
         purl: comp.purl, osvId: vid, cveAliases: vuln.aliases, description: vuln.description,
         fixedVersions: vuln.fixedVersions, severity: vuln.severity, cvssVector: vuln.cvssVector,
+        advisoryModified: vuln.advisoryModified || null, advisoryPublished: vuln.advisoryPublished || null, affectedRanges: vuln.affectedRanges || null,
         hasKnownAttackRef: vuln.hasKnownAttackRef, osvVulnFunctions: vuln.osvVulnFunctions || [], reachable: comp.reachable, scope: comp.scope,
         file: comp.filePath,
         // `isDirect` is backfilled onto every component just above the queryOSV
@@ -8971,7 +8995,7 @@ function _gcHint(minHeapMiB) {
   _gcFn();
 }
 
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[]}, setProgress=()=>{}){
+async function _runFullScanBody({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[], haskellSourceMap=null, gitScope=false}, setProgress=()=>{}){
   // E6-01: local, aggregate telemetry for this scan (see pipeline/telemetry.js). Nothing is sent anywhere; the snapshot is a field of the result.
   const _tel = createTelemetry({ deterministic: isDeterministic() });
   setDetectorTimingSink((name, ms) => _tel.detector(name, ms));
@@ -8979,6 +9003,14 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // The feed metadata is module state: reset it so one scan cannot inherit another's catalog freshness in the same process (0.195.22).
   _kevCatalogMeta = { source: 'not-loaded', fetchedAt: null, ageDays: null, stale: null, entries: 0 };
   _epssLiveMeta = { source: 'not-loaded', ageDays: null, stale: null, cvesChecked: 0 };
+  // PRD FR 03: reviewed project models for Haskell wrappers. Registered for this scan only; a model without provenance or paired tests is rejected and reported.
+  let _projectModels = { present: false, accepted: [], rejected: [], catalog: [] };
+  try {
+    if (scanRoot) {
+      _projectModels = loadProjectModels(readProjectModelFile(scanRoot), projectFileExists(scanRoot));
+      if (_projectModels.catalog.length) registerProjectCatalogEntries(scanRoot, _projectModels.catalog);
+    }
+  } catch (e) { _projectModels = { present: true, accepted: [], rejected: [{ id: '(file)', reason: String((e && e.message) || e) }], catalog: [] }; }
   _resetSuppressions();_tel.time('index', () => _buildProjectIndex(fileContents));await _tel.timeAsync('custom-rules', () => _loadCustomRules(scanRoot));
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
@@ -9006,7 +9038,7 @@ function _deterministicFileTimings(timings) {
 
   const _fileTimings = [];
   let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0, _filesOversizeSkipped = 0;
-  const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f]) || isCloudFormationTemplate(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];const _detectorErrors=[];
+  const files=Object.keys(fileContents).filter(f=>(shouldScan(f,gitScope) || isKubernetesManifest(f, fileContents[f]) || isCloudFormationTemplate(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];const _detectorErrors=[];
   // ---- R8: opt-in per-file checkpointing (AGENTIC_SECURITY_RESUME=1, or
   // runScan({resume:true})). Default OFF, so existing behaviour is untouched.
   // Only this loop is checkpointed; every cross-file pass below re-runs, so
@@ -9405,7 +9437,6 @@ function _deterministicFileTimings(timings) {
     } else {
       sc.reachabilityTier = 'transitive-only';
     }
-    if (sc.reachabilityTier === 'transitive-only') { sc.unreachable = true; sc._reachabilityDemoted = true; }
     // Mark as the strongest "vulnerable function actually invoked" signal so
     // posture/reachability-filter can preserve full severity on this tier
     // while demoting lower tiers.
@@ -9413,6 +9444,8 @@ function _deterministicFileTimings(timings) {
       sc.routeReachableViaFunction = true;
     }
   }
+  // PRD FR 08: record the basis of every dependency finding, kept apart from reachability.
+  try { const _merged = dedupeAdvisoryAliases(supplyChain); supplyChain.length = 0; supplyChain.push(..._merged); annotateScaBasis(supplyChain); } catch (_) {}
   // Early dedup: collapse duplicates BEFORE the annotation pipeline to reduce work.
   try{const _earlyMap=new Map();for(const f of aF){const k=`${f.file||''}:${f.line||0}:${f.vuln||''}`;if(!_earlyMap.has(k))_earlyMap.set(k,f);}aF.length=0;aF.push(..._earlyMap.values());}catch(_){}
   // Sort findings: critical first, then structural patterns last within same severity
@@ -9881,12 +9914,14 @@ function _deterministicFileTimings(timings) {
   // An `unsafePerformIO` / `unsafeCoerce` / `unsafeInterleaveIO` boundary note says (in its own text) that it claims no vulnerability class: it marks where the
   // type system is stepped around. In a scan it is information, not a finding that gates a release; the rules module keeps emitting it at `low` (its contract),
   // and the severity is lowered here with the original kept.
-  try{aF.push(...analyzeHaskellRules(fc,{reachability:_hsReachCtx()}).findings.map((f)=>f&&f.rule==='hs-unsafe-io-boundary'?{...f,originalSeverity:f.severity,severity:'info'}:f));}catch(_){}
-  try{aF.push(...analyzeHaskellLlmRules(fc));}catch(_){}
+  // FR 02: which Haskell rule families really executed (a thrown family is recorded as failed, never as clean).
+  const _hsRuleRuns={};
+  try{const _r=analyzeHaskellRules(fc,{reachability:_hsReachCtx()}).findings.map((f)=>f&&f.rule==='hs-unsafe-io-boundary'?{...f,originalSeverity:f.severity,severity:'info'}:f);aF.push(..._r);_hsRuleRuns['hs-security-rules']={ran:true,findings:_r.length};}catch(e){_hsRuleRuns['hs-security-rules']={ran:false,failed:String((e&&e.message)||e).slice(0,120)};}
+  try{const _r=analyzeHaskellLlmRules(fc);aF.push(..._r);_hsRuleRuns['hs-llm']={ran:true,findings:_r.length};}catch(e){_hsRuleRuns['hs-llm']={ran:false,failed:String((e&&e.message)||e).slice(0,120)};}
   try{const{analyzeLanguageFindings}=await import('./language/engine-pass.js');aF.push(...analyzeLanguageFindings(allFileContents).findings);}catch(_){}
   let _languageBridges=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$/i.test(f))){const{analyzePolyglotBridges}=await import('./language/bridges.js');_languageBridges=analyzePolyglotBridges(allFileContents);}}catch(_){}
   try{for(const[_p,_t]of Object.entries(allFileContents))if(typeof _t==='string')aF.push(...scanDependencyUrlCredentials(_p,_t));}catch(_){}
-  try{const _hw=analyzeHaskellWeb(fc,{reachability:_hsReachCtx()});aF.push(..._hw.findings);aR.push(...toEngineRoutes(_hw));}catch(_){}
+  try{const _hw=analyzeHaskellWeb(fc,{reachability:_hsReachCtx()});aF.push(..._hw.findings);aR.push(...toEngineRoutes(_hw));_hsRuleRuns['hs-web']={ran:true,findings:_hw.findings.length};}catch(e){_hsRuleRuns['hs-web']={ran:false,failed:String((e&&e.message)||e).slice(0,120)};}
   let finalFindings;try{finalFindings=dedupeFindingsWithEvidence(aF);}catch(_){finalFindings=dd(aF,f=>f.id);}
   // Inline `agentic-security-ignore` pragmas, pass 1 of 2. This covers every
   // finding that exists BY THIS POINT — the pattern detectors, the cross-file
@@ -10037,6 +10072,9 @@ function _deterministicFileTimings(timings) {
       _licenseGraph = null, _attributions = null, _taxonomySummary = null;
   let _scanMeta = null;
   let _aiAssistance = null;
+  let _dispositionCounts = null;
+  let _groupedClaims = [];
+  let _candidateReconciliation = null;
   let _entrypointInventory = {};
   let _rootCauseSweep = null;
   let _proofCoverage = null;
@@ -10520,6 +10558,31 @@ function _deterministicFileTimings(timings) {
     // upstream of it still need to run before validation, same as before).
     try { annotateVerifierVerdicts(finalFindings, { fileContents: fc }); } catch (_) {}
   } catch(_) {}
+  // PRD FR 06: trust-policy evidence kept in the repository adjusts OIDC findings; absence there never closes one.
+  try { const _own = finalFindings.some((x) => x && /^Pipeline: OIDC id-token: write/.test(String(x.vuln || ''))) ? resolveOwnRepository(scanRoot) : null; applyOidcTrust(finalFindings, depFileContents && Object.keys(depFileContents).length ? { ...allFileContents, ...depFileContents } : allFileContents, _own ? { ownRepository: _own.name, ownRepositoryBasis: _own.basis } : {}); } catch (e) { _annotatorErrors.push({ phase: 'applyOidcTrust', err: String((e && e.message) || e) }); }
+  // PRD FR 05: final disposition. Runs whether or not a model was configured,
+  // so every actionable finding says why it is confirmed, needs review,
+  // hardening, refuted or unvalidated. Only an evidence-backed refutation or a
+  // reviewed suppression leaves the list, and it is retained in the ledger.
+  try {
+    // Equivalent detector claims are grouped first (one weakness, one actionable result naming every detector); the grouped
+    // claims are kept for the raw export, never deleted.
+    const _suppressedBefore = _suppressionLog.length;
+    const _raw = finalFindings.filter((x) => x && x.kind !== 'sca').length;
+    const cg = groupEquivalentClaims(finalFindings);
+    finalFindings = cg.kept;
+    for (const g of cg.grouped) { try { assignDisposition(g, { fileContents: fc }); } catch (_) {} }
+    _groupedClaims = cg.grouped;
+    const dr = applyDispositions(finalFindings, { fileContents: fc });
+    finalFindings = dr.kept;
+    _dispositionCounts = dr.counts;
+    _candidateReconciliation = reconcileCounts({ raw: _raw, grouped: cg.grouped.length, refuted: dr.refuted.length, dispositionCounts: dr.counts, suppressed: _suppressedBefore });
+    for (const d of dr.refuted) _suppressionLog.push({
+      vuln: d.vuln, file: d.file, line: d.line, snippet: d.snippet,
+      reason: 'refuted:' + (d.dispositionDetail?.reason || '').slice(0, 80),
+      disposition: d.disposition, dispositionDetail: d.dispositionDetail,
+    });
+  } catch (e) { _annotatorErrors.push({ phase: 'applyDispositions', err: String((e && e.message) || e) }); }
   // Same ordering fix as annotateVerifierVerdicts above: annotateConfidence
   // (~8111) computes f.confidence before f.unvalidated exists on any
   // finding, so its 0.85x "LLM validator unavailable" penalty could never
@@ -11376,6 +11439,12 @@ function _deterministicFileTimings(timings) {
         ...(() => { const a = configuredAdvisoryDb(scanRoot); return { advisoryDb: a.db, advisoryReason: a.db ? null : a.reason }; })(),
         policyExcluded,
         sizeSkipped,
+        deepEnabled: _deepEnabled,
+        scanRoot,
+        ...(() => { const o = parseHaskellBudgetOverrides(env.AGENTIC_SECURITY_HASKELL_PARSE_BUDGETS); return { parseBudgets: o.budgets, parseBudgetRejected: o.rejected }; })(),
+        projectModels: _projectModels,
+        sourceMap: haskellSourceMap,
+        ruleRuns: { ..._hsRuleRuns, 'ir-taint': { ran: _deepEnabled, findings: finalFindings.filter((f) => f && f.parser === 'IR-TAINT' && /\.l?hs$/i.test(f.file || '')).length }, 'hs-sca': { ran: true } },
         supplyGaps: _languageSupplyGaps,
         licenseUnavailable: ((_languageBom && _languageBom.components) || []).filter((c) => c && !c.license && !(Array.isArray(c.licenses) && c.licenses.length)).length,
         optional: { 'nix-eval': { selected: env.AGENTIC_SECURITY_NIX_EVAL === '1', result: _nixEvalResult }, 'cabal-plan': { selected: false }, 'hackage-live': liveFeedOptionalState(env)},
@@ -11410,7 +11479,18 @@ function _deterministicFileTimings(timings) {
   setDetectorTimingSink(null);
   attributeErrors(_tel, { annotatorErrors: _annotatorErrors, detectorErrors: (typeof _detectorErrors !== 'undefined' ? _detectorErrors : []), deepFailure: _deepFailure, filesTimedOut: (_scanMeta && _scanMeta.filesTimedOut) || 0 });
   _tel.set('files.scanned', (_scanMeta && _scanMeta.filesScanned) || 0); _tel.set('files.skipped', (_scanMeta && _scanMeta.filesSkipped) || 0);
-  return{telemetry:_tel.snapshot(),entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance};}
+  try { unregisterProjectCatalogEntries(scanRoot); } catch (_) {}
+  return{telemetry:_tel.snapshot(),entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance,dispositionCounts:_dispositionCounts,groupedClaims:_groupedClaims,candidateReconciliation:_candidateReconciliation};}
+
+// A scan runs inside its own owner scope, so project-declared catalog entries registered for one root are matched only by the scan of that
+// root, even when scans overlap in one process, and are removed on every exit, including a thrown error.
+async function runFullScan(args = {}, setProgress) {
+  const owner = args.scanRoot ?? null;
+  return scanOwner.run(owner, async () => {
+    try { return await _runFullScanBody(args, setProgress); }
+    finally { try { unregisterProjectCatalogEntries(owner); } catch (_) {} }
+  });
+}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

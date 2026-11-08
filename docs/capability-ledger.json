@@ -487,6 +487,7 @@
         "docs/walkthroughs/finding-evidence.md",
         "docs/guides/finding-provenance.md",
         "docs/reference/finding-provenance-contract.md",
+        "docs/reference/evidence-record.md",
         "docs/workflows/one-findings-journey.md"
       ],
       "haskell": {
@@ -926,7 +927,8 @@
       "title": "CI setup, severity and assurance gates, predeploy gate",
       "sources": [
         "docs/guides/ci-setup.md",
-        "docs/workflows/ci-gating.md"
+        "docs/workflows/ci-gating.md",
+        "docs/reference/workflow-analysis.md"
       ],
       "haskell": {
         "applicability": "applicable",

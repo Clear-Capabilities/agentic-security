@@ -264,6 +264,18 @@ jobs:
         timeout-minutes: 15
       - run: ghc --version && cabal --version
         timeout-minutes: 5
+      # GHC 9.4.8's bindist asks for -fuse-ld=gold, and Ubuntu 26.04's binutils no longer ships ld.gold, so every C link (hsc2hs for zlib
+      # first) failed with "cannot find 'ld'". The flag is in the hsc2hs wrapper's HSC2HS_EXTRA as well as the settings file, so every text
+      # file under the GHC install is rewritten. Fail if the flag stays.
+      - name: Link with the default linker when ld.gold is absent
+        run: |
+          command -v ld.gold && exit 0
+          root="$(cd "$(ghc --print-libdir)/../../.." && pwd)"
+          files=$(grep -rlI -e '-fuse-ld=gold' "$root" || true)
+          echo "rewriting: ${files:-none}"
+          [ -z "$files" ] || sudo sed -i 's/-fuse-ld=gold//g' $files
+          if grep -rqI -e '-fuse-ld=gold' "$root"; then echo "::error::-fuse-ld=gold is still under $root" >&2; exit 1; fi
+        timeout-minutes: 2
       # The package build below is most of this job's time. Restoring the cabal store makes the install fast on a hit. The default package
       # environment (~/.ghc) is NOT cached: a restored one makes `cabal install --lib` refuse to overwrite packages it already lists (0.195.2). The key names the compiler, the cabal version and the index state, so a change to any of them rebuilds.
       - name: Restore the cabal store
