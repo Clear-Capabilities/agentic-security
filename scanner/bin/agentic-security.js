@@ -739,14 +739,18 @@ async function cmdScan(args) {
   // normal one-shot scan.
   if (args.flags['watch']) {
     process.env.AGENTIC_SECURITY_INCREMENTAL = '1';
-    const { watchProject, computeDelta, persistStatus, renderStatusLine } = await import('../src/posture/watch-mode.js');
+    const { watchProject, computeDelta, persistStatus, renderStatusLine, createScopeFilter } = await import('../src/posture/watch-mode.js');
     process.stderr.write(`[watch] scanning ${targetAbs} on change — Ctrl-C to stop. Status → .agentic-security/watch-status.md\n`);
-    const seed = await runScan(targetAbs, { onProgress: scanProgressReporter() });
+    // The scope flags apply to the first scan, every rescan and the watcher itself (PRD FR 01): the watcher asks the same
+    // inventory, so an ignored file never triggers a rescan and an eligible one always does.
+    const _watchScoped = scopeFlags.active || process.env.AGENTIC_SECURITY_GIT_SCOPE === '1';
+    const _watchScanOpts = scopeFlags.active ? { gitScope: true, scope: scopeFlags.scope } : {};
+    const seed = await runScan(targetAbs, { onProgress: scanProgressReporter(), ..._watchScanOpts });
     clearScanProgressLine();
     let prevFindings = seed.scan.findings || [];
     await watchProject(targetAbs, async () => {
       try {
-        const { scan } = await runScan(targetAbs, { onProgress: scanProgressReporter() });
+        const { scan } = await runScan(targetAbs, { onProgress: scanProgressReporter(), ..._watchScanOpts });
         clearScanProgressLine();
         const curr = scan.findings || [];
         const delta = computeDelta(prevFindings, curr);
@@ -756,7 +760,7 @@ async function cmdScan(args) {
       } catch (e) {
         process.stderr.write(`[watch] rescan failed: ${e.message}\n`);
       }
-    });
+    }, _watchScoped ? { isEligible: createScopeFilter(targetAbs, scopeFlags.active ? scopeFlags.scope : {}) } : {});
     return 0; // watchProject blocks until aborted
   }
 
