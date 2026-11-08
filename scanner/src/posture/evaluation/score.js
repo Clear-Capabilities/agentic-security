@@ -17,6 +17,10 @@
 // (`clusterAlerts`) score once and are reported in `alertsCollapsed`; the operational
 // alert burden is report.js's job and is never hidden by this. The score also carries
 // `perTarget` tallies, which is what the grouped bootstrap resamples. Pure: no fs, no clock.
+//
+// Every enrolled label is reconciled to exactly one status (threat-model PRD FR-09.2), so the original denominator survives whatever the
+// run did: a positive is tp, fn, outside-run or not-adjudicated; a negative is tp-free by construction and is tn, fp, scan-failed,
+// outside-run or not-adjudicated. `reconciliation.reconciled` is true only when the statuses add up to the enrolled count.
 
 import { SCHEMA_VERSION } from '../assurance/schema-kit.js';
 import { digestOf } from '../assurance/identity.js';
@@ -82,7 +86,9 @@ export function scoreRun({ run, protocol, defects = [], negatives = [] }) {
 
   const e2e = { lang: {}, family: {} }; const cond = { lang: {}, family: {} };
   const misses = []; const falsePositives = []; const negativeFailures = []; const matchedFinding = new Set();
-  const unscored = { unlabeledTargets: [], nonAdjudicatedLabels: 0, unlabeledFindings: { count: 0, byReason: {} }, positivesOutsideRun: 0 };
+  const unscored = { unlabeledTargets: [], nonAdjudicatedLabels: 0, unlabeledFindings: { count: 0, byReason: {} }, positivesOutsideRun: 0, negativesOutsideRun: 0 };
+  const recon = [];
+  const settle = (l, kind, status, reason = null) => recon.push({ labelId: l?.id ?? null, kind, status, ...(reason ? { reason } : {}) });
   const queue = [];
 
   const labelledTargets = new Set();
@@ -92,14 +98,15 @@ export function scoreRun({ run, protocol, defects = [], negatives = [] }) {
     if (!perTarget[targetId]) perTarget[targetId] = { language, tp: 0, fn: 0, fp: 0, tn: 0 };
     perTarget[targetId][field] += n;
   };
-  const scoreable = (l) => {
+  const scoreable = (kind) => (l) => {
     if (isScoreable(l)) return true;
     unscored.nonAdjudicatedLabels++;
+    settle(l, kind, 'not-adjudicated');
     return false;
   };
 
-  for (const l of defects.filter(scoreable)) {
-    if (!inRun.has(l.targetId)) { unscored.positivesOutsideRun++; continue; }
+  for (const l of defects.filter(scoreable('positive'))) {
+    if (!inRun.has(l.targetId)) { unscored.positivesOutsideRun++; settle(l, 'positive', 'outside-run'); continue; }
     labelledTargets.add(l.targetId);
     const o = outcomeOf.get(`${l.targetId}|pre`);
     const completed = o?.status === 'completed';
@@ -108,21 +115,25 @@ export function scoreRun({ run, protocol, defects = [], negatives = [] }) {
       matchedFinding.add(`${l.targetId}|pre|${findingKey(hit)}`);
       for (const [m, k] of [[e2e.lang, l.language], [e2e.family, l.family], [cond.lang, l.language], [cond.family, l.family]]) bump(m, k, 'tp');
       tally(l.targetId, l.language, 'tp');
+      settle(l, 'positive', 'tp');
     } else {
       const reason = !o ? 'no-outcome' : completed ? 'not-detected' : o.status;
       misses.push({ labelId: l.id, targetId: l.targetId, reason, detail: o?.failureReason || null });
+      settle(l, 'positive', 'fn', reason);
       for (const [m, k] of [[e2e.lang, l.language], [e2e.family, l.family]]) bump(m, k, 'fn');
       tally(l.targetId, l.language, 'fn');
       if (completed) for (const [m, k] of [[cond.lang, l.language], [cond.family, l.family]]) bump(m, k, 'fn');
     }
   }
 
-  for (const n of negatives.filter(scoreable)) {
-    if (!inRun.has(n.targetId)) continue;
+  for (const n of negatives.filter(scoreable('negative'))) {
+    // a negative the run never reached is counted, not dropped: it leaves the denominator only with its reason
+    if (!inRun.has(n.targetId)) { unscored.negativesOutsideRun++; settle(n, 'negative', 'outside-run'); continue; }
     labelledTargets.add(n.targetId);
     const o = outcomeOf.get(`${n.targetId}|${n.variant}`);
     if (o?.status !== 'completed') {
       negativeFailures.push({ labelId: n.id, targetId: n.targetId, variant: n.variant, reason: o?.status || 'no-outcome', detail: o?.failureReason || null });
+      settle(n, 'negative', 'scan-failed', o?.status || 'no-outcome');
       continue;
     }
     const hits = new Map();
@@ -138,9 +149,11 @@ export function scoreRun({ run, protocol, defects = [], negatives = [] }) {
       for (const c of clusters) falsePositives.push({ labelId: n.id, targetId: n.targetId, kind: n.kind, finding: { file: c.members[0].file, line: c.members[0].line, family: c.family }, alertsCollapsed: c.members.length });
       for (const [m, k] of [[e2e.lang, n.language], [e2e.family, n.family], [cond.lang, n.language], [cond.family, n.family]]) { for (let i = 0; i < clusters.length; i++) bump(m, k, 'fp'); }
       tally(n.targetId, n.language, 'fp', clusters.length);
+      settle(n, 'negative', 'fp');
     } else {
       for (const [m, k] of [[e2e.lang, n.language], [e2e.family, n.family], [cond.lang, n.language], [cond.family, n.family]]) bump(m, k, 'tn');
       tally(n.targetId, n.language, 'tn');
+      settle(n, 'negative', 'tn');
     }
   }
 
@@ -160,12 +173,16 @@ export function scoreRun({ run, protocol, defects = [], negatives = [] }) {
   const endToEnd = { byLanguage: finalize(e2e.lang), byFamily: finalize(e2e.family) };
   const conditional = { byLanguage: finalize(cond.lang), byFamily: finalize(cond.family) };
   const completed = run.outcomes.filter((o) => o.status === 'completed').length;
+  const byStatus = {};
+  for (const r of recon) { const k = `${r.kind}:${r.status}`; byStatus[k] = (byStatus[k] || 0) + 1; }
+  const enrolled = defects.length + negatives.length;
+  const reconciliation = { enrolled, settled: recon.length, reconciled: recon.length === enrolled, byStatus: Object.fromEntries(Object.keys(byStatus).sort().map((k) => [k, byStatus[k]])), cases: recon };
   const score = {
     schema: SCORE_SCHEMA, schemaVersion: SCHEMA_VERSION, runId: run.runId, protocolHash: run.protocolHash, split: run.split,
     endToEnd: { ...endToEnd, ...aggregate(endToEnd.byLanguage), label: 'end-to-end: failures on known positives are misses' },
     conditional: { ...conditional, ...aggregate(conditional.byLanguage), label: 'conditional on completion: additional, never a replacement' },
     completion: { outcomes: run.outcomes.length, completed, rate: rate(completed, run.outcomes.length), totals: run.totals },
-    misses, falsePositives, negativeFailures, unscored, perTarget,
+    misses, falsePositives, negativeFailures, unscored, perTarget, reconciliation,
     reviewQueue: reviewQueue(queue),
     population: populationCounts(defects, negatives),
   };

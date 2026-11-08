@@ -56,6 +56,11 @@ TypeScript, Python, Java, Kotlin, Go, Ruby, PHP, C# and Rust; Haskell and Nix ar
 - False positives are counted only on adjudicated negatives. Repeated alerts for one flaw count as one false positive for scoring,
   and the raw alert burden is reported beside it so deduplication never hides what a reviewer reads.
 - A report carries exactly one population. Nothing merges two, and a target may not appear in more than one.
+- Every enrolled label is reconciled to exactly one status, and the score says whether the statuses add up to the enrolled count
+  (`reconciliation.reconciled`).
+  - A positive is `tp`, `fn` (with its reason), `outside-run` or `not-adjudicated`.
+  - A negative is `tn`, `fp`, `scan-failed` (with its reason), `outside-run` or `not-adjudicated`.
+  - A negative whose target the run never reached is counted as `negativesOutsideRun`. It is never dropped from the count.
 
 ## Uncertainties
 

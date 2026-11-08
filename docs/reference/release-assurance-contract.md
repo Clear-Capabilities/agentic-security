@@ -175,6 +175,38 @@ The verdict is a function of the package alone: no clock and no environment, so 
 
 The local two-tenant pilot (`scanner/test/pilot/`) supplies real positive, negative and legitimate cases. Staging, owner approval and independent measurement are separate qualifications. A local result is never reported as one of them.
 
+**Evidence tiers.** Each case carries `tier`: `local` (loopback fixtures on the host that ran them, the default), `staging` (the owner-authorized staging deployment) or `independent` (an independently held population or reviewer). A gate named in `requiredTiers` (`--require-tier G-05=staging` on the command line) is met only by cases of that tier. Cases of another tier stay in the decision with their own outcome and do not count, so a pile of local detection cases never meets a staging gate. An unknown tier leaves its case unresolved. The signature covers the tier, so relabelling local evidence as staging breaks it. The decision counts cases by tier.
+
+**Detection cases.** A case with `kind: "detection"` is judged on the signal, not the effect. A positive case is met only when `observed.detected` is `true` (the right rule fired and joined the oracle's request). A negative case is met only when it is `false`. An observation that does not record whether the rule fired leaves the case unresolved.
+
+**Upgrade, rollback and expiry (FR-10.4).** A decision records the target it qualified: the artifact and policy digests, the scanner bundle and the digest of the packet it was computed from. `revalidateDecision(decision, target, {packet, now})` refuses it:
+
+- for another artifact, so an upgrade invalidates candidate-bound proof, scope and telemetry;
+- for another deployment policy or scanner bundle;
+- for a packet other than the one it was computed from;
+- once the earliest case expiry has passed;
+- when the decision was not a qualification in the first place.
+
+A rollback to an earlier artifact is covered only by that artifact's own unexpired decision. The newer artifact's evidence says nothing about it.
+
+**Compatibility.** `verifyCandidatePacket` refuses a packet from a newer or older writer with `UNSUPPORTED_VERSION`, rather than reading it with this version's meaning. A wrong schema is `FORMAT` and a bad signature is `SIGNATURE`.
+
+**Command line.** `agentic-security release-package qualify <packet.json> --public-key <pem>` verifies the packet, recomputes every gate and prints each gate's outcome and reasons. Options: `--require-case id,id`, `--require-gate G-01,G-03`, `--require-tier G-05=staging`, `--output <decision.json>` (atomic, idempotent) and `--format json`. Exit codes: 0 qualified; 1 not qualified, or the packet failed verification; 2 a usage problem or unreadable input. Ordinary scan exit codes do not change.
+
+**The local pilot run.** `node bench/threat-model-pilot/qualify.mjs [--out <dir>] [--private-key <pem>] [--scope <reconciliation.json>]` runs the pilot fixtures and writes one signed packet and one decision per deployment identity:
+
+- `records-service`: PILOT-01 to PILOT-11;
+- `export-chain`: the PILOT-12 app-to-cloud chain;
+- `records-search`: the PILOT-12 database proof.
+
+Every executed case is `local`. Three cases are recorded as `blocked`, each with its reason, never left out:
+
+- PILOT-09, the independently held variant;
+- PILOT-10, the staging sensor-loss drill;
+- PILOT-11, the workflow invariant, which executes through the trust boundary in its own suite.
+
+The runner is recorded as unattested and the population as unmeasured. On a developer host, the expected result is therefore "not qualified", with G-03 met for the export chain and the database search. The run exits 1 only when a local case is violated or unresolved, which makes it a regression check of the fixtures, not a release claim.
+
 ## What release assurance does not do
 
 <!-- limits-verified: 2026-10-19 -->

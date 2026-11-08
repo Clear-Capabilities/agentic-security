@@ -147,6 +147,7 @@ Commands:
   release-view <package.json>  Developer, CISO and auditor views of one signed release package (--view, --format text|json|html, --previous, --public-key)
   metrics [path]               Assurance Coverage, Evidence Conversion and Verified Remediation Rate for the last scan, each with numerator and denominator (--format text|json)
   release-package build|verify Build a signed release package from the last scan (--private-key, --output, --fix-records), or check one offline (--public-key)
+                               release-package qualify <packet.json> --public-key <pem>: recompute candidate gates G-01..G-07 from a signed candidate packet (exit 0 only when qualified; --require-case, --require-gate, --require-tier G-05=staging, --output, --format json)
   reset [--yes] [--keep ...]   Right-to-delete: wipe accumulated learned state under .agentic-security/ (preserves operator-authored config)
                                --expired    only remove artifacts past their retention-class TTL
                                Every run writes a deletion-report.json proving what was planned/deleted/preserved/failed.

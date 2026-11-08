@@ -107,8 +107,9 @@ export function buildAccuracyReport({ score, protocol, population, run = null, r
       unsupported: { outcomesUnavailable: statusCounts.unavailable ?? 0, outcomesQuarantined: statusCounts.quarantined ?? 0 },
       unscored: {
         unlabeledTargets: score.unscored.unlabeledTargets.length, nonAdjudicatedLabels: score.unscored.nonAdjudicatedLabels,
-        unlabeledFindings: score.unscored.unlabeledFindings.count, positivesOutsideRun: score.unscored.positivesOutsideRun,
+        unlabeledFindings: score.unscored.unlabeledFindings.count, positivesOutsideRun: score.unscored.positivesOutsideRun, negativesOutsideRun: score.unscored.negativesOutsideRun ?? 0,
       },
+      reconciliation: score.reconciliation ? { enrolled: score.reconciliation.enrolled, reconciled: score.reconciliation.reconciled, byStatus: score.reconciliation.byStatus } : null,
       unknownLabels: { count: score.unscored.nonAdjudicatedLabels, note: 'candidate, disputed or rejected labels are never scored' },
       trueNegativeFailures: { count: score.negativeFailures.length, note: 'a negative whose scan did not complete is neither a true negative nor a false positive', items: score.negativeFailures },
       reviewQueue: { count: score.reviewQueue.length, note: 'findings no adjudicated label accounts for; they may be genuine and are not counted as false positives' },

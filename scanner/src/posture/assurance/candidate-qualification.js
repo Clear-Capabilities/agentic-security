@@ -10,6 +10,13 @@
 // Outcome per case: met (the expectation held), violated (it did not), unresolved (evidence missing, stale, expired or differently
 // scoped) or blocked (a prerequisite such as an attested runner or an independent population is unavailable). Pure apart from the
 // optional signed write, which is atomic.
+//
+// Evidence tiers stay separate qualifications (PRD section 1 and section 8). Each case carries `tier`: `local` (loopback fixtures on
+// this host, the default), `staging` (the owner-authorized staging deployment) or `independent` (an independently held population or
+// reviewer). A gate the caller declares in `requiredTiers` is met only by cases of that tier: local evidence never satisfies a staging
+// or independent gate by being more of it. A decision records the target it was computed for, and `revalidateDecision` refuses it for
+// any other artifact, policy or scanner bundle, so an upgrade invalidates candidate-bound evidence and a rollback is qualified only by
+// the earlier artifact's own unexpired decision (FR-10.4).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,6 +28,7 @@ export const GATES = Object.freeze({
   'G-05': 'detection and response', 'G-06': 'independent accuracy', 'G-07': 'operability',
 });
 const EXPECT = new Set(['positive', 'negative', 'legitimate']);
+const TIERS = new Set(['local', 'staging', 'independent']);
 const DOMAIN = `${CANDIDATE_SCHEMA}@1\n`;
 const canon = (v) => {
   if (v === null || typeof v !== 'object') return JSON.stringify(v ?? null);
@@ -37,7 +45,9 @@ export function signCandidatePacket(packet, privateKeyPem) {
   return { ...body, signature: crypto.sign(null, Buffer.from(DOMAIN + canon(body)), privateKeyPem).toString('base64') };
 }
 export function verifyCandidatePacket(packet, publicKeyPem) {
-  if (!packet || packet.schema !== CANDIDATE_SCHEMA || packet.version !== CANDIDATE_VERSION) return { ok: false, code: 'FORMAT' };
+  if (!packet || packet.schema !== CANDIDATE_SCHEMA) return { ok: false, code: 'FORMAT' };
+  // a packet from a newer or older writer is refused by name, never read with this version's meaning
+  if (packet.version !== CANDIDATE_VERSION) return { ok: false, code: 'UNSUPPORTED_VERSION', version: packet.version ?? null };
   const { signature, ...body } = packet;
   try { return crypto.verify(null, Buffer.from(DOMAIN + canon(body)), publicKeyPem, Buffer.from(String(signature), 'base64')) ? { ok: true, code: 'VERIFIED' } : { ok: false, code: 'SIGNATURE' }; } catch { return { ok: false, code: 'SIGNATURE' }; }
 }
@@ -49,6 +59,7 @@ function judgeCase(c, packet, now) {
   for (const k of ['caseId', 'requirement', 'gate', 'expected', 'verdict', 'owner', 'expires']) if (c[k] === undefined || c[k] === null || c[k] === '') miss.push(k);
   if (miss.length) return { outcome: 'unresolved', reason: `missing ${miss.join(', ')}`, owner: c.owner ?? null };
   if (!GATES[c.gate] || !EXPECT.has(c.expected)) return { outcome: 'unresolved', reason: 'unknown gate or expectation' };
+  if (c.tier !== undefined && !TIERS.has(c.tier)) return { outcome: 'unresolved', reason: 'unknown evidence tier' };
   if (c.blocked) return { outcome: 'blocked', reason: String(c.blocked) };
   if (!(Date.parse(c.expires) > now)) return { outcome: 'unresolved', reason: 'the evidence has expired' };
   if (c.artifactDigest && t.artifactDigest && c.artifactDigest !== t.artifactDigest) return { outcome: 'unresolved', reason: 'the evidence was produced against another artifact' };
@@ -58,6 +69,13 @@ function judgeCase(c, packet, now) {
   const o = c.observed;
   if (!o || typeof o !== 'object') return { outcome: 'unresolved', reason: 'no observation is recorded' };
   // the observation and the expectation stay separately inspectable; met/violated is derived, not asserted
+  if (c.kind === 'detection') {
+    // a detection case judges the signal, not the effect: positive means the rule must fire, negative that it must stay quiet,
+    // and an observation that does not say whether the rule fired leaves the case open
+    if (typeof o.detected !== 'boolean') return { outcome: 'unresolved', reason: 'the observation does not record whether the detection fired' };
+    if (c.expected === 'positive') return o.detected ? { outcome: 'met', reason: 'the detection fired on the reproduced effect' } : { outcome: 'violated', reason: 'the detection missed the reproduced effect' };
+    return o.detected ? { outcome: 'violated', reason: 'the detection fired where it must not' } : { outcome: 'met', reason: 'the detection stayed quiet where it must' };
+  }
   const forbidden = o.forbiddenEffect === true; const legit = o.legitimateEffect === true;
   if (c.expected === 'positive') return forbidden ? { outcome: 'met', reason: 'the vulnerable control reproduced the forbidden effect' } : { outcome: 'violated', reason: 'the vulnerable control did not reproduce the effect, so the fixture shows nothing' };
   if (c.expected === 'negative') return forbidden ? { outcome: 'violated', reason: 'the forbidden effect occurred on the fixed artifact' } : { outcome: 'met', reason: 'no forbidden effect' };
@@ -67,11 +85,11 @@ function judgeCase(c, packet, now) {
 /**
  * Recompute every gate from the packet's evidence.
  * @param {object} packet
- * @param {{requiredGates?:string[], requiredCases?:string[], now?:number, maxFeedAgeMs?:number}} o
- * @returns {{status:'qualified'|'not-qualified', gates:object, cases:object[], blockers:object[]}}
+ * @param {{requiredGates?:string[], requiredCases?:string[], requiredTiers?:Object<string,string>, now?:number, maxFeedAgeMs?:number}} o
+ * @returns {{status:'qualified'|'not-qualified', gates:object, cases:object[], blockers:object[], tiers:object}}
  */
-export function evaluateCandidate(packet, { requiredGates = Object.keys(GATES), requiredCases = [], now = Date.now(), maxFeedAgeMs = 15 * 60 * 1000 } = {}) {
-  const cases = (packet.cases || []).map((c) => ({ caseId: c.caseId ?? null, gate: c.gate ?? null, requirement: c.requirement ?? null, owner: c.owner ?? null, ...judgeCase(c, packet, now) }));
+export function evaluateCandidate(packet, { requiredGates = Object.keys(GATES), requiredCases = [], requiredTiers = {}, now = Date.now(), maxFeedAgeMs = 15 * 60 * 1000 } = {}) {
+  const cases = (packet.cases || []).map((c) => ({ caseId: c.caseId ?? null, gate: c.gate ?? null, requirement: c.requirement ?? null, owner: c.owner ?? null, tier: c.tier ?? 'local', ...judgeCase(c, packet, now) }));
   const blockers = [];
   for (const id of requiredCases) if (!cases.some((c) => c.caseId === id)) { cases.push({ caseId: id, gate: null, outcome: 'unresolved', reason: 'a required case has no record' }); blockers.push({ gate: null, caseId: id, reason: 'missing required case' }); }
   // gate-level evidence that is not a case
@@ -86,17 +104,44 @@ export function evaluateCandidate(packet, { requiredGates = Object.keys(GATES), 
   }
   const gates = {};
   for (const g of requiredGates) {
-    const mine = cases.filter((c) => c.gate === g);
+    const need = requiredTiers[g];
+    const ofGate = cases.filter((c) => c.gate === g);
+    // a case of another tier is reported, but it cannot meet a gate that names its tier
+    const mine = need ? ofGate.filter((c) => c.tier === need) : ofGate;
     const rank = { violated: 3, blocked: 2, unresolved: 1, met: 0 };
     let worst = mine.reduce((w, c) => (rank[c.outcome] > rank[w] ? c.outcome : w), 'met');
     const reasons = mine.filter((c) => c.outcome !== 'met').map((c) => `${c.caseId}: ${c.reason}`);
     if (extra[g]) { if (rank[extra[g].outcome] > rank[worst]) worst = extra[g].outcome; reasons.push(extra[g].reason); }
     // no evidence is not a pass: a gate with no case and no gate-level evidence stays unresolved
-    if (!mine.length && !extra[g] && !(g === 'G-02' && packet.scope?.status === 'satisfied') && !(g === 'G-04' && packet.runner?.attested === true) && !(g === 'G-06' && ev?.status === 'measured')) { worst = 'unresolved'; reasons.push('no evidence for this gate'); }
+    if (need && !mine.length) { worst = rank[worst] > rank.unresolved ? worst : 'unresolved'; reasons.push(`no ${need} evidence for this gate${ofGate.length ? ` (${ofGate.length} case(s) of another tier do not count)` : ''}`); }
+    else if (!mine.length && !extra[g] && !(g === 'G-02' && packet.scope?.status === 'satisfied') && !(g === 'G-04' && packet.runner?.attested === true) && !(g === 'G-06' && ev?.status === 'measured')) { worst = 'unresolved'; reasons.push('no evidence for this gate'); }
     gates[g] = { name: GATES[g], outcome: worst, reasons };
     if (worst !== 'met') blockers.push({ gate: g, reason: reasons.join('; ') });
   }
-  return { status: blockers.length ? 'not-qualified' : 'qualified', scope: packet.target ? { ...packet.target } : null, gates, cases, blockers };
+  const tiers = { local: 0, staging: 0, independent: 0 };
+  for (const c of cases) if (tiers[c.tier] !== undefined) tiers[c.tier]++;
+  return { status: blockers.length ? 'not-qualified' : 'qualified', scope: packet.target ? { ...packet.target } : null, scannerBundle: packet.scanner?.bundleDigest ?? null, packetDigest: packetDigest(packet), gates, cases, blockers, tiers };
+}
+
+/**
+ * Is a recorded decision still the decision for this target? A decision qualifies only the artifact, policy and scanner bundle it was
+ * computed for and only until its earliest case expiry, so an upgrade or policy change invalidates it and a rollback is covered only by
+ * the earlier artifact's own decision.
+ * @param {object} decision  an `evaluateCandidate` result
+ * @param {{artifactDigest?:string, policyDigest?:string, scannerBundle?:string}} target
+ */
+export function revalidateDecision(decision, target, { packet = null, now = Date.now() } = {}) {
+  if (!decision || typeof decision !== 'object' || !decision.scope) return { valid: false, reason: 'no recorded decision scope' };
+  if (decision.status !== 'qualified') return { valid: false, reason: 'the recorded decision did not qualify the candidate' };
+  if (!target || !target.artifactDigest || decision.scope.artifactDigest !== target.artifactDigest) return { valid: false, reason: 'the artifact differs from the one the decision qualified' };
+  if (decision.scope.policyDigest && decision.scope.policyDigest !== target.policyDigest) return { valid: false, reason: 'the deployment policy differs from the one the decision qualified' };
+  if (decision.scannerBundle && target.scannerBundle && decision.scannerBundle !== target.scannerBundle) return { valid: false, reason: 'the scanner bundle differs from the one the decision qualified' };
+  if (packet) {
+    if (packetDigest(packet) !== decision.packetDigest) return { valid: false, reason: 'the packet is not the one the decision was computed from' };
+    const soonest = Math.min(...(packet.cases || []).map((c) => Date.parse(c.expires)).filter(Number.isFinite));
+    if (Number.isFinite(soonest) && !(soonest > now)) return { valid: false, reason: 'evidence the decision rests on has expired' };
+  }
+  return { valid: true, reason: 'the decision covers this artifact, policy and scanner bundle' };
 }
 
 /** Write a decision atomically; an identical retried write leaves the same bytes. */

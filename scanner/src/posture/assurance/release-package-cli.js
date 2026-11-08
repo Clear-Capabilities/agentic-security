@@ -2,9 +2,16 @@
 //
 //   release-package build [path] --private-key <pem> [--output <file>] [--fix-records <file>] [--public-key-out <file>]
 //   release-package verify <package.json> --public-key <pem> [--require kind,kind]
+//   release-package qualify <candidate-packet.json> --public-key <pem> [--require-case id,id] [--require-gate G-01,G-03]
+//                           [--require-tier G-05=staging,...] [--output <decision.json>] [--format text|json]
+//
+// `qualify` is the strict candidate qualification of the threat-model PRD (FR-10.3): it verifies the packet's signature, recomputes
+// every gate from the case evidence (`candidate-qualification.js`) and exits 0 only when the candidate is qualified. It never changes
+// what an ordinary scan exits with.
 //
 // `io.git(root, ...args)` answers a read-only git query (or null); the caller supplies it so this layer never spawns a process itself.
-// Exit codes: 0 built or verified; 1 the scan state failed its integrity check, or a package was rejected; 2 a usage problem or unreadable input.
+// Exit codes: 0 built, verified or qualified; 1 the scan state failed its integrity check, a package was rejected or a candidate was not
+// qualified; 2 a usage problem or unreadable input.
 //
 // What goes in: the scan's health record and one record per finding (and, with --fix-records, one verification record per fix claimed). The proof tier of a
 // finding is whatever the scan recorded; a finding that recorded none is `taint-proven` when the taint engine found its path and `unproven` otherwise. An
@@ -18,8 +25,9 @@ import { buildSnapshotRef } from './evidence-registry.js';
 import { buildReleasePackage, signReleasePackage } from './release-package.js';
 import { releaseVerdict, verifyStatedVerdict } from './release-verdict.js';
 import { verifyReleasePackage } from './release-package-verify.js';
+import { evaluateCandidate, verifyCandidatePacket, writeCandidateDecision, GATES } from './candidate-qualification.js';
 
-const USAGE = 'Usage: agentic-security release-package build [path] --private-key <pem> [--output <file>] [--fix-records <file>] [--public-key-out <file>]\n       agentic-security release-package verify <package.json> --public-key <pem> [--require kind,kind]';
+const USAGE = 'Usage: agentic-security release-package build [path] --private-key <pem> [--output <file>] [--fix-records <file>] [--public-key-out <file>]\n       agentic-security release-package verify <package.json> --public-key <pem> [--require kind,kind]\n       agentic-security release-package qualify <candidate-packet.json> --public-key <pem> [--require-case id,id] [--require-gate G-01,G-03] [--require-tier G-05=staging] [--output <decision.json>] [--format text|json]';
 const DEFAULT_OUT = 'release-package.json';
 
 
@@ -104,11 +112,45 @@ async function verify(args, say) {
   return 1;
 }
 
+const listFlag = (v) => String(v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+
+async function qualify(args, say) {
+  const file = args._[2];
+  const keyFile = args.flags['public-key'];
+  if (!file || !keyFile) { say.err(USAGE); return 2; }
+  let packet; let key;
+  try { packet = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8')); key = fs.readFileSync(path.resolve(String(keyFile)), 'utf8'); } catch (e) { say.err(`Could not read the input: ${e.message}`); return 2; }
+  const requiredGates = args.flags['require-gate'] ? listFlag(args.flags['require-gate']) : Object.keys(GATES);
+  const unknown = requiredGates.filter((g) => !GATES[g]);
+  if (unknown.length) { say.err(`Unknown gate: ${unknown.join(', ')}. Gates: ${Object.keys(GATES).join(', ')}.`); return 2; }
+  const requiredTiers = {};
+  for (const pair of listFlag(args.flags['require-tier'])) {
+    const [g, t] = pair.split('=');
+    if (!GATES[g] || !['local', 'staging', 'independent'].includes(t)) { say.err(`--require-tier takes gate=tier pairs (tier local, staging or independent), got ${pair}`); return 2; }
+    requiredTiers[g] = t;
+  }
+  const sig = verifyCandidatePacket(packet, key);
+  if (!sig.ok) { say.err(`${sig.code}: the candidate packet ${sig.code === 'UNSUPPORTED_VERSION' ? `has version ${sig.version}, which this scanner does not read` : 'did not verify under the given key'}`); say.err('candidate NOT QUALIFIED'); return 1; }
+  const d = evaluateCandidate(packet, { requiredGates, requiredCases: listFlag(args.flags['require-case']), requiredTiers });
+  if (args.flags.output) {
+    try { writeCandidateDecision(path.resolve(String(args.flags.output)), d); } catch (e) { say.err(`Could not write the decision: ${e.message}`); return 2; }
+  }
+  if (args.flags.format === 'json') say.out(JSON.stringify(d, null, 2));
+  else {
+    const t = d.scope || {};
+    say.out(`candidate ${d.status === 'qualified' ? 'QUALIFIED' : 'NOT QUALIFIED'} for ${t.service || t.repository || 'an unnamed target'} artifact ${String(t.artifactDigest || 'unbound').slice(0, 19)} (${t.deploymentProfile || 'no profile'})`);
+    for (const [g, x] of Object.entries(d.gates)) say.out(`  ${g} ${x.name}: ${x.outcome}${x.reasons.length ? ` (${x.reasons.join('; ')})` : ''}`);
+    say.out(`  cases by tier: local ${d.tiers.local}, staging ${d.tiers.staging}, independent ${d.tiers.independent}`);
+  }
+  return d.status === 'qualified' ? 0 : 1;
+}
+
 export async function cmdReleasePackage(args, io = {}) {
   const say = { out: io.out || ((s) => console.log(s)), err: io.err || ((s) => console.error(s)) };
   const sub = args._[1];
   if (sub === 'build') return build(args, say, io.git || (() => null));
   if (sub === 'verify') return verify(args, say);
+  if (sub === 'qualify') return qualify(args, say);
   say.err(USAGE);
   return 2;
 }

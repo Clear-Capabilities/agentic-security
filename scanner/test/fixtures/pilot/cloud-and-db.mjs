@@ -67,6 +67,9 @@ export async function startCloudChain({ policy }) {
   return { url: `http://127.0.0.1:${server.address().port}`, policyDigest: policyDigest(policy), close: () => new Promise((r) => server.close(r)) };
 }
 
+/** The export service's artifact identity: the digest of its handler and its store's evaluator. */
+export const cloudArtifactDigest = () => digest(`${startCloudChain.toString()}\n${storeDecides.toString()}`);
+
 export const DB_APPS = {
   vulnerable: (db, tenant, name) => db.prepare(`SELECT marker FROM records WHERE tenant = '${tenant}' AND name = '${name}' LIMIT 10`).all(),
   fixed: (db, tenant, name) => db.prepare('SELECT marker FROM records WHERE tenant = ? AND name = ? LIMIT 10').all(tenant, name),
