@@ -69,7 +69,7 @@ const real = (p) => { try { return realpathSync(p); } catch { return resolve(p);
  * The sandboxed command for a backend. Reads are an ALLOWLIST (the listed roots, system library paths and the
  * evaluator); writes are an allowlist of one scratch directory; network and process creation are denied.
  * @param {{backend:string, path?:string}} sb
- * @param {{execFile:string, args:string[], readOnly:string[], readFiles?:string[], writable:string[], cwd:string}} spec
+ * @param {{execFile:string, args:string[], readOnly:string[], readFiles?:string[], writable:string[], cwd:string, env?:Record<string,string>}} spec
  */
 export function sandboxCommand(sb, spec) {
   const ro = [...new Set(spec.readOnly.map(real))];
@@ -92,34 +92,94 @@ export function sandboxCommand(sb, spec) {
     for (const p of ro) a.push('--ro-bind', p, p);
     for (const p of files) a.push('--ro-bind', p, p);
     for (const p of rw) a.push('--bind', p, p);
+    // --clearenv empties the environment bwrap itself was given, so the clean one is set explicitly inside.
+    for (const [k, v] of Object.entries(spec.env || {})) a.push('--setenv', k, String(v));
+    // Namespaces do not stop process creation; the seccomp filter does. Before it, a sandboxed process could spawn anything the
+    // read-only binds expose (found the first time a CI runner had bwrap installed). On an architecture with no filter there is
+    // none, and the probe then reports the spawn and refuses to evaluate.
+    const seccomp = seccompNoProcesses(sb.arch || process.arch);
+    if (seccomp) a.push('--seccomp', '3');
     a.push('--chdir', spec.cwd, exec, ...spec.args);
-    return { file: sb.path, args: a, profile: null };
+    return { file: sb.path, args: a, profile: null, fd3: seccomp };
   }
   return null;
 }
 
+// ── seccomp: threads yes, processes no ──────────────────────────────────────
+// A classic-BPF seccomp program, as `bwrap --seccomp FD` reads it (struct sock_filter, native little-endian). It denies fork and vfork,
+// denies clone unless CLONE_THREAD is set (so pthread_create works and posix_spawn, fork and vfork through clone do not), answers clone3
+// with ENOSYS (its flags are behind a pointer a filter cannot read; glibc then falls back to clone), denies x32 syscalls, and kills a
+// process that switches to another syscall ABI.
+const SECCOMP_ARCH = {
+  x64: { audit: 0xc000003e, clone: 56, clone3: 435, deny: [57, 58], x32: true },
+  arm64: { audit: 0xc00000b7, clone: 220, clone3: 435, deny: [], x32: false },
+};
+const CLONE_THREAD = 0x10000;
+export function seccompNoProcesses(arch) {
+  const A = SECCOMP_ARCH[arch];
+  if (!A) return null;
+  const LD = 0x20, JEQ = 0x15, JGE = 0x35, JSET = 0x45, RET = 0x06;
+  const ALLOW = 0x7fff0000, EPERM = 0x00050000 | 1, ENOSYS = 0x00050000 | 38, KILL = 0x80000000;
+  // Instructions with symbolic jump targets, resolved to relative offsets below.
+  const prog = [
+    [LD, 0, 0, 4],                                         // arch
+    [JEQ, null, 'kill', A.audit],
+    [LD, 0, 0, 0],                                         // syscall number
+    ...(A.x32 ? [[JGE, 'eperm', null, 0x40000000]] : []),
+    [JEQ, 'enosys', null, A.clone3],
+    ...A.deny.map((nr) => [JEQ, 'eperm', null, nr]),
+    [JEQ, null, 'allow', A.clone],
+    [LD, 0, 0, 16],                                        // clone flags, args[0] low word
+    [JSET, 'allow', 'eperm', CLONE_THREAD],
+    ['allow', RET, ALLOW], ['eperm', RET, EPERM], ['enosys', RET, ENOSYS], ['kill', RET, KILL],
+  ];
+  const at = {};
+  prog.forEach((ins, i) => { if (typeof ins[0] === 'string') at[ins[0]] = i; });
+  const buf = Buffer.alloc(prog.length * 8);
+  prog.forEach((ins, i) => {
+    const [code, jt, jf, k] = typeof ins[0] === 'string' ? [ins[1], 0, 0, ins[2]] : ins;
+    const rel = (t) => (t === null || t === 0 ? 0 : at[t] - i - 1);
+    buf.writeUInt16LE(code, i * 8); buf.writeUInt8(rel(jt), i * 8 + 2); buf.writeUInt8(rel(jf), i * 8 + 3); buf.writeUInt32LE(k >>> 0, i * 8 + 4);
+  });
+  return buf;
+}
+
 // ── process supervisor ───────────────────────────────────────────────────────
-function rssOfGroup(pgid) {
-  const r = spawnSync('/bin/ps', ['-o', 'rss=', '-g', String(pgid)], { encoding: 'utf8', timeout: 2000 });
+// The memory of the whole process tree under `root`, in MB. Not the process group: bwrap's --new-session puts the sandboxed process in
+// a session and group of its own, so a group sum never saw the evaluator on Linux.
+function rssOfTree(root) {
+  const r = spawnSync('/bin/ps', ['-A', '-o', 'pid=,ppid=,rss='], { encoding: 'utf8', timeout: 2000 });
   if (r.status !== 0) return 0;
-  return r.stdout.split('\n').map((x) => parseInt(x, 10)).filter(Number.isFinite).reduce((a, b) => a + b, 0) / 1024;
+  const kids = new Map(); const rss = new Map();
+  for (const line of r.stdout.split('\n')) {
+    const [pid, ppid, kb] = line.trim().split(/\s+/).map((x) => parseInt(x, 10));
+    if (!Number.isFinite(pid) || !Number.isFinite(ppid)) continue;
+    rss.set(pid, Number.isFinite(kb) ? kb : 0);
+    if (!kids.has(ppid)) kids.set(ppid, []);
+    kids.get(ppid).push(pid);
+  }
+  let total = 0; const seen = new Set(); const stack = [root];
+  while (stack.length) { const p = stack.pop(); if (seen.has(p)) continue; seen.add(p); total += rss.get(p) || 0; stack.push(...(kids.get(p) || [])); }
+  return total / 1024;
 }
 function killGroup(pid, sig) { try { process.kill(-pid, sig); } catch { try { process.kill(pid, sig); } catch { /* gone */ } } }
 
 /** Run a command to completion under a deadline, an output cap and a memory ceiling. Never throws. */
-export function supervise(file, args, { env, cwd, deadlineMs, maxOutputBytes, maxRssMb, killGraceMs = 1500 }) {
+export function supervise(file, args, { env, cwd, deadlineMs, maxOutputBytes, maxRssMb, killGraceMs = 1500, fd3 = null }) {
   return new Promise((resolveP) => {
     const t0 = Date.now();
     let child;
-    try { child = spawn(file, args, { env, cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    try { child = spawn(file, args, { env, cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe', ...(fd3 ? ['pipe'] : [])] }); }
     catch (e) { return resolveP({ status: 'failed', reason: `could not start: ${e.message}`, stdout: '', stderr: '', exitCode: null, signal: null, ms: 0 }); }
+    // fd 3 carries the seccomp program to bwrap; a child that exits before reading it closes the pipe, which is not an error here.
+    if (fd3) { child.stdio[3].on('error', () => {}); child.stdio[3].end(fd3); }
     let out = ''; let err = ''; let bytes = 0; let state = null; let done = false;
     const finish = (extra = {}) => { if (done) return; done = true; clearInterval(poll); clearTimeout(dl); resolveP({ stdout: out, stderr: err.slice(0, 4000), ms: Date.now() - t0, ...extra }); };
     const stop = (why) => { if (state) return; state = why; killGroup(child.pid, 'SIGTERM'); setTimeout(() => killGroup(child.pid, 'SIGKILL'), killGraceMs).unref(); };
     child.stdout.on('data', (d) => { bytes += d.length; if (bytes > maxOutputBytes) { stop('output-limit'); return; } out += d.toString('utf8'); });
     child.stderr.on('data', (d) => { if (err.length < 8000) err += d.toString('utf8'); });
     const dl = setTimeout(() => stop('timed-out'), deadlineMs);
-    const poll = setInterval(() => { if (!state && maxRssMb && rssOfGroup(child.pid) > maxRssMb) stop('resource-limit'); }, 250);
+    const poll = setInterval(() => { if (!state && maxRssMb && rssOfTree(child.pid) > maxRssMb) stop('resource-limit'); }, 250);
     child.on('error', (e) => finish({ status: 'failed', reason: e.message, exitCode: null, signal: null }));
     child.on('close', (code, signal) => {
       killGroup(child.pid, 'SIGKILL');                                          // reap any descendants
@@ -197,8 +257,8 @@ export async function probeSandbox(sb, opts = {}) {
   const port = tcp.address().port;
   try {
     const exe = opts.nodePath || process.execPath;
-    const cmd = sandboxCommand(sb, { execFile: exe, args: [script, join(allowed, 'a.txt'), join(outside, 'secret.txt'), join(outside, 'w.txt'), join(scratch, 'w.txt'), String(port), sockPath], readOnly: [allowed, dirname(dirname(real(exe)))], readFiles: [script], writable: [scratch], cwd: scratch });
-    const r = await supervise(cmd.file, cmd.args, { env: cleanEnv(scratch), cwd: scratch, deadlineMs: limits.probeDeadlineMs, maxOutputBytes: 64 * 1024, maxRssMb: limits.maxRssMb, killGraceMs: limits.killGraceMs });
+    const cmd = sandboxCommand(sb, { env: cleanEnv(scratch), execFile: exe, args: [script, join(allowed, 'a.txt'), join(outside, 'secret.txt'), join(outside, 'w.txt'), join(scratch, 'w.txt'), String(port), sockPath], readOnly: [allowed, dirname(dirname(real(exe)))], readFiles: [script], writable: [scratch], cwd: scratch });
+    const r = await supervise(cmd.file, cmd.args, { fd3: cmd.fd3, env: cleanEnv(scratch), cwd: scratch, deadlineMs: limits.probeDeadlineMs, maxOutputBytes: 64 * 1024, maxRssMb: limits.maxRssMb, killGraceMs: limits.killGraceMs });
     let attempts = null;
     try { attempts = JSON.parse(r.stdout.trim()); } catch { /* unparseable: not verified */ }
     if (!attempts) return { verified: false, backend: sb.backend, reason: `the probe did not complete inside the sandbox (${r.reason || r.stderr.slice(0, 120) || 'no output'})`, attempts: {} };
@@ -221,8 +281,8 @@ export async function probeSandbox(sb, opts = {}) {
 /** @param {{file:string, prefixArgs?:string[]}} nix  the evaluator command (a stand-in in tests) */
 export async function detectEvaluator(nix, sb, ctx) {
   const run = async (args) => {
-    const cmd = sandboxCommand(sb, { execFile: nix.file, args: [...(nix.prefixArgs || []), ...args], readOnly: ctx.readOnly, readFiles: [...(ctx.readFiles || []), ...(nix.prefixArgs || []).filter((a) => !a.startsWith('-'))], writable: [ctx.work], cwd: ctx.work });
-    return supervise(cmd.file, cmd.args, { env: cleanEnv(ctx.work), cwd: ctx.work, deadlineMs: 10_000, maxOutputBytes: 64 * 1024, maxRssMb: ctx.limits.maxRssMb, killGraceMs: ctx.limits.killGraceMs });
+    const cmd = sandboxCommand(sb, { env: cleanEnv(ctx.work), execFile: nix.file, args: [...(nix.prefixArgs || []), ...args], readOnly: ctx.readOnly, readFiles: [...(ctx.readFiles || []), ...(nix.prefixArgs || []).filter((a) => !a.startsWith('-'))], writable: [ctx.work], cwd: ctx.work });
+    return supervise(cmd.file, cmd.args, { fd3: cmd.fd3, env: cleanEnv(ctx.work), cwd: ctx.work, deadlineMs: 10_000, maxOutputBytes: 64 * 1024, maxRssMb: ctx.limits.maxRssMb, killGraceMs: ctx.limits.killGraceMs });
   };
   const v = await run(['--version']);
   const ver = (/(\d+\.\d+(?:\.\d+)?)/.exec(v.stdout) || [])[1] || null;
@@ -276,8 +336,8 @@ export async function runIsolatedEval(o) {
     const feat = await detectEvaluator(o.nix, sb, ctx);
     if (!feat.ok) return stopBefore('unsupported', `${feat.reason}; the project's Nix code was NOT evaluated`, { sandbox: sb, probe: { verified: true }, evaluator: feat });
     const args = [...(o.nix.prefixArgs || []), ...buildEvalArgs(target)];
-    const cmd = sandboxCommand(sb, { execFile: o.nix.file, args, readOnly: ctx.readOnly, readFiles: nixFiles, writable: [ctx.work], cwd: ctx.work });
-    const r = await supervise(cmd.file, cmd.args, { env: cleanEnv(ctx.work, o.env || {}), cwd: ctx.work, deadlineMs: limits.deadlineMs, maxOutputBytes: limits.maxOutputBytes, maxRssMb: limits.maxRssMb, killGraceMs: limits.killGraceMs });
+    const cmd = sandboxCommand(sb, { env: cleanEnv(ctx.work, o.env || {}), execFile: o.nix.file, args, readOnly: ctx.readOnly, readFiles: nixFiles, writable: [ctx.work], cwd: ctx.work });
+    const r = await supervise(cmd.file, cmd.args, { fd3: cmd.fd3, env: cleanEnv(ctx.work, o.env || {}), cwd: ctx.work, deadlineMs: limits.deadlineMs, maxOutputBytes: limits.maxOutputBytes, maxRssMb: limits.maxRssMb, killGraceMs: limits.killGraceMs });
     const base = { ...keep, projectCodeEvaluated: true, sandbox: { backend: sb.backend }, evaluator: { version: feat.version }, ms: r.ms, target: { attribute: target.attribute, system: target.system, installable: target.installable } };
     if (r.status !== 'ok') return { ...base, status: r.status === 'failed' ? 'failed' : r.status, reason: r.reason || r.stderr.slice(0, 200) };
     let data;
