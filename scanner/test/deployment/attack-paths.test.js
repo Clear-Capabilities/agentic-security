@@ -253,14 +253,27 @@ describe('[X-305.AC03] network isolation, a denied IAM permission and tenant bin
     assert.ok(g.edges.some((e) => e.id === p.blockers[0].edgeId));
   });
 
-  test('[X-305.AC03] a denied IAM permission blocks the grant hop even when an allow sits beside it', () => {
+  test('[X-305.AC03] a denied IAM permission that matches the granted action blocks the grant hop even when an allow sits beside it', () => {
+    // threat-model FR-03.1: a deny blocks only an action it matches. The allow and the deny here both name the action.
     const b = baseline();
-    const g = graphOf({ nodes: b.nodes, edges: [...b.edges, edge('grants', b.ident, b.db, { effect: 'deny' })] });
+    const allow = b.edges.find((e) => e.relation === 'grants'); allow.attrs = { ...allow.attrs, actions: 's3:GetObject' };
+    const g = graphOf({ nodes: b.nodes, edges: [...b.edges, edge('grants', b.ident, b.db, { effect: 'deny', attrs: { actions: 's3:Get*' } })] });
     assert.ok(g.gaps.some((x) => x.code === 'conflicting-configuration'), 'the conflict is recorded as a gap');
     const p = paths(g)[0];
     assert.equal(p.state, 'blocked');
     assert.equal(p.blockers[0].relation, 'grants');
+    assert.equal(p.blockers[0].action, 's3:GetObject'); assert.deepEqual(p.blockers[0].matchedActions, ['s3:Get*']);
     assert.equal(p.hops[3].state, 'blocked');
+  });
+
+  test('[X-305.AC03] a deny that records no action list cannot be matched, so the hop is unresolved rather than blocked', () => {
+    // before the threat-model FR-03 change any deny blocked; an opaque deny now leaves the decision open, never closed
+    const b = baseline();
+    const g = graphOf({ nodes: b.nodes, edges: [...b.edges, edge('grants', b.ident, b.db, { effect: 'deny' })] });
+    const p = paths(g)[0];
+    assert.equal(p.state, 'unresolved');
+    assert.equal(p.blockers.length, 0, 'nothing is credited as the blocker');
+    assert.match(p.hops[3].actions[0].unresolvedBy[0], /records no action list/);
   });
 
   test('[X-305.AC03] a deny elsewhere in the graph does not block an unrelated path', () => {

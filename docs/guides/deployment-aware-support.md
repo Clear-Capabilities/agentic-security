@@ -69,6 +69,20 @@ These are never folded into the counts above.
 - **Stale**: an ingested source whose content no longer matches the digest recorded at ingest, or that is missing. In the set: 0 stale and 0 missing sources. Stale or missing sources must be re-ingested before the relationships they supported are trusted.
 - **Traces**: the set contains no runtime traces, so observed, sampled and stale trace coverage are all unmeasured here. Traffic coverage is never established by any supplied observation.
 
+## IAM decisions and search limits
+
+A deny blocks an IAM hop only for an action it matches, on a resource it matches, under a condition that holds. An unrelated deny (a `s3:DeleteObject` deny on a `s3:GetObject` path) leaves the path possible. A deny whose condition cannot be evaluated leaves it unresolved, never blocked. A deny on a resource pattern (`*`, `arn:aws:s3:::bucket/*`) applies to every resource the pattern matches. Each blocker names the deny edge, the action and the pattern it matched, and the condition result. Network denies are separate from IAM and still block the hop they sit on.
+
+`boundaries --action <iam-action>` decides each IAM hop for that action only. Without it, every granted action is decided, and a path that carries several reports them in `actionOutcomes`.
+
+The decided subset is small, and anything outside it is unresolved and disclosed as a gap:
+
+- exact actions and resources, and IAM globs;
+- the condition operators `StringEquals`, `StringNotEquals`, `Bool` and `ArnEquals`, evaluated against a request context the caller supplies (a key the context does not supply is unknown);
+- not decided: `...IfExists` and set operators, policy variables, `NotAction`/`NotResource`/`NotPrincipal` (skipped, as before), a clipped action list, and a deny that records no action list.
+
+A path search records why it stopped (`truncation.reasons`: `depth`, `result-count`, `expansion`, with a bounded frontier sample for depth). Reaching the depth limit on a node with nowhere left to go is not a cutoff. A boundary context at `schemaVersion` `1.1.0` carries the reasons; a `1.0.0` context stays readable. A truncated search never certifies that a path is absent.
+
 ## What is not claimed
 
 - No claim of benefit on real programs, no claim of accuracy, and no claim that a finding with no path is safe: "no path found" means the supplied files did not show one.

@@ -55,7 +55,7 @@ export function buildScanRecord({ root, scan, meta, argv = [], engineVersion, mo
     tool: { name: 'agentic-security', version: engineVersion || null },
     source: sourceState(root),
     invocation: { flags: invocationSummary(argv), mode: mode || (meta && meta.mode) || 'full' },
-    ignorePolicy: scan.scope ? { mode: scan.scope.policy.mode, ruleDigest: scan.scope.policy.ruleDigest, trackedFileSemantics: scan.scope.policy.trackedFileSemantics } : { mode: 'legacy-walk', ruleDigest: null, trackedFileSemantics: false },
+    ignorePolicy: scan.scope ? { mode: scan.scope.policy.mode, ruleDigest: scan.scope.policy.ruleDigest, trackedFileSemantics: scan.scope.policy.trackedFileSemantics, inventoryDigest: scan.scope.inventoryDigest ?? null } : { mode: 'legacy-walk', ruleDigest: null, trackedFileSemantics: false, inventoryDigest: null },
     rules: { rulesetVersion: scan._rulesetVersion || null, rulesetSource: scan._rulesetVersionSource || null },
     model: model ? { provider: model.provider, model: model.model, egress: model.egress, stages: model.stages } : { configured: false },
     capability: { status: h.status || null, conditions: Array.isArray(h.conditions) ? h.conditions.length : 0 },

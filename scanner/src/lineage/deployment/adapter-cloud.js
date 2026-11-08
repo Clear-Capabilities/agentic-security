@@ -9,6 +9,7 @@
 // and conditions it cannot interpret are reported, not approximated.
 
 import { adapterContext, isObject, asArray, str } from './adapter-kit.js';
+import { statementAttrs } from './iam-eval.js';
 
 export const TERRAFORM_PARSER = 'terraform-plan-json';
 export const TERRAFORM_PARSER_VERSION = '1';
@@ -39,10 +40,12 @@ function applyPolicy(kit, identity, policy, subject) {
     const conditioned = isObject(st.Condition) && Object.keys(st.Condition).length > 0;
     read += 1;
     if (resources.length > MAX_RESOURCES_PER_STATEMENT) kit.gap('limit-exceeded', subject, `a statement lists ${resources.length} resources; only the first ${MAX_RESOURCES_PER_STATEMENT} are read`);
+    if (actions.join(',').length > 250) kit.gap('limit-exceeded', subject, 'a statement\'s action list is longer than the graph records; the clipped list leaves decisions about the missing actions unresolved');
+    if (conditioned && statementAttrs(actions, st.Condition).conditionSupported !== true) kit.gap('unsupported-syntax', subject, 'a statement condition uses an operator or value outside the supported subset (StringEquals, StringNotEquals, Bool, ArnEquals); decisions it can affect stay unresolved');
     for (const r of resources.slice(0, MAX_RESOURCES_PER_STATEMENT)) {
       const target = kit.node('resource', `aws/${r}`, { trustZone: 'internal', attrs: r === '*' ? { wildcard: true } : {} });
-      const attrs = { actions: actions.join(',').slice(0, 250) };
-      if (conditioned) attrs.conditioned = true;
+      // threat-model FR-03.1: the action list (and whether it was clipped) and the condition, in a form the path search can decide
+      const attrs = statementAttrs(actions, conditioned ? st.Condition : null);
       kit.edge('grants', identity, target, {
         effect, confidence: conditioned ? 'low' : 'high', discriminator: `${actions.join(',')}${conditioned ? ';cond' : ''}`.slice(0, 250), attrs,
       });

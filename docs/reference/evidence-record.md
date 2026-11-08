@@ -9,7 +9,7 @@ Additive fields on a scan and on each finding. They extend the existing JSON, ad
 | `tool` | Name and version of the scanner |
 | `source` | `vcs`, the commit, whether the tree is dirty, and for up to 200 changed files the path, status and SHA-256 of the current content |
 | `invocation` | The flags that shaped the run. A flag whose name contains key, token, secret or password is recorded as `<redacted>` |
-| `ignorePolicy` | Scope mode, the digest of the effective ignore rules and whether tracked-file semantics applied |
+| `ignorePolicy` | Scope mode, the digest of the effective ignore rules, whether tracked-file semantics applied, and `inventoryDigest`: the scope's digest of every eligibility decision (null for a scan that was not Git-scoped) |
 | `rules` | The ruleset version and where it came from |
 | `model` | Provider, model, egress and per-stage status when a model was used, otherwise `configured: false` |
 | `capability` | The scan health status and the number of recorded conditions |

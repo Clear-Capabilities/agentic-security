@@ -27,6 +27,9 @@ export const COVERAGE_SCHEMA = 'agentic-security/boundary-coverage';
 export const BOUNDARY_FEATURE = 'deployment-boundaries';
 
 const CONTEXT_KEYS = ['schema', 'schemaVersion', 'id', 'hypothesisId', 'finding', 'binding', 'graph', 'exposure', 'paths', 'truncated', 'verification', 'uncovered', 'warnings'];
+// Optional from 1.1.0: a 1.0.0 context stays valid without them, and may not carry them.
+const OPTIONAL_KEYS_1_1 = ['truncation', 'action'];
+const SUPPORTED_VERSIONS = ['1.0.0', '1.1.0'];
 const FILTER_KEYS = ['service', 'repository', 'environment', 'tenant'];
 const MAX_STRING = 600;
 
@@ -72,7 +75,9 @@ export function validateBoundaryContext(ctx) {
   const errors = [];
   if (!ctx || typeof ctx !== 'object' || Array.isArray(ctx)) return { ok: false, errors: [{ code: 'BAD_TYPE', path: '', message: 'a boundary context must be an object' }] };
   if (ctx.schema !== BOUNDARY_CONTEXT_SCHEMA) errors.push({ code: 'BAD_SCHEMA', path: 'schema', message: `schema must be '${BOUNDARY_CONTEXT_SCHEMA}'` });
-  for (const k of Object.keys(ctx)) if (!CONTEXT_KEYS.includes(k)) errors.push({ code: 'UNKNOWN_FIELD', path: k, message: `field '${k}' is not part of a boundary context` });
+  if (!SUPPORTED_VERSIONS.includes(ctx.schemaVersion)) errors.push({ code: 'BAD_SCHEMA', path: 'schemaVersion', message: `schemaVersion must be one of ${SUPPORTED_VERSIONS.join(', ')}` });
+  const allowed = ctx.schemaVersion === '1.0.0' ? CONTEXT_KEYS : [...CONTEXT_KEYS, ...OPTIONAL_KEYS_1_1];
+  for (const k of Object.keys(ctx)) if (!allowed.includes(k)) errors.push({ code: 'UNKNOWN_FIELD', path: k, message: `field '${k}' is not part of a boundary context ${ctx.schemaVersion}` });
   for (const k of CONTEXT_KEYS) if (!(k in ctx)) errors.push({ code: 'MISSING_FIELD', path: k, message: `field '${k}' is required` });
   if (errors.length) return { ok: false, errors };
   if (typeof ctx.id !== 'string' || !ctx.id) errors.push({ code: 'BAD_TYPE', path: 'id', message: 'id must be a non-empty string' });
@@ -95,13 +100,14 @@ function pathView(p) {
     environments: p.environments, tenants: p.tenants, services, repositories, provenance: p.provenance,
     entry: p.entry, target: p.target,
     hops: p.hops.map((h) => ({
-      index: h.index, from: h.from, to: h.to, relations: h.relations, state: h.state,
+      index: h.index, from: h.from, to: h.to, relations: h.relations, state: h.state, ...(h.actions ? { actions: h.actions } : {}),
       edges: h.edges.map((e) => ({
         id: e.id, relation: e.relation, provenance: e.provenance, effect: e.effect, confidence: e.confidence, pathState: e.pathState,
         sourceRevision: e.sourceRevision, source: e.source, observationInterval: e.observationInterval, completeness: e.completeness,
       })),
     })),
     supportingEdgeIds: p.supportingEdgeIds, conditions: p.conditions, blockers: p.blockers, assumptions: p.assumptions,
+    ...(p.actionOutcomes ? { actionOutcomes: p.actionOutcomes } : {}),
     crossings: p.crossings, uncoveredBoundaries: uncovered,
     freshness: {
       observedFrom: p.coverage.observedFrom, observedUntil: p.coverage.observedUntil, staleHops: p.coverage.staleHops,
@@ -231,12 +237,12 @@ export function boundaryCoverage(contexts) {
  *
  * @returns {{ status: string, code?: string, reason?: string, findings: object[], errors: object[] }}
  */
-export function attachBoundaryContext({ config, findings, graph, bindings = [], records = [], now } = {}) {
+export function attachBoundaryContext({ config, findings, graph, bindings = [], records = [], now, action = null } = {}) {
   const gate = featureStatus(config, BOUNDARY_FEATURE);
   if (gate.status !== 'ok') return { ...gate, findings, errors: [] };
   const out = [], errors = [];
   for (const f of Array.isArray(findings) ? findings : []) {
-    const r = analyzeFindingBoundaries({ graph, finding: f, bindings, records, now });
+    const r = analyzeFindingBoundaries({ graph, finding: f, bindings, records, now, ...(action ? { action } : {}) });
     if (!r.ok) { errors.push(...r.errors); out.push(f); continue; }
     out.push({ ...f, boundaryContext: r.context });
   }

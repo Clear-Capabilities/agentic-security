@@ -26,9 +26,11 @@ import { indexGraph, validateBoundaryGraph, boundaryCrossings } from './boundary
 import { semanticId, hypothesisIdFromFinding } from '../../posture/assurance/identity.js';
 import { validateVerificationRecord, deriveConfirmationLevel } from '../../posture/assurance/verification-record.js';
 import { nonTaintClassOf, SCENARIO_CLASSES } from '../../posture/oracles/scenario-classes.js';
+import { decideAction, resourceMatches, UNKNOWN_ACTION } from './iam-eval.js';
 
 export const BOUNDARY_CONTEXT_SCHEMA = 'agentic-security/boundary-context';
-export const BOUNDARY_CONTEXT_VERSION = '1.0.0';
+// 1.1.0 (threat-model FR-03.3): optional `truncation` (why a search stopped) and `action` (the action a query asked about).
+export const BOUNDARY_CONTEXT_VERSION = '1.1.0';
 
 export const TRAVERSED_RELATIONS = Object.freeze(['routes-to', 'calls', 'depends-on', 'network-allows', 'assumes', 'grants']);
 const TRAVERSED = new Set(TRAVERSED_RELATIONS);
@@ -122,16 +124,53 @@ function hopsFrom(ix, nodeId) {
     else if (TRAVERSED.has(e.relation)) h.edges.push(e);
     hops.set(e.to, h);
   }
+  // threat-model FR-03.1: a deny statement whose resource is a pattern (`*`, `arn:aws:s3:::bucket/*`) is a node of its own, so before
+  // this it never reached the hop to the concrete resource it covers. It now applies to every resource its pattern matches.
+  const patternDenies = [];
+  for (const [to, h] of hops) {
+    const name = ix.nodesById.get(to)?.name ?? '';
+    if (/[*?]/.test(name)) for (const d of h.denies) if (d.relation === 'grants') patternDenies.push({ d, pattern: name });
+  }
+  for (const [to, h] of hops) {
+    const name = ix.nodesById.get(to)?.name ?? '';
+    for (const { d, pattern } of patternDenies) if (d.to !== to && resourceMatches(pattern, name) && !h.denies.includes(d)) h.denies.push(d);
+  }
   for (const [k, h] of [...hops]) if (!h.edges.length) hops.delete(k);
   return hops;
 }
 
-function hopState(h, from, to) {
-  if (h.denies.length) return 'blocked';
+function baseState(h, from, to) {
   if (h.edges.some((e) => e.pathState === 'runtime-supported')) return 'runtime-supported';
   if (!from.resolved || !to.resolved || h.edges.every((e) => e.pathState === 'unresolved' || e.pathState === 'blocked')) return 'unresolved';
   return 'possible';
 }
+
+/**
+ * Decide a hop. A network deny, or a deny on a relation other than an IAM grant, blocks it as before. An IAM hop is decided per
+ * action (threat-model FR-03.1): with a requested action, that action only; without one, every action the allow statements grant, and
+ * the hop is possible when any of them is. A deny blocks only an action it matches, under a condition that holds for the request
+ * context; a condition that cannot be evaluated leaves the action unresolved.
+ * @returns {{state:string, denies:object[], actions:object[]|null}}
+ */
+function hopDecision(h, from, to, q = null) {
+  const other = h.denies.filter((d) => d.relation !== 'grants');
+  if (other.length) return { state: 'blocked', denies: other.map((d) => ({ d, why: null })), actions: null };
+  const allows = h.edges.filter((e) => e.relation === 'grants' && e.effect === 'allow');
+  const iamDenies = h.denies.filter((d) => d.relation === 'grants');
+  const base = baseState(h, from, to);
+  if (!allows.length) return { state: base, denies: [], actions: null };
+  const recorded = [...new Set(allows.flatMap((e) => String(e.attrs?.actions ?? '').split(',').filter(Boolean)))].sort();
+  // with no IAM deny on the hop and no requested action there is nothing to decide per action: the grant stands as before
+  if (!iamDenies.length && !(q && q.action)) return { state: base, denies: [], actions: recorded.length ? recorded.map((action) => ({ action, outcome: base === 'unresolved' ? 'unresolved' : 'possible', blockedBy: [], unresolvedBy: [] })) : null };
+  const wanted = q && q.action ? [q.action] : (recorded.length ? recorded : [UNKNOWN_ACTION]);
+  const decisions = wanted.map((a) => decideAction(allows, iamDenies, a, q && q.context));
+  const pick = (o) => decisions.some((d) => d.outcome === o);
+  const state = pick('possible') ? base : pick('unresolved') ? 'unresolved' : pick('blocked') ? 'blocked' : 'not-granted';
+  const denies = state === 'blocked' ? decisions.flatMap((d) => d.blockers).map((b) => ({ d: iamDenies.find((x) => x.id === b.edgeId), why: b })) : [];
+  return { state, denies, actions: decisions.map(({ action, outcome, blockers, unresolvedBy }) => ({ action, outcome, blockedBy: blockers.map((b) => b.edgeId), unresolvedBy })) };
+}
+
+function hopState(h, from, to, q = null) { return hopDecision(h, from, to, q).state; }
 
 function isStale(e, nowMs, staleAfterMs) {
   if (e.attrs?.stale === true) return true;
@@ -139,7 +178,7 @@ function isStale(e, nowMs, staleAfterMs) {
   return nowMs - Date.parse(e.observationInterval.end) > staleAfterMs;
 }
 
-function buildPath(ix, seq, hopList, nowMs, staleAfterMs) {
+function buildPath(ix, seq, hopList, nowMs, staleAfterMs, q = null) {
   const nodes = seq.map((id) => ix.nodesById.get(id));
   const hops = [];
   const conditions = [];
@@ -151,16 +190,20 @@ function buildPath(ix, seq, hopList, nowMs, staleAfterMs) {
   hopList.forEach((h, i) => {
     from = nodes[i];
     const to = nodes[i + 1];
-    const state = hopState(h, from, to);
+    const dec = hopDecision(h, from, to, q);
+    const state = dec.state;
     const crossing = boundaryCrossings(h.edges[0], ix.nodesById);
     for (const c of crossing) crossings.push({ hop: i, type: c.type, detail: c.detail });
     hops.push({
       index: i, from: nodeSummary(from), to: nodeSummary(to), relations: sortedUnique(h.edges.map((e) => e.relation)), state,
       edges: h.edges.map(edgeSummary).sort((a, b) => (a.id < b.id ? -1 : 1)),
+      ...(dec.actions ? { actions: dec.actions } : {}),
     });
-    for (const d of h.denies) {
+    // each blocker is the rule that actually decided the hop, with the action and the condition it matched
+    for (const { d, why } of dec.denies) {
+      if (!d) continue;
       blockers.push({ hop: i, edgeId: d.id, relation: d.relation, provenance: d.provenance, source: d.source ? { file: d.source.file, digest: d.source.digest } : null,
-        detail: `${d.relation} (deny) from ${from.name} to ${to.name}` });
+        detail: `${d.relation} (deny) from ${from.name} to ${to.name}`, ...(why ? { action: why.action, matchedActions: why.matchedActions, condition: why.condition } : {}) });
     }
     if (from.tenant !== null && to.tenant !== null && from.tenant !== to.tenant) {
       conditions.push({ kind: 'tenant-binding', hop: i, detail: `${from.name} (tenant ${from.tenant}) reaches ${to.name} (tenant ${to.tenant}): reachable only if no tenant binding is enforced on this transition, and the configuration does not establish either` });
@@ -193,6 +236,10 @@ function buildPath(ix, seq, hopList, nowMs, staleAfterMs) {
   else if (networkHops.length && networkHops.every((h) => h.state === 'runtime-supported')) state = 'runtime-supported';
   else state = 'possible';
 
+  // threat-model FR-03.2: a path that carries several actions keeps their separate outcomes; one is the worst over its IAM hops
+  const actionOutcomes = {};
+  const RANK = { possible: 0, unresolved: 1, blocked: 2, 'not-granted': 3 };
+  for (const hp of hops) for (const a of hp.actions || []) if (!(a.action in actionOutcomes) || RANK[a.outcome] > RANK[actionOutcomes[a.action]]) actionOutcomes[a.action] = a.outcome;
   const observedEnds = hops.flatMap((h) => h.edges).filter((e) => e.observationInterval).map((e) => e.observationInterval);
   const supportingEdgeIds = sortedUnique(hops.flatMap((h) => h.edges.map((e) => e.id)));
   const envs = sortedUnique([...hops.flatMap((h) => h.edges.map((e) => e.environment)), ...nodes.map((n) => n.environment)].filter(Boolean));
@@ -202,6 +249,8 @@ function buildPath(ix, seq, hopList, nowMs, staleAfterMs) {
     id: semanticId('bpath', { hops: hops.map((h) => h.edges.map((e) => e.id).sort()) }, ['hops']),
     entry: nodeSummary(nodes[0]), target: nodeSummary(nodes[nodes.length - 1]),
     state, conditional: conditions.length > 0, conditions, blockers, assumptions: [...assumptions].sort(),
+    ...(Object.keys(actionOutcomes).length ? { actionOutcomes: Object.fromEntries(Object.entries(actionOutcomes).sort()) } : {}),
+    ...(q && q.action ? { action: q.action } : {}),
     environments: envs, tenants,
     provenance: sortedUnique(hops.flatMap((h) => h.edges.map((e) => e.provenance))),
     crossings: dedupCross, supportingEdgeIds, hops,
@@ -239,7 +288,7 @@ function defaultTargets(graph) {
  */
 export function computeAttackPaths(graph, o = {}) {
   const v = validateBoundaryGraph(graph);
-  if (!v.ok) return { ok: false, paths: [], entries: [], targets: [], truncated: false, limits: { ...PATH_LIMITS }, statement: 'the graph failed validation, so no path was computed', errors: v.errors };
+  if (!v.ok) return { ok: false, paths: [], entries: [], targets: [], truncated: false, truncation: { reasons: [], depthCutoffs: 0, frontier: [], frontierCapped: false }, limits: { ...PATH_LIMITS }, statement: 'the graph failed validation, so no path was computed', errors: v.errors };
   const limits = {
     maxHops: Math.min(o.maxHops ?? PATH_LIMITS.maxHops, PATH_LIMITS.maxHops), maxPaths: Math.min(o.maxPaths ?? PATH_LIMITS.maxPaths, PATH_LIMITS.maxPaths),
     maxExpansions: Math.min(o.maxExpansions ?? PATH_LIMITS.maxExpansions, PATH_LIMITS.maxExpansions),
@@ -252,25 +301,34 @@ export function computeAttackPaths(graph, o = {}) {
   const staleAfterMs = o.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
   const found = [];
   let expansions = 0;
-  let truncated = false;
+  let stopped = false;
+  const q = o.action ? { action: String(o.action), context: o.context ?? {} } : (o.context ? { action: null, context: o.context } : null);
+  // threat-model FR-03.3 (TM-04): every bound that ended the search is recorded, so "no path" after a depth cutoff is never read as
+  // "no path exists". Reaching the depth bound on a node with no unvisited continuation is not a cutoff.
+  const cut = { depth: 0, results: false, expansions: false, frontier: [] };
+  const next = (seq, here) => [...hopsFrom(ix, here)].sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .filter(([to, h]) => !seq.includes(to) && !(q && q.action && hopState(h, ix.nodesById.get(here), ix.nodesById.get(to), q) === 'not-granted'));
 
   const walk = (seq, hopList) => {
-    if (truncated) return;
+    if (stopped) return;
     const here = seq[seq.length - 1];
     if (hopList.length && targetSet.has(here)) {
-      found.push(buildPath(ix, seq, hopList, Number.isNaN(nowMs) ? null : nowMs, staleAfterMs));
-      if (found.length >= limits.maxPaths) { truncated = true; return; }
+      found.push(buildPath(ix, seq, hopList, Number.isNaN(nowMs) ? null : nowMs, staleAfterMs, q));
+      if (found.length >= limits.maxPaths) { stopped = true; cut.results = true; return; }
     }
-    if (hopList.length >= limits.maxHops) return;
-    for (const [to, h] of [...hopsFrom(ix, here)].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-      if (seq.includes(to)) continue;
-      if (++expansions > limits.maxExpansions) { truncated = true; return; }
+    const cont = next(seq, here);
+    if (hopList.length >= limits.maxHops) {
+      if (cont.length) { cut.depth++; if (cut.frontier.length < 20) cut.frontier.push({ node: here, depth: hopList.length, unexplored: cont.length }); }
+      return;
+    }
+    for (const [to, h] of cont) {
+      if (++expansions > limits.maxExpansions) { stopped = true; cut.expansions = true; return; }
       walk([...seq, to], [...hopList, h]);
     }
   };
   for (const entry of entries) {
     if (o.includeSelf && targetSet.has(entry)) {
-      const p = buildPath(ix, [entry], [], Number.isNaN(nowMs) ? null : nowMs, staleAfterMs);
+      const p = buildPath(ix, [entry], [], Number.isNaN(nowMs) ? null : nowMs, staleAfterMs, q);
       p.assumptions = sortedUnique([...p.assumptions, 'the entry point is itself the target; its public trust zone is declared in configuration']);
       found.push(p);
     }
@@ -278,9 +336,13 @@ export function computeAttackPaths(graph, o = {}) {
   }
   found.sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state] || a.hops.length - b.hops.length || (a.id < b.id ? -1 : 1));
   const n = found.length;
+  const reasons = [...(cut.depth ? ['depth'] : []), ...(cut.results ? ['result-count'] : []), ...(cut.expansions ? ['expansion'] : [])];
+  const truncated = reasons.length > 0;
   return {
     ok: true, paths: found, entries, targets, truncated, limits,
-    statement: `${n} path(s) found in the supplied configuration${truncated ? ' (search stopped at a limit; more may exist)' : ''}; a path that is not listed has not been shown to exist or to be absent`,
+    truncation: { reasons, depthCutoffs: cut.depth, frontier: cut.frontier, frontierCapped: cut.depth > cut.frontier.length },
+    ...(q && q.action ? { action: q.action } : {}),
+    statement: `${n} path(s) found in the supplied configuration${truncated ? ` (search stopped at a limit: ${reasons.join(', ')}; more may exist)` : ''}; a path that is not listed has not been shown to exist or to be absent`,
     errors: [],
   };
 }
@@ -306,7 +368,7 @@ export function exposureReach(graph, { entries } = {}) {
     const cur = best.get(id);
     for (const [to, h] of hopsFrom(ix, id)) {
       const st = hopState(h, ix.nodesById.get(id), ix.nodesById.get(to));
-      if (st === 'blocked') continue;
+      if (st === 'blocked' || st === 'not-granted') continue;
       const state = cur.state === 'unresolved' || st === 'unresolved' ? 'unresolved' : 'definite';
       const prev = best.get(to);
       if (prev && (prev.state === 'definite' || state === 'unresolved')) continue;
@@ -384,7 +446,7 @@ function summarizeExposure(paths) {
  * @param {Array} [args.records]   version-1 verification records
  * @param {number|string} [args.now]
  */
-export function analyzeFindingBoundaries({ graph, finding, bindings = [], records = [], now, maxHops, maxPaths } = {}) {
+export function analyzeFindingBoundaries({ graph, finding, bindings = [], records = [], now, maxHops, maxPaths, action, context: requestContext } = {}) {
   const v = validateBoundaryGraph(graph);
   if (!v.ok) return { ok: false, context: null, errors: v.errors };
   const hypothesisId = hypothesisIdFromFinding(finding);
@@ -392,11 +454,13 @@ export function analyzeFindingBoundaries({ graph, finding, bindings = [], record
   const assessments = assessVerification(finding, records, hypothesisId);
   const paths = [];
   let truncated = false;
-  const popts = { now, maxHops, maxPaths };
+  const truncationReasons = new Set();
+  const popts = { now, maxHops, maxPaths, ...(action ? { action } : {}), ...(requestContext ? { context: requestContext } : {}) };
   if (binding.status === 'bound') {
     const exposure = computeAttackPaths(graph, { ...popts, targets: [binding.service.id], includeSelf: true });
     const impact = computeAttackPaths(graph, { ...popts, entries: [binding.service.id] });
     truncated = exposure.truncated || impact.truncated;
+    for (const r of [...exposure.truncation.reasons, ...impact.truncation.reasons]) truncationReasons.add(r);
     for (const p of exposure.paths) paths.push({ kind: 'exposure', ...p, exploitability: labelPath(p, assessments) });
     for (const p of impact.paths) paths.push({ kind: 'impact', ...p, exploitability: labelPath(p, assessments) });
   }
@@ -422,7 +486,7 @@ export function analyzeFindingBoundaries({ graph, finding, bindings = [], record
   const warnings = ['Runtime traffic coverage is not established by any supplied observation; configured relationships were not exercised.'];
   if (binding.status !== 'bound') warnings.push(`This finding is not tied to a deployed service (${binding.status}); no path was computed.`);
   if (graph.gaps.length) warnings.push(`The boundary graph has ${graph.gaps.length} gap(s) (${sortedUnique(graph.gaps.map((g) => g.code)).join(', ')}); relationships behind them are missing, not absent.`);
-  if (truncated) warnings.push('The path search stopped at a limit; more paths may exist.');
+  if (truncated) warnings.push(`The path search stopped at a limit (${[...truncationReasons].sort().join(', ')}); more paths may exist, so no listed absence is a proof of absence.`);
 
   const context = {
     schema: BOUNDARY_CONTEXT_SCHEMA, schemaVersion: BOUNDARY_CONTEXT_VERSION, id: '', hypothesisId,
@@ -435,7 +499,8 @@ export function analyzeFindingBoundaries({ graph, finding, bindings = [], record
       tenants: sortedUnique(graph.nodes.map((n) => n.tenant).filter(Boolean)),
       gapCodes: sortedUnique(graph.gaps.map((g) => g.code)), gapCount: graph.gaps.length,
     },
-    exposure, paths, truncated,
+    exposure, paths, truncated, truncation: { reasons: [...truncationReasons].sort() },
+    ...(action ? { action } : {}),
     verification: assessments, uncovered, warnings,
   };
   context.id = semanticId('bctx', { hypothesisId, graph: graph.digest, binding: binding.binding, service: binding.service?.id ?? null, paths: paths.map((p) => p.id) }, ['hypothesisId', 'graph', 'binding', 'service', 'paths']);

@@ -35,6 +35,7 @@ export function renderScopePreview(inv, { maxLines = 40 } = {}) {
   const p = inv.policy;
   L.push(`Scope mode: ${p.mode}${p.respectGitignore ? '' : ' (git ignore rules disabled)'}; tracked-file semantics: ${p.trackedFileSemantics ? 'yes' : 'no'}`);
   if (p.ruleDigest) L.push(`Effective ignore-rule digest: ${p.ruleDigest}`);
+  if (inv.digest) L.push(`Inventory digest: ${inv.digest}`);
   for (const d of p.disclosures) L.push(`Disclosure: ${d}`);
   L.push(`Included: ${inv.included.length} file(s)`);
   for (const f of inv.included.slice(0, maxLines)) L.push(`  + ${f}`);

@@ -98,7 +98,7 @@ export function readScanFindings(file, { maxBytes, verify } = {}) {
  * @param {string} [o.now]         ISO time used to judge trace staleness; defaults to the current time
  * @returns {object} typed result; `status` is ok | disabled | blocked | unsupported | error. Never throws.
  */
-export function runBoundaries({ config, from, environment = 'prod', repository = null, revision = null, findingsFile = null, findings: suppliedFindings = null, verifySignature, now } = {}) {
+export function runBoundaries({ config, from, environment = 'prod', repository = null, revision = null, findingsFile = null, findings: suppliedFindings = null, verifySignature, now, action = null } = {}) {
   const gate = featureStatus(config, DEPLOYMENT_FEATURE);
   if (gate.status !== 'ok') return { ...gate, report: null };
   const limits = limitValues(config);
@@ -175,7 +175,7 @@ export function runBoundaries({ config, from, environment = 'prod', repository =
     if (integrity === 'unsigned') notes.push('the scan result carries no signature, so its integrity was not verified');
   }
 
-  const attached = attachBoundaryContext({ config, findings, graph, bindings, now: clock });
+  const attached = attachBoundaryContext({ config, findings, graph, bindings, now: clock, action });
   if (attached.status !== 'ok') return { ...attached, report: null };
   const contexts = attached.findings.map((f) => f.boundaryContext).filter(Boolean);
   const rows = attached.findings.map((f) => ({
