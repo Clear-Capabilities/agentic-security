@@ -49,7 +49,7 @@ Records live under `.agentic-security/dnr/<finding>/` as `<kind>-<digest>.json`,
 | `attackBehavior` | The attack in words |
 | `endpoint` | `method` and `path` |
 | `parameter` | `name` and `location` |
-| `payloadClass` | One of the eight payload classes |
+| `payloadClass` | One of the nine payload classes |
 | `affectedOperation` | `sink`, `file` and `line` |
 | `processEffect` | The process effect of the attack |
 | `networkEffect` | The network effect |
@@ -91,6 +91,7 @@ Records live under `.agentic-security/dnr/<finding>/` as `<kind>-<digest>.json`,
 | `logs` | What was read (below) |
 | `window` | The dated span the logs cover (below) |
 | `coverage` | What the logs could and could not show (below) |
+| `effect` | Always `corroborated: false`: a matched line is a signal that the response indicated success, not evidence that data was delivered |
 | `matches` | The matching events (below) |
 | `caveats` | Plain-language reasons the verdict is limited |
 | `statement` | The verdict in one sentence |
@@ -122,9 +123,11 @@ Records live under `.agentic-security/dnr/<finding>/` as `<kind>-<digest>.json`,
 | `requestedWindow` | The `--since` and `--until` asked for |
 | `outOfWindow` | Events outside it |
 | `undated` | Events with no usable time |
-| `endpointEvents` | Events for the detection's endpoint |
+| `endpointEvents` | Judged events for the detection's endpoint: the same method AND route template the matcher uses (earlier releases counted an event of the same method on any route) |
+| `target` | For the endpoint: `relevant` events, `adjudicable` ones, `missingRequired` ones (a required field absent), `deniedAttempts`, `authorizedDelegations`, and whether the match samples were capped |
+| `windowGaps` | Edges of the requested window the logs do not reach (`start` or `end`); each one blocks a negative answer |
 | `requiredFields` | The log fields the detection needs |
-| `fieldAvailability` | Which of them the logs actually had |
+| `fieldAvailability` | Which of them the logs actually had, including `authOutcome` and `tenant` |
 
 **Matches**
 
@@ -136,6 +139,21 @@ Records live under `.agentic-security/dnr/<finding>/` as `<kind>-<digest>.json`,
 | `samples` | A bounded list of events with values redacted and a fingerprint in place of the value |
 
 `NOT_OBSERVED` means the searched window, in the logs that could be read, held no matching event. It does not mean the vulnerability was not exploited elsewhere or outside the window.
+
+**Effect.** `effect.corroborated` is always `false` on a hunt result: a matched line shows that the response indicated success (`samples[].signal: response-indication`). Delivery or mutation of data is a separate claim that needs a separately bound observer.
+
+### Authentication and object authorization
+
+A normalized event carries the credential's presence and the authentication outcome as separate facts: `credentialPresent` and `authOutcome` (`authenticated`, `unauthenticated`, `unknown`, `conflict`). The outcome comes from mapped fields (`authenticated`, `is_authenticated`, `auth.outcome`, `auth.result`, `authn.outcome`, `authn.result`). An explicit rejection survives a credential header, even a redacted one. A header with no outcome only shows that a credential was sent, so an `auth-bypass` detection cannot judge that event. The legacy `authPresent` field is unchanged.
+
+| Class | Fires when | Cannot judge when |
+|---|---|---|
+| `auth-bypass` | a 2xx response to a request that is not authenticated: no credential, or one the outcome says was rejected | the status is missing, or a credential was sent with no recorded outcome, or the outcome fields conflict |
+| `object-authz` (CWE-639) | a 2xx response to an authenticated actor whose tenant differs from the object's, with no cross-tenant grant | the status, the outcome, the actor tenant or the object tenant is missing |
+
+For `object-authz`, a 401 or 403, or a recorded `authz.decision: deny`, is a denied attempt and never a delivery. A recorded `authz.cross_tenant_grant: true` is an authorized delegation. The actor tenant (`identity.tenant`, `actor.tenant`, `auth.tenant`, `principal.tenant`), the object tenant (`object.tenant`, `resource.tenant`, `record.tenant`), the grant and the decision are read only from those mapped fields. A value the client sends in a header, the query or the body is never treated as identity.
+
+Rendering: `object-authz` is published only to the `http` and `log-query` outputs, which name the fields it needs. Every other destination reports it as unavailable with the reason. An `auth-bypass` rule rendered to a rule language tests for a missing Authorization header, and it says in `coverage.notCovered` that a credential sent and rejected is not covered. Validation adds independent controls for both classes: a rejected credential, an accepted one, a header with no outcome (which must be undecidable), the rightful tenant, a delegation and a denial.
 
 ## The exposure window
 
@@ -178,6 +196,6 @@ Records live under `.agentic-security/dnr/<finding>/` as `<kind>-<digest>.json`,
 
 - **No SIEM connection.** Every renderer produces text; none connects anywhere, and the Elastic, YARA-L and Datadog output was not run against a live product.
 - **Local, text-only logs.** Common and combined access logs and JSON lines are read; compressed logs are skipped and make the verdict `INCONCLUSIVE`.
-- **Eight payload classes.** A finding of another class gets no detection rather than a guessed one.
+- **Nine payload classes.** A finding of another class gets no detection rather than a guessed one.
 - **The artifact join relies on a build label.** An image built without the revision label cannot be placed in history, and the join does not infer one.
 - **A hunt covers only the logs it was given.** Exposure outside the telemetry is reported as unobserved.

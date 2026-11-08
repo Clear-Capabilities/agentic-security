@@ -102,8 +102,8 @@ test('contract: a date with no source is unknown, and the window is not complete
 
 test('contract: the output formats and payload classes are the documented ones', () => {
   for (const f of FORMATS) assert.ok(PAGE.includes(`\`${f}\``), `${f} is on the page`);
-  assert.equal(PAYLOAD_CLASS_NAMES.length, 8, 'the page says eight payload classes');
-  assert.ok(PAGE.includes('Eight payload classes'));
+  assert.equal(PAYLOAD_CLASS_NAMES.length, 9, 'the page says nine payload classes (object-authz added by the threat-model FR-07)');
+  assert.ok(PAGE.includes('Nine payload classes'));
 });
 
 test('contract: the comparison itself fails when a field is added or dropped', () => {

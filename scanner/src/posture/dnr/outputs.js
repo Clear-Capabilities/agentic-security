@@ -32,6 +32,7 @@ const unavailable = (reason) => ({ applicable: false, reason });
 const fpNotes = (ir) => [
   'A legitimate client that sends this payload shape to the same endpoint (a security scanner, a penetration test).',
   ...(ir.payloadClass === 'auth-bypass' ? ['Public endpoints that are intentionally reachable without a credential.'] : []),
+  ...(ir.payloadClass === 'object-authz' ? ['A cross-tenant read that an operator or support role is allowed to make but whose grant is not recorded in the event.'] : []),
 ];
 
 /** Sigma rule as YAML text. JSON string syntax is used for every scalar; it is valid YAML and cannot be broken out of. */
@@ -72,7 +73,8 @@ function http(ir) {
     schema: 'agentic-security/http-detection', version: 1, id: ir.id, findingId: ir.findingId, level: levelFor(ir), mode: 'detect',
     request: { method: ir.endpoint.method, pathTemplate: ir.endpoint.path },
     parameter: ir.parameter,
-    payload: ir.payloadClass === 'auth-bypass' ? { class: 'auth-bypass', behavior: 'status 2xx with no credential' }
+    payload: ir.payloadClass === 'auth-bypass' ? { class: 'auth-bypass', behavior: 'status 2xx for a request that is not authenticated (no credential, or a rejected one)' }
+      : ir.payloadClass === 'object-authz' ? { class: 'object-authz', behavior: 'status 2xx for an authenticated actor whose tenant differs from the object\'s, with no cross-tenant grant', requiredFields: ['auth.outcome', 'actor.tenant', 'object.tenant', 'authz.cross_tenant_grant'] }
       : { class: ir.payloadClass, matcher: def.matcher, minLength: def.minLength ?? null, regex: classRegex(ir.payloadClass), flags: 'i' },
     limitations: ir.limitations,
   };
@@ -104,6 +106,7 @@ function logQuery(ir) {
   if (!ir.endpoint) return unavailable('no endpoint is known for this finding');
   const where = [{ field: 'http.request.method', op: 'eq', value: ir.endpoint.method }, hasTemplate(ir.endpoint.path) ? { field: 'url.path', op: 'regex', value: pathRegex(ir.endpoint.path) } : { field: 'url.path', op: 'eq', value: ir.endpoint.path }];
   if (ir.payloadClass === 'auth-bypass') where.push({ field: 'http.response.status_code', op: 'range', value: [200, 299] }, { field: 'http.request.headers.authorization', op: 'absent' });
+  else if (ir.payloadClass === 'object-authz') where.push({ field: 'http.response.status_code', op: 'range', value: [200, 299] }, { field: 'auth.outcome', op: 'eq', value: 'authenticated' }, { field: 'actor.tenant', op: 'ne-field', value: 'object.tenant' }, { field: 'authz.cross_tenant_grant', op: 'ne', value: true });
   else where.push({ field: ir.parameter?.location === 'body' ? 'http.request.body.content' : ir.parameter?.location === 'query' ? `url.query.${ir.parameter.name}` : 'url.query', op: 'regex', value: classRegex(ir.payloadClass), flags: 'i' });
   return { applicable: true, format: 'log-query', content: `${JSON.stringify({ schema: 'agentic-security/structured-log-query', version: 1, id: ir.id, findingId: ir.findingId, where }, null, 2)}\n` };
 }
@@ -152,8 +155,19 @@ const RENDERERS = { sigma, http, waf, 'log-query': logQuery, yara, spl, kql, clo
 export function renderDetection(ir, format) {
   const fn = RENDERERS[format];
   if (!fn) return { applicable: false, reason: `unknown format: ${format}` };
-  return { format, ...fn(ir) };
+  // Threat-model FR-07.4: a rule is published to a destination only when its field mapping carries what the rule needs. The
+  // object-authorization rule needs the actor's tenant, the object's tenant and any cross-tenant grant, which only this tool's own
+  // structured formats name; elsewhere it is reported as unavailable rather than rendered as a lossy predicate.
+  if (ir.payloadClass === 'object-authz' && !OBJECT_AUTHZ_FORMATS.has(format)) {
+    return { format, ...unavailable(`the ${format} destination's default fields carry no actor tenant, object tenant or cross-tenant grant, so the object-authorization rule cannot be expressed; use the http or log-query output with mapped fields`) };
+  }
+  const out = { format, ...fn(ir) };
+  // The rule languages see whether an Authorization header was sent, not whether it was accepted: the rendered rule covers the
+  // no-credential case only, and says so.
+  if (ir.payloadClass === 'auth-bypass' && out.applicable && format !== 'http') out.coverage = { covers: 'requests that sent no credential', notCovered: 'a credential that was sent and rejected: this destination has no authentication-outcome field' };
+  return out;
 }
+const OBJECT_AUTHZ_FORMATS = new Set(['http', 'log-query']);
 
 export function renderAll(ir) {
   return Object.fromEntries(FORMATS.map((f) => [f, renderDetection(ir, f)]));

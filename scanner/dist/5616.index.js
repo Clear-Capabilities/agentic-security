@@ -105,14 +105,14 @@ function buildDetectionIR({ finding, proof = null, allowUnproven = false } = {})
 
   let parameter = null;
   if (attack?.parameter) { parameter = { name: attack.parameter, location: attack.location }; facts.parameter = { source: 'reproducer', ref: 'attack.parameter' }; }
-  else if (payloadClass !== 'auth-bypass') limitations.push('no vulnerable parameter is known, so the payload test is applied to every query and body value of the endpoint');
+  else if (def.matcher !== 'behavior') limitations.push('no vulnerable parameter is known, so the payload test is applied to every query and body value of the endpoint');
 
   let sink = null;
   if (attack?.sink) { sink = attack.sink; facts.sink = { source: 'reproducer', ref: 'attack.sink' }; }
   const affectedOperation = { sink, file: finding.file ? String(finding.file) : null, line: Number.isInteger(finding.line) ? finding.line : null };
 
   const confidence = Math.max(0.1, Math.min(0.95,
-    (grounding === 'exploit-confirmed' ? 0.9 : grounding === 'reproduced' ? 0.7 : 0.4) - (endpoint ? 0 : 0.2) - (parameter || payloadClass === 'auth-bypass' ? 0 : 0.1)));
+    (grounding === 'exploit-confirmed' ? 0.9 : grounding === 'reproduced' ? 0.7 : 0.4) - (endpoint ? 0 : 0.2) - (parameter || def.matcher === 'behavior' ? 0 : 0.1)));
   if (grounding !== 'exploit-confirmed') limitations.push(grounding === 'reproduced' ? 'the exploit was reproduced but not independently confirmed' : 'the exploit was not executed; this detection rests on static analysis only');
 
   const ir = {
@@ -188,6 +188,7 @@ const unavailable = (reason) => ({ applicable: false, reason });
 const fpNotes = (ir) => [
   'A legitimate client that sends this payload shape to the same endpoint (a security scanner, a penetration test).',
   ...(ir.payloadClass === 'auth-bypass' ? ['Public endpoints that are intentionally reachable without a credential.'] : []),
+  ...(ir.payloadClass === 'object-authz' ? ['A cross-tenant read that an operator or support role is allowed to make but whose grant is not recorded in the event.'] : []),
 ];
 
 /** Sigma rule as YAML text. JSON string syntax is used for every scalar; it is valid YAML and cannot be broken out of. */
@@ -228,7 +229,8 @@ function http(ir) {
     schema: 'agentic-security/http-detection', version: 1, id: ir.id, findingId: ir.findingId, level: levelFor(ir), mode: 'detect',
     request: { method: ir.endpoint.method, pathTemplate: ir.endpoint.path },
     parameter: ir.parameter,
-    payload: ir.payloadClass === 'auth-bypass' ? { class: 'auth-bypass', behavior: 'status 2xx with no credential' }
+    payload: ir.payloadClass === 'auth-bypass' ? { class: 'auth-bypass', behavior: 'status 2xx for a request that is not authenticated (no credential, or a rejected one)' }
+      : ir.payloadClass === 'object-authz' ? { class: 'object-authz', behavior: 'status 2xx for an authenticated actor whose tenant differs from the object\'s, with no cross-tenant grant', requiredFields: ['auth.outcome', 'actor.tenant', 'object.tenant', 'authz.cross_tenant_grant'] }
       : { class: ir.payloadClass, matcher: def.matcher, minLength: def.minLength ?? null, regex: classRegex(ir.payloadClass), flags: 'i' },
     limitations: ir.limitations,
   };
@@ -260,6 +262,7 @@ function logQuery(ir) {
   if (!ir.endpoint) return unavailable('no endpoint is known for this finding');
   const where = [{ field: 'http.request.method', op: 'eq', value: ir.endpoint.method }, hasTemplate(ir.endpoint.path) ? { field: 'url.path', op: 'regex', value: pathRegex(ir.endpoint.path) } : { field: 'url.path', op: 'eq', value: ir.endpoint.path }];
   if (ir.payloadClass === 'auth-bypass') where.push({ field: 'http.response.status_code', op: 'range', value: [200, 299] }, { field: 'http.request.headers.authorization', op: 'absent' });
+  else if (ir.payloadClass === 'object-authz') where.push({ field: 'http.response.status_code', op: 'range', value: [200, 299] }, { field: 'auth.outcome', op: 'eq', value: 'authenticated' }, { field: 'actor.tenant', op: 'ne-field', value: 'object.tenant' }, { field: 'authz.cross_tenant_grant', op: 'ne', value: true });
   else where.push({ field: ir.parameter?.location === 'body' ? 'http.request.body.content' : ir.parameter?.location === 'query' ? `url.query.${ir.parameter.name}` : 'url.query', op: 'regex', value: classRegex(ir.payloadClass), flags: 'i' });
   return { applicable: true, format: 'log-query', content: `${JSON.stringify({ schema: 'agentic-security/structured-log-query', version: 1, id: ir.id, findingId: ir.findingId, where }, null, 2)}\n` };
 }
@@ -308,8 +311,19 @@ const RENDERERS = { sigma, http, waf, 'log-query': logQuery, yara, spl, kql, clo
 function renderDetection(ir, format) {
   const fn = RENDERERS[format];
   if (!fn) return { applicable: false, reason: `unknown format: ${format}` };
-  return { format, ...fn(ir) };
+  // Threat-model FR-07.4: a rule is published to a destination only when its field mapping carries what the rule needs. The
+  // object-authorization rule needs the actor's tenant, the object's tenant and any cross-tenant grant, which only this tool's own
+  // structured formats name; elsewhere it is reported as unavailable rather than rendered as a lossy predicate.
+  if (ir.payloadClass === 'object-authz' && !OBJECT_AUTHZ_FORMATS.has(format)) {
+    return { format, ...unavailable(`the ${format} destination's default fields carry no actor tenant, object tenant or cross-tenant grant, so the object-authorization rule cannot be expressed; use the http or log-query output with mapped fields`) };
+  }
+  const out = { format, ...fn(ir) };
+  // The rule languages see whether an Authorization header was sent, not whether it was accepted: the rendered rule covers the
+  // no-credential case only, and says so.
+  if (ir.payloadClass === 'auth-bypass' && out.applicable && format !== 'http') out.coverage = { covers: 'requests that sent no credential', notCovered: 'a credential that was sent and rejected: this destination has no authentication-outcome field' };
+  return out;
 }
+const OBJECT_AUTHZ_FORMATS = new Set(['http', 'log-query']);
 
 function renderAll(ir) {
   return Object.fromEntries(FORMATS.map((f) => [f, renderDetection(ir, f)]));
@@ -423,7 +437,13 @@ RENDERERS.elastic = elastic; RENDERERS.yaral = yaral; RENDERERS.datadog = datado
 // searches the logs. An event is the NORMALIZED request record produced by log-reader.js or by the validator.
 //
 //   event = { time, method, path, query: {name: [values]}, bodyParams: {name: [values]} | null, headers: {name: value} | null,
-//             status, authPresent: boolean | null }
+//             status, authPresent: boolean | null,
+//             credentialPresent: boolean | null, authOutcome: 'authenticated'|'unauthenticated'|'unknown'|'conflict',
+//             actorTenant, objectTenant, crossTenantGrant: boolean | null, authzDecision: 'allow'|'deny'|null }
+//
+// Authentication (threat-model FR-07.1): the outcome decides, not the header. A request whose credential was REJECTED is
+// unauthenticated even though a header was sent; a header with no recorded outcome is undecidable, not "authenticated". An event
+// that carries only the legacy `authPresent` (an older caller) is judged as before.
 //
 // A missing field is `undefined`/`null`, never an empty string: "the log did not record this" and "the value was empty" are
 // different facts, and only the first makes an event undecidable.
@@ -440,11 +460,25 @@ function pathMatches(template, actual) {
   return t.every((seg, i) => (/^(?::[A-Za-z_]\w*|\{[A-Za-z_]\w*\})$/.test(seg) ? a[i].length > 0 : seg === a[i]));
 }
 
+/**
+ * The authentication fact a detection may rely on: 'authenticated', 'unauthenticated' or 'unknown'. An explicit outcome wins; with
+ * no outcome, a request that carried NO credential is unauthenticated, and one that carried a credential is unknown (it may have
+ * been accepted or rejected). An event with only the legacy `authPresent` keeps its legacy reading.
+ */
+function authenticationOf(event) {
+  const legacyOnly = event.authOutcome === undefined && event.credentialPresent === undefined;
+  if (legacyOnly) return event.authPresent === false ? 'unauthenticated' : event.authPresent === true ? 'authenticated' : 'unknown';
+  if (event.authOutcome === 'authenticated' || event.authOutcome === 'unauthenticated') return event.authOutcome;
+  if (event.authOutcome === 'conflict') return 'unknown';
+  return event.credentialPresent === false ? 'unauthenticated' : 'unknown';
+}
+
 /** Fields an event must have for a detection to be able to say "no" about it. */
 function requiredFields(ir) {
   const need = new Set();
   if (ir.endpoint) { need.add('method'); need.add('path'); }
   if (ir.payloadClass === 'auth-bypass') { need.add('status'); need.add('auth'); return [...need]; }
+  if (ir.payloadClass === 'object-authz') { need.add('status'); need.add('auth'); need.add('tenant'); return [...need]; }
   const loc = ir.parameter?.location;
   if (loc === 'body') need.add('body');
   else if (loc === 'header' || loc === 'cookie') need.add('headers');
@@ -493,10 +527,30 @@ function evaluateEvent(ir, event) {
   } else if (typeof event.path !== 'string') { res.missing.push('path'); res.undecidable = true; return res; }
 
   if (ir.payloadClass === 'auth-bypass') {
+    const auth = authenticationOf(event);
     if (event.status == null) res.missing.push('status');
-    if (event.authPresent == null) res.missing.push('auth');
+    if (auth === 'unknown') res.missing.push('auth');
     if (res.missing.length) { res.undecidable = true; return res; }
-    if (event.status >= 200 && event.status < 300 && event.authPresent === false) { res.match = true; res.matchedOn = 'unauthenticated-success'; res.value = `${event.status}`; }
+    // a matched line is a SIGNAL that the response indicated success; delivery needs a separately bound observer
+    if (event.status >= 200 && event.status < 300 && auth === 'unauthenticated') { res.match = true; res.matchedOn = 'unauthenticated-success'; res.value = `${event.status}`; res.signal = 'response-indication'; }
+    return res;
+  }
+
+  if (ir.payloadClass === 'object-authz') {
+    // FR-07.2: an AUTHENTICATED actor whose tenant differs from the object's, with no explicit cross-tenant grant, and a success
+    // response. A denial (401/403 or a recorded deny) is an attempt, never a delivery. An unauthenticated success is the auth-bypass
+    // rule's case, not this one.
+    const auth = authenticationOf(event);
+    if (event.status == null) res.missing.push('status');
+    if (auth === 'unknown') res.missing.push('auth');
+    // an unauthenticated request has no actor tenant to compare: it is decided (not this rule's case), not undecidable
+    if (auth !== 'unauthenticated' && (event.actorTenant == null || event.objectTenant == null)) res.missing.push('tenant');
+    if (res.missing.length) { res.undecidable = true; return res; }
+    if (auth !== 'authenticated' || event.actorTenant === event.objectTenant) return res;
+    const denied = event.status === 401 || event.status === 403 || event.authzDecision === 'deny';
+    if (denied) { res.attempt = 'denied'; return res; }
+    if (event.crossTenantGrant === true) { res.attempt = 'authorized-delegation'; return res; }
+    if (event.status >= 200 && event.status < 300) { res.match = true; res.matchedOn = 'cross-tenant-success'; res.value = `${event.status}`; res.signal = 'response-indication'; }
     return res;
   }
 
@@ -522,10 +576,10 @@ function evaluateEvent(ir, event) {
 
 const PROBE = 'probe';
 
-function eventFor(ir, { method, path, values, extraParam = null, status = 200, authPresent = null }) {
+function eventFor(ir, { method, path, values, extraParam = null, status = 200, authPresent = null, facts = null }) {
   const p = ir.parameter;
   const bag = {};
-  const ev = { time: '2024-01-01T00:00:00.000Z', method, path, query: {}, bodyParams: {}, headers: {}, status, authPresent };
+  const ev = { time: '2024-01-01T00:00:00.000Z', method, path, query: {}, bodyParams: {}, headers: {}, status, authPresent, ...(facts || {}) };
   const put = (loc, name, vals) => {
     if (loc === 'query') ev.query[name] = vals;
     else if (loc === 'body') ev.bodyParams[name] = vals;
@@ -551,14 +605,27 @@ function validateDetection(ir) {
   if (!ir.endpoint) return { schema: 'agentic-security/detection-validation', version: 1, detectionId: ir.id, status: 'NOT_VALIDATED', reason: 'no endpoint is known, so there is no request to synthesize', cases, render, counts: { positives: 0, negatives: 0, passed: 0, failed: 0 } };
   const concretePath = ir.endpoint.path.replace(/(:[A-Za-z_]\w*|\{[A-Za-z_]\w*\})/g, '42');
   const { method } = ir.endpoint;
-  const add = (kind, name, ev) => { const r = evaluateEvent(ir, ev); cases.push({ kind, name, expected: kind === 'positive', fired: r.match, undecidable: r.undecidable, ok: kind === 'positive' ? r.match : !r.match }); };
+  // `undecidable` cases (threat-model FR-07.4): the rule must refuse to answer, neither fire nor clear, when a required fact is missing
+  const add = (kind, name, ev) => { const r = evaluateEvent(ir, ev); cases.push({ kind, name, expected: kind === 'positive' ? true : kind === 'undecidable' ? 'undecidable' : false, fired: r.match, undecidable: r.undecidable, ok: kind === 'positive' ? r.match : kind === 'undecidable' ? r.undecidable && !r.match : !r.match }); };
+  const auth = (credentialPresent, authOutcome, extra = {}) => ({ credentialPresent, authOutcome, actorTenant: null, objectTenant: null, crossTenantGrant: null, authzDecision: null, ...extra });
 
   if (ir.payloadClass === 'auth-bypass') {
     add('positive', 'success with no credential', eventFor(ir, { method, path: concretePath, status: 200, authPresent: false }));
+    add('positive', 'success after a credential was sent and rejected', eventFor(ir, { method, path: concretePath, status: 200, facts: auth(true, 'unauthenticated') }));
     add('negative', 'success with a credential', eventFor(ir, { method, path: concretePath, status: 200, authPresent: true }));
+    add('negative', 'success with an accepted credential', eventFor(ir, { method, path: concretePath, status: 200, facts: auth(true, 'authenticated') }));
     add('negative', 'refusal without a credential (401)', eventFor(ir, { method, path: concretePath, status: 401, authPresent: false }));
     add('negative', 'refusal without a credential (403)', eventFor(ir, { method, path: concretePath, status: 403, authPresent: false }));
     add('negative', 'same request on another path', eventFor(ir, { method, path: '/other/unrelated', status: 200, authPresent: false }));
+    add('undecidable', 'a credential header with no recorded outcome', eventFor(ir, { method, path: concretePath, status: 200, facts: auth(true, 'unknown') }));
+  } else if (ir.payloadClass === 'object-authz') {
+    const t = (actorTenant, objectTenant, extra = {}) => auth(true, 'authenticated', { actorTenant, objectTenant, ...extra });
+    add('positive', 'an authenticated actor receives another tenant\'s object', eventFor(ir, { method, path: concretePath, status: 200, facts: t('tenant-a', 'tenant-b') }));
+    add('negative', 'the rightful tenant reads its own object', eventFor(ir, { method, path: concretePath, status: 200, facts: t('tenant-b', 'tenant-b') }));
+    add('negative', 'a cross-tenant read under an explicit grant', eventFor(ir, { method, path: concretePath, status: 200, facts: t('tenant-a', 'tenant-b', { crossTenantGrant: true }) }));
+    add('negative', 'a cross-tenant attempt that was denied (403)', eventFor(ir, { method, path: concretePath, status: 403, facts: t('tenant-a', 'tenant-b', { authzDecision: 'deny' }) }));
+    add('negative', 'the same cross-tenant read on another path', eventFor(ir, { method, path: '/other/unrelated', status: 200, facts: t('tenant-a', 'tenant-b') }));
+    add('undecidable', 'no object tenant recorded', eventFor(ir, { method, path: concretePath, status: 200, facts: t('tenant-a', null) }));
   } else {
     for (const [i, v] of def.exemplars.positive.entries()) add('positive', `exploit payload #${i + 1}`, eventFor(ir, { method, path: concretePath, values: [v] }));
     for (const [i, v] of def.exemplars.benign.entries()) add('negative', `benign value #${i + 1} on the same endpoint`, eventFor(ir, { method, path: concretePath, values: [v] }));
@@ -569,7 +636,7 @@ function validateDetection(ir) {
     add('negative', 'same endpoint, no parameter at all', eventFor(ir, { method, path: concretePath }));
     if (ir.parameter && ir.parameter.location !== 'path') add('negative', 'exploit payload in an unrelated parameter', eventFor(ir, { method, path: concretePath, values: exploit, extraParam: 'unrelated_field' }));
   }
-  const positives = cases.filter((c) => c.kind === 'positive'); const negatives = cases.filter((c) => c.kind === 'negative');
+  const positives = cases.filter((c) => c.kind === 'positive'); const negatives = cases.filter((c) => c.kind !== 'positive');
   const failed = cases.filter((c) => !c.ok);
   const status = failed.length === 0 && positives.length && negatives.length && render.regexCompiles ? 'VALIDATED' : 'FAILED';
   return { schema: 'agentic-security/detection-validation', version: 1, detectionId: ir.id, status, cases, render, counts: { positives: positives.length, negatives: negatives.length, passed: cases.length - failed.length, failed: failed.length }, failures: failed.map((c) => c.name) };
@@ -680,17 +747,59 @@ function parseLine(line) {
     }
     const authHeader = headers.authorization ?? pick(f, ['authorization']);
     const authFlag = pick(f, ['authenticated', 'is_authenticated', 'auth.present']);
+    // Legacy: one boolean where a header wins over everything. Kept for existing callers; detections read the two facts below.
     const authPresent = authHeader != null ? true : typeof authFlag === 'boolean' ? authFlag : (sawHeaders ? false : null);
     const statusRaw = pick(f, ['status', 'status_code', 'response_code', 'http.response.status_code', 'sc-status', 'response.status', 'res.statuscode']);
     const status = Number.isInteger(Number(statusRaw)) && statusRaw !== undefined ? Number(statusRaw) : null;
-    return { time: parseTime(pick(f, ['@timestamp', 'timestamp', 'time', 'ts', 'start_time', 'datetime', 'date'])), method: typeof m === 'string' ? m.toUpperCase() : null, path: tgt.path ?? null, query: query ?? null, bodyParams, headers: sawHeaders ? headers : null, status, authPresent };
+    return { time: parseTime(pick(f, ['@timestamp', 'timestamp', 'time', 'ts', 'start_time', 'datetime', 'date'])), method: typeof m === 'string' ? m.toUpperCase() : null, path: tgt.path ?? null, query: query ?? null, bodyParams, headers: sawHeaders ? headers : null, status, authPresent, ...authFacts(f, authHeader, sawHeaders) };
   }
   const c = CLF.exec(text);
   if (c) {
     const { path: p, query } = fromRequestTarget(c[5]);
-    return { time: parseTime(c[3]), method: c[4], path: p, query, bodyParams: null, headers: null, status: c[6] === '-' ? null : Number(c[6]), authPresent: null };
+    return { time: parseTime(c[3]), method: c[4], path: p, query, bodyParams: null, headers: null, status: c[6] === '-' ? null : Number(c[6]), authPresent: null, ...UNKNOWN_AUTH };
   }
   return null;
+}
+
+// ── authentication and authorization facts (PRD threat-model FR-07.1, FR-07.5) ──────────────────────────────────────────────────────
+// Credential PRESENCE and the verified authentication OUTCOME are separate facts. A header only says a credential was sent; an
+// authoritative `authenticated: false` (or an auth result of "rejected") says it was refused, and survives a redacted header. Missing or
+// conflicting outcome fields leave the outcome `unknown`. Identity and policy fields (actor tenant, object tenant, a cross-tenant grant,
+// the authorization decision) are read only from these mapped field names, never from request headers, query or body, which the client
+// controls.
+const OUTCOME_FIELDS = ['authenticated', 'is_authenticated', 'auth.authenticated', 'auth.outcome', 'auth.result', 'authn.outcome', 'authn.result'];
+const ACTOR_TENANT_FIELDS = ['identity.tenant', 'actor.tenant', 'auth.tenant', 'principal.tenant'];
+const OBJECT_TENANT_FIELDS = ['object.tenant', 'resource.tenant', 'record.tenant'];
+const GRANT_FIELDS = ['authz.cross_tenant_grant', 'authz.delegated', 'authz.crossTenantGrant'];
+const DECISION_FIELDS = ['authz.decision', 'authz.result'];
+const UNKNOWN_AUTH = Object.freeze({ credentialPresent: null, authOutcome: 'unknown', actorTenant: null, objectTenant: null, crossTenantGrant: null, authzDecision: null });
+
+function outcomeOf(v) {
+  if (v === true) return 'authenticated';
+  if (v === false) return 'unauthenticated';
+  const s = String(v ?? '').trim().toLowerCase();
+  if (/^(?:true|success|succeeded|ok|authenticated|allow|allowed|valid)$/.test(s)) return 'authenticated';
+  if (/^(?:false|failure|failed|rejected|denied|invalid|unauthenticated|anonymous|none|expired)$/.test(s)) return 'unauthenticated';
+  return null;
+}
+const ident = (v) => (v === undefined || v === null || v === '' ? null : String(v).slice(0, 128));
+
+function authFacts(f, authHeader, sawHeaders) {
+  const outcomes = new Set(OUTCOME_FIELDS.map((k) => f[k]).filter((v) => v !== undefined).map(outcomeOf).filter(Boolean));
+  const authOutcome = outcomes.size === 1 ? [...outcomes][0] : 'unknown';
+  const presentFlag = f['auth.present'];
+  const credentialPresent = authHeader != null ? true : typeof presentFlag === 'boolean' ? presentFlag : (sawHeaders ? false : null);
+  const grant = GRANT_FIELDS.map((k) => f[k]).find((v) => v !== undefined);
+  const decision = DECISION_FIELDS.map((k) => f[k]).find((v) => v !== undefined);
+  const d = String(decision ?? '').toLowerCase();
+  return {
+    credentialPresent,
+    authOutcome: outcomes.size > 1 ? 'conflict' : authOutcome,
+    actorTenant: ident(pick(f, ACTOR_TENANT_FIELDS)),
+    objectTenant: ident(pick(f, OBJECT_TENANT_FIELDS)),
+    crossTenantGrant: grant === true || grant === 'true' ? true : grant === false || grant === 'false' ? false : null,
+    authzDecision: /^(?:allow|allowed|permit|granted)$/.test(d) ? 'allow' : /^(?:deny|denied|forbidden|refused)$/.test(d) ? 'deny' : null,
+  };
 }
 
 function collectFiles(root, limits, skipped) {
@@ -722,7 +831,7 @@ function collectFiles(root, limits, skipped) {
  */
 async function readLogs(target, { onEvent, signal, limits: over = {} } = {}) {
   const limits = { ...LIMITS, ...over };
-  const stats = { files: [], filesSkipped: [], lines: 0, parsed: 0, failed: 0, oversizeLines: 0, windowStart: null, windowEnd: null, eventsWithTime: 0, fieldCounts: { method: 0, path: 0, query: 0, body: 0, headers: 0, status: 0, auth: 0 }, truncated: [], budgetExhausted: false, aborted: false, unreadable: false };
+  const stats = { files: [], filesSkipped: [], lines: 0, parsed: 0, failed: 0, oversizeLines: 0, windowStart: null, windowEnd: null, eventsWithTime: 0, fieldCounts: { method: 0, path: 0, query: 0, body: 0, headers: 0, status: 0, auth: 0, authOutcome: 0, tenant: 0 }, truncated: [], budgetExhausted: false, aborted: false, unreadable: false };
   let st;
   try { st = external_node_fs_.lstatSync(target); } catch { stats.unreadable = true; return stats; }
   if (st.isSymbolicLink()) { stats.unreadable = true; stats.filesSkipped.push({ file: external_node_path_.basename(target), reason: 'symlink' }); return stats; }
@@ -758,6 +867,8 @@ async function readLogs(target, { onEvent, signal, limits: over = {} } = {}) {
         if (ev.headers != null) stats.fieldCounts.headers++;
         if (ev.status != null) stats.fieldCounts.status++;
         if (ev.authPresent != null) stats.fieldCounts.auth++;
+        if (ev.authOutcome === 'authenticated' || ev.authOutcome === 'unauthenticated') stats.fieldCounts.authOutcome++;
+        if (ev.actorTenant != null && ev.objectTenant != null) stats.fieldCounts.tenant++;
         if (ev.time) { stats.eventsWithTime++; if (!stats.windowStart || ev.time < stats.windowStart) stats.windowStart = ev.time; if (!stats.windowEnd || ev.time > stats.windowEnd) stats.windowEnd = ev.time; }
         onEvent?.(ev);
       }
@@ -825,7 +936,10 @@ const STATEMENTS = {
   TELEMETRY_UNAVAILABLE: () => 'There were no readable request records to search, so nothing can be said about past exploitation.',
 };
 
-const FIELD_COUNT_KEY = { method: 'method', path: 'path', query: 'query', body: 'body', headers: 'headers', status: 'status', auth: 'auth' };
+const FIELD_COUNT_KEY = { method: 'method', path: 'path', query: 'query', body: 'body', headers: 'headers', status: 'status', auth: 'auth', authOutcome: 'authOutcome', tenant: 'tenant' };
+
+// A matched line shows the RESPONSE indicated success; delivery of the data is an effect that needs a separately bound observer.
+const EFFECT = Object.freeze({ corroborated: false, basis: 'log-signal', reason: 'a matched log line is a detection signal; delivery or mutation needs a separately bound observer (runtime corroboration), which a log hunt does not have' });
 
 async function huntLogs({ ir, logsPath, since = null, until = null, signal, limits } = {}) {
   const base = { schema: 'agentic-security/hunt-result', version: 1, findingId: ir.findingId, detectionId: ir.id, detectionDigest: ir.digest, notExploitedClaim: false, egress: 'none' };
@@ -838,6 +952,10 @@ async function huntLogs({ ir, logsPath, since = null, until = null, signal, limi
   let matchCount = 0; let firstSeen = null; let lastSeen = null;
   let undecidable = 0; const undecidableFields = new Set();
   let endpointEvents = 0; let outOfWindow = 0; let undated = 0;
+  // Threat-model FR-07.3: the target counter uses the SAME method and route template as the matcher (a different route with the same
+  // method used to count), and separates the relevant events from those that could be judged and those missing a required field.
+  const target = { relevant: 0, adjudicable: 0, missingRequired: 0, deniedAttempts: 0, authorizedDelegations: 0 };
+  const atEndpoint = (ev) => !!ir.endpoint && typeof ev.method === 'string' && ev.method.toUpperCase() === ir.endpoint.method && pathMatches(ir.endpoint.path, ev.path);
 
   const stats = await readLogs(logsPath, {
     signal, limits,
@@ -848,19 +966,27 @@ async function huntLogs({ ir, logsPath, since = null, until = null, signal, limi
         if ((sinceMs != null && t < sinceMs) || (untilMs != null && t > untilMs)) { outOfWindow++; return; }
       }
       const r = evaluateEvent(ir, ev);
-      if (r.undecidable) { undecidable++; r.missing.forEach((m) => undecidableFields.add(m)); return; }
-      if (ir.endpoint && ev.method === ir.endpoint.method) endpointEvents++;
+      const here = atEndpoint(ev);
+      if (here) target.relevant++;
+      if (r.undecidable) { undecidable++; if (here) target.missingRequired++; r.missing.forEach((m) => undecidableFields.add(m)); return; }
+      if (here) { endpointEvents++; target.adjudicable++; }
+      if (r.attempt === 'denied') target.deniedAttempts++;
+      if (r.attempt === 'authorized-delegation') target.authorizedDelegations++;
       if (!r.match) return;
       matchCount++;
       if (ev.time) { if (!firstSeen || ev.time < firstSeen) firstSeen = ev.time; if (!lastSeen || ev.time > lastSeen) lastSeen = ev.time; }
-      if (sampleList.length < MAX_SAMPLES) sampleList.push({ time: ev.time, method: ev.method, path: redactValue(ev.path, 160), matchedOn: r.matchedOn, valueFingerprint: fingerprint(r.value), valuePreview: redactValue(r.value, 80), status: ev.status });
+      if (sampleList.length < MAX_SAMPLES) sampleList.push({ time: ev.time, method: ev.method, path: redactValue(ev.path, 160), matchedOn: r.matchedOn, valueFingerprint: fingerprint(r.value), valuePreview: redactValue(r.value, 80), status: ev.status, ...(r.signal ? { signal: r.signal } : {}) });
     },
   });
 
   const logs = { source: external_node_path_.basename(String(logsPath)), files: stats.files.length, filesSkipped: stats.filesSkipped, lines: stats.lines, parsed: stats.parsed, failed: stats.failed, truncated: stats.truncated };
   const window = { start: stats.windowStart, end: stats.windowEnd, datedEvents: stats.eventsWithTime };
   const caveats = [];
-  const result = (verdict) => ({ ...base, verdict, logs, window, coverage: { requestedWindow: { since, until }, outOfWindow, undated, endpointEvents, requiredFields: requiredFields(ir), fieldAvailability: Object.fromEntries(Object.entries(FIELD_COUNT_KEY).map(([k, key]) => [k, stats.parsed ? Number((stats.fieldCounts[key] / stats.parsed).toFixed(3)) : 0])) }, matches: { count: matchCount, firstSeen, lastSeen, samples: sampleList }, caveats, statement: STATEMENTS[verdict](matchCount) });
+  // A requested window the logs do not reach: the time before the first event or after the last cannot be searched, so it is a gap.
+  const windowGaps = [];
+  if (sinceMs != null && stats.windowStart && Date.parse(stats.windowStart) > sinceMs) windowGaps.push({ edge: 'start', from: new Date(sinceMs).toISOString(), to: stats.windowStart });
+  if (untilMs != null && stats.windowEnd && Date.parse(stats.windowEnd) < untilMs) windowGaps.push({ edge: 'end', from: stats.windowEnd, to: new Date(untilMs).toISOString() });
+  const result = (verdict) => ({ ...base, verdict, logs, window, effect: EFFECT, coverage: { requestedWindow: { since, until }, outOfWindow, undated, endpointEvents, target: { ...target, samples: sampleList.length, samplesCapped: matchCount > sampleList.length }, windowGaps, requiredFields: requiredFields(ir), fieldAvailability: Object.fromEntries(Object.entries(FIELD_COUNT_KEY).map(([k, key]) => [k, stats.parsed ? Number((stats.fieldCounts[key] / stats.parsed).toFixed(3)) : 0])) }, matches: { count: matchCount, firstSeen, lastSeen, samples: sampleList }, caveats, statement: STATEMENTS[verdict](matchCount) });
 
   if (stats.unreadable || stats.parsed === 0) {
     caveats.push(stats.unreadable ? 'the log path could not be read' : stats.lines === 0 ? 'the logs contain no lines' : 'no line was recognised as a request record (supported: common/combined access logs, JSON lines)');
@@ -878,6 +1004,7 @@ async function huntLogs({ ir, logsPath, since = null, until = null, signal, limi
   if (!stats.eventsWithTime) caveats.push('no event carries a timestamp, so the searched time window is unknown');
   if (stats.filesSkipped.some((f) => f.reason !== 'not-a-log-extension')) caveats.push(`${stats.filesSkipped.filter((f) => f.reason !== 'not-a-log-extension').length} file(s) were skipped (${[...new Set(stats.filesSkipped.map((f) => f.reason))].join(', ')})`);
   if (undated > 0) caveats.push(`${undated} event(s) had no timestamp and were excluded by the requested window`);
+  for (const g of windowGaps) caveats.push(`the logs do not reach the ${g.edge} of the requested window (${g.from} to ${g.to} is not covered), so nothing is known about that time`);
   if (!caveats.length && ir.endpoint && endpointEvents === 0) caveats.push('no request to the endpoint appears in the logs at all (informational: nothing to exploit was seen either)');
   const blocking = caveats.some((c) => !c.startsWith('no request to the endpoint'));
   return result(blocking ? 'INCONCLUSIVE' : 'NOT_OBSERVED');

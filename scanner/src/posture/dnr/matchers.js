@@ -3,7 +3,13 @@
 // searches the logs. An event is the NORMALIZED request record produced by log-reader.js or by the validator.
 //
 //   event = { time, method, path, query: {name: [values]}, bodyParams: {name: [values]} | null, headers: {name: value} | null,
-//             status, authPresent: boolean | null }
+//             status, authPresent: boolean | null,
+//             credentialPresent: boolean | null, authOutcome: 'authenticated'|'unauthenticated'|'unknown'|'conflict',
+//             actorTenant, objectTenant, crossTenantGrant: boolean | null, authzDecision: 'allow'|'deny'|null }
+//
+// Authentication (threat-model FR-07.1): the outcome decides, not the header. A request whose credential was REJECTED is
+// unauthenticated even though a header was sent; a header with no recorded outcome is undecidable, not "authenticated". An event
+// that carries only the legacy `authPresent` (an older caller) is judged as before.
 //
 // A missing field is `undefined`/`null`, never an empty string: "the log did not record this" and "the value was empty" are
 // different facts, and only the first makes an event undecidable.
@@ -20,11 +26,25 @@ export function pathMatches(template, actual) {
   return t.every((seg, i) => (/^(?::[A-Za-z_]\w*|\{[A-Za-z_]\w*\})$/.test(seg) ? a[i].length > 0 : seg === a[i]));
 }
 
+/**
+ * The authentication fact a detection may rely on: 'authenticated', 'unauthenticated' or 'unknown'. An explicit outcome wins; with
+ * no outcome, a request that carried NO credential is unauthenticated, and one that carried a credential is unknown (it may have
+ * been accepted or rejected). An event with only the legacy `authPresent` keeps its legacy reading.
+ */
+export function authenticationOf(event) {
+  const legacyOnly = event.authOutcome === undefined && event.credentialPresent === undefined;
+  if (legacyOnly) return event.authPresent === false ? 'unauthenticated' : event.authPresent === true ? 'authenticated' : 'unknown';
+  if (event.authOutcome === 'authenticated' || event.authOutcome === 'unauthenticated') return event.authOutcome;
+  if (event.authOutcome === 'conflict') return 'unknown';
+  return event.credentialPresent === false ? 'unauthenticated' : 'unknown';
+}
+
 /** Fields an event must have for a detection to be able to say "no" about it. */
 export function requiredFields(ir) {
   const need = new Set();
   if (ir.endpoint) { need.add('method'); need.add('path'); }
   if (ir.payloadClass === 'auth-bypass') { need.add('status'); need.add('auth'); return [...need]; }
+  if (ir.payloadClass === 'object-authz') { need.add('status'); need.add('auth'); need.add('tenant'); return [...need]; }
   const loc = ir.parameter?.location;
   if (loc === 'body') need.add('body');
   else if (loc === 'header' || loc === 'cookie') need.add('headers');
@@ -73,10 +93,30 @@ export function evaluateEvent(ir, event) {
   } else if (typeof event.path !== 'string') { res.missing.push('path'); res.undecidable = true; return res; }
 
   if (ir.payloadClass === 'auth-bypass') {
+    const auth = authenticationOf(event);
     if (event.status == null) res.missing.push('status');
-    if (event.authPresent == null) res.missing.push('auth');
+    if (auth === 'unknown') res.missing.push('auth');
     if (res.missing.length) { res.undecidable = true; return res; }
-    if (event.status >= 200 && event.status < 300 && event.authPresent === false) { res.match = true; res.matchedOn = 'unauthenticated-success'; res.value = `${event.status}`; }
+    // a matched line is a SIGNAL that the response indicated success; delivery needs a separately bound observer
+    if (event.status >= 200 && event.status < 300 && auth === 'unauthenticated') { res.match = true; res.matchedOn = 'unauthenticated-success'; res.value = `${event.status}`; res.signal = 'response-indication'; }
+    return res;
+  }
+
+  if (ir.payloadClass === 'object-authz') {
+    // FR-07.2: an AUTHENTICATED actor whose tenant differs from the object's, with no explicit cross-tenant grant, and a success
+    // response. A denial (401/403 or a recorded deny) is an attempt, never a delivery. An unauthenticated success is the auth-bypass
+    // rule's case, not this one.
+    const auth = authenticationOf(event);
+    if (event.status == null) res.missing.push('status');
+    if (auth === 'unknown') res.missing.push('auth');
+    // an unauthenticated request has no actor tenant to compare: it is decided (not this rule's case), not undecidable
+    if (auth !== 'unauthenticated' && (event.actorTenant == null || event.objectTenant == null)) res.missing.push('tenant');
+    if (res.missing.length) { res.undecidable = true; return res; }
+    if (auth !== 'authenticated' || event.actorTenant === event.objectTenant) return res;
+    const denied = event.status === 401 || event.status === 403 || event.authzDecision === 'deny';
+    if (denied) { res.attempt = 'denied'; return res; }
+    if (event.crossTenantGrant === true) { res.attempt = 'authorized-delegation'; return res; }
+    if (event.status >= 200 && event.status < 300) { res.match = true; res.matchedOn = 'cross-tenant-success'; res.value = `${event.status}`; res.signal = 'response-indication'; }
     return res;
   }
 

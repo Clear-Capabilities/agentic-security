@@ -10,10 +10,10 @@ import { classRegex } from './outputs.js';
 
 const PROBE = 'probe';
 
-function eventFor(ir, { method, path, values, extraParam = null, status = 200, authPresent = null }) {
+function eventFor(ir, { method, path, values, extraParam = null, status = 200, authPresent = null, facts = null }) {
   const p = ir.parameter;
   const bag = {};
-  const ev = { time: '2024-01-01T00:00:00.000Z', method, path, query: {}, bodyParams: {}, headers: {}, status, authPresent };
+  const ev = { time: '2024-01-01T00:00:00.000Z', method, path, query: {}, bodyParams: {}, headers: {}, status, authPresent, ...(facts || {}) };
   const put = (loc, name, vals) => {
     if (loc === 'query') ev.query[name] = vals;
     else if (loc === 'body') ev.bodyParams[name] = vals;
@@ -39,14 +39,27 @@ export function validateDetection(ir) {
   if (!ir.endpoint) return { schema: 'agentic-security/detection-validation', version: 1, detectionId: ir.id, status: 'NOT_VALIDATED', reason: 'no endpoint is known, so there is no request to synthesize', cases, render, counts: { positives: 0, negatives: 0, passed: 0, failed: 0 } };
   const concretePath = ir.endpoint.path.replace(/(:[A-Za-z_]\w*|\{[A-Za-z_]\w*\})/g, '42');
   const { method } = ir.endpoint;
-  const add = (kind, name, ev) => { const r = evaluateEvent(ir, ev); cases.push({ kind, name, expected: kind === 'positive', fired: r.match, undecidable: r.undecidable, ok: kind === 'positive' ? r.match : !r.match }); };
+  // `undecidable` cases (threat-model FR-07.4): the rule must refuse to answer, neither fire nor clear, when a required fact is missing
+  const add = (kind, name, ev) => { const r = evaluateEvent(ir, ev); cases.push({ kind, name, expected: kind === 'positive' ? true : kind === 'undecidable' ? 'undecidable' : false, fired: r.match, undecidable: r.undecidable, ok: kind === 'positive' ? r.match : kind === 'undecidable' ? r.undecidable && !r.match : !r.match }); };
+  const auth = (credentialPresent, authOutcome, extra = {}) => ({ credentialPresent, authOutcome, actorTenant: null, objectTenant: null, crossTenantGrant: null, authzDecision: null, ...extra });
 
   if (ir.payloadClass === 'auth-bypass') {
     add('positive', 'success with no credential', eventFor(ir, { method, path: concretePath, status: 200, authPresent: false }));
+    add('positive', 'success after a credential was sent and rejected', eventFor(ir, { method, path: concretePath, status: 200, facts: auth(true, 'unauthenticated') }));
     add('negative', 'success with a credential', eventFor(ir, { method, path: concretePath, status: 200, authPresent: true }));
+    add('negative', 'success with an accepted credential', eventFor(ir, { method, path: concretePath, status: 200, facts: auth(true, 'authenticated') }));
     add('negative', 'refusal without a credential (401)', eventFor(ir, { method, path: concretePath, status: 401, authPresent: false }));
     add('negative', 'refusal without a credential (403)', eventFor(ir, { method, path: concretePath, status: 403, authPresent: false }));
     add('negative', 'same request on another path', eventFor(ir, { method, path: '/other/unrelated', status: 200, authPresent: false }));
+    add('undecidable', 'a credential header with no recorded outcome', eventFor(ir, { method, path: concretePath, status: 200, facts: auth(true, 'unknown') }));
+  } else if (ir.payloadClass === 'object-authz') {
+    const t = (actorTenant, objectTenant, extra = {}) => auth(true, 'authenticated', { actorTenant, objectTenant, ...extra });
+    add('positive', 'an authenticated actor receives another tenant\'s object', eventFor(ir, { method, path: concretePath, status: 200, facts: t('tenant-a', 'tenant-b') }));
+    add('negative', 'the rightful tenant reads its own object', eventFor(ir, { method, path: concretePath, status: 200, facts: t('tenant-b', 'tenant-b') }));
+    add('negative', 'a cross-tenant read under an explicit grant', eventFor(ir, { method, path: concretePath, status: 200, facts: t('tenant-a', 'tenant-b', { crossTenantGrant: true }) }));
+    add('negative', 'a cross-tenant attempt that was denied (403)', eventFor(ir, { method, path: concretePath, status: 403, facts: t('tenant-a', 'tenant-b', { authzDecision: 'deny' }) }));
+    add('negative', 'the same cross-tenant read on another path', eventFor(ir, { method, path: '/other/unrelated', status: 200, facts: t('tenant-a', 'tenant-b') }));
+    add('undecidable', 'no object tenant recorded', eventFor(ir, { method, path: concretePath, status: 200, facts: t('tenant-a', null) }));
   } else {
     for (const [i, v] of def.exemplars.positive.entries()) add('positive', `exploit payload #${i + 1}`, eventFor(ir, { method, path: concretePath, values: [v] }));
     for (const [i, v] of def.exemplars.benign.entries()) add('negative', `benign value #${i + 1} on the same endpoint`, eventFor(ir, { method, path: concretePath, values: [v] }));
@@ -57,7 +70,7 @@ export function validateDetection(ir) {
     add('negative', 'same endpoint, no parameter at all', eventFor(ir, { method, path: concretePath }));
     if (ir.parameter && ir.parameter.location !== 'path') add('negative', 'exploit payload in an unrelated parameter', eventFor(ir, { method, path: concretePath, values: exploit, extraParam: 'unrelated_field' }));
   }
-  const positives = cases.filter((c) => c.kind === 'positive'); const negatives = cases.filter((c) => c.kind === 'negative');
+  const positives = cases.filter((c) => c.kind === 'positive'); const negatives = cases.filter((c) => c.kind !== 'positive');
   const failed = cases.filter((c) => !c.ok);
   const status = failed.length === 0 && positives.length && negatives.length && render.regexCompiles ? 'VALIDATED' : 'FAILED';
   return { schema: 'agentic-security/detection-validation', version: 1, detectionId: ir.id, status, cases, render, counts: { positives: positives.length, negatives: negatives.length, passed: cases.length - failed.length, failed: failed.length }, failures: failed.map((c) => c.name) };
