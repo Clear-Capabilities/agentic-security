@@ -20,9 +20,32 @@
 // already-capped body, so a call site changes one identifier. Failures are thrown as `ModelTransportError` with a `code` in
 // `TRANSPORT_ERROR_CODES`, which the callers map to their own unavailable states; nothing here retries or falls back.
 
+//   6. a connect deadline (0.195.31, GA-06 §3). With `opts.connectTimeoutMs` set, a TCP connection to the endpoint's host and port is
+//      opened and closed BEFORE the request, bounded by that value: a dead port is `connect-refused` and an unroutable host is
+//      `connect-timeout`, each within the connect deadline instead of the whole call timeout (minutes for a local model). A server
+//      that accepts the connection and then takes its time is the per-call deadline's business, because a non-streaming model answers
+//      with its headers only when generation is done. The probe is skipped when a test injects `fetchImpl`: it is about the real network.
+
+import net from 'node:net';
+
 export const DEFAULT_TIMEOUT_MS = 60_000;
 export const DEFAULT_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
-export const TRANSPORT_ERROR_CODES = Object.freeze(['redirect', 'timeout', 'response-too-large', 'budget-exhausted', 'network']);
+export const TRANSPORT_ERROR_CODES = Object.freeze(['redirect', 'timeout', 'response-too-large', 'budget-exhausted', 'network', 'connect-timeout', 'connect-refused']);
+
+/** One bounded TCP connect to the endpoint's host and port, closed as soon as it opens; rejects with a transport error. */
+function probeConnect(endpoint, ms) {
+  let u;
+  try { u = new URL(String(endpoint)); } catch { return Promise.reject(new ModelTransportError('network', `not a URL: ${endpoint}`)); }
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  const port = Number(u.port) || (u.protocol === 'https:' ? 443 : 80);
+  return new Promise((resolve, reject) => {
+    const sock = net.connect({ host, port });
+    const done = (err) => { sock.destroy(); clearTimeout(t); err ? reject(err) : resolve(); };
+    const t = setTimeout(() => done(new ModelTransportError('connect-timeout', `no connection to ${host}:${port} within ${ms} ms`, { connectTimeoutMs: ms })), ms);
+    sock.once('connect', () => done(null));
+    sock.once('error', (e) => done(new ModelTransportError('connect-refused', `cannot connect to ${host}:${port}: ${e?.code || e?.message || e}`, { connectTimeoutMs: ms, cause: e })));
+  });
+}
 
 export class ModelTransportError extends Error {
   constructor(code, message, extra = {}) {
@@ -99,6 +122,8 @@ export async function modelFetch(endpoint, init = {}, opts = {}) {
   // the remaining budget, when one is set, caps this call too
   const callMs = b.limitMs === null ? timeoutMs : Math.min(timeoutMs, Math.max(1, b.limitMs - b.spentMs));
   const timer = setTimeout(() => ac.abort(new ModelTransportError('timeout', `no response within ${callMs} ms`)), callMs);
+  // the connect deadline (header bullet 6): a bounded TCP probe before the request, only when asked for and only on the real network
+  const connectMs = Number.isFinite(opts.connectTimeoutMs) && opts.connectTimeoutMs > 0 ? Math.min(opts.connectTimeoutMs, callMs) : null;
   const onOuter = () => ac.abort(opts.signal?.reason);
   if (opts.signal) {
     if (opts.signal.aborted) onOuter();
@@ -111,8 +136,10 @@ export async function modelFetch(endpoint, init = {}, opts = {}) {
     let res;
     try {
       // The caller already evaluated the egress policy for this endpoint; this is the only place a model request leaves the process.
+      if (connectMs !== null && !opts.fetchImpl) await probeConnect(endpoint, connectMs);
       res = await doFetch(endpoint, { ...rest, redirect: 'error', signal: ac.signal }); // agentic-security-ignore: CWE-918
     } catch (e) {
+      if (e instanceof ModelTransportError) throw e;
       if (ac.signal.aborted && ac.signal.reason instanceof ModelTransportError) throw ac.signal.reason;
       if (isAbort(e) || ac.signal.aborted) throw new ModelTransportError('timeout', `aborted after ${Date.now() - started} ms`, { cause: e });
       const msg = String(e?.cause?.message || e?.message || e);

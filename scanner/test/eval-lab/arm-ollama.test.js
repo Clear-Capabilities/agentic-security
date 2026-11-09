@@ -98,6 +98,8 @@ test('a non-loopback host is blocked at run time too, and a failed local model i
   globalThis.fetch = async (...a) => { calls++; assert.match(String(a[0]), /^http:\/\/127\.0\.0\.1:/, 'every request stays on the loopback host'); throw new Error('connection refused'); };
   try {
     const u = await runArmTask({ arm: arm('http://127.0.0.1:9'), task: 'detect', request: req('detect'), workspaceDir: ws() });
-    assert.equal(u.status, 'unavailable'); assert.equal(calls, 1, 'exactly one attempt and no fallback');
+    // since 0.195.31 the transport's connect probe refuses a dead port before any request is made, so the attempt count is 0 or 1;
+    // either way every request that was made stayed on the loopback host (asserted above) and nothing fell back
+    assert.equal(u.status, 'unavailable'); assert.ok(calls <= 1, 'at most one attempt and no fallback');
   } finally { globalThis.fetch = originalFetch; }
 });

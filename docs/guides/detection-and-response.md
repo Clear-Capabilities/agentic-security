@@ -203,7 +203,7 @@ An earlier hunt that observed matches is not hidden by a later hunt over differe
 ```bash
 agentic-security dnr generate <finding-id> [--format <name>|all] [--out <dir>] [--allow-unproven] [--json]
 agentic-security dnr validate <finding-id>
-agentic-security dnr hunt <finding-id> --logs <file-or-dir> [--since <iso>] [--until <iso>]
+agentic-security dnr hunt <finding-id> --logs <file-or-dir> [--since <iso>] [--until <iso>] [--max-gap <hours>]
 agentic-security dnr window <finding-id> --deployments <file> [--fix-commit <sha>] [--environment <name>]
 agentic-security dnr show <finding-id>
 agentic-security dnr status <finding-id>
@@ -211,6 +211,25 @@ agentic-security dnr status <finding-id>
 
 `--allow-unproven` builds a lower-confidence detection from the static finding alone; it is labelled `static-only` and carries a
 limitation saying the exploit was not executed.
+
+**What each format has been held to** (since 0.195.31). Every rendered rule is checked against a grammar for exactly what the
+renderer emits (`scanner/src/posture/dnr/syntax.js`): a vendored schema for the JSON formats this repository owns, a subset grammar
+written from the target's public documentation for Sigma, ModSecurity, YARA, SPL, KQL, CloudWatch and YARA-L, each with the document
+and version it was read from. No vendor tool runs here and no output has been run against a live product; the contract page carries
+the per-format table (generated, syntax, samples, product). A renderer now declines what its target cannot express rather than
+inventing a field: Sigma's `webserver` log source has no request body or arbitrary header, and neither `W3CIISLog` nor an access log
+line carries an `Authorization` header, so those cases print `not applicable (...)` with the reason.
+
+**What a hunt now reports about its own coverage** (since 0.195.31). `coverage.gaps` lists holes between dated events longer than six
+hours (informational, because the logs alone cannot tell a quiet night from lost retention; `--max-gap <hours>` declares what a gap is
+and makes one block a negative); `coverage.truncatedEvents` counts events whose query or body parameters were cut at the parser's
+limits, and `coverage.ambiguousTime` counts events whose timestamp carries no zone, which are searched but not dated instead of being
+read in the machine's local time. Either count blocks a negative. "A request to the endpoint" is counted by method and path, not by
+method alone. The exposure window refuses two deployment records that place different commits in one environment at one moment and a
+deployment that contains the fix but predates the fix commit, lists every refused record under `unknowns` (it could have been the
+first vulnerable deployment), flags records that span environments, and reports exposure after the telemetry ends
+(`unobservableAfter`) beside the part before it began. A labelled log corpus (`scanner/test/fixtures/dnr/corpus/`) holds the hunt to
+these verdicts and caveats, including the same instant spelled five ways under three time zones.
 
 ## Output schema
 
@@ -243,7 +262,9 @@ exposure window with every unknown listed) and `fix` (the remediation closure). 
 * The Elastic, YARA-L and Datadog renderers translate exactly or say why not, which makes them narrow. Elastic uses Lucene regular
   expressions (no anchors, word boundaries or look-around), YARA-L sees the whole URL, and Datadog has wildcards but no regular
   expressions. Most payload classes are therefore reported as not expressible there; the structural cases (authentication bypass,
-  oversized values) render. The syntax of these three was not run against a live Elastic, Google SecOps or Datadog.
+  oversized values) render. No format's output has been run against a live product: the syntax checks are subset grammars and
+  vendored schemas written here, not the vendors' own parsers, and an official check belongs to a hosted qualification job that is not
+  provisioned.
 * An MCP tool for the loop.
 * Hunting compressed logs (`.gz` and friends are reported as skipped, which makes the verdict INCONCLUSIVE).
 * Payload classes beyond the eight above. A finding of another class gets no detection rather than a guessed one.

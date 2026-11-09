@@ -11,7 +11,7 @@
 The code is split into focus areas by call graph, and each area is hunted once per lens. Every candidate then passes three gates in order:
 
 1. **Confirmation.** The taint engine looks for a flow at or within two lines of the candidate. The tier is `taint-confirmed`, `sink-adjacent` or `unconfirmed`, and the severity comes from the tier, so an unconfirmed candidate is `low`.
-2. **Refutation.** A panel of model calls tries to refute the candidate on three angles: reachability, preconditions and sanitization. A majority of refuting votes removes it.
+2. **Refutation.** A panel of model calls tries to refute the candidate on three angles: reachability, preconditions and sanitization. A majority of refuting votes removes a candidate the taint engine could not corroborate. Since 0.195.31 a `taint-confirmed` candidate is never removed by the panel: the votes are recorded, `refutation.overridden` is set, the candidate stays with its evidence-derived severity, and the coverage block counts it under `contestedConfirmed`. Mechanical evidence outranks a model opinion; the two are shown side by side, never merged.
 3. **Judgement.** A candidate already in the last scan is a duplicate, and one a person marked as a false positive is suppressed.
 
 ## Command
@@ -57,6 +57,8 @@ A compatibility test (`scanner/test/contracts/agentic-discovery.contract.test.js
 | `confirmedByTier` | Candidates per confirmation tier |
 | `panelsRun` | Candidates that went through the refutation panel |
 | `undecidedPanels` | Panels that returned no votes at all. These are not refuted |
+| `contestedConfirmed` | Taint-confirmed candidates a model majority voted to refute; kept, with `refutation.overridden`, because mechanical evidence outranks the opinion (since 0.195.31) |
+| `citationsDiscarded` | Candidates the hunter discarded because the cited file was not one it was shown or the cited line is past the file's end (since 0.195.31) |
 | `rememberedRefutals` | Candidates skipped because an earlier run refuted them |
 | `priorRuns` | Earlier runs in the memory, or `null` with `--no-memory` |
 | `nextWave` | What to hunt next, from the memory, or `null` |
@@ -80,6 +82,8 @@ A compatibility test (`scanner/test/contracts/agentic-discovery.contract.test.js
 
 - **Coverage is part of the output.** A hunt in which a model call failed, the budget ran out, candidates were capped or discarded, or the confirmation or refutation stage corroborated nothing says so in `coverage.reasons`. A hunt that found nothing because every run degraded is not a clean result, and the command says that in so many words.
 - **A silent panel never refutes.** A panel that returned no votes leaves the candidate standing and counts it in `undecidedPanels`.
+- **A citation must resolve** (since 0.195.31). A candidate's file must be one the hunter was shown (the focus area's files, or a file whose contents the run holds) and its line must exist in that file; a leading `./` is tolerated and nothing else is normalised. A candidate that fails this is discarded before confirmation and counted in `citationsDiscarded`, so a reply of invented locations does not read as a reply that found nothing.
+- **Confirmed evidence outranks the panel** (since 0.195.31). A `taint-confirmed` candidate a majority voted to refute survives with `refutation.overridden: true`, its votes kept, its severity unchanged, and is counted in `contestedConfirmed`; it is not remembered as refuted, so a later run examines it again.
 - **Severity comes from evidence.** An unconfirmed candidate is `low`.
 - **A budget is a ceiling.** The call budget, the wall-clock limit and the candidate cap each stop the run and are reported, never applied quietly.
 - **A candidate with no file and line is discarded and counted.** It has nowhere to point.

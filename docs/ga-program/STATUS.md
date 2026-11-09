@@ -26,7 +26,7 @@ Status is the rollup of the acceptance records: `passed` only when every require
 
 | Capability | Maturity | Owner | Status | Passed / required | Next action |
 |---|---|---|---|---|---|
-| `agentic-discovery` | Preview | unassigned (security evaluation lead) | failed | 0 / 8 | agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
+| `agentic-discovery` | Preview | unassigned (security evaluation lead) | failed | 0 / 8 | agentic-discovery:REG-BAR: Preview row; the GA bar still needs platforms |
 | `context-intelligence` | Preview | unassigned (security evaluation lead) | failed | 1 / 8 | context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms |
 | `language-depth-haskell-nix` | Preview | unassigned (security evaluation lead) | failed | 0 / 8 | language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | `model-validation` | Preview | unassigned (security evaluation lead) | failed | 0 / 7 | model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
@@ -36,8 +36,8 @@ Status is the rollup of the acceptance records: `passed` only when every require
 | `code-boundaries` | Preview | unassigned (security evaluation lead) | failed | 3 / 10 | code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms |
 | `finding-provenance` | Preview | unassigned (security evaluation lead) | failed | 2 / 8 | finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms |
 | `graph-precision` | Preview | unassigned (security evaluation lead) | failed | 1 / 8 | graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms |
-| `detection-and-response` | Preview | unassigned (analysis/platform engineer) | failed | 0 / 7 | detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
-| `local-models` | Preview | unassigned (inference/evaluation engineer) | failed | 1 / 7 | local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
+| `detection-and-response` | Preview | unassigned (analysis/platform engineer) | failed | 0 / 7 | detection-and-response:REG-BAR: Preview row; the GA bar still needs platforms |
+| `local-models` | Preview | unassigned (inference/evaluation engineer) | failed | 1 / 7 | local-models:REG-BAR: Preview row; the GA bar still needs platforms |
 | `compliance-evidence` | Preview | unassigned (language/supply-chain lead) | failed | 0 / 6 | compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | `capability-enforcement` | Labs | unassigned (platform security engineer) | failed | 0 / 5 | capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | `strategic-metrics` | Preview | unassigned (assurance engineer) | failed | 1 / 6 | strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
@@ -103,7 +103,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| agentic-discovery:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, limits, since, platforms |
+| agentic-discovery:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
 | agentic-discovery:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
 | agentic-discovery:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
 | agentic-discovery:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
@@ -232,7 +232,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| detection-and-response:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, limits, since, platforms |
+| detection-and-response:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
 | detection-and-response:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
 | detection-and-response:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | detection-and-response:GA-05-001 | manual | GA-05 | not-started | depends on the GA-02 benchmarks |
@@ -244,7 +244,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| local-models:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, limits, since, platforms |
+| local-models:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
 | local-models:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
 | local-models:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | local-models:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
@@ -580,7 +580,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 ## Milestone reasons
 
-- agentic-discovery: 0/8 acceptance records passed (failed); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms
+- agentic-discovery: 0/8 acceptance records passed (failed); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs platforms
 - agentic-discovery: owner unassigned (role security evaluation lead)
 - context-intelligence: 1/8 acceptance records passed (failed); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms
 - context-intelligence: owner unassigned (role security evaluation lead)
@@ -600,9 +600,9 @@ Mechanical records are computed from committed artifacts; manual records carry t
 - finding-provenance: owner unassigned (role security evaluation lead)
 - graph-precision: 1/8 acceptance records passed (failed); next: graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms
 - graph-precision: owner unassigned (role security evaluation lead)
-- detection-and-response: 0/7 acceptance records passed (failed); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms
+- detection-and-response: 0/7 acceptance records passed (failed); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs platforms
 - detection-and-response: owner unassigned (role analysis/platform engineer)
-- local-models: 1/7 acceptance records passed (failed); next: local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms
+- local-models: 1/7 acceptance records passed (failed); next: local-models:REG-BAR: Preview row; the GA bar still needs platforms
 - local-models: owner unassigned (role inference/evaluation engineer)
 - compliance-evidence: 0/6 acceptance records passed (failed); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms
 - compliance-evidence: owner unassigned (role language/supply-chain lead)

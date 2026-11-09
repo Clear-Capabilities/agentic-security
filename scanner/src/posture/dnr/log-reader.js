@@ -44,9 +44,16 @@ function parseTime(v) {
     return new Date(Date.UTC(Number(clf[3]), MONTHS[clf[2]], Number(clf[1]), Number(clf[4]), Number(clf[5]), Number(clf[6])) - offMin * 60000).toISOString();
   }
   if (/^\d{9,13}(?:\.\d+)?$/.test(s)) return parseTime(Number(s));
+  // GA-10 §2 (0.195.31): a timestamp with no zone (`2026-03-14 02:13:44`, `2026-03-14T02:13:44`) used to be read in the host's
+  // local time, so the same line placed an event at different instants on different machines. It is ambiguous, not dated:
+  // the event is still searched, it is reported through `timeAmbiguous`, and the hunt says the window is not fully known.
+  if (ZONELESS.test(s)) return null;
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
+const ZONELESS = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/;
+/** True when a raw timestamp carries a date and time but no zone, so it cannot be placed on the UTC line without a guess. */
+export function timeIsAmbiguous(raw) { return raw != null && raw !== '' && typeof raw !== 'number' && ZONELESS.test(String(raw)) && /[T ]\d{2}:\d{2}/.test(String(raw)); }
 
 function flatten(obj, prefix = '', depth = 0, out = {}) {
   for (const [k, v] of Object.entries(obj)) {
@@ -104,7 +111,21 @@ export function parseLine(line) {
     const authPresent = authHeader != null ? true : typeof authFlag === 'boolean' ? authFlag : (sawHeaders ? false : null);
     const statusRaw = pick(f, ['status', 'status_code', 'response_code', 'http.response.status_code', 'sc-status', 'response.status', 'res.statuscode']);
     const status = Number.isInteger(Number(statusRaw)) && statusRaw !== undefined ? Number(statusRaw) : null;
-    return { time: parseTime(pick(f, ['@timestamp', 'timestamp', 'time', 'ts', 'start_time', 'datetime', 'date'])), method: typeof m === 'string' ? m.toUpperCase() : null, path: tgt.path ?? null, query: query ?? null, bodyParams, headers: sawHeaders ? headers : null, status, authPresent, ...authFacts(f, authHeader, sawHeaders) };
+    const rawTime = pick(f, ['@timestamp', 'timestamp', 'time', 'ts', 'start_time', 'datetime', 'date']);
+    // GA-10 §2 (0.195.31): every parser limit that can DROP a value is reported on the event, so the hunt can say that a payload past
+    // the limit would not have been seen; before, a query of 201 parameters or a body nested four deep was cut in silence.
+    const truncated = [];
+    const countParams = (qs) => String(qs ?? '').split('&').filter(Boolean).length;
+    const over = (o) => o && typeof o === 'object' && !Array.isArray(o) && Object.keys(flatten(o)).length > LIMITS.maxParams;
+    const deep = (o) => o && typeof o === 'object' && !Array.isArray(o) && Object.values(flatten(o)).some((v) => v && typeof v === 'object' && !Array.isArray(v));
+    if (typeof target === 'string' && target.includes('?') && countParams(target.slice(target.indexOf('?') + 1)) > LIMITS.maxParams) truncated.push('query-params');
+    if (typeof qsField === 'string' && countParams(qsField.replace(/^\?/, '')) > LIMITS.maxParams) truncated.push('query-params');
+    if (qsField && typeof qsField === 'object' && Object.keys(qsField).length > LIMITS.maxParams) truncated.push('query-params');
+    let bodyObj = bodyRaw && typeof bodyRaw === 'object' ? bodyRaw : null;
+    if (typeof bodyRaw === 'string') { try { bodyObj = JSON.parse(bodyRaw); } catch { bodyObj = null; } }
+    if (over(bodyObj)) truncated.push('body-params');
+    if (deep(bodyObj)) truncated.push('body-depth');
+    return { timeAmbiguous: timeIsAmbiguous(rawTime), truncated: [...new Set(truncated)].length ? [...new Set(truncated)] : null, time: parseTime(rawTime), method: typeof m === 'string' ? m.toUpperCase() : null, path: tgt.path ?? null, query: query ?? null, bodyParams, headers: sawHeaders ? headers : null, status, authPresent, ...authFacts(f, authHeader, sawHeaders) };
   }
   const c = CLF.exec(text);
   if (c) {
@@ -184,7 +205,7 @@ function collectFiles(root, limits, skipped) {
  */
 export async function readLogs(target, { onEvent, signal, limits: over = {} } = {}) {
   const limits = { ...LIMITS, ...over };
-  const stats = { files: [], filesSkipped: [], lines: 0, parsed: 0, failed: 0, oversizeLines: 0, windowStart: null, windowEnd: null, eventsWithTime: 0, fieldCounts: { method: 0, path: 0, query: 0, body: 0, headers: 0, status: 0, auth: 0, authOutcome: 0, tenant: 0 }, truncated: [], budgetExhausted: false, aborted: false, unreadable: false };
+  const stats = { files: [], filesSkipped: [], lines: 0, parsed: 0, failed: 0, oversizeLines: 0, eventsTruncated: 0, ambiguousTime: 0, windowStart: null, windowEnd: null, eventsWithTime: 0, fieldCounts: { method: 0, path: 0, query: 0, body: 0, headers: 0, status: 0, auth: 0, authOutcome: 0, tenant: 0 }, truncated: [], budgetExhausted: false, aborted: false, unreadable: false };
   let st;
   try { st = fs.lstatSync(target); } catch { stats.unreadable = true; return stats; }
   if (st.isSymbolicLink()) { stats.unreadable = true; stats.filesSkipped.push({ file: path.basename(target), reason: 'symlink' }); return stats; }
@@ -222,6 +243,8 @@ export async function readLogs(target, { onEvent, signal, limits: over = {} } = 
         if (ev.authPresent != null) stats.fieldCounts.auth++;
         if (ev.authOutcome === 'authenticated' || ev.authOutcome === 'unauthenticated') stats.fieldCounts.authOutcome++;
         if (ev.actorTenant != null && ev.objectTenant != null) stats.fieldCounts.tenant++;
+        if (ev.truncated) stats.eventsTruncated++;
+        if (ev.timeAmbiguous) stats.ambiguousTime++;
         if (ev.time) { stats.eventsWithTime++; if (!stats.windowStart || ev.time < stats.windowStart) stats.windowStart = ev.time; if (!stats.windowEnd || ev.time > stats.windowEnd) stats.windowEnd = ev.time; }
         onEvent?.(ev);
       }

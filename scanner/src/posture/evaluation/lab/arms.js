@@ -22,12 +22,17 @@ import { guardPrompt } from '../custody.js';
 import { defaultScanFn } from '../runner.js';
 import { LAYER_ENV } from '../scan-child.js';
 import { runOllamaArm } from './arm-ollama.js';
+import { runHuntArm } from './arm-hunt.js';
+import { isLoopbackUrl } from '../../../llm-validator/local-endpoint.js';
 
 export const TASKS = Object.freeze(['detect', 'falsify', 'exploit', 'patch']);
 const ARM_KINDS = Object.freeze(['deterministic', 'model']);
 const ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
-const LOOPBACK = /^(?:https?:\/\/)?(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?(?:\/|$)/i;
+// GA-06 §3 (0.195.31): ONE loopback rule for the whole repository. This file used to carry its own regex (which accepted
+// `127.999.0.1` and refused `127.0.0.1/path`), while the arm runner used `isLoopbackUrl`; a host that one accepted and the
+// other refused was a lie waiting to be told. A bare `host:port` (no scheme) is read as http, as the Ollama client does.
+const LOOPBACK = { test: (s) => isLoopbackUrl(/^https?:\/\//i.test(String(s)) ? String(s) : `http://${String(s)}`) };
 
 export function validateArm(a) {
   const errors = [];
@@ -50,7 +55,17 @@ export function validateArm(a) {
     if (a.model?.local !== true) bad('the ollama adapter talks to a local server, so model.local must be true');
     if (ad.host !== undefined && !LOOPBACK.test(String(ad.host))) bad('adapter.host must be a loopback address; use the command adapter for a remote model');
     if (ad.timeoutMs !== undefined && !(Number.isInteger(ad.timeoutMs) && ad.timeoutMs >= 1000 && ad.timeoutMs <= 3_600_000)) bad('adapter.timeoutMs must be between 1000 and 3600000');
-  } else bad('adapter.type must be builtin-scanner, command or ollama');
+  } else if (ad.type === 'hunt') {
+    // GA-06 §5 (0.195.31): the deterministic scanner plus the discovery pipeline with a LOCAL model (arm-hunt.js)
+    if (a.kind !== 'model') bad('the hunt adapter is a model arm (the deterministic stage is part of it, the hunter is a model)');
+    if (a.tasks?.some((t) => t !== 'detect')) bad('the hunt adapter performs the detect task only');
+    if (a.model?.local !== true) bad('the hunt adapter talks to a local server, so model.local must be true');
+    if (ad.host !== undefined && !LOOPBACK.test(String(ad.host))) bad('adapter.host must be a loopback address; the hunt arm has no remote form');
+    if (ad.layer !== undefined && !['deterministic-only', 'deep-taint'].includes(ad.layer)) bad('adapter.layer must be deterministic-only or deep-taint');
+    for (const k of ['maxLlmCalls', 'maxCandidates', 'maxAreas', 'maxFiles']) if (ad[k] !== undefined && !(Number.isInteger(ad[k]) && ad[k] >= 1 && ad[k] <= 100_000)) bad(`adapter.${k} must be a positive integer`);
+    if (ad.lenses !== undefined && !(Array.isArray(ad.lenses) && ad.lenses.length && ad.lenses.every((l) => typeof l === 'string' && /^[a-z-]+$/.test(l)))) bad('adapter.lenses must be a non-empty list of lens keys');
+    if (ad.timeoutMs !== undefined && !(Number.isInteger(ad.timeoutMs) && ad.timeoutMs >= 1000 && ad.timeoutMs <= 3_600_000)) bad('adapter.timeoutMs must be between 1000 and 3600000');
+  } else bad('adapter.type must be builtin-scanner, command, ollama or hunt');
   if (a.kind === 'model') {
     const m = a.model;
     if (!m || typeof m.id !== 'string' || !m.id || typeof m.provider !== 'string' || !m.provider) bad('a model arm needs model.id and model.provider');
@@ -119,6 +134,11 @@ export async function runArmTask({ arm, task, request, workspaceDir, terms = [],
     const o = await runOllamaArm({ arm, task, request, workspaceDir, terms, timeoutMs, signal });
     if (o.status !== 'ok') return done(o.status, { reason: o.reason, reported: o.reported });
     return shapeBody(task, o.body, done);
+  }
+  if (arm.adapter.type === 'hunt') {
+    const h = await runHuntArm({ arm, task, request, workspaceDir, terms, timeoutMs, signal, scanFn });
+    if (h.status !== 'completed') return done(h.status, { reason: h.reason, reported: h.reported });
+    return done('completed', { output: h.output, reported: h.reported });
   }
   const guard = guardPrompt(JSON.stringify(request), terms);
   if (!guard.ok) return done('blocked', { reason: `leakage guard: the request contained a protected term (${guard.leaks[0]?.kind})` });

@@ -38,6 +38,10 @@ An endpoint is loopback only when its host, as the URL parser reads it, is one o
 | `http://127.0.0.1.evil.example` | No |
 | `http://192.168.1.5:11434` | No: a LAN address is a remote endpoint for this guarantee |
 | `http://[::ffff:127.0.0.1]` | No: refused rather than guessed |
+| `http://[0:0:0:0:0:0:0:1]:11434` | Yes (pinned since 0.195.31): the parser reads the long form as `[::1]` |
+| `http://LOCALHOST:11434` | Yes (pinned since 0.195.31): the host is lower-cased by the parser |
+| `http://localhost.` | No (pinned since 0.195.31): the trailing dot makes it another name |
+| `http://127.999.0.1` | No (pinned since 0.195.31): not an address; the Eval Lab's arm validator used to accept it and now applies this one rule |
 | `ftp://127.0.0.1`, `file:///x`, an empty string, text that is not a URL | No |
 
 A compatibility test (`scanner/test/contracts/local-models.contract.test.js`) holds the rule to this table in both directions.
@@ -85,6 +89,7 @@ Every Ollama failure carries exactly one of these codes, never free text alone.
 | `ollama-context-overflow` | The prompt did not fit the model's context |
 | `ollama-capability-missing` | The model lacks a capability the call needs, such as tool calls |
 | `ollama-timeout` | The request timed out |
+| `ollama-cancelled` | The caller cancelled the request through its signal before it completed (since 0.195.31); the request is aborted at the transport, not left to run |
 | `ollama-malformed-response` | The reply could not be read |
 | `ollama-tool-call-invalid` | A tool call from the model was not valid |
 | `ollama-tool-loop-limit` | The tool loop hit its step limit |
@@ -99,7 +104,7 @@ Every Ollama failure carries exactly one of these codes, never free text alone.
 
 ## What this does not do
 
-<!-- limits-verified: 2026-10-20 -->
+<!-- limits-verified: 2026-11-06 -->
 
 - **Loopback means this machine, not this process.** Anything else running on your machine can answer on a loopback port. The rule decides where the prompt is sent, not who receives it.
 - **Only inference is constrained.** Advisory data lookups for dependencies and similar network paths are separate and unaffected by this rule.

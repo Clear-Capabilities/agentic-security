@@ -55,7 +55,7 @@ Records live under `.agentic-security/dnr/<finding>/` as `<kind>-<digest>.json`,
 | `networkEffect` | The network effect |
 | `dbEffect` | The database effect |
 | `confidence` | A number from 0 to 1 |
-| `grounding` | `exploit-confirmed` or `static-only` |
+| `grounding` | `exploit-confirmed` (the proof ran and confirmed), `reproduced` (the proof ran and reproduced the behaviour without confirming the exploit) or `static-only` (no proof; `--allow-unproven`) |
 | `evidence` | Where each claim came from: the finding, the proof and the reproducer |
 | `facts` | For each of `payloadClass`, `endpoint`, `parameter` and `sink`, its `source` and `ref` |
 | `limitations` | What the detection cannot say, such as that the exploit was not executed |
@@ -70,7 +70,7 @@ Records live under `.agentic-security/dnr/<finding>/` as `<kind>-<digest>.json`,
 | `detectionId` | The detection |
 | `status` | `VALIDATED` when every positive fired and no look-alike did |
 | `cases` | Every positive and look-alike tried, with whether it was expected to fire and did |
-| `render` | Whether the generated expression compiles |
+| `render` | Whether the payload class's JavaScript regular expression compiles. The rendered text of each format is held to its own grammar separately (`syntax.js` `checkRendered`, the format assurance table below), not here |
 | `counts` | `positives`, `negatives`, `passed` and `failed` |
 | `failures` | The cases that disagreed with the rule |
 
@@ -122,6 +122,9 @@ Records live under `.agentic-security/dnr/<finding>/` as `<kind>-<digest>.json`,
 |---|---|
 | `requestedWindow` | The `--since` and `--until` asked for |
 | `outOfWindow` | Events outside it |
+| `gaps` | `{count, limitMs, listed}`: holes between dated events longer than the limit (six hours unless `--max-gap` says otherwise), the first twenty listed. With the default limit a gap is reported as informational, because the logs alone cannot tell a quiet period from lost retention; a limit the operator sets makes a gap block a negative (since 0.195.31) |
+| `truncatedEvents` | Events whose query or body parameters were cut at the parser's limits, so a payload past the limit would not have been seen; a non-zero count blocks a negative (since 0.195.31) |
+| `ambiguousTime` | Events whose timestamp carries no zone and so could not be placed in time; they were searched but not dated, and a non-zero count blocks a negative (since 0.195.31) |
 | `undated` | Events with no usable time |
 | `endpointEvents` | Judged events for the detection's endpoint: the same method AND route template the matcher uses (earlier releases counted an event of the same method on any route) |
 | `target` | For the endpoint: `relevant` events, `adjudicable` ones, `missingRequired` ones (a required field absent), `deniedAttempts`, `authorizedDelegations`, and whether the match samples were capped |
@@ -175,6 +178,9 @@ Rendering: `object-authz` is published only to the `http` and `log-query` output
 | `telemetryWindow` | The span the telemetry covers, or `null` |
 | `observableWindow` | The part of the exposure the telemetry covers, or `null` |
 | `unobservableBefore` | Exposure that predates the telemetry, or `null` |
+| `unobservableAfter` | Exposure after the telemetry ends (the fix not deployed, or deployed after the last log line), open-ended when there is no fix deployment, or `null` (since 0.195.31) |
+| `exposureStart` | `{at, evidence}`: the first vulnerable deployment, or `at: null` with `evidence: none` (since 0.195.31) |
+| `exposureEnd` | `{at, evidence}`: the fix deployment, `fix-not-deployed` when the history has none, or `none` (since 0.195.31) |
 | `unresolvedDeployments` | Deployments whose contents could not be resolved against the commits |
 | `deploymentProblems` | Entries of the history that were refused, with the reason |
 | `unknowns` | Every date or fact that could not be sourced |
@@ -182,8 +188,31 @@ Rendering: `object-authz` is published only to the `http` and `log-query` output
 
 **Where a deployment's commit comes from.** A deployment record names a commit. A record that names only an image digest is placed at the commit the image declares in its `org.opencontainers.image.revision` build label, read from the [artifact provenance graph](../guides/artifact-provenance.md) passed with `--artifact-graph`, and `commitSource` says `artifact-provenance-graph`. A record whose commit and image disagree is refused and listed; an image that declares no commit, or two graphs that disagree about one image, place nothing. Without `--artifact-graph`, a digest-only record is refused.
 
+## What each format's output has been held to
+
+Four levels, stated per format and never merged (GA-10 §4, since 0.195.31): the renderer **generates** it; its **syntax** is checked by a vendored schema (a JSON shape this repository owns or vendors) or by a subset grammar written from the target's public documentation for exactly the constructs the renderer emits (`scanner/src/posture/dnr/syntax.js`, with the document and version each was read from); it is tested against **samples** when an interpreter in this repository executes the rendered rule over the labelled log corpus and must agree with the hunt evaluator on every line; and it is tested against a real **product** only in a disposable qualification environment, which none has been. No vendor tool runs here: `official` is not a level any row claims. A generic suggestion is never presented as a deployed control.
+
+**Format assurance**
+
+| Format | Generated | Syntax | Samples | Product |
+|---|---|---|---|---|
+| `sigma` | yes | subset-grammar (Sigma specification 2.0.0; the `webserver` log source fields) | no | no |
+| `http` | yes | vendored-schema (this repository's `http-detection` v1) | yes | no |
+| `waf` | yes | subset-grammar (ModSecurity SecRule, 2.9 and 3.0: a chain whose metadata sits on the starter and whose only disruptive action is `pass`) | no | no |
+| `log-query` | yes | vendored-schema (this repository's `structured-log-query` v1) | yes | no |
+| `yara` | yes | subset-grammar (YARA 4.5: text, hex and regex strings, the string escapes YARA accepts) | no | no |
+| `spl` | yes | subset-grammar (Splunk SPL 9.x: search terms, `regex` and `where`) | no | no |
+| `kql` | yes | subset-grammar (Kusto over the `W3CIISLog` table and its columns) | no | no |
+| `cloudwatch` | yes | subset-grammar (Logs Insights: `fields`, `filter ... like /re/`, `sort`) | no | no |
+| `elastic` | yes | vendored-schema (Query DSL `bool` with `term`, `regexp`, `range`, `exists`; no Lucene-less classes) | no | no |
+| `yaral` | yes | subset-grammar (YARA-L 2.0: `meta`, `events` with `re.regex`, `condition`) | no | no |
+| `datadog` | yes | vendored-schema (`log_detection` rule fields; `isEnabled` must be `false`) | no | no |
+
+`scanner/test/dnr/renderer-syntax.test.js` renders every payload class at every parameter location on a literal and a templated path and holds each applicable output to its checker, and each checker to a known-bad sample; the `FORMAT_ASSURANCE` constant in `outputs.js` must match this table.
+
 ## Guarantees
 
+- **A renderer declines what its target cannot see** (since 0.195.31). The Sigma `webserver` log source records no request body and no arbitrary header, the `W3CIISLog` table and an access log line carry no `Authorization` header: a rule that would need one is reported `applicable: false` with the reason, never written against an invented field or widened to every 2xx.
 - **A hunt never says "not exploited".** `notExploitedClaim` is `false`, and an unanswered question has its own verdict and exit code.
 - **Nothing leaves the machine.** No command here contacts a network or a model.
 - **Secrets are redacted before anything is stored or printed.** A fingerprint stands in for the value.
@@ -192,9 +221,9 @@ Rendering: `object-authz` is published only to the `http` and `log-query` output
 
 ## What this does not do
 
-<!-- limits-verified: 2026-10-19 -->
+<!-- limits-verified: 2026-11-06 -->
 
-- **No SIEM connection.** Every renderer produces text; none connects anywhere, and the Elastic, YARA-L and Datadog output was not run against a live product.
+- **No SIEM connection, no vendor parser.** Every renderer produces text; none connects anywhere, and no output has been run against a live product. The syntax checks are subset grammars and vendored schemas written here from the targets' public documentation, not the vendors' own parsers; a construct outside the subset the renderers emit is not judged, and an official check (Sigma's own validator, a YARA compiler, a ModSecurity rule check) belongs to a hosted qualification job that is not provisioned.
 - **Local, text-only logs.** Common and combined access logs and JSON lines are read; compressed logs are skipped and make the verdict `INCONCLUSIVE`.
 - **Nine payload classes.** A finding of another class gets no detection rather than a guessed one.
 - **The artifact join relies on a build label.** An image built without the revision label cannot be placed in history, and the join does not infer one.

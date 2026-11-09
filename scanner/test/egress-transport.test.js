@@ -141,5 +141,5 @@ test('a connection refusal is a network error with the cause kept', async () => 
 
 test('the defaults and the error vocabulary are the documented ones', () => {
   assert.equal(DEFAULT_MAX_RESPONSE_BYTES, 4 * 1024 * 1024);
-  assert.deepEqual([...TRANSPORT_ERROR_CODES], ['redirect', 'timeout', 'response-too-large', 'budget-exhausted', 'network']);
+  assert.deepEqual([...TRANSPORT_ERROR_CODES], ['redirect', 'timeout', 'response-too-large', 'budget-exhausted', 'network', 'connect-timeout', 'connect-refused']);
 });

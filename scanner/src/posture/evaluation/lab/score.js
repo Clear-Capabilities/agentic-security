@@ -15,6 +15,25 @@ const DEFAULT_LINE_TOLERANCE = 3;
 
 const resultOf = (a) => a && a.status === 'completed';
 
+/**
+ * The ids of the vulnerable entries an arm's detect attempts hit (same file, same class, line within the tolerance), the rule
+ * `scoreDetect` counts a true positive by. GA-06 §5 (0.195.31): the paired comparison of two arms over the same population is
+ * made from these sets, entry by entry, never from two aggregate scores.
+ */
+export function detectedEntryIds({ entries, attempts, mapFile = (entryId, f) => f, tolerance = DEFAULT_LINE_TOLERANCE }) {
+  const out = new Set();
+  for (const e of entries) {
+    if (e.kind !== 'vulnerable') continue;
+    const a = attempts.get(e.id);
+    if (!resultOf(a)) continue;
+    const cwe = normalizeCwe(e.cwe);
+    const file = mapFile(e.id, e.expectedSpan.file);
+    const hit = (a.output?.findings ?? []).some((f) => f.file === file && normalizeCwe(f.cwe) === cwe && Number.isInteger(f.line) && f.line >= e.expectedSpan.startLine - tolerance && f.line <= e.expectedSpan.endLine + tolerance);
+    if (hit) out.add(e.id);
+  }
+  return out;
+}
+
 /** @param {object[]} entries dataset entries @param {Map<string, object>} attempts entryId -> attempt @param {Map<string,string>} fileMaps `${entryId}\0${path}` -> staged path */
 export function scoreDetect({ entries, attempts, mapFile = (entryId, f) => f, tolerance = DEFAULT_LINE_TOLERANCE, targetCwes = null }) {
   const cweSet = targetCwes ? new Set(targetCwes.map(normalizeCwe)) : null;

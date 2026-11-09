@@ -180,7 +180,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs platforms",
           "evidencePath": null
         },
         {
@@ -254,7 +254,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "agentic-discovery:REG-BAR: Preview row; the GA bar still needs platforms"
     },
     {
       "capabilityId": "context-intelligence",
@@ -1203,7 +1203,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs platforms",
           "evidencePath": null
         },
         {
@@ -1267,7 +1267,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "detection-and-response:REG-BAR: Preview row; the GA bar still needs platforms"
     },
     {
       "capabilityId": "local-models",
@@ -1296,7 +1296,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs platforms",
           "evidencePath": null
         },
         {
@@ -1360,7 +1360,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "local-models:REG-BAR: Preview row; the GA bar still needs platforms"
     },
     {
       "capabilityId": "compliance-evidence",
@@ -3574,7 +3574,7 @@
   "milestone": {
     "met": false,
     "reasons": [
-      "agentic-discovery: 0/8 acceptance records passed (failed); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "agentic-discovery: 0/8 acceptance records passed (failed); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs platforms",
       "agentic-discovery: owner unassigned (role security evaluation lead)",
       "context-intelligence: 1/8 acceptance records passed (failed); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "context-intelligence: owner unassigned (role security evaluation lead)",
@@ -3594,9 +3594,9 @@
       "finding-provenance: owner unassigned (role security evaluation lead)",
       "graph-precision: 1/8 acceptance records passed (failed); next: graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "graph-precision: owner unassigned (role security evaluation lead)",
-      "detection-and-response: 0/7 acceptance records passed (failed); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "detection-and-response: 0/7 acceptance records passed (failed); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs platforms",
       "detection-and-response: owner unassigned (role analysis/platform engineer)",
-      "local-models: 1/7 acceptance records passed (failed); next: local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "local-models: 1/7 acceptance records passed (failed); next: local-models:REG-BAR: Preview row; the GA bar still needs platforms",
       "local-models: owner unassigned (role inference/evaluation engineer)",
       "compliance-evidence: 0/6 acceptance records passed (failed); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "compliance-evidence: owner unassigned (role language/supply-chain lead)",

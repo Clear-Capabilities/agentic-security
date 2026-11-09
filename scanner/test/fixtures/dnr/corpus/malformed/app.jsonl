@@ -1,0 +1,8 @@
+{"time":"2026-03-10T09:00:00Z","method":"GET","path":"/api/health","status":200}
+{"time":"2026-03-10T09:00:00Z","method":"POST","path":"/api/export","status":200,"body":{"filename":"report.pdf"}}
+{"time":"2026-03-10T09:00:00Z","method":"GET","path":"/api/users","status":200,"query":"page=2&sort=name"}
+{"time":"2026-03-10T09:01:00Z","method":"POST"
+not json at all
+{"time":"2026-03-10T09:30:00Z","method":"GET","path":"/api/health","status":200}
+{"time":"2026-03-10T09:30:00Z","method":"POST","path":"/api/export","status":200,"body":{"filename":"report.pdf"}}
+{"time":"2026-03-10T09:30:00Z","method":"GET","path":"/api/users","status":200,"query":"page=2&sort=name"}
