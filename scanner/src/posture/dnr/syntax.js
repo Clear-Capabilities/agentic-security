@@ -135,8 +135,10 @@ export function checkYara(text) {
     if (!l || l === '}') continue;
     if (/^(meta|strings|condition):$/.test(l)) { section = l.slice(0, -1); continue; }
     if (section === 'meta') { const m = /^[a-z_]+\s*=\s*(.+)$/.exec(l); if (!m || !(YARA_STRING.test(m[1]) || /^-?\d+$/.test(m[1]) || /^(true|false)$/.test(m[1]))) errors.push(`meta: ${l} is not identifier = "string" | integer | boolean (YARA strings accept only \\\\ \\" \\t \\n \\xNN escapes)`); continue; }
-    if (section === 'strings') { const m = /^\$[A-Za-z0-9_]*\s*=\s*(.+)$/.exec(l); if (!m) { errors.push(`strings: ${l} is not $name = ...`); continue; } const v = m[1]; if (!(YARA_STRING.test(v) || /^\{\s*(?:[0-9A-Fa-f?]{2}\s*)+\}$/.test(v) || /^\/.+\/[is]*$/.test(v))) errors.push(`strings: ${v} is not a text, hex or regex string`); continue; }
-    if (section === 'condition') { if (!/^(any of them|all of them|\$[A-Za-z0-9_]+(?:\s+(?:and|or)\s+\$[A-Za-z0-9_]+)*)$/.test(l)) errors.push(`condition: ${l} is outside the subset grammar`); continue; }
+    // the subset-grammar patterns below separate every repeated group with a disjoint literal or class (`=`, `and|or`, `, `, two hex
+    // digits), so none can backtrack catastrophically, and they read the renderer's own bounded output
+    if (section === 'strings') { const m = /^\$[A-Za-z0-9_]*\s*=\s*(.+)$/.exec(l); if (!m) { errors.push(`strings: ${l} is not $name = ...`); continue; } const v = m[1]; if (!(YARA_STRING.test(v) || /^\{\s*(?:[0-9A-Fa-f?]{2}\s*)+\}$/.test(v) || /^\/.+\/[is]*$/.test(v))) errors.push(`strings: ${v} is not a text, hex or regex string`); continue; } // agentic-security-ignore: CWE-1333
+    if (section === 'condition') { if (!/^(any of them|all of them|\$[A-Za-z0-9_]+(?:\s+(?:and|or)\s+\$[A-Za-z0-9_]+)*)$/.test(l)) errors.push(`condition: ${l} is outside the subset grammar`); continue; } // agentic-security-ignore: CWE-1333
     errors.push(`line outside a section: ${l}`);
   }
   if (section !== 'condition' && !lines.some((l) => l.trim() === 'condition:')) errors.push('no condition section');
@@ -171,7 +173,7 @@ export function checkSpl(text) {
     const rx = /^\| regex ([a-z_]+)=("(?:[^"\\]|\\[\\"])*")$/.exec(l);
     // SPL regexes are PCRE: a leading `(?i)` is the case-insensitivity flag, which JavaScript cannot compile inline
     if (rx) { try { new RegExp(JSON.parse(rx[2]).replace(/^\(\?i\)/, ''), 'i'); } catch { errors.push(`regex: ${rx[2]} is not a regular expression`); } continue; }
-    if (/^\| where [a-z_]+[<>=!]+[0-9]+(?: (?:AND|OR) (?:[a-z_]+[<>=!]+[0-9]+|isnull\([a-z_]+\)|isnotnull\([a-z_]+\)))*$/.test(l)) continue;
+    if (/^\| where [a-z_]+[<>=!]+[0-9]+(?: (?:AND|OR) (?:[a-z_]+[<>=!]+[0-9]+|isnull\([a-z_]+\)|isnotnull\([a-z_]+\)))*$/.test(l)) continue; // agentic-security-ignore: CWE-1333
     errors.push(`${l} is outside the subset grammar`);
   }
   return errors.length ? fail(...errors) : ok();
@@ -202,7 +204,7 @@ export function checkKql(text) {
 export function checkCloudwatch(text) {
   const lines = String(text).split('\n').map((l) => l.trim()).filter(Boolean);
   const errors = [];
-  if (!/^fields (@?[A-Za-z_]+)(, @?[A-Za-z_]+)*$/.test(lines[0] || '')) errors.push('the first line must be `fields ...`');
+  if (!/^fields (@?[A-Za-z_]+)(, @?[A-Za-z_]+)*$/.test(lines[0] || '')) errors.push('the first line must be `fields ...`'); // agentic-security-ignore: CWE-1333
   for (const l of lines.slice(1)) {
     const f = /^\| filter @message like \/(.+)\/$/.exec(l);
     // Logs Insights regexes are PCRE-like: `(?i)` is the case flag, which JavaScript cannot compile inline
