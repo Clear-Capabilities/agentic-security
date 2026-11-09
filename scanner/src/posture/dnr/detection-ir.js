@@ -74,14 +74,14 @@ export function buildDetectionIR({ finding, proof = null, allowUnproven = false 
 
   let parameter = null;
   if (attack?.parameter) { parameter = { name: attack.parameter, location: attack.location }; facts.parameter = { source: 'reproducer', ref: 'attack.parameter' }; }
-  else if (payloadClass !== 'auth-bypass') limitations.push('no vulnerable parameter is known, so the payload test is applied to every query and body value of the endpoint');
+  else if (def.matcher !== 'behavior') limitations.push('no vulnerable parameter is known, so the payload test is applied to every query and body value of the endpoint');
 
   let sink = null;
   if (attack?.sink) { sink = attack.sink; facts.sink = { source: 'reproducer', ref: 'attack.sink' }; }
   const affectedOperation = { sink, file: finding.file ? String(finding.file) : null, line: Number.isInteger(finding.line) ? finding.line : null };
 
   const confidence = Math.max(0.1, Math.min(0.95,
-    (grounding === 'exploit-confirmed' ? 0.9 : grounding === 'reproduced' ? 0.7 : 0.4) - (endpoint ? 0 : 0.2) - (parameter || payloadClass === 'auth-bypass' ? 0 : 0.1)));
+    (grounding === 'exploit-confirmed' ? 0.9 : grounding === 'reproduced' ? 0.7 : 0.4) - (endpoint ? 0 : 0.2) - (parameter || def.matcher === 'behavior' ? 0 : 0.1)));
   if (grounding !== 'exploit-confirmed') limitations.push(grounding === 'reproduced' ? 'the exploit was reproduced but not independently confirmed' : 'the exploit was not executed; this detection rests on static analysis only');
 
   const ir = {

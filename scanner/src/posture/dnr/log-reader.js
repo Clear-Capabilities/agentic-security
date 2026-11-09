@@ -100,17 +100,59 @@ export function parseLine(line) {
     }
     const authHeader = headers.authorization ?? pick(f, ['authorization']);
     const authFlag = pick(f, ['authenticated', 'is_authenticated', 'auth.present']);
+    // Legacy: one boolean where a header wins over everything. Kept for existing callers; detections read the two facts below.
     const authPresent = authHeader != null ? true : typeof authFlag === 'boolean' ? authFlag : (sawHeaders ? false : null);
     const statusRaw = pick(f, ['status', 'status_code', 'response_code', 'http.response.status_code', 'sc-status', 'response.status', 'res.statuscode']);
     const status = Number.isInteger(Number(statusRaw)) && statusRaw !== undefined ? Number(statusRaw) : null;
-    return { time: parseTime(pick(f, ['@timestamp', 'timestamp', 'time', 'ts', 'start_time', 'datetime', 'date'])), method: typeof m === 'string' ? m.toUpperCase() : null, path: tgt.path ?? null, query: query ?? null, bodyParams, headers: sawHeaders ? headers : null, status, authPresent };
+    return { time: parseTime(pick(f, ['@timestamp', 'timestamp', 'time', 'ts', 'start_time', 'datetime', 'date'])), method: typeof m === 'string' ? m.toUpperCase() : null, path: tgt.path ?? null, query: query ?? null, bodyParams, headers: sawHeaders ? headers : null, status, authPresent, ...authFacts(f, authHeader, sawHeaders) };
   }
   const c = CLF.exec(text);
   if (c) {
     const { path: p, query } = fromRequestTarget(c[5]);
-    return { time: parseTime(c[3]), method: c[4], path: p, query, bodyParams: null, headers: null, status: c[6] === '-' ? null : Number(c[6]), authPresent: null };
+    return { time: parseTime(c[3]), method: c[4], path: p, query, bodyParams: null, headers: null, status: c[6] === '-' ? null : Number(c[6]), authPresent: null, ...UNKNOWN_AUTH };
   }
   return null;
+}
+
+// ── authentication and authorization facts (PRD threat-model FR-07.1, FR-07.5) ──────────────────────────────────────────────────────
+// Credential PRESENCE and the verified authentication OUTCOME are separate facts. A header only says a credential was sent; an
+// authoritative `authenticated: false` (or an auth result of "rejected") says it was refused, and survives a redacted header. Missing or
+// conflicting outcome fields leave the outcome `unknown`. Identity and policy fields (actor tenant, object tenant, a cross-tenant grant,
+// the authorization decision) are read only from these mapped field names, never from request headers, query or body, which the client
+// controls.
+const OUTCOME_FIELDS = ['authenticated', 'is_authenticated', 'auth.authenticated', 'auth.outcome', 'auth.result', 'authn.outcome', 'authn.result'];
+const ACTOR_TENANT_FIELDS = ['identity.tenant', 'actor.tenant', 'auth.tenant', 'principal.tenant'];
+const OBJECT_TENANT_FIELDS = ['object.tenant', 'resource.tenant', 'record.tenant'];
+const GRANT_FIELDS = ['authz.cross_tenant_grant', 'authz.delegated', 'authz.crossTenantGrant'];
+const DECISION_FIELDS = ['authz.decision', 'authz.result'];
+const UNKNOWN_AUTH = Object.freeze({ credentialPresent: null, authOutcome: 'unknown', actorTenant: null, objectTenant: null, crossTenantGrant: null, authzDecision: null });
+
+function outcomeOf(v) {
+  if (v === true) return 'authenticated';
+  if (v === false) return 'unauthenticated';
+  const s = String(v ?? '').trim().toLowerCase();
+  if (/^(?:true|success|succeeded|ok|authenticated|allow|allowed|valid)$/.test(s)) return 'authenticated';
+  if (/^(?:false|failure|failed|rejected|denied|invalid|unauthenticated|anonymous|none|expired)$/.test(s)) return 'unauthenticated';
+  return null;
+}
+const ident = (v) => (v === undefined || v === null || v === '' ? null : String(v).slice(0, 128));
+
+function authFacts(f, authHeader, sawHeaders) {
+  const outcomes = new Set(OUTCOME_FIELDS.map((k) => f[k]).filter((v) => v !== undefined).map(outcomeOf).filter(Boolean));
+  const authOutcome = outcomes.size === 1 ? [...outcomes][0] : 'unknown';
+  const presentFlag = f['auth.present'];
+  const credentialPresent = authHeader != null ? true : typeof presentFlag === 'boolean' ? presentFlag : (sawHeaders ? false : null);
+  const grant = GRANT_FIELDS.map((k) => f[k]).find((v) => v !== undefined);
+  const decision = DECISION_FIELDS.map((k) => f[k]).find((v) => v !== undefined);
+  const d = String(decision ?? '').toLowerCase();
+  return {
+    credentialPresent,
+    authOutcome: outcomes.size > 1 ? 'conflict' : authOutcome,
+    actorTenant: ident(pick(f, ACTOR_TENANT_FIELDS)),
+    objectTenant: ident(pick(f, OBJECT_TENANT_FIELDS)),
+    crossTenantGrant: grant === true || grant === 'true' ? true : grant === false || grant === 'false' ? false : null,
+    authzDecision: /^(?:allow|allowed|permit|granted)$/.test(d) ? 'allow' : /^(?:deny|denied|forbidden|refused)$/.test(d) ? 'deny' : null,
+  };
 }
 
 function collectFiles(root, limits, skipped) {
@@ -142,7 +184,7 @@ function collectFiles(root, limits, skipped) {
  */
 export async function readLogs(target, { onEvent, signal, limits: over = {} } = {}) {
   const limits = { ...LIMITS, ...over };
-  const stats = { files: [], filesSkipped: [], lines: 0, parsed: 0, failed: 0, oversizeLines: 0, windowStart: null, windowEnd: null, eventsWithTime: 0, fieldCounts: { method: 0, path: 0, query: 0, body: 0, headers: 0, status: 0, auth: 0 }, truncated: [], budgetExhausted: false, aborted: false, unreadable: false };
+  const stats = { files: [], filesSkipped: [], lines: 0, parsed: 0, failed: 0, oversizeLines: 0, windowStart: null, windowEnd: null, eventsWithTime: 0, fieldCounts: { method: 0, path: 0, query: 0, body: 0, headers: 0, status: 0, auth: 0, authOutcome: 0, tenant: 0 }, truncated: [], budgetExhausted: false, aborted: false, unreadable: false };
   let st;
   try { st = fs.lstatSync(target); } catch { stats.unreadable = true; return stats; }
   if (st.isSymbolicLink()) { stats.unreadable = true; stats.filesSkipped.push({ file: path.basename(target), reason: 'symlink' }); return stats; }
@@ -178,6 +220,8 @@ export async function readLogs(target, { onEvent, signal, limits: over = {} } = 
         if (ev.headers != null) stats.fieldCounts.headers++;
         if (ev.status != null) stats.fieldCounts.status++;
         if (ev.authPresent != null) stats.fieldCounts.auth++;
+        if (ev.authOutcome === 'authenticated' || ev.authOutcome === 'unauthenticated') stats.fieldCounts.authOutcome++;
+        if (ev.actorTenant != null && ev.objectTenant != null) stats.fieldCounts.tenant++;
         if (ev.time) { stats.eventsWithTime++; if (!stats.windowStart || ev.time < stats.windowStart) stats.windowStart = ev.time; if (!stats.windowEnd || ev.time > stats.windowEnd) stats.windowEnd = ev.time; }
         onEvent?.(ev);
       }

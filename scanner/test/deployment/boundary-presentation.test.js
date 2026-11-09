@@ -301,7 +301,7 @@ describe('[X-307.AC03] JSON and MCP graph and path records share stable ids with
     assert.equal(f.boundaryView.hypothesisId, rec.hypothesisId);
     assert.deepEqual(f.boundaryView.verificationRecordIds, [rec.id]);
     assert.equal(f.verificationView.recordId, f.boundaryView.verificationRecordIds[0], 'one id joins the two records');
-    assert.ok(f.boundaryView.paths.every((p) => p.exploitability.recordId === rec.id));
+    assert.ok(f.boundaryView.paths.every((p) => (p.exploitability.recordId ?? p.exploitability.componentProof?.recordId) === rec.id), 'the record joins whether or not a binding promoted the path');
     const mcp = await mcpExplain(json);
     assert.equal(mcp.verificationView.recordId, mcp.boundaryView.verificationRecordIds[0]);
     assert.deepEqual(mcp.boundaryView.paths.map((p) => p.id), f.boundaryView.paths.map((p) => p.id));

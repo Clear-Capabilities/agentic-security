@@ -80,12 +80,22 @@ export const PAYLOAD_CLASSES = Object.freeze({
     effects: { process: 'memory-corruption-possible', network: 'none', db: 'none' },
   },
   'auth-bypass': {
-    cwe: ['CWE-287', 'CWE-306', 'CWE-285', 'CWE-862', 'CWE-863', 'CWE-639', 'CWE-284'],
-    behavior: 'a protected operation succeeds for a request that carries no credential',
+    cwe: ['CWE-287', 'CWE-306', 'CWE-285', 'CWE-862', 'CWE-863', 'CWE-284'],
+    behavior: 'a protected operation succeeds for a request that is not authenticated (no credential, or a credential that was rejected)',
     matcher: 'behavior',
     indicators: [],
     exemplars: { positive: [''], benign: [''] },
     effects: { process: 'none', network: 'none', db: 'none', access: 'protected-operation-without-credential' },
+  },
+  // Threat-model FR-07.2: an authenticated actor receives another tenant's object. CWE-639 (authorization through a user-controlled
+  // key) moved here from auth-bypass, which could only see "no credential" and so never fired on the wrong-tenant case.
+  'object-authz': {
+    cwe: ['CWE-639'],
+    behavior: 'an authenticated actor receives an object that belongs to another tenant, with no explicit cross-tenant grant',
+    matcher: 'behavior',
+    indicators: [],
+    exemplars: { positive: [''], benign: [''] },
+    effects: { process: 'none', network: 'none', db: 'none', access: 'object-of-another-tenant-delivered' },
   },
 });
 

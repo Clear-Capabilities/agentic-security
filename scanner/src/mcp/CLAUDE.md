@@ -88,6 +88,12 @@ the before and after image, **no content**) and `languageFix.planDigest` after r
 caller then sends `apply_fix {finding_id, confirm:true, plan_digest}` (optionally `dry_run:true`, `fixMeta.approval` for a
 high-impact change).
 
+**Approval binding (threat-model FR-06.3).** `fixMeta.approval` may carry `expires` (ISO time) and `scope: {tool, action, target,
+change}`: `tool` is `apply_fix`, `action` is `apply-plan` (multi-file) or `apply-patch`, `target` is the finding's stableId, and
+`change` is the plan digest or the digest of the exact edits (path, before and after image hashes). `approvalBindingRefusal` refuses
+an expired approval and one issued for another tool, action, target or change. Under the restricted execution profile
+(`AGENTIC_SECURITY_EGRESS_PROFILE=restricted`) both fields are required; elsewhere an approval without them works as before.
+
 Design decision: the caller **cannot supply file content** on this path (`plan_digest` plus `patch` is refused). The server
 re-derives the plan with `planNixFix` over `loadLanguageProject` and refuses unless the digest matches, so "the plan applied is
 exactly the plan previewed" holds by construction, and a changed project file, a changed finding or an altered digest all give

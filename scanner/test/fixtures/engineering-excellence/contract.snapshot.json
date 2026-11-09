@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAtVersion": "0.195.21",
+  "capturedAtVersion": "0.195.28",
   "surfaces": {
     "scanJson": {
       "shape": {
@@ -244,6 +244,20 @@
           "bundles": {
             "array": "empty"
           },
+          "candidateReconciliation": {
+            "object": {
+              "balanced": "boolean",
+              "confirmed": "number",
+              "deduplicated": "number",
+              "grouped": "number",
+              "hardening": "number",
+              "needsReview": "number",
+              "raw": "number",
+              "refuted": "number",
+              "suppressedBeforeValidation": "number",
+              "unvalidated": "number"
+            }
+          },
           "components": {
             "array": {
               "object": {
@@ -260,6 +274,11 @@
           },
           "detectorErrors": {
             "array": "empty"
+          },
+          "dispositionCounts": {
+            "object": {
+              "unvalidated": "number"
+            }
           },
           "durationMs": "number",
           "entrypointInventory": {
@@ -321,6 +340,11 @@
                 "advisory": {
                   "optional": "string"
                 },
+                "advisoryIds": {
+                  "optional": {
+                    "array": "string"
+                  }
+                },
                 "aiAuthored": {
                   "optional": "boolean"
                 },
@@ -345,6 +369,46 @@
                 "authMechanism": {
                   "optional": "null"
                 },
+                "basis": {
+                  "optional": {
+                    "object": {
+                      "advisory": {
+                        "object": {
+                          "aliases": {
+                            "array": "string"
+                          },
+                          "fixedVersions": {
+                            "array": "string"
+                          },
+                          "id": "string",
+                          "source": "string"
+                        }
+                      },
+                      "deploymentEvidence": "string",
+                      "ecosystem": "string",
+                      "gaps": {
+                        "array": "string"
+                      },
+                      "matchBasis": "string",
+                      "package": "string",
+                      "reachability": "string",
+                      "reachabilityNote": "string",
+                      "resolvedVersion": "string",
+                      "schema": "string",
+                      "source": {
+                        "object": {
+                          "chain": {
+                            "array": "empty"
+                          },
+                          "direct": "boolean",
+                          "file": "string",
+                          "line": "number"
+                        }
+                      },
+                      "versionBasis": "string"
+                    }
+                  }
+                },
                 "blastRadius": "null",
                 "bountyConfidence": {
                   "optional": "null|string"
@@ -366,6 +430,19 @@
                 },
                 "chain": {
                   "optional": "null"
+                },
+                "claims": {
+                  "optional": {
+                    "array": {
+                      "object": {
+                        "id": "string",
+                        "parser": "string",
+                        "severity": "string",
+                        "stableId": "string",
+                        "vuln": "string"
+                      }
+                    }
+                  }
                 },
                 "cloneClusterId": {
                   "optional": "null|string"
@@ -454,6 +531,23 @@
                 },
                 "description": {
                   "optional": "null|string"
+                },
+                "disposition": {
+                  "optional": "string"
+                },
+                "dispositionDetail": {
+                  "optional": {
+                    "object": {
+                      "evidence": {
+                        "array": "empty"
+                      },
+                      "missingEvidence": {
+                        "array": "empty|string"
+                      },
+                      "nextCheck": "string",
+                      "reason": "string"
+                    }
+                  }
                 },
                 "ecosystem": {
                   "optional": "null|string"
@@ -619,6 +713,20 @@
                 "networkExposure": {
                   "optional": "null"
                 },
+                "occurrences": {
+                  "optional": {
+                    "array": {
+                      "object": {
+                        "chain": {
+                          "array": "empty"
+                        },
+                        "direct": "boolean",
+                        "file": "string",
+                        "line": "number"
+                      }
+                    }
+                  }
+                },
                 "originatingPrompt": {
                   "optional": "null"
                 },
@@ -727,6 +835,48 @@
                 },
                 "reachable": {
                   "optional": "boolean"
+                },
+                "record": {
+                  "optional": {
+                    "object": {
+                      "confidence": "number",
+                      "disposition": "string",
+                      "evidence": {
+                        "object": {
+                          "guards": {
+                            "array": "empty|{\"object\":{\"reasons\":{\"array\":\"string\"},\"verdict\":\"string\"}}"
+                          },
+                          "missingEvidence": {
+                            "array": "empty|string"
+                          },
+                          "sourceToSink": "null|{\"object\":{\"sink\":{\"object\":{\"args\":\"string\",\"cwe\":\"string\",\"file\":\"string\",\"line\":\"number\",\"severity\":\"string\",\"snippet\":\"string\",\"stride\":\"string\",\"type\":\"string\",\"vuln\":\"string\"}},\"source\":{\"object\":{\"category\":\"string\",\"file\":\"string\",\"inputType\":\"string\",\"label\":\"string\",\"line\":\"number\",\"snippet\":\"string\",\"variable\":\"string\"}}}}|{\"object\":{\"sink\":{\"object\":{\"args\":\"string\",\"cwe\":\"string\",\"line\":\"number\",\"severity\":\"string\",\"snippet\":\"string\",\"stride\":\"string\",\"type\":\"string\",\"vuln\":\"string\"}},\"source\":{\"object\":{\"category\":\"string\",\"file\":\"string\",\"inputType\":\"string\",\"label\":\"string\",\"line\":\"number\",\"snippet\":\"string\",\"variable\":\"string\"}}}}"
+                        }
+                      },
+                      "modelOpinion": {
+                        "object": {
+                          "confidence": "null",
+                          "verdict": "string"
+                        }
+                      },
+                      "originalSeverity": "string",
+                      "path": "string",
+                      "remediation": "null|string",
+                      "reviewerVerdicts": {
+                        "array": "empty"
+                      },
+                      "ruleFamily": "string",
+                      "ruleVersion": "string",
+                      "schema": "string",
+                      "sourceHash": "string",
+                      "span": {
+                        "object": {
+                          "endLine": "number",
+                          "startLine": "number"
+                        }
+                      },
+                      "stableId": "string"
+                    }
+                  }
                 },
                 "regression_test": {
                   "optional": "null|{\"object\":{\"code\":\"string\",\"filename\":\"string\",\"framework\":\"string\",\"lang\":\"string\",\"runHint\":\"string\"}}"
@@ -840,7 +990,7 @@
                   "optional": "string"
                 },
                 "verification": {
-                  "optional": "null|{\"object\":{\"consensus\":{\"object\":{\"lenses\":{\"array\":\"string\"},\"refuted\":\"number\",\"undecided\":\"number\",\"upheld\":\"number\",\"verdict\":\"string\"}},\"producer\":\"string\",\"verdicts\":{\"array\":{\"object\":{\"lens\":\"string\",\"reason\":\"string\",\"verdict\":\"string\",\"verifierId\":\"string\"}}}}}"
+                  "optional": "null|{\"object\":{\"consensus\":{\"object\":{\"conflict\":\"boolean\",\"groups\":{\"array\":{\"object\":{\"key\":\"string\",\"kinds\":{\"array\":\"empty\"},\"lenses\":{\"array\":\"string\"},\"vote\":\"string\"}}},\"independent\":{\"object\":{\"groups\":\"number\",\"refuted\":\"number\",\"undecided\":\"number\",\"upheld\":\"number\"}},\"lenses\":{\"array\":\"string\"},\"refutationAuthority\":\"string\",\"refuted\":\"number\",\"undecided\":\"number\",\"upheld\":\"number\",\"verdict\":\"string\"}},\"producer\":\"string\",\"verdicts\":{\"array\":{\"object\":{\"lens\":\"string\",\"reason\":\"string\",\"verdict\":\"string\",\"verifierId\":\"string\"}}}}}"
                 },
                 "verifier_reason": {
                   "optional": "string"
@@ -907,6 +1057,22 @@
                     }
                   }
                 }
+              }
+            }
+          },
+          "groupedClaims": {
+            "array": {
+              "object": {
+                "cwe": "string",
+                "disposition": "string",
+                "file": "string",
+                "groupedInto": "string",
+                "id": "string",
+                "line": "number",
+                "parser": "string",
+                "severity": "string",
+                "stableId": "string",
+                "vuln": "string"
               }
             }
           },
@@ -1176,6 +1342,76 @@
             }
           },
           "scanId": "string",
+          "scanRecord": {
+            "object": {
+              "capability": {
+                "object": {
+                  "conditions": "number",
+                  "status": "string"
+                }
+              },
+              "elapsedMs": "number",
+              "fileCounts": {
+                "object": {
+                  "included": "null",
+                  "scanned": "number",
+                  "skipped": "null"
+                }
+              },
+              "ignorePolicy": {
+                "object": {
+                  "inventoryDigest": "null",
+                  "mode": "string",
+                  "ruleDigest": "null",
+                  "trackedFileSemantics": "boolean"
+                }
+              },
+              "invocation": {
+                "object": {
+                  "flags": {
+                    "array": "empty"
+                  },
+                  "mode": "string"
+                }
+              },
+              "model": {
+                "object": {
+                  "configured": "boolean"
+                }
+              },
+              "rules": {
+                "object": {
+                  "rulesetSource": "string",
+                  "rulesetVersion": "string"
+                }
+              },
+              "schema": "string",
+              "source": {
+                "object": {
+                  "commit": "string",
+                  "dirty": "boolean",
+                  "dirtyCount": "number",
+                  "dirtyFiles": {
+                    "array": {
+                      "object": {
+                        "file": "string",
+                        "sha256": "string",
+                        "status": "string"
+                      }
+                    }
+                  },
+                  "dirtyFilesTruncated": "boolean",
+                  "vcs": "string"
+                }
+              },
+              "tool": {
+                "object": {
+                  "name": "string",
+                  "version": "string"
+                }
+              }
+            }
+          },
           "scanned": {
             "object": {
               "files": "number",
@@ -2024,6 +2260,16 @@
       "at": "2026-11-04T06:59:07.156Z",
       "version": "0.195.21",
       "acceptedBreakingChange": "scanHealth.freshness.epss.ageDays and .stale were always nullable (offline, unavailable, or no CVE to check: number|null and boolean|null, documented in docs/trust/scan-health.md); the 0.195.22 per-scan reset of the feed metadata made the contract scan see the null case instead of a value inherited from an earlier scan in the same process. The documented type is unchanged; the committed shape was "
+    },
+    {
+      "at": "2026-11-08T18:45:47.275Z",
+      "version": "0.195.28",
+      "acceptedBreakingChange": "threat-model FR-04.3: findings[].verification.consensus gains independent, conflict, refutationAuthority and groups (additive fields inside an optional object, which the snapshot records as one type string); consensus.verdict is now decided by independent evidence groups instead of lenses, and the per-lens counts keep their meaning"
+    },
+    {
+      "at": "2026-11-09T02:10:00.000Z",
+      "version": "0.195.30",
+      "acceptedBreakingChange": "findings[].basis.advisory.affectedRanges, modified and published are no longer recorded: they are null when the advisory feed was unreachable during the scan and populated when it was reachable, so no single recorded type holds on both an offline and an online host (the hosted runner failed the 0.195.28 capture taken offline)"
     }
   ]
 }

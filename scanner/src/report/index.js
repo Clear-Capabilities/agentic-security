@@ -776,6 +776,10 @@ export function toJSON(scan, meta={}, opts={}){
     // hand-built `scan` object in a test), same convention as the S7 fields
     // above; a real scan always computes it.
      ...(scan.scanRecord ? { scanRecord: scan.scanRecord } : {}),
+     // Threat-model FR-01.1: the scan scope (policy, exact totals, reasons, overrides, coverage conditions, the inventory digest and
+     // bounded samples) whenever the scan computed one. Absent for a legacy (non-Git-scoped) scan, which therefore cannot satisfy a
+     // strict scope gate.
+     ...(scan.scope ? { scope: scan.scope } : {}),
      ...(scan.reportView ? { reportView: scan.reportView } : {}),
      ...(scan.dispositionCounts ? { dispositionCounts: scan.dispositionCounts } : {}),
      // PRD FR 05: every candidate stays discoverable. Equivalent claims grouped under a primary are listed here, and the

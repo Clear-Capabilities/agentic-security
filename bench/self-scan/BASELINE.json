@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-08T01:07:37.510Z",
-  "commit": "5370151158d41e908c5aa874420c73440e990c52",
+  "generatedAt": "2026-11-08T18:48:36.817Z",
+  "commit": "bf38523cfe8a9ebb0c7bb50e4d99454204096da3",
   "targets": {
     "hooks": {
       "total": 21,
@@ -183,6 +183,7 @@
         "posture/api-contract.js": 1,
         "posture/assurance/baseline.js": 2,
         "posture/assurance/bounded-io.js": 1,
+        "posture/assurance/candidate-qualification.js": 1,
         "posture/assurance/config.js": 1,
         "posture/assurance/evidence-registry.js": 1,
         "posture/assurance/release-package-cli.js": 1,
@@ -332,7 +333,7 @@
         "posture/threat-model-grounding.js": 1,
         "posture/time-to-fix.js": 3,
         "posture/triage-learning.js": 3,
-        "posture/triage-memory.js": 3,
+        "posture/triage-memory.js": 2,
         "posture/triage.js": 3,
         "posture/validator-metrics.js": 3,
         "posture/verifier-ephemeral.js": 1,

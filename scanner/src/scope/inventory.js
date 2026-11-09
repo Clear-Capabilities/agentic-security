@@ -220,7 +220,23 @@ export function buildScanInventory(root, o = {}) {
   }
 
   included.sort();
-  return { included, skipped, overrides, policy };
+  return { included, skipped, overrides, policy, digest: inventoryDigest({ included, skipped, overrides, policy }) };
+}
+
+/**
+ * Threat-model FR-01.1: a deterministic digest over the COMPLETE normalized eligibility decisions (every included path, every skipped
+ * path and its reason, every override, and the policy), computed before any display cap. Two scans with the same digest made the same
+ * eligibility decisions; an `--include-path` changes it. Eligibility is not analysis: a file can be eligible and still not be read.
+ */
+export function inventoryDigest({ included, skipped, overrides, policy }) {
+  const canon = {
+    v: 1,
+    policy: { mode: policy.mode, respectGitignore: !!policy.respectGitignore, trackedFileSemantics: !!policy.trackedFileSemantics, ruleDigest: policy.ruleDigest ?? null },
+    included: [...included].sort(),
+    skipped: skipped.map((x) => `${x.path}\u0000${x.reason}`).sort(),
+    overrides: overrides.map((x) => `${x.path}\u0000${x.overrode}`).sort(),
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(canon)).digest('hex');
 }
 
 function walkAll(root) {

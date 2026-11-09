@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { computeAttackPaths, analyzeFindingBoundaries, bindFindingToService, assessVerification, exposureReach } from '../../src/lineage/deployment/attack-paths.js';
 import { validateBoundaryGraph } from '../../src/lineage/deployment/boundary-graph.js';
 import { ingestOne } from './helpers.js';
-import { node, edge, graphOf, baseline, FINDING, BINDINGS, recordFor, SRC } from './path-helpers.js';
+import { node, edge, graphOf, baseline, FINDING, BINDINGS, recordFor, SRC, bindingFor, TRUST_ROOT } from './path-helpers.js';
 
 const OBS = (start, end) => ({ start, end });
 
@@ -155,10 +155,14 @@ describe('[X-305.AC02] every path lists edges, assumptions, blockers and environ
     }
   });
 
-  test('[X-305.AC02] a trusted runtime-confirmed record for the same hypothesis labels a reachable path exploitable-confirmed', () => {
+  test('[X-305.AC02] a trusted runtime-confirmed record for the same hypothesis labels a reachable path exploitable-confirmed once an issued binding ties it to that path', () => {
     const { graph } = deployed();
     const rec = recordFor('trusted');
-    const ctx = analyzeFindingBoundaries({ graph, finding: FINDING, bindings: BINDINGS, records: [rec] }).context;
+    const first = analyzeFindingBoundaries({ graph, finding: FINDING, bindings: BINDINGS, records: [rec] }).context;
+    // threat-model FR-04.1: the record alone proves the component; each path needs its own issued binding
+    assert.ok(first.paths.every((p) => p.exploitability.label === 'not-established' && p.exploitability.componentProof.recordId === rec.id && p.exploitability.componentProof.code === 'component-only'));
+    const proofBindings = first.paths.map((p) => bindingFor(rec, graph, p, p.kind));
+    const ctx = analyzeFindingBoundaries({ graph, finding: FINDING, bindings: BINDINGS, records: [rec], proofBindings, trustRoot: TRUST_ROOT }).context;
     assert.ok(ctx.paths.every((p) => p.exploitability.label === 'exploitable-confirmed' && p.exploitability.recordId === rec.id));
     assert.equal(ctx.verification[0].applicable, true);
     assert.equal(ctx.verification[0].recordId, rec.id, 'the context shares the verification record id');
@@ -203,7 +207,7 @@ describe('[X-305.AC02] every path lists edges, assumptions, blockers and environ
     const impact = ctx.paths.find((p) => p.kind === 'impact');
     assert.equal(impact.state, 'blocked');
     assert.equal(impact.exploitability.label, 'oracle-confirmed-path-blocked');
-    assert.ok(ctx.paths.filter((p) => p.kind === 'exposure').every((p) => p.exploitability.label === 'exploitable-confirmed'));
+    assert.ok(ctx.paths.filter((p) => p.kind === 'exposure').every((p) => p.exploitability.label === 'not-established' && p.exploitability.componentProof.recordId === rec.id), 'without a binding the exposure path is not promoted');
     const route = node('route', 'edge/x', { trustZone: 'public' });
     const api = node('service', 'shop/api', { tenant: 'acme' });
     const other = node('service', 'shop/other', { tenant: 'globex' });
@@ -253,14 +257,27 @@ describe('[X-305.AC03] network isolation, a denied IAM permission and tenant bin
     assert.ok(g.edges.some((e) => e.id === p.blockers[0].edgeId));
   });
 
-  test('[X-305.AC03] a denied IAM permission blocks the grant hop even when an allow sits beside it', () => {
+  test('[X-305.AC03] a denied IAM permission that matches the granted action blocks the grant hop even when an allow sits beside it', () => {
+    // threat-model FR-03.1: a deny blocks only an action it matches. The allow and the deny here both name the action.
     const b = baseline();
-    const g = graphOf({ nodes: b.nodes, edges: [...b.edges, edge('grants', b.ident, b.db, { effect: 'deny' })] });
+    const allow = b.edges.find((e) => e.relation === 'grants'); allow.attrs = { ...allow.attrs, actions: 's3:GetObject' };
+    const g = graphOf({ nodes: b.nodes, edges: [...b.edges, edge('grants', b.ident, b.db, { effect: 'deny', attrs: { actions: 's3:Get*' } })] });
     assert.ok(g.gaps.some((x) => x.code === 'conflicting-configuration'), 'the conflict is recorded as a gap');
     const p = paths(g)[0];
     assert.equal(p.state, 'blocked');
     assert.equal(p.blockers[0].relation, 'grants');
+    assert.equal(p.blockers[0].action, 's3:GetObject'); assert.deepEqual(p.blockers[0].matchedActions, ['s3:Get*']);
     assert.equal(p.hops[3].state, 'blocked');
+  });
+
+  test('[X-305.AC03] a deny that records no action list cannot be matched, so the hop is unresolved rather than blocked', () => {
+    // before the threat-model FR-03 change any deny blocked; an opaque deny now leaves the decision open, never closed
+    const b = baseline();
+    const g = graphOf({ nodes: b.nodes, edges: [...b.edges, edge('grants', b.ident, b.db, { effect: 'deny' })] });
+    const p = paths(g)[0];
+    assert.equal(p.state, 'unresolved');
+    assert.equal(p.blockers.length, 0, 'nothing is credited as the blocker');
+    assert.match(p.hops[3].actions[0].unresolvedBy[0], /records no action list/);
   });
 
   test('[X-305.AC03] a deny elsewhere in the graph does not block an unrelated path', () => {

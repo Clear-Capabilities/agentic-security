@@ -69,8 +69,24 @@ These are never folded into the counts above.
 - **Stale**: an ingested source whose content no longer matches the digest recorded at ingest, or that is missing. In the set: 0 stale and 0 missing sources. Stale or missing sources must be re-ingested before the relationships they supported are trusted.
 - **Traces**: the set contains no runtime traces, so observed, sampled and stale trace coverage are all unmeasured here. Traffic coverage is never established by any supplied observation.
 
+## IAM decisions and search limits
+
+A deny blocks an IAM hop only for an action it matches, on a resource it matches, under a condition that holds. An unrelated deny (a `s3:DeleteObject` deny on a `s3:GetObject` path) leaves the path possible. A deny whose condition cannot be evaluated leaves it unresolved, never blocked. A deny on a resource pattern (`*`, `arn:aws:s3:::bucket/*`) applies to every resource the pattern matches. Each blocker names the deny edge, the action and the pattern it matched, and the condition result. Network denies are separate from IAM and still block the hop they sit on.
+
+`boundaries --action <iam-action>` decides each IAM hop for that action only. Without it, every granted action is decided, and a path that carries several reports them in `actionOutcomes`.
+
+The decided subset is small, and anything outside it is unresolved and disclosed as a gap:
+
+- exact actions and resources, and IAM globs;
+- the condition operators `StringEquals`, `StringNotEquals`, `Bool` and `ArnEquals`, evaluated against a request context the caller supplies (a key the context does not supply is unknown);
+- not decided: `...IfExists` and set operators, policy variables, `NotAction`/`NotResource`/`NotPrincipal` (skipped, as before), a clipped action list, and a deny that records no action list.
+
+The graph decides at the granularity of resource PATTERNS: a grant on `arn:aws:s3:::records/*` is one node, and it is not expanded into the objects it covers. A deny narrower than an allow in the same bucket therefore leaves the bucket path possible (true for the objects it does not cover) and cannot say which object a request names; ask whether a reachable pattern covers the object instead (`resourceMatches`). The local PILOT-12 fixture compares that prediction with an object store that adjudicates the request itself.
+
+A path search records why it stopped (`truncation.reasons`: `depth`, `result-count`, `expansion`, with a bounded frontier sample for depth). Reaching the depth limit on a node with nowhere left to go is not a cutoff. A boundary context at `schemaVersion` `1.1.0` carries the reasons; a `1.0.0` context stays readable. A truncated search never certifies that a path is absent.
+
 ## What is not claimed
 
 - No claim of benefit on real programs, no claim of accuracy, and no claim that a finding with no path is safe: "no path found" means the supplied files did not show one.
-- No exploitability from reachability. A path is possible, blocked or unresolved; only an applicable trusted verification record makes a finding exploitable in its scenario.
+- No exploitability from reachability. A path is possible, blocked or unresolved. A path is labelled `exploitable-confirmed` only when an applicable trusted verification record is at the graph's revision AND an issued proof binding (`agentic-security/proof-binding`, version 1, Ed25519-signed by an issuer in the operator's trust root) ties that record to that exact path and claim (exposure or impact), artifact, policy digest, environment, tenant, actor, route, action and oracle version. A record from another revision is kept as historical evidence with the reason. A record with no binding for the path is reported under `exploitability.componentProof` and does not promote it. A malformed, tampered, expired, untrusted or replayed binding gets its own diagnostic code.
 - No adapter beyond the validated ones above, no ingress annotation or gateway authentication semantics, and no explicit network deny from Kubernetes network policies (a policy narrows what is allowed; the adapters do not turn the absence of an allow into a deny).

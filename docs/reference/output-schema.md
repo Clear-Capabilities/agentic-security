@@ -60,6 +60,7 @@ which is not part of scan output at all.
 | `rootCauseSweep`, `attackTaxonomy`, `privacyFramework` | Scan-level structured summaries (root-cause sweep always runs; the other two are default-on unless their own opt-out env var is set). |
 | `privacyIrBacked`, `privacyTaxonomyVersion` | See above. |
 | `scanHealth` | Whether the analysis itself completed — see below and [Scan health](../walkthroughs/scan-health.md). |
+| `scope` | Present when the scan used Git-aware scope (a scope flag, or `AGENTIC_SECURITY_GIT_SCOPE=1`). It holds the policy and rule digest; exact `includedCount`, `skippedCount` and `skippedByReason`; `overrides`; `coverageConditions`; and `inventoryDigest`, a digest of every eligibility decision computed before any cap. `included` is listed only up to 5000 files (`includedOmitted: true` beyond that) and `skipped` only up to 500 (`skippedSampled: true` beyond that); the counts and the digest are always complete. `read` says how many eligible files were actually read and how many were too large to read: eligibility is not analysis. The preview (`--explain-scope`) prints the same digest. A report without `scope` was not Git-scoped, and cannot satisfy a release scope check. |
 | `suppressed` | Only present with `--include-suppressed`. |
 
 Fields prefixed `_` (`_v3`, `_scanMeta`) are internal/engine-detail and not

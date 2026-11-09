@@ -56,7 +56,8 @@ test('evaluateEgress: missing endpoint -> denied with a clear reason, never thro
 test('evaluateEgress: the returned decision object never carries prompt or source content, only metadata', () => {
   const d = evaluateEgress({ purpose: 'test', endpoint: 'https://api.example.com/v1/chat' });
   const keys = Object.keys(d).sort();
-  assert.deepEqual(keys, ['allowed', 'decision', 'policySource', 'provider', 'purpose', 'reason']);
+  // threat-model FR-06.4 added the profile, the policy states, a reason code and the enforcement state: still metadata only
+  assert.deepEqual(keys, ['allowed', 'decision', 'enforcement', 'policySource', 'policyState', 'profile', 'provider', 'purpose', 'reason', 'reasonCode']);
 });
 
 // ── mode: deny ───────────────────────────────────────────────────────────

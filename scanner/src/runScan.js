@@ -301,11 +301,16 @@ export async function runScan(rootDir, opts = {}) {
       // The included list itself lets a later comparison tell "no longer reported because it was fixed" from "no longer reported
       // because a narrower scan did not look". Kept only when small enough not to bloat the record.
       ...(scopeInventory.included.length <= 5000 ? { included: scopeInventory.included } : { includedOmitted: true }),
+      // Threat-model FR-01.1: the digest covers every decision before the caps below; the lists are samples, the counts are exact.
+      inventoryDigest: scopeInventory.digest,
       skippedCount: scopeInventory.skipped.length,
       skippedByReason: reasons,
+      skippedSampled: scopeInventory.skipped.length > 500,
       skipped: scopeInventory.skipped.slice(0, 500),
       overrides: scopeInventory.overrides,
       coverageConditions: scopeInventory.skipped.filter((x) => x.coverageCondition).slice(0, 100),
+      // eligibility is not analysis: how many eligible files were actually read, and how many were too large to read
+      read: { files: Object.keys(fileContents || {}).length + Object.keys(depFileContents || {}).length, oversize: Array.isArray(sizeSkipped) ? sizeSkipped.length : 0 },
     };
   }
   // FR 10: additive evidence contract. Finding records carry the source hash and span; the scan record ties the run to a commit,

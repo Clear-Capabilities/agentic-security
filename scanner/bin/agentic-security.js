@@ -147,6 +147,7 @@ Commands:
   release-view <package.json>  Developer, CISO and auditor views of one signed release package (--view, --format text|json|html, --previous, --public-key)
   metrics [path]               Assurance Coverage, Evidence Conversion and Verified Remediation Rate for the last scan, each with numerator and denominator (--format text|json)
   release-package build|verify Build a signed release package from the last scan (--private-key, --output, --fix-records), or check one offline (--public-key)
+                               release-package qualify <packet.json> --public-key <pem>: recompute candidate gates G-01..G-07 from a signed candidate packet (exit 0 only when qualified; --require-case, --require-gate, --require-tier G-05=staging, --output, --format json)
   reset [--yes] [--keep ...]   Right-to-delete: wipe accumulated learned state under .agentic-security/ (preserves operator-authored config)
                                --expired    only remove artifacts past their retention-class TTL
                                Every run writes a deletion-report.json proving what was planned/deleted/preserved/failed.
@@ -181,7 +182,7 @@ Commands:
   scan-baseline --current <f> --previous <f>
                                Finding-level diff between two scan JSON outputs.
                                Reports added / removed / changed findings.
-  boundaries --from <dir> [--findings <last-scan.json>] [--environment <name>] [--out <file>] [--json]
+  boundaries --from <dir> [--findings <last-scan.json>] [--environment <name>] [--out <file>] [--json] [--action <iam-action>]
                                Build a deployment boundary graph from local configuration
                                (and optional sanitized traces) and attach a boundary context
                                to each finding of a scan result. Read-only, local files only.
@@ -4166,9 +4167,9 @@ Do not suppress anything you are not certain is a false positive. When in doubt,
 // 3 the feature is disabled, blocked or unsupported on this platform (nothing was read).
 async function cmdBoundaries(args) {
   const f = args.flags;
-  const usage = 'Usage: agentic-security boundaries --from <dir> [--findings <last-scan.json>] [--environment <name>] [--repository <name>] [--revision <sha>] [--root <project>] [--out <file>] [--json] [--now <iso>]';
+  const usage = 'Usage: agentic-security boundaries --from <dir> [--findings <last-scan.json>] [--environment <name>] [--repository <name>] [--revision <sha>] [--root <project>] [--out <file>] [--json] [--now <iso>] [--action <iam-action>]';
   if (typeof f.from !== 'string' || !f.from) { console.error(usage); return 2; }
-  for (const k of ['findings', 'environment', 'repository', 'revision', 'out', 'now', 'root']) {
+  for (const k of ['findings', 'environment', 'repository', 'revision', 'out', 'now', 'root', 'action']) {
     if (f[k] !== undefined && (typeof f[k] !== 'string' || !f[k])) { console.error(`agentic-security boundaries: --${k} needs a value\n${usage}`); return 2; }
   }
   const scanRoot = path.resolve(f.root || '.');
@@ -4178,6 +4179,8 @@ async function cmdBoundaries(args) {
   const result = runBoundaries({
     config, from: path.resolve(f.from), environment: f.environment || 'prod', repository: f.repository || null, revision: f.revision || null,
     findingsFile: f.findings ? path.resolve(f.findings) : null, verifySignature: _verifyLastScan, now: f.now,
+    // threat-model FR-03.2: an action-specific query (`--action s3:GetObject`) decides each IAM hop for that action only
+    action: f.action || null,
   });
   if (result.status === 'disabled' || result.status === 'blocked' || result.status === 'unsupported') {
     console.error(`agentic-security boundaries: not run (${result.status}): ${result.reason}`);

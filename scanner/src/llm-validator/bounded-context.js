@@ -156,7 +156,8 @@ function collectConfiguration(finding, fileContents, { window, maxConfig, add, g
     if (typeof code !== 'string' || !CONFIG_FILE.test(file) || code.length > 500_000) continue;
     const cl = code.split('\n');
     for (const key of keys) {
-      const re = new RegExp(`(?<![\\w])${escapeRe(key)}(?![\\w])`);
+      // the key is escaped before it reaches the pattern, which has no quantifier at all
+      const re = new RegExp(`(?<![\\w])${escapeRe(key)}(?![\\w])`); // agentic-security-ignore: CWE-1333
       const i = cl.findIndex((t) => re.test(t));
       if (i < 0) continue;
       found.add(key);

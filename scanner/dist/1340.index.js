@@ -666,6 +666,8 @@ function parseCompose(text, fileCtx) {
   return kit.result();
 }
 
+// EXTERNAL MODULE: ./src/lineage/deployment/iam-eval.js
+var iam_eval = __webpack_require__(1086);
 ;// CONCATENATED MODULE: ./src/lineage/deployment/adapter-cloud.js
 // adapter-cloud.js: Terraform plan JSON and IAM policy documents into
 // deployment boundary nodes and edges (X-302).
@@ -676,6 +678,7 @@ function parseCompose(text, fileCtx) {
 // guessed: the relation becomes an unresolved node plus a gap. Policy
 // documents are read with JSON.parse; `NotAction` / `NotResource` statements
 // and conditions it cannot interpret are reported, not approximated.
+
 
 
 
@@ -708,10 +711,12 @@ function applyPolicy(kit, identity, policy, subject) {
     const conditioned = isObject(st.Condition) && Object.keys(st.Condition).length > 0;
     read += 1;
     if (resources.length > MAX_RESOURCES_PER_STATEMENT) kit.gap('limit-exceeded', subject, `a statement lists ${resources.length} resources; only the first ${MAX_RESOURCES_PER_STATEMENT} are read`);
+    if (actions.join(',').length > 250) kit.gap('limit-exceeded', subject, 'a statement\'s action list is longer than the graph records; the clipped list leaves decisions about the missing actions unresolved');
+    if (conditioned && (0,iam_eval/* statementAttrs */.c2)(actions, st.Condition).conditionSupported !== true) kit.gap('unsupported-syntax', subject, 'a statement condition uses an operator or value outside the supported subset (StringEquals, StringNotEquals, Bool, ArnEquals); decisions it can affect stay unresolved');
     for (const r of resources.slice(0, MAX_RESOURCES_PER_STATEMENT)) {
       const target = kit.node('resource', `aws/${r}`, { trustZone: 'internal', attrs: r === '*' ? { wildcard: true } : {} });
-      const attrs = { actions: actions.join(',').slice(0, 250) };
-      if (conditioned) attrs.conditioned = true;
+      // threat-model FR-03.1: the action list (and whether it was clipped) and the condition, in a form the path search can decide
+      const attrs = (0,iam_eval/* statementAttrs */.c2)(actions, conditioned ? st.Condition : null);
       kit.edge('grants', identity, target, {
         effect, confidence: conditioned ? 'low' : 'high', discriminator: `${actions.join(',')}${conditioned ? ';cond' : ''}`.slice(0, 250), attrs,
       });
@@ -1638,8 +1643,8 @@ function applyCorrelation(graph, correlation) {
   return (0,boundary_graph/* buildBoundaryGraph */.v4)({ repository: graph.repository, revision: graph.revision, nodes, edges, gaps: graph.gaps, sources: graph.sources });
 }
 
-// EXTERNAL MODULE: ./src/lineage/deployment/projection.js + 1 modules
-var projection = __webpack_require__(73596);
+// EXTERNAL MODULE: ./src/lineage/deployment/projection.js + 2 modules
+var projection = __webpack_require__(83929);
 ;// CONCATENATED MODULE: ./src/lineage/deployment/boundaries-run.js
 // boundaries-run.js: the operator entry point that builds a boundary context for scanned findings (X-308 wiring).
 //
@@ -1741,7 +1746,7 @@ function readScanFindings(file, { maxBytes, verify } = {}) {
  * @param {string} [o.now]         ISO time used to judge trace staleness; defaults to the current time
  * @returns {object} typed result; `status` is ok | disabled | blocked | unsupported | error. Never throws.
  */
-function runBoundaries({ config, from, environment = 'prod', repository = null, revision = null, findingsFile = null, findings: suppliedFindings = null, verifySignature, now } = {}) {
+function runBoundaries({ config, from, environment = 'prod', repository = null, revision = null, findingsFile = null, findings: suppliedFindings = null, verifySignature, now, action = null } = {}) {
   const gate = (0,assurance_config/* featureStatus */.FX)(config, DEPLOYMENT_FEATURE);
   if (gate.status !== 'ok') return { ...gate, report: null };
   const limits = (0,assurance_config/* limitValues */.OH)(config);
@@ -1818,7 +1823,7 @@ function runBoundaries({ config, from, environment = 'prod', repository = null, 
     if (integrity === 'unsigned') notes.push('the scan result carries no signature, so its integrity was not verified');
   }
 
-  const attached = (0,projection/* attachBoundaryContext */.Nu)({ config, findings, graph, bindings, now: clock });
+  const attached = (0,projection/* attachBoundaryContext */.Nu)({ config, findings, graph, bindings, now: clock, action });
   if (attached.status !== 'ok') return { ...attached, report: null };
   const contexts = attached.findings.map((f) => f.boundaryContext).filter(Boolean);
   const rows = attached.findings.map((f) => ({
