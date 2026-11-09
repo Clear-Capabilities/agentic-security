@@ -129,3 +129,27 @@ test('sensitive logging: a record built from a credential logged through another
   assert.equal(ruleHits(card('lastFour (cardNumber payment)'), 'hs-sensitive-logging').length, 0, 'a masking helper by name');
   assert.equal(ruleHits(card('cardNumber payment'), 'hs-sensitive-logging').length, 1);
 });
+
+test('a request whose whole destination is a literal is REFUTED when the client reaches only the query; a client-chosen path is only lowered', async () => {
+  // PRD FR 05: specific evidence that disproves the claim refutes it. The SSRF claim is that the client chooses where the request goes;
+  // with scheme, host and path all literal it cannot. A path, a concatenation or a custom manager (which can carry a proxy) leaves part of
+  // the destination open, so those stay at `info` with the guard note and are never refuted.
+  const spock = (req, extraImports = []) => mod(['import Control.Monad.IO.Class (liftIO)', 'import qualified Data.ByteString.Lazy as BL', 'import Data.Text (Text)', 'import qualified Data.Text.Encoding as TE', 'import Network.HTTP.Simple', 'import Web.Spock', ...extraImports],
+    `catalogRequest :: Request\ncatalogRequest = "https://catalog.example.internal/feeds/search"\n\nsearchFeeds :: Text -> IO BL.ByteString\nsearchFeeds term = do\n  let request = ${req}\n  response <- httpLBS request\n  pure (getResponseBody response)\n\napp :: SpockM () () () ()\napp = get "feeds/search" $ do\n  term <- param' "q"\n  found <- liftIO (searchFeeds term)\n  lazyBytes found`, '{-# LANGUAGE OverloadedStrings #-}\nmodule Feeds (app) where');
+  const full = async (files) => {
+    const dir = mkTestTmp('hs-refute-');
+    writeFileSync(join(dir, 'package.json'), '{}');
+    for (const [f, text] of Object.entries(files)) { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), text); }
+    return (await runScan(dir, { deep: true })).scan;
+  };
+  const ssrf = (s) => (s.findings || []).filter((f) => f.cwe === 'CWE-918');
+  const query = await full({ 'src/Feeds.hs': spock('setRequestQueryString [("q", Just (TE.encodeUtf8 term))] catalogRequest') });
+  assert.equal(ssrf(query).length, 0, 'refuted findings leave the actionable list');
+  assert.ok((query.candidateReconciliation || {}).refuted >= 1, `the refutation is counted, not lost: ${JSON.stringify(query.candidateReconciliation)}`);
+  for (const [why, req] of [['a path the client chooses', 'setRequestPath (TE.encodeUtf8 term) catalogRequest'], ['a custom manager', 'setRequestManager (error (show term)) catalogRequest']]) {
+    const s = await full({ 'src/Feeds.hs': spock(req) });
+    const hits = ssrf(s);
+    assert.ok(hits.length >= 1, `${why}: still reported`);
+    assert.ok(hits.every((f) => f.disposition !== 'refuted' && !f.refutation), `${why}: lowered, never refuted`);
+  }
+});

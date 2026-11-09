@@ -9,6 +9,16 @@
 > make the history less accurate, not more.
 
 
+## 0.195.29 - `scan --watch` watches, the validator collects callers and configuration, and pilot tooling for the measured targets
+
+**Measured, 0.195.28:** `TIMINGS preflight=3s push=6s pr=1s checks=430s merge=6s verify=6s tag=2s release=131s npm=450s total=1035s release-clock=145s`, shipped from the merge to the published release in 145 s; the run stopped once on a git index lock held by the post-commit gate warm-up, and `ship --resume` continued after it.
+
+- **`scan --watch` exited after its first scan** and never watched anything: the watcher does not block, and the scan command's dispatch exits with whatever the command returns. It now stays running until Ctrl-C or SIGTERM, and says when the first scan is done. A new end-to-end test runs the real CLI with a scope flag: a change to a Git-ignored file does not rescan, and a change to a tracked file under `dist/` (which the default watcher filter skips) does.
+- **The model validator collects callers and configuration** (PRD FR 05). Callers: the nearest function definition above the finding, then up to three call sites of that name in scanned files of the same language, labelled as matched by name rather than resolved. Configuration: environment keys read near the finding, then the scanned configuration files that set them; a real `.env` file is never read, and the value of a secret-like key is masked before redaction. What could not be collected is still stated in the prompt. Prompt version `v2.2-callers-config`, so cached verdicts are not reused.
+- **A Haskell request whose whole destination is a literal is refuted** when the client's text reaches only the query, headers, body, method or authentication: a `constant-input` refutation tied to the file's content hash, kept in the refuted record. A client-chosen path, a concatenation, a custom manager or an unknown record field still only lowers the finding to `info`.
+- **Pilot and benchmark tooling** for the targets that need data the project does not hold. `bench/haskell-pilot/pilot.mjs capture` records what M0 asks for and measures the 95% parse and 90% semantic rates with failures in the denominator, with frozen exclusions; `compare` diffs two reports of one snapshot and says it is not recall. `bench/haskell-core-families/adjudicate.mjs` imports blind two-reviewer labels, reports agreement and Cohen's kappa, adds only unanimous cases, and freezes the manifest and definitions; the runner refuses the holdout without a matching freeze and logs every holdout run, and reports 95% Wilson intervals. No independent case and no pilot snapshot exists yet; every family still reports `insufficient-cases`.
+- **CI**: the cabal store's cache key names the runner's OS release, so packages built on one Ubuntu release are not restored on another.
+
 ## 0.195.28 - Git-aware scope, Haskell coverage accounting, and findings that keep their evidence
 
 **Measured, 0.195.27:** `TIMINGS preflight=4s push=8s pr=4s checks=15s merge=6s verify=6s tag=2s release=131s npm=268s total=444s release-clock=145s`, shipped from the merge to the published release in 145 s.
