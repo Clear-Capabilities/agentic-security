@@ -9,6 +9,24 @@
 > make the history less accurate, not more.
 
 
+## 0.195.31 - GA programme, release H: local detections syntax-checked per format with a labelled hunt corpus, hunts that state their coverage, refused provenance conflicts, mechanical evidence that outranks a model reject, and a deterministic + hunt Eval Lab arm
+
+**Measured, 0.195.30:** `TIMINGS preflight=3s push=7s pr=1s checks=392s merge=5s verify=10s tag=2s release=223s npm=328s total=971s release-clock=240s`, shipped from the merge to the published release in 240 s; the npm listing lagged the publish and `ship --resume` confirmed it.
+
+The code and test items of GA-10 (§1 to §4) and GA-06 (§3 to §5). Qualifying real models on the advertised hardware and running the official parsers or disposable products are separate qualifications and are not claimed: the GA ledger records them as not started with their blockers. Nothing moved a maturity; the agentic discovery, detection and response and local models registry rows now carry `gate`, `limits` and `since`.
+
+- **Changed results, listed first.**
+  - A Sigma rule for a parameter in a request body or an arbitrary header is declined with the reason: the `webserver` log source records neither, and the fields the rule used to name do not exist in any backend. The Sigma output carries a `date`, names the CWE in its description instead of an invented tag namespace, and the WAF suggestion keeps its metadata on the chain starter only.
+  - A hunt is `INCONCLUSIVE` when events were cut at the parser's parameter limits or carry a timestamp with no zone. A gap of six hours or more in the dated events is reported as informational, and blocks a negative when `dnr hunt --max-gap <hours>` declares what a gap is.
+  - A model `reject` on a finding from the C/C++ dataflow engine, or with an oracle-confirmed verification record, is refused and becomes `escalate`, like a reject on the taint engine. The model's own verdict is kept in `validator_model_verdict`.
+  - The exposure window refuses two deployment records that place different commits in one environment at one moment, and a deployment that contains the fix but is dated before the fix commit. Every refused record makes the window incomplete.
+- **Syntax per format (GA-10 §1, §4).** `dnr/syntax.js` checks every rendered rule against a subset grammar or a vendored schema written for exactly what its renderer emits, with the target and version stated. Each checker rejects a known-bad sample, so a pass is a decision. The contract page carries the per-format table of what is generated, syntax-checked, tested against sample data and tested against a real product; no output has been run against a live product.
+- **A labelled hunt corpus (GA-10 §2).** Malicious and near-miss benign log samples pin each hunt verdict and caveat, including malformed records, truncation, retention gaps and timezones.
+- **Exposure after telemetry ends (GA-10 §3).** It is reported like the part before telemetry began, open-ended when the fix was never deployed. The start and the end of the exposure are explicit records with their evidence.
+- **The `deterministic + hunt` Eval Lab arm (GA-06 §5).** Runs the scanner and then the discovery pipeline over the staged workspace with a loopback model. Every hunter prompt passes the leakage guard, no hunt memory crosses repeats, and a hunt that reached nothing is `unavailable`, never `completed`. A run records the entry-by-entry comparison of each model arm with each deterministic arm.
+- **Mechanical evidence first in discovery (GA-06 §4).** A previously refuted candidate is dropped before the confirmation panel spends calls on it, and a candidate whose file or line the run does not hold is never invented.
+- **The loopback endpoint audit (GA-06 §3).** Every allowance in `llm-validator/local-endpoint.js` is tested against the documented loopback promise, and `isLoopbackUrl` is the one rule for the whole repository.
+
 ## 0.195.30 - Threat model hardening: verdicts bound to what they tested, honest path limits, a fail-closed restricted profile, and candidate qualification
 
 **Measured, 0.195.29:** `TIMINGS preflight=6s push=13s pr=4s checks=737s merge=5s verify=10s tag=2s release=254s npm=146s total=1177s release-clock=271s`, shipped from the merge to the published release in 271 s; the npm listing lagged the publish and `ship --resume` confirmed it.

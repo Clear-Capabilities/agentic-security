@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.195.30",
-    "bundleSha256": "49efaca1a4d9c735d54511f9e3b65837265fbc5341177c79a5fb6e9a4d3bea90",
-    "commit": "430cddd7248862e00f946b7180d546cac142374c",
+    "engineVersion": "0.195.31",
+    "bundleSha256": "15828baf4198b1e138b8558e297eeb9796d5a267477925c5ac6ab8c70b8b2324",
+    "commit": "3e3ce6b05216be8b70071c2f999ae2ae106889f7",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-09T01:35:03.253Z",
+    "generatedAt": "2026-11-09T13:49:20.144Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -624,7 +624,7 @@
         }
       },
       "scanner/src": {
-        "total": 685,
+        "total": 688,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -725,7 +725,6 @@
           "lineage/remediation.js": 2,
           "lineage/runtime-assurance.js": 3,
           "llm-validator/agent-tools.js": 4,
-          "llm-validator/bounded-context.js": 1,
           "llm-validator/consistency.js": 1,
           "llm-validator/index.js": 4,
           "llm-validator/model-probe.js": 1,
@@ -781,6 +780,7 @@
           "posture/dnr/log-reader.js": 1,
           "posture/dnr/payload-classes.js": 2,
           "posture/dnr/store.js": 1,
+          "posture/dnr/syntax.js": 4,
           "posture/dnr/view.js": 1,
           "posture/encryption-provider.js": 3,
           "posture/epss.js": 3,
@@ -1001,8 +1001,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 270,
-    "d": 572
+    "n": 388,
+    "d": 571
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2255,9 +2255,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.195.30",
-    "commit": "430cddd7248862e00f946b7180d546cac142374c",
-    "bundleSha256": "49efaca1a4d9c735d54511f9e3b65837265fbc5341177c79a5fb6e9a4d3bea90",
+    "engineVersion": "0.195.31",
+    "commit": "3e3ce6b05216be8b70071c2f999ae2ae106889f7",
+    "bundleSha256": "15828baf4198b1e138b8558e297eeb9796d5a267477925c5ac6ab8c70b8b2324",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",
