@@ -374,7 +374,6 @@
                     "object": {
                       "advisory": {
                         "object": {
-                          "affectedRanges": "null",
                           "aliases": {
                             "array": "string"
                           },
@@ -382,8 +381,6 @@
                             "array": "string"
                           },
                           "id": "string",
-                          "modified": "null",
-                          "published": "null",
                           "source": "string"
                         }
                       },
@@ -2268,6 +2265,11 @@
       "at": "2026-11-08T18:45:47.275Z",
       "version": "0.195.28",
       "acceptedBreakingChange": "threat-model FR-04.3: findings[].verification.consensus gains independent, conflict, refutationAuthority and groups (additive fields inside an optional object, which the snapshot records as one type string); consensus.verdict is now decided by independent evidence groups instead of lenses, and the per-lens counts keep their meaning"
+    },
+    {
+      "at": "2026-11-09T02:10:00.000Z",
+      "version": "0.195.30",
+      "acceptedBreakingChange": "findings[].basis.advisory.affectedRanges, modified and published are no longer recorded: they are null when the advisory feed was unreachable during the scan and populated when it was reachable, so no single recorded type holds on both an offline and an online host (the hosted runner failed the 0.195.28 capture taken offline)"
     }
   ]
 }
