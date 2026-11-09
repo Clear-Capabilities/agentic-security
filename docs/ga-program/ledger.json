@@ -539,6 +539,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "kind": "manual",
+          "workstream": "GA-06",
+          "status": "passed",
+          "sourceCommit": "672585f77cef8864c60ea0bfa575d90716c1a5ff",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "exitCode": 0,
+          "recordedAt": "2026-11-09T13:39:29Z",
+          "blocker": null,
+          "id": "model-validation:MECHANICAL-PRECEDENCE",
+          "requirement": "A model reject on a finding from any dataflow engine, with an execution-proven result or with an oracle-confirmed verification record is refused and becomes escalate with the model verdict kept in its own field and the severity untouched; an ordinary reject stays in the actionable list for review; a hunt candidate whose file or line the run does not hold is never invented.",
+          "command": "cd scanner && node --test test/discovery-mechanical-precedence.test.js test/contracts/model-validation.contract.test.js",
+          "evidencePath": "scanner/test/discovery-mechanical-precedence.test.js"
         }
       ]
     },
@@ -1370,7 +1386,7 @@
           "workstream": "GA-10",
           "requirement": "Every advertised format parses in its declared target and version; labelled positive and negative fixtures behave as specified; unavailable telemetry stays unavailable.",
           "status": "not-started",
-          "blocker": "disposable validation products and official parsers not provisioned"
+          "blocker": "syntax checks against subset grammars and vendored schemas, a labelled hunt corpus and refused provenance conflicts are recorded (detection-and-response:RENDERER-SYNTAX-AND-HUNT-CORPUS); the official parsers and disposable validation products are not provisioned"
         },
         {
           "sourceCommit": null,
@@ -1387,6 +1403,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "kind": "manual",
+          "workstream": "GA-10",
+          "status": "passed",
+          "sourceCommit": "672585f77cef8864c60ea0bfa575d90716c1a5ff",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "exitCode": 0,
+          "recordedAt": "2026-11-09T13:39:29Z",
+          "blocker": null,
+          "id": "detection-and-response:RENDERER-SYNTAX-AND-HUNT-CORPUS",
+          "requirement": "Every rendered detection of every payload class at every parameter location, on a literal and a templated path, passes a syntax check for its declared target and version (a subset grammar or a vendored schema written for exactly what the renderer emits, each checker rejecting a known-bad sample); renderers decline what the target cannot see instead of inventing a field; a labelled malicious and near-miss log corpus holds the hunt verdicts and caveats; the hunt reports gaps, parser truncation and zoneless timestamps and they block a negative where they must; the exposure window refuses conflicting provenance and a deployment that predates its fix commit. No output was run against a live product.",
+          "command": "cd scanner && node --test test/dnr/renderer-syntax.test.js test/dnr/hunt-corpus.test.js test/dnr/window-provenance-conflicts.test.js test/dnr/ir-and-outputs.test.js test/cli/dnr-cli.test.js",
+          "evidencePath": "scanner/test/dnr/renderer-syntax.test.js"
         }
       ]
     },
@@ -1497,6 +1529,22 @@
           "evidencePath": "scanner/test/local-preset-callers.test.js",
           "recordedAt": "2026-11-04T14:58:52Z",
           "blocker": null
+        },
+        {
+          "kind": "manual",
+          "workstream": "GA-06",
+          "status": "passed",
+          "sourceCommit": "672585f77cef8864c60ea0bfa575d90716c1a5ff",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "exitCode": 0,
+          "recordedAt": "2026-11-09T13:39:29Z",
+          "blocker": null,
+          "id": "local-models:ENDPOINT-AUDIT",
+          "requirement": "Every allowance in the local endpoint rule is audited against the documented loopback promise (IPv4, IPv6 and alias forms, normalization), one loopback rule serves the whole repository, and the transport never follows a redirect, caps the reply while reading, aborts a stalled connection or body and ignores proxy variables.",
+          "command": "cd scanner && node --test test/local-endpoint-audit.test.js test/egress-transport.test.js test/contracts/local-models.contract.test.js",
+          "evidencePath": "scanner/test/local-endpoint-audit.test.js"
         }
       ]
     },
@@ -1872,6 +1920,22 @@
           "requirement": "Pilot on at least five representative repositories with install, upgrade, scan, fix, revert, export and integration behaviour recorded; named maintainer and runbooks published.",
           "status": "not-started",
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "kind": "manual",
+          "workstream": "GA-06",
+          "status": "passed",
+          "sourceCommit": "672585f77cef8864c60ea0bfa575d90716c1a5ff",
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": "darwin (maintainer host)",
+          "exitCode": 0,
+          "recordedAt": "2026-11-09T13:39:29Z",
+          "blocker": null,
+          "id": "eval-lab:HUNT-ARM",
+          "requirement": "A deterministic + hunt arm runs the scanner and the discovery pipeline over the staged workspace with a loopback model, every hunter prompt passes the leakage guard, no hunt memory crosses repeats, a hunt that reached nothing is unavailable rather than completed, and the run records the entry-by-entry paired comparison of each model arm with each deterministic arm. Exercised with protocol stand-ins; no real-model measurement is recorded.",
+          "command": "cd scanner && node --test test/eval-lab/arm-hunt.test.js test/eval-lab/arm-ollama.test.js test/eval-lab/run-report.test.js",
+          "evidencePath": "scanner/test/eval-lab/arm-hunt.test.js"
         }
       ]
     },
