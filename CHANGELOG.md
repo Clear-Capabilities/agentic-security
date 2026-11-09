@@ -9,6 +9,37 @@
 > make the history less accurate, not more.
 
 
+## 0.195.30 - Threat model hardening: verdicts bound to what they tested, honest path limits, a fail-closed restricted profile, and candidate qualification
+
+**Measured, 0.195.29:** `TIMINGS preflight=6s push=13s pr=4s checks=737s merge=5s verify=10s tag=2s release=254s npm=146s total=1177s release-clock=271s`, shipped from the merge to the published release in 271 s; the npm listing lagged the publish and `ship --resume` confirmed it.
+
+The locally verifiable part of the threat model hardening plan. Each of the nine reproduced baseline behaviours (TM-01 to TM-09) has a failing control that now passes. Staging delivery, independent accuracy measurement, attested execution and owner approvals are separate qualifications and are not claimed: the candidate packet records each as blocked. Nothing moved a maturity. Per-requirement state: `docs/implementation-status/threat-model-hardening.md`.
+
+- **Changed results, listed first.**
+  - A hunt's target counter counts only events with the matched route template and method, so an unrelated route no longer inflates it.
+  - An authoritative `authenticated: false` survives a redacted authorization header: a header alone shows a credential was present, not that it was accepted.
+  - An IAM deny blocks only the action, resource and condition it matches; a conditional or opaque deny that can affect the action leaves the path `unresolved` instead of blocked.
+  - A family or directory triage bucket is advisory: a new high finding keeps its confidence.
+  - Corroboration is counted by independent evidence group, not by lens.
+- **Detection (FR-07).** Credential presence and authentication outcome are separate. A new `object-authz` rule detects an authenticated actor receiving another tenant's object. Hunts report window gaps, and a detection signal is never reported as a corroborated effect on its own. CWE-639 moved to the new payload class; the detection IR documents the change.
+- **Scope (FR-01).** Standard JSON carries the `scope` object and a deterministic `inventoryDigest` over every eligibility decision before display caps. Scope preview agrees with it. A release scope reconciliation reports each critical route or unit as covered, excluded, unsupported or unknown.
+- **IAM and paths (FR-03).** Per-action deny evaluation, the `StringEquals`, `StringNotEquals`, `Bool` and `ArnEquals` condition subset, and `truncation.reasons` that tell depth, expansion, result-count and deadline cutoffs apart. A search that hit a bound cannot certify the absence of a path. `boundaries --action` queries one action. The boundary context version is 1.1.0, with optional fields only.
+- **Proof binding (FR-04).** A deployed path is promoted only by an Ed25519-signed proof binding from a trusted issuer. The binding covers the revision, artifact, policy, actor, tenant, route, scenario and oracle. A receipt from another revision or context keeps its stable id with a distinct diagnostic.
+- **Learned decisions (FR-05).** Exact, scoped, HMAC-signed triage decisions apply; bucket matches, expired, copied, cross-tenant and unsigned records do not. A confirmed root cause yields a sibling review queue with six separate states. The legacy `mitigated` count keeps its detector-coverage meaning.
+- **Restricted egress (FR-06).** `AGENTIC_SECURITY_EGRESS_PROFILE=restricted` requires its authoritative policy and fails closed on a malformed, unreadable, missing or unsupported one before any model request. An operator deny always wins. High-impact MCP approvals can be bound to tool, action, target and change, with an expiry; the restricted profile requires that binding.
+- **Pilot (FR-02, FR-08).** Loopback fixtures cover:
+  - a two-tenant records service (PILOT-01 to PILOT-08);
+  - the order approval invariant (wrong guard, then patched);
+  - an app-to-cloud chain whose object store adjudicates with its own evaluator;
+  - a bounded SQLite injection proof (PILOT-12).
+- **Candidate qualification (FR-10).**
+  - A signed candidate packet; gates G-01 to G-07 are recomputed from case evidence, never read from the packet.
+  - `agentic-security release-package qualify <packet> --public-key <pem>` exits 0 only when qualified.
+  - Each case carries a `local`, `staging` or `independent` tier, and a gate that requires a tier (`--require-tier G-05=staging`) counts only cases of that tier.
+  - `revalidateDecision` refuses a decision for another artifact, policy, scanner bundle or packet, or after its evidence expires.
+  - `npm run pilot:qualify` writes one signed packet per deployment identity. On a developer host it reports "not qualified", with the blocked staging, independent and attested-runner cases named.
+- **Evaluation scoring (FR-09.2).** Every enrolled label is reconciled to one status. A negative label whose target the run never reached used to leave the count without a trace; it is now counted as `negativesOutsideRun`.
+
 ## 0.195.29 - `scan --watch` watches, the validator collects callers and configuration, and pilot tooling for the measured targets
 
 **Measured, 0.195.28:** `TIMINGS preflight=3s push=6s pr=1s checks=430s merge=6s verify=6s tag=2s release=131s npm=450s total=1035s release-clock=145s`, shipped from the merge to the published release in 145 s; the run stopped once on a git index lock held by the post-commit gate warm-up, and `ship --resume` continued after it.
