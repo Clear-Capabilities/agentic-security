@@ -58,16 +58,16 @@ Each TM case is reproduced as a failing control in the test named for its requir
 | AC-06C execution cases on an attested runner | blocked | the four confinement-dependent cases stay skipped and visible on this host | | a runner that attests its confinement |
 | FR-07 authentication truth, object authorization, target counter | verified-local | `node --test test/dnr/auth-truth-object-authz.test.js test/dnr/ir-and-outputs.test.js` | `a38986c2` | detection engineering |
 | FR-08.1 two-tenant local fixture, PILOT-01 to PILOT-08 | verified-local | `node --test test/pilot/two-tenant-records.test.js` | `a38986c2` | service owner |
-| FR-08.2 reference fixture and service qualification kept separate | verified-local | `node --test test/pilot/candidate-packet.test.js` (one packet per deployment identity) | this change | each service's own qualification needs its own deployment identity |
+| FR-08.2 reference fixture and service qualification kept separate | verified-local | `node --test test/pilot/candidate-packet.test.js` (one packet per deployment identity) | `d455ba54` | each service's own qualification needs its own deployment identity |
 | FR-08.3 app-to-cloud chain and database proof (PILOT-12) | verified-local | `node --test test/pilot/app-to-cloud-and-db.test.js` | `c10e2ada` | the path graph reasons about resource patterns, not individual objects |
 | FR-08.4 staging delivery, sensor loss, replay (PILOT-10) | blocked | recorded as a blocked staging case in the pilot packet | | detection engineering and the incident lead; an authorized staging deployment |
 | PILOT-09 independently withheld variant | blocked | recorded as a blocked independent case | | label custodian |
 | FR-09.1 frozen protocol and custody | implemented (pre-existing) | `npm run test:evaluation` | | evaluation lead and label custodian |
-| FR-09.2 every enrolled case reconciled, denominator preserved | verified-local | `node --test test/evaluation/scorer-reconciliation.test.js` | this change | |
+| FR-09.2 every enrolled case reconciled, denominator preserved | verified-local | `node --test test/evaluation/scorer-reconciliation.test.js` | `d455ba54` | |
 | FR-09.3, FR-09.4 floors and runtime measurement on the candidate | blocked | the candidate packet records G-06 as unmeasured | | an independently held population of at least 100 positives and 100 negatives per core language |
 | FR-10.1, FR-10.2 candidate packet, gates recomputed from evidence | verified-local | `node --test test/candidate-qualification.test.js` | `4a573a40` | release owner |
-| FR-10.3 strict qualification surface | verified-local | `agentic-security release-package qualify`; `node --test test/pilot/candidate-packet.test.js` | this change | ordinary scan exit codes are unchanged |
-| FR-10.4 upgrade, rollback and expiry invalidate a decision | verified-local | same file (`revalidateDecision`; `UNSUPPORTED_VERSION` for another packet version) | this change | |
+| FR-10.3 strict qualification surface | verified-local | `agentic-security release-package qualify`; `node --test test/pilot/candidate-packet.test.js` | `d455ba54` | ordinary scan exit codes are unchanged |
+| FR-10.4 upgrade, rollback and expiry invalidate a decision | verified-local | same file (`revalidateDecision`; `UNSUPPORTED_VERSION` for another packet version) | `d455ba54` | |
 | AC-10C staged rollout and rollback | blocked | | | release owner; a staging deployment |
 
 ## The local candidate
