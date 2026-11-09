@@ -87,12 +87,50 @@ function stillExposed(deployments, vulnerable) {
   return vulnerable.some((d) => d.commit === newest.commit && d.deployedAt === newest.deployedAt);
 }
 
-export function computeExposureWindow({ finding, repo, deployments: rawDeployments = [], deploymentProblems = [], fixCommit = null, telemetry = null, deps = {} } = {}) {
-  // callers may pass records that did not come through loadDeployments; normalise dates so every output is comparable
-  const deployments = rawDeployments.filter((d) => d && ts(d.deployedAt) != null).map((d) => ({ ...d, deployedAt: iso(ts(d.deployedAt)) }));
+/**
+ * Reconcile the deployment records against each other and against the fix commit (GA-10 §3, 0.195.31). Two records that place
+ * DIFFERENT commits in the same environment at the same moment contradict each other, and nothing here can say which is true, so
+ * both are refused. A record that contains the fix but is dated before the fix was committed is refused too: a deployment cannot
+ * precede its own code. Refused records are listed with the reason; the caller carries them into `unknowns`, because a refused
+ * record could have been the first vulnerable deployment and the window can no longer be called complete.
+ */
+export function reconcileDeployments(deployments, { fixCommit = null, fixAt = null, isAncestor: anc = null } = {}) {
+  const problems = [];
+  const byKey = new Map();
+  for (const d of deployments) {
+    const key = `${d.environment ?? ''}\0${d.deployedAt}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(d);
+  }
+  const refused = new Set();
+  for (const [key, group] of byKey) {
+    const commits = new Set(group.map((d) => d.commit));
+    if (commits.size > 1) {
+      for (const d of group) refused.add(d);
+      const [env, at] = key.split('\0');
+      problems.push(`conflicting provenance: ${group.length} records place different commits (${[...commits].map((c) => c.slice(0, 12)).join(', ')}) in ${env || 'an unnamed environment'} at ${at}; none of them is trusted`);
+    }
+  }
+  if (fixCommit && fixAt && anc) {
+    for (const d of deployments) {
+      if (refused.has(d)) continue;
+      if (anc(fixCommit, d.commit) === true && Date.parse(d.deployedAt) < Date.parse(fixAt)) { refused.add(d); problems.push(`deployment of ${d.commit.slice(0, 12)} at ${d.deployedAt} contains the fix but predates the fix commit (${fixAt}); the record is refused`); }
+    }
+  }
+  return { deployments: deployments.filter((d) => !refused.has(d)), problems };
+}
+
+export function computeExposureWindow({ finding, repo, deployments: rawDeployments = [], deploymentProblems: loadProblems = [], fixCommit = null, telemetry = null, deps = {} } = {}) {
   const anc = deps.isAncestor ?? ((a, d) => isAncestor(repo, a, d));
   const cdate = deps.commitDate ?? ((sha) => commitDate(repo, sha));
+  // callers may pass records that did not come through loadDeployments; normalise dates so every output is comparable
+  const dated = rawDeployments.filter((d) => d && ts(d.deployedAt) != null).map((d) => ({ ...d, deployedAt: iso(ts(d.deployedAt)) }));
+  const reconciled = reconcileDeployments(dated, { fixCommit, fixAt: fixCommit ? cdate(fixCommit) : null, isAncestor: anc });
+  const deployments = reconciled.deployments;
+  const deploymentProblems = [...loadProblems, ...reconciled.problems];
   const unknowns = [];
+  const environments = new Set(deployments.map((d) => d.environment).filter(Boolean));
+  if (environments.size > 1) unknowns.push(`the deployment records span ${environments.size} environments (${[...environments].sort().join(', ')}); pass --environment to scope the window to one`);
   const origin = finding?.findingProvenance?.findingOrigin ?? null;
   const introCommit = origin?.commit ?? null;
   const introducedAt = iso(ts(origin?.authorDate ?? origin?.committerDate));
@@ -116,6 +154,9 @@ export function computeExposureWindow({ finding, repo, deployments: rawDeploymen
     if (hasFix) fixed.push(d);
   }
   if (unresolved.length) unknowns.push(`${unresolved.length} deployment(s) whose contents could not be resolved against the introduction/fix commits`);
+  // GA-10 §3 (0.195.31): a refused record (unreadable, conflicting with its image, conflicting with another record, dated before
+  // its own fix) is an unknown, not a footnote: it could have been the first vulnerable deployment, so the window is not complete.
+  if (deploymentProblems.length) unknowns.push(`${deploymentProblems.length} deployment record(s) were refused (conflicting or unreadable provenance); a refused record could have been the first vulnerable deployment`);
   const byTime = (a, b) => Date.parse(a.deployedAt) - Date.parse(b.deployedAt);
   const firstVulnerable = [...vulnerable].sort(byTime)[0] ?? null;
   const fixDeployedAt = [...fixed].sort(byTime)[0] ?? null;
@@ -127,15 +168,21 @@ export function computeExposureWindow({ finding, repo, deployments: rawDeploymen
   const telStart = ts(telemetry?.start); const telEnd = ts(telemetry?.end);
   if (telStart == null || telEnd == null) unknowns.push('telemetry window (no dated telemetry)');
 
-  let observable = null; let unobservableBefore = null;
+  let observable = null; let unobservableBefore = null; let unobservableAfter = null;
   if (exposureStart != null) {
     const end = exposureEnd ?? telEnd;
     if (telStart != null && telEnd != null && end != null) {
       const s = Math.max(exposureStart, telStart); const e = Math.min(end, telEnd);
       if (s <= e) observable = { start: iso(s), end: iso(e), openEnded: exposureEnd == null };
       if (exposureStart < telStart) unobservableBefore = { start: iso(exposureStart), end: iso(Math.min(telStart, end ?? telStart)) };
+      // GA-10 §3 (0.195.31): exposure AFTER the telemetry ends (the fix not yet deployed, or deployed after the last log line) used
+      // to be dropped in silence; it is reported like the part before telemetry began, open-ended when there is no fix deployment.
+      if (exposureEnd == null || exposureEnd > telEnd) unobservableAfter = { start: iso(Math.max(telEnd, exposureStart)), end: exposureEnd == null ? null : iso(exposureEnd), openEnded: exposureEnd == null };
     }
   }
+  // the start and end of the exposure as explicit facts with their evidence, so a missing one is a stated absence, never an implied zero
+  const exposureStartRecord = { at: exposureStart == null ? null : iso(exposureStart), evidence: firstVulnerable ? 'first-vulnerable-deployment' : 'none' };
+  const exposureEndRecord = { at: exposureEnd == null ? null : iso(exposureEnd), evidence: fixDeployedAt ? 'fix-deployment' : fixCommit && deployments.length && !fixDeployedAt ? 'fix-not-deployed' : 'none' };
   const status = exposureStart == null ? 'unavailable' : (unknowns.length || !observable) ? 'partial' : 'complete';
   return {
     schema: 'agentic-security/exposure-window', version: 1, findingId: finding?.stableId ?? finding?.id ?? null, status,
@@ -145,7 +192,7 @@ export function computeExposureWindow({ finding, repo, deployments: rawDeploymen
     fixDeployed: fixDeployedAt ? { at: fixDeployedAt.deployedAt, commit: fixDeployedAt.commit, commitSource: fixDeployedAt.commitSource ?? 'deployment-record', environment: fixDeployedAt.environment, artifactDigest: fixDeployedAt.artifactDigest } : null,
     stillExposed: stillExposed(deployments, vulnerable),
     telemetryWindow: telStart != null && telEnd != null ? { start: iso(telStart), end: iso(telEnd) } : null,
-    observableWindow: observable, unobservableBefore, unresolvedDeployments: unresolved, deploymentProblems, unknowns,
+    observableWindow: observable, unobservableBefore, unobservableAfter, exposureStart: exposureStartRecord, exposureEnd: exposureEndRecord, unresolvedDeployments: unresolved, deploymentProblems, unknowns,
     statement: 'The observable window is the part of the exposure that telemetry covers. Exposure outside it is unobserved, which is not the same as unexploited.',
   };
 }
@@ -162,6 +209,8 @@ export function formatExposureWindow(w) {
     `Observable exposure window: ${w.observableWindow ? `${w.observableWindow.start.slice(0, 10)} to ${w.observableWindow.openEnded ? 'present (fix not deployed)' : w.observableWindow.end.slice(0, 10)}` : 'cannot be determined'}`,
   ];
   if (w.unobservableBefore) lines.push(`Exposed but not observable: ${w.unobservableBefore.start.slice(0, 10)} to ${w.unobservableBefore.end.slice(0, 10)} (before telemetry began)`);
+  if (w.unobservableAfter) lines.push(`Exposed but not observable: ${w.unobservableAfter.start.slice(0, 10)} to ${w.unobservableAfter.openEnded ? 'present' : w.unobservableAfter.end.slice(0, 10)} (after telemetry ended)`);
+  if (w.deploymentProblems?.length) lines.push(`Refused deployment records: ${w.deploymentProblems.length} (${w.deploymentProblems[0]})`);
   if (w.unknowns.length) lines.push('', `Status: ${w.status}. Unknown: ${w.unknowns.join('; ')}`);
   return lines.join('\n');
 }

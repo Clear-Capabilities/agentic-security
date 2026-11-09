@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/ga-program-status@1",
-  "engineVersion": "0.195.30",
+  "engineVersion": "0.195.31",
   "program": {
     "baselineCapabilities": 36,
     "capabilitiesInLedger": 36,
@@ -11,8 +11,8 @@
     "milestoneDeclared": false
   },
   "records": {
-    "required": 249,
-    "passed": 34
+    "required": 253,
+    "passed": 38
   },
   "realCodeAccuracy": {
     "label": "historical (not this engine)",
@@ -104,8 +104,8 @@
     "GA-06": {
       "title": "Qualify local models, model validation, hunt and routing",
       "accountableRole": "inference/evaluation engineer",
-      "required": 8,
-      "passed": 2,
+      "required": 11,
+      "passed": 5,
       "blocked": 0
     },
     "GA-07": {
@@ -132,8 +132,8 @@
     "GA-10": {
       "title": "Qualify local detection generation, log hunting and exposure windows",
       "accountableRole": "detection engineer",
-      "required": 2,
-      "passed": 0,
+      "required": 3,
+      "passed": 1,
       "blocked": 0
     },
     "GA-11": {
@@ -180,7 +180,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs platforms",
           "evidencePath": null
         },
         {
@@ -200,7 +200,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -254,7 +254,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "agentic-discovery:REG-BAR: Preview row; the GA bar still needs platforms"
     },
     {
       "capabilityId": "context-intelligence",
@@ -303,7 +303,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -407,7 +407,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -480,8 +480,8 @@
         "GA-12"
       ],
       "status": "failed",
-      "passed": 0,
-      "required": 7,
+      "passed": 1,
+      "required": 8,
       "records": [
         {
           "id": "model-validation:REG-BAR",
@@ -510,7 +510,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -552,6 +552,16 @@
           "detail": "pilot repositories not selected; maintainer not named",
           "evidencePath": null,
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "model-validation:MECHANICAL-PRECEDENCE",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "A model reject on a finding from any dataflow engine, with an execution-proven result or with an oracle-confirmed verification record is refused and becomes escalate with the model verdict kept in its own field and the severity untouched; an ordinary reject stays in the actionable list for review; a hunt candidate whose file or line the run does not hold is never invented.",
+          "status": "passed",
+          "detail": "cd scanner && node --test test/discovery-mechanical-precedence.test.js test/contracts/model-validation.contract.test.js (exit 0) at 672585f77cef: scanner/test/discovery-mechanical-precedence.test.js",
+          "evidencePath": "scanner/test/discovery-mechanical-precedence.test.js",
+          "blocker": null
         }
       ],
       "nextAction": "model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
@@ -893,7 +903,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -1119,7 +1129,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -1193,8 +1203,8 @@
         "GA-12"
       ],
       "status": "failed",
-      "passed": 0,
-      "required": 7,
+      "passed": 1,
+      "required": 8,
       "records": [
         {
           "id": "detection-and-response:REG-BAR",
@@ -1203,7 +1213,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs platforms",
           "evidencePath": null
         },
         {
@@ -1252,9 +1262,9 @@
           "workstream": "GA-10",
           "requirement": "Every advertised format parses in its declared target and version; labelled positive and negative fixtures behave as specified; unavailable telemetry stays unavailable.",
           "status": "not-started",
-          "detail": "disposable validation products and official parsers not provisioned",
+          "detail": "syntax checks against subset grammars and vendored schemas, a labelled hunt corpus and refused provenance conflicts are recorded (detection-and-response:RENDERER-SYNTAX-AND-HUNT-CORPUS); the official parsers and disposable validation products are not provisioned",
           "evidencePath": null,
-          "blocker": "disposable validation products and official parsers not provisioned"
+          "blocker": "syntax checks against subset grammars and vendored schemas, a labelled hunt corpus and refused provenance conflicts are recorded (detection-and-response:RENDERER-SYNTAX-AND-HUNT-CORPUS); the official parsers and disposable validation products are not provisioned"
         },
         {
           "id": "detection-and-response:GA-12-001",
@@ -1265,9 +1275,19 @@
           "detail": "pilot repositories not selected; maintainer not named",
           "evidencePath": null,
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "detection-and-response:RENDERER-SYNTAX-AND-HUNT-CORPUS",
+          "kind": "manual",
+          "workstream": "GA-10",
+          "requirement": "Every rendered detection of every payload class at every parameter location, on a literal and a templated path, passes a syntax check for its declared target and version (a subset grammar or a vendored schema written for exactly what the renderer emits, each checker rejecting a known-bad sample); renderers decline what the target cannot see instead of inventing a field; a labelled malicious and near-miss log corpus holds the hunt verdicts and caveats; the hunt reports gaps, parser truncation and zoneless timestamps and they block a negative where they must; the exposure window refuses conflicting provenance and a deployment that predates its fix commit. No output was run against a live product.",
+          "status": "passed",
+          "detail": "cd scanner && node --test test/dnr/renderer-syntax.test.js test/dnr/hunt-corpus.test.js test/dnr/window-provenance-conflicts.test.js test/dnr/ir-and-outputs.test.js test/cli/dnr-cli.test.js (exit 0) at 672585f77cef: scanner/test/dnr/renderer-syntax.test.js",
+          "evidencePath": "scanner/test/dnr/renderer-syntax.test.js",
+          "blocker": null
         }
       ],
-      "nextAction": "detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "detection-and-response:REG-BAR: Preview row; the GA bar still needs platforms"
     },
     {
       "capabilityId": "local-models",
@@ -1286,8 +1306,8 @@
         "GA-12"
       ],
       "status": "failed",
-      "passed": 1,
-      "required": 7,
+      "passed": 2,
+      "required": 8,
       "records": [
         {
           "id": "local-models:REG-BAR",
@@ -1296,7 +1316,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs platforms",
           "evidencePath": null
         },
         {
@@ -1358,9 +1378,19 @@
           "detail": "cd scanner && node --test test/local-preset-callers.test.js test/local-endpoint.test.js test/contracts/local-models.contract.test.js (exit 0) at cee423df8f84: scanner/test/local-preset-callers.test.js",
           "evidencePath": "scanner/test/local-preset-callers.test.js",
           "blocker": null
+        },
+        {
+          "id": "local-models:ENDPOINT-AUDIT",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "Every allowance in the local endpoint rule is audited against the documented loopback promise (IPv4, IPv6 and alias forms, normalization), one loopback rule serves the whole repository, and the transport never follows a redirect, caps the reply while reading, aborts a stalled connection or body and ignores proxy variables.",
+          "status": "passed",
+          "detail": "cd scanner && node --test test/local-endpoint-audit.test.js test/egress-transport.test.js test/contracts/local-models.contract.test.js (exit 0) at 672585f77cef: scanner/test/local-endpoint-audit.test.js",
+          "evidencePath": "scanner/test/local-endpoint-audit.test.js",
+          "blocker": null
         }
       ],
-      "nextAction": "local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "local-models:REG-BAR: Preview row; the GA bar still needs platforms"
     },
     {
       "capabilityId": "compliance-evidence",
@@ -1617,8 +1647,8 @@
         "GA-12"
       ],
       "status": "failed",
-      "passed": 0,
-      "required": 7,
+      "passed": 1,
+      "required": 8,
       "records": [
         {
           "id": "eval-lab:REG-BAR",
@@ -1689,6 +1719,16 @@
           "detail": "pilot repositories not selected; maintainer not named",
           "evidencePath": null,
           "blocker": "pilot repositories not selected; maintainer not named"
+        },
+        {
+          "id": "eval-lab:HUNT-ARM",
+          "kind": "manual",
+          "workstream": "GA-06",
+          "requirement": "A deterministic + hunt arm runs the scanner and the discovery pipeline over the staged workspace with a loopback model, every hunter prompt passes the leakage guard, no hunt memory crosses repeats, a hunt that reached nothing is unavailable rather than completed, and the run records the entry-by-entry paired comparison of each model arm with each deterministic arm. Exercised with protocol stand-ins; no real-model measurement is recorded.",
+          "status": "passed",
+          "detail": "cd scanner && node --test test/eval-lab/arm-hunt.test.js test/eval-lab/arm-ollama.test.js test/eval-lab/run-report.test.js (exit 0) at 672585f77cef: scanner/test/eval-lab/arm-hunt.test.js",
+          "evidencePath": "scanner/test/eval-lab/arm-hunt.test.js",
+          "blocker": null
         }
       ],
       "nextAction": "eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
@@ -1812,7 +1852,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -1977,7 +2017,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -2070,7 +2110,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -2235,7 +2275,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the independent record was measured on engine 0.141.0, not 0.195.30 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
+          "detail": "the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json)",
           "evidencePath": null
         },
         {
@@ -3574,13 +3614,13 @@
   "milestone": {
     "met": false,
     "reasons": [
-      "agentic-discovery: 0/8 acceptance records passed (failed); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "agentic-discovery: 0/8 acceptance records passed (failed); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs platforms",
       "agentic-discovery: owner unassigned (role security evaluation lead)",
       "context-intelligence: 1/8 acceptance records passed (failed); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "context-intelligence: owner unassigned (role security evaluation lead)",
       "language-depth-haskell-nix: 0/8 acceptance records passed (failed); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
-      "model-validation: 0/7 acceptance records passed (failed); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "model-validation: 1/8 acceptance records passed (failed); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "model-validation: owner unassigned (role security evaluation lead)",
       "rule-compiler: 2/9 acceptance records passed (failed); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms",
       "rule-compiler: owner unassigned (role security evaluation lead)",
@@ -3594,9 +3634,9 @@
       "finding-provenance: owner unassigned (role security evaluation lead)",
       "graph-precision: 1/8 acceptance records passed (failed); next: graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms",
       "graph-precision: owner unassigned (role security evaluation lead)",
-      "detection-and-response: 0/7 acceptance records passed (failed); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "detection-and-response: 1/8 acceptance records passed (failed); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs platforms",
       "detection-and-response: owner unassigned (role analysis/platform engineer)",
-      "local-models: 1/7 acceptance records passed (failed); next: local-models:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "local-models: 2/8 acceptance records passed (failed); next: local-models:REG-BAR: Preview row; the GA bar still needs platforms",
       "local-models: owner unassigned (role inference/evaluation engineer)",
       "compliance-evidence: 0/6 acceptance records passed (failed); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "compliance-evidence: owner unassigned (role language/supply-chain lead)",
@@ -3604,7 +3644,7 @@
       "capability-enforcement: owner unassigned (role platform security engineer)",
       "strategic-metrics: 1/6 acceptance records passed (failed); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "strategic-metrics: owner unassigned (role assurance engineer)",
-      "eval-lab: 0/7 acceptance records passed (failed); next: eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "eval-lab: 1/8 acceptance records passed (failed); next: eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "eval-lab: owner unassigned (role security evaluation lead)",
       "release-assurance: 0/5 acceptance records passed (failed); next: release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "release-assurance: owner unassigned (role assurance engineer)",

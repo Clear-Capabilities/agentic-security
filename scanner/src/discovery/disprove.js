@@ -91,6 +91,15 @@ export async function disprovePanel(candidates, opts = {}) {
   const survivors = [], refuted = [];
   for (const c of candidates || []) {
     const judged = await disproveCandidate(c, opts);
+    // GA-06 §4 (0.195.31): a model opinion stays separate from mechanical evidence. A candidate the taint engine CONFIRMED
+    // (`confirmation.tier === 'taint-confirmed'`) is not removed by a model majority: the votes are recorded, the refutation is
+    // marked overridden, and the candidate survives as contested, with its evidence-derived severity untouched. Only a candidate
+    // the engine could not corroborate is removed by the panel.
+    if (judged.refutation.refuted && judged.confirmation?.tier === 'taint-confirmed') {
+      judged.refutation = { ...judged.refutation, overridden: true, overriddenBy: 'taint-confirmed' };
+      survivors.push(judged);
+      continue;
+    }
     (judged.refutation.refuted ? refuted : survivors).push(judged);
   }
   return { survivors, refuted };

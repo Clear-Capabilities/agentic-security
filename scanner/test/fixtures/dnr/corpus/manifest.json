@@ -1,0 +1,178 @@
+{
+  "schema": "agentic-security/dnr-hunt-corpus",
+  "version": 1,
+  "note": "Labelled log scenarios for the hunt (GA-10 §2). Each scenario names the attack the detection is built from and the verdict the hunt must return, with the caveat it must state. Synthetic, authored here; a mechanism check, not a measurement.",
+  "scenarios": [
+    {
+      "id": "malicious-command-injection",
+      "dir": "malicious",
+      "attack": {
+        "method": "POST",
+        "path": "/api/export",
+        "parameter": "filename",
+        "location": "body",
+        "payloadClass": "command-injection"
+      },
+      "expect": {
+        "verdict": "OBSERVED",
+        "matches": 1
+      }
+    },
+    {
+      "id": "malicious-sql-injection",
+      "dir": "malicious",
+      "attack": {
+        "method": "GET",
+        "path": "/api/users",
+        "parameter": "id",
+        "location": "query",
+        "payloadClass": "sql-injection"
+      },
+      "expect": {
+        "verdict": "OBSERVED",
+        "matches": 1
+      }
+    },
+    {
+      "id": "malicious-path-traversal-encoded",
+      "dir": "malicious",
+      "attack": {
+        "method": "GET",
+        "path": "/api/files",
+        "parameter": "name",
+        "location": "query",
+        "payloadClass": "path-traversal"
+      },
+      "expect": {
+        "verdict": "OBSERVED",
+        "matches": 2
+      }
+    },
+    {
+      "id": "near-miss-command-injection",
+      "dir": "near-miss",
+      "attack": {
+        "method": "POST",
+        "path": "/api/export",
+        "parameter": "filename",
+        "location": "body",
+        "payloadClass": "command-injection"
+      },
+      "expect": {
+        "verdict": "NOT_OBSERVED",
+        "matches": 0
+      }
+    },
+    {
+      "id": "near-miss-sql-injection",
+      "dir": "near-miss",
+      "attack": {
+        "method": "GET",
+        "path": "/api/users",
+        "parameter": "q",
+        "location": "query",
+        "payloadClass": "sql-injection"
+      },
+      "expect": {
+        "verdict": "NOT_OBSERVED",
+        "matches": 0
+      }
+    },
+    {
+      "id": "near-miss-path-traversal",
+      "dir": "near-miss",
+      "attack": {
+        "method": "GET",
+        "path": "/api/files",
+        "parameter": "name",
+        "location": "query",
+        "payloadClass": "path-traversal"
+      },
+      "expect": {
+        "verdict": "NOT_OBSERVED",
+        "matches": 0
+      }
+    },
+    {
+      "id": "malformed-records",
+      "dir": "malformed",
+      "attack": {
+        "method": "POST",
+        "path": "/api/export",
+        "parameter": "filename",
+        "location": "body",
+        "payloadClass": "command-injection"
+      },
+      "expect": {
+        "verdict": "INCONCLUSIVE",
+        "caveat": "could not be parsed"
+      }
+    },
+    {
+      "id": "zone-less-timestamp",
+      "dir": "timezone",
+      "attack": {
+        "method": "POST",
+        "path": "/api/export",
+        "parameter": "filename",
+        "location": "body",
+        "payloadClass": "command-injection"
+      },
+      "expect": {
+        "verdict": "INCONCLUSIVE",
+        "caveat": "timestamp with no zone"
+      }
+    },
+    {
+      "id": "retention-gap-informational",
+      "dir": "retention-gap",
+      "attack": {
+        "method": "POST",
+        "path": "/api/export",
+        "parameter": "filename",
+        "location": "body",
+        "payloadClass": "command-injection"
+      },
+      "expect": {
+        "verdict": "NOT_OBSERVED",
+        "caveat": "informational: 1 gap",
+        "gaps": 1
+      }
+    },
+    {
+      "id": "retention-gap-declared",
+      "dir": "retention-gap",
+      "limits": {
+        "maxGapMs": 86400000
+      },
+      "attack": {
+        "method": "POST",
+        "path": "/api/export",
+        "parameter": "filename",
+        "location": "body",
+        "payloadClass": "command-injection"
+      },
+      "expect": {
+        "verdict": "INCONCLUSIVE",
+        "caveat": "1 gap(s) of 24 hours",
+        "gaps": 1
+      }
+    },
+    {
+      "id": "query-past-parser-limit",
+      "dir": "query-limits",
+      "attack": {
+        "method": "GET",
+        "path": "/api/files",
+        "parameter": "name",
+        "location": "query",
+        "payloadClass": "path-traversal"
+      },
+      "expect": {
+        "verdict": "INCONCLUSIVE",
+        "caveat": "beyond the parser's limits",
+        "matches": 0
+      }
+    }
+  ]
+}

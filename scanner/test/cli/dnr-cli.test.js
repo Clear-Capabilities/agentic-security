@@ -88,15 +88,18 @@ test('Find -> Prove -> Hunt -> Scope -> Fix -> Verify -> Detect, end to end', { 
   assert.match(prove.stdout, /Reproductions: 3\/3/);
 
   // GENERATE DETECTION, validated before it is enabled
-  const gen = run(dir, ['dnr', 'generate', 'F1', '--format', 'sigma']);
+  // the attack parameter is in the request BODY: since 0.195.31 the Sigma webserver log source declines it (it records no body),
+  // so the generic HTTP detection is the format shown here and the Sigma file is not written
+  const gen = run(dir, ['dnr', 'generate', 'F1', '--format', 'http']);
   assert.equal(gen.status, 0, gen.stdout + gen.stderr);
   assert.match(gen.stdout, /Validation: VALIDATED/);
   assert.match(gen.stdout, /recurrence rule enabled/);
-  assert.match(gen.stdout, /cs-uri-stem: "\/api\/export"/);
+  assert.match(gen.stdout, /"pathTemplate": "\/api\/export"/);
   const out = path.join(dir, 'rules');
   assert.equal(run(dir, ['dnr', 'generate', 'F1', '--out', out]).status, 0);
   const written = fs.readdirSync(out);
-  assert.ok(written.some((f) => f.endsWith('.sigma.yml')) && written.some((f) => f.endsWith('.waf.conf')), written.join(','));
+  assert.ok(written.some((f) => f.endsWith('.waf.conf')), written.join(','));
+  assert.ok(!written.some((f) => f.endsWith('.sigma.yml')), 'a body parameter has no Sigma webserver form, so no Sigma file is written');
   assert.ok(!written.some((f) => f.includes('yara')), 'YARA is not written for a request-shaped class');
   const showProof = run(dir, ['proof', 'show', 'F1']);
   assert.match(showProof.stdout, /Detection: det-[0-9a-f]{12} \(VALIDATED, enabled\)/, 'the proof links to the detection');

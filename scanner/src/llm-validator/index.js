@@ -378,7 +378,7 @@ const OLLAMA_VALIDATE_SCHEMA = {
   },
 };
 
-async function callEndpoint(endpoint, apiKey, model, prompt, preset = null, shape = null, provider = null, ollamaConfig = null) {
+async function callEndpoint(endpoint, apiKey, model, prompt, preset = null, shape = null, provider = null, ollamaConfig = null, signal = null) {
   // ollama-offline-prd.md §8.2/§38: native /api/chat, not a SHAPES entry —
   // see ollama-provider.js's header for why this needs its own wire path
   // rather than another `body(model, prompt, maxTokens)` function. The
@@ -395,6 +395,7 @@ async function callEndpoint(endpoint, apiKey, model, prompt, preset = null, shap
       timeouts: ollamaConfig
         ? { connectTimeoutMs: ollamaConfig.connectTimeoutMs, requestTimeoutMs: ollamaConfig.requestTimeoutMs }
         : undefined,
+      signal: signal || undefined, // GA-06 §3 (0.195.31): a caller's cancellation reaches the transport
     });
     if (!r.ok) return { ok: false, error: r.reason || r.code, errorCode: r.code };
     return { ok: true, text: String(r.result.text || ''), usage: r.result.usage || null };
@@ -409,7 +410,7 @@ async function callEndpoint(endpoint, apiKey, model, prompt, preset = null, shap
     // A model that accepts the connection and never answers must not hold a scan open forever: every call is bounded.
     // The result is an UNAVAILABLE finding (kept, unvalidated), never a silent pass.
     const ms = Number(process.env.AGENTIC_SECURITY_LLM_TIMEOUT_MS) > 0 ? Number(process.env.AGENTIC_SECURITY_LLM_TIMEOUT_MS) : 60_000;
-    const r = await modelFetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) }, { timeoutMs: ms });
+    const r = await modelFetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) }, { timeoutMs: ms, signal: signal || undefined });
     if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
     const j = await r.json().catch(() => null);
     return { ok: true, text: String(extractText(j) || ''), usage: extractUsage ? extractUsage(j) : null };
@@ -504,7 +505,7 @@ export function validateResponse(obj, { challenge, file, line }) {
 // Pre-flight (premortem 2R2.2): findings WITHOUT a precise file:line cannot
 // be cross-checked against the LLM response (the model can trivially echo
 // empty/zero values). Such findings are marked unvalidated and KEPT.
-export async function validateOne(finding, fileContents, scanRoot, ledger = null) {
+export async function validateOne(finding, fileContents, scanRoot, ledger = null, signal = null) {
   const cfg = endpointConfig();
   if (!cfg) {
     finding.validator_verdict = 'unvalidated';
@@ -618,7 +619,7 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
     }
   }
 
-  const resp = await callEndpoint(cfg.endpoint, cfg.apiKey, cfg.model, prompt, cfg.preset, cfg._shape, cfg.provider, cfg._ollama);
+  const resp = await callEndpoint(cfg.endpoint, cfg.apiKey, cfg.model, prompt, cfg.preset, cfg._shape, cfg.provider, cfg._ollama, signal);
   // Record actual usage when the endpoint reports it, else the estimate. An
   // unreported call is never free — but the two are recorded DISTINCTLY, so
   // the reported spend can say which it is. Presenting an upper bound as a
@@ -692,7 +693,7 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
 // Deterministic ordering: findings sorted by stableId (or id) before
 // batching. Default concurrency = 1 so cache misses produce identical SARIF
 // run-over-run. Operators raise concurrency for throughput.
-export async function validateMany(findings, { fileContents, scanRoot, concurrency = 1 } = {}) {
+export async function validateMany(findings, { fileContents, scanRoot, concurrency = 1, signal = null } = {}) {
   if (!Array.isArray(findings) || findings.length === 0) return findings;
   // Default-on when an endpoint is configured. Opt-out via VALIDATE=0.
   const cfg = endpointConfig();
@@ -748,7 +749,7 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
   async function worker() {
     while (i < candidates.length) {
       const idx = i++;
-      try { await validateOne(candidates[idx], fileContents, scanRoot, ledger); }
+      try { await validateOne(candidates[idx], fileContents, scanRoot, ledger, signal); }
       catch (e) {
         // FAIL-CLOSED on exception too.
         candidates[idx].validator_verdict = 'escalate';
@@ -802,9 +803,13 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
 // multi-sink correlation, or a proof-of-concept that actually executed — so a
 // `reject` against one is far more likely to be a manipulated or mistaken
 // verdict than a correct dismissal.
-const _STRONG_PARSERS = new Set(['IR-TAINT', 'MULTI-SINK']);
-function _stronglyProvenanced(f) {
-  return _STRONG_PARSERS.has(f?.parser) || f?.proofTier === 'execution-proven';
+// GA-06 §4 (0.195.31): the C/C++ dataflow engine (`CPP_DATAFLOW`) is a taint path too and was missing from the set; a
+// verification record a trusted oracle settled as `confirmed` (`verificationRecord.outcome`, or its projected
+// `verificationView.state`) is the strongest evidence of all.
+const _STRONG_PARSERS = new Set(['IR-TAINT', 'MULTI-SINK', 'CPP_DATAFLOW']);
+export function _stronglyProvenanced(f) {
+  return _STRONG_PARSERS.has(f?.parser) || f?.proofTier === 'execution-proven'
+    || f?.verificationRecord?.outcome === 'confirmed' || f?.verificationView?.state === 'confirmed';
 }
 
 // Apply validator verdicts: reject → keep as needs-review (since FR 05; the old
@@ -833,10 +838,13 @@ export function applyValidatorVerdicts(findings, { legacyRejectSuppress = proces
   for (const f of findings) {
     if (f.validator_verdict === 'reject' && _stronglyProvenanced(f)) {
       // Downgrade rather than drop, and record why, so this is visible in the
-      // report instead of looking like an ordinary escalate.
+      // report instead of looking like an ordinary escalate. The model's own
+      // opinion stays in its own field (GA-06 §4, 0.195.31): the acted-on
+      // verdict is the escalation, the opinion is not erased, severity is untouched.
+      f.validator_model_verdict = 'reject';
       f.validator_verdict = 'escalate';
       f.validator_reject_refused = 'strong provenance: a model verdict may not delete a '
-        + 'taint-proven, multi-sink or execution-proven finding';
+        + 'taint-proven, multi-sink, execution-proven or oracle-confirmed finding';
       kept.push(f);
       continue;
     }

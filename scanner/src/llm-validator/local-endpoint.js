@@ -8,12 +8,16 @@
 // merely happens to be local today provides no such assurance. One typo, one
 // inherited environment variable, and source is on someone else's server.
 //
-// So the `local` preset ENFORCES loopback. An endpoint that resolves to
-// anything other than a loopback literal is refused outright rather than
-// called. The check is on the host literal, not on DNS: resolving a name would
-// mean trusting a resolver, and a name that answers 127.0.0.1 today can answer
-// something else tomorrow. Only literal loopback forms are accepted, so the
-// guarantee cannot be undone by a DNS entry.
+// So the `local` preset ENFORCES loopback. An endpoint whose host is anything
+// other than a loopback literal, or the one name `localhost`, is refused
+// outright rather than called. The check is on the host as the URL parser reads
+// it, never on DNS: resolving a name would mean trusting a resolver, and a name
+// that answers 127.0.0.1 today can answer something else tomorrow. `localhost`
+// is the single, documented exception (`docs/reference/local-models-contract.md`,
+// the loopback table and its limits): it is accepted on its spelling, not
+// resolved, so a host whose resolver maps that name elsewhere is outside what
+// this check can see. Every other name is refused, so the guarantee cannot be
+// undone by a DNS entry.
 //
 // OFFLINE DEGRADATION. A local server that is not running is the normal case,
 // not an error: the validator tier is optional and the scan must complete
@@ -62,8 +66,8 @@ export function localEndpointConfig(env = process.env) {
       ok: false,
       reason: `the 'local' preset refuses a non-loopback endpoint: ${endpoint}. `
         + 'The point of the local path is that source never leaves this machine, so a remote '
-        + 'address is refused rather than silently used. Only literal loopback addresses are '
-        + 'accepted — a hostname is not, because a resolver could point it anywhere. '
+        + 'address is refused rather than silently used. Only literal loopback addresses and the '
+        + 'name localhost are accepted; any other name is not, because a resolver could point it anywhere. '
         + 'Use AGENTIC_SECURITY_LLM_PRESET=anthropic (or a BYO endpoint) to call out deliberately.',
     };
   }

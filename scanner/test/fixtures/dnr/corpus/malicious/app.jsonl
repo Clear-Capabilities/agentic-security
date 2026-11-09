@@ -1,0 +1,10 @@
+{"time":"2026-03-10T09:00:00Z","method":"GET","path":"/api/health","status":200}
+{"time":"2026-03-10T09:00:00Z","method":"POST","path":"/api/export","status":200,"body":{"filename":"report.pdf"}}
+{"time":"2026-03-10T09:00:00Z","method":"GET","path":"/api/users","status":200,"query":"page=2&sort=name"}
+{"time":"2026-03-10T09:05:00Z","method":"POST","path":"/api/export","status":200,"body":{"filename":"x; cat /etc/passwd"}}
+{"time":"2026-03-10T09:06:00Z","method":"GET","path":"/api/users","status":200,"query":"id=1' OR '1'='1"}
+{"time":"2026-03-10T09:07:00Z","method":"GET","path":"/api/files","status":200,"query":"name=../../etc/passwd"}
+{"time":"2026-03-10T09:08:00Z","method":"GET","path":"/api/files","status":200,"query":"name=%2e%2e%2f%2e%2e%2fetc%2fpasswd"}
+{"time":"2026-03-10T10:00:00Z","method":"GET","path":"/api/health","status":200}
+{"time":"2026-03-10T10:00:00Z","method":"POST","path":"/api/export","status":200,"body":{"filename":"report.pdf"}}
+{"time":"2026-03-10T10:00:00Z","method":"GET","path":"/api/users","status":200,"query":"page=2&sort=name"}

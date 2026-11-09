@@ -43,8 +43,19 @@ gates are run by the ship flow, not by this document.
   class) and the class's exemplar payloads. It does not run the exploit in the proof lab and record what the application logged.
   It shows the rule matches the shape the proof established and ignores lookalikes; it does not show what a real application logs.
 * **Payload classes are generic shapes.** Eight classes. A finding of another class gets no detection rather than a guess.
-* **Artifact history is a plain file.** The exposure window reads a deployment-history JSON file. It is not yet joined to the
-  source-to-artifact provenance graph (PRD 5), so "artifact history" means what the operator supplies.
+* **Artifact history is a file plus the provenance graph.** The exposure window reads a deployment-history JSON file; a record that
+  names only an image digest is placed at the commit the image declares in the source-to-artifact provenance graph (`--artifact-graph`),
+  and a record whose commit disagrees with its image is refused. Since 0.195.31 two records that place different commits in one
+  environment at one moment, and a deployment that contains the fix but predates the fix commit, are refused as well, every refused
+  record is an unknown (it could have been the first vulnerable deployment), and exposure after the telemetry ends is reported.
+* **Syntax is checked by grammars written here, not by the vendors' tools.** Since 0.195.31 every rendered rule is held to a subset
+  grammar or a vendored schema for exactly what the renderer emits, with the document and version stated; no output has been run
+  against a live product, and the contract page carries the per-format table of what was generated, syntax-checked, sample-tested and
+  product-tested. A renderer declines what its target cannot see (a request body in Sigma's webserver source, a credential in
+  `W3CIISLog` or an access log) instead of inventing a field.
+* **A hunt states its own coverage.** Gaps between dated events (informational unless `--max-gap` declares what a gap is), events cut
+  at the parser's parameter limits and events whose timestamp has no zone are counted and block a negative where they must; a labelled
+  log corpus holds the verdicts and caveats.
 * **Not folded into `scanHealth`.** A hunt is not a scan, and its degraded states (inconclusive, unavailable) are reported in the
   hunt result and the finding view and carry their own exit codes. They do not feed the scan's assurance rollup.
 * **Not built:** every remote, read-only SIEM integration; an MCP tool;
@@ -59,7 +70,9 @@ gates are run by the ship flow, not by this document.
 
 ## Blockers
 
-None.
+The official validators (Sigma's own checker, a YARA compiler, a ModSecurity rule check, a Kusto parser) and the disposable
+qualification products the GA plan names for GA-10 are not provisioned; until a hosted job runs them, the syntax level stays
+`subset-grammar` or `vendored-schema` and the product level stays `no` for every format.
 
 ## Last verified commands
 

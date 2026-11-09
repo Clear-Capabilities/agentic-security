@@ -1,0 +1,10 @@
+{"time":"2026-03-10T09:00:00Z","method":"GET","path":"/api/health","status":200}
+{"time":"2026-03-10T09:00:00Z","method":"POST","path":"/api/export","status":200,"body":{"filename":"report.pdf"}}
+{"time":"2026-03-10T09:00:00Z","method":"GET","path":"/api/users","status":200,"query":"page=2&sort=name"}
+{"time":"2026-03-10T09:05:00Z","method":"POST","path":"/api/export","status":200,"body":{"filename":"cat photos.zip"}}
+{"time":"2026-03-10T09:06:00Z","method":"GET","path":"/api/users","status":200,"query":"q=order%20by%20name"}
+{"time":"2026-03-10T09:07:00Z","method":"GET","path":"/api/files","status":200,"query":"name=docs/readme.md"}
+{"time":"2026-03-10T09:08:00Z","method":"POST","path":"/api/export","status":200,"body":{"filename":"semicolons; are fine in a title"}}
+{"time":"2026-03-10T10:00:00Z","method":"GET","path":"/api/health","status":200}
+{"time":"2026-03-10T10:00:00Z","method":"POST","path":"/api/export","status":200,"body":{"filename":"report.pdf"}}
+{"time":"2026-03-10T10:00:00Z","method":"GET","path":"/api/users","status":200,"query":"page=2&sort=name"}

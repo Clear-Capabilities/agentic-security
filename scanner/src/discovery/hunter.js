@@ -41,13 +41,36 @@ function candidateId(focusAreaId, lensKey, file, line, title) {
     .digest('hex').slice(0, 12);
 }
 
-function candidatesFromParsed(parsed, focusArea, lens) {
+// GA-06 §4 (0.195.31): a hunt candidate needs a REAL citation, not a plausible one. The file must be one the hunter was shown
+// (the focus area's files, or any file whose contents the run holds) and the line must exist in it when the contents are known.
+// A model that names a file outside the area, or a line past the end, has not cited evidence; such a candidate is discarded and
+// counted (`citationsDiscarded`), never scored or shown. A leading `./` is tolerated; nothing else is normalised, so a path that
+// differs from what the hunter was shown is a miss, not a match.
+function resolveCitation(c, focusArea, ctx) {
+  const raw = typeof c?.file === 'string' ? c.file.trim() : '';
+  const file = raw.replace(/^\.\//, '');
+  const line = Number.isInteger(c?.line) ? c.line : Number.parseInt(c?.line, 10);
+  if (!file || !Number.isInteger(line) || line < 1) return { ok: false, reason: 'no-location' };
+  const known = (Array.isArray(focusArea?.files) && focusArea.files.includes(file)) || (ctx?.fileContents && Object.prototype.hasOwnProperty.call(ctx.fileContents, file));
+  if (!known) return { ok: false, reason: 'file-not-in-scope' };
+  const text = ctx?.fileContents ? ctx.fileContents[file] : undefined;
+  if (typeof text === 'string') {
+    const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+    if (line > Math.max(1, lines)) return { ok: false, reason: 'line-past-end' };
+  }
+  return { ok: true, file, line };
+}
+
+function candidatesFromParsed(parsed, focusArea, lens, ctx = {}, stats = null) {
   const list = Array.isArray(parsed?.candidates) ? parsed.candidates : [];
   const out = [];
   for (const c of list) {
-    const file = typeof c?.file === 'string' ? c.file : null;
-    const line = Number.isInteger(c?.line) ? c.line : Number.parseInt(c?.line, 10);
-    if (!file || !Number.isInteger(line)) continue;      // no location, no candidate
+    const cite = resolveCitation(c, focusArea, ctx);
+    if (!cite.ok) {
+      if (stats) { stats.discarded += 1; if (cite.reason !== 'no-location') stats.citationsDiscarded += 1; }
+      continue;
+    }
+    const { file, line } = cite;
     const title = typeof c?.title === 'string' && c.title ? c.title : `${lens.title} candidate`;
     out.push({
       id: candidateId(focusArea.id, lens.key, file, line, title),
@@ -66,9 +89,9 @@ function candidatesFromParsed(parsed, focusArea, lens) {
   return out;
 }
 
-export function parseCandidates(raw, focusArea, lens) {
+export function parseCandidates(raw, focusArea, lens, ctx = {}) {
   const { parsed } = extractJsonWithFlag(raw);
-  return candidatesFromParsed(parsed, focusArea, lens);
+  return candidatesFromParsed(parsed, focusArea, lens, ctx);
 }
 
 export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
@@ -123,11 +146,11 @@ export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
     return { ...base, candidates: [], degraded: true, reason };
   }
 
-  const candidates = candidatesFromParsed(parsed, focusArea, lens);
-  // A proposed candidate with no file and line has nowhere to point and is dropped; say how many, so a reply full of them
-  // does not read as a reply that found nothing.
-  const proposed = Array.isArray(parsed?.candidates) ? parsed.candidates.length : 0;
-  const discarded = proposed - candidates.length;
-  appendEntry(transcript, { phase: 'result', candidateCount: candidates.length, discarded });
-  return { ...base, candidates, degraded: false, reason: null, discarded };
+  const stats = { discarded: 0, citationsDiscarded: 0 };
+  const candidates = candidatesFromParsed(parsed, focusArea, lens, ctx, stats);
+  // A proposed candidate with no file and line has nowhere to point and is dropped, and one whose citation does not resolve
+  // (a file the hunter was not shown, a line past the file's end) is dropped too; say how many of each, so a reply full of
+  // them does not read as a reply that found nothing.
+  appendEntry(transcript, { phase: 'result', candidateCount: candidates.length, discarded: stats.discarded, citationsDiscarded: stats.citationsDiscarded });
+  return { ...base, candidates, degraded: false, reason: null, discarded: stats.discarded, citationsDiscarded: stats.citationsDiscarded };
 }

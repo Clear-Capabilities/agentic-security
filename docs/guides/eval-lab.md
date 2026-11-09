@@ -90,7 +90,22 @@ arms:
     model: { id: qwen-coder, provider: ollama, local: true, endpoint: "http://127.0.0.1:11434" }
     adapter: { type: command, argv: [node, ./my-arm.mjs], timeoutMs: 60000 }
     price: { inputPerMTok: 0, outputPerMTok: 0 }
+  - id: det-plus-hunt
+    kind: model
+    tasks: [detect]
+    model: { id: qwen-coder, provider: ollama, local: true }
+    adapter: { type: hunt, host: "http://127.0.0.1:11434", lenses: [authz, business-logic], maxLlmCalls: 40, maxCandidates: 20 }
 ```
+
+**The `deterministic + hunt` arm** (`adapter: { type: hunt }`, since 0.195.31) runs the deterministic scanner on the staged
+workspace and then the existing discovery pipeline (`agentic-security hunt`'s code, not a new hunter) over the same files with a
+LOCAL model, and answers with one finding list in which every finding says its `source` (`deterministic` or `hunt`) and a hunt
+finding carries its confirmation `tier`. It is a model arm, so it repeats like one; it keeps no hunt memory between repeats; every
+prompt the hunter builds for itself passes the leakage guard, and a hit blocks the whole attempt; and a hunt that reached no focus
+area or ran out of its call budget is a no-result (`unavailable` or `error`), never a completed attempt that found nothing extra.
+The run record's `paired` field compares each model arm with each deterministic arm entry by entry on the identical usable
+population, per repeat: wins (the arm detected, the baseline did not), losses, ties, and both detected counts, with
+`representative: false` below three repeats.
 
 `local` is declared, never inferred, and a "local" arm that names a non-loopback endpoint is refused. The command gets its request
 as a file (`AGENTIC_EVAL_REQUEST`, or `{{REQUEST}}` in `argv`), prints one JSON object on stdout, never reads stdin, and runs with a

@@ -56,6 +56,7 @@ export const OLLAMA_ERROR_CODES = Object.freeze([
   'ollama-context-overflow',
   'ollama-capability-missing',
   'ollama-timeout',
+  'ollama-cancelled',
   'ollama-malformed-response',
   'ollama-tool-call-invalid',
   'ollama-tool-loop-limit',
@@ -187,25 +188,22 @@ export function parseOllamaChatResponse(json, model) {
 /**
  * Fetch with SEPARATE connect and total timeouts (PRD §22): a dead port must
  * fail in ~3s, but a cold-loading local model may legitimately take minutes.
- * A single fetch-level timeout cannot express both, so this races an early
- * "did anything respond yet" signal against the real request. Since
- * `fetch()` itself doesn't expose a connect-only phase, this approximates it:
- * the connect timeout aborts the whole request if headers haven't arrived
- * fast, done via a short first AbortSignal that gets replaced once the
- * request is confirmed in flight is not observable from fetch() alone — so,
- * conservatively, this uses the total timeout as the enforced bound and
- * treats "still pending after connectTimeoutMs with zero bytes" as the same
- * abort path. This keeps behavior simple and correct (never exceeds
- * requestTimeoutMs) even though it cannot distinguish "slow to connect" from
- * "slow to generate" without a lower-level HTTP client.
+ * Since 0.195.31 (GA-06 §3) the shared transport enforces the connect
+ * deadline for real: `connectTimeoutMs` aborts the request if no response
+ * HEADERS arrive in time (a dead port, a stalled handshake), and is cleared
+ * once they do, so a slow generation is bounded by `requestTimeoutMs` alone.
+ * Before, the connect value was accepted and ignored. A caller's `signal`
+ * reaches the transport too, so cancellation ends the request instead of
+ * leaving it to run to its own timeout.
  */
-async function _fetchOllama(url, init, { connectTimeoutMs, requestTimeoutMs }) {
-  void connectTimeoutMs; // see the note above: the client exposes no connect-only phase to bound separately
+async function _fetchOllama(url, init, { connectTimeoutMs, requestTimeoutMs, signal }) {
   try {
     // the shared transport: no redirect is followed, the reply is capped while it is read, the deadline is the total timeout
-    const res = await modelFetch(url, init, { timeoutMs: requestTimeoutMs });
+    const res = await modelFetch(url, init, { timeoutMs: requestTimeoutMs, connectTimeoutMs, signal });
     return { ok: true, res };
   } catch (e) {
+    if (e?.code === 'connect-timeout' || e?.code === 'connect-refused') return _err('ollama-unreachable', `Ollama could not be connected to within the ${connectTimeoutMs}ms connect timeout (${e.message}).`);
+    if (e?.code === 'timeout' && signal?.aborted) return _err('ollama-cancelled', 'the request was cancelled by its caller');
     if (e?.code === 'timeout') return _err('ollama-timeout', `Ollama request timed out after ${requestTimeoutMs}ms.`);
     if (e?.code === 'redirect') return _err('ollama-unreachable', `Ollama answered with a redirect, which is never followed: ${e.message}`);
     if (e?.code === 'response-too-large') return _err('ollama-malformed-response', e.message);
@@ -220,13 +218,13 @@ async function _fetchOllama(url, init, { connectTimeoutMs, requestTimeoutMs }) {
  * that means (deterministic-only, another explicitly-configured local model,
  * or an explicit error), exactly as PRD §23.4 requires.
  */
-export async function callOllamaChat({ host, model, messages, maxTokens, schema, tools, think, keepAlive, timeouts }) {
+export async function callOllamaChat({ host, model, messages, maxTokens, schema, tools, think, keepAlive, timeouts, signal }) {
   const body = buildOllamaChatBody({ model, messages, maxTokens, schema, tools, think, keepAlive });
   const r = await _fetchOllama(`${host}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }, timeouts || { connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS, requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS });
+  }, { ...(timeouts || { connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS, requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS }), signal });
   if (!r.ok) return r;
 
   const { res } = r;

@@ -38,14 +38,19 @@ const fpNotes = (ir) => [
 /** Sigma rule as YAML text. JSON string syntax is used for every scalar; it is valid YAML and cannot be broken out of. */
 function sigma(ir) {
   if (!ir.endpoint) return unavailable('no endpoint is known for this finding, so there is no request to describe');
+  // GA-10 §1 (0.195.31): the `webserver` log source is the W3C extended log format, which records the query string and the
+  // cookie header but no request body and no arbitrary request header. A body or header parameter was rendered against invented
+  // field names (`request-body`, `cs(<name>)`) that no Sigma backend knows; now the rule declines, like the KQL output does.
+  if (ir.payloadClass !== 'auth-bypass' && ['body', 'header'].includes(ir.parameter?.location)) return unavailable(`the webserver log source records no request ${ir.parameter.location}, so a Sigma rule would never see the parameter`);
   const q = JSON.stringify;
   const lines = [
     `title: ${q(title(ir))}`,
     `id: ${q(`${ir.digest.slice(0, 8)}-${ir.digest.slice(8, 12)}-${ir.digest.slice(12, 16)}-${ir.digest.slice(16, 20)}-${ir.digest.slice(20, 32)}`)}`,
     'status: experimental',
-    `description: ${q(`${ir.attackBehavior}. Generated from finding ${ir.findingId} (${ir.grounding}).`)}`,
+    `description: ${q(`${ir.attackBehavior}. Generated from finding ${ir.findingId} (${ir.grounding}${ir.cwe ? `, ${ir.cwe}` : ''}).`)}`,
     'references:', `  - ${q(`finding:${ir.findingId}`)}`,
     'author: agentic-security',
+    `date: ${q(ir.generatedAt ? String(ir.generatedAt).slice(0, 10) : '1970-01-01')}`,
     'logsource:', '  category: webserver',
     'detection:', '  selection_request:',
     `    cs-method: ${q(ir.endpoint.method)}`,
@@ -57,12 +62,13 @@ function sigma(ir) {
     lines.push('  selection_outcome:', '    sc-status|startswith: "2"', '  filter_credential:', '    cs-authorization|exists: true');
     condition = 'selection_request and selection_outcome and not filter_credential';
   } else {
-    const field = ir.parameter?.location === 'body' ? 'request-body' : ir.parameter?.location === 'header' ? `cs(${ir.parameter.name})` : ir.parameter?.location === 'cookie' ? 'cs-cookie' : 'cs-uri-query';
+    const field = ir.parameter?.location === 'cookie' ? 'cs-cookie' : 'cs-uri-query';
     lines.push('  selection_payload:', `    ${field}|re|i: ${q(classRegex(ir.payloadClass))}`);
     condition = 'selection_request and selection_payload';
   }
+  // tags stay in the namespaces the specification lists (`attack.*`); a CWE is named in the description, not invented as a namespace
   lines.push(`  condition: ${condition}`, 'falsepositives:', ...fpNotes(ir).map((n) => `  - ${q(n)}`), `level: ${levelFor(ir)}`,
-    'tags:', '  - attack.initial_access', '  - attack.t1190', ...(ir.cwe ? [`  - ${q(String(ir.cwe).toLowerCase().replace('cwe-', 'cwe.'))}`] : []));
+    'tags:', '  - attack.initial_access', '  - attack.t1190');
   return { applicable: true, format: 'sigma', content: `${lines.join('\n')}\n` };
 }
 
@@ -88,16 +94,21 @@ function waf(ir) {
   const msg = `Agentic Security ${ir.id}: ${ir.payloadClass} on ${ir.endpoint.method} ${ir.endpoint.path}`.replace(/['"\\]/g, '');
   const rx = (s) => s.replace(/"/g, '\\x22');
   const pathOp = hasTemplate(ir.endpoint.path) ? `"@rx ${rx(pathRegex(ir.endpoint.path))}"` : `"@streq ${rx(ir.endpoint.path)}"`;
+  // GA-10 §1 (0.195.31): ModSecurity accepts the metadata actions (id, phase, msg, severity, tag, log, auditlog) on the chain
+  // STARTER only; a chained rule carries its operator, transformations and `chain`. They used to sit on the last rule, which the
+  // rule parser refuses. The disruptive action is `pass` on the starter, so the chain is detect-only by construction.
+  const severity = ir.payloadClass === 'auth-bypass' ? 'WARNING' : 'CRITICAL';
+  const meta = `log,auditlog,msg:'${msg}',severity:'${severity}',tag:'cwe-${(ir.cwe || '').replace(/\D/g, '')}'`;
   const out = [
     '# SUGGESTION ONLY. Detect-only (pass). Review, test against your own traffic, then decide whether to enforce.',
-    `SecRule REQUEST_METHOD "@streq ${ir.endpoint.method}" "id:${id},phase:2,pass,nolog,chain"`,
+    `SecRule REQUEST_METHOD "@streq ${ir.endpoint.method}" "id:${id},phase:2,pass,${meta},chain"`,
     `  SecRule REQUEST_FILENAME ${pathOp} "chain"`,
   ];
   if (ir.payloadClass === 'auth-bypass') {
-    out.push(`  SecRule &REQUEST_HEADERS:Authorization "@eq 0" "log,auditlog,msg:'${msg}',severity:'WARNING',tag:'cwe-${(ir.cwe || '').replace(/\D/g, '')}'"`);
+    out.push('  SecRule &REQUEST_HEADERS:Authorization "@eq 0" "t:none"');
   } else {
     const target = ir.parameter?.location === 'body' ? `ARGS_POST${ir.parameter ? `:${ir.parameter.name}` : ''}` : ir.parameter?.location === 'header' ? `REQUEST_HEADERS:${ir.parameter.name}` : ir.parameter?.location === 'cookie' ? `REQUEST_COOKIES:${ir.parameter.name}` : ir.parameter ? `ARGS_GET:${ir.parameter.name}` : 'ARGS';
-    out.push(`  SecRule ${target} "@rx ${rx(classRegex(ir.payloadClass))}" "t:urlDecodeUni,log,auditlog,msg:'${msg}',severity:'CRITICAL',tag:'cwe-${(ir.cwe || '').replace(/\D/g, '')}'"`);
+    out.push(`  SecRule ${target} "@rx ${rx(classRegex(ir.payloadClass))}" "t:urlDecodeUni"`);
   }
   return { applicable: true, format: 'waf', content: `${out.join('\n')}\n`, enforcement: 'detect-only' };
 }
@@ -114,8 +125,11 @@ function logQuery(ir) {
 function yara(ir) {
   if (ir.payloadClass !== 'deserialization') return unavailable(`YARA matches file or memory content; the ${ir.payloadClass} class is request-shaped, so a YARA rule would be misleading`);
   const ident = `as_${ir.digest.slice(0, 12)}`;
+  // GA-10 §1 (0.195.31): a YARA text string accepts only \\ \" \t \n \xNN escapes; JSON's \uXXXX for a control character is a
+  // syntax error, so anything outside printable ASCII is replaced before quoting
+  const ys = (s) => `"${String(s).replace(/[^\x20-\x7e]/g, '?').replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   const content = [
-    `rule ${ident} {`, '  meta:', `    description = ${JSON.stringify(`serialized object stream (${ir.findingId})`)}`, `    finding = ${JSON.stringify(ir.findingId)}`, '    generated_by = "agentic-security"',
+    `rule ${ident} {`, '  meta:', `    description = ${ys(`serialized object stream (${ir.findingId})`)}`, `    finding = ${ys(ir.findingId)}`, '    generated_by = "agentic-security"',
     '  strings:', '    $java_raw = { AC ED 00 05 }', '    $java_b64 = "rO0AB"', '    $pickle_b64 = "gASV"', '    $php = /O:[0-9]{1,4}:"[A-Za-z_\\\\]/',
     '  condition:', '    any of them', '}', '',
   ].join('\n');
@@ -135,21 +149,51 @@ const kqlQ = (s) => `@"${s.replace(/"/g, '""')}"`;
 function kql(ir) {
   if (!ir.endpoint) return unavailable('no endpoint is known for this finding');
   if (['body', 'header', 'cookie'].includes(ir.parameter?.location)) return unavailable(`the W3CIISLog table does not record request ${ir.parameter.location}s, so this rule would never see the parameter`);
+  // GA-10 §1 (0.195.31): W3CIISLog has no column for the Authorization header, so "a 2xx with no credential" cannot be
+  // expressed; the rule used to test a `csAuthorization` column that does not exist. Decline rather than invent.
+  if (ir.payloadClass === 'auth-bypass') return unavailable('the W3CIISLog table records no request headers, so "no credential was sent" cannot be expressed in KQL over it');
   const lines = ['W3CIISLog', `| where csMethod == ${JSON.stringify(ir.endpoint.method)}`,
     hasTemplate(ir.endpoint.path) ? `| where csUriStem matches regex ${kqlQ(pathRegex(ir.endpoint.path))}` : `| where csUriStem == ${JSON.stringify(ir.endpoint.path)}`,
-    ir.payloadClass === 'auth-bypass' ? '| where scStatus between (200 .. 299) and isempty(csAuthorization)' : `| where csUriQuery matches regex ${kqlQ(`(?i)${classRegex(ir.payloadClass)}`)}`];
+    `| where csUriQuery matches regex ${kqlQ(`(?i)${classRegex(ir.payloadClass)}`)}`];
   return { applicable: true, format: 'kql', content: `${lines.join('\n')}\n` };
 }
 function cloudwatch(ir) {
   if (!ir.endpoint) return unavailable('no endpoint is known for this finding');
   if (['body', 'header', 'cookie'].includes(ir.parameter?.location)) return unavailable(`access logs do not record request ${ir.parameter.location}s, so this query would never see the parameter`);
+  // GA-10 §1 (0.195.31): an access log line carries no Authorization header, so the auth-bypass query used to match every 2xx
+  // to the endpoint, which is not what the proof established. Decline rather than widen.
+  if (ir.payloadClass === 'auth-bypass') return unavailable('access logs record no request headers, so "no credential was sent" cannot be expressed in a Logs Insights query');
   const re = (s) => `/${s.replace(/\//g, '\\/')}/`;
   const lines = ['fields @timestamp, @message', `| filter @message like ${re(`${ir.endpoint.method} ${hasTemplate(ir.endpoint.path) ? pathRegex(ir.endpoint.path).replace(/^\^|\$$/g, '') : escRe(ir.endpoint.path)}`)}`,
-    ir.payloadClass === 'auth-bypass' ? '| filter @message like /" 2[0-9][0-9] /' : `| filter @message like ${re(`(?i)${classRegex(ir.payloadClass)}`)}`, '| sort @timestamp desc'];
+    `| filter @message like ${re(`(?i)${classRegex(ir.payloadClass)}`)}`, '| sort @timestamp desc'];
   return { applicable: true, format: 'cloudwatch', content: `${lines.join('\n')}\n` };
 }
 
 const RENDERERS = { sigma, http, waf, 'log-query': logQuery, yara, spl, kql, cloudwatch };
+
+/**
+ * What each format's output has been held to (GA-10 §4, 0.195.31), stated per format and mirrored on the contract page:
+ *   generated  the renderer produces it from the detection IR;
+ *   syntax     `vendored-schema` (a JSON shape this repository owns or vendors) or `subset-grammar` (a grammar written from the
+ *              target's public documentation for the subset the renderer emits, `syntax.js`); never `official`, since no vendor
+ *              tool runs here;
+ *   samples    the output is executed against the labelled log corpus and must agree with the evaluator on every line
+ *              (`renderer-semantics`), which only the two formats with an interpreter in this repository can claim;
+ *   product    tested against a real product: none, and a generic suggestion is never presented as a deployed control.
+ */
+export const FORMAT_ASSURANCE = Object.freeze({
+  sigma: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  http: { generated: true, syntax: 'vendored-schema', samples: true, product: false },
+  waf: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  'log-query': { generated: true, syntax: 'vendored-schema', samples: true, product: false },
+  yara: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  spl: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  kql: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  cloudwatch: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  elastic: { generated: true, syntax: 'vendored-schema', samples: false, product: false },
+  yaral: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  datadog: { generated: true, syntax: 'vendored-schema', samples: false, product: false },
+});
 
 /** Render one format. An inapplicable format is reported as such with its reason, never as an empty rule. */
 export function renderDetection(ir, format) {

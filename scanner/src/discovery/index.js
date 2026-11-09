@@ -205,16 +205,9 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   // panel's three calls per candidate on it again. Only refutals suppress: a
   // candidate previously judged fresh is re-reported, because it was never
   // fixed, which is the same asymmetry judge.js applies to tp/fp triage.
+  // GA-06 §4 (0.195.31): the memory skip is applied AFTER confirmation (below), because memory is keyed by location and a
+  // candidate the taint engine confirms at a location an earlier run's model panel refuted must be examined, not skipped.
   let rememberedRefutals = 0;
-  if (memory) {
-    const before = candidates.length;
-    candidates = candidates.filter(c => !previouslyRefuted(memory, c));
-    rememberedRefutals = before - candidates.length;
-    if (rememberedRefutals > 0) {
-      reasons.push(`${rememberedRefutals} candidate(s) were refuted by an earlier run and not re-examined ` +
-        '(clear with --forget-refuted if a model, ruleset or the code has changed since)');
-    }
-  }
 
   const maxCandidates = Number.isInteger(opts.maxCandidates) && opts.maxCandidates >= 0
     ? opts.maxCandidates : DEFAULT_MAX_CANDIDATES;
@@ -245,7 +238,20 @@ export async function runDiscovery(ctx = {}, opts = {}) {
     reasons.push('deterministic confirmation was DISABLED for this run (uplift measurement); ' +
       'every candidate is reported unconfirmed and severity is not evidence-derived');
   }
-  const confirmed = await confirmAll(candidates, { taintProbe });
+  let confirmed = await confirmAll(candidates, { taintProbe });
+  // PRD C4 — drop what a previous run already refuted, BEFORE spending the panel's three calls per candidate on it again. Only
+  // refutals suppress: a candidate previously judged fresh is re-reported, because it was never fixed, which is the same
+  // asymmetry judge.js applies to tp/fp triage. A taint-confirmed candidate is never skipped on memory alone (GA-06 §4): the
+  // engine's evidence is current, the remembered refutation was a model's opinion about an earlier, uncorroborated candidate.
+  if (memory) {
+    const before = confirmed.length;
+    confirmed = confirmed.filter(c => c?.confirmation?.tier === 'taint-confirmed' || !previouslyRefuted(memory, c));
+    rememberedRefutals = before - confirmed.length;
+    if (rememberedRefutals > 0) {
+      reasons.push(`${rememberedRefutals} candidate(s) were refuted by an earlier run and not re-examined ` +
+        '(clear with --forget-refuted if a model, ruleset or the code has changed since)');
+    }
+  }
   const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke, scanRoot: opts.scanRoot });
   const { fresh, duplicates, suppressed } = judgeCandidates(survivors, ctx.priorScan, ctx.triageFeedback);
 
@@ -357,6 +363,12 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       // of those came back with no votes at all (undecided, not refuted).
       panelsRun,
       undecidedPanels,
+      // GA-06 §4 (0.195.31): candidates a model majority voted to refute that the taint engine had confirmed; they survive as
+      // contested (refutation.overridden) because mechanical evidence outranks a model opinion. A reader sees the disagreement.
+      contestedConfirmed: survivors.filter(c => c?.refutation?.overridden === true).length,
+      // Candidates the hunter discarded because their citation did not resolve (a file outside the focus area or the scanned
+      // tree, a line beyond the file's end); counted, never silently dropped.
+      citationsDiscarded: runs.reduce((n, r) => n + (r.citationsDiscarded || 0), 0),
       // PRD Phase 0 / C3 — what the run cost and whether the budget stopped it.
       // `budgetExhausted` true means the report is INCOMPLETE by construction:
       // work remained and was not done. Reading it as a clean result is the

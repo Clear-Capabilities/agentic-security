@@ -194,14 +194,19 @@ const fpNotes = (ir) => [
 /** Sigma rule as YAML text. JSON string syntax is used for every scalar; it is valid YAML and cannot be broken out of. */
 function sigma(ir) {
   if (!ir.endpoint) return unavailable('no endpoint is known for this finding, so there is no request to describe');
+  // GA-10 §1 (0.195.31): the `webserver` log source is the W3C extended log format, which records the query string and the
+  // cookie header but no request body and no arbitrary request header. A body or header parameter was rendered against invented
+  // field names (`request-body`, `cs(<name>)`) that no Sigma backend knows; now the rule declines, like the KQL output does.
+  if (ir.payloadClass !== 'auth-bypass' && ['body', 'header'].includes(ir.parameter?.location)) return unavailable(`the webserver log source records no request ${ir.parameter.location}, so a Sigma rule would never see the parameter`);
   const q = JSON.stringify;
   const lines = [
     `title: ${q(title(ir))}`,
     `id: ${q(`${ir.digest.slice(0, 8)}-${ir.digest.slice(8, 12)}-${ir.digest.slice(12, 16)}-${ir.digest.slice(16, 20)}-${ir.digest.slice(20, 32)}`)}`,
     'status: experimental',
-    `description: ${q(`${ir.attackBehavior}. Generated from finding ${ir.findingId} (${ir.grounding}).`)}`,
+    `description: ${q(`${ir.attackBehavior}. Generated from finding ${ir.findingId} (${ir.grounding}${ir.cwe ? `, ${ir.cwe}` : ''}).`)}`,
     'references:', `  - ${q(`finding:${ir.findingId}`)}`,
     'author: agentic-security',
+    `date: ${q(ir.generatedAt ? String(ir.generatedAt).slice(0, 10) : '1970-01-01')}`,
     'logsource:', '  category: webserver',
     'detection:', '  selection_request:',
     `    cs-method: ${q(ir.endpoint.method)}`,
@@ -213,12 +218,13 @@ function sigma(ir) {
     lines.push('  selection_outcome:', '    sc-status|startswith: "2"', '  filter_credential:', '    cs-authorization|exists: true');
     condition = 'selection_request and selection_outcome and not filter_credential';
   } else {
-    const field = ir.parameter?.location === 'body' ? 'request-body' : ir.parameter?.location === 'header' ? `cs(${ir.parameter.name})` : ir.parameter?.location === 'cookie' ? 'cs-cookie' : 'cs-uri-query';
+    const field = ir.parameter?.location === 'cookie' ? 'cs-cookie' : 'cs-uri-query';
     lines.push('  selection_payload:', `    ${field}|re|i: ${q(classRegex(ir.payloadClass))}`);
     condition = 'selection_request and selection_payload';
   }
+  // tags stay in the namespaces the specification lists (`attack.*`); a CWE is named in the description, not invented as a namespace
   lines.push(`  condition: ${condition}`, 'falsepositives:', ...fpNotes(ir).map((n) => `  - ${q(n)}`), `level: ${levelFor(ir)}`,
-    'tags:', '  - attack.initial_access', '  - attack.t1190', ...(ir.cwe ? [`  - ${q(String(ir.cwe).toLowerCase().replace('cwe-', 'cwe.'))}`] : []));
+    'tags:', '  - attack.initial_access', '  - attack.t1190');
   return { applicable: true, format: 'sigma', content: `${lines.join('\n')}\n` };
 }
 
@@ -244,16 +250,21 @@ function waf(ir) {
   const msg = `Agentic Security ${ir.id}: ${ir.payloadClass} on ${ir.endpoint.method} ${ir.endpoint.path}`.replace(/['"\\]/g, '');
   const rx = (s) => s.replace(/"/g, '\\x22');
   const pathOp = hasTemplate(ir.endpoint.path) ? `"@rx ${rx(pathRegex(ir.endpoint.path))}"` : `"@streq ${rx(ir.endpoint.path)}"`;
+  // GA-10 §1 (0.195.31): ModSecurity accepts the metadata actions (id, phase, msg, severity, tag, log, auditlog) on the chain
+  // STARTER only; a chained rule carries its operator, transformations and `chain`. They used to sit on the last rule, which the
+  // rule parser refuses. The disruptive action is `pass` on the starter, so the chain is detect-only by construction.
+  const severity = ir.payloadClass === 'auth-bypass' ? 'WARNING' : 'CRITICAL';
+  const meta = `log,auditlog,msg:'${msg}',severity:'${severity}',tag:'cwe-${(ir.cwe || '').replace(/\D/g, '')}'`;
   const out = [
     '# SUGGESTION ONLY. Detect-only (pass). Review, test against your own traffic, then decide whether to enforce.',
-    `SecRule REQUEST_METHOD "@streq ${ir.endpoint.method}" "id:${id},phase:2,pass,nolog,chain"`,
+    `SecRule REQUEST_METHOD "@streq ${ir.endpoint.method}" "id:${id},phase:2,pass,${meta},chain"`,
     `  SecRule REQUEST_FILENAME ${pathOp} "chain"`,
   ];
   if (ir.payloadClass === 'auth-bypass') {
-    out.push(`  SecRule &REQUEST_HEADERS:Authorization "@eq 0" "log,auditlog,msg:'${msg}',severity:'WARNING',tag:'cwe-${(ir.cwe || '').replace(/\D/g, '')}'"`);
+    out.push('  SecRule &REQUEST_HEADERS:Authorization "@eq 0" "t:none"');
   } else {
     const target = ir.parameter?.location === 'body' ? `ARGS_POST${ir.parameter ? `:${ir.parameter.name}` : ''}` : ir.parameter?.location === 'header' ? `REQUEST_HEADERS:${ir.parameter.name}` : ir.parameter?.location === 'cookie' ? `REQUEST_COOKIES:${ir.parameter.name}` : ir.parameter ? `ARGS_GET:${ir.parameter.name}` : 'ARGS';
-    out.push(`  SecRule ${target} "@rx ${rx(classRegex(ir.payloadClass))}" "t:urlDecodeUni,log,auditlog,msg:'${msg}',severity:'CRITICAL',tag:'cwe-${(ir.cwe || '').replace(/\D/g, '')}'"`);
+    out.push(`  SecRule ${target} "@rx ${rx(classRegex(ir.payloadClass))}" "t:urlDecodeUni"`);
   }
   return { applicable: true, format: 'waf', content: `${out.join('\n')}\n`, enforcement: 'detect-only' };
 }
@@ -270,8 +281,11 @@ function logQuery(ir) {
 function yara(ir) {
   if (ir.payloadClass !== 'deserialization') return unavailable(`YARA matches file or memory content; the ${ir.payloadClass} class is request-shaped, so a YARA rule would be misleading`);
   const ident = `as_${ir.digest.slice(0, 12)}`;
+  // GA-10 §1 (0.195.31): a YARA text string accepts only \\ \" \t \n \xNN escapes; JSON's \uXXXX for a control character is a
+  // syntax error, so anything outside printable ASCII is replaced before quoting
+  const ys = (s) => `"${String(s).replace(/[^\x20-\x7e]/g, '?').replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   const content = [
-    `rule ${ident} {`, '  meta:', `    description = ${JSON.stringify(`serialized object stream (${ir.findingId})`)}`, `    finding = ${JSON.stringify(ir.findingId)}`, '    generated_by = "agentic-security"',
+    `rule ${ident} {`, '  meta:', `    description = ${ys(`serialized object stream (${ir.findingId})`)}`, `    finding = ${ys(ir.findingId)}`, '    generated_by = "agentic-security"',
     '  strings:', '    $java_raw = { AC ED 00 05 }', '    $java_b64 = "rO0AB"', '    $pickle_b64 = "gASV"', '    $php = /O:[0-9]{1,4}:"[A-Za-z_\\\\]/',
     '  condition:', '    any of them', '}', '',
   ].join('\n');
@@ -291,21 +305,51 @@ const kqlQ = (s) => `@"${s.replace(/"/g, '""')}"`;
 function kql(ir) {
   if (!ir.endpoint) return unavailable('no endpoint is known for this finding');
   if (['body', 'header', 'cookie'].includes(ir.parameter?.location)) return unavailable(`the W3CIISLog table does not record request ${ir.parameter.location}s, so this rule would never see the parameter`);
+  // GA-10 §1 (0.195.31): W3CIISLog has no column for the Authorization header, so "a 2xx with no credential" cannot be
+  // expressed; the rule used to test a `csAuthorization` column that does not exist. Decline rather than invent.
+  if (ir.payloadClass === 'auth-bypass') return unavailable('the W3CIISLog table records no request headers, so "no credential was sent" cannot be expressed in KQL over it');
   const lines = ['W3CIISLog', `| where csMethod == ${JSON.stringify(ir.endpoint.method)}`,
     hasTemplate(ir.endpoint.path) ? `| where csUriStem matches regex ${kqlQ(pathRegex(ir.endpoint.path))}` : `| where csUriStem == ${JSON.stringify(ir.endpoint.path)}`,
-    ir.payloadClass === 'auth-bypass' ? '| where scStatus between (200 .. 299) and isempty(csAuthorization)' : `| where csUriQuery matches regex ${kqlQ(`(?i)${classRegex(ir.payloadClass)}`)}`];
+    `| where csUriQuery matches regex ${kqlQ(`(?i)${classRegex(ir.payloadClass)}`)}`];
   return { applicable: true, format: 'kql', content: `${lines.join('\n')}\n` };
 }
 function cloudwatch(ir) {
   if (!ir.endpoint) return unavailable('no endpoint is known for this finding');
   if (['body', 'header', 'cookie'].includes(ir.parameter?.location)) return unavailable(`access logs do not record request ${ir.parameter.location}s, so this query would never see the parameter`);
+  // GA-10 §1 (0.195.31): an access log line carries no Authorization header, so the auth-bypass query used to match every 2xx
+  // to the endpoint, which is not what the proof established. Decline rather than widen.
+  if (ir.payloadClass === 'auth-bypass') return unavailable('access logs record no request headers, so "no credential was sent" cannot be expressed in a Logs Insights query');
   const re = (s) => `/${s.replace(/\//g, '\\/')}/`;
   const lines = ['fields @timestamp, @message', `| filter @message like ${re(`${ir.endpoint.method} ${hasTemplate(ir.endpoint.path) ? pathRegex(ir.endpoint.path).replace(/^\^|\$$/g, '') : escRe(ir.endpoint.path)}`)}`,
-    ir.payloadClass === 'auth-bypass' ? '| filter @message like /" 2[0-9][0-9] /' : `| filter @message like ${re(`(?i)${classRegex(ir.payloadClass)}`)}`, '| sort @timestamp desc'];
+    `| filter @message like ${re(`(?i)${classRegex(ir.payloadClass)}`)}`, '| sort @timestamp desc'];
   return { applicable: true, format: 'cloudwatch', content: `${lines.join('\n')}\n` };
 }
 
 const RENDERERS = { sigma, http, waf, 'log-query': logQuery, yara, spl, kql, cloudwatch };
+
+/**
+ * What each format's output has been held to (GA-10 §4, 0.195.31), stated per format and mirrored on the contract page:
+ *   generated  the renderer produces it from the detection IR;
+ *   syntax     `vendored-schema` (a JSON shape this repository owns or vendors) or `subset-grammar` (a grammar written from the
+ *              target's public documentation for the subset the renderer emits, `syntax.js`); never `official`, since no vendor
+ *              tool runs here;
+ *   samples    the output is executed against the labelled log corpus and must agree with the evaluator on every line
+ *              (`renderer-semantics`), which only the two formats with an interpreter in this repository can claim;
+ *   product    tested against a real product: none, and a generic suggestion is never presented as a deployed control.
+ */
+const FORMAT_ASSURANCE = Object.freeze({
+  sigma: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  http: { generated: true, syntax: 'vendored-schema', samples: true, product: false },
+  waf: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  'log-query': { generated: true, syntax: 'vendored-schema', samples: true, product: false },
+  yara: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  spl: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  kql: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  cloudwatch: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  elastic: { generated: true, syntax: 'vendored-schema', samples: false, product: false },
+  yaral: { generated: true, syntax: 'subset-grammar', samples: false, product: false },
+  datadog: { generated: true, syntax: 'vendored-schema', samples: false, product: false },
+});
 
 /** Render one format. An inapplicable format is reported as such with its reason, never as an empty rule. */
 function renderDetection(ir, format) {
@@ -691,9 +735,16 @@ function parseTime(v) {
     return new Date(Date.UTC(Number(clf[3]), MONTHS[clf[2]], Number(clf[1]), Number(clf[4]), Number(clf[5]), Number(clf[6])) - offMin * 60000).toISOString();
   }
   if (/^\d{9,13}(?:\.\d+)?$/.test(s)) return parseTime(Number(s));
+  // GA-10 §2 (0.195.31): a timestamp with no zone (`2026-03-14 02:13:44`, `2026-03-14T02:13:44`) used to be read in the host's
+  // local time, so the same line placed an event at different instants on different machines. It is ambiguous, not dated:
+  // the event is still searched, it is reported through `timeAmbiguous`, and the hunt says the window is not fully known.
+  if (ZONELESS.test(s)) return null;
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
+const ZONELESS = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/;
+/** True when a raw timestamp carries a date and time but no zone, so it cannot be placed on the UTC line without a guess. */
+function timeIsAmbiguous(raw) { return raw != null && raw !== '' && typeof raw !== 'number' && ZONELESS.test(String(raw)) && /[T ]\d{2}:\d{2}/.test(String(raw)); }
 
 function flatten(obj, prefix = '', depth = 0, out = {}) {
   for (const [k, v] of Object.entries(obj)) {
@@ -751,7 +802,21 @@ function parseLine(line) {
     const authPresent = authHeader != null ? true : typeof authFlag === 'boolean' ? authFlag : (sawHeaders ? false : null);
     const statusRaw = pick(f, ['status', 'status_code', 'response_code', 'http.response.status_code', 'sc-status', 'response.status', 'res.statuscode']);
     const status = Number.isInteger(Number(statusRaw)) && statusRaw !== undefined ? Number(statusRaw) : null;
-    return { time: parseTime(pick(f, ['@timestamp', 'timestamp', 'time', 'ts', 'start_time', 'datetime', 'date'])), method: typeof m === 'string' ? m.toUpperCase() : null, path: tgt.path ?? null, query: query ?? null, bodyParams, headers: sawHeaders ? headers : null, status, authPresent, ...authFacts(f, authHeader, sawHeaders) };
+    const rawTime = pick(f, ['@timestamp', 'timestamp', 'time', 'ts', 'start_time', 'datetime', 'date']);
+    // GA-10 §2 (0.195.31): every parser limit that can DROP a value is reported on the event, so the hunt can say that a payload past
+    // the limit would not have been seen; before, a query of 201 parameters or a body nested four deep was cut in silence.
+    const truncated = [];
+    const countParams = (qs) => String(qs ?? '').split('&').filter(Boolean).length;
+    const over = (o) => o && typeof o === 'object' && !Array.isArray(o) && Object.keys(flatten(o)).length > LIMITS.maxParams;
+    const deep = (o) => o && typeof o === 'object' && !Array.isArray(o) && Object.values(flatten(o)).some((v) => v && typeof v === 'object' && !Array.isArray(v));
+    if (typeof target === 'string' && target.includes('?') && countParams(target.slice(target.indexOf('?') + 1)) > LIMITS.maxParams) truncated.push('query-params');
+    if (typeof qsField === 'string' && countParams(qsField.replace(/^\?/, '')) > LIMITS.maxParams) truncated.push('query-params');
+    if (qsField && typeof qsField === 'object' && Object.keys(qsField).length > LIMITS.maxParams) truncated.push('query-params');
+    let bodyObj = bodyRaw && typeof bodyRaw === 'object' ? bodyRaw : null;
+    if (typeof bodyRaw === 'string') { try { bodyObj = JSON.parse(bodyRaw); } catch { bodyObj = null; } }
+    if (over(bodyObj)) truncated.push('body-params');
+    if (deep(bodyObj)) truncated.push('body-depth');
+    return { timeAmbiguous: timeIsAmbiguous(rawTime), truncated: [...new Set(truncated)].length ? [...new Set(truncated)] : null, time: parseTime(rawTime), method: typeof m === 'string' ? m.toUpperCase() : null, path: tgt.path ?? null, query: query ?? null, bodyParams, headers: sawHeaders ? headers : null, status, authPresent, ...authFacts(f, authHeader, sawHeaders) };
   }
   const c = CLF.exec(text);
   if (c) {
@@ -831,7 +896,7 @@ function collectFiles(root, limits, skipped) {
  */
 async function readLogs(target, { onEvent, signal, limits: over = {} } = {}) {
   const limits = { ...LIMITS, ...over };
-  const stats = { files: [], filesSkipped: [], lines: 0, parsed: 0, failed: 0, oversizeLines: 0, windowStart: null, windowEnd: null, eventsWithTime: 0, fieldCounts: { method: 0, path: 0, query: 0, body: 0, headers: 0, status: 0, auth: 0, authOutcome: 0, tenant: 0 }, truncated: [], budgetExhausted: false, aborted: false, unreadable: false };
+  const stats = { files: [], filesSkipped: [], lines: 0, parsed: 0, failed: 0, oversizeLines: 0, eventsTruncated: 0, ambiguousTime: 0, windowStart: null, windowEnd: null, eventsWithTime: 0, fieldCounts: { method: 0, path: 0, query: 0, body: 0, headers: 0, status: 0, auth: 0, authOutcome: 0, tenant: 0 }, truncated: [], budgetExhausted: false, aborted: false, unreadable: false };
   let st;
   try { st = external_node_fs_.lstatSync(target); } catch { stats.unreadable = true; return stats; }
   if (st.isSymbolicLink()) { stats.unreadable = true; stats.filesSkipped.push({ file: external_node_path_.basename(target), reason: 'symlink' }); return stats; }
@@ -869,6 +934,8 @@ async function readLogs(target, { onEvent, signal, limits: over = {} } = {}) {
         if (ev.authPresent != null) stats.fieldCounts.auth++;
         if (ev.authOutcome === 'authenticated' || ev.authOutcome === 'unauthenticated') stats.fieldCounts.authOutcome++;
         if (ev.actorTenant != null && ev.objectTenant != null) stats.fieldCounts.tenant++;
+        if (ev.truncated) stats.eventsTruncated++;
+        if (ev.timeAmbiguous) stats.ambiguousTime++;
         if (ev.time) { stats.eventsWithTime++; if (!stats.windowStart || ev.time < stats.windowStart) stats.windowStart = ev.time; if (!stats.windowEnd || ev.time > stats.windowEnd) stats.windowEnd = ev.time; }
         onEvent?.(ev);
       }
@@ -928,6 +995,8 @@ const fingerprint = (value) => (0,external_node_crypto_.createHash)('sha256').up
 const HUNT_VERDICTS = Object.freeze(['OBSERVED', 'NOT_OBSERVED', 'INCONCLUSIVE', 'TELEMETRY_UNAVAILABLE']);
 const MAX_SAMPLES = 20;
 const MAX_PARSE_FAILURE_RATIO = 0.05;
+const DEFAULT_MAX_GAP_MS = 6 * 60 * 60 * 1000; // a hole of six hours or more in dated events is a coverage gap
+const MAX_GAPS_REPORTED = 20;
 
 const STATEMENTS = {
   OBSERVED: (n) => `${n} request(s) have the shape of this exploit. A match is a lead to investigate, not proof of compromise: a scanner or a test could produce the same request.`,
@@ -956,6 +1025,10 @@ async function huntLogs({ ir, logsPath, since = null, until = null, signal, limi
   // method used to count), and separates the relevant events from those that could be judged and those missing a required field.
   const target = { relevant: 0, adjudicable: 0, missingRequired: 0, deniedAttempts: 0, authorizedDelegations: 0 };
   const atEndpoint = (ev) => !!ir.endpoint && typeof ev.method === 'string' && ev.method.toUpperCase() === ir.endpoint.method && pathMatches(ir.endpoint.path, ev.path);
+  // GA-10 §2 (0.195.31): the minutes that carry at least one dated event, so a hole in the telemetry (rotation, retention, an
+  // outage) can be found and reported; a minute-set is bounded by the span of the logs, never by their volume
+  const minutes = new Set();
+  const maxGapMs = Number.isFinite(limits?.maxGapMs) && limits.maxGapMs > 0 ? limits.maxGapMs : DEFAULT_MAX_GAP_MS;
 
   const stats = await readLogs(logsPath, {
     signal, limits,
@@ -965,6 +1038,7 @@ async function huntLogs({ ir, logsPath, since = null, until = null, signal, limi
         const t = Date.parse(ev.time);
         if ((sinceMs != null && t < sinceMs) || (untilMs != null && t > untilMs)) { outOfWindow++; return; }
       }
+      if (ev.time) minutes.add(Math.floor(Date.parse(ev.time) / 60000));
       const r = evaluateEvent(ir, ev);
       const here = atEndpoint(ev);
       if (here) target.relevant++;
@@ -979,6 +1053,16 @@ async function huntLogs({ ir, logsPath, since = null, until = null, signal, limi
     },
   });
 
+  // coverage gaps: consecutive dated minutes further apart than the gap limit; the first twenty are listed, every one is counted
+  const sortedMinutes = [...minutes].sort((a, b) => a - b);
+  const gaps = [];
+  let gapCount = 0;
+  for (let i = 1; i < sortedMinutes.length; i++) {
+    const ms = (sortedMinutes[i] - sortedMinutes[i - 1]) * 60000;
+    if (ms < maxGapMs) continue;
+    gapCount++;
+    if (gaps.length < MAX_GAPS_REPORTED) gaps.push({ from: new Date(sortedMinutes[i - 1] * 60000).toISOString(), to: new Date(sortedMinutes[i] * 60000).toISOString(), ms });
+  }
   const logs = { source: external_node_path_.basename(String(logsPath)), files: stats.files.length, filesSkipped: stats.filesSkipped, lines: stats.lines, parsed: stats.parsed, failed: stats.failed, truncated: stats.truncated };
   const window = { start: stats.windowStart, end: stats.windowEnd, datedEvents: stats.eventsWithTime };
   const caveats = [];
@@ -986,7 +1070,7 @@ async function huntLogs({ ir, logsPath, since = null, until = null, signal, limi
   const windowGaps = [];
   if (sinceMs != null && stats.windowStart && Date.parse(stats.windowStart) > sinceMs) windowGaps.push({ edge: 'start', from: new Date(sinceMs).toISOString(), to: stats.windowStart });
   if (untilMs != null && stats.windowEnd && Date.parse(stats.windowEnd) < untilMs) windowGaps.push({ edge: 'end', from: stats.windowEnd, to: new Date(untilMs).toISOString() });
-  const result = (verdict) => ({ ...base, verdict, logs, window, effect: EFFECT, coverage: { requestedWindow: { since, until }, outOfWindow, undated, endpointEvents, target: { ...target, samples: sampleList.length, samplesCapped: matchCount > sampleList.length }, windowGaps, requiredFields: requiredFields(ir), fieldAvailability: Object.fromEntries(Object.entries(FIELD_COUNT_KEY).map(([k, key]) => [k, stats.parsed ? Number((stats.fieldCounts[key] / stats.parsed).toFixed(3)) : 0])) }, matches: { count: matchCount, firstSeen, lastSeen, samples: sampleList }, caveats, statement: STATEMENTS[verdict](matchCount) });
+  const result = (verdict) => ({ ...base, verdict, logs, window, effect: EFFECT, coverage: { requestedWindow: { since, until }, outOfWindow, undated, endpointEvents, target: { ...target, samples: sampleList.length, samplesCapped: matchCount > sampleList.length }, windowGaps, gaps: { count: gapCount, limitMs: maxGapMs, listed: gaps }, truncatedEvents: stats.eventsTruncated, ambiguousTime: stats.ambiguousTime, requiredFields: requiredFields(ir), fieldAvailability: Object.fromEntries(Object.entries(FIELD_COUNT_KEY).map(([k, key]) => [k, stats.parsed ? Number((stats.fieldCounts[key] / stats.parsed).toFixed(3)) : 0])) }, matches: { count: matchCount, firstSeen, lastSeen, samples: sampleList }, caveats, statement: STATEMENTS[verdict](matchCount) });
 
   if (stats.unreadable || stats.parsed === 0) {
     caveats.push(stats.unreadable ? 'the log path could not be read' : stats.lines === 0 ? 'the logs contain no lines' : 'no line was recognised as a request record (supported: common/combined access logs, JSON lines)');
@@ -1003,10 +1087,17 @@ async function huntLogs({ ir, logsPath, since = null, until = null, signal, limi
   if (undecidable > 0) caveats.push(`${undecidable} event(s) lacked a field this detection needs (${[...undecidableFields].join(', ')}), so they could not be judged`);
   if (!stats.eventsWithTime) caveats.push('no event carries a timestamp, so the searched time window is unknown');
   if (stats.filesSkipped.some((f) => f.reason !== 'not-a-log-extension')) caveats.push(`${stats.filesSkipped.filter((f) => f.reason !== 'not-a-log-extension').length} file(s) were skipped (${[...new Set(stats.filesSkipped.map((f) => f.reason))].join(', ')})`);
+  // GA-10 §2 (0.195.31): three more reasons a negative cannot be supported, each a stated fact about the logs
+  if (stats.eventsTruncated > 0) caveats.push(`${stats.eventsTruncated} event(s) had query or body parameters beyond the parser's limits (${stats.eventsTruncated} truncated), so a payload past the limit would not have been seen`);
+  if (stats.ambiguousTime > 0) caveats.push(`${stats.ambiguousTime} event(s) carry a timestamp with no zone and could not be placed in time; they were searched but not dated`);
+  // A gap cannot be told apart from a quiet period by the logs alone, so it blocks a negative only when the operator declared
+  // what a gap is (`limits.maxGapMs`); with the default limit it is reported as informational and listed in `coverage.gaps`.
+  const gapsBlock = Number.isFinite(limits?.maxGapMs) && limits.maxGapMs > 0;
+  if (gapCount > 0) caveats.push(`${gapsBlock ? '' : 'informational: '}${gapCount} gap(s) of ${Math.round(maxGapMs / 3600000)} hours or more in the dated events (first: ${gaps[0].from.slice(0, 16)} to ${gaps[0].to.slice(0, 16)}); exploitation inside a gap would not appear in these logs`);
   if (undated > 0) caveats.push(`${undated} event(s) had no timestamp and were excluded by the requested window`);
   for (const g of windowGaps) caveats.push(`the logs do not reach the ${g.edge} of the requested window (${g.from} to ${g.to} is not covered), so nothing is known about that time`);
   if (!caveats.length && ir.endpoint && endpointEvents === 0) caveats.push('no request to the endpoint appears in the logs at all (informational: nothing to exploit was seen either)');
-  const blocking = caveats.some((c) => !c.startsWith('no request to the endpoint'));
+  const blocking = caveats.some((c) => !c.startsWith('no request to the endpoint') && !c.startsWith('informational: '));
   return result(blocking ? 'INCONCLUSIVE' : 'NOT_OBSERVED');
 }
 
@@ -1102,12 +1193,50 @@ function stillExposed(deployments, vulnerable) {
   return vulnerable.some((d) => d.commit === newest.commit && d.deployedAt === newest.deployedAt);
 }
 
-function computeExposureWindow({ finding, repo, deployments: rawDeployments = [], deploymentProblems = [], fixCommit = null, telemetry = null, deps = {} } = {}) {
-  // callers may pass records that did not come through loadDeployments; normalise dates so every output is comparable
-  const deployments = rawDeployments.filter((d) => d && ts(d.deployedAt) != null).map((d) => ({ ...d, deployedAt: iso(ts(d.deployedAt)) }));
+/**
+ * Reconcile the deployment records against each other and against the fix commit (GA-10 §3, 0.195.31). Two records that place
+ * DIFFERENT commits in the same environment at the same moment contradict each other, and nothing here can say which is true, so
+ * both are refused. A record that contains the fix but is dated before the fix was committed is refused too: a deployment cannot
+ * precede its own code. Refused records are listed with the reason; the caller carries them into `unknowns`, because a refused
+ * record could have been the first vulnerable deployment and the window can no longer be called complete.
+ */
+function reconcileDeployments(deployments, { fixCommit = null, fixAt = null, isAncestor: anc = null } = {}) {
+  const problems = [];
+  const byKey = new Map();
+  for (const d of deployments) {
+    const key = `${d.environment ?? ''}\0${d.deployedAt}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(d);
+  }
+  const refused = new Set();
+  for (const [key, group] of byKey) {
+    const commits = new Set(group.map((d) => d.commit));
+    if (commits.size > 1) {
+      for (const d of group) refused.add(d);
+      const [env, at] = key.split('\0');
+      problems.push(`conflicting provenance: ${group.length} records place different commits (${[...commits].map((c) => c.slice(0, 12)).join(', ')}) in ${env || 'an unnamed environment'} at ${at}; none of them is trusted`);
+    }
+  }
+  if (fixCommit && fixAt && anc) {
+    for (const d of deployments) {
+      if (refused.has(d)) continue;
+      if (anc(fixCommit, d.commit) === true && Date.parse(d.deployedAt) < Date.parse(fixAt)) { refused.add(d); problems.push(`deployment of ${d.commit.slice(0, 12)} at ${d.deployedAt} contains the fix but predates the fix commit (${fixAt}); the record is refused`); }
+    }
+  }
+  return { deployments: deployments.filter((d) => !refused.has(d)), problems };
+}
+
+function computeExposureWindow({ finding, repo, deployments: rawDeployments = [], deploymentProblems: loadProblems = [], fixCommit = null, telemetry = null, deps = {} } = {}) {
   const anc = deps.isAncestor ?? ((a, d) => isAncestor(repo, a, d));
   const cdate = deps.commitDate ?? ((sha) => commitDate(repo, sha));
+  // callers may pass records that did not come through loadDeployments; normalise dates so every output is comparable
+  const dated = rawDeployments.filter((d) => d && ts(d.deployedAt) != null).map((d) => ({ ...d, deployedAt: iso(ts(d.deployedAt)) }));
+  const reconciled = reconcileDeployments(dated, { fixCommit, fixAt: fixCommit ? cdate(fixCommit) : null, isAncestor: anc });
+  const deployments = reconciled.deployments;
+  const deploymentProblems = [...loadProblems, ...reconciled.problems];
   const unknowns = [];
+  const environments = new Set(deployments.map((d) => d.environment).filter(Boolean));
+  if (environments.size > 1) unknowns.push(`the deployment records span ${environments.size} environments (${[...environments].sort().join(', ')}); pass --environment to scope the window to one`);
   const origin = finding?.findingProvenance?.findingOrigin ?? null;
   const introCommit = origin?.commit ?? null;
   const introducedAt = iso(ts(origin?.authorDate ?? origin?.committerDate));
@@ -1131,6 +1260,9 @@ function computeExposureWindow({ finding, repo, deployments: rawDeployments = []
     if (hasFix) fixed.push(d);
   }
   if (unresolved.length) unknowns.push(`${unresolved.length} deployment(s) whose contents could not be resolved against the introduction/fix commits`);
+  // GA-10 §3 (0.195.31): a refused record (unreadable, conflicting with its image, conflicting with another record, dated before
+  // its own fix) is an unknown, not a footnote: it could have been the first vulnerable deployment, so the window is not complete.
+  if (deploymentProblems.length) unknowns.push(`${deploymentProblems.length} deployment record(s) were refused (conflicting or unreadable provenance); a refused record could have been the first vulnerable deployment`);
   const byTime = (a, b) => Date.parse(a.deployedAt) - Date.parse(b.deployedAt);
   const firstVulnerable = [...vulnerable].sort(byTime)[0] ?? null;
   const fixDeployedAt = [...fixed].sort(byTime)[0] ?? null;
@@ -1142,15 +1274,21 @@ function computeExposureWindow({ finding, repo, deployments: rawDeployments = []
   const telStart = ts(telemetry?.start); const telEnd = ts(telemetry?.end);
   if (telStart == null || telEnd == null) unknowns.push('telemetry window (no dated telemetry)');
 
-  let observable = null; let unobservableBefore = null;
+  let observable = null; let unobservableBefore = null; let unobservableAfter = null;
   if (exposureStart != null) {
     const end = exposureEnd ?? telEnd;
     if (telStart != null && telEnd != null && end != null) {
       const s = Math.max(exposureStart, telStart); const e = Math.min(end, telEnd);
       if (s <= e) observable = { start: iso(s), end: iso(e), openEnded: exposureEnd == null };
       if (exposureStart < telStart) unobservableBefore = { start: iso(exposureStart), end: iso(Math.min(telStart, end ?? telStart)) };
+      // GA-10 §3 (0.195.31): exposure AFTER the telemetry ends (the fix not yet deployed, or deployed after the last log line) used
+      // to be dropped in silence; it is reported like the part before telemetry began, open-ended when there is no fix deployment.
+      if (exposureEnd == null || exposureEnd > telEnd) unobservableAfter = { start: iso(Math.max(telEnd, exposureStart)), end: exposureEnd == null ? null : iso(exposureEnd), openEnded: exposureEnd == null };
     }
   }
+  // the start and end of the exposure as explicit facts with their evidence, so a missing one is a stated absence, never an implied zero
+  const exposureStartRecord = { at: exposureStart == null ? null : iso(exposureStart), evidence: firstVulnerable ? 'first-vulnerable-deployment' : 'none' };
+  const exposureEndRecord = { at: exposureEnd == null ? null : iso(exposureEnd), evidence: fixDeployedAt ? 'fix-deployment' : fixCommit && deployments.length && !fixDeployedAt ? 'fix-not-deployed' : 'none' };
   const status = exposureStart == null ? 'unavailable' : (unknowns.length || !observable) ? 'partial' : 'complete';
   return {
     schema: 'agentic-security/exposure-window', version: 1, findingId: finding?.stableId ?? finding?.id ?? null, status,
@@ -1160,7 +1298,7 @@ function computeExposureWindow({ finding, repo, deployments: rawDeployments = []
     fixDeployed: fixDeployedAt ? { at: fixDeployedAt.deployedAt, commit: fixDeployedAt.commit, commitSource: fixDeployedAt.commitSource ?? 'deployment-record', environment: fixDeployedAt.environment, artifactDigest: fixDeployedAt.artifactDigest } : null,
     stillExposed: stillExposed(deployments, vulnerable),
     telemetryWindow: telStart != null && telEnd != null ? { start: iso(telStart), end: iso(telEnd) } : null,
-    observableWindow: observable, unobservableBefore, unresolvedDeployments: unresolved, deploymentProblems, unknowns,
+    observableWindow: observable, unobservableBefore, unobservableAfter, exposureStart: exposureStartRecord, exposureEnd: exposureEndRecord, unresolvedDeployments: unresolved, deploymentProblems, unknowns,
     statement: 'The observable window is the part of the exposure that telemetry covers. Exposure outside it is unobserved, which is not the same as unexploited.',
   };
 }
@@ -1177,6 +1315,8 @@ function formatExposureWindow(w) {
     `Observable exposure window: ${w.observableWindow ? `${w.observableWindow.start.slice(0, 10)} to ${w.observableWindow.openEnded ? 'present (fix not deployed)' : w.observableWindow.end.slice(0, 10)}` : 'cannot be determined'}`,
   ];
   if (w.unobservableBefore) lines.push(`Exposed but not observable: ${w.unobservableBefore.start.slice(0, 10)} to ${w.unobservableBefore.end.slice(0, 10)} (before telemetry began)`);
+  if (w.unobservableAfter) lines.push(`Exposed but not observable: ${w.unobservableAfter.start.slice(0, 10)} to ${w.unobservableAfter.openEnded ? 'present' : w.unobservableAfter.end.slice(0, 10)} (after telemetry ended)`);
+  if (w.deploymentProblems?.length) lines.push(`Refused deployment records: ${w.deploymentProblems.length} (${w.deploymentProblems[0]})`);
   if (w.unknowns.length) lines.push('', `Status: ${w.status}. Unknown: ${w.unknowns.join('; ')}`);
   return lines.join('\n');
 }
@@ -1260,7 +1400,7 @@ function formatLifecycleView(v) {
 const HUNT_EXIT = Object.freeze({ NOT_OBSERVED: 0, OBSERVED: 10, INCONCLUSIVE: 11, TELEMETRY_UNAVAILABLE: 12 });
 const EXT = { sigma: 'yml', http: 'json', waf: 'conf', 'log-query': 'json', yara: 'yar', spl: 'spl', kql: 'kql', cloudwatch: 'txt', elastic: 'json', yaral: 'yaral', datadog: 'json' };
 
-const usage = () => { console.error('usage: dnr generate <finding-id> [--format sigma|http|waf|log-query|yara|spl|kql|cloudwatch|elastic|yaral|datadog|all] [--out dir] [--allow-unproven]\n       dnr validate <finding-id>\n       dnr hunt <finding-id> --logs <file-or-dir> [--since ISO] [--until ISO]\n       dnr window <finding-id> --deployments <file> [--fix-commit sha] [--environment name]\n       dnr show <finding-id>\n       dnr status <finding-id>'); return 4; };
+const usage = () => { console.error('usage: dnr generate <finding-id> [--format sigma|http|waf|log-query|yara|spl|kql|cloudwatch|elastic|yaral|datadog|all] [--out dir] [--allow-unproven]\n       dnr validate <finding-id>\n       dnr hunt <finding-id> --logs <file-or-dir> [--since ISO] [--until ISO] [--max-gap hours]\n       dnr window <finding-id> --deployments <file> [--fix-commit sha] [--environment name]\n       dnr show <finding-id>\n       dnr status <finding-id>'); return 4; };
 
 function ensureDetection(root, id, flags) {
   const existing = (0,dnr_store.latestRecord)(root, id, 'detection');
@@ -1334,7 +1474,7 @@ async function cmdDnr(args, root) {
     const onSig = () => ac.abort();
     process.once('SIGINT', onSig);
     let result;
-    try { result = await huntLogs({ ir: det.saved.ir, logsPath: external_node_path_.resolve(String(flags.logs)), since: flags.since ?? null, until: flags.until ?? null, signal: ac.signal }); } finally { process.off('SIGINT', onSig); }
+    try { result = await huntLogs({ ir: det.saved.ir, logsPath: external_node_path_.resolve(String(flags.logs)), since: flags.since ?? null, until: flags.until ?? null, signal: ac.signal, limits: Number(flags['max-gap']) > 0 ? { maxGapMs: Number(flags['max-gap']) * 3600000 } : undefined }); } finally { process.off('SIGINT', onSig); }
     const saved = (0,dnr_store.saveRecord)(root, id, 'hunt', result);
     if (flags.json) console.log(JSON.stringify({ ...result, stored: saved.ok ? saved.file : null }, null, 2));
     else {

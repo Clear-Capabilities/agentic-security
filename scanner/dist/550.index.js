@@ -161,6 +161,15 @@ async function disprovePanel(candidates, opts = {}) {
   const survivors = [], refuted = [];
   for (const c of candidates || []) {
     const judged = await disproveCandidate(c, opts);
+    // GA-06 §4 (0.195.31): a model opinion stays separate from mechanical evidence. A candidate the taint engine CONFIRMED
+    // (`confirmation.tier === 'taint-confirmed'`) is not removed by a model majority: the votes are recorded, the refutation is
+    // marked overridden, and the candidate survives as contested, with its evidence-derived severity untouched. Only a candidate
+    // the engine could not corroborate is removed by the panel.
+    if (judged.refutation.refuted && judged.confirmation?.tier === 'taint-confirmed') {
+      judged.refutation = { ...judged.refutation, overridden: true, overriddenBy: 'taint-confirmed' };
+      survivors.push(judged);
+      continue;
+    }
     (judged.refutation.refuted ? refuted : survivors).push(judged);
   }
   return { survivors, refuted };
@@ -290,12 +299,14 @@ function judgeCandidates(candidates, priorScan, triageFeedback) {
 /* harmony import */ var _egress_transport_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73785);
 /* harmony import */ var _llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(38947);
 /* harmony import */ var _llm_validator_ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(23837);
+/* harmony import */ var _llm_validator_local_endpoint_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(894);
 //
 // Shared LLM endpoint caller. Both the hunter and the refutation panel need
 // the same default endpoint caller when tests don't inject a mock. Two copies
 // of a network call is one copy too many — if one path gets fixed and the
 // other does not, the bug stays buried in one direction.
 //
+
 
 
 
@@ -348,6 +359,7 @@ async function defaultLlmInvoke(prompt, opts = {}) {
         timeouts: oc
           ? { connectTimeoutMs: oc.connectTimeoutMs, requestTimeoutMs: oc.requestTimeoutMs }
           : { connectTimeoutMs: 3000, requestTimeoutMs: timeoutMs },
+        signal: opts.signal, // GA-06 §3 (0.195.31): a caller's cancellation reaches the transport
       });
       // PRD §23.4: never fall back to a cloud provider on failure — throwing
       // here is exactly what the pre-existing raw-fetch path already does on
@@ -371,7 +383,7 @@ async function defaultLlmInvoke(prompt, opts = {}) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ prompt }),
-  }, { timeoutMs });
+  }, { timeoutMs, signal: opts.signal });
   if (!res.ok) throw new Error(`llm endpoint returned ${res.status}`);
   const body = await res.json();
   return typeof body === 'string' ? body : (body?.text ?? JSON.stringify(body));
@@ -497,13 +509,30 @@ function resolveLlmInvokeWithDecision(opts = {}) {
 
   const multi = opts.endpoints || process.env[DEFAULT_CONSENSUS_ENV];
   if (multi) {
-    const { invoke, decisions } = makeConsensusInvoke(multi, { timeoutMs: opts.timeoutMs, scanRoot: opts.scanRoot, purpose: opts.purpose });
+    // GA-06 §3 (0.195.31): the `local` and `ollama` presets promise that no prompt leaves this machine, and the consensus list
+    // used to bypass that promise (only the egress policy's own `local-only` mode caught a remote voter). Under either preset a
+    // non-loopback voter is refused here with a decision that says so: never silently called, never silently dropped.
+    let voters = multi;
+    const presetDecisions = [];
+    const provider = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_2__.resolveProvider)({ role: opts.role || 'hunt' });
+    const preset = provider?.ok && (provider.config?.provider === 'local' || provider.config?.provider === 'ollama') ? provider.config.provider : null;
+    if (preset === 'local' || preset === 'ollama') {
+      const kept = [];
+      for (const url of parseEndpoints(multi)) {
+        if ((0,_llm_validator_local_endpoint_js__WEBPACK_IMPORTED_MODULE_4__/* .isLoopbackUrl */ .tE)(url)) kept.push(url);
+        else presetDecisions.push({ allowed: false, endpoint: url, reason: `the '${preset}' preset keeps every prompt on this machine; a non-loopback consensus endpoint is refused: ${url}` });
+      }
+      voters = kept.join(',');
+      if (!kept.length) return { invoke: null, decision: presetDecisions[0] || null, decisions: presetDecisions };
+    }
+    const { invoke, decisions } = makeConsensusInvoke(voters, { timeoutMs: opts.timeoutMs, scanRoot: opts.scanRoot, purpose: opts.purpose });
     // A single aggregate `decision` for the pre-existing callers (hunter.js,
     // disprove.js), which only ever read `.reason` when `invoke` is null —
     // the all-denied case. The full per-endpoint detail is on `decisions`
     // for a caller that wants it.
-    const decision = decisions.find(d => !d.allowed) || decisions[0] || null;
-    return { invoke, decision, decisions };
+    const all = [...presetDecisions, ...decisions];
+    const decision = all.find(d => !d.allowed) || all[0] || null;
+    return { invoke, decision, decisions: all };
   }
 
   // ollama-offline-prd.md §32: PRESET=ollama is a configured provider even

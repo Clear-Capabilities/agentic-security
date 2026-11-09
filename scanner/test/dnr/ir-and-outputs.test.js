@@ -141,7 +141,8 @@ test('outputs: every format renders for a full IR, and an inapplicable one says 
 });
 
 test('outputs: sigma is valid structure, the WAF suggestion cannot block, and values are escaped for each target', () => {
-  const { ir } = buildDetectionIR({ finding: FINDING, proof: proof('EXPLOIT_CONFIRMED', attack({ path: '/api/users/:id/export' })) });
+  // a query parameter: the webserver log source records the query string, so Sigma applies (a body parameter is declined, below)
+  const { ir } = buildDetectionIR({ finding: FINDING, proof: proof('EXPLOIT_CONFIRMED', attack({ path: '/api/users/:id/export', location: 'query' })) });
   const sigma = renderDetection(ir, 'sigma').content;
   assert.match(sigma, /^title: "/m);
   assert.match(sigma, /condition: selection_request and selection_payload/);
@@ -161,6 +162,8 @@ test('outputs: body/header locations are not pretended into logs that cannot see
   const body = buildDetectionIR({ finding: FINDING, proof: proof() }).ir;
   assert.equal(renderDetection(body, 'kql').applicable, false);
   assert.equal(renderDetection(body, 'cloudwatch').applicable, false);
+  assert.equal(renderDetection(body, 'sigma').applicable, false, 'since 0.195.31 the webserver log source has no request body field, so Sigma declines too');
+  assert.match(renderDetection(body, 'sigma').reason, /records no request body/);
   const query = buildDetectionIR({ finding: FINDING, proof: proof('EXPLOIT_CONFIRMED', attack({ location: 'query' })) }).ir;
   assert.equal(renderDetection(query, 'kql').applicable, true);
   assert.match(renderDetection(query, 'spl').content, /uri_query=/);

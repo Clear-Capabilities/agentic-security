@@ -19,7 +19,7 @@ import { buildLifecycleView, formatLifecycleView, loadFindingFromLastScan } from
 export const HUNT_EXIT = Object.freeze({ NOT_OBSERVED: 0, OBSERVED: 10, INCONCLUSIVE: 11, TELEMETRY_UNAVAILABLE: 12 });
 const EXT = { sigma: 'yml', http: 'json', waf: 'conf', 'log-query': 'json', yara: 'yar', spl: 'spl', kql: 'kql', cloudwatch: 'txt', elastic: 'json', yaral: 'yaral', datadog: 'json' };
 
-const usage = () => { console.error('usage: dnr generate <finding-id> [--format sigma|http|waf|log-query|yara|spl|kql|cloudwatch|elastic|yaral|datadog|all] [--out dir] [--allow-unproven]\n       dnr validate <finding-id>\n       dnr hunt <finding-id> --logs <file-or-dir> [--since ISO] [--until ISO]\n       dnr window <finding-id> --deployments <file> [--fix-commit sha] [--environment name]\n       dnr show <finding-id>\n       dnr status <finding-id>'); return 4; };
+const usage = () => { console.error('usage: dnr generate <finding-id> [--format sigma|http|waf|log-query|yara|spl|kql|cloudwatch|elastic|yaral|datadog|all] [--out dir] [--allow-unproven]\n       dnr validate <finding-id>\n       dnr hunt <finding-id> --logs <file-or-dir> [--since ISO] [--until ISO] [--max-gap hours]\n       dnr window <finding-id> --deployments <file> [--fix-commit sha] [--environment name]\n       dnr show <finding-id>\n       dnr status <finding-id>'); return 4; };
 
 function ensureDetection(root, id, flags) {
   const existing = latestRecord(root, id, 'detection');
@@ -93,7 +93,7 @@ export async function cmdDnr(args, root) {
     const onSig = () => ac.abort();
     process.once('SIGINT', onSig);
     let result;
-    try { result = await huntLogs({ ir: det.saved.ir, logsPath: path.resolve(String(flags.logs)), since: flags.since ?? null, until: flags.until ?? null, signal: ac.signal }); } finally { process.off('SIGINT', onSig); }
+    try { result = await huntLogs({ ir: det.saved.ir, logsPath: path.resolve(String(flags.logs)), since: flags.since ?? null, until: flags.until ?? null, signal: ac.signal, limits: Number(flags['max-gap']) > 0 ? { maxGapMs: Number(flags['max-gap']) * 3600000 } : undefined }); } finally { process.off('SIGINT', onSig); }
     const saved = saveRecord(root, id, 'hunt', result);
     if (flags.json) console.log(JSON.stringify({ ...result, stored: saved.ok ? saved.file : null }, null, 2));
     else {

@@ -23,7 +23,7 @@ import { materializeEntry } from './materialize.js';
 import { stageNeutralized } from './neutralize.js';
 import { validateArm, runArmTask, TASKS } from './arms.js';
 import { resolveInside, normalizeCwe } from './dataset.js';
-import { scoreDetect, scoreFalsify, scoreExploit, scorePatch, scoreEconomics } from './score.js';
+import { scoreDetect, scoreFalsify, scoreExploit, scorePatch, scoreEconomics, detectedEntryIds } from './score.js';
 
 export const RUN_SCHEMA = 'agentic-security/eval-lab-run';
 const RUN_VERSION = 1;
@@ -99,6 +99,27 @@ async function testsPass({ argv, dir, files, timeoutMs, signal }) {
  * @param {string[]} [o.tasks]
  * @param {number} [o.repeats]
  */
+/** The paired, same-population comparison of each model arm with each deterministic arm (see the `paired` field of the run). */
+export function pairedComparisons({ armPlans, usable, attempts, mapFile }) {
+  const detectedFor = (armId, repeat) => detectedEntryIds({ entries: usable, attempts: new Map(attempts.filter((a) => a.armId === armId && a.repeat === repeat && a.task === 'detect').map((a) => [a.entryId, a])), mapFile });
+  const positives = usable.filter((e) => e.kind === 'vulnerable').map((e) => e.id);
+  const out = [];
+  for (const base of armPlans.filter((p) => p.arm.kind === 'deterministic' && p.tasks.includes('detect'))) {
+    const baseSet = detectedFor(base.arm.id, 0);
+    for (const plan of armPlans.filter((p) => p.arm.kind === 'model' && p.tasks.includes('detect'))) {
+      const perRepeat = [];
+      for (let r = 0; r < plan.repeats; r++) {
+        const s = detectedFor(plan.arm.id, r);
+        let wins = 0; let losses = 0; let ties = 0;
+        for (const id of positives) { const a = s.has(id); const b = baseSet.has(id); if (a && !b) wins++; else if (b && !a) losses++; else ties++; }
+        perRepeat.push({ repeat: r, wins, losses, ties, armDetected: s.size, baselineDetected: baseSet.size });
+      }
+      out.push({ baselineArmId: base.arm.id, armId: plan.arm.id, positives: positives.length, sameEntrySet: true, repeats: plan.repeats, representative: plan.repeats >= 3, perRepeat });
+    }
+  }
+  return out;
+}
+
 export async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEFAULT_REPEATS, concurrency = 2, timeoutMs = 120_000, budgetUsd = null, scanRoot = process.cwd(), signal, onProgress = () => {}, deps = {} } = {}) {
   const now = deps.now ?? Date.now;
   const startedAt = new Date(now()).toISOString();
@@ -218,6 +239,9 @@ export async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEF
         ...(signal?.aborted ? ['cancelled'] : []),
       ],
       spendUsdMeasured: spend.usd,
+      // GA-06 §5 (0.195.31): every model arm against every deterministic arm, entry by entry, on the identical usable population,
+      // per repeat. A win is an entry the model arm detected and the baseline did not; a loss the reverse; a tie both or neither.
+      paired: pairedComparisons({ armPlans, usable, attempts, mapFile: mapFileFor }),
     };
     run.digest = digestOf({ ...run, digest: undefined });
     return { ok: true, run };

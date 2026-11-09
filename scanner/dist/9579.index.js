@@ -188,13 +188,36 @@ function candidateId(focusAreaId, lensKey, file, line, title) {
     .digest('hex').slice(0, 12);
 }
 
-function candidatesFromParsed(parsed, focusArea, lens) {
+// GA-06 §4 (0.195.31): a hunt candidate needs a REAL citation, not a plausible one. The file must be one the hunter was shown
+// (the focus area's files, or any file whose contents the run holds) and the line must exist in it when the contents are known.
+// A model that names a file outside the area, or a line past the end, has not cited evidence; such a candidate is discarded and
+// counted (`citationsDiscarded`), never scored or shown. A leading `./` is tolerated; nothing else is normalised, so a path that
+// differs from what the hunter was shown is a miss, not a match.
+function resolveCitation(c, focusArea, ctx) {
+  const raw = typeof c?.file === 'string' ? c.file.trim() : '';
+  const file = raw.replace(/^\.\//, '');
+  const line = Number.isInteger(c?.line) ? c.line : Number.parseInt(c?.line, 10);
+  if (!file || !Number.isInteger(line) || line < 1) return { ok: false, reason: 'no-location' };
+  const known = (Array.isArray(focusArea?.files) && focusArea.files.includes(file)) || (ctx?.fileContents && Object.prototype.hasOwnProperty.call(ctx.fileContents, file));
+  if (!known) return { ok: false, reason: 'file-not-in-scope' };
+  const text = ctx?.fileContents ? ctx.fileContents[file] : undefined;
+  if (typeof text === 'string') {
+    const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+    if (line > Math.max(1, lines)) return { ok: false, reason: 'line-past-end' };
+  }
+  return { ok: true, file, line };
+}
+
+function candidatesFromParsed(parsed, focusArea, lens, ctx = {}, stats = null) {
   const list = Array.isArray(parsed?.candidates) ? parsed.candidates : [];
   const out = [];
   for (const c of list) {
-    const file = typeof c?.file === 'string' ? c.file : null;
-    const line = Number.isInteger(c?.line) ? c.line : Number.parseInt(c?.line, 10);
-    if (!file || !Number.isInteger(line)) continue;      // no location, no candidate
+    const cite = resolveCitation(c, focusArea, ctx);
+    if (!cite.ok) {
+      if (stats) { stats.discarded += 1; if (cite.reason !== 'no-location') stats.citationsDiscarded += 1; }
+      continue;
+    }
+    const { file, line } = cite;
     const title = typeof c?.title === 'string' && c.title ? c.title : `${lens.title} candidate`;
     out.push({
       id: candidateId(focusArea.id, lens.key, file, line, title),
@@ -213,9 +236,9 @@ function candidatesFromParsed(parsed, focusArea, lens) {
   return out;
 }
 
-function parseCandidates(raw, focusArea, lens) {
+function parseCandidates(raw, focusArea, lens, ctx = {}) {
   const { parsed } = extractJsonWithFlag(raw);
-  return candidatesFromParsed(parsed, focusArea, lens);
+  return candidatesFromParsed(parsed, focusArea, lens, ctx);
 }
 
 async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
@@ -270,13 +293,13 @@ async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
     return { ...base, candidates: [], degraded: true, reason };
   }
 
-  const candidates = candidatesFromParsed(parsed, focusArea, lens);
-  // A proposed candidate with no file and line has nowhere to point and is dropped; say how many, so a reply full of them
-  // does not read as a reply that found nothing.
-  const proposed = Array.isArray(parsed?.candidates) ? parsed.candidates.length : 0;
-  const discarded = proposed - candidates.length;
-  appendEntry(transcript, { phase: 'result', candidateCount: candidates.length, discarded });
-  return { ...base, candidates, degraded: false, reason: null, discarded };
+  const stats = { discarded: 0, citationsDiscarded: 0 };
+  const candidates = candidatesFromParsed(parsed, focusArea, lens, ctx, stats);
+  // A proposed candidate with no file and line has nowhere to point and is dropped, and one whose citation does not resolve
+  // (a file the hunter was not shown, a line past the file's end) is dropped too; say how many of each, so a reply full of
+  // them does not read as a reply that found nothing.
+  appendEntry(transcript, { phase: 'result', candidateCount: candidates.length, discarded: stats.discarded, citationsDiscarded: stats.citationsDiscarded });
+  return { ...base, candidates, degraded: false, reason: null, discarded: stats.discarded, citationsDiscarded: stats.citationsDiscarded };
 }
 
 // EXTERNAL MODULE: ./src/discovery/confirm.js
@@ -895,16 +918,9 @@ async function runDiscovery(ctx = {}, opts = {}) {
   // panel's three calls per candidate on it again. Only refutals suppress: a
   // candidate previously judged fresh is re-reported, because it was never
   // fixed, which is the same asymmetry judge.js applies to tp/fp triage.
+  // GA-06 §4 (0.195.31): the memory skip is applied AFTER confirmation (below), because memory is keyed by location and a
+  // candidate the taint engine confirms at a location an earlier run's model panel refuted must be examined, not skipped.
   let rememberedRefutals = 0;
-  if (memory) {
-    const before = candidates.length;
-    candidates = candidates.filter(c => !previouslyRefuted(memory, c));
-    rememberedRefutals = before - candidates.length;
-    if (rememberedRefutals > 0) {
-      reasons.push(`${rememberedRefutals} candidate(s) were refuted by an earlier run and not re-examined ` +
-        '(clear with --forget-refuted if a model, ruleset or the code has changed since)');
-    }
-  }
 
   const maxCandidates = Number.isInteger(opts.maxCandidates) && opts.maxCandidates >= 0
     ? opts.maxCandidates : DEFAULT_MAX_CANDIDATES;
@@ -935,7 +951,20 @@ async function runDiscovery(ctx = {}, opts = {}) {
     reasons.push('deterministic confirmation was DISABLED for this run (uplift measurement); ' +
       'every candidate is reported unconfirmed and severity is not evidence-derived');
   }
-  const confirmed = await (0,discovery_confirm/* confirmAll */.iX)(candidates, { taintProbe });
+  let confirmed = await (0,discovery_confirm/* confirmAll */.iX)(candidates, { taintProbe });
+  // PRD C4 — drop what a previous run already refuted, BEFORE spending the panel's three calls per candidate on it again. Only
+  // refutals suppress: a candidate previously judged fresh is re-reported, because it was never fixed, which is the same
+  // asymmetry judge.js applies to tp/fp triage. A taint-confirmed candidate is never skipped on memory alone (GA-06 §4): the
+  // engine's evidence is current, the remembered refutation was a model's opinion about an earlier, uncorroborated candidate.
+  if (memory) {
+    const before = confirmed.length;
+    confirmed = confirmed.filter(c => c?.confirmation?.tier === 'taint-confirmed' || !previouslyRefuted(memory, c));
+    rememberedRefutals = before - confirmed.length;
+    if (rememberedRefutals > 0) {
+      reasons.push(`${rememberedRefutals} candidate(s) were refuted by an earlier run and not re-examined ` +
+        '(clear with --forget-refuted if a model, ruleset or the code has changed since)');
+    }
+  }
   const { survivors, refuted } = await (0,disprove/* disprovePanel */.Jx)(confirmed, { llmInvoke, scanRoot: opts.scanRoot });
   const { fresh, duplicates, suppressed } = (0,judge/* judgeCandidates */.m)(survivors, ctx.priorScan, ctx.triageFeedback);
 
@@ -1047,6 +1076,12 @@ async function runDiscovery(ctx = {}, opts = {}) {
       // of those came back with no votes at all (undecided, not refuted).
       panelsRun,
       undecidedPanels,
+      // GA-06 §4 (0.195.31): candidates a model majority voted to refute that the taint engine had confirmed; they survive as
+      // contested (refutation.overridden) because mechanical evidence outranks a model opinion. A reader sees the disagreement.
+      contestedConfirmed: survivors.filter(c => c?.refutation?.overridden === true).length,
+      // Candidates the hunter discarded because their citation did not resolve (a file outside the focus area or the scanned
+      // tree, a line beyond the file's end); counted, never silently dropped.
+      citationsDiscarded: runs.reduce((n, r) => n + (r.citationsDiscarded || 0), 0),
       // PRD Phase 0 / C3 — what the run cost and whether the budget stopped it.
       // `budgetExhausted` true means the report is INCOMPLETE by construction:
       // work remained and was not done. Reading it as a clean result is the

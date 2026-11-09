@@ -39,6 +39,7 @@ A compatibility test (`scanner/test/contracts/model-validation.contract.test.js`
 | `validator_context` | The spans the model was shown (`id`, `role`, `file`, `start`, `end`, never the text) and `gaps`, what was not collected |
 | `validator_citation_status` | `valid` (every citation names a span line that was sent), `none` (the reply cited nothing) |
 | `validator_citations` | The cited lines resolved to `span`, `file` and `line` |
+| `validator_model_verdict` | The model's own verdict (`reject`) when it was refused and `validator_verdict` became `escalate`; the opinion is kept beside the evidence, never erased (since 0.195.31) |
 
 **Verdicts**
 
@@ -63,7 +64,7 @@ A compatibility test (`scanner/test/contracts/model-validation.contract.test.js`
 ## Rules that hold
 
 - **The verdict is recorded, the severity is not touched.** No verdict changes a finding's `severity`. An `accept` can raise the finding's confidence; nothing else about it changes.
-- **A model cannot delete a strongly established finding.** A `reject` on a finding from the taint engine, from a multi-sink correlation or with an execution-proven result becomes `escalate`, with `validator_reject_refused` set.
+- **A model cannot delete a strongly established finding.** A `reject` on a finding from the taint engine (`IR-TAINT`, `MULTI-SINK`, and since 0.195.31 the C/C++ dataflow engine `CPP_DATAFLOW`), from a multi-sink correlation, with an execution-proven result, or (since 0.195.31) with a verification record a trusted oracle settled as `confirmed`, becomes `escalate`, with `validator_reject_refused` set and the model's own verdict kept in `validator_model_verdict`. The opinion and the evidence are both visible; the opinion changes neither the list nor the severity.
 - **A reject is an opinion, not a suppression.** Since the disposition rules below, a `reject` on any finding keeps it in the actionable list as `needs-review` with `validator_reject_retained` set. Only an evidence-backed refutation or a reviewed suppression removes a finding, and it is then retained in the suppression ledger with its reason and evidence. `AGENTIC_SECURITY_LLM_REJECT_SUPPRESS=1` restores the earlier behavior of moving a rejected finding to the ledger.
 - **An untrusted reply keeps the finding.** A reply with the wrong challenge, file or line, no JSON, an unknown verdict, or reasoning that reports an injection attempt becomes `escalate`. A reply is never read from the first JSON object, only the last.
 - **No answer is not a clean answer.** A finding the model did not judge is `unvalidated` or `escalate` with a status that names the reason. It is never `accept`.
