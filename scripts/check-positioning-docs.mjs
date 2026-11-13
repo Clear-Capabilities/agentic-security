@@ -785,6 +785,19 @@ function limitsMarker(repo, limits) {
   return m ? m[1] : null;
 }
 
+// Platforms a row declares, GA or not: a row filled in ahead of promotion must name jobs that exist, or the promotion would inherit a false platform.
+function platformFindings(c, jobs, file, at) {
+  const out = [];
+  const plats = c.platforms || [];
+  for (const pl of plats) {
+    const m = /^([a-z]+):([A-Za-z0-9_-]+)$/.exec(pl);
+    if (!m || !GA_PLATFORMS.includes(m[1])) { out.push(F('bar', file, at, `${c.id}: platform "${pl}" must be os:job with os in ${GA_PLATFORMS.join(', ')}`)); continue; }
+    if (!jobs.has(m[2])) out.push(F('bar', file, at, `${c.id}: platform job "${m[2]}" is not a job in .github/workflows`));
+  }
+  if (plats.length && !plats.some(pl => pl.startsWith('linux:'))) out.push(F('bar', file, at, `${c.id}: GA needs a linux job`));
+  return out;
+}
+
 export function checkGaBar(reg, repo = REPO_DEFAULT) {
   const out = [];
   const file = 'docs/capabilities.yaml';
@@ -796,9 +809,10 @@ export function checkGaBar(reg, repo = REPO_DEFAULT) {
     if (c.maturity === 'Preview') {
       if (!c.contract && !c.contractNote) out.push(F('bar', file, at, `${c.id}: Preview needs a \`contract\` page or a dated \`contractNote\` saying which fields may still change`));
       if (c.contract && !exists(repo, c.contract)) out.push(F('bar', file, at, `${c.id}: contract page ${c.contract} does not exist`));
+      out.push(...platformFindings(c, jobs, file, at));
       continue;
     }
-    if (c.maturity !== 'GA') continue;
+    if (c.maturity !== 'GA') { out.push(...platformFindings(c, jobs, file, at)); continue; }
     for (const k of ['contract', 'contractTest', 'gate', 'limits', 'since']) {
       if (!c[k]) out.push(F('bar', file, at, `${c.id}: GA requires \`${k}\` (the GA bar, docs/how-it-works/maturity-model.md)`));
     }
@@ -811,12 +825,7 @@ export function checkGaBar(reg, repo = REPO_DEFAULT) {
     if (c.gate && !gates.has(c.gate)) out.push(F('bar', file, at, `${c.id}: gate "${c.gate}" is not a check release-check.mjs evaluates`));
     const plats = c.platforms || [];
     if (!plats.length) out.push(F('bar', file, at, `${c.id}: GA requires \`platforms\` (os:job pairs)`));
-    for (const pl of plats) {
-      const m = /^([a-z]+):([A-Za-z0-9_-]+)$/.exec(pl);
-      if (!m || !GA_PLATFORMS.includes(m[1])) { out.push(F('bar', file, at, `${c.id}: platform "${pl}" must be os:job with os in ${GA_PLATFORMS.join(', ')}`)); continue; }
-      if (!jobs.has(m[2])) out.push(F('bar', file, at, `${c.id}: platform job "${m[2]}" is not a job in .github/workflows`));
-    }
-    if (plats.length && !plats.some(pl => pl.startsWith('linux:'))) out.push(F('bar', file, at, `${c.id}: GA needs a linux job`));
+    out.push(...platformFindings(c, jobs, file, at));
     if (c.limits) {
       const [page, anchor] = c.limits.split('#');
       if (!page || !anchor || !exists(repo, page)) out.push(F('bar', file, at, `${c.id}: limits must be an existing page#anchor, got "${c.limits}"`));

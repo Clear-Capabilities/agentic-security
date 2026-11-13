@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.195.32",
-    "bundleSha256": "27c30ed5314608be8e43f22e3dfc1f3d659f83a5bc9e280229c3dc172052107d",
-    "commit": "a9ce9129abf33863c18f3cbe921d78ca48b6a84b",
+    "engineVersion": "0.195.33",
+    "bundleSha256": "07baab5bcef9f52aff47e70a2cefffdab0e8d37c8aef0ca39a1cf63e5b0f45c4",
+    "commit": "cc3360604712b66b9269c9590c34387a707ed025",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-13T14:29:01.140Z",
+    "generatedAt": "2026-11-13T16:39:32.467Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -1000,7 +1000,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 276,
+    "n": 364,
     "d": 571
   },
   "taintRecall": {
@@ -2254,22 +2254,22 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.195.32",
-    "commit": "a9ce9129abf33863c18f3cbe921d78ca48b6a84b",
-    "bundleSha256": "27c30ed5314608be8e43f22e3dfc1f3d659f83a5bc9e280229c3dc172052107d",
+    "engineVersion": "0.195.33",
+    "commit": "cc3360604712b66b9269c9590c34387a707ed025",
+    "bundleSha256": "07baab5bcef9f52aff47e70a2cefffdab0e8d37c8aef0ca39a1cf63e5b0f45c4",
     "cleanMeasurement": true,
-    "currentEngineRealcodeVerdict": "passed",
-    "currentEngineRealcodeReason": "6 language(s) at or above their pre-registered floors",
+    "currentEngineRealcodeVerdict": "unmeasured",
+    "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",
     "approvedIndependentBaseline": "a72968195aa1",
     "identity": "the commit and bundle below identify exactly the tree that was measured",
-    "currentEngineIndependentAccuracy": "measured",
-    "currentEngineIndependentReason": "measured by run 83df9f624d98 on a clean commit; the figures are for the development and validation splits only",
+    "currentEngineIndependentAccuracy": "unmeasured",
+    "currentEngineIndependentReason": "the latest independent run (83df9f624d98) measured engine 0.195.32, not the engine above; it is a historical record",
     "independentRun": {
       "runId": "83df9f624d98",
       "engineVersion": "0.195.32",
       "measuredAt": "2026-11-13T05:56:54.413Z",
-      "comparableToCurrentEngine": true,
-      "historical": false,
+      "comparableToCurrentEngine": false,
+      "historical": true,
       "identity": {
         "sourceCommit": "688a873b2752578855d2fe4e2e60ea47c7f46272",
         "bundleSha256": "e134fd2c0bc9e4ee558bd90d11af4f7a9f56ba5783996954daa7be8bc4996eb6",

@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/ga-program-status@1",
-  "engineVersion": "0.195.32",
+  "engineVersion": "0.195.33",
   "program": {
     "baselineCapabilities": 36,
     "capabilitiesInLedger": 36,
@@ -12,10 +12,10 @@
   },
   "records": {
     "required": 253,
-    "passed": 84
+    "passed": 74
   },
   "realCodeAccuracy": {
-    "label": "current",
+    "label": "historical (not this engine)",
     "engineVersion": "0.195.32",
     "measuredAt": "2026-11-13T05:56:54.413Z",
     "sourceCommit": "688a873b2752578855d2fe4e2e60ea47c7f46272",
@@ -58,7 +58,7 @@
         "seed": 2259309968
       }
     },
-    "currentEngineIndependentAccuracy": "measured"
+    "currentEngineIndependentAccuracy": "unmeasured"
   },
   "surfaces": {
     "inventoried": 193,
@@ -169,8 +169,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "blocked",
+      "passed": 1,
       "required": 8,
       "records": [
         {
@@ -180,7 +180,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -190,7 +190,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -199,9 +199,9 @@
           "workstream": null,
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
-          "status": "passed",
-          "detail": "independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors",
-          "evidencePath": "bench/independent/runs/83df9f624d98/RESULT.json"
+          "status": "blocked",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
+          "evidencePath": null
         },
         {
           "id": "agentic-discovery:GA-01-001",
@@ -254,7 +254,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "agentic-discovery:REG-BAR: Preview row; the GA bar still needs platforms"
+      "nextAction": "agentic-discovery:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "context-intelligence",
@@ -272,8 +272,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "blocked",
+      "passed": 2,
       "required": 8,
       "records": [
         {
@@ -283,7 +283,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -293,7 +293,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -302,9 +302,9 @@
           "workstream": null,
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
-          "status": "passed",
-          "detail": "independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors",
-          "evidencePath": "bench/independent/runs/83df9f624d98/RESULT.json"
+          "status": "blocked",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
+          "evidencePath": null
         },
         {
           "id": "context-intelligence:GA-01-001",
@@ -357,7 +357,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms"
+      "nextAction": "context-intelligence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "language-depth-haskell-nix",
@@ -376,8 +376,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "blocked",
+      "passed": 1,
       "required": 8,
       "records": [
         {
@@ -387,7 +387,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -397,7 +397,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -406,9 +406,9 @@
           "workstream": null,
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
-          "status": "passed",
-          "detail": "independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors",
-          "evidencePath": "bench/independent/runs/83df9f624d98/RESULT.json"
+          "status": "blocked",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
+          "evidencePath": null
         },
         {
           "id": "language-depth-haskell-nix:GA-01-001",
@@ -461,7 +461,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+      "nextAction": "language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "model-validation",
@@ -479,8 +479,8 @@
         "GA-06",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "blocked",
+      "passed": 2,
       "required": 8,
       "records": [
         {
@@ -490,7 +490,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -500,7 +500,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -509,9 +509,9 @@
           "workstream": null,
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
-          "status": "passed",
-          "detail": "independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors",
-          "evidencePath": "bench/independent/runs/83df9f624d98/RESULT.json"
+          "status": "blocked",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
+          "evidencePath": null
         },
         {
           "id": "model-validation:GA-01-001",
@@ -564,7 +564,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "model-validation:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "rule-compiler",
@@ -594,7 +594,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -604,7 +604,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -678,7 +678,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms"
+      "nextAction": "rule-compiler:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "detector-spec-synthesis",
@@ -707,7 +707,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "detail": "Labs row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -717,7 +717,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -761,7 +761,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+      "nextAction": "detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "fleet-scan",
@@ -790,7 +790,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -800,7 +800,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -854,7 +854,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "fleet-scan:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "code-boundaries",
@@ -872,8 +872,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 5,
+      "status": "blocked",
+      "passed": 4,
       "required": 10,
       "records": [
         {
@@ -883,7 +883,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -893,7 +893,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -902,9 +902,9 @@
           "workstream": null,
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
-          "status": "passed",
-          "detail": "independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors",
-          "evidencePath": "bench/independent/runs/83df9f624d98/RESULT.json"
+          "status": "blocked",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
+          "evidencePath": null
         },
         {
           "id": "code-boundaries:GA-01-001",
@@ -977,7 +977,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms"
+      "nextAction": "code-boundaries:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "finding-provenance",
@@ -1006,7 +1006,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1016,7 +1016,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1080,7 +1080,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms"
+      "nextAction": "finding-provenance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "graph-precision",
@@ -1098,8 +1098,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "blocked",
+      "passed": 2,
       "required": 8,
       "records": [
         {
@@ -1109,7 +1109,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1119,7 +1119,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1128,9 +1128,9 @@
           "workstream": null,
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
-          "status": "passed",
-          "detail": "independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors",
-          "evidencePath": "bench/independent/runs/83df9f624d98/RESULT.json"
+          "status": "blocked",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
+          "evidencePath": null
         },
         {
           "id": "graph-precision:GA-01-001",
@@ -1183,7 +1183,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms"
+      "nextAction": "graph-precision:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "detection-and-response",
@@ -1213,7 +1213,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1223,7 +1223,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1287,7 +1287,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "detection-and-response:REG-BAR: Preview row; the GA bar still needs platforms"
+      "nextAction": "detection-and-response:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "local-models",
@@ -1316,7 +1316,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1326,7 +1326,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1390,7 +1390,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "local-models:REG-BAR: Preview row; the GA bar still needs platforms"
+      "nextAction": "local-models:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "compliance-evidence",
@@ -1419,7 +1419,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1429,7 +1429,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1473,7 +1473,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+      "nextAction": "compliance-evidence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "capability-enforcement",
@@ -1501,7 +1501,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "detail": "Labs row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1511,7 +1511,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1545,7 +1545,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+      "nextAction": "capability-enforcement:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "strategic-metrics",
@@ -1573,7 +1573,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1583,7 +1583,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1627,7 +1627,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "strategic-metrics:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "eval-lab",
@@ -1657,7 +1657,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1667,7 +1667,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1731,7 +1731,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "eval-lab:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "release-assurance",
@@ -1759,7 +1759,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1769,7 +1769,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1803,7 +1803,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "release-assurance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "deterministic-scan",
@@ -1821,8 +1821,8 @@
         "GA-04",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "blocked",
+      "passed": 2,
       "required": 7,
       "records": [
         {
@@ -1842,7 +1842,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1851,9 +1851,9 @@
           "workstream": null,
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
-          "status": "passed",
-          "detail": "independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors",
-          "evidencePath": "bench/independent/runs/83df9f624d98/RESULT.json"
+          "status": "blocked",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
+          "evidencePath": null
         },
         {
           "id": "deterministic-scan:GA-01-001",
@@ -1896,7 +1896,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "deterministic-scan:GA-01-001: owner unassigned"
+      "nextAction": "deterministic-scan:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)"
     },
     {
       "capabilityId": "dependency-risk",
@@ -1934,7 +1934,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -1986,8 +1986,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "blocked",
+      "passed": 2,
       "required": 7,
       "records": [
         {
@@ -2007,7 +2007,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2016,9 +2016,9 @@
           "workstream": null,
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
-          "status": "passed",
-          "detail": "independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors",
-          "evidencePath": "bench/independent/runs/83df9f624d98/RESULT.json"
+          "status": "blocked",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
+          "evidencePath": null
         },
         {
           "id": "taint-and-reachability:GA-01-001",
@@ -2061,7 +2061,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "taint-and-reachability:GA-01-001: owner unassigned"
+      "nextAction": "taint-and-reachability:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)"
     },
     {
       "capabilityId": "falsification",
@@ -2079,8 +2079,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "blocked",
+      "passed": 2,
       "required": 7,
       "records": [
         {
@@ -2100,7 +2100,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2109,9 +2109,9 @@
           "workstream": null,
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
-          "status": "passed",
-          "detail": "independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors",
-          "evidencePath": "bench/independent/runs/83df9f624d98/RESULT.json"
+          "status": "blocked",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
+          "evidencePath": null
         },
         {
           "id": "falsification:GA-01-001",
@@ -2154,7 +2154,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "falsification:GA-01-001: owner unassigned"
+      "nextAction": "falsification:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)"
     },
     {
       "capabilityId": "exploit-proof",
@@ -2192,7 +2192,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2244,8 +2244,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "blocked",
+      "passed": 2,
       "required": 7,
       "records": [
         {
@@ -2265,7 +2265,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2274,9 +2274,9 @@
           "workstream": null,
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
-          "status": "passed",
-          "detail": "independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors",
-          "evidencePath": "bench/independent/runs/83df9f624d98/RESULT.json"
+          "status": "blocked",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
+          "evidencePath": null
         },
         {
           "id": "root-cause-sweep:GA-01-001",
@@ -2319,7 +2319,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "root-cause-sweep:GA-01-001: owner unassigned"
+      "nextAction": "root-cause-sweep:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)"
     },
     {
       "capabilityId": "federation",
@@ -2358,7 +2358,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2441,7 +2441,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2524,7 +2524,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2608,7 +2608,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2701,7 +2701,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2785,7 +2785,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2877,7 +2877,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -2950,7 +2950,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3042,7 +3042,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3116,7 +3116,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3228,7 +3228,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3300,7 +3300,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3372,7 +3372,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "passed",
-          "detail": "clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146",
+          "detail": "clean measurement of 0.195.33 at cc3360604712, bundle 07baab5bcef9",
           "evidencePath": "docs/scorecard.json"
         },
         {
@@ -3614,51 +3614,51 @@
   "milestone": {
     "met": false,
     "reasons": [
-      "agentic-discovery: 2/8 acceptance records passed (in-progress); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs platforms",
+      "agentic-discovery: 1/8 acceptance records passed (blocked); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "agentic-discovery: owner unassigned (role security evaluation lead)",
-      "context-intelligence: 3/8 acceptance records passed (in-progress); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms",
+      "context-intelligence: 2/8 acceptance records passed (blocked); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "context-intelligence: owner unassigned (role security evaluation lead)",
-      "language-depth-haskell-nix: 2/8 acceptance records passed (in-progress); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "language-depth-haskell-nix: 1/8 acceptance records passed (blocked); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
-      "model-validation: 3/8 acceptance records passed (in-progress); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "model-validation: 2/8 acceptance records passed (blocked); next: model-validation:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "model-validation: owner unassigned (role security evaluation lead)",
-      "rule-compiler: 3/9 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms",
+      "rule-compiler: 3/9 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "rule-compiler: owner unassigned (role security evaluation lead)",
-      "detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself",
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
-      "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "fleet-scan: owner unassigned (role graph/analysis lead)",
-      "code-boundaries: 5/10 acceptance records passed (in-progress); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms",
+      "code-boundaries: 4/10 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "code-boundaries: owner unassigned (role security evaluation lead)",
-      "finding-provenance: 3/8 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms",
+      "finding-provenance: 3/8 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "finding-provenance: owner unassigned (role security evaluation lead)",
-      "graph-precision: 3/8 acceptance records passed (in-progress); next: graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms",
+      "graph-precision: 2/8 acceptance records passed (blocked); next: graph-precision:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "graph-precision: owner unassigned (role security evaluation lead)",
-      "detection-and-response: 2/8 acceptance records passed (in-progress); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs platforms",
+      "detection-and-response: 2/8 acceptance records passed (in-progress); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "detection-and-response: owner unassigned (role analysis/platform engineer)",
-      "local-models: 3/8 acceptance records passed (in-progress); next: local-models:REG-BAR: Preview row; the GA bar still needs platforms",
+      "local-models: 3/8 acceptance records passed (in-progress); next: local-models:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "local-models: owner unassigned (role inference/evaluation engineer)",
-      "compliance-evidence: 1/6 acceptance records passed (in-progress); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "compliance-evidence: 1/6 acceptance records passed (in-progress); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "compliance-evidence: owner unassigned (role language/supply-chain lead)",
-      "capability-enforcement: 1/5 acceptance records passed (in-progress); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "capability-enforcement: 1/5 acceptance records passed (in-progress); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself",
       "capability-enforcement: owner unassigned (role platform security engineer)",
-      "strategic-metrics: 2/6 acceptance records passed (in-progress); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "strategic-metrics: 2/6 acceptance records passed (in-progress); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "strategic-metrics: owner unassigned (role assurance engineer)",
-      "eval-lab: 2/8 acceptance records passed (in-progress); next: eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "eval-lab: 2/8 acceptance records passed (in-progress); next: eval-lab:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "eval-lab: owner unassigned (role security evaluation lead)",
-      "release-assurance: 1/5 acceptance records passed (in-progress); next: release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "release-assurance: 1/5 acceptance records passed (in-progress); next: release-assurance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "release-assurance: owner unassigned (role assurance engineer)",
-      "deterministic-scan: 3/7 acceptance records passed (in-progress); next: deterministic-scan:GA-01-001: owner unassigned",
+      "deterministic-scan: 2/7 acceptance records passed (blocked); next: deterministic-scan:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
       "deterministic-scan: owner unassigned (role security evaluation lead)",
       "dependency-risk: 2/5 acceptance records passed (in-progress); next: dependency-risk:GA-01-001: owner unassigned",
       "dependency-risk: owner unassigned (role language/supply-chain lead)",
-      "taint-and-reachability: 3/7 acceptance records passed (in-progress); next: taint-and-reachability:GA-01-001: owner unassigned",
+      "taint-and-reachability: 2/7 acceptance records passed (blocked); next: taint-and-reachability:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
       "taint-and-reachability: owner unassigned (role security evaluation lead)",
-      "falsification: 3/7 acceptance records passed (in-progress); next: falsification:GA-01-001: owner unassigned",
+      "falsification: 2/7 acceptance records passed (blocked); next: falsification:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
       "falsification: owner unassigned (role security evaluation lead)",
       "exploit-proof: 2/5 acceptance records passed (in-progress); next: exploit-proof:GA-01-001: owner unassigned",
       "exploit-proof: owner unassigned (role platform security engineer)",
-      "root-cause-sweep: 3/7 acceptance records passed (in-progress); next: root-cause-sweep:GA-01-001: owner unassigned",
+      "root-cause-sweep: 2/7 acceptance records passed (blocked); next: root-cause-sweep:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.33 (historical)",
       "root-cause-sweep: owner unassigned (role security evaluation lead)",
       "federation: 2/6 acceptance records passed (in-progress); next: federation:GA-01-001: owner unassigned",
       "federation: owner unassigned (role graph/analysis lead)",
@@ -3695,7 +3695,8 @@
       "subcapability state-governance (deterministic-scan): 0/1 passed (not-started)",
       "subcapability economics-and-memory (strategic-metrics): 0/1 passed (not-started)",
       "subcapability operator-modules (graph-precision): 0/1 passed (not-started)",
-      "subcapability product-shell (deterministic-scan): 0/1 passed (not-started)"
+      "subcapability product-shell (deterministic-scan): 0/1 passed (not-started)",
+      "no current-engine independent accuracy record (the scorecard says unmeasured; the independent record is historical)"
     ]
   }
 }

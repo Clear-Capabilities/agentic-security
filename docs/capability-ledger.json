@@ -1252,7 +1252,11 @@
         "docs/reference/code-boundaries-contract.md",
         "docs/reference/strategic-metrics.md",
         "docs/reference/exploit-proof-contract.md",
-        "docs/reference/artifact-provenance-contract.md"
+        "docs/reference/artifact-provenance-contract.md",
+        "docs/reference/language-depth-contract.md",
+        "docs/reference/compliance-evidence-contract.md",
+        "docs/reference/detector-spec-synthesis-contract.md",
+        "docs/reference/capability-enforcement-contract.md"
       ],
       "haskell": {
         "applicability": "applicable",

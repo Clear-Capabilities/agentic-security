@@ -547,6 +547,13 @@ test('GA bar: platforms need os:job pairs, a job that exists, and a linux job', 
   assert.ok(barFindings(barRepo({}, swap('[macos:determinism-attest]'))).some(x => /needs a linux job/.test(x.message)));
 });
 
+test('GA bar: platforms a Preview row declares ahead of promotion are held to the same rule', () => {
+  const preview = (pl) => BAR_CAP().replace('maturity: GA', 'maturity: Preview').replace('[linux:test-shard, macos:determinism-attest]', pl);
+  assert.deepEqual(barFindings(barRepo({}, preview('[linux:test-shard]'))), []);
+  assert.ok(barFindings(barRepo({}, preview('[linux:no-such-job]'))).some(x => /not a job in \.github\/workflows/.test(x.message)));
+  assert.ok(barFindings(barRepo({}, preview('[test-shard]'))).some(x => /must be os:job/.test(x.message)));
+});
+
 test('GA bar: a limits anchor that is not a heading, or has no verified marker, fails', () => {
   assert.ok(barFindings(barRepo({}, BAR_CAP().replace('#what-alpha-does-not-do', '#nope'))).some(x => /is not a heading/.test(x.message)));
   const noMarker = { 'docs/alpha.md': '# Alpha\n\n## What alpha does not do\n\n- a limit\n' };
@@ -594,10 +601,11 @@ test('GA bar: the real registry meets its own bar, and every GA capability names
   for (const c of ga) for (const k of ['contract', 'contractTest', 'gate', 'limits', 'since']) assert.ok(c[k], `${c.id} lacks ${k}`);
 });
 
-test('contract-conformance runs exactly the tests the registry names for GA and Preview, and none for Labs', async () => {
+test('contract-conformance runs exactly the tests the registry names, a Labs row that names one included, and none for Roadmap', async () => {
   const { contractTests } = await import('../../scripts/check-ga-contracts.mjs');
-  const reg = parseRegistry(registryYaml(BAR_CAP() + BAR_CAP().replace('alpha-scan', 'lab-thing').replace('maturity: GA', 'maturity: Labs').replace('scanner/test/alpha.test.js', 'scanner/test/lab.test.js')));
-  assert.deepEqual(contractTests(reg), ['scanner/test/alpha.test.js']);
+  const row = (id, maturity, t) => BAR_CAP().replace('alpha-scan', id).replace('maturity: GA', `maturity: ${maturity}`).replace('scanner/test/alpha.test.js', t);
+  const reg = parseRegistry(registryYaml(BAR_CAP() + row('lab-thing', 'Labs', 'scanner/test/lab.test.js') + row('road-thing', 'Roadmap', 'scanner/test/road.test.js')));
+  assert.deepEqual(contractTests(reg), ['scanner/test/alpha.test.js', 'scanner/test/lab.test.js']);
   assert.deepEqual(contractTests({ capabilities: [] }), []);
   const real = contractTests(loadRegistry(REPO));
   assert.ok(real.length >= 12);

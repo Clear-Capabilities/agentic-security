@@ -9,18 +9,18 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.195.32 |
-| Bundle SHA-256 | `27c30ed5314608be8e43f22e3dfc1f3d659f83a5bc9e280229c3dc172052107d` |
-| Commit | `a9ce9129abf33863c18f3cbe921d78ca48b6a84b` |
+| Engine version | 0.195.33 |
+| Bundle SHA-256 | `07baab5bcef9f52aff47e70a2cefffdab0e8d37c8aef0ca39a1cf63e5b0f45c4` |
+| Commit | `cc3360604712b66b9269c9590c34387a707ed025` |
 | Worktree at measurement time | clean |
 | Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
-| Independent accuracy of THIS engine | measured on a clean commit: measured by run 83df9f624d98 on a clean commit; the figures are for the development and validation splits only |
-| Real-code release verdict (approved floors of run a72968195aa1) | passed: 6 language(s) at or above their pre-registered floors |
+| Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
+| Real-code release verdict (approved floors of run a72968195aa1) | unmeasured: no release-tier real-code verdict for this engine |
 | Node | v24.20.0 |
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-13T14:29:01.140Z |
+| Generated (UTC) | 2026-11-13T16:39:32.467Z |
 
 ## What these numbers are, and what they are not
 
@@ -237,7 +237,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 276/571 (48.3%) |
+| 364/571 (63.7%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -341,7 +341,7 @@ Tools present where this was measured: ghc=true, ghcVersion=9.4.8, ghcRecorded=9
 - A text parameter of an exported Haskell function is a source, and the finding says which kind. When the function returns a web-framework handler value (a Scotty action, a Yesod handler or widget, a Servant handler, a WAI application) the source is labelled request input, because the framework supplies the value from the request. For any other export it stays the weaker "caller-controlled" label (the callers of a library function are not known to be clients). A project record handed to an exported function is not a taint source at all (its fields are used by the data-flow lineage view only).
 - The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules) are reported beside it, with intervals over shapes (two near-identical cases per shape). From 2026-10-26 this split is a DEVELOPMENT set: its failures were read and the engine was changed to fix their causes, so the column is a regression result and says nothing about code shapes the engine was not fitted to. A generalisation claim needs a new unseen set that no engine change has been motivated by. The earlier unseen-v1 and unseen-v2 sets became the development sets shape-dev and shape-dev-2 the same way.
 
-## Independent accuracy of this engine (run 83df9f624d98)
+## Independent run 83df9f624d98: historical record (engine 0.195.32)
 
 This is the independent population, upstream code labelled by public advisories, run on the engine below at a named commit. It is a different
 instrument from the curated regression net above and the two figures are never combined. Only the **localized** definition (a matching finding landed on code the
@@ -349,7 +349,7 @@ fix changed) is a claim; it is reported with numerator and denominator.
 
 | Field | Value |
 | --- | --- |
-| Engine | 0.195.32 |
+| Engine | 0.195.32 (NOT the engine this scorecard describes) |
 | Measured at commit | `688a873b2752578855d2fe4e2e60ea47c7f46272` |
 | Bundle SHA-256 | `e134fd2c0bc9e4ee558bd90d11af4f7a9f56ba5783996954daa7be8bc4996eb6` (sidecar matches) |
 | Measurement | valid: clean tree, bundle matches its digest |
@@ -379,7 +379,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.195.32), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.195.33), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both

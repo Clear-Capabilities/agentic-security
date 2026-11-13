@@ -110,6 +110,7 @@ capabilities:
     gate: contract-conformance
     limits: docs/reference/agentic-discovery-contract.md#what-this-does-not-do
     since: 0.195.31
+    platforms: [linux:test-shard]
     contractNote: Report and coverage fields are frozen at version 1; candidates are model proposals, and no precision for them is published because the small hosted model produced none the gates accepted; reviewed 2026-10-20.
     establishes: Model-proposed candidate weaknesses that no rule encodes, each routed back through the deterministic engine before it is reported. Advisory; needs a configured model endpoint.
     docs:
@@ -126,6 +127,8 @@ capabilities:
     contractTest: scanner/test/contracts/code-boundaries.contract.test.js
     limits: docs/reference/code-boundaries-contract.md#limits
     since: 0.195.26
+    gate: contract-conformance
+    platforms: [linux:test-shard]
     contractNote: The manifest shape and the citation refusals are frozen on the contract page since 0.195.26; the command flags may still tighten; reviewed 2026-11-04.
     establishes: Per-entry-point, hash-bound context bundles and citation-checked focused reviews. Opt-in.
     docs:
@@ -137,7 +140,13 @@ capabilities:
     name: Haskell and Nix/NixOS analysis
     lifecycleStages: [discover, corroborate]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/language-depth-contract.md
+    contractTest: scanner/test/contracts/language-depth.contract.test.js
+    contractNote: Finding metadata, producer registration, coverage outcomes and the support registry shape are frozen at contract version 1; command flags may still tighten; reviewed 2026-11-13.
+    gate: contract-conformance
+    limits: docs/reference/language-depth-contract.md#what-this-does-not-do
+    since: 0.195.10
+    platforms: [linux:test-shard]
     establishes: Static findings for Haskell and Nix/NixOS, with support measured per capability on a synthetic corpus and some legs honestly blocked.
     docs:
       - docs/language-support.md
@@ -187,6 +196,10 @@ capabilities:
     maturity: Preview
     contract: docs/reference/model-validation-contract.md
     contractTest: scanner/test/contracts/model-validation.contract.test.js
+    gate: contract-conformance
+    limits: docs/reference/model-validation-contract.md#what-this-does-not-do
+    since: 0.195.31
+    platforms: [linux:test-shard]
     contractNote: Finding fields, verdicts and statuses are frozen at version 1; the decision logic is tested with recorded replies and no precision is published for the model's own judgments; reviewed 2026-10-20.
     establishes: A second-opinion verdict on a finding, recorded separately from the deterministic evidence. A no-op unless a model endpoint is configured.
     docs:
@@ -220,6 +233,7 @@ capabilities:
     gate: contract-conformance
     limits: docs/reference/rule-compiler-contract.md#what-the-compiler-does-not-do
     since: 0.195.27
+    platforms: [linux:test-shard]
     establishes: Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence.
     docs:
       - docs/guides/rule-compiler.md
@@ -230,12 +244,20 @@ capabilities:
     name: Detector spec synthesis
     lifecycleStages: [learn]
     maturity: Labs
+    contract: docs/reference/detector-spec-synthesis-contract.md
+    contractTest: scanner/test/contracts/detector-spec-synthesis.contract.test.js
+    contractNote: The proposal fields, the model reply keys, the value limits and the exit codes are frozen at version 1; a proposal is never read by any rule loader; reviewed 2026-11-13.
+    gate: contract-conformance
+    limits: docs/reference/detector-spec-synthesis-contract.md#what-this-does-not-do
+    since: 0.195.22
+    platforms: [linux:test-shard]
     establishes: A detector-spec proposal drafted from sample vulnerable files, written for a human to review and never incorporated automatically.
     docs:
       - commands/labs.md
       - docs/learn/README.md
     evidence:
       - commands/labs.md
+      - scanner/src/discovery/detector-spec-synthesis.js
 
   - id: security-learning-rate
     name: Security learning rate metric
@@ -270,6 +292,10 @@ capabilities:
     maturity: Preview
     contract: docs/reference/fleet-contract.md
     contractTest: scanner/test/contracts/fleet.contract.test.js
+    gate: contract-conformance
+    limits: docs/reference/fleet-contract.md#what-fleet-does-not-do
+    since: 0.195.23
+    platforms: [linux:test-shard]
     contractNote: Manifest keys and result shapes are frozen at version 1; scheduling is local to one machine; reviewed 2026-10-19.
     establishes: Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue.
     docs:
@@ -333,6 +359,8 @@ capabilities:
     contractTest: scanner/test/contracts/code-boundaries.contract.test.js
     limits: docs/reference/code-boundaries-contract.md#limits
     since: 0.195.26
+    gate: contract-conformance
+    platforms: [linux:test-shard]
     contractNote: Artifact shapes and refusals are frozen on the contract page since 0.195.26; the command flags may still tighten; reviewed 2026-11-04.
     establishes: Field-level sources, sinks, protection state, sensitive-data classes and findings as one signed graph, browsable locally. Opt-in at scan time.
     docs:
@@ -369,6 +397,7 @@ capabilities:
     gate: provenance-gate
     limits: docs/reference/finding-provenance-contract.md#limits
     since: 0.195.27
+    platforms: [linux:test-shard]
     establishes: Which commit introduced a finding, resolved from Git history, with the resolution quality stated.
     docs:
       - docs/guides/finding-provenance.md
@@ -384,6 +413,8 @@ capabilities:
     contractTest: scanner/test/contracts/code-boundaries.contract.test.js
     limits: docs/reference/code-boundaries-contract.md#limits
     since: 0.195.26
+    gate: contract-conformance
+    platforms: [linux:test-shard]
     contractNote: Each part is off by default or additive; fields and options may still tighten before they are frozen; reviewed 2026-10-26. Measured targets not yet met are listed in the establishes text and in the measured-results section of the page.
     establishes: Whether a graph analysis finished, and how far its answer reaches. Adds completion status, recursion handling, call-site correlation, demand queries, path conditions, incremental invalidation, boundary contracts, control-placement planning and replayable witness bundles, each with its limits stated. The typed graph view, boundary contracts, demand sink queries, control-placement planning and witness bundles are reachable from the CLI (`dataflow view|contracts|sink-query|plan-cuts`, `witness build|verify`), each opt-in and each reporting a completion status. Targets not yet met: incremental analysis is 2.5x and 2.4x on the two synthetic projects against a 3x target, 75 of 982 sink sites still take the full path in demand queries, the multi-service fixture finds 3 of 8 labeled positives, the optional z3 backend is not used by a default scan, and the precision figures come from a development sample; on an independent sample of the whole default scan the measured precision was 11.7% for JavaScript and TypeScript and 6.8% for Nix (one LLM labeler, wide intervals; bench/dag/independent).
     docs:
@@ -480,6 +511,7 @@ capabilities:
     gate: contract-conformance
     limits: docs/reference/dnr-contract.md#what-this-does-not-do
     since: 0.195.31
+    platforms: [linux:test-shard]
     contractNote: Record schemas and exit codes are frozen at version 1; renderers for the three newest targets (Elastic, YARA-L, Datadog) were not run against a live product; reviewed 2026-10-19.
     establishes: A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection.
     docs:
@@ -590,6 +622,7 @@ capabilities:
     gate: contract-conformance
     limits: docs/reference/local-models-contract.md#what-this-does-not-do
     since: 0.195.31
+    platforms: [linux:test-shard]
     contractNote: The loopback rule, configuration shapes and error codes are frozen at version 1; the smallest supported model is exercised in a hosted job but is not evidence of what a larger model does; reviewed 2026-10-20.
     establishes: Validation, fix proposal and hunt against a model on loopback, refusing non-loopback endpoints and never falling back to a cloud provider.
     docs:
@@ -618,7 +651,13 @@ capabilities:
     name: Compliance control evidence
     lifecycleStages: [trace]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/compliance-evidence-contract.md
+    contractTest: scanner/test/contracts/compliance-evidence.contract.test.js
+    contractNote: The three status vocabularies, the report and truth-model fields and the OSCAL reduction are frozen at version 1; command flags may still tighten; reviewed 2026-11-13.
+    gate: contract-conformance
+    limits: docs/reference/compliance-evidence-contract.md#what-this-does-not-do
+    since: 0.173.0
+    platforms: [linux:test-shard]
     establishes: Automated technical-control evidence mapped to bundled frameworks, with unassessed and manual controls kept out of the satisfied count. Not a certification.
     docs:
       - docs/guides/compliance.md
@@ -632,6 +671,13 @@ capabilities:
     name: Runner-level capability enforcement
     lifecycleStages: [cross-cutting]
     maturity: Labs
+    contract: docs/reference/capability-enforcement-contract.md
+    contractTest: scanner/test/contracts/capability-enforcement.contract.test.js
+    contractNote: The manifest schema 1.0.0, its refusal codes, the decision record, the reason codes and the per-platform statements are frozen; reviewed 2026-11-13.
+    gate: contract-conformance
+    limits: docs/reference/capability-enforcement-contract.md#what-this-does-not-do
+    since: 0.165.0
+    platforms: [linux:test-shard]
     establishes: Filesystem, command and network limits enforced by the task runner. Off by default and operator-only; Linux is partially verified.
     docs:
       - docs/trust/agent-threat-model.md
@@ -645,6 +691,10 @@ capabilities:
     maturity: Preview
     contract: docs/reference/strategic-metrics.md
     contractTest: scanner/test/contracts/strategic-metrics.contract.test.js
+    gate: contract-conformance
+    limits: docs/reference/strategic-metrics.md#what-these-metrics-do-not-do
+    since: 0.195.23
+    platforms: [linux:test-shard]
     contractNote: Report schema version 1 is frozen; the three figures describe one scan and the recorded fix attempts, and the Security Learning Rate stays unmeasured; reviewed 2026-10-19.
     establishes: Assurance Coverage, Evidence Conversion and Verified Remediation Rate for the last scan and the recorded fix attempts, each with its numerator, denominator and basis. The Security Learning Rate is reported as not measured.
     docs:
@@ -659,6 +709,10 @@ capabilities:
     maturity: Preview
     contract: docs/reference/eval-lab-report.md
     contractTest: scanner/test/contracts/eval-lab-report.contract.test.js
+    gate: contract-conformance
+    limits: docs/reference/eval-lab-report.md#what-this-does-not-do
+    since: 0.182.0
+    platforms: [linux:test-shard]
     contractNote: Report schema version 1 is frozen; the SARD integration is not built by design; reviewed 2026-10-19.
     establishes: A measured comparison of a deterministic baseline and any number of models on detection, exploit proof, remediation, cost, latency and repeatability, and routing of each task to a model. Only a local Ollama server has a built-in adapter, tested against a stand-in.
     docs:
@@ -672,6 +726,10 @@ capabilities:
     maturity: Preview
     contract: docs/reference/release-assurance-contract.md
     contractTest: scanner/test/contracts/release-assurance.contract.test.js
+    gate: contract-conformance
+    limits: docs/reference/release-assurance-contract.md#what-release-assurance-does-not-do
+    since: 0.195.30
+    platforms: [linux:test-shard]
     contractNote: Package schema 1.0.0 and verdict reason codes are frozen; the signing key is the holder own; reviewed 2026-10-19.
     establishes: A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; `release-package build` assembles the package from the last scan, and the independent verifier checks it offline.
     docs:
