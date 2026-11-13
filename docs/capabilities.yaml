@@ -110,6 +110,7 @@ capabilities:
     gate: contract-conformance
     limits: docs/reference/agentic-discovery-contract.md#what-this-does-not-do
     since: 0.195.31
+    platforms: [linux:test-shard]
     contractNote: Report and coverage fields are frozen at version 1; candidates are model proposals, and no precision for them is published because the small hosted model produced none the gates accepted; reviewed 2026-10-20.
     establishes: Model-proposed candidate weaknesses that no rule encodes, each routed back through the deterministic engine before it is reported. Advisory; needs a configured model endpoint.
     docs:
@@ -220,6 +221,7 @@ capabilities:
     gate: contract-conformance
     limits: docs/reference/rule-compiler-contract.md#what-the-compiler-does-not-do
     since: 0.195.27
+    platforms: [linux:test-shard]
     establishes: Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence.
     docs:
       - docs/guides/rule-compiler.md
@@ -369,6 +371,7 @@ capabilities:
     gate: provenance-gate
     limits: docs/reference/finding-provenance-contract.md#limits
     since: 0.195.27
+    platforms: [linux:test-shard]
     establishes: Which commit introduced a finding, resolved from Git history, with the resolution quality stated.
     docs:
       - docs/guides/finding-provenance.md
@@ -480,6 +483,7 @@ capabilities:
     gate: contract-conformance
     limits: docs/reference/dnr-contract.md#what-this-does-not-do
     since: 0.195.31
+    platforms: [linux:test-shard]
     contractNote: Record schemas and exit codes are frozen at version 1; renderers for the three newest targets (Elastic, YARA-L, Datadog) were not run against a live product; reviewed 2026-10-19.
     establishes: A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection.
     docs:
@@ -590,6 +594,7 @@ capabilities:
     gate: contract-conformance
     limits: docs/reference/local-models-contract.md#what-this-does-not-do
     since: 0.195.31
+    platforms: [linux:test-shard]
     contractNote: The loopback rule, configuration shapes and error codes are frozen at version 1; the smallest supported model is exercised in a hosted job but is not evidence of what a larger model does; reviewed 2026-10-20.
     establishes: Validation, fix proposal and hunt against a model on loopback, refusing non-loopback endpoints and never falling back to a cloud provider.
     docs:

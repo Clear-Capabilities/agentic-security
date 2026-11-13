@@ -26,18 +26,18 @@ Status is the rollup of the acceptance records: `passed` only when every require
 
 | Capability | Maturity | Owner | Status | Passed / required | Next action |
 |---|---|---|---|---|---|
-| `agentic-discovery` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | agentic-discovery:REG-BAR: Preview row; the GA bar still needs platforms |
+| `agentic-discovery` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | agentic-discovery:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `context-intelligence` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 8 | context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms |
 | `language-depth-haskell-nix` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | `model-validation` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 8 | model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
-| `rule-compiler` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 9 | rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms |
+| `rule-compiler` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 9 | rule-compiler:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `detector-spec-synthesis` | Labs | unassigned (inference/evaluation engineer) | in-progress | 1 / 6 | detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | `fleet-scan` | Preview | unassigned (graph/analysis lead) | in-progress | 2 / 7 | fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
 | `code-boundaries` | Preview | unassigned (security evaluation lead) | in-progress | 5 / 10 | code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms |
-| `finding-provenance` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 8 | finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms |
+| `finding-provenance` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 8 | finding-provenance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `graph-precision` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 8 | graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms |
-| `detection-and-response` | Preview | unassigned (analysis/platform engineer) | in-progress | 2 / 8 | detection-and-response:REG-BAR: Preview row; the GA bar still needs platforms |
-| `local-models` | Preview | unassigned (inference/evaluation engineer) | in-progress | 3 / 8 | local-models:REG-BAR: Preview row; the GA bar still needs platforms |
+| `detection-and-response` | Preview | unassigned (analysis/platform engineer) | in-progress | 2 / 8 | detection-and-response:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
+| `local-models` | Preview | unassigned (inference/evaluation engineer) | in-progress | 3 / 8 | local-models:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `compliance-evidence` | Preview | unassigned (language/supply-chain lead) | in-progress | 1 / 6 | compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | `capability-enforcement` | Labs | unassigned (platform security engineer) | in-progress | 1 / 5 | capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | `strategic-metrics` | Preview | unassigned (assurance engineer) | in-progress | 2 / 6 | strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms |
@@ -103,7 +103,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| agentic-discovery:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
+| agentic-discovery:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | agentic-discovery:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | agentic-discovery:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | agentic-discovery:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
@@ -155,7 +155,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| rule-compiler:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
+| rule-compiler:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | rule-compiler:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | rule-compiler:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | rule-compiler:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -207,7 +207,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| finding-provenance:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
+| finding-provenance:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | finding-provenance:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | finding-provenance:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | finding-provenance:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -233,7 +233,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| detection-and-response:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
+| detection-and-response:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | detection-and-response:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | detection-and-response:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | detection-and-response:GA-05-001 | manual | GA-05 | not-started | depends on the GA-02 benchmarks |
@@ -246,7 +246,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| local-models:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
+| local-models:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | local-models:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | local-models:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | local-models:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
@@ -584,7 +584,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 ## Milestone reasons
 
-- agentic-discovery: 2/8 acceptance records passed (in-progress); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs platforms
+- agentic-discovery: 2/8 acceptance records passed (in-progress); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - agentic-discovery: owner unassigned (role security evaluation lead)
 - context-intelligence: 3/8 acceptance records passed (in-progress); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms
 - context-intelligence: owner unassigned (role security evaluation lead)
@@ -592,7 +592,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 - language-depth-haskell-nix: owner unassigned (role security evaluation lead)
 - model-validation: 3/8 acceptance records passed (in-progress); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms
 - model-validation: owner unassigned (role security evaluation lead)
-- rule-compiler: 3/9 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs platforms
+- rule-compiler: 3/9 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - rule-compiler: owner unassigned (role security evaluation lead)
 - detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms
 - detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)
@@ -600,13 +600,13 @@ Mechanical records are computed from committed artifacts; manual records carry t
 - fleet-scan: owner unassigned (role graph/analysis lead)
 - code-boundaries: 5/10 acceptance records passed (in-progress); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms
 - code-boundaries: owner unassigned (role security evaluation lead)
-- finding-provenance: 3/8 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs platforms
+- finding-provenance: 3/8 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - finding-provenance: owner unassigned (role security evaluation lead)
 - graph-precision: 3/8 acceptance records passed (in-progress); next: graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms
 - graph-precision: owner unassigned (role security evaluation lead)
-- detection-and-response: 2/8 acceptance records passed (in-progress); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs platforms
+- detection-and-response: 2/8 acceptance records passed (in-progress); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - detection-and-response: owner unassigned (role analysis/platform engineer)
-- local-models: 3/8 acceptance records passed (in-progress); next: local-models:REG-BAR: Preview row; the GA bar still needs platforms
+- local-models: 3/8 acceptance records passed (in-progress); next: local-models:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - local-models: owner unassigned (role inference/evaluation engineer)
 - compliance-evidence: 1/6 acceptance records passed (in-progress); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms
 - compliance-evidence: owner unassigned (role language/supply-chain lead)
