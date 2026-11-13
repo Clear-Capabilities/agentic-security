@@ -547,6 +547,13 @@ test('GA bar: platforms need os:job pairs, a job that exists, and a linux job', 
   assert.ok(barFindings(barRepo({}, swap('[macos:determinism-attest]'))).some(x => /needs a linux job/.test(x.message)));
 });
 
+test('GA bar: platforms a Preview row declares ahead of promotion are held to the same rule', () => {
+  const preview = (pl) => BAR_CAP().replace('maturity: GA', 'maturity: Preview').replace('[linux:test-shard, macos:determinism-attest]', pl);
+  assert.deepEqual(barFindings(barRepo({}, preview('[linux:test-shard]'))), []);
+  assert.ok(barFindings(barRepo({}, preview('[linux:no-such-job]'))).some(x => /not a job in \.github\/workflows/.test(x.message)));
+  assert.ok(barFindings(barRepo({}, preview('[test-shard]'))).some(x => /must be os:job/.test(x.message)));
+});
+
 test('GA bar: a limits anchor that is not a heading, or has no verified marker, fails', () => {
   assert.ok(barFindings(barRepo({}, BAR_CAP().replace('#what-alpha-does-not-do', '#nope'))).some(x => /is not a heading/.test(x.message)));
   const noMarker = { 'docs/alpha.md': '# Alpha\n\n## What alpha does not do\n\n- a limit\n' };
