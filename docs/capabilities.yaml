@@ -127,6 +127,8 @@ capabilities:
     contractTest: scanner/test/contracts/code-boundaries.contract.test.js
     limits: docs/reference/code-boundaries-contract.md#limits
     since: 0.195.26
+    gate: contract-conformance
+    platforms: [linux:test-shard]
     contractNote: The manifest shape and the citation refusals are frozen on the contract page since 0.195.26; the command flags may still tighten; reviewed 2026-11-04.
     establishes: Per-entry-point, hash-bound context bundles and citation-checked focused reviews. Opt-in.
     docs:
@@ -335,6 +337,8 @@ capabilities:
     contractTest: scanner/test/contracts/code-boundaries.contract.test.js
     limits: docs/reference/code-boundaries-contract.md#limits
     since: 0.195.26
+    gate: contract-conformance
+    platforms: [linux:test-shard]
     contractNote: Artifact shapes and refusals are frozen on the contract page since 0.195.26; the command flags may still tighten; reviewed 2026-11-04.
     establishes: Field-level sources, sinks, protection state, sensitive-data classes and findings as one signed graph, browsable locally. Opt-in at scan time.
     docs:
@@ -387,6 +391,8 @@ capabilities:
     contractTest: scanner/test/contracts/code-boundaries.contract.test.js
     limits: docs/reference/code-boundaries-contract.md#limits
     since: 0.195.26
+    gate: contract-conformance
+    platforms: [linux:test-shard]
     contractNote: Each part is off by default or additive; fields and options may still tighten before they are frozen; reviewed 2026-10-26. Measured targets not yet met are listed in the establishes text and in the measured-results section of the page.
     establishes: Whether a graph analysis finished, and how far its answer reaches. Adds completion status, recursion handling, call-site correlation, demand queries, path conditions, incremental invalidation, boundary contracts, control-placement planning and replayable witness bundles, each with its limits stated. The typed graph view, boundary contracts, demand sink queries, control-placement planning and witness bundles are reachable from the CLI (`dataflow view|contracts|sink-query|plan-cuts`, `witness build|verify`), each opt-in and each reporting a completion status. Targets not yet met: incremental analysis is 2.5x and 2.4x on the two synthetic projects against a 3x target, 75 of 982 sink sites still take the full path in demand queries, the multi-service fixture finds 3 of 8 labeled positives, the optional z3 backend is not used by a default scan, and the precision figures come from a development sample; on an independent sample of the whole default scan the measured precision was 11.7% for JavaScript and TypeScript and 6.8% for Nix (one LLM labeler, wide intervals; bench/dag/independent).
     docs:

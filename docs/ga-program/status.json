@@ -283,7 +283,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -357,7 +357,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms"
+      "nextAction": "context-intelligence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "language-depth-haskell-nix",
@@ -883,7 +883,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -977,7 +977,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms"
+      "nextAction": "code-boundaries:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "finding-provenance",
@@ -1109,7 +1109,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1183,7 +1183,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms"
+      "nextAction": "graph-precision:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "detection-and-response",
@@ -3616,7 +3616,7 @@
     "reasons": [
       "agentic-discovery: 2/8 acceptance records passed (in-progress); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "agentic-discovery: owner unassigned (role security evaluation lead)",
-      "context-intelligence: 3/8 acceptance records passed (in-progress); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs gate, platforms",
+      "context-intelligence: 3/8 acceptance records passed (in-progress); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "context-intelligence: owner unassigned (role security evaluation lead)",
       "language-depth-haskell-nix: 2/8 acceptance records passed (in-progress); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
@@ -3628,11 +3628,11 @@
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
       "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "fleet-scan: owner unassigned (role graph/analysis lead)",
-      "code-boundaries: 5/10 acceptance records passed (in-progress); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs gate, platforms",
+      "code-boundaries: 5/10 acceptance records passed (in-progress); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "code-boundaries: owner unassigned (role security evaluation lead)",
       "finding-provenance: 3/8 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "finding-provenance: owner unassigned (role security evaluation lead)",
-      "graph-precision: 3/8 acceptance records passed (in-progress); next: graph-precision:REG-BAR: Preview row; the GA bar still needs gate, platforms",
+      "graph-precision: 3/8 acceptance records passed (in-progress); next: graph-precision:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "graph-precision: owner unassigned (role security evaluation lead)",
       "detection-and-response: 2/8 acceptance records passed (in-progress); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "detection-and-response: owner unassigned (role analysis/platform engineer)",
