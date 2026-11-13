@@ -490,7 +490,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -564,7 +564,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "model-validation:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "rule-compiler",
@@ -790,7 +790,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -854,7 +854,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "fleet-scan:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "code-boundaries",
@@ -1573,7 +1573,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1627,7 +1627,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "strategic-metrics:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "eval-lab",
@@ -1657,7 +1657,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1731,7 +1731,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "eval-lab:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "release-assurance",
@@ -1759,7 +1759,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1803,7 +1803,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms"
+      "nextAction": "release-assurance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "deterministic-scan",
@@ -3620,13 +3620,13 @@
       "context-intelligence: owner unassigned (role security evaluation lead)",
       "language-depth-haskell-nix: 2/8 acceptance records passed (in-progress); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
-      "model-validation: 3/8 acceptance records passed (in-progress); next: model-validation:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "model-validation: 3/8 acceptance records passed (in-progress); next: model-validation:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "model-validation: owner unassigned (role security evaluation lead)",
       "rule-compiler: 3/9 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "rule-compiler: owner unassigned (role security evaluation lead)",
       "detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
-      "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "fleet-scan: owner unassigned (role graph/analysis lead)",
       "code-boundaries: 5/10 acceptance records passed (in-progress); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "code-boundaries: owner unassigned (role security evaluation lead)",
@@ -3642,11 +3642,11 @@
       "compliance-evidence: owner unassigned (role language/supply-chain lead)",
       "capability-enforcement: 1/5 acceptance records passed (in-progress); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
       "capability-enforcement: owner unassigned (role platform security engineer)",
-      "strategic-metrics: 2/6 acceptance records passed (in-progress); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "strategic-metrics: 2/6 acceptance records passed (in-progress); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "strategic-metrics: owner unassigned (role assurance engineer)",
-      "eval-lab: 2/8 acceptance records passed (in-progress); next: eval-lab:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "eval-lab: 2/8 acceptance records passed (in-progress); next: eval-lab:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "eval-lab: owner unassigned (role security evaluation lead)",
-      "release-assurance: 1/5 acceptance records passed (in-progress); next: release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
+      "release-assurance: 1/5 acceptance records passed (in-progress); next: release-assurance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "release-assurance: owner unassigned (role assurance engineer)",
       "deterministic-scan: 3/7 acceptance records passed (in-progress); next: deterministic-scan:GA-01-001: owner unassigned",
       "deterministic-scan: owner unassigned (role security evaluation lead)",
