@@ -1501,7 +1501,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "detail": "Labs row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -1545,7 +1545,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+      "nextAction": "capability-enforcement:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "strategic-metrics",
@@ -3640,7 +3640,7 @@
       "local-models: owner unassigned (role inference/evaluation engineer)",
       "compliance-evidence: 1/6 acceptance records passed (in-progress); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "compliance-evidence: owner unassigned (role language/supply-chain lead)",
-      "capability-enforcement: 1/5 acceptance records passed (in-progress); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "capability-enforcement: 1/5 acceptance records passed (in-progress); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself",
       "capability-enforcement: owner unassigned (role platform security engineer)",
       "strategic-metrics: 2/6 acceptance records passed (in-progress); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "strategic-metrics: owner unassigned (role assurance engineer)",

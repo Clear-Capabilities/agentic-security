@@ -671,6 +671,13 @@ capabilities:
     name: Runner-level capability enforcement
     lifecycleStages: [cross-cutting]
     maturity: Labs
+    contract: docs/reference/capability-enforcement-contract.md
+    contractTest: scanner/test/contracts/capability-enforcement.contract.test.js
+    contractNote: The manifest schema 1.0.0, its refusal codes, the decision record, the reason codes and the per-platform statements are frozen; reviewed 2026-11-13.
+    gate: contract-conformance
+    limits: docs/reference/capability-enforcement-contract.md#what-this-does-not-do
+    since: 0.165.0
+    platforms: [linux:test-shard]
     establishes: Filesystem, command and network limits enforced by the task runner. Off by default and operator-only; Linux is partially verified.
     docs:
       - docs/trust/agent-threat-model.md
