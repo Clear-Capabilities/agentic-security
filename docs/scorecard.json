@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.195.31",
-    "bundleSha256": "15828baf4198b1e138b8558e297eeb9796d5a267477925c5ac6ab8c70b8b2324",
-    "commit": "3e3ce6b05216be8b70071c2f999ae2ae106889f7",
-    "worktreeClean": false,
+    "engineVersion": "0.195.32",
+    "bundleSha256": "e134fd2c0bc9e4ee558bd90d11af4f7a9f56ba5783996954daa7be8bc4996eb6",
+    "commit": "06b171baff6c5d080552eeda5aaa72a944145700",
+    "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-09T13:49:20.144Z",
+    "generatedAt": "2026-11-13T13:32:16.560Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -624,7 +624,7 @@
         }
       },
       "scanner/src": {
-        "total": 688,
+        "total": 684,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -780,7 +780,6 @@
           "posture/dnr/log-reader.js": 1,
           "posture/dnr/payload-classes.js": 2,
           "posture/dnr/store.js": 1,
-          "posture/dnr/syntax.js": 4,
           "posture/dnr/view.js": 1,
           "posture/encryption-provider.js": 3,
           "posture/epss.js": 3,
@@ -1001,7 +1000,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 388,
+    "n": 395,
     "d": 571
   },
   "taintRecall": {
@@ -2255,26 +2254,28 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.195.31",
-    "commit": "3e3ce6b05216be8b70071c2f999ae2ae106889f7",
-    "bundleSha256": "15828baf4198b1e138b8558e297eeb9796d5a267477925c5ac6ab8c70b8b2324",
-    "cleanMeasurement": false,
-    "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
-    "currentEngineIndependentAccuracy": "unmeasured",
-    "currentEngineIndependentReason": "the latest independent run (a72968195aa1) measured engine 0.172.0, not the engine above; it is a historical record",
+    "engineVersion": "0.195.32",
+    "commit": "06b171baff6c5d080552eeda5aaa72a944145700",
+    "bundleSha256": "e134fd2c0bc9e4ee558bd90d11af4f7a9f56ba5783996954daa7be8bc4996eb6",
+    "cleanMeasurement": true,
+    "currentEngineRealcodeVerdict": "passed",
+    "currentEngineRealcodeReason": "6 language(s) at or above their pre-registered floors",
+    "identity": "the commit and bundle below identify exactly the tree that was measured",
+    "currentEngineIndependentAccuracy": "measured",
+    "currentEngineIndependentReason": "measured by run 83df9f624d98 on a clean commit; the figures are for the development and validation splits only",
     "independentRun": {
-      "runId": "a72968195aa1",
-      "engineVersion": "0.172.0",
-      "measuredAt": "2026-10-16T17:28:34.519Z",
-      "comparableToCurrentEngine": false,
-      "historical": true,
+      "runId": "83df9f624d98",
+      "engineVersion": "0.195.32",
+      "measuredAt": "2026-11-13T05:56:54.413Z",
+      "comparableToCurrentEngine": true,
+      "historical": false,
       "identity": {
-        "sourceCommit": "2c0f0d13c6085580f920452a9866db5aae1dcc29",
-        "bundleSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
-        "bundleSidecarSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
+        "sourceCommit": "688a873b2752578855d2fe4e2e60ea47c7f46272",
+        "bundleSha256": "e134fd2c0bc9e4ee558bd90d11af4f7a9f56ba5783996954daa7be8bc4996eb6",
+        "bundleSidecarSha256": "e134fd2c0bc9e4ee558bd90d11af4f7a9f56ba5783996954daa7be8bc4996eb6",
         "measurementValid": true,
         "invalidReasons": [],
-        "lockfileSha256": "ba0c0043c2154e32576a6d52c8f8cfbfc3dc72151b5002fedb4d60e39ca7671d",
+        "lockfileSha256": "a0c795619dff1b3ff1f3708b0e7847d761bac39837aa8900144ffb9d202f4273",
         "configSha256": "7a9f18deda06dcf6ee8ce5864e2c3d50c15f8aba4ee9122b0a788ed3e2369a71",
         "modelEndpointMode": "none",
         "toolchain": {
@@ -2300,10 +2301,10 @@
       },
       "denominators": {
         "inScope": 283,
-        "scored": 278,
-        "unscored": 5,
+        "scored": 279,
+        "unscored": 4,
         "unscoredByClass": {
-          "timeout": 5
+          "timeout": 4
         },
         "unaccounted": 0,
         "reconciles": true
@@ -2312,26 +2313,26 @@
         "quotable": true,
         "reason": null,
         "precision": {
-          "n": 6,
+          "n": 7,
           "d": 19,
-          "value": 0.3157894736842105
+          "value": 0.3684210526315789
         },
         "recall": {
-          "n": 6,
-          "d": 278,
-          "value": 0.02158273381294964
+          "n": 7,
+          "d": 279,
+          "value": 0.025089605734767026
         },
-        "f1": 0.04040404040404041,
+        "f1": 0.04697986577181208,
         "f1Interval": {
           "method": "grouped-bootstrap-95",
           "level": 0.95,
           "replicates": 2000,
-          "groups": 155,
-          "units": 278,
-          "point": 0.04040404040404041,
+          "groups": 156,
+          "units": 279,
+          "point": 0.04697986577181208,
           "status": "measured",
-          "low": 0.012778535235343197,
-          "high": 0.07490870786516853,
+          "low": 0.014813448134481348,
+          "high": 0.08421052631578947,
           "undefinedDraws": 0,
           "seed": 2259309968
         }
@@ -2392,13 +2393,13 @@
         },
         {
           "language": "java",
-          "entries": 22,
+          "entries": 23,
           "status": "insufficient_population",
           "counts": {
             "tp": 0,
             "fp": 2,
-            "fn": 22,
-            "tn": 20
+            "fn": 23,
+            "tn": 21
           }
         },
         {
@@ -2537,41 +2538,41 @@
           "entries": 40,
           "status": "reportable",
           "recall": {
-            "n": 2,
+            "n": 3,
             "d": 40,
-            "value": 0.05
+            "value": 0.075
           },
           "precision": {
-            "n": 2,
+            "n": 3,
             "d": 5,
-            "value": 0.4
+            "value": 0.6
           },
-          "f1": 0.08888888888888889,
+          "f1": 0.13333333333333333,
           "recallInterval": {
             "method": "wilson-95",
             "level": 0.95,
             "status": "measured",
-            "point": 0.05,
-            "low": 0.01382066726155863,
-            "high": 0.16503877495105868,
-            "successes": 2,
+            "point": 0.075,
+            "low": 0.025836025573262464,
+            "high": 0.19864233651643165,
+            "successes": 3,
             "n": 40
           },
           "precisionInterval": {
             "method": "wilson-95",
             "level": 0.95,
             "status": "measured",
-            "point": 0.4,
-            "low": 0.11762077314099711,
-            "high": 0.7692757205908813,
-            "successes": 2,
+            "point": 0.6,
+            "low": 0.23072427940911855,
+            "high": 0.8823792268590028,
+            "successes": 3,
             "n": 5
           },
           "counts": {
-            "tp": 2,
-            "fp": 3,
-            "fn": 38,
-            "tn": 37
+            "tp": 3,
+            "fp": 2,
+            "fn": 37,
+            "tn": 38
           }
         },
         {
@@ -2619,12 +2620,12 @@
       "minEntriesForRate": 30,
       "fixedVersionPressure": {
         "meaning": "findings of ANY family on the fixed version, not only the labelled CWE: the alert burden a user would see",
-        "entriesMeasured": 278,
-        "total": 34326,
-        "mean": 123.4748201438849,
-        "median": 38,
-        "p95": 656,
-        "entriesWithAnyFinding": 270
+        "entriesMeasured": 279,
+        "total": 33793,
+        "mean": 121.12186379928315,
+        "median": 36,
+        "p95": 636,
+        "entriesWithAnyFinding": 271
       }
     },
     "historicalIndependentRecord": {
