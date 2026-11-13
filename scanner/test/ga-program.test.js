@@ -13,8 +13,10 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { evaluate, validateLedger, loadLedger, render, modelCallSites, LEDGER_FILE, STATUS_MD } from '../../scripts/ga-program/ledger.mjs';
 import { buildInventory, collectSurfaces, cliCommands, surfaceKey } from '../../scripts/ga-program/inventory.mjs';
+import { latestRunId } from '../../bench/independent/realcode.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const version = JSON.parse(readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8')).version;
 const clone = (x) => JSON.parse(JSON.stringify(x));
 let inventory;
 test.before(() => { inventory = buildInventory(REPO); });
@@ -43,12 +45,16 @@ test('every registry capability that ships has a ledger entry, the baseline coun
   for (const c of ledger.capabilities) assert.ok(c.owner.role && c.owner.person === null, `${c.capabilityId}: owners are roles until a person is named`);
 });
 
-test('mechanical records are computed from the artifacts: the GA bar passes for a GA row, the independent record is historical, every model path evaluates the policy', () => {
+test('mechanical records are computed from the artifacts: the GA bar passes for a GA row, the independent record is the committed current-engine run, every model path evaluates the policy', () => {
   const model = evaluate(REPO);
   const ds = model.capabilities.find((c) => c.capabilityId === 'deterministic-scan');
   assert.equal(ds.records.find((r) => r.check === 'registry-ga-bar').status, 'passed');
-  assert.equal(ds.records.find((r) => r.check === 'independent-accuracy-current').status, 'blocked');
-  assert.match(ds.records.find((r) => r.check === 'independent-accuracy-current').detail, /historical/);
+  // 0.195.32 committed run 83df9f624d98 of this engine; realcode.mjs judges it against the approved floors (the runs-dir tests pin the blocked cases)
+  const ind = ds.records.find((r) => r.check === 'independent-accuracy-current');
+  const runId = latestRunId(path.join(REPO, 'bench', 'independent', 'runs'));
+  assert.equal(ind.status, 'passed', ind.detail);
+  assert.match(ind.detail, new RegExp(`independent run ${runId} on ${version}`));
+  assert.equal(ind.evidencePath, `bench/independent/runs/${runId}/RESULT.json`);
   const preview = model.capabilities.find((c) => c.registryMaturity === 'Preview');
   assert.equal(preview.records.find((r) => r.check === 'registry-ga-bar').status, 'not-started');
   const mep = model.capabilities.find((c) => c.capabilityId === 'model-egress-policy');
@@ -81,12 +87,12 @@ test('a model site that sends through a bare fetch fails the egress record even 
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('the headline is honest: verified GA is 0 of 36 until a current-engine independent record exists, and the milestone is not met', () => {
+test('the headline is honest: verified GA is 0 of 36 while other records are open, and the milestone is not met', () => {
   const model = evaluate(REPO);
   assert.equal(model.program.verifiedGa, 0);
   assert.equal(model.program.registryGa, 19);
   assert.equal(model.milestone.met, false);
-  assert.ok(model.milestone.reasons.some((r) => /no current-engine independent accuracy record/.test(r)));
+  assert.ok(!model.milestone.reasons.some((r) => /no current-engine independent accuracy record/.test(r)), 'a current-engine run is committed');
   assert.ok(model.milestone.reasons.some((r) => /owner unassigned/.test(r)));
   const md = readFileSync(path.join(REPO, STATUS_MD), 'utf8');
   assert.match(md, /Verified GA \(every required acceptance record passed\) \| 0 of 36/);

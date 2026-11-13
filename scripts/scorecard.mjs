@@ -136,14 +136,15 @@ function git(args) {
 function readLatestIndependentRun(version) {
   const runsDir = path.join(REPO, 'bench', 'independent', 'runs');
   const runId = latestRunId(runsDir);
-  if (!runId) return { run: null, verdict: null };
-  const full = readJsonIfPresent(`bench/independent/runs/${runId}/RESULT.json`);
-  if (!full) return { run: null, verdict: null };
   const base = loadBaseline(runsDir);
+  const baselineRunId = base ? base.pointer.runId : null;
+  if (!runId) return { run: null, verdict: null, baselineRunId };
+  const full = readJsonIfPresent(`bench/independent/runs/${runId}/RESULT.json`);
+  if (!full) return { run: null, verdict: null, baselineRunId };
   const verdict = full.engineVersion === version ? realcodeEvaluate({ floors: base ? base.floors : null, current: full, tier: 'release' }) : null;
   const { perEntry, unscored, ...rest } = full;
   void perEntry; void unscored;
-  return { run: rest, verdict: verdict ? { status: verdict.status, why: verdict.why } : null };
+  return { run: rest, verdict: verdict ? { status: verdict.status, why: verdict.why } : null, baselineRunId };
 }
 
 async function main() {
@@ -274,6 +275,7 @@ function countPartiallyEvidenced(dir) {
       // The approved baseline run of the CURRENT engine (E1-04/E1-07), if one exists: read from the run directory the pointer names.
       independentRun: latestIndependent.run,
       realcodeVerdict: latestIndependent.verdict,
+      approvedIndependentBaseline: latestIndependent.baselineRunId,
       // FR-905: same reasoning as `independent` above — the full-population
       // diagnostic run (bench/independent/why-missed.mjs --all) is measured
       // in minutes, so its summary is read from a committed file rather
