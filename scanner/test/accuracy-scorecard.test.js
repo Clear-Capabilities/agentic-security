@@ -721,3 +721,20 @@ test('renderScorecardMarkdown: Strategic metrics is cleanly OMITTED when none wa
   assert.match(md, /\| Assurance Coverage \| not measurable/);
   assert.match(md, /\| Verified Remediation Rate \| 0\/0 \(not measurable\)/);
 });
+
+test('summarizeMeasurement publishes the computed realcode verdict', async () => {
+  const { summarizeMeasurement: sm } = await import('../src/posture/accuracy-scorecard.js');
+  const prov = { engineVersion: '1.0.0', worktreeClean: true };
+  assert.equal(sm(prov, null, null, { status: 'passed', why: 'six languages held' }).currentEngineRealcodeVerdict, 'passed');
+  assert.equal(sm(prov, null, null, { status: 'failed', why: 'go recall' }).currentEngineRealcodeVerdict, 'failed');
+  assert.equal(sm(prov, null, null).currentEngineRealcodeVerdict, 'unmeasured');
+});
+
+test('summarizeMeasurement names the approved baseline the floors come from, even when the latest run is another', async () => {
+  const { summarizeMeasurement: sm } = await import('../src/posture/accuracy-scorecard.js');
+  const prov = { engineVersion: '1.0.0', worktreeClean: true };
+  const m = sm(prov, null, null, { status: 'passed', why: 'held', baselineRunId: 'a72968195aa1' });
+  assert.equal(m.approvedIndependentBaseline, 'a72968195aa1');
+  assert.equal(sm(prov, null, null, null, 'a72968195aa1').approvedIndependentBaseline, 'a72968195aa1', 'named without a current-engine verdict too');
+  assert.equal(sm(prov, null, null).approvedIndependentBaseline, null);
+});

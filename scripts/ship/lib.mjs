@@ -13,6 +13,7 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync, mkdtempSync, realpathSync, rmSync, lstatSync } from 'node:fs';
 import { tmpdir as osTmpdir } from 'node:os';
 import { dirname, basename, join } from 'node:path';
+import { scorecardIdentity } from '../scorecard-finalize.mjs';
 
 export const PHASES = Object.freeze(['preflight', 'push', 'pr', 'checks', 'merge', 'verify', 'tag', 'release', 'npm', 'done']);
 
@@ -118,6 +119,20 @@ export function preflightProblems({ version, files, changelog, npmLatest, branch
 }
 
 /**
+ * The scorecard identity rule (scripts/scorecard-finalize.mjs) applied BEFORE the push. The same rule is a post-merge publish blocker; found
+ * only there, it leaves main merged and unreleasable. Also refuses a branch that main has moved past: the merge commit would then differ from
+ * the measured tree by main's changes. A checkout with no scorecard is left to the release check. Pure.
+ */
+export function scorecardPreflight({ scorecard, version, changedSince, mainIsAncestor, releaseOnly = false }) {
+  if (!scorecard) return [];
+  const out = [];
+  const id = scorecardIdentity({ scorecard, version, changedSince });
+  if (!id.ok) out.push(`the scorecard does not identify this commit (${id.reasons.join('; ')}): commit everything, then run npm run scorecard:finalize in scanner/`);
+  if (!releaseOnly && mainIsAncestor === false) out.push('origin/main has commits this branch lacks, so the merge would release a tree the scorecard did not measure: merge origin/main, then run npm run scorecard:finalize in scanner/');
+  return out;
+}
+
+/**
  * Generated files that record the engine version and are compared with it by a test (the hosted language-suites job, the pre-push suite). A
  * version bump that does not regenerate them fails 15 minutes into the push, so the same check runs before anything is pushed.
  * `readFile` throws for a missing file; a missing file is not reported (it may not exist in a given checkout).
@@ -131,7 +146,7 @@ export function staleVersionArtifacts({ version, readFile }) {
   if (inv && inv.facts && inv.facts.version !== version) out.push(`docs/engineering-excellence/inventory.json records ${inv.facts.version}, not ${version} (run: node scripts/release-prepare.mjs)`);
   const sc = read('docs/scorecard.json');
   const scv = sc && sc.provenance && sc.provenance.engineVersion;
-  if (sc && scv !== version) out.push(`docs/scorecard.json records ${scv}, not ${version} (run: node scripts/release-prepare.mjs)`);
+  if (sc && scv !== version) out.push(`docs/scorecard.json records ${scv}, not ${version} (commit the bump, then run: npm run scorecard:finalize in scanner/)`);
   return out;
 }
 

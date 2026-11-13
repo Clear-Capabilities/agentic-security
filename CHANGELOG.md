@@ -9,6 +9,20 @@
 > make the history less accurate, not more.
 
 
+## 0.195.32 - GA gap closure, part 1: a scorecard that names the tree it measured, and an independent-accuracy record that can pass
+
+**Measured, 0.195.31:** `TIMINGS preflight=3s push=7s pr=4s checks=361s merge=5s verify=6s tag=2s release=254s npm=328s total=970s release-clock=267s`, shipped from the merge to the published release in 267 s; the npm listing lagged the publish and `ship --resume` confirmed it.
+
+Two defects made GA ledger records impossible to pass however good the engine was. Nothing moved a maturity.
+
+- **Changed results, listed first.**
+  - `release-prepare` no longer measures the scorecard. It ran in the middle of the version bump, while every version file was uncommitted, so every release recorded `worktreeClean: false` and all 36 `EVIDENCE-IDENTITY` records failed by construction. The order is now: bump, commit, `npm run scorecard:finalize`, ship.
+  - A new fast publish blocker, `scorecard-identity`, fails when the committed scorecard was not measured on a clean tree, describes another version, or names a commit that differs from the released tree by anything but the scorecard and the GA status pages rendered from it. `ship` runs it with the other post-merge publish blockers (nine, was eight), and its preflight applies the same rule before anything is pushed, together with a refusal of a branch that `origin/main` has moved past (the merge would release a tree the scorecard did not measure).
+  - The GA `independent-accuracy-current` record judges the latest finished run in `bench/independent/runs/` against the approved floors with `realcode.mjs`'s own verdict. It used to read an engine 0.141.0 record and a `verdict` field that nothing writes, so it could never pass. The scorecard reports the latest run too, not only the approved baseline, publishes the release-tier verdict for a run of this engine, and names the approved baseline whose floors that verdict uses (`approvedIndependentBaseline`), so the baseline stays named once a newer run is reported.
+- **`npm run scorecard:finalize`** (`scripts/scorecard-finalize.mjs`) refuses a dirty tree, measures, re-renders `docs/ga-program/STATUS.md` and `status.json`, and commits exactly those four files. Proven on a clean tree: the GA records passed went from 38 to 74 of 253, and `scorecard-identity` exits 0 on the finalized tree and 1 after a source commit on top.
+- **Independent run `83df9f624d98` on this engine** (committed source 688a873b, clean tree, bundle digest matches its sidecar; same population rules as the approved 0.172.0 baseline, 40 advisories per language over the dev and validation splits). Localized precision 7/19 (36.8%), recall 7/279 (2.5%), F1 0.047 (95% grouped bootstrap 0.015 to 0.084); 4 of 283 entries unscored (timeouts), 0 unaccounted. The approved baseline measured 6/19 and 6/278. Release-tier verdict against the approved floors: **passed**, every language at or above its floor; the floors were not changed. Recall is still the gap: of the 272 misses, 152 (56%) had no detector rule fire at all, 80 lacked a recognized source or sink, 30 found the right place under the wrong family or line, 5 were call-graph gaps and 5 parser gaps (`bench/independent/runs/83df9f624d98/FORENSICS.md`).
+- **Dependencies.** `@babel/core` 8.1.0 to 8.1.2 (runtime), `z3-solver` 5.3.3 to 5.4.1 (optional), `@vscode/vsce` 4.1.0 to 4.1.1 (VS Code extension, dev), released upstream after the run above; the dataflow suite (1599/1599) and the smoke suite (30/30) pass on the rebuilt bundle.
+
 ## 0.195.31 - GA programme, release H: local detections syntax-checked per format with a labelled hunt corpus, hunts that state their coverage, refused provenance conflicts, mechanical evidence that outranks a model reject, and a deterministic + hunt Eval Lab arm
 
 **Measured, 0.195.30:** `TIMINGS preflight=3s push=7s pr=1s checks=392s merge=5s verify=10s tag=2s release=223s npm=328s total=971s release-clock=240s`, shipped from the merge to the published release in 240 s; the npm listing lagged the publish and `ship --resume` confirmed it.

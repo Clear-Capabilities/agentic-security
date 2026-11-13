@@ -26,7 +26,7 @@ test('the plan regenerates before it verifies, and --no-tests drops only the sui
   const gen = planSteps({ tests: false }).map((s) => s.name);
   assert.deepEqual(all.slice(0, gen.length), gen);
   assert.ok(all.length > gen.length);
-  assert.ok(gen.indexOf('build the bundle') < gen.indexOf('regenerate the scorecard'));
+  assert.ok(!gen.includes('regenerate the scorecard'), 'the scorecard is measured after the bump is committed (scorecard:finalize), never mid-bump');
   assert.ok(gen.indexOf('record inventory test runs') < gen.indexOf('render the inventory'));
   assert.ok(gen.indexOf('regenerate the regression report') < gen.indexOf('regenerate the final report'));
 });

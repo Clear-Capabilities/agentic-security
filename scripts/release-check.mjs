@@ -65,6 +65,7 @@ import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { evaluateScorecardFreshness, countCorpusEntries } from './scorecard-check.mjs';
+import { scorecardIdentity, changedSinceCommit } from './scorecard-finalize.mjs';
 import { runDependencyCurrencyCheck } from './dependency-currency.mjs';
 import { runPackageContentsCheck } from './package-contents-check.mjs';
 import { evaluate as evaluateGaProgram } from './ga-program/ledger.mjs';
@@ -136,6 +137,15 @@ export const CHECKS = [
     title: 'Committed accuracy scorecard describes this version',
     slow: false,
     remedy: 'Run `npm run scorecard`, review the numbers, and commit the result.',
+  },
+  {
+    // GA-01 evidence identity: the scorecard must have been measured on a clean tree, and the commit it names must differ from the one being
+    // released only by the scorecard and the pages rendered from it. Before this, release-prepare measured mid-bump and every release
+    // recorded a dirty worktree, so the named commit never identified what was measured.
+    id: 'scorecard-identity',
+    title: 'Committed scorecard was measured on a clean tree that is the tree being released',
+    slow: false,
+    remedy: 'Commit everything, then run `npm run scorecard:finalize` in scanner/ (it refuses a dirty tree, measures, and commits the scorecard on its own).',
   },
   {
     // R4 correctness follow-up: computeRunAttestation is genuinely wired
@@ -558,6 +568,12 @@ export function parseSelection(argv, { fast = false } = {}) {
   if (!ids.length) return { error: 'the selection matches no planned check; refusing to report a vacuous pass' };
   const partial = ids.length !== planned.length || Boolean(shardSpec);
   return { ids, label, shard: shardSpec, partial };
+}
+
+/** The release check over `scorecardIdentity` (scripts/scorecard-finalize.mjs). Pure. */
+export function evaluateScorecardIdentityCheck({ scorecard, version, changedSince }) {
+  const id = scorecardIdentity({ scorecard, version, changedSince });
+  return result(id.ok ? [] : [`The scorecard does not identify this release: ${id.reasons.join('; ')}.`]);
 }
 
 function result(errors = [], warnings = [], extra = {}) {
@@ -1225,6 +1241,12 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   evaluate('scorecard-freshness', () => {
     if (!version) return result(['Cannot check the scorecard: no version could be determined.']);
     return evaluateScorecardFreshness(scorecardFacts(version));
+  });
+
+  evaluate('scorecard-identity', () => {
+    if (!version) return result(['Cannot check the scorecard identity: no version could be determined.']);
+    const scorecard = scorecardFacts(version).scorecardJson;
+    return evaluateScorecardIdentityCheck({ scorecard, version, changedSince: changedSinceCommit(REPO, scorecard?.provenance?.commit) });
   });
 
   evaluate('attestation-self-check', () => evaluateAttestationSelfCheck());

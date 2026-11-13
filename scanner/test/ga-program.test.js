@@ -13,8 +13,10 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { evaluate, validateLedger, loadLedger, render, modelCallSites, LEDGER_FILE, STATUS_MD } from '../../scripts/ga-program/ledger.mjs';
 import { buildInventory, collectSurfaces, cliCommands, surfaceKey } from '../../scripts/ga-program/inventory.mjs';
+import { latestRunId } from '../../bench/independent/realcode.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const version = JSON.parse(readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8')).version;
 const clone = (x) => JSON.parse(JSON.stringify(x));
 let inventory;
 test.before(() => { inventory = buildInventory(REPO); });
@@ -43,12 +45,16 @@ test('every registry capability that ships has a ledger entry, the baseline coun
   for (const c of ledger.capabilities) assert.ok(c.owner.role && c.owner.person === null, `${c.capabilityId}: owners are roles until a person is named`);
 });
 
-test('mechanical records are computed from the artifacts: the GA bar passes for a GA row, the independent record is historical, every model path evaluates the policy', () => {
+test('mechanical records are computed from the artifacts: the GA bar passes for a GA row, the independent record is the committed current-engine run, every model path evaluates the policy', () => {
   const model = evaluate(REPO);
   const ds = model.capabilities.find((c) => c.capabilityId === 'deterministic-scan');
   assert.equal(ds.records.find((r) => r.check === 'registry-ga-bar').status, 'passed');
-  assert.equal(ds.records.find((r) => r.check === 'independent-accuracy-current').status, 'blocked');
-  assert.match(ds.records.find((r) => r.check === 'independent-accuracy-current').detail, /historical/);
+  // 0.195.32 committed run 83df9f624d98 of this engine; realcode.mjs judges it against the approved floors (the runs-dir tests pin the blocked cases)
+  const ind = ds.records.find((r) => r.check === 'independent-accuracy-current');
+  const runId = latestRunId(path.join(REPO, 'bench', 'independent', 'runs'));
+  assert.equal(ind.status, 'passed', ind.detail);
+  assert.match(ind.detail, new RegExp(`independent run ${runId} on ${version}`));
+  assert.equal(ind.evidencePath, `bench/independent/runs/${runId}/RESULT.json`);
   const preview = model.capabilities.find((c) => c.registryMaturity === 'Preview');
   assert.equal(preview.records.find((r) => r.check === 'registry-ga-bar').status, 'not-started');
   const mep = model.capabilities.find((c) => c.capabilityId === 'model-egress-policy');
@@ -81,12 +87,12 @@ test('a model site that sends through a bare fetch fails the egress record even 
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('the headline is honest: verified GA is 0 of 36 until a current-engine independent record exists, and the milestone is not met', () => {
+test('the headline is honest: verified GA is 0 of 36 while other records are open, and the milestone is not met', () => {
   const model = evaluate(REPO);
   assert.equal(model.program.verifiedGa, 0);
   assert.equal(model.program.registryGa, 19);
   assert.equal(model.milestone.met, false);
-  assert.ok(model.milestone.reasons.some((r) => /no current-engine independent accuracy record/.test(r)));
+  assert.ok(!model.milestone.reasons.some((r) => /no current-engine independent accuracy record/.test(r)), 'a current-engine run is committed');
   assert.ok(model.milestone.reasons.some((r) => /owner unassigned/.test(r)));
   const md = readFileSync(path.join(REPO, STATUS_MD), 'utf8');
   assert.match(md, /Verified GA \(every required acceptance record passed\) \| 0 of 36/);
@@ -156,4 +162,64 @@ test('the inventory is deterministic across two generations', () => {
 
 test('the ledger file is where the docs say it is', () => {
   assert.equal(LEDGER_FILE, 'docs/ga-program/ledger.json');
+});
+
+// ── the independent-accuracy record judges the latest current-engine run against the approved floors (GA gap closure, Task 2) ──
+
+const VERSION = JSON.parse(readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8')).version;
+function runsDirWith(run) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ga-realcode-'));
+  for (const f of ['BASELINE.json', 'floors-a72968195aa1.json']) writeFileSync(path.join(dir, f), readFileSync(path.join(REPO, 'bench/independent/runs', f)));
+  if (run) { mkdirSync(path.join(dir, run.runId)); writeFileSync(path.join(dir, run.runId, 'RESULT.json'), JSON.stringify(run)); }
+  return dir;
+}
+function syntheticRun({ engineVersion = VERSION, measurementValid = true, recall = (f) => f.recallFloor + 0.1 } = {}) {
+  const floors = JSON.parse(readFileSync(path.join(REPO, 'bench/independent/runs/floors-a72968195aa1.json'), 'utf8'));
+  const byLanguage = {};
+  for (const [lang, f] of Object.entries(floors.languages)) {
+    if (f.status !== 'floor') continue;
+    byLanguage[lang] = { status: 'reportable', entries: 40, recall: { n: 4, d: 40, value: recall(f) }, precision: { n: 4, d: 5, value: 0.8 } };
+  }
+  return {
+    runId: 'r2', mergedAt: '2099-01-01T00:00:00.000Z', engineVersion,
+    identity: { sourceCommit: 'd'.repeat(40), bundleSha256: 'e'.repeat(64), measurementValid, invalidReasons: measurementValid ? [] : ['the measured tree was dirty'] },
+    scoring: { denominators: { inScope: 240, scored: 240, unscored: 0, unaccounted: 0, reconciles: true, duplicateRows: [], rowsNotInScope: [] }, definitions: { localized: { byLanguage } } },
+  };
+}
+const indepRecord = (runsDir) => evaluate(REPO, { runsDir }).capabilities.find((c) => c.capabilityId === 'deterministic-scan').records.find((r) => r.check === 'independent-accuracy-current');
+
+test('latest run of the current engine is judged against approved floors', () => {
+  const dir = runsDirWith(syntheticRun());
+  try {
+    const r = indepRecord(dir);
+    assert.equal(r.status, 'passed', r.detail);
+    assert.match(r.evidencePath, /bench\/independent\/runs\/r2\/RESULT\.json/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('historical run blocks', () => {
+  const dir = runsDirWith(syntheticRun({ engineVersion: '0.172.0' }));
+  try {
+    const r = indepRecord(dir);
+    assert.equal(r.status, 'blocked');
+    assert.match(r.detail, /historical/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('invalid identity blocks', () => {
+  const dir = runsDirWith(syntheticRun({ measurementValid: false }));
+  try {
+    const r = indepRecord(dir);
+    assert.equal(r.status, 'blocked');
+    assert.match(r.detail, /not valid/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a regression fails', () => {
+  const dir = runsDirWith(syntheticRun({ recall: (f) => (f.recallFloor > 0 ? 0 : 0.1) }));
+  try {
+    const r = indepRecord(dir);
+    assert.equal(r.status, 'blocked');
+    assert.match(r.detail, /regression/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

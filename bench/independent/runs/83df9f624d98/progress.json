@@ -1,0 +1,320 @@
+{
+  "schema": "agentic-security/independent-run-progress@1",
+  "runId": "83df9f624d98",
+  "chunks": {
+    "0": {
+      "state": "done",
+      "offset": 0,
+      "limit": 20,
+      "startedAt": "2026-11-13T02:15:07.766Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 96720
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 904677
+      },
+      "endedAt": "2026-11-13T02:31:49.170Z"
+    },
+    "1": {
+      "state": "done",
+      "offset": 20,
+      "limit": 20,
+      "startedAt": "2026-11-13T02:31:49.178Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 119788
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 490144
+      },
+      "endedAt": "2026-11-13T02:41:59.116Z"
+    },
+    "2": {
+      "state": "done",
+      "offset": 40,
+      "limit": 20,
+      "startedAt": "2026-11-13T02:41:59.123Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 595925
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 269045
+      },
+      "endedAt": "2026-11-13T02:56:24.099Z"
+    },
+    "3": {
+      "state": "done",
+      "offset": 60,
+      "limit": 20,
+      "startedAt": "2026-11-13T02:56:24.103Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 69270
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 212200
+      },
+      "endedAt": "2026-11-13T03:01:05.578Z"
+    },
+    "4": {
+      "state": "done",
+      "offset": 80,
+      "limit": 20,
+      "startedAt": "2026-11-13T03:01:05.582Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 195578
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 1461421
+      },
+      "endedAt": "2026-11-13T03:28:42.586Z"
+    },
+    "5": {
+      "state": "done",
+      "offset": 100,
+      "limit": 20,
+      "startedAt": "2026-11-13T03:28:42.594Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 423805
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 787614
+      },
+      "endedAt": "2026-11-13T03:48:54.019Z"
+    },
+    "6": {
+      "state": "done",
+      "offset": 120,
+      "limit": 20,
+      "startedAt": "2026-11-13T03:48:54.026Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 152318
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 923707
+      },
+      "endedAt": "2026-11-13T04:06:50.058Z"
+    },
+    "7": {
+      "state": "done",
+      "offset": 140,
+      "limit": 20,
+      "startedAt": "2026-11-13T04:06:50.066Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 85863
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 332348
+      },
+      "endedAt": "2026-11-13T04:13:48.282Z"
+    },
+    "8": {
+      "state": "done",
+      "offset": 160,
+      "limit": 20,
+      "startedAt": "2026-11-13T04:13:48.288Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 111519
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 2199571
+      },
+      "endedAt": "2026-11-13T04:52:19.383Z"
+    },
+    "9": {
+      "state": "done",
+      "offset": 180,
+      "limit": 20,
+      "startedAt": "2026-11-13T04:52:19.398Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 562860
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 673942
+      },
+      "endedAt": "2026-11-13T05:12:56.208Z"
+    },
+    "10": {
+      "state": "done",
+      "offset": 200,
+      "limit": 20,
+      "startedAt": "2026-11-13T05:12:56.217Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 156430
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 1078728
+      },
+      "endedAt": "2026-11-13T05:33:31.384Z"
+    },
+    "11": {
+      "state": "done",
+      "offset": 220,
+      "limit": 20,
+      "startedAt": "2026-11-13T05:33:31.391Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 90655
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 184956
+      },
+      "endedAt": "2026-11-13T05:38:07.006Z"
+    },
+    "12": {
+      "state": "done",
+      "offset": 240,
+      "limit": 20,
+      "startedAt": "2026-11-13T05:38:07.014Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 86036
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 395076
+      },
+      "endedAt": "2026-11-13T05:46:08.131Z"
+    },
+    "13": {
+      "state": "done",
+      "offset": 260,
+      "limit": 20,
+      "startedAt": "2026-11-13T05:46:08.137Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 122681
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 479592
+      },
+      "endedAt": "2026-11-13T05:56:10.416Z"
+    },
+    "14": {
+      "state": "done",
+      "offset": 280,
+      "limit": 3,
+      "startedAt": "2026-11-13T05:56:10.424Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 7082
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 35248
+      },
+      "endedAt": "2026-11-13T05:56:52.759Z"
+    }
+  },
+  "measuredIn": {
+    "detachedWorktreeOf": "688a873b2752578855d2fe4e2e60ea47c7f46272",
+    "linkedFromSourceCheckout": [
+      "scanner/node_modules",
+      "scanner/vendor",
+      "bench/independent/cache"
+    ]
+  },
+  "identity": {
+    "schemaVersion": 1,
+    "sourceCommit": "688a873b2752578855d2fe4e2e60ea47c7f46272",
+    "sourceBranch": "HEAD",
+    "sourceTreeClean": true,
+    "dirtyPaths": [],
+    "bookkeepingPathsIgnored": 2,
+    "bundleSha256": "e134fd2c0bc9e4ee558bd90d11af4f7a9f56ba5783996954daa7be8bc4996eb6",
+    "bundleSidecarSha256": "e134fd2c0bc9e4ee558bd90d11af4f7a9f56ba5783996954daa7be8bc4996eb6",
+    "lockfileSha256": "a0c795619dff1b3ff1f3708b0e7847d761bac39837aa8900144ffb9d202f4273",
+    "configSha256": "7a9f18deda06dcf6ee8ce5864e2c3d50c15f8aba4ee9122b0a788ed3e2369a71",
+    "config": {
+      "knobs": {},
+      "modelEndpointMode": "none",
+      "modelValidatorEnabled": false
+    },
+    "corpusId": "independent-selection",
+    "corpusSha256": "4766dbfe1a35b9145727ae968bb9a2fa100c49b5be4e0759cf02f16d9504a309",
+    "corpusFiles": 2,
+    "toolchain": {
+      "node": "v24.20.0",
+      "npm": "11.19.0",
+      "git": "git version 2.54.0",
+      "python3": "Python 3.13.9",
+      "java": null,
+      "go": null,
+      "ghc": "The Glorious Glasgow Haskell Compilation System, version 9.14.1",
+      "os": "darwin 27.0.0 arm64",
+      "cpus": 8,
+      "memoryGb": 16
+    },
+    "startedAt": "2026-11-13T02:15:07.233Z",
+    "measurementValid": true,
+    "releaseTrust": "trusted",
+    "invalidReasons": []
+  }
+}
