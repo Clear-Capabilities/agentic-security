@@ -43,7 +43,7 @@ Validation, fix proposal and `hunt` can run against a model on loopback: [Local 
 
 ## Model and token cost
 
-A per-prompt advisor suggests a cheaper model or lower reasoning depth when one would do, accounting for the prompt cache a model switch would discard. It is advisory and on by default. See [cache economics](../MODEL_COST_OPTIMIZATION.md).
+`/posture --cache` reports what the prompt cache saved and wasted this session, and the cache bodyguard warns before an edit invalidates it. A scan of a project that calls a model provider flags prompt-cache killers and over-provisioned calls. See [stop overpaying for tokens](../reference/capability-reference.md#stop-overpaying-for-tokens).
 
 ## Inventory AI components
 

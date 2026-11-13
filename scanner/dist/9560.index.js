@@ -5145,7 +5145,7 @@ function money(n) {
   return Math.abs(v) >= 1 ? `$${v.toFixed(2)}` : `$${v.toFixed(4)}`;
 }
 
-// Per-1M-token rates (input / output). Mirror hooks/model-cost-advisor.js MODELS.
+// Per-1M-token rates (input / output).
 const MODEL_RATES = {
   fable:   { label: 'Fable 5',    in: 10, out: 50 },
   opus:    { label: 'Opus 4.8',   in: 5,  out: 25 },

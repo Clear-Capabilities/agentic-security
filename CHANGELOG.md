@@ -9,6 +9,18 @@
 > make the history less accurate, not more.
 
 
+## 0.195.34 - The per-prompt model-cost advisor is removed
+
+**Measured, 0.195.33:** `TIMINGS preflight=5s push=6s pr=1s checks=494s merge=5s verify=6s tag=2s release=224s npm=90s total=833s release-clock=237s`, shipped from the merge to the published release in 237 s; the npm listing lagged the publish and was confirmed afterwards. The first push failed one hosted test shard: the GA ledger test written in 0.195.32 pinned the independent-accuracy record as passed, which stops holding at the next version bump; it now reads which engine the latest run measured.
+
+- **Removed, listed first.** The per-prompt model-cost advisor, which suggested a cheaper model or a lower reasoning depth with an estimated token saving, is gone, at the maintainer's request.
+  - Deleted: `hooks/model-cost-advisor.js` and its two tests, the SessionStart hook `hooks/session-start-model-capture.js` that recorded the session's model for it (and its test), and `docs/MODEL_COST_OPTIMIZATION.md`.
+  - `/setup --model-optimizer` (with `--quality`, `--min-savings`, `--interactive`) is no longer a mode; passing it prints a one-line note and the mode menu.
+  - The UserPromptSubmit dispatcher runs only the legacy-alias redirect. A project that still has `.agentic-security/model-optimizer.json` gets no advice and no error; the file is no longer read and can be deleted.
+  - The project instruction that let an interactive advisor answer set a cheaper model for delegated sub-agent work is removed from `CLAUDE.md`.
+- **Kept**, because they are separate features: `/posture --cache` (what the prompt cache saved and wasted), the cache bodyguard, the scan-time lint of a project's own model calls, model routing, and the validator's cost ceiling. The "Stop overpaying for tokens" section of the capability reference now describes those three and says the advisor was removed.
+- The GA programme inventory drops one hook surface (192 surfaces, was 193) and one environment variable; the self-scan baseline drops the one finding the deleted hook carried (hooks 20, was 21), recorded deliberately.
+
 ## 0.195.33 - GA gap closure, part 2: every Preview and Labs row carries the GA bar, so a promotion is an evidence decision
 
 **Measured, 0.195.32:** `TIMINGS preflight=4s push=8s pr=1s checks=325s merge=5s verify=8s tag=2s release=254s npm=90s total=697s release-clock=269s`, shipped from the merge to the published release in 269 s; the npm listing lagged the publish and `ship --resume` confirmed it. The first push failed three hosted test shards: the scorecard had stopped naming the approved independent baseline once a newer run was reported (fixed in that release), and two GA ledger tests pinned the state before a current-engine run existed.

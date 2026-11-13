@@ -1,25 +1,14 @@
 #!/usr/bin/env node
 // UserPromptSubmit dispatcher (#24 — hook process consolidation).
 //
-// Runs BOTH UserPromptSubmit hooks in ONE node process instead of two: it reads
-// stdin once, runs the legacy-alias redirect and the model-cost advisor
-// in-process, and emits a single merged hook output. Both sub-hooks are purely
-// advisory (neither can block a prompt), so the merge is a plain union:
+// The single UserPromptSubmit hook. It reads stdin once, runs the legacy-alias
+// redirect in-process and emits its output:
 //   • legacy-alias-redirect → hookSpecificOutput.additionalContext
-//   • model-cost-advisor    → systemMessage (free) by default; ALSO
-//     hookSpecificOutput.additionalContext (billed) when the advisor's
-//     `interactive` config is opted in and a recommendation qualifies — see
-//     model-cost-advisor.js's header comment. Both sub-hooks can set
-//     additionalContext on the SAME prompt (an alias redirect and an
-//     interactive advisor directive are independent triggers), so the merge
-//     below joins them instead of letting one clobber the other.
-//
-// Halving the per-prompt process spawns (2 → 1) removes a latency tax paid on
-// every single user turn. Behaviour is otherwise identical to the two standalone
-// hooks; each is wrapped so one failing never suppresses the other.
+// The per-prompt model-cost advisor that also ran here was removed in 0.195.34.
+// The redirect is purely advisory and cannot block a prompt; a failure writes
+// nothing and exits 0.
 'use strict';
 const { resolveAlias, buildContext } = require('./legacy-alias-redirect.js');
-const { advise } = require('./model-cost-advisor.js');
 
 function readStdinJSON() {
   return new Promise((resolve) => {
@@ -32,31 +21,18 @@ function readStdinJSON() {
   });
 }
 
-// Pure merge — importable for tests. Given the two sub-hook results, produce the
-// single UserPromptSubmit hook-output object (or {} when neither fired).
-// `adviceOut` is model-cost-advisor's advise() result: {systemMessage?, additionalContext?} | null.
-function mergeOutputs({ aliasHit, adviceOut }) {
-  const out = {};
-  const contexts = [];
-  if (aliasHit) contexts.push(buildContext(aliasHit));
-  if (adviceOut && adviceOut.additionalContext) contexts.push(adviceOut.additionalContext);
-  if (contexts.length) {
-    out.hookSpecificOutput = {
-      hookEventName: 'UserPromptSubmit',
-      additionalContext: contexts.join('\n\n'),
-    };
-  }
-  if (adviceOut && adviceOut.systemMessage) out.systemMessage = adviceOut.systemMessage;
-  return out;
+// Pure — importable for tests. Given the redirect's result, produce the
+// UserPromptSubmit hook-output object (or {} when it did not fire).
+function mergeOutputs({ aliasHit }) {
+  if (!aliasHit) return {};
+  return { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: buildContext(aliasHit) } };
 }
 
 async function main() {
   const input = await readStdinJSON();
   let aliasHit = null;
-  let adviceOut = null;
   try { aliasHit = resolveAlias(input.prompt || ''); } catch { /* best-effort */ }
-  try { adviceOut = await advise(input); } catch { /* best-effort */ }
-  const out = mergeOutputs({ aliasHit, adviceOut });
+  const out = mergeOutputs({ aliasHit });
   if (Object.keys(out).length) process.stdout.write(JSON.stringify(out));
   process.exit(0);
 }

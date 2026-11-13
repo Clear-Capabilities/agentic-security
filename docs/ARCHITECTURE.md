@@ -73,7 +73,7 @@
          lsp/        Language-Server-Protocol — powers JetBrains, Neovim, and
                      VS Code plugins via textDocument/publishDiagnostics.
          hooks/      5 Claude Code hook event types: SessionStart,
-                     UserPromptSubmit (alias redirect + model-cost advisor,
+                     UserPromptSubmit (alias redirect,
                      one dispatcher process), PreToolUse (bodyguard +
                      conversation-context + cache-invalidator, one dispatcher
                      process — the security-critical bodyguard block runs

@@ -1,6 +1,6 @@
 ---
-description: Workflow installers + on-write guards. Hooks, CI, pre-deploy gate, bodyguard, destructive-guard, model-cost optimizer
-argument-hint: "[--hooks|--ci|--predeploy|--bodyguard|--destructive-guard|--model-optimizer] [--provider github|gitlab|circleci|buildkite|jenkins] [--fail-on critical|high|medium] [--apply]"
+description: Workflow installers + on-write guards. Hooks, CI, pre-deploy gate, bodyguard, destructive-guard
+argument-hint: "[--hooks|--ci|--predeploy|--bodyguard|--destructive-guard] [--provider github|gitlab|circleci|buildkite|jenkins] [--fail-on critical|high|medium] [--apply]"
 ---
 
 # /setup
@@ -16,10 +16,9 @@ Workflow + guard installer dispatcher.
 | `--predeploy` | Pre-deploy gate that blocks `vercel`/`fly`/`wrangler` deploys **in your terminal** (not just CI) on critical/KEV findings. Sub-commands: `install` (default), `check`, `status`, `off` |
 | `--bodyguard` | Configure the AI bodyguard PreToolUse hook. Modes: `warn`, `block`, `off`. Per-project forbidden APIs at `.agentic-security/forbidden-apis.yml` |
 | `--destructive-guard` | Configure the destructive-Bash-command guard (rm -rf, force-push, etc.). Modes: `warn`, `block`, `off` |
-| `--model-optimizer` | Enable the per-prompt model-cost advisor (suggests a cheaper model + depth with est. token savings; advisory only by default — it can't switch for you). Modes: `advise`, `off`. `--quality <0-10>` sets the cost-quality dial (default `7`: `0`=never downgrade, `10`=cheapest); `--min-savings <usd>` is the absolute anti-noise floor; `--interactive` opts into a real `AskUserQuestion` choice (keep defaults / show the `/model` command / apply the cheaper model to delegated sub-agent work this session) instead of a read-only tip — costs a little context on the prompts where it fires, off by default. See `docs/MODEL_COST_OPTIMIZATION.md` |
-| `--all` | One-pass setup: installs hooks + CI + bodyguard + destructive-guard with sensible defaults (model-optimizer + pre-deploy gate stay opt-in) |
+| `--all` | One-pass setup: installs hooks + CI + bodyguard + destructive-guard with sensible defaults (the pre-deploy gate stays opt-in) |
 
-Bare `/setup` (no flag) prints this mode menu.
+Bare `/setup` (no flag) prints this mode menu. `--model-optimizer` was removed in 0.195.34 with the per-prompt model-cost advisor; if it is passed, say so in one line and print the menu.
 
 ## `--all` (one-pass setup)
 
@@ -30,7 +29,7 @@ Runs the four installers in sequence with safe defaults, pausing for confirmatio
 3. `--bodyguard` — `mode=warn` (non-blocking until the user opts into `block`).
 4. `--destructive-guard` — `mode=warn`.
 
-Two modes stay **out** of `--all` and remain opt-in: the model-cost optimizer (`--model-optimizer`, it emits per-prompt suggestions) and the pre-deploy gate (`--predeploy`, it edits your shell profile to intercept deploy commands). Mention both once in the summary so the user knows they exist.
+The pre-deploy gate (`--predeploy`) stays **out** of `--all` and remains opt-in, because it edits your shell profile to intercept deploy commands. Mention it once in the summary so the user knows it exists.
 
 Prints a single summary of what was installed and the one command to harden each further.
 
@@ -49,11 +48,6 @@ Prints a single summary of what was installed and the one command to harden each
 /setup --predeploy off                           # disable the gate
 /setup --bodyguard mode=block                     # block insecure edits
 /setup --destructive-guard mode=warn             # warn on destructive bash
-/setup --model-optimizer                         # enable cheaper-model tips (advise)
-/setup --model-optimizer --quality 9             # lean aggressive on cost (dial 9/10)
-/setup --model-optimizer --min-savings 0.05      # absolute floor: only ≥ $0.05
-/setup --model-optimizer --interactive           # let me choose via AskUserQuestion, not just read a tip
-/setup --model-optimizer mode=off                # disable
 ```
 
 ## Implementation
@@ -62,17 +56,8 @@ The routing modes call their installers directly:
 
 - `--hooks` → `posture/workflow-installer.js` (detectProject, buildHookConfig) + the pre-commit hook writer (husky / pre-commit / lefthook / native).
 - `--bodyguard` / `--destructive-guard` → the existing PreToolUse hooks.
-- `--model-optimizer` → config write only (see below).
 
 `--ci` and `--predeploy` run the inline generators below.
-
-`--model-optimizer` writes `.agentic-security/model-optimizer.json`:
-
-```json
-{ "mode": "advise", "costQualityTradeoff": 7, "minSavingsUsd": 0.01, "assumedModel": "claude-opus-4-8", "assumedCachedTokens": null, "interactive": false }
-```
-
-Set `mode` from the flag (`advise` default, or `off`), `costQualityTradeoff` from `--quality` (0–10, default 7), `minSavingsUsd` from `--min-savings`, and `interactive` to `true` when `--interactive` is passed (default `false`). The advisor (`hooks/model-cost-advisor.js`, UserPromptSubmit) and model capture (`hooks/session-start-model-capture.js`, SessionStart) are already registered in `hooks/hooks.json`, so enabling is purely the config write — no hook installation step. Confirm the config landed (`mode` is `advise`), then point the user at `docs/MODEL_COST_OPTIMIZATION.md`. If `--interactive` was passed, mention explicitly that qualifying prompts will now cost a little extra context (unlike the default tip-only mode) in exchange for a real choice.
 
 ### `--ci` — multi-provider CI security gate
 

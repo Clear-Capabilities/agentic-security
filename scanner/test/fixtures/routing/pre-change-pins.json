@@ -226,14 +226,5 @@
       "cached": 0.2
     }
   ],
-  "sourcedAt": "2026-07-05",
-  "advisorTiers": [
-    "simple",
-    "complex",
-    "medium"
-  ],
-  "advisorCosts": [
-    0.11499999999999999,
-    0.023
-  ]
+  "sourcedAt": "2026-07-05"
 }

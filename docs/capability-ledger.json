@@ -633,7 +633,6 @@
       "title": "Local AI, model cost controls, model egress policy, LLM and agent safety",
       "sources": [
         "docs/guides/ollama.md",
-        "docs/MODEL_COST_OPTIMIZATION.md",
         "docs/walkthroughs/model-egress.md",
         "docs/trust/model-egress.md"
       ],
@@ -1740,7 +1739,7 @@
     {
       "id": "CAP-109",
       "kind": "command",
-      "title": "setup: hooks, ci, predeploy, bodyguard, destructive-guard, model-optimizer",
+      "title": "setup: hooks, ci, predeploy, bodyguard, destructive-guard",
       "sources": [
         "command:setup"
       ],
@@ -1749,8 +1748,7 @@
         "ci",
         "predeploy",
         "bodyguard",
-        "destructive-guard",
-        "model-optimizer"
+        "destructive-guard"
       ],
       "haskell": {
         "applicability": "applicable",

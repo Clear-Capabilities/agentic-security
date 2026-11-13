@@ -215,4 +215,3 @@ suppression is logged and shown by `scan --include-suppressed`. See
 ## Related
 
 - [CLI reference](cli.md)
-- [Cost optimization](../MODEL_COST_OPTIMIZATION.md) — the model-cost advisor's own config

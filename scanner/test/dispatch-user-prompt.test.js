@@ -1,73 +1,46 @@
-// Tests for the UserPromptSubmit dispatcher merge (#24) and the advisor savings
-// ledger summary (#12). CJS hook modules, loaded via createRequire.
+// Tests for the UserPromptSubmit dispatcher (#24). Since 0.195.34 it runs one sub-hook, the legacy-alias redirect; the per-prompt
+// model-cost advisor was removed. CJS hook modules, loaded via createRequire.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { mergeOutputs } = require('../../hooks/dispatch-user-prompt.js');
-const { summarizeAdvisorLedger } = require('../../hooks/model-cost-advisor.js');
+const HOOKS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'hooks');
 
-test('mergeOutputs: alias-only → additionalContext, no systemMessage', () => {
-  const out = mergeOutputs({ aliasHit: { alias: 'status', replacement: '/posture --status', rest: '' }, adviceOut: null });
+test('mergeOutputs: an alias hit → additionalContext, no systemMessage', () => {
+  const out = mergeOutputs({ aliasHit: { alias: 'status', replacement: '/posture --status', rest: '' } });
   assert.equal(out.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
   assert.match(out.hookSpecificOutput.additionalContext, /\/posture --status/);
   assert.equal(out.systemMessage, undefined);
 });
 
-test('mergeOutputs: tip-only (legacy shape, interactive off) → systemMessage, no additionalContext', () => {
-  const out = mergeOutputs({ aliasHit: null, adviceOut: { systemMessage: '\u{1F4A1} try haiku' } });
-  assert.equal(out.systemMessage, '\u{1F4A1} try haiku');
-  assert.equal(out.hookSpecificOutput, undefined);
+test('mergeOutputs: no alias → empty object (dispatcher writes nothing)', () => {
+  assert.deepEqual(mergeOutputs({ aliasHit: null }), {});
 });
 
-test('mergeOutputs: alias fires + advisor tip-only → union of the two hook outputs', () => {
-  const out = mergeOutputs({
-    aliasHit: { alias: 'harden', replacement: '/fix --harden', rest: 'x' },
-    adviceOut: { systemMessage: 'tip' },
-  });
-  assert.ok(out.hookSpecificOutput && out.systemMessage);
+test('the model-cost advisor is gone: no module, no SessionStart model capture, no hook registration', () => {
+  for (const f of ['model-cost-advisor.js', 'session-start-model-capture.js']) assert.ok(!fs.existsSync(path.join(HOOKS, f)), `${f} still exists`);
+  const hooksJson = fs.readFileSync(path.join(HOOKS, 'hooks.json'), 'utf8');
+  assert.doesNotMatch(hooksJson, /model-cost-advisor|model-capture/);
+  assert.doesNotMatch(fs.readFileSync(path.join(HOOKS, 'dispatch-user-prompt.js'), 'utf8'), /model-cost-advisor|advise/);
 });
 
-test('mergeOutputs: neither fires → empty object (dispatcher writes nothing)', () => {
-  assert.deepEqual(mergeOutputs({ aliasHit: null, adviceOut: null }), {});
-});
-
-test('mergeOutputs: alias AND the interactive advisor BOTH set additionalContext on the same prompt → joined, not clobbered', () => {
-  const out = mergeOutputs({
-    aliasHit: { alias: 'status', replacement: '/posture --status', rest: '' },
-    adviceOut: { systemMessage: 'tip', additionalContext: '[model-advisor] call AskUserQuestion...' },
-  });
-  assert.equal(out.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
-  assert.match(out.hookSpecificOutput.additionalContext, /\/posture --status/);
-  assert.match(out.hookSpecificOutput.additionalContext, /model-advisor/);
-  assert.match(out.hookSpecificOutput.additionalContext, /AskUserQuestion/);
-  assert.equal(out.systemMessage, 'tip');
-});
-
-test('mergeOutputs: interactive advisor additionalContext only (no alias) → still surfaced under hookSpecificOutput', () => {
-  const out = mergeOutputs({
-    aliasHit: null,
-    adviceOut: { systemMessage: 'tip', additionalContext: '[model-advisor] call AskUserQuestion...' },
-  });
-  assert.equal(out.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
-  assert.match(out.hookSpecificOutput.additionalContext, /model-advisor/);
-  assert.equal(out.systemMessage, 'tip');
-});
-
-test('summarizeAdvisorLedger (#12): aggregates predicted savings + tier counts', () => {
-  const s = summarizeAdvisorLedger([
-    { tier: 'simple', kind: 'switch', savings: 0.02 },
-    { tier: 'simple', kind: 'switch', savings: 0.03 },
-    { tier: 'medium', kind: 'effort', savings: 0.01 },
-  ]);
-  assert.equal(s.adviceCount, 3);
-  assert.ok(Math.abs(s.totalPredictedSavingUsd - 0.06) < 1e-9);
-  assert.deepEqual(s.byTier, { simple: 2, medium: 1 });
-});
-
-test('summarizeAdvisorLedger: empty / garbage input → zeroed, never throws', () => {
-  assert.deepEqual(summarizeAdvisorLedger([]), { adviceCount: 0, totalPredictedSavingUsd: 0, byTier: {} });
-  assert.deepEqual(summarizeAdvisorLedger(null), { adviceCount: 0, totalPredictedSavingUsd: 0, byTier: {} });
+test('a project that still has the old advisor config gets no advice from the dispatcher', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dispatch-'));
+  try {
+    fs.mkdirSync(path.join(dir, '.agentic-security'));
+    fs.writeFileSync(path.join(dir, '.agentic-security', 'model-optimizer.json'), JSON.stringify({ mode: 'advise', costQualityTradeoff: 10, minSavingsUsd: 0 }));
+    const r = spawnSync(process.execPath, [path.join(HOOKS, 'dispatch-user-prompt.js')], {
+      cwd: dir, input: JSON.stringify({ prompt: 'fix the typo in README.md', cwd: dir }), encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, '');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

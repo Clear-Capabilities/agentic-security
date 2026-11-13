@@ -141,21 +141,13 @@ Real captured verification legs, real rejection messages, and the three separate
 
 ## Stop overpaying for tokens
 
-Your agentic workforce runs on tokens. agentic-security watches each prompt and tells you when a cheaper model or lower reasoning depth would answer it just as well, and it's the only tool that does this **cache-aware**, accounting for the prompt cache a model switch would throw away.
+Your agentic workforce runs on tokens. agentic-security measures what the prompt cache saves and wastes, warns before an edit throws the cache away, and checks your own AI app's model calls for the same mistakes.
 
-```text
-💡 This simple one-off sits on a deep warm cache (~250k tokens). Switching your
-   main model would discard it — instead run this as a Haiku 4.5 subagent: it
-   answers in its own context (~84% cheaper) and leaves your Opus 4.8 cache intact.
-```
-
-- **Per-prompt model + depth advice, cache-aware.** Suggests the cheapest model + effort that still does the job, you tap `/model` + `/effort`. Prefers a cache-preserving effort drop over a plain model switch, and shows a switch's break-even point ("worth it past ~N more turns"). Zero added tokens; the analysis is purely local.
 - **Cache bodyguard.** Warns *before* an edit to `CLAUDE.md` or `.claude/settings` silently invalidates your cache and forces a costly cold re-read.
-- **Measured, not guessed.** `/posture --cache` reports what prompt caching actually **saved** and **wasted** this session, in real dollars, plus a running predicted-vs-realized check on the optimizer's own advice.
-- **Beyond this session, lints your own AI app's LLM calls too.** Scanning a project that calls Anthropic, OpenAI, Gemini, or xAI? It flags prompt-cache killers and over-provisioned calls, with a fix in that provider's own framework, e.g. an OpenAI app gets "gpt-5.4 at `reasoning_effort: low`."
-- **Opt-in: an actual choice, not just a tip.** Set `interactive: true` and a qualifying prompt gets you a real `AskUserQuestion` menu, keep your defaults, get the `/model` command to run yourself, or have Claude apply the cheaper model to its own delegated sub-agent work for the rest of the session. Costs a little real context on the prompts where it fires, unlike everything else in this section.
+- **Measured, not guessed.** `/posture --cache` reports what prompt caching actually **saved** and **wasted** this session, in real dollars, with a per-model breakdown.
+- **Lints your own AI app's LLM calls too.** Scanning a project that calls Anthropic, OpenAI, Gemini, or xAI? It flags prompt-cache killers and over-provisioned calls, with a fix in that provider's own framework, e.g. an OpenAI app gets "gpt-5.4 at `reasoning_effort: low`."
 
-On by default (advisory only, a hook can't switch your model for you); disable per-project via `/setup --model-optimizer` or the kill switch. Full detail, including the live cost HUD, session budget, and interactive mode, [cache economics](../MODEL_COST_OPTIMIZATION.md).
+The per-prompt model-cost advisor (cheaper-model tips, `/setup --model-optimizer`) was removed in 0.195.34.
 
 ---
 

@@ -12,7 +12,7 @@ import { resolveRoutingControl } from './routing/control.js';
 // (crypto, auth, deserialization, XXE, cross-file taint) and let Haiku handle
 // the mechanical hardening findings.
 //
-// Mirrors the model IDs + tier vocabulary of hooks/model-cost-advisor.js:
+// Model IDs and tier vocabulary:
 //   strongest = claude-opus-4-8   (high effort)
 //   mid       = claude-sonnet-4-6 (medium effort)
 //   cheapest  = claude-haiku-4-5  (low effort)
