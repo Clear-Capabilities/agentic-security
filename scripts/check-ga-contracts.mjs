@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Runs the compatibility test every GA capability names in docs/capabilities.yaml (`contractTest`), and the same for any
-// Preview capability that names one. The registry is the list: a contract test nothing runs cannot count as evidence, and a
+// Preview or Labs capability that names one (a Labs row that names a contract test is holding itself to it ahead of promotion). The registry is the list: a contract test nothing runs cannot count as evidence, and a
 // registry that names no tests runs none and fails. Used by the `contract-conformance` release check.
 //
 //   node scripts/check-ga-contracts.mjs [--list]
@@ -12,7 +12,7 @@ import { loadRegistry } from './check-positioning-docs.mjs';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export function contractTests(reg) {
-  return [...new Set(reg.capabilities.filter(c => c.contractTest && (c.maturity === 'GA' || c.maturity === 'Preview')).map(c => c.contractTest))].sort();
+  return [...new Set(reg.capabilities.filter(c => c.contractTest && ['GA', 'Preview', 'Labs'].includes(c.maturity)).map(c => c.contractTest))].sort();
 }
 
 function main() {

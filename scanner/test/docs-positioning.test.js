@@ -601,10 +601,11 @@ test('GA bar: the real registry meets its own bar, and every GA capability names
   for (const c of ga) for (const k of ['contract', 'contractTest', 'gate', 'limits', 'since']) assert.ok(c[k], `${c.id} lacks ${k}`);
 });
 
-test('contract-conformance runs exactly the tests the registry names for GA and Preview, and none for Labs', async () => {
+test('contract-conformance runs exactly the tests the registry names, a Labs row that names one included, and none for Roadmap', async () => {
   const { contractTests } = await import('../../scripts/check-ga-contracts.mjs');
-  const reg = parseRegistry(registryYaml(BAR_CAP() + BAR_CAP().replace('alpha-scan', 'lab-thing').replace('maturity: GA', 'maturity: Labs').replace('scanner/test/alpha.test.js', 'scanner/test/lab.test.js')));
-  assert.deepEqual(contractTests(reg), ['scanner/test/alpha.test.js']);
+  const row = (id, maturity, t) => BAR_CAP().replace('alpha-scan', id).replace('maturity: GA', `maturity: ${maturity}`).replace('scanner/test/alpha.test.js', t);
+  const reg = parseRegistry(registryYaml(BAR_CAP() + row('lab-thing', 'Labs', 'scanner/test/lab.test.js') + row('road-thing', 'Roadmap', 'scanner/test/road.test.js')));
+  assert.deepEqual(contractTests(reg), ['scanner/test/alpha.test.js', 'scanner/test/lab.test.js']);
   assert.deepEqual(contractTests({ capabilities: [] }), []);
   const real = contractTests(loadRegistry(REPO));
   assert.ok(real.length >= 12);
