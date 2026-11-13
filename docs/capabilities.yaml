@@ -140,7 +140,13 @@ capabilities:
     name: Haskell and Nix/NixOS analysis
     lifecycleStages: [discover, corroborate]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/language-depth-contract.md
+    contractTest: scanner/test/contracts/language-depth.contract.test.js
+    contractNote: Finding metadata, producer registration, coverage outcomes and the support registry shape are frozen at contract version 1; command flags may still tighten; reviewed 2026-11-13.
+    gate: contract-conformance
+    limits: docs/reference/language-depth-contract.md#what-this-does-not-do
+    since: 0.195.10
+    platforms: [linux:test-shard]
     establishes: Static findings for Haskell and Nix/NixOS, with support measured per capability on a synthetic corpus and some legs honestly blocked.
     docs:
       - docs/language-support.md

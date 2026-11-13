@@ -387,7 +387,7 @@
           "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
           "check": "registry-ga-bar",
           "status": "not-started",
-          "detail": "Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+          "detail": "Preview row; the GA bar still needs nothing but the promotion itself",
           "evidencePath": null
         },
         {
@@ -461,7 +461,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms"
+      "nextAction": "language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself"
     },
     {
       "capabilityId": "model-validation",
@@ -3618,7 +3618,7 @@
       "agentic-discovery: owner unassigned (role security evaluation lead)",
       "context-intelligence: 3/8 acceptance records passed (in-progress); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "context-intelligence: owner unassigned (role security evaluation lead)",
-      "language-depth-haskell-nix: 2/8 acceptance records passed (in-progress); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms",
+      "language-depth-haskell-nix: 2/8 acceptance records passed (in-progress); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
       "model-validation: 3/8 acceptance records passed (in-progress); next: model-validation:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "model-validation: owner unassigned (role security evaluation lead)",

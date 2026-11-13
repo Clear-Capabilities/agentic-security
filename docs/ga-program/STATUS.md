@@ -28,7 +28,7 @@ Status is the rollup of the acceptance records: `passed` only when every require
 |---|---|---|---|---|---|
 | `agentic-discovery` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | agentic-discovery:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `context-intelligence` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 8 | context-intelligence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
-| `language-depth-haskell-nix` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
+| `language-depth-haskell-nix` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `model-validation` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 8 | model-validation:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `rule-compiler` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 9 | rule-compiler:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `detector-spec-synthesis` | Labs | unassigned (inference/evaluation engineer) | in-progress | 1 / 6 | detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
@@ -129,7 +129,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| language-depth-haskell-nix:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
+| language-depth-haskell-nix:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | language-depth-haskell-nix:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | language-depth-haskell-nix:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | language-depth-haskell-nix:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
@@ -588,7 +588,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 - agentic-discovery: owner unassigned (role security evaluation lead)
 - context-intelligence: 3/8 acceptance records passed (in-progress); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - context-intelligence: owner unassigned (role security evaluation lead)
-- language-depth-haskell-nix: 2/8 acceptance records passed (in-progress); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms
+- language-depth-haskell-nix: 2/8 acceptance records passed (in-progress); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - language-depth-haskell-nix: owner unassigned (role security evaluation lead)
 - model-validation: 3/8 acceptance records passed (in-progress); next: model-validation:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - model-validation: owner unassigned (role security evaluation lead)
