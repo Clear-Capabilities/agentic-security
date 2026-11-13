@@ -132,7 +132,8 @@ function main(argv) {
   for (const step of planSteps({ tests: !argv.includes('--no-tests') })) {
     const t0 = Date.now();
     out(`▶ ${step.name}`);
-    const r = spawnSync(step.cmd, step.args, { cwd: join(ROOT, step.cwd), stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+    // The scorecard is measured after the bump is committed (scorecard:finalize), so here it still describes the previous version.
+    const r = spawnSync(step.cmd, step.args, { cwd: join(ROOT, step.cwd), stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, env: { ...process.env, AGENTIC_SECURITY_SCORECARD_PENDING: '1' } });
     const secs = ((Date.now() - t0) / 1000).toFixed(0);
     if (r.status !== 0) {
       const tail = `${r.stdout || ''}\n${r.stderr || ''}`.split('\n').filter((l) => /^(✖|not ok|Error|AssertionError)|fail [1-9]|stale|mismatch/i.test(l)).slice(0, 12).join('\n');

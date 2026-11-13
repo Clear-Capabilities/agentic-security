@@ -79,7 +79,10 @@ test('[DOC-002.AC02] the scorecard and its JSON carry the same Haskell and Nix s
     const have = Object.fromEntries(ls.languages[lang].rows.map((r) => [r.capability, r.status]));
     for (const row of Object.values(REG.languages[lang].rows)) assert.equal(have[row.capability], row.status, `${lang}/${row.capability}: the scorecard differs from the registry`);
   }
-  assert.equal(json.engineVersion || (json.provenance && json.provenance.engineVersion) || ls.engineVersion || JSON.parse(read('scanner/package.json')).version, JSON.parse(read('scanner/package.json')).version);
+  // Between the bump commit and `npm run scorecard:finalize` the scorecard describes the previous version by design (it is measured on the
+  // committed bump, never mid-bump). release-prepare runs this suite in that gap and says so with AGENTIC_SECURITY_SCORECARD_PENDING=1; every
+  // other run (pre-push, hosted CI on the PR head, which is after finalize) keeps the equality.
+  if (process.env.AGENTIC_SECURITY_SCORECARD_PENDING !== '1') assert.equal(json.engineVersion || (json.provenance && json.provenance.engineVersion) || ls.engineVersion || JSON.parse(read('scanner/package.json')).version, JSON.parse(read('scanner/package.json')).version);
 });
 
 test('[DOC-002.AC02] a stale table fails the freshness check, in both directions', () => {

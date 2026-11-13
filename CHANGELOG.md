@@ -9,6 +9,18 @@
 > make the history less accurate, not more.
 
 
+## 0.195.32 - GA gap closure, part 1: a scorecard that names the tree it measured, and an independent-accuracy record that can pass
+
+**Measured, 0.195.31:** `TIMINGS preflight=3s push=7s pr=4s checks=361s merge=5s verify=6s tag=2s release=254s npm=328s total=970s release-clock=267s`, shipped from the merge to the published release in 267 s; the npm listing lagged the publish and `ship --resume` confirmed it.
+
+Two defects made GA ledger records impossible to pass however good the engine was. Nothing moved a maturity.
+
+- **Changed results, listed first.**
+  - `release-prepare` no longer measures the scorecard. It ran in the middle of the version bump, while every version file was uncommitted, so every release recorded `worktreeClean: false` and all 36 `EVIDENCE-IDENTITY` records failed by construction. The order is now: bump, commit, `npm run scorecard:finalize`, ship.
+  - A new fast publish blocker, `scorecard-identity`, fails when the committed scorecard was not measured on a clean tree, describes another version, or names a commit that differs from the released tree by anything but the scorecard and the GA status pages rendered from it. `ship` runs it with the other post-merge publish blockers (nine, was eight), and its preflight applies the same rule before anything is pushed, together with a refusal of a branch that `origin/main` has moved past (the merge would release a tree the scorecard did not measure).
+  - The GA `independent-accuracy-current` record judges the latest finished run in `bench/independent/runs/` against the approved floors with `realcode.mjs`'s own verdict. It used to read an engine 0.141.0 record and a `verdict` field that nothing writes, so it could never pass. The scorecard reports the latest run too, not only the approved baseline, and publishes the release-tier verdict for a run of this engine.
+- **`npm run scorecard:finalize`** (`scripts/scorecard-finalize.mjs`) refuses a dirty tree, measures, re-renders `docs/ga-program/STATUS.md` and `status.json`, and commits exactly those four files. Proven on a clean tree: the GA records passed went from 38 to 74 of 253, and `scorecard-identity` exits 0 on the finalized tree and 1 after a source commit on top.
+
 ## 0.195.31 - GA programme, release H: local detections syntax-checked per format with a labelled hunt corpus, hunts that state their coverage, refused provenance conflicts, mechanical evidence that outranks a model reject, and a deterministic + hunt Eval Lab arm
 
 **Measured, 0.195.30:** `TIMINGS preflight=3s push=7s pr=1s checks=392s merge=5s verify=10s tag=2s release=223s npm=328s total=971s release-clock=240s`, shipped from the merge to the published release in 240 s; the npm listing lagged the publish and `ship --resume` confirmed it.

@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/ga-program-status@1",
-  "engineVersion": "0.195.31",
+  "engineVersion": "0.195.32",
   "program": {
     "baselineCapabilities": 36,
     "capabilitiesInLedger": 36,
@@ -190,7 +190,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -200,7 +200,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical)",
+          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.32 (historical)",
           "evidencePath": null
         },
         {
@@ -293,7 +293,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -303,7 +303,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical)",
+          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.32 (historical)",
           "evidencePath": null
         },
         {
@@ -397,7 +397,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -407,7 +407,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical)",
+          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.32 (historical)",
           "evidencePath": null
         },
         {
@@ -500,7 +500,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -510,7 +510,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical)",
+          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.32 (historical)",
           "evidencePath": null
         },
         {
@@ -604,7 +604,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -717,7 +717,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -800,7 +800,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -893,7 +893,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -903,7 +903,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical)",
+          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.32 (historical)",
           "evidencePath": null
         },
         {
@@ -1016,7 +1016,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1119,7 +1119,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1129,7 +1129,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical)",
+          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.32 (historical)",
           "evidencePath": null
         },
         {
@@ -1223,7 +1223,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1326,7 +1326,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1429,7 +1429,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1511,7 +1511,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1583,7 +1583,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1667,7 +1667,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1769,7 +1769,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1842,7 +1842,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1852,7 +1852,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical)",
+          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.32 (historical)",
           "evidencePath": null
         },
         {
@@ -1896,7 +1896,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "deterministic-scan:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "deterministic-scan:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "dependency-risk",
@@ -1934,7 +1934,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -1968,7 +1968,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "dependency-risk:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "dependency-risk:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "taint-and-reachability",
@@ -2007,7 +2007,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2017,7 +2017,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical)",
+          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.32 (historical)",
           "evidencePath": null
         },
         {
@@ -2061,7 +2061,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "taint-and-reachability:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "taint-and-reachability:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "falsification",
@@ -2100,7 +2100,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2110,7 +2110,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical)",
+          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.32 (historical)",
           "evidencePath": null
         },
         {
@@ -2154,7 +2154,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "falsification:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "falsification:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "exploit-proof",
@@ -2192,7 +2192,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2226,7 +2226,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "exploit-proof:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "exploit-proof:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "root-cause-sweep",
@@ -2265,7 +2265,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2275,7 +2275,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical)",
+          "detail": "the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.32 (historical)",
           "evidencePath": null
         },
         {
@@ -2319,7 +2319,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "root-cause-sweep:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "root-cause-sweep:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "federation",
@@ -2358,7 +2358,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2402,7 +2402,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "federation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "federation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "runtime-corroboration",
@@ -2441,7 +2441,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2485,7 +2485,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "runtime-corroboration:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "runtime-corroboration:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "blast-radius",
@@ -2524,7 +2524,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2568,7 +2568,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "blast-radius:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "blast-radius:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "artifact-provenance",
@@ -2608,7 +2608,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2662,7 +2662,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "artifact-provenance:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "artifact-provenance:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "safe-fix",
@@ -2701,7 +2701,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2745,7 +2745,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "safe-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "safe-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "verified-remediation",
@@ -2785,7 +2785,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2839,7 +2839,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "verified-remediation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "verified-remediation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "proof-gated-fix",
@@ -2877,7 +2877,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -2911,7 +2911,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "proof-gated-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "proof-gated-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "scan-health",
@@ -2950,7 +2950,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -3004,7 +3004,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "scan-health:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "scan-health:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "assurance-modes",
@@ -3042,7 +3042,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -3076,7 +3076,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "assurance-modes:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "assurance-modes:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "model-egress-policy",
@@ -3116,7 +3116,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -3190,7 +3190,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "model-egress-policy:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "model-egress-policy:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "agent-guardrails",
@@ -3228,7 +3228,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -3262,7 +3262,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "agent-guardrails:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "agent-guardrails:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "mcp-server",
@@ -3300,7 +3300,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -3334,7 +3334,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "mcp-server:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "mcp-server:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     },
     {
       "capabilityId": "ci-gating",
@@ -3372,7 +3372,7 @@
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
           "status": "failed",
-          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+          "detail": "the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
           "evidencePath": null
         },
         {
@@ -3406,7 +3406,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "ci-gating:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement"
+      "nextAction": "ci-gating:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32"
     }
   ],
   "subcapabilities": [
@@ -3648,43 +3648,43 @@
       "eval-lab: owner unassigned (role security evaluation lead)",
       "release-assurance: 0/5 acceptance records passed (failed); next: release-assurance:REG-BAR: Preview row; the GA bar still needs gate, limits, since, platforms",
       "release-assurance: owner unassigned (role assurance engineer)",
-      "deterministic-scan: 1/7 acceptance records passed (failed); next: deterministic-scan:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "deterministic-scan: 1/7 acceptance records passed (failed); next: deterministic-scan:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "deterministic-scan: owner unassigned (role security evaluation lead)",
-      "dependency-risk: 1/5 acceptance records passed (failed); next: dependency-risk:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "dependency-risk: 1/5 acceptance records passed (failed); next: dependency-risk:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "dependency-risk: owner unassigned (role language/supply-chain lead)",
-      "taint-and-reachability: 1/7 acceptance records passed (failed); next: taint-and-reachability:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "taint-and-reachability: 1/7 acceptance records passed (failed); next: taint-and-reachability:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "taint-and-reachability: owner unassigned (role security evaluation lead)",
-      "falsification: 1/7 acceptance records passed (failed); next: falsification:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "falsification: 1/7 acceptance records passed (failed); next: falsification:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "falsification: owner unassigned (role security evaluation lead)",
-      "exploit-proof: 1/5 acceptance records passed (failed); next: exploit-proof:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "exploit-proof: 1/5 acceptance records passed (failed); next: exploit-proof:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "exploit-proof: owner unassigned (role platform security engineer)",
-      "root-cause-sweep: 1/7 acceptance records passed (failed); next: root-cause-sweep:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "root-cause-sweep: 1/7 acceptance records passed (failed); next: root-cause-sweep:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "root-cause-sweep: owner unassigned (role security evaluation lead)",
-      "federation: 1/6 acceptance records passed (failed); next: federation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "federation: 1/6 acceptance records passed (failed); next: federation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "federation: owner unassigned (role graph/analysis lead)",
-      "runtime-corroboration: 1/6 acceptance records passed (failed); next: runtime-corroboration:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "runtime-corroboration: 1/6 acceptance records passed (failed); next: runtime-corroboration:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "runtime-corroboration: owner unassigned (role graph/analysis lead)",
-      "blast-radius: 1/6 acceptance records passed (failed); next: blast-radius:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "blast-radius: 1/6 acceptance records passed (failed); next: blast-radius:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "blast-radius: owner unassigned (role graph/analysis lead)",
-      "artifact-provenance: 1/7 acceptance records passed (failed); next: artifact-provenance:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "artifact-provenance: 1/7 acceptance records passed (failed); next: artifact-provenance:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "artifact-provenance: owner unassigned (role language/supply-chain lead)",
-      "safe-fix: 1/6 acceptance records passed (failed); next: safe-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "safe-fix: 1/6 acceptance records passed (failed); next: safe-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "safe-fix: owner unassigned (role security evaluation lead)",
-      "verified-remediation: 1/7 acceptance records passed (failed); next: verified-remediation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "verified-remediation: 1/7 acceptance records passed (failed); next: verified-remediation:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "verified-remediation: owner unassigned (role security evaluation lead)",
-      "proof-gated-fix: 1/5 acceptance records passed (failed); next: proof-gated-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "proof-gated-fix: 1/5 acceptance records passed (failed); next: proof-gated-fix:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "proof-gated-fix: owner unassigned (role platform security engineer)",
-      "scan-health: 2/7 acceptance records passed (failed); next: scan-health:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "scan-health: 2/7 acceptance records passed (failed); next: scan-health:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "scan-health: owner unassigned (role language/supply-chain lead)",
-      "assurance-modes: 1/5 acceptance records passed (failed); next: assurance-modes:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "assurance-modes: 1/5 acceptance records passed (failed); next: assurance-modes:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "assurance-modes: owner unassigned (role assurance engineer)",
-      "model-egress-policy: 3/9 acceptance records passed (failed); next: model-egress-policy:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "model-egress-policy: 3/9 acceptance records passed (failed); next: model-egress-policy:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "model-egress-policy: owner unassigned (role inference/evaluation engineer)",
-      "agent-guardrails: 1/5 acceptance records passed (failed); next: agent-guardrails:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "agent-guardrails: 1/5 acceptance records passed (failed); next: agent-guardrails:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "agent-guardrails: owner unassigned (role platform security engineer)",
-      "mcp-server: 1/5 acceptance records passed (failed); next: mcp-server:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "mcp-server: 1/5 acceptance records passed (failed); next: mcp-server:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "mcp-server: owner unassigned (role platform security engineer)",
-      "ci-gating: 1/5 acceptance records passed (failed); next: ci-gating:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement",
+      "ci-gating: 1/5 acceptance records passed (failed); next: ci-gating:EVIDENCE-IDENTITY: the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement; the scorecard describes engine 0.195.31, the tree is 0.195.32",
       "ci-gating: owner unassigned (role assurance engineer)",
       "subcapability distribution (deterministic-scan): 0/1 passed (not-started)",
       "subcapability harness-manifests (agent-guardrails): 0/1 passed (not-started)",
