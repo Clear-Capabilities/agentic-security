@@ -37,6 +37,7 @@ import {
 import { mappingCoverageOf } from '../scanner/src/posture/auditor-walkthrough.js';
 import { computeStrategicMetrics } from '../scanner/src/posture/strategic-metrics.js';
 import { SCORECARD_OUTPUTS } from './scorecard-finalize.mjs';
+import { evaluate as realcodeEvaluate, loadBaseline, latestRunId } from '../bench/independent/realcode.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -129,14 +130,20 @@ function git(args) {
 }
 
 /** The result of the run `bench/independent/runs/BASELINE.json` names, without its per-entry rows; null when no baseline is approved. */
-function readApprovedIndependentRun() {
-  const pointer = readJsonIfPresent('bench/independent/runs/BASELINE.json');
-  if (!pointer || !pointer.runId) return null;
-  const run = readJsonIfPresent(`bench/independent/runs/${pointer.runId}/RESULT.json`);
-  if (!run) return null;
-  const { perEntry, unscored, ...rest } = run;
+// The LATEST finished independent run (not only the approved baseline): a fresh run of the current engine is reported as measured and
+// judged against the approved floors, without anyone having to move the floors first. The verdict is published only for a run of this
+// engine; a historical run's verdict would describe another engine.
+function readLatestIndependentRun(version) {
+  const runsDir = path.join(REPO, 'bench', 'independent', 'runs');
+  const runId = latestRunId(runsDir);
+  if (!runId) return { run: null, verdict: null };
+  const full = readJsonIfPresent(`bench/independent/runs/${runId}/RESULT.json`);
+  if (!full) return { run: null, verdict: null };
+  const base = loadBaseline(runsDir);
+  const verdict = full.engineVersion === version ? realcodeEvaluate({ floors: base ? base.floors : null, current: full, tier: 'release' }) : null;
+  const { perEntry, unscored, ...rest } = full;
   void perEntry; void unscored;
-  return rest;
+  return { run: rest, verdict: verdict ? { status: verdict.status, why: verdict.why } : null };
 }
 
 async function main() {
@@ -220,6 +227,7 @@ function countPartiallyEvidenced(dir) {
   } catch { return 0; }
 }
 
+  const latestIndependent = readLatestIndependentRun(pkg.version);
   const model = buildScorecard({
     provenance: {
       engineVersion: pkg.version,
@@ -264,7 +272,8 @@ function countPartiallyEvidenced(dir) {
       // withdrawn. A number nobody regenerates is a number nobody corrects.
       independent: readJsonIfPresent('bench/independent/RESULT.json'),
       // The approved baseline run of the CURRENT engine (E1-04/E1-07), if one exists: read from the run directory the pointer names.
-      independentRun: readApprovedIndependentRun(),
+      independentRun: latestIndependent.run,
+      realcodeVerdict: latestIndependent.verdict,
       // FR-905: same reasoning as `independent` above — the full-population
       // diagnostic run (bench/independent/why-missed.mjs --all) is measured
       // in minutes, so its summary is read from a committed file rather

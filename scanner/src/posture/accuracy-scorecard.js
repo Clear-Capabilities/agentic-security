@@ -118,7 +118,9 @@ export function aggregateCorpus(detail) {
  * protocol is forced to `unmeasured`, and an absent report is `unmeasured` with
  * the reason, never an empty pass. Pure.
  */
-export function summarizeMeasurement(provenance, independent, independentRun = null) {
+// `realcodeVerdict` is realcode.mjs's release-tier verdict for the CURRENT engine's run against the approved floors; the caller passes null
+// when the latest run measured another engine, so a historical verdict is never published as this engine's.
+export function summarizeMeasurement(provenance, independent, independentRun = null, realcodeVerdict = null) {
   const p = provenance || {};
   const run = summarizeIndependentRun(independentRun, p);
   const clean = p.worktreeClean === true;
@@ -126,6 +128,8 @@ export function summarizeMeasurement(provenance, independent, independentRun = n
   return {
     engineVersion: p.engineVersion || null, commit: p.commit || null, bundleSha256: p.bundleSha256 || null,
     cleanMeasurement: clean,
+    currentEngineRealcodeVerdict: realcodeVerdict && realcodeVerdict.status ? realcodeVerdict.status : 'unmeasured',
+    currentEngineRealcodeReason: realcodeVerdict && realcodeVerdict.why ? realcodeVerdict.why : 'no release-tier real-code verdict for this engine',
     identity: clean
       ? 'the commit and bundle below identify exactly the tree that was measured'
       : p.worktreeClean === false ? 'the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement' : 'cleanliness of the measured tree was not recorded',
@@ -399,7 +403,7 @@ export function buildScorecard(inputs) {
     // QA-001/QA-003: the real-code gates registered in the evaluation protocol. Relayed, never computed here.
     evaluationGates: summarizeEvaluationGates(inputs.evaluation),
     // QA-008.AC01: what this scorecard measured, stated once. `clean` is what lets the commit and bundle identify the measured tree.
-    measurement: summarizeMeasurement(inputs.provenance, committed.independent, committed.independentRun),
+    measurement: summarizeMeasurement(inputs.provenance, committed.independent, committed.independentRun, committed.realcodeVerdict || null),
   };
 }
 
@@ -457,6 +461,7 @@ export function renderScorecardMarkdown(m) {
     L.push(ia === 'unmeasured'
       ? '| Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |'
       : `| Independent accuracy of THIS engine | ${ia === 'measured' ? 'measured on a clean commit' : 'measured, but NOT release grade'}: ${m.measurement.currentEngineIndependentReason} |`);
+    if (m.measurement.currentEngineRealcodeVerdict) L.push(`| Real-code release verdict (approved floors) | ${m.measurement.currentEngineRealcodeVerdict}: ${m.measurement.currentEngineRealcodeReason} |`);
   }
   L.push(`| Node | ${p.nodeVersion || 'unknown'} |`);
   L.push(`| Corpus entries | ${c.totalEntries} (${c.scoredEntries} scored) |`);

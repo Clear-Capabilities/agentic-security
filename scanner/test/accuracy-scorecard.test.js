@@ -721,3 +721,11 @@ test('renderScorecardMarkdown: Strategic metrics is cleanly OMITTED when none wa
   assert.match(md, /\| Assurance Coverage \| not measurable/);
   assert.match(md, /\| Verified Remediation Rate \| 0\/0 \(not measurable\)/);
 });
+
+test('summarizeMeasurement publishes the computed realcode verdict', async () => {
+  const { summarizeMeasurement: sm } = await import('../src/posture/accuracy-scorecard.js');
+  const prov = { engineVersion: '1.0.0', worktreeClean: true };
+  assert.equal(sm(prov, null, null, { status: 'passed', why: 'six languages held' }).currentEngineRealcodeVerdict, 'passed');
+  assert.equal(sm(prov, null, null, { status: 'failed', why: 'go recall' }).currentEngineRealcodeVerdict, 'failed');
+  assert.equal(sm(prov, null, null).currentEngineRealcodeVerdict, 'unmeasured');
+});

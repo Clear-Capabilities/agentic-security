@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { loadRegistry, checkGaBar } from '../check-positioning-docs.mjs';
 import { buildInventory, surfaceKey, INVENTORY_FILE } from './inventory.mjs';
 import { checkClaims, collectFacts } from '../engineering-excellence/inventory.mjs';
+import { evaluate as realcodeEvaluate, loadBaseline, latestRunId } from '../../bench/independent/realcode.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO = path.resolve(HERE, '..', '..');
@@ -26,6 +27,7 @@ export const STATUS_MD = 'docs/ga-program/STATUS.md';
 const ALLOWED = ['not-started', 'in-progress', 'blocked', 'failed', 'passed', 'not-applicable'];
 const read = (repo, rel) => readFileSync(path.join(repo, rel), 'utf8');
 const readJson = (repo, rel) => (existsSync(path.join(repo, rel)) ? JSON.parse(read(repo, rel)) : null);
+const readJsonAbs = (p) => (existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null);
 
 export function loadLedger(repo = REPO) { return JSON.parse(read(repo, LEDGER_FILE)); }
 
@@ -55,15 +57,27 @@ function evidenceIdentity(ctx) {
 }
 
 function independentAccuracyCurrent(ctx) {
-  const r = ctx.independent;
-  if (!r) return { status: 'blocked', detail: 'bench/independent/RESULT.json is missing' };
+  // The latest finished run in bench/independent/runs/, judged against the APPROVED floors by realcode.mjs's own evaluate(): the verdict is
+  // computed here, never read from BASELINE.json (which records the approved run and its floors, not a verdict).
+  const { runId, run, verdict } = ctx.realcode || {};
+  if (!run) return { status: 'blocked', detail: 'no independent run has been recorded in bench/independent/runs/' };
   const problems = [];
-  if (r.engineVersion !== ctx.version) problems.push(`the independent record was measured on engine ${r.engineVersion}, not ${ctx.version} (historical)`);
-  if (!/^[0-9a-f]{40}$/.test(String(r.sourceCommit || r.commit || ''))) problems.push('no source commit in the record');
-  if (!/^[0-9a-f]{64}$/.test(String(r.bundleSha256 || ''))) problems.push('no bundle digest in the record');
-  const verdict = ctx.realcodeBaseline && ctx.realcodeBaseline.verdict;
-  if (verdict !== 'passed') problems.push(`the release-tier real-code verdict is ${verdict || 'unmeasured'} (bench/independent/runs/BASELINE.json)`);
-  return problems.length ? { status: 'blocked', detail: problems.join('; ') } : { status: 'passed', detail: `independent record on ${r.engineVersion} with identity; release-tier verdict passed`, evidence: 'bench/independent/RESULT.json' };
+  if (run.engineVersion !== ctx.version) problems.push(`the latest independent run (${runId}) measured engine ${run.engineVersion}, not ${ctx.version} (historical)`);
+  const id = run.identity || {};
+  if (id.measurementValid !== true) problems.push(`the run's measurement is not valid${(id.invalidReasons || []).length ? `: ${id.invalidReasons.join(', ')}` : ''}`);
+  if (!/^[0-9a-f]{40}$/.test(String(id.sourceCommit || ''))) problems.push('no source commit in the run identity');
+  if (!/^[0-9a-f]{64}$/.test(String(id.bundleSha256 || ''))) problems.push('no bundle digest in the run identity');
+  if (verdict.status !== 'passed') problems.push(`the release-tier real-code verdict is ${verdict.status}: ${verdict.why}`);
+  const evidence = `bench/independent/runs/${runId}/RESULT.json`;
+  return problems.length ? { status: 'blocked', detail: problems.join('; ') } : { status: 'passed', detail: `independent run ${runId} on ${run.engineVersion} at ${String(id.sourceCommit).slice(0, 12)}; release-tier verdict passed: ${verdict.why}`, evidence };
+}
+
+/** The latest finished independent run and its release-tier verdict against the approved floors. */
+function realcodeContext(runsDir) {
+  const runId = latestRunId(runsDir);
+  const run = runId ? readJsonAbs(path.join(runsDir, runId, 'RESULT.json')) : null;
+  const base = loadBaseline(runsDir);
+  return { runId, run, verdict: realcodeEvaluate({ floors: base ? base.floors : null, current: run, tier: 'release' }) };
 }
 
 /**
@@ -157,11 +171,11 @@ function rollup(records) {
  * Evaluate the ledger against the committed artifacts. `overrides.ledger` and `overrides.inventory` replace the committed files (the
  * tests use them to fabricate a defect without touching the tree); everything else is read from `repo`.
  */
-export function evaluate(repo = REPO, { now = Date.now(), ledger: ledgerOverride = null, inventory: inventoryOverride = null } = {}) {
+export function evaluate(repo = REPO, { now = Date.now(), ledger: ledgerOverride = null, inventory: inventoryOverride = null, runsDir = path.join(repo, 'bench', 'independent', 'runs') } = {}) {
   const ledger = ledgerOverride || loadLedger(repo);
   const registry = loadRegistry(repo);
   const version = JSON.parse(read(repo, 'scanner/package.json')).version;
-  const ctx = { repo, ledger, registry, version, now, barFindings: checkGaBar(registry, repo), scorecard: readJson(repo, 'docs/scorecard.json'), independent: readJson(repo, 'bench/independent/RESULT.json'), realcodeBaseline: readJson(repo, 'bench/independent/runs/BASELINE.json') };
+  const ctx = { repo, ledger, registry, version, now, barFindings: checkGaBar(registry, repo), scorecard: readJson(repo, 'docs/scorecard.json'), realcode: realcodeContext(runsDir) };
   const capabilities = ledger.capabilities.map((cap) => {
     const row = registry.capabilities.find((c) => c.id === cap.capabilityId) || {};
     const records = evaluateRecords(ctx, cap, cap.acceptance);

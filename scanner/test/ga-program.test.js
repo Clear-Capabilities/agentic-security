@@ -157,3 +157,63 @@ test('the inventory is deterministic across two generations', () => {
 test('the ledger file is where the docs say it is', () => {
   assert.equal(LEDGER_FILE, 'docs/ga-program/ledger.json');
 });
+
+// ── the independent-accuracy record judges the latest current-engine run against the approved floors (GA gap closure, Task 2) ──
+
+const VERSION = JSON.parse(readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8')).version;
+function runsDirWith(run) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ga-realcode-'));
+  for (const f of ['BASELINE.json', 'floors-a72968195aa1.json']) writeFileSync(path.join(dir, f), readFileSync(path.join(REPO, 'bench/independent/runs', f)));
+  if (run) { mkdirSync(path.join(dir, run.runId)); writeFileSync(path.join(dir, run.runId, 'RESULT.json'), JSON.stringify(run)); }
+  return dir;
+}
+function syntheticRun({ engineVersion = VERSION, measurementValid = true, recall = (f) => f.recallFloor + 0.1 } = {}) {
+  const floors = JSON.parse(readFileSync(path.join(REPO, 'bench/independent/runs/floors-a72968195aa1.json'), 'utf8'));
+  const byLanguage = {};
+  for (const [lang, f] of Object.entries(floors.languages)) {
+    if (f.status !== 'floor') continue;
+    byLanguage[lang] = { status: 'reportable', entries: 40, recall: { n: 4, d: 40, value: recall(f) }, precision: { n: 4, d: 5, value: 0.8 } };
+  }
+  return {
+    runId: 'r2', mergedAt: '2099-01-01T00:00:00.000Z', engineVersion,
+    identity: { sourceCommit: 'd'.repeat(40), bundleSha256: 'e'.repeat(64), measurementValid, invalidReasons: measurementValid ? [] : ['the measured tree was dirty'] },
+    scoring: { denominators: { inScope: 240, scored: 240, unscored: 0, unaccounted: 0, reconciles: true, duplicateRows: [], rowsNotInScope: [] }, definitions: { localized: { byLanguage } } },
+  };
+}
+const indepRecord = (runsDir) => evaluate(REPO, { runsDir }).capabilities.find((c) => c.capabilityId === 'deterministic-scan').records.find((r) => r.check === 'independent-accuracy-current');
+
+test('latest run of the current engine is judged against approved floors', () => {
+  const dir = runsDirWith(syntheticRun());
+  try {
+    const r = indepRecord(dir);
+    assert.equal(r.status, 'passed', r.detail);
+    assert.match(r.evidencePath, /bench\/independent\/runs\/r2\/RESULT\.json/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('historical run blocks', () => {
+  const dir = runsDirWith(syntheticRun({ engineVersion: '0.172.0' }));
+  try {
+    const r = indepRecord(dir);
+    assert.equal(r.status, 'blocked');
+    assert.match(r.detail, /historical/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('invalid identity blocks', () => {
+  const dir = runsDirWith(syntheticRun({ measurementValid: false }));
+  try {
+    const r = indepRecord(dir);
+    assert.equal(r.status, 'blocked');
+    assert.match(r.detail, /not valid/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a regression fails', () => {
+  const dir = runsDirWith(syntheticRun({ recall: (f) => (f.recallFloor > 0 ? 0 : 0.1) }));
+  try {
+    const r = indepRecord(dir);
+    assert.equal(r.status, 'blocked');
+    assert.match(r.detail, /regression/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

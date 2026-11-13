@@ -105,7 +105,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | agentic-discovery:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
 | agentic-discovery:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
-| agentic-discovery:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
+| agentic-discovery:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical) |
 | agentic-discovery:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | agentic-discovery:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | agentic-discovery:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
@@ -118,7 +118,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | context-intelligence:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, platforms |
 | context-intelligence:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
-| context-intelligence:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
+| context-intelligence:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical) |
 | context-intelligence:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | context-intelligence:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | context-intelligence:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -131,7 +131,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | language-depth-haskell-nix:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | language-depth-haskell-nix:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
-| language-depth-haskell-nix:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
+| language-depth-haskell-nix:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical) |
 | language-depth-haskell-nix:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | language-depth-haskell-nix:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | language-depth-haskell-nix:GA-04-001 | manual | GA-04 | not-started | fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved |
@@ -144,7 +144,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | model-validation:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, limits, since, platforms |
 | model-validation:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
-| model-validation:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
+| model-validation:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical) |
 | model-validation:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | model-validation:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | model-validation:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
@@ -194,7 +194,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | code-boundaries:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, platforms |
 | code-boundaries:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
-| code-boundaries:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
+| code-boundaries:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical) |
 | code-boundaries:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | code-boundaries:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | code-boundaries:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -222,7 +222,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | graph-precision:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, platforms |
 | graph-precision:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
-| graph-precision:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
+| graph-precision:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical) |
 | graph-precision:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | graph-precision:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | graph-precision:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -316,7 +316,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | deterministic-scan:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate corpus-gate) |
 | deterministic-scan:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
-| deterministic-scan:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
+| deterministic-scan:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical) |
 | deterministic-scan:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | deterministic-scan:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | deterministic-scan:GA-04-001 | manual | GA-04 | not-started | fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved |
@@ -338,7 +338,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | taint-and-reachability:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate layer-recall-gate) |
 | taint-and-reachability:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
-| taint-and-reachability:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
+| taint-and-reachability:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical) |
 | taint-and-reachability:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | taint-and-reachability:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | taint-and-reachability:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -350,7 +350,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | falsification:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate mutation-gate) |
 | falsification:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
-| falsification:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
+| falsification:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical) |
 | falsification:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | falsification:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | falsification:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -372,7 +372,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | root-cause-sweep:REG-BAR | mechanical |  | passed | GA bar met (since 0.181.0, gate sibling-sweep-gate) |
 | root-cause-sweep:EVIDENCE-IDENTITY | mechanical |  | failed | the scorecard was measured on a dirty worktree; the scorecard does not record a clean measurement |
-| root-cause-sweep:INDEP-ACCURACY | mechanical |  | blocked | the independent record was measured on engine 0.141.0, not 0.195.31 (historical); no source commit in the record; no bundle digest in the record; the release-tier real-code verdict is unmeasured (bench/independent/runs/BASELINE.json) |
+| root-cause-sweep:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (a72968195aa1) measured engine 0.172.0, not 0.195.31 (historical) |
 | root-cause-sweep:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | root-cause-sweep:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | root-cause-sweep:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
