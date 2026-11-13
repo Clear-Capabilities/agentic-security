@@ -22,7 +22,7 @@ That means every row in the table below has **no broken inbound link**, and the 
 | `README.md#see-it-in-action` | `docs/reference/capability-reference.md#see-it-in-action` | Moved verbatim | Not linked externally | Positioning checker |
 | `README.md#what-makes-it-different` | `docs/reference/capability-reference.md#what-makes-it-different` | Moved verbatim; the short list now sits under "Why it is different" | README commands link to the new anchor | Positioning checker |
 | `README.md#fixes-are-verified-not-trusted` | `docs/trust/verified-remediation.md` | Moved; canonical Trust page plus verbatim copy in the capability reference | README links to Trust | Positioning checker |
-| `README.md#stop-overpaying-for-tokens` | docs/reference/capability-reference.md#stop-overpaying-for-tokens and docs/MODEL_COST_OPTIMIZATION.md | Moved verbatim | Full detail was already in MODEL_COST_OPTIMIZATION.md | Positioning checker |
+| `README.md#stop-overpaying-for-tokens` | docs/reference/capability-reference.md#stop-overpaying-for-tokens | Moved verbatim; the model-cost advisor it described was removed in 0.195.34 and the section now covers what remains | The advisor's page, MODEL_COST_OPTIMIZATION.md, was deleted with it | Positioning checker |
 | `README.md#code-boundaries` | README.md#code-boundaries-the-security-graph-underneath and docs/security-graph/code-boundaries.md | Repositioned and moved higher; example retained | Anchor renamed; internal links updated | Positioning checker (anchors) |
 | `README.md#run-ai-assisted-security-analysis-locally-with-ollama` | docs/reference/capability-reference.md#run-ai-assisted-security-analysis-locally-with-ollama and docs/guides/ollama.md | Moved verbatim | Full guide unchanged | Positioning checker |
 | `README.md#security-benchmarking` | `docs/trust/benchmarking-methodology.md` | Moved and expanded | README links to it | Positioning checker |
@@ -58,7 +58,7 @@ That means every row in the table below has **no broken inbound link**, and the 
 | `docs/HARNESS_COMPATIBILITY.md` | `docs/integrations/README.md` | Linked from the integrations area; page retained in place | Path unchanged; no redirect needed | Link gate; positioning checker |
 | `docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md` | `docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md` | Retained in place; indexed by docs/README.md | Path unchanged; no redirect needed | Link gate |
 | `docs/METRICS.md` | `docs/trust/benchmarking-methodology.md` | Methodology page added; measured numbers stay in METRICS.md | Path unchanged; no redirect needed | Link gate; positioning checker |
-| `docs/MODEL_COST_OPTIMIZATION.md` | `docs/MODEL_COST_OPTIMIZATION.md` | Retained in place; indexed by docs/README.md | Path unchanged; no redirect needed | Link gate |
+| `docs/MODEL_COST_OPTIMIZATION.md` | none | Deleted in 0.195.34 with the per-prompt model-cost advisor it documented | No redirect; the cache economics it also covered are in docs/reference/capability-reference.md#stop-overpaying-for-tokens | Link gate |
 | `docs/OSCAL.md` | `docs/OSCAL.md` | Retained in place; indexed by docs/README.md | Path unchanged; no redirect needed | Link gate |
 | `docs/POSITIONING.md` | `docs/POSITIONING.md` | Retained in place; indexed by docs/README.md | Path unchanged; no redirect needed | Link gate |
 | `docs/README.md` | `docs/README.md` | Rewritten in place | Path unchanged; every previous link and section kept under "Deeper reading by lane" | Link gate; capability ledger |

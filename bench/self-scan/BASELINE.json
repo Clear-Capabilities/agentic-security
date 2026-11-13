@@ -1,15 +1,14 @@
 {
-  "generatedAt": "2026-11-08T18:48:36.817Z",
-  "commit": "bf38523cfe8a9ebb0c7bb50e4d99454204096da3",
+  "generatedAt": "2026-11-13T17:00:45.166Z",
+  "commit": "e66033a64ee8a4eb541bb21e9f00d984f852ac7c",
   "targets": {
     "hooks": {
-      "total": 21,
+      "total": 20,
       "byFile": {
         "conversation-context.js": 1,
         "lib/capability-advice.js": 1,
         "lib/transcript.js": 1,
         "mascot.js": 1,
-        "model-cost-advisor.js": 1,
         "post-edit-scan.js": 2,
         "pre-edit-bodyguard.js": 5,
         "session-start-self-check.js": 4,

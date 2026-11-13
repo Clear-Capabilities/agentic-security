@@ -2,7 +2,7 @@
 
 Autonomous Security Assurance Platform for the AI Software Era (a Claude Code plugin and CLI; also described as an agentic security harness). Full ASPM + LLMSecOps. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.195.33  
+**Version:** 0.195.34  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -55,7 +55,7 @@ Autonomous Security Assurance Platform for the AI Software Era (a Claude Code pl
 | `docs/capabilities.yaml` | **Capability registry: the single source of truth for GA / Preview / Labs / Roadmap.** Every page that states a maturity is checked against it; the README and lifecycle capability tables are generated from it (`npm run docs:positioning` writes them, `npm run docs:check-positioning` checks). Promote or demote a capability here, with evidence, never by rewriting a page. A Roadmap capability lists no implementation evidence. Also run by `node scripts/check-doc-drift.mjs --gate`. | |
 | `scripts/check-ga-contracts.mjs` + `docs/implementation-status/ga-promotion.md` | The GA bar: a GA capability in `docs/capabilities.yaml` must carry `since`, `contract`, `contractTest`, `gate`, `platforms` and `limits`, and the checker verifies each named thing exists (`bar` and `limits` rules). `check-ga-contracts.mjs` runs the registry's contract tests as the `contract-conformance` release check. The promotion record lists each capability against the bar and what is still open. Promote only by changing the registry with evidence. | |
 | `docs/STYLE-AND-TERMINOLOGY.md` | Product vocabulary: the one ten-stage lifecycle ordering, the avoid-list (unqualified secure/safe/guarantees/compliant/certified), the "verified" and "proven" rules, no em-dashes in prose. Enforced mechanically by `scripts/check-positioning-docs.mjs` for the pages the repositioning owns. | |
-| `docs/DOCS-MIGRATION.md` | Where every pre-repositioning doc path and README section lives now. No page was moved or deleted. | |
+| `docs/DOCS-MIGRATION.md` | Where every pre-repositioning doc path and README section lives now. No page was moved; one was deleted later, the model-cost advisor's page, with the advisor in 0.195.34. | |
 | `docs/OSCAL.md` | NIST OSCAL output: which model and why, and what an OSCAL document must REFUSE to claim (an unassessed control gets no finding). Read before changing `src/report/oscal.js`. |  |
 | `docs/HARNESS_ASSESSMENT_SPEC.md` | Six-domain rubric for scoring an AI agent harness (PRD-derived, versioned). |  |
 | `docs/HARNESS_ASSESSMENT_EVIDENCE.md` + `docs/schemas/harness-evidence.schema.json` | Wire format a conforming harness must emit so it can be scored. |  |
@@ -167,7 +167,6 @@ Several releases (v0.106.0–v0.107.1) shipped broken or false because work was 
 - **Bench-shape isolation.** Answer-key reading (Juliet folder names, OWASP template markers) lives under `sast/bench-shape/` and is OFF by default. `AGENTIC_SECURITY_BENCH_SHAPE=1` enables; `AGENTIC_SECURITY_BLIND_BENCH=1` overrides to force off.
 - **Shadow mode.** Custom rules with `shadow: true` write to `.agentic-security/shadow-findings.json` and are excluded from CI gates — for experimental rules not yet ready to block.
 - **Test fixtures.** New rules need a minimal `vulnerable/` + `clean/` pair under `scanner/test/fixtures/<rule-name>/`. Smoke must detect in `vulnerable/`, must pass on `clean/`.
-- **Sub-agent model/effort override (interactive cost advisor).** If `.agentic-security/model-optimizer-state.json` has a `subagentOverride: {model, effort, setAt}` for the *current* session (not a stale one from a prior session — it's cleared at every `SessionStart`), apply that `model`/`effort` when dispatching cost-sensitive, delegable Agent/Task subagent calls — **unless** the specific subagent already pins its own `model:` in its frontmatter (e.g. `agents/security-triager.md`, `agents/sca-triager.md` — always respect a static pin over the override), or the task clearly needs more capability than the override provides (the override is a cost preference, not a ceiling on judgment). This override only exists when the user explicitly opted into `interactive: true` (see `hooks/model-cost-advisor.js`'s header comment and `docs/MODEL_COST_OPTIMIZATION.md`) and then chose it via an `AskUserQuestion` prompt raised by that hook's `additionalContext` directive — if you see that directive, follow it (call `AskUserQuestion`, then persist the answer to the same state file yourself, per the directive's exact instructions) rather than silently ignoring it.
 
 ---
 

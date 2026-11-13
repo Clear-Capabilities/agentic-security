@@ -12,7 +12,7 @@ Agentic Security is an autonomous security assurance platform. It pairs **determ
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.195.33-blue)]()
+[![Version](https://img.shields.io/badge/version-0.195.34-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 > Built by **[Clear Capabilities](https://www.clearcapabilities.com/)**. Also known as an *agentic security harness* for Claude Code, Codex, Cursor and Gemini CLI.
@@ -286,7 +286,7 @@ Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`
 ### Fix and verify
 
 - **`fix`**: Remediation. Modes: id / all / pr / sca / compliance / rotate-secret / vault / harden / trim / generate. Every patch: deterministic or agent-composed: is re-verified (rescan-clean + no new ≥medium + lint) before it's written; `--all` runs independent findings in parallel and never halts on the first failure. `fix --apply --require-proof` additionally refuses to write unless the original exploit reproduces beforehand and is demonstrably blocked afterward. A real `rules synthesize|evaluate|promote|status|rollback` CLI (not a slash command) turns one confirmed finding into a reviewed, promoted deterministic detection rule: see [the rule compiler](docs/guides/rule-compiler.md).
-- **`setup`**: Workflow installers + guards. Modes: hooks / ci / predeploy / bodyguard / destructive-guard / model-optimizer. `--ci` generates a multi-provider CI gate; `--predeploy` blocks vercel/fly/wrangler deploys on critical findings.
+- **`setup`**: Workflow installers + guards. Modes: hooks / ci / predeploy / bodyguard / destructive-guard. `--ci` generates a multi-provider CI gate; `--predeploy` blocks vercel/fly/wrangler deploys on critical findings.
 
 ### Trace: the security graph, provenance and the supply chain
 

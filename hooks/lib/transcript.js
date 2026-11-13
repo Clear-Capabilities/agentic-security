@@ -1,6 +1,6 @@
 'use strict';
-// CJS twin of the transcript locator/parser for the CJS hooks (model-cost-advisor,
-// cache-invalidator-guard). Kept deliberately small; scanner/src/posture/
+// CJS twin of the transcript locator/parser for the CJS hook
+// cache-invalidator-guard. Kept deliberately small; scanner/src/posture/
 // cache-economics.js is the ESM source of truth, and
 // scanner/test/cache-economics.test.js asserts the two agree on a shared fixture.
 //

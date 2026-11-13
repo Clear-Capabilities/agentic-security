@@ -4368,9 +4368,6 @@
     "hook:PreToolUse:pre-bash-guard.js": {
       "to": "agent-guardrails"
     },
-    "hook:SessionStart:session-start-model-capture.js": {
-      "to": "harness-manifests"
-    },
     "hook:SessionStart:session-start-self-check.js": {
       "to": "harness-manifests"
     },

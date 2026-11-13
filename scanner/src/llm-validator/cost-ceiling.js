@@ -1,9 +1,8 @@
 // R12 — a hard cost ceiling for the LLM validator tier.
 //
-// A cost *advisor* already exists (`hooks/model-cost-advisor.js`): it biases a
-// quality/cost dial and warns as spend approaches a soft budget. What did not
-// exist is a CAP — something that refuses to spend rather than advising about
-// it. A soft budget you can sail past is not a ceiling, and "it warned you" is
+// A cost *advisor* (the per-prompt model-cost hook, removed in 0.195.34) biased
+// a quality/cost dial and warned as spend approached a soft budget. This is a
+// CAP: something that refuses to spend rather than advising about it. A soft budget you can sail past is not a ceiling, and "it warned you" is
 // no comfort on an invoice.
 //
 // THE DISTINCTION THAT MATTERS: this never degrades quality to fit a budget.

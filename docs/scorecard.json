@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.195.33",
-    "bundleSha256": "07baab5bcef9f52aff47e70a2cefffdab0e8d37c8aef0ca39a1cf63e5b0f45c4",
-    "commit": "cc3360604712b66b9269c9590c34387a707ed025",
+    "engineVersion": "0.195.34",
+    "bundleSha256": "a5bf1d4710fb6507b2920732cb155664efd4a33f963ad5f564f9ef3bbb7e0993",
+    "commit": "f3230aa335cec135d5c003d5470af9f529fb71d8",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-13T16:39:32.467Z",
+    "generatedAt": "2026-11-13T17:46:36.552Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -609,13 +609,12 @@
     "measuredThisRun": true,
     "targets": {
       "hooks": {
-        "total": 21,
+        "total": 20,
         "byFile": {
           "conversation-context.js": 1,
           "lib/capability-advice.js": 1,
           "lib/transcript.js": 1,
           "mascot.js": 1,
-          "model-cost-advisor.js": 1,
           "post-edit-scan.js": 2,
           "pre-edit-bodyguard.js": 5,
           "session-start-self-check.js": 4,
@@ -1000,8 +999,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 364,
-    "d": 571
+    "n": 245,
+    "d": 570
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2254,9 +2253,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.195.33",
-    "commit": "cc3360604712b66b9269c9590c34387a707ed025",
-    "bundleSha256": "07baab5bcef9f52aff47e70a2cefffdab0e8d37c8aef0ca39a1cf63e5b0f45c4",
+    "engineVersion": "0.195.34",
+    "commit": "f3230aa335cec135d5c003d5470af9f529fb71d8",
+    "bundleSha256": "a5bf1d4710fb6507b2920732cb155664efd4a33f963ad5f564f9ef3bbb7e0993",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",
