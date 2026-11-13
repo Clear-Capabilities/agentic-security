@@ -19,7 +19,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 90100,
+      "durationMs": 33476,
       "counts": {
         "tests": 37,
         "pass": 37,
@@ -27,11 +27,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-cli-scan.log",
-      "logSha256": "1d1f80cb15016d9c97ef45d6bd366208310a3125aca29221a91ac53104b79605",
-      "ranAt": "2026-11-13T01:36:24.150Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "6ef09e77f1ca2e5bbdd1e4fda48803807cb9a804765c42e168b8797c5159d91a",
+      "ranAt": "2026-11-13T15:22:57.196Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "sast-detectors": {
       "capability": "sast-detectors",
@@ -47,7 +47,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 1634,
+      "durationMs": 675,
       "counts": {
         "tests": 11,
         "pass": 11,
@@ -55,11 +55,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-sast-detectors.log",
-      "logSha256": "bd563e063c3f2883a423eb436caf395c2083f73ee9e4f2ea18b5e326de132fba",
-      "ranAt": "2026-11-13T01:36:26.299Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "2ca0657648c4c9d28fb8b77780761c113cbe0bb72cb2425cf39e33dc346a051c",
+      "ranAt": "2026-11-13T15:22:58.093Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "ir-layer": {
       "capability": "ir-layer",
@@ -75,7 +75,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 270,
+      "durationMs": 147,
       "counts": {
         "tests": 12,
         "pass": 12,
@@ -83,11 +83,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-ir-layer.log",
-      "logSha256": "ebd5cff9de0ca46b5aef01b24305ef6ef3c6d0b428e66706684929dd6d8fa247",
-      "ranAt": "2026-11-13T01:36:27.181Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "0f948dbe17c295219a108059640a25c85aa5917350b0cff934cb3fd69aebd957",
+      "ranAt": "2026-11-13T15:22:58.499Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "taint-engine": {
       "capability": "taint-engine",
@@ -109,7 +109,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 2796,
+      "durationMs": 965,
       "counts": {
         "tests": 32,
         "pass": 32,
@@ -117,11 +117,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-taint-engine.log",
-      "logSha256": "89552bae779d1f4ffd98bed664da363b9c22c153a63e09e1874155a26aaf6ade",
-      "ranAt": "2026-11-13T01:36:30.493Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "6ad6ea9effa5e6c30568c01d101fc30cf9873149f5f701c448c09e6a47e5d661",
+      "ranAt": "2026-11-13T15:22:59.681Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "guard-recognition": {
       "capability": "guard-recognition",
@@ -139,7 +139,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 2227,
+      "durationMs": 825,
       "counts": {
         "tests": 10,
         "pass": 10,
@@ -147,11 +147,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-guard-recognition.log",
-      "logSha256": "ddc624506486898393df1d855a65b1b159ade6d51ae05aca2d8ca12647664022",
-      "ranAt": "2026-11-13T01:36:33.341Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "558a939db3743e4da6df8a90f26f61bca0dd071499185b68f1b0f7e10581854d",
+      "ranAt": "2026-11-13T15:23:00.764Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "suppression-ledger": {
       "capability": "suppression-ledger",
@@ -171,7 +171,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 7471,
+      "durationMs": 2619,
       "counts": {
         "tests": 31,
         "pass": 31,
@@ -179,11 +179,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-suppression-ledger.log",
-      "logSha256": "760ab06b4ceb1d083c395e473287162d01f46c224f26560a23a86beed2780854",
-      "ranAt": "2026-11-13T01:36:41.490Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "cce2452dcae2e4bae9667bf8a8c6f8e03d1d9299a2e57be4baa048110842a033",
+      "ranAt": "2026-11-13T15:23:03.650Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "scan-health": {
       "capability": "scan-health",
@@ -201,7 +201,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 10397,
+      "durationMs": 4789,
       "counts": {
         "tests": 55,
         "pass": 55,
@@ -209,11 +209,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-scan-health.log",
-      "logSha256": "3cd103e1f3f0d87601e26f085b2e59f30959d90b894cee40ff51c34ff843c7a6",
-      "ranAt": "2026-11-13T01:36:52.510Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "775f363042c0c6dd85debc8fd4228673e9c7d575a8716300503b060b854fb16a",
+      "ranAt": "2026-11-13T15:23:08.712Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "analyzer-isolation": {
       "capability": "analyzer-isolation",
@@ -229,7 +229,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 1706,
+      "durationMs": 1518,
       "counts": {
         "tests": 6,
         "pass": 6,
@@ -237,11 +237,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-analyzer-isolation.log",
-      "logSha256": "0bbd368bf215d92c5babc616df18edd2a9d1b327ebc54fe3580b6f1f2f020385",
-      "ranAt": "2026-11-13T01:36:54.730Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "08fd229cd050e5fe57bc08e23d8a6b4c06acd12542b25d3b119c16a6e3772281",
+      "ranAt": "2026-11-13T15:23:10.456Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "incremental-cache": {
       "capability": "incremental-cache",
@@ -259,7 +259,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 2641,
+      "durationMs": 1221,
       "counts": {
         "tests": 14,
         "pass": 14,
@@ -267,11 +267,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-incremental-cache.log",
-      "logSha256": "1d6c851f68303f7fd13101aa266e540133bb39ff5c75aec726d1b61f6c9eb9d1",
-      "ranAt": "2026-11-13T01:36:57.917Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "f01d792ac5a4311605dc0e1fb5958247820ecbc5b20b42784d7918a52465fee8",
+      "ranAt": "2026-11-13T15:23:11.966Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "determinism": {
       "capability": "determinism",
@@ -289,7 +289,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 162512,
+      "durationMs": 67246,
       "counts": {
         "tests": 27,
         "pass": 27,
@@ -297,11 +297,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-determinism.log",
-      "logSha256": "c32a1eb9d3152c15271b816141b0d11250165256c89fae245fa77d9afddfdb77",
-      "ranAt": "2026-11-13T01:39:41.035Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "9b0b6a834f00311588936f11d21f20b1d9014cd7f28afd32ff9a76ce49f4d185",
+      "ranAt": "2026-11-13T15:24:19.560Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "fix-synthesis": {
       "capability": "fix-synthesis",
@@ -321,7 +321,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 12881,
+      "durationMs": 3908,
       "counts": {
         "tests": 58,
         "pass": 58,
@@ -329,11 +329,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-fix-synthesis.log",
-      "logSha256": "e9e0dfcd84c08f434383bfc143208943b60609c301a217b4c8d5aa49aacbff63",
-      "ranAt": "2026-11-13T01:39:54.766Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "9b9da7d53f710c5e4504ce381cf6c87cf99f6b87592076a4ec11b5f896e0cd40",
+      "ranAt": "2026-11-13T15:24:23.738Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "apply-fix-service": {
       "capability": "apply-fix-service",
@@ -349,7 +349,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 2087,
+      "durationMs": 761,
       "counts": {
         "tests": 16,
         "pass": 16,
@@ -357,11 +357,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-apply-fix-service.log",
-      "logSha256": "b80c4563882258e0db2abac4bbd3b7bcb88629bee259319890bec48cd79a85d7",
-      "ranAt": "2026-11-13T01:39:57.614Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "3d88586fd9cc2ecbb31ffc0235229fce8421198a297689d0df4267423b069278",
+      "ranAt": "2026-11-13T15:24:24.763Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "exploit-proof": {
       "capability": "exploit-proof",
@@ -381,7 +381,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 4137,
+      "durationMs": 2031,
       "counts": {
         "tests": 43,
         "pass": 43,
@@ -389,11 +389,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-exploit-proof.log",
-      "logSha256": "443e58b6090470a446771be60a90ece7390a165f1e4889a2bd47555b35ab5567",
-      "ranAt": "2026-11-13T01:40:02.527Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "0d2cd16103db82308abdfe4d44c81ceac6ce5f01ac7f2495688f290bf0e078fc",
+      "ranAt": "2026-11-13T15:24:27.058Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "sandbox": {
       "capability": "sandbox",
@@ -411,7 +411,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 9180,
+      "durationMs": 8462,
       "counts": {
         "tests": 44,
         "pass": 44,
@@ -419,11 +419,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-sandbox.log",
-      "logSha256": "e82edb63e7c45fb42e91601f458e76e441c2e845f24f5aea7e763219cf6282ff",
-      "ranAt": "2026-11-13T01:40:12.467Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "a9a60f6b664f7ee08666e6e79bcf245b587c06ddfd0c8d03113f8d936fbddd3d",
+      "ranAt": "2026-11-13T15:24:35.794Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "dci": {
       "capability": "dci",
@@ -441,7 +441,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 2242,
+      "durationMs": 970,
       "counts": {
         "tests": 13,
         "pass": 13,
@@ -449,11 +449,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-dci.log",
-      "logSha256": "278d136a95ad5ed229be209a89e1aed926520c36d5e58622e4650b4183778c86",
-      "ranAt": "2026-11-13T01:40:15.197Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "c1228a2e69f90db61f4ccfaade289286743482e1d26255fbc67436e8e1795219",
+      "ranAt": "2026-11-13T15:24:37.032Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "llm-discovery": {
       "capability": "llm-discovery",
@@ -475,7 +475,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 483,
+      "durationMs": 268,
       "counts": {
         "tests": 39,
         "pass": 39,
@@ -483,11 +483,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-llm-discovery.log",
-      "logSha256": "0f7b3b3a09e0d4f4957f86c655e6a62734d1a66dac738fc8ae4764745e907262",
-      "ranAt": "2026-11-13T01:40:16.428Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "3e8ea5e44d8aa52428c5370d2055174330ffbffccc896274606bc467f2265fbd",
+      "ranAt": "2026-11-13T15:24:37.561Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "business-invariants": {
       "capability": "business-invariants",
@@ -505,7 +505,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 6419,
+      "durationMs": 4415,
       "counts": {
         "tests": 34,
         "pass": 34,
@@ -513,11 +513,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-business-invariants.log",
-      "logSha256": "4cd6bfdf44dc7bfa53905f9c8b0fe7d478802fc185d6988c33c82d749a0ee702",
-      "ranAt": "2026-11-13T01:40:23.352Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "f51a9da9e91da207961b3796cc0c63494ad798145732e3b40bde0946face52ff",
+      "ranAt": "2026-11-13T15:24:42.195Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "egress-policy": {
       "capability": "egress-policy",
@@ -537,7 +537,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 392,
+      "durationMs": 241,
       "counts": {
         "tests": 36,
         "pass": 36,
@@ -545,11 +545,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-egress-policy.log",
-      "logSha256": "c414e8416cbab968775efa4a0d9242a5adadf83f1185b8eeecef2a84421de6a0",
-      "ranAt": "2026-11-13T01:40:24.200Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "bfa7e0acdca680ada1bbff171a27e195b16e62d654099845b0fea041bdca041b",
+      "ranAt": "2026-11-13T15:24:42.703Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "llm-validator": {
       "capability": "llm-validator",
@@ -567,7 +567,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 270,
+      "durationMs": 185,
       "counts": {
         "tests": 21,
         "pass": 21,
@@ -575,11 +575,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-llm-validator.log",
-      "logSha256": "da044ee7e8d140c236f7724c32a9766e9cf6543439a1ae53617b1181cc312893",
-      "ranAt": "2026-11-13T01:40:24.915Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "470e0683b945331fcf1055e55249b765448c68168a22a722ddde0aee36d9f301",
+      "ranAt": "2026-11-13T15:24:43.153Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "runtime-correlation": {
       "capability": "runtime-correlation",
@@ -597,7 +597,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 244,
+      "durationMs": 162,
       "counts": {
         "tests": 29,
         "pass": 29,
@@ -605,11 +605,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-runtime-correlation.log",
-      "logSha256": "b998c5341ec403c3a184f5933518b22e6607abe770fbbb1ff28df8646e9c6d6b",
-      "ranAt": "2026-11-13T01:40:25.599Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "fe49b53bf52a9b6d8bfc73fcafed17451463ba302fda94bc8fbacedbb56cd92e",
+      "ranAt": "2026-11-13T15:24:43.576Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "dataflow-explorer": {
       "capability": "dataflow-explorer",
@@ -627,7 +627,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 2584,
+      "durationMs": 1378,
       "counts": {
         "tests": 6,
         "pass": 6,
@@ -635,11 +635,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-dataflow-explorer.log",
-      "logSha256": "dabfb608b9dba7f7e799d80582d293930b816bba5211429362c61c4d077c352d",
-      "ranAt": "2026-11-13T01:40:28.548Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "9b053f7ec6d5e2d725dcb67cf610af373993e41f68c4da1a27f65630e3b46a30",
+      "ranAt": "2026-11-13T15:24:45.174Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "fleet": {
       "capability": "fleet",
@@ -655,7 +655,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 296,
+      "durationMs": 210,
       "counts": {
         "tests": 49,
         "pass": 49,
@@ -663,11 +663,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-fleet.log",
-      "logSha256": "b0ed1df90009adbf27af585004098ab4a9c6f0d0d9dca4d90796df7e5c5aca6b",
-      "ranAt": "2026-11-13T01:40:29.331Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "7adfc9eb660ef281da737bed45f7c97174b739c2440a74c3fcf3c34fad158f0e",
+      "ranAt": "2026-11-13T15:24:45.677Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "artifact-provenance": {
       "capability": "artifact-provenance",
@@ -685,7 +685,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 1018,
+      "durationMs": 547,
       "counts": {
         "tests": 7,
         "pass": 7,
@@ -693,11 +693,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-artifact-provenance.log",
-      "logSha256": "129d5de0a75ea691ccf9b554a519411f78a4e3a1ec3a40ecd4c40e0652dbb21a",
-      "ranAt": "2026-11-13T01:40:30.840Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "fe5d5ac6a5a69fab80239fc3f9e1940749940d7bfcf4dfa11a5ac8e5e8467e84",
+      "ranAt": "2026-11-13T15:24:46.553Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "finding-provenance": {
       "capability": "finding-provenance",
@@ -713,7 +713,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 230,
+      "durationMs": 154,
       "counts": {
         "tests": 5,
         "pass": 5,
@@ -721,11 +721,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-finding-provenance.log",
-      "logSha256": "e8a22dce5554c66913962af2aad10694b3c0e869f40b1e00a16809332e95980f",
-      "ranAt": "2026-11-13T01:40:31.498Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "641eea9227dcf8a7d7fff47ab2503d347f6ce9178115e4f35083976462a387ea",
+      "ranAt": "2026-11-13T15:24:46.936Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "signed-evidence": {
       "capability": "signed-evidence",
@@ -743,7 +743,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 7374,
+      "durationMs": 3933,
       "counts": {
         "tests": 18,
         "pass": 18,
@@ -751,11 +751,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-signed-evidence.log",
-      "logSha256": "8504333c0568ec8025078d0745b326bf54bf81cee3318d116e2b747ef9beab96",
-      "ranAt": "2026-11-13T01:40:39.299Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "49e0a9d00796dd447d31f44edac05db283ffd8f5f99ea3e7d9138ef775ad8c6f",
+      "ranAt": "2026-11-13T15:24:51.090Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "oscal": {
       "capability": "oscal",
@@ -771,7 +771,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 1037,
+      "durationMs": 574,
       "counts": {
         "tests": 15,
         "pass": 15,
@@ -779,11 +779,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-oscal.log",
-      "logSha256": "4e354aad2a2bb987bae2ec1014813f0e8d207ae41058daffc621cac72452b67e",
-      "ranAt": "2026-11-13T01:40:40.878Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "6a874ea3613a8d8438f142976ae19384572a6bf6865a0a6df2d218e492f25af2",
+      "ranAt": "2026-11-13T15:24:51.933Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "compliance-mapping": {
       "capability": "compliance-mapping",
@@ -801,7 +801,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 411,
+      "durationMs": 249,
       "counts": {
         "tests": 34,
         "pass": 34,
@@ -809,11 +809,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-compliance-mapping.log",
-      "logSha256": "d90bb26acce4715e523c41060d6fcfe5be9e950ca31e4d2f43483d69e595e5fe",
-      "ranAt": "2026-11-13T01:40:41.709Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "3e8cfb49cfea08299030ded775076fef7db2e289cc19a94490dc33a4e62ca026",
+      "ranAt": "2026-11-13T15:24:52.405Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "privacy-controls": {
       "capability": "privacy-controls",
@@ -833,7 +833,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 11664,
+      "durationMs": 5079,
       "counts": {
         "tests": 50,
         "pass": 50,
@@ -841,11 +841,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-privacy-controls.log",
-      "logSha256": "e9f5fbcc33a49882c07cc8d9d52edfce6d06a294121a41b877b4bad2ba40b332",
-      "ranAt": "2026-11-13T01:40:53.851Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "d75b5dcc95c75dc0d1e9b93e91df4456b32382532fd35b45810a92df9bfd3e66",
+      "ranAt": "2026-11-13T15:24:57.744Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "mcp-server": {
       "capability": "mcp-server",
@@ -865,7 +865,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 7590,
+      "durationMs": 2990,
       "counts": {
         "tests": 37,
         "pass": 37,
@@ -873,11 +873,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-mcp-server.log",
-      "logSha256": "0cf4b9e0bec85d7583dc3d487b8902a4816c49f33ba0c18149848b0a44e26457",
-      "ranAt": "2026-11-13T01:41:02.038Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "9b702a8da982c32235b01d9b6104281479c0b685aaf38c48ab24b243fe435fe2",
+      "ranAt": "2026-11-13T15:25:01.005Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "lsp-server": {
       "capability": "lsp-server",
@@ -895,7 +895,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 9763,
+      "durationMs": 3405,
       "counts": {
         "tests": 9,
         "pass": 9,
@@ -903,11 +903,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-lsp-server.log",
-      "logSha256": "7513e39afb849ccffe57520eadb25a32a173199240e7a4782aff1d1452058248",
-      "ranAt": "2026-11-13T01:41:12.325Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "6ec7d930c624acf82a9539190c216e4229a9b0f86c0b2419c947c4bbbf09dd21",
+      "ranAt": "2026-11-13T15:25:04.633Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "language-support": {
       "capability": "language-support",
@@ -923,7 +923,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 592,
+      "durationMs": 240,
       "counts": {
         "tests": 14,
         "pass": 14,
@@ -931,11 +931,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-language-support.log",
-      "logSha256": "9c0dcd2e12eea7b69fa51d6b9aa6a6cb7334b774d419ab06d069412280d7105d",
-      "ranAt": "2026-11-13T01:41:13.545Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "1bc5a2e86013370c874fe473a6f88f3bd090d402871395fa3c9b1191712c272b",
+      "ranAt": "2026-11-13T15:25:05.139Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "scorecard": {
       "capability": "scorecard",
@@ -955,19 +955,19 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 1523,
+      "durationMs": 588,
       "counts": {
-        "tests": 66,
-        "pass": 66,
+        "tests": 67,
+        "pass": 67,
         "fail": 0,
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-scorecard.log",
-      "logSha256": "7e53e42dd61bad5fc24efc859986dbf51cad079fcd6881075676c6c37b30fb9e",
-      "ranAt": "2026-11-13T01:41:15.693Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "89dbba5ec5ea2134c02a2c1ce4e1b6090820b53447ab75ebc300a069ff5290c3",
+      "ranAt": "2026-11-13T15:25:05.988Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "evaluation-holdout": {
       "capability": "evaluation-holdout",
@@ -985,7 +985,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 1399,
+      "durationMs": 545,
       "counts": {
         "tests": 16,
         "pass": 16,
@@ -993,11 +993,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-evaluation-holdout.log",
-      "logSha256": "fcb284e5c2ae163f8f011712ef0fa9684933aba414e3815aabbc05c1889d5ef1",
-      "ranAt": "2026-11-13T01:41:17.620Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "b94181bd53038b28cd8be8c4b95937129e264ab94a602de7ccd86933455e07d2",
+      "ranAt": "2026-11-13T15:25:06.755Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "loop-engineering": {
       "capability": "loop-engineering",
@@ -1015,7 +1015,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 23152,
+      "durationMs": 20460,
       "counts": {
         "tests": 27,
         "pass": 27,
@@ -1023,11 +1023,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-loop-engineering.log",
-      "logSha256": "ce1706c2744d83ec5d6712dc56c60c0c39f54fd4a919f6ea02bee4ea7389222c",
-      "ranAt": "2026-11-13T01:41:41.300Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "a51d38f0fccd81c3580429b92301ae8cff0dbe36c01323f989629964937dd3eb",
+      "ranAt": "2026-11-13T15:25:27.437Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "engineering-excellence-tracker": {
       "capability": "engineering-excellence-tracker",
@@ -1045,7 +1045,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 22554,
+      "durationMs": 13272,
       "counts": {
         "tests": 31,
         "pass": 31,
@@ -1053,11 +1053,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-engineering-excellence-tracker.log",
-      "logSha256": "2784f85f4e2c90da56bdde1ffa89de91c088804ab79d63a6881adf8a594ce1b2",
-      "ranAt": "2026-11-13T01:42:04.397Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "aba35d229d591afb9bc557b3e2205eb7275fdb3d462278a0d8ba959c1ded1a59",
+      "ranAt": "2026-11-13T15:25:40.970Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "proof-fabric": {
       "capability": "proof-fabric",
@@ -1077,7 +1077,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 38561,
+      "durationMs": 20811,
       "counts": {
         "tests": 58,
         "pass": 46,
@@ -1085,11 +1085,11 @@
         "skipped": 12
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-proof-fabric.log",
-      "logSha256": "a038a6b150b5d2955210063fa9821933ba8977208a5015a8ada04a63d9cfd73a",
-      "ranAt": "2026-11-13T01:42:43.496Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "28ad73bdcfd76851a969909527e2732eddb30ef364ba407b9c7d1d0e88fe59a8",
+      "ranAt": "2026-11-13T15:26:02.042Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     },
     "assurance-contracts": {
       "capability": "assurance-contracts",
@@ -1109,7 +1109,7 @@
       "cwd": "scanner",
       "outcome": "exited",
       "exitCode": 0,
-      "durationMs": 15715,
+      "durationMs": 5284,
       "counts": {
         "tests": 50,
         "pass": 50,
@@ -1117,11 +1117,11 @@
         "skipped": 0
       },
       "log": "scripts/engineering-excellence/logs/E0-01/inventory-assurance-contracts.log",
-      "logSha256": "716136da60b3a8639561366591af076d9c0ed663ae46dc8cabe51a37964eff4a",
-      "ranAt": "2026-11-13T01:42:59.844Z",
-      "commit": "d6768a9ceec455f708a92705d60480ac3304d01c",
+      "logSha256": "73f22c49ab7da4efab89550693e16f81bcda4d4643d95baecbbf6c62c35ceb5f",
+      "ranAt": "2026-11-13T15:26:07.591Z",
+      "commit": "3c02c29d21ee98054ee7f0ec1ff7c684b3b8948e",
       "worktreeDirty": true,
-      "version": "0.195.32"
+      "version": "0.195.33"
     }
   }
 }

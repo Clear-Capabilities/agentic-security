@@ -28,6 +28,10 @@ Deep reference material. Nothing here is a tutorial; start from [docs home](../R
 | [Runtime corroboration](runtime-corroboration-contract.md) | The telemetry adapters, the runtime status and the edge states |
 | [Exploit proof](exploit-proof-contract.md) | The proof result, evidence ladder, environments and the fix proof gate |
 | [Artifact provenance](artifact-provenance-contract.md) | Image scan, verify, trace and VEX output, the inputs and the signature states |
+| [Haskell and Nix/NixOS analysis](language-depth-contract.md) | Language finding metadata, producer registration, coverage outcomes and the support registry |
+| [Compliance control evidence](compliance-evidence-contract.md) | The three status vocabularies, the report fields and the OSCAL reduction |
+| [Detector spec synthesis](detector-spec-synthesis-contract.md) | The proposal shape, the reply checks and why a proposal is never loaded as a rule |
+| [Runner-level capability enforcement](capability-enforcement-contract.md) | The task manifest, its refusals, the decision record and the per-platform statements |
 | [Capability registry](../capabilities.yaml) | The single source of truth for GA, Preview, Labs and Roadmap |
 | [Style and terminology](../STYLE-AND-TERMINOLOGY.md) | How these docs talk |
 | [Metrics](../METRICS.md) and [scorecard](../SCORECARD.md) | Measured numbers with the command that produced each |

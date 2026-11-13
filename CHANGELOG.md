@@ -9,6 +9,19 @@
 > make the history less accurate, not more.
 
 
+## 0.195.33 - GA gap closure, part 2: every Preview and Labs row carries the GA bar, so a promotion is an evidence decision
+
+**Measured, 0.195.32:** `TIMINGS preflight=4s push=8s pr=1s checks=325s merge=5s verify=8s tag=2s release=254s npm=90s total=697s release-clock=269s`, shipped from the merge to the published release in 269 s; the npm listing lagged the publish and `ship --resume` confirmed it. The first push failed three hosted test shards: the scorecard had stopped naming the approved independent baseline once a newer run was reported (fixed in that release), and two GA ledger tests pinned the state before a current-engine run existed.
+
+The 17 Preview and Labs rows of `docs/capabilities.yaml` each name a contract page, a contract test, a release gate, a dated limits section, the version the contract has held since, and a hosted job that runs the contract test. Each row's GA programme record now reads "needs nothing but the promotion itself". Nothing moved a maturity, and no acceptance record changed status: a promotion still needs its evidence.
+
+- **Changed results, listed first.**
+  - The GA bar now checks the `platforms` a Preview or Labs row declares, not only a GA row's. A row filled in ahead of promotion could name a CI job that does not exist and pass every check until the day it was promoted.
+  - `contract-conformance` (`scripts/check-ga-contracts.mjs`) runs a contract test that a Labs row names (33 contract test files with the four below, was 29). A Labs row held to a contract is checked on every release; a Roadmap row is not.
+- **Four new contracts, written from the code as it is** (`docs/reference/{language-depth,compliance-evidence,detector-spec-synthesis,capability-enforcement}-contract.md`), each with a contract test in `test:posture` that compares the page's field tables with what the code emits in both directions and runs the stated rules on small inputs, with no network, compiler, `nix` or sandbox backend (56 tests, about 4 s). Where the code is looser than its comments, the page says so under "What this does not do": the Haskell and Nix `excluded` file status is never assigned per file; the default OSCAL export turns every `partial` control into a finding, and only `--truth` keeps undecidable controls out; the detector-spec output refusal compares path text only; the capability runner's header comment still describes Linux as unverified.
+- **`since` is the release of the last change to each contract**, not the current version: model-validation 0.195.31, fleet-scan and strategic-metrics 0.195.23, eval-lab 0.182.0, release-assurance 0.195.30, language-depth 0.195.10, compliance-evidence 0.173.0, detector-spec-synthesis 0.195.22, capability-enforcement 0.165.0, the eight rows that already had one unchanged. Every platform is `linux:test-shard`, checked by listing the unit-test union the hosted matrix runs.
+- **Recall, measured not fixed yet.** The 0.195.32 forensics split by population: 131 of the 152 misses where no rule fired are in the development split, spread thinly (no language and CWE pair has 5 entries; by CWE alone, authorization 21 across CWE-862, 639 and 863, resource exhaustion 11). That is the input to the next release's work, not a result.
+
 ## 0.195.32 - GA gap closure, part 1: a scorecard that names the tree it measured, and an independent-accuracy record that can pass
 
 **Measured, 0.195.31:** `TIMINGS preflight=3s push=7s pr=4s checks=361s merge=5s verify=6s tag=2s release=254s npm=328s total=970s release-clock=267s`, shipped from the merge to the published release in 267 s; the npm listing lagged the publish and `ship --resume` confirmed it.
