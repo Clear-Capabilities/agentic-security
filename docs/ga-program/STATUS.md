@@ -31,7 +31,7 @@ Status is the rollup of the acceptance records: `passed` only when every require
 | `language-depth-haskell-nix` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `model-validation` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 8 | model-validation:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `rule-compiler` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 9 | rule-compiler:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
-| `detector-spec-synthesis` | Labs | unassigned (inference/evaluation engineer) | in-progress | 1 / 6 | detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
+| `detector-spec-synthesis` | Labs | unassigned (inference/evaluation engineer) | in-progress | 1 / 6 | detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself |
 | `fleet-scan` | Preview | unassigned (graph/analysis lead) | in-progress | 2 / 7 | fleet-scan:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `code-boundaries` | Preview | unassigned (security evaluation lead) | in-progress | 5 / 10 | code-boundaries:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `finding-provenance` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 8 | finding-provenance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
@@ -169,7 +169,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| detector-spec-synthesis:REG-BAR | mechanical |  | not-started | Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
+| detector-spec-synthesis:REG-BAR | mechanical |  | not-started | Labs row; the GA bar still needs nothing but the promotion itself |
 | detector-spec-synthesis:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | detector-spec-synthesis:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | detector-spec-synthesis:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
@@ -594,7 +594,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 - model-validation: owner unassigned (role security evaluation lead)
 - rule-compiler: 3/9 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - rule-compiler: owner unassigned (role security evaluation lead)
-- detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms
+- detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself
 - detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)
 - fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - fleet-scan: owner unassigned (role graph/analysis lead)

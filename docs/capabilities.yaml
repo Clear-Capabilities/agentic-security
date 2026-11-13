@@ -244,12 +244,20 @@ capabilities:
     name: Detector spec synthesis
     lifecycleStages: [learn]
     maturity: Labs
+    contract: docs/reference/detector-spec-synthesis-contract.md
+    contractTest: scanner/test/contracts/detector-spec-synthesis.contract.test.js
+    contractNote: The proposal fields, the model reply keys, the value limits and the exit codes are frozen at version 1; a proposal is never read by any rule loader; reviewed 2026-11-13.
+    gate: contract-conformance
+    limits: docs/reference/detector-spec-synthesis-contract.md#what-this-does-not-do
+    since: 0.195.22
+    platforms: [linux:test-shard]
     establishes: A detector-spec proposal drafted from sample vulnerable files, written for a human to review and never incorporated automatically.
     docs:
       - commands/labs.md
       - docs/learn/README.md
     evidence:
       - commands/labs.md
+      - scanner/src/discovery/detector-spec-synthesis.js
 
   - id: security-learning-rate
     name: Security learning rate metric
