@@ -643,7 +643,13 @@ capabilities:
     name: Compliance control evidence
     lifecycleStages: [trace]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/compliance-evidence-contract.md
+    contractTest: scanner/test/contracts/compliance-evidence.contract.test.js
+    contractNote: The three status vocabularies, the report and truth-model fields and the OSCAL reduction are frozen at version 1; command flags may still tighten; reviewed 2026-11-13.
+    gate: contract-conformance
+    limits: docs/reference/compliance-evidence-contract.md#what-this-does-not-do
+    since: 0.173.0
+    platforms: [linux:test-shard]
     establishes: Automated technical-control evidence mapped to bundled frameworks, with unassessed and manual controls kept out of the satisfied count. Not a certification.
     docs:
       - docs/guides/compliance.md

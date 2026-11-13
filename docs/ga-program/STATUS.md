@@ -38,7 +38,7 @@ Status is the rollup of the acceptance records: `passed` only when every require
 | `graph-precision` | Preview | unassigned (security evaluation lead) | in-progress | 3 / 8 | graph-precision:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `detection-and-response` | Preview | unassigned (analysis/platform engineer) | in-progress | 2 / 8 | detection-and-response:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `local-models` | Preview | unassigned (inference/evaluation engineer) | in-progress | 3 / 8 | local-models:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
-| `compliance-evidence` | Preview | unassigned (language/supply-chain lead) | in-progress | 1 / 6 | compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
+| `compliance-evidence` | Preview | unassigned (language/supply-chain lead) | in-progress | 1 / 6 | compliance-evidence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `capability-enforcement` | Labs | unassigned (platform security engineer) | in-progress | 1 / 5 | capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
 | `strategic-metrics` | Preview | unassigned (assurance engineer) | in-progress | 2 / 6 | strategic-metrics:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `eval-lab` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | eval-lab:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
@@ -259,7 +259,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
-| compliance-evidence:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
+| compliance-evidence:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | compliance-evidence:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | compliance-evidence:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | compliance-evidence:GA-04-001 | manual | GA-04 | not-started | fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved |
@@ -608,7 +608,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 - detection-and-response: owner unassigned (role analysis/platform engineer)
 - local-models: 3/8 acceptance records passed (in-progress); next: local-models:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - local-models: owner unassigned (role inference/evaluation engineer)
-- compliance-evidence: 1/6 acceptance records passed (in-progress); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms
+- compliance-evidence: 1/6 acceptance records passed (in-progress); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - compliance-evidence: owner unassigned (role language/supply-chain lead)
 - capability-enforcement: 1/5 acceptance records passed (in-progress); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms
 - capability-enforcement: owner unassigned (role platform security engineer)
