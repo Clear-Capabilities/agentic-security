@@ -13,6 +13,7 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync, mkdtempSync, realpathSync, rmSync, lstatSync } from 'node:fs';
 import { tmpdir as osTmpdir } from 'node:os';
 import { dirname, basename, join } from 'node:path';
+import { scorecardIdentity } from '../scorecard-finalize.mjs';
 
 export const PHASES = Object.freeze(['preflight', 'push', 'pr', 'checks', 'merge', 'verify', 'tag', 'release', 'npm', 'done']);
 
@@ -115,6 +116,20 @@ export function preflightProblems({ version, files, changelog, npmLatest, branch
   for (const [path, text] of Object.entries(files || {})) if (version && !String(text).includes(version)) problems.push(`${path} does not mention version ${version}`);
   if (version && !new RegExp(`^## ${version.replace(/\./g, '\\.')}\\b`, 'm').test(changelog || '')) problems.push(`CHANGELOG.md has no "## ${version}" entry`);
   return problems;
+}
+
+/**
+ * The scorecard identity rule (scripts/scorecard-finalize.mjs) applied BEFORE the push. The same rule is a post-merge publish blocker; found
+ * only there, it leaves main merged and unreleasable. Also refuses a branch that main has moved past: the merge commit would then differ from
+ * the measured tree by main's changes. A checkout with no scorecard is left to the release check. Pure.
+ */
+export function scorecardPreflight({ scorecard, version, changedSince, mainIsAncestor, releaseOnly = false }) {
+  if (!scorecard) return [];
+  const out = [];
+  const id = scorecardIdentity({ scorecard, version, changedSince });
+  if (!id.ok) out.push(`the scorecard does not identify this commit (${id.reasons.join('; ')}): commit everything, then run npm run scorecard:finalize in scanner/`);
+  if (!releaseOnly && mainIsAncestor === false) out.push('origin/main has commits this branch lacks, so the merge would release a tree the scorecard did not measure: merge origin/main, then run npm run scorecard:finalize in scanner/');
+  return out;
 }
 
 /**

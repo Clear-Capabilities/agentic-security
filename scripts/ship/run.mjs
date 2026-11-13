@@ -1,7 +1,7 @@
 // The release flow, as a state machine over an injected context (scripts/ship.mjs wires the real one; the tests wire a scripted one).
 // Each phase starts the moment the previous one finishes: no human or agent polling sits between a green check and the next step.
 
-import { staleVersionArtifacts, PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm, earlyGateArgs, lateGateArgs, scratchEnv } from './lib.mjs';
+import { staleVersionArtifacts, scorecardPreflight, PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm, earlyGateArgs, lateGateArgs, scratchEnv } from './lib.mjs';
 
 const PKG = '@clear-capabilities/agentic-security-scanner';
 const CRED = ['-c', "credential.helper=!gh auth git-credential"];
@@ -41,6 +41,15 @@ export async function runShip(ctx, opts = {}) {
       let npmLatest = null; try { npmLatest = (await ctx.fetchJson(`https://registry.npmjs.org/${PKG.replace('/', '%2f')}`))['dist-tags'].latest; } catch { /* offline: the registry check is skipped, and said so */ }
       const problems = preflightProblems({ version, files, changelog: ctx.readFile('CHANGELOG.md'), npmLatest, branch, dirty, releaseOnly: o.releaseOnly });
       problems.push(...staleVersionArtifacts({ version, readFile: ctx.readFile }));
+      let scorecard = null; try { scorecard = JSON.parse(ctx.readFile('docs/scorecard.json')); } catch { /* no scorecard here: the release check reports it */ }
+      if (scorecard) {
+        const measured = String(scorecard.provenance?.commit || '');
+        const known = /^[0-9a-f]{40}$/.test(measured) && sh('git', ['cat-file', '-e', `${measured}^{commit}`]).code === 0;
+        const changedSince = known ? git(['diff', '--name-only', measured, 'HEAD']).split('\n').filter(Boolean) : null;
+        if (!o.releaseOnly) git(['fetch', 'origin', 'main']);
+        const mainIsAncestor = sh('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']).code === 0;
+        problems.push(...scorecardPreflight({ scorecard, version, changedSince, mainIsAncestor, releaseOnly: o.releaseOnly }));
+      }
       if (o.releaseOnly) {
         // Release-only: the change was already pushed, reviewed and merged through its own pull request, so the work here is the tag and the hosted
         // release. That is only sound when main is exactly what origin has AND the hosted CI already passed on that commit.

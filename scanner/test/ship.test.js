@@ -771,3 +771,43 @@ test('--local-gate keeps the previous push: the background gate is awaited and t
   assert.equal(pushEnv && pushEnv.AGENTIC_SECURITY_PUSH_GATE, undefined, 'no tier override');
   fs.rmSync(ctx._dir, { recursive: true, force: true });
 });
+
+// GA gap closure review: a scorecard that does not name the released tree used to surface only at verify, after the merge, leaving main
+// merged and unreleasable. Preflight now applies the same identity rule before anything is pushed, and refuses a branch main has moved past.
+import { scorecardPreflight } from '../../scripts/ship/lib.mjs';
+const finalized = { provenance: { commit: 'f'.repeat(40), worktreeClean: true, engineVersion: '1.2.3' }, measurement: { cleanMeasurement: true, engineVersion: '1.2.3' } };
+
+test('preflight: a finalized scorecard on a branch that contains main passes', () => {
+  assert.deepEqual(scorecardPreflight({ scorecard: finalized, version: '1.2.3', changedSince: ['docs/scorecard.json'], mainIsAncestor: true }), []);
+});
+
+test('preflight: a source commit after finalize is named before the push', () => {
+  const p = scorecardPreflight({ scorecard: finalized, version: '1.2.3', changedSince: ['scanner/src/engine.js'], mainIsAncestor: true });
+  assert.equal(p.length, 1);
+  assert.match(p[0], /scanner\/src\/engine\.js.*scorecard:finalize/);
+});
+
+test('preflight: a dirty measurement is refused before the push', () => {
+  const dirty = { ...finalized, provenance: { ...finalized.provenance, worktreeClean: false }, measurement: { cleanMeasurement: false, engineVersion: '1.2.3' } };
+  assert.match(scorecardPreflight({ scorecard: dirty, version: '1.2.3', changedSince: [], mainIsAncestor: true }).join(), /dirty/);
+});
+
+test('preflight: a branch main has moved past is refused, because the merge would release a tree the scorecard did not measure', () => {
+  const p = scorecardPreflight({ scorecard: finalized, version: '1.2.3', changedSince: [], mainIsAncestor: false });
+  assert.equal(p.length, 1);
+  assert.match(p[0], /merge origin\/main/);
+});
+
+test('preflight: no scorecard in this checkout is left to the release check', () => {
+  assert.deepEqual(scorecardPreflight({ scorecard: null, version: '1.2.3', changedSince: null, mainIsAncestor: true }), []);
+});
+
+test('flow: a scorecard measured on a dirty tree stops ship at preflight, before anything is pushed', async () => {
+  const w = world(); const ctx = ctxFor(w);
+  const read = ctx.readFile;
+  const dirty = { provenance: { commit: HEAD, worktreeClean: false, engineVersion: '1.2.3' }, measurement: { cleanMeasurement: false, engineVersion: '1.2.3' } };
+  ctx.readFile = (p) => (p === 'docs/scorecard.json' ? JSON.stringify(dirty) : read(p));
+  const r = await runShipDefault(ctx, { maxRetries: 2 });
+  assert.equal(r.ok, false); assert.equal(r.phase, 'preflight');
+  assert.equal(ran(w, /push/).length, 0, 'nothing was pushed');
+});
