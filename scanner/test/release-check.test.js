@@ -367,7 +367,8 @@ test('release-gate — full run plans all thirty-three checks in order', () => {
   // (slow: it requires the recorded result of the once-per-release sealed measurement).
   // The GA programme (0.195.21) added ga-milestone-gate (fast: it evaluates the committed ledger, registry, scorecard and independent
   // record; a warning until the milestone is declared in docs/ga-program/ledger.json, then an error per unmet reason).
-  assert.equal(ids.length, 37);
+  // The GA gap closure added scorecard-identity (fast: the committed scorecard must name the clean tree being released).
+  assert.equal(ids.length, 38);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -394,7 +395,7 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
   assert.equal(slowIds.length, 19);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 18);
+  assert.equal(ids.length, 19);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
   // The four cheap correctness gates, the two new fast checks,
   // package-contents, both provenance gates, the doc-link gate, the two
@@ -405,7 +406,7 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
   // --fast: they are what make a fast run still meaningful.
   for (const keep of [
     'working-tree-clean', 'version-consistency', 'changelog-entry',
-    'bundle-integrity', 'scorecard-freshness', 'attestation-self-check',
+    'bundle-integrity', 'scorecard-freshness', 'scorecard-identity', 'attestation-self-check',
     'nist-catalog-freshness', 'nist-800-171-labels', 'package-contents',
     'head-pushed', 'remote-ci-green', 'doc-links', 'calibration-holdout',
     'independent-population-gate', 'ga-milestone-gate',
@@ -971,4 +972,26 @@ test('expected jobs — every workflow job name seen on a recent release commit 
   for (const name of ['analyze (javascript-typescript)', 'test-shard (5/8)', 'telemetry-capture', 'language-stress', 'dependency-currency']) {
     assert.ok(tiers.blocking.includes(name) || tiers.informational.includes(name), `${name} is classified`);
   }
+});
+
+import { evaluateScorecardIdentityCheck } from '../../scripts/release-check.mjs';
+
+test('scorecard-identity is a fast publish check', () => {
+  const c = CHECKS.find((x) => x.id === 'scorecard-identity');
+  assert.ok(c, 'scorecard-identity is registered');
+  assert.equal(c.slow, false);
+  assert.match(c.remedy, /scorecard:finalize/);
+});
+
+test('scorecard-identity passes on a finalized scorecard', () => {
+  const sc = { provenance: { commit: 'c'.repeat(40), worktreeClean: true, engineVersion: '2.0.0' }, measurement: { cleanMeasurement: true, engineVersion: '2.0.0' } };
+  const r = evaluateScorecardIdentityCheck({ scorecard: sc, version: '2.0.0', changedSince: ['docs/scorecard.json', 'docs/ga-program/STATUS.md'] });
+  assert.deepEqual(r.errors, []);
+});
+
+test('scorecard-identity fails after a source commit on top', () => {
+  const sc = { provenance: { commit: 'c'.repeat(40), worktreeClean: true, engineVersion: '2.0.0' }, measurement: { cleanMeasurement: true, engineVersion: '2.0.0' } };
+  const r = evaluateScorecardIdentityCheck({ scorecard: sc, version: '2.0.0', changedSince: ['scanner/src/engine.js'] });
+  assert.equal(r.errors.length, 1);
+  assert.match(r.errors[0], /scanner\/src\/engine\.js/);
 });

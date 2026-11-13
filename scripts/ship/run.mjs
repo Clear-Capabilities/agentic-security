@@ -224,7 +224,7 @@ export async function runShip(ctx, opts = {}) {
       if (o.releaseOnly || !o.localGate) {
         // The hosted release workflow re-runs every check with the cache off and its publish job needs all of them, so this local step is only
         // the publish blockers that can be answered here in seconds.
-        const only = ['head-pushed', 'remote-ci-green', 'changelog-entry', 'version-consistency', 'scorecard-freshness', 'bundle-integrity', 'package-contents', 'dependency-currency'];
+        const only = ['head-pushed', 'remote-ci-green', 'changelog-entry', 'version-consistency', 'scorecard-freshness', 'scorecard-identity', 'bundle-integrity', 'package-contents', 'dependency-currency'];
         const q = sh('node', ['scripts/release-check.mjs', '--only', only.join(',')], { stream: true, timeoutMs: 20 * 60 * 1000 });
         if (q.code !== 0) throw new Stop('verify', `the ${o.releaseOnly ? 'release-only' : 'publish-blocker'} checks failed: ${(q.out + q.err).split('\n').filter((l) => /^(FAIL|✗)/.test(l)).slice(0, 4).join(' | ')}`);
         return `${o.releaseOnly ? 'release-only' : 'publish-blocker'} checks passed on ${releaseSha.slice(0, 8)} (${only.length} publish blockers; hosted CI and the hosted release workflow run the full gate; --local-gate adds the local one)`;

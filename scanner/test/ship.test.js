@@ -202,7 +202,7 @@ test('flow: by default the local early release gate does not run; only the publi
   assert.equal(r.ok, true, JSON.stringify(r));
   const gates = ran(w, /^node scripts\/release-check\.mjs/);
   assert.equal(gates.length, 1, 'one local check run, after the merge: no early gate on the PR head');
-  assert.match(gates[0], /--only head-pushed,remote-ci-green,changelog-entry,version-consistency,scorecard-freshness,bundle-integrity,package-contents,dependency-currency$/);
+  assert.match(gates[0], /--only head-pushed,remote-ci-green,changelog-entry,version-consistency,scorecard-freshness,scorecard-identity,bundle-integrity,package-contents,dependency-currency$/);
   assert.equal(w.earlyEnv, undefined, 'no early gate (and so no closure run) happened');
   const at = (p, from = 0) => w.calls.findIndex((c, i) => i >= from && c.includes(p));
   assert.ok(at('release-check') > at('pr merge'), 'nothing local runs before the merge');

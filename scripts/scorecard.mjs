@@ -36,6 +36,7 @@ import {
 } from '../scanner/src/posture/accuracy-scorecard.js';
 import { mappingCoverageOf } from '../scanner/src/posture/auditor-walkthrough.js';
 import { computeStrategicMetrics } from '../scanner/src/posture/strategic-metrics.js';
+import { SCORECARD_OUTPUTS } from './scorecard-finalize.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -228,8 +229,7 @@ function countPartiallyEvidenced(dir) {
       // excluded — a scorecard can never be clean with respect to its own
       // output. Everything else being uncommitted is disclosed in the document,
       // because then the recorded commit does not describe what was measured.
-      worktreeClean: git(['status', '--porcelain', '--',
-        ':(exclude)docs/SCORECARD.md', ':(exclude)docs/scorecard.json']) === '',
+      worktreeClean: git(['status', '--porcelain', '--', ...SCORECARD_OUTPUTS.map((f) => `:(exclude)${f}`)]) === '',
       nodeVersion: process.version,
       generatedAt: new Date().toISOString(),
       // FR-901: "Published results identify engine version, corpus version,

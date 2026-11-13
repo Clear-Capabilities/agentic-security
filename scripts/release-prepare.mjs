@@ -81,7 +81,6 @@ export function planSteps({ tests = true } = {}) {
     { name: 'render the language docs', ...npm('docs:render-language') },
     { name: 'capture the language examples', ...npm('docs:capture-language') },
     { name: 'regenerate the assurance docs', ...npm('docs:assurance') },
-    { name: 'regenerate the scorecard', ...npm('scorecard') },
     { name: 'regenerate the shipped-surface inventory', ...node('scripts/ga-program/inventory.mjs', '--write') },
     { name: 'render the GA programme status', ...node('scripts/ga-program/ledger.mjs', '--render') },
     { name: 'record inventory test runs', ...node('scripts/engineering-excellence/inventory.mjs', '--verify') },
@@ -142,7 +141,7 @@ function main(argv) {
     }
     out(`✓ ${step.name} (${secs}s)`);
   }
-  out(`release-prepare: done in ${((Date.now() - started) / 1000).toFixed(0)}s. Review \`git status\`, commit, then run \`node scripts/ship.mjs\`.`);
+  out(`release-prepare: done in ${((Date.now() - started) / 1000).toFixed(0)}s. Review \`git status\`, commit, then run \`npm run scorecard:finalize\` in scanner/ (it measures the committed tree and commits the scorecard on its own), then \`node scripts/ship.mjs\`.`);
   return 0;
 }
 

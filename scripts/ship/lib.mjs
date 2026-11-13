@@ -131,7 +131,7 @@ export function staleVersionArtifacts({ version, readFile }) {
   if (inv && inv.facts && inv.facts.version !== version) out.push(`docs/engineering-excellence/inventory.json records ${inv.facts.version}, not ${version} (run: node scripts/release-prepare.mjs)`);
   const sc = read('docs/scorecard.json');
   const scv = sc && sc.provenance && sc.provenance.engineVersion;
-  if (sc && scv !== version) out.push(`docs/scorecard.json records ${scv}, not ${version} (run: node scripts/release-prepare.mjs)`);
+  if (sc && scv !== version) out.push(`docs/scorecard.json records ${scv}, not ${version} (commit the bump, then run: npm run scorecard:finalize in scanner/)`);
   return out;
 }
 
