@@ -104,7 +104,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | agentic-discovery:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
-| agentic-discovery:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| agentic-discovery:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | agentic-discovery:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | agentic-discovery:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | agentic-discovery:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -117,7 +117,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | context-intelligence:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, platforms |
-| context-intelligence:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| context-intelligence:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | context-intelligence:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | context-intelligence:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | context-intelligence:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -130,7 +130,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | language-depth-haskell-nix:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
-| language-depth-haskell-nix:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| language-depth-haskell-nix:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | language-depth-haskell-nix:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | language-depth-haskell-nix:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | language-depth-haskell-nix:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -143,7 +143,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | model-validation:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, limits, since, platforms |
-| model-validation:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| model-validation:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | model-validation:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | model-validation:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | model-validation:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -156,7 +156,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | rule-compiler:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
-| rule-compiler:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| rule-compiler:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | rule-compiler:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | rule-compiler:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | rule-compiler:GA-07-001 | manual | GA-07 | not-started | depends on GA-02 and GA-06; mutation execution needs GA-08 |
@@ -170,7 +170,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | detector-spec-synthesis:REG-BAR | mechanical |  | not-started | Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
-| detector-spec-synthesis:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| detector-spec-synthesis:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | detector-spec-synthesis:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | detector-spec-synthesis:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
 | detector-spec-synthesis:GA-07-001 | manual | GA-07 | not-started | depends on GA-02 and GA-06; mutation execution needs GA-08 |
@@ -181,7 +181,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | fleet-scan:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, limits, since, platforms |
-| fleet-scan:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| fleet-scan:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | fleet-scan:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | fleet-scan:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
 | fleet-scan:GA-09-001 | manual | GA-09 | not-started | qualification repositories not pinned |
@@ -193,7 +193,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | code-boundaries:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, platforms |
-| code-boundaries:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| code-boundaries:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | code-boundaries:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | code-boundaries:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | code-boundaries:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -208,7 +208,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | finding-provenance:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
-| finding-provenance:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| finding-provenance:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | finding-provenance:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | finding-provenance:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | finding-provenance:GA-05-001 | manual | GA-05 | not-started | adverse histories, the frozen contract and the absolute budget are recorded (finding-provenance:ADVERSE-HISTORIES); eligible coverage on this project is 83.8% against the 95% target (whole-project analyses need a project-scoped replay), and the accuracy half depends on the GA-02 benchmarks |
@@ -221,7 +221,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | graph-precision:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, platforms |
-| graph-precision:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| graph-precision:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | graph-precision:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | graph-precision:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | graph-precision:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -234,7 +234,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | detection-and-response:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
-| detection-and-response:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| detection-and-response:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | detection-and-response:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | detection-and-response:GA-05-001 | manual | GA-05 | not-started | depends on the GA-02 benchmarks |
 | detection-and-response:GA-08-001 | manual | GA-08 | not-started | hosted Linux confinement capacity not reserved |
@@ -247,7 +247,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | local-models:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs platforms |
-| local-models:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| local-models:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | local-models:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | local-models:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
 | local-models:GA-07-001 | manual | GA-07 | not-started | depends on GA-02 and GA-06; mutation execution needs GA-08 |
@@ -260,7 +260,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | compliance-evidence:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
-| compliance-evidence:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| compliance-evidence:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | compliance-evidence:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | compliance-evidence:GA-04-001 | manual | GA-04 | not-started | fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved |
 | compliance-evidence:GA-11-001 | manual | GA-11 | not-started | clean-machine verifier qualification not run; compliance mapping review not scheduled |
@@ -271,7 +271,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | capability-enforcement:REG-BAR | mechanical |  | not-started | Labs row; the GA bar still needs contract, contractTest, gate, limits, since, platforms |
-| capability-enforcement:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| capability-enforcement:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | capability-enforcement:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | capability-enforcement:GA-08-001 | manual | GA-08 | not-started | hosted Linux confinement capacity not reserved |
 | capability-enforcement:GA-12-001 | manual | GA-12 | not-started | pilot repositories not selected; maintainer not named |
@@ -281,7 +281,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | strategic-metrics:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, limits, since, platforms |
-| strategic-metrics:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| strategic-metrics:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | strategic-metrics:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | strategic-metrics:GA-11-001 | manual | GA-11 | not-started | clean-machine verifier qualification not run; compliance mapping review not scheduled |
 | strategic-metrics:GA-12-001 | manual | GA-12 | not-started | pilot repositories not selected; maintainer not named |
@@ -292,7 +292,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | eval-lab:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, limits, since, platforms |
-| eval-lab:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| eval-lab:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | eval-lab:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | eval-lab:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | eval-lab:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
@@ -305,7 +305,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | release-assurance:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs gate, limits, since, platforms |
-| release-assurance:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| release-assurance:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | release-assurance:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | release-assurance:GA-11-001 | manual | GA-11 | not-started | clean-machine verifier qualification not run; compliance mapping review not scheduled |
 | release-assurance:GA-12-001 | manual | GA-12 | not-started | pilot repositories not selected; maintainer not named |
@@ -315,7 +315,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | deterministic-scan:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate corpus-gate) |
-| deterministic-scan:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| deterministic-scan:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | deterministic-scan:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | deterministic-scan:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | deterministic-scan:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -327,7 +327,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | dependency-risk:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate sca-replay-gate) |
-| dependency-risk:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| dependency-risk:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | dependency-risk:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | dependency-risk:GA-04-001 | manual | GA-04 | not-started | fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved |
 | dependency-risk:GA-12-001 | manual | GA-12 | not-started | pilot repositories not selected; maintainer not named |
@@ -337,7 +337,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | taint-and-reachability:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate layer-recall-gate) |
-| taint-and-reachability:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| taint-and-reachability:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | taint-and-reachability:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | taint-and-reachability:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | taint-and-reachability:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -349,7 +349,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | falsification:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate mutation-gate) |
-| falsification:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| falsification:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | falsification:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | falsification:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | falsification:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -361,7 +361,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | exploit-proof:REG-BAR | mechanical |  | passed | GA bar met (since 0.183.1, gate remote-ci-green) |
-| exploit-proof:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| exploit-proof:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | exploit-proof:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | exploit-proof:GA-08-001 | manual | GA-08 | not-started | hosted Linux confinement capacity not reserved |
 | exploit-proof:GA-12-001 | manual | GA-12 | not-started | pilot repositories not selected; maintainer not named |
@@ -371,7 +371,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | root-cause-sweep:REG-BAR | mechanical |  | passed | GA bar met (since 0.181.0, gate sibling-sweep-gate) |
-| root-cause-sweep:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| root-cause-sweep:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | root-cause-sweep:INDEP-ACCURACY | mechanical |  | passed | independent run 83df9f624d98 on 0.195.32 at 688a873b2752; release-tier verdict passed: 6 language(s) at or above their pre-registered floors |
 | root-cause-sweep:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | root-cause-sweep:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
@@ -383,7 +383,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | federation:REG-BAR | mechanical |  | passed | GA bar met (since 0.181.0, gate contract-conformance) |
-| federation:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| federation:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | federation:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | federation:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
 | federation:GA-09-001 | manual | GA-09 | not-started | qualification repositories not pinned |
@@ -394,7 +394,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | runtime-corroboration:REG-BAR | mechanical |  | passed | GA bar met (since 0.184.0, gate contract-conformance) |
-| runtime-corroboration:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| runtime-corroboration:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | runtime-corroboration:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | runtime-corroboration:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
 | runtime-corroboration:GA-10-001 | manual | GA-10 | not-started | disposable validation products and official parsers not provisioned |
@@ -405,7 +405,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | blast-radius:REG-BAR | mechanical |  | passed | GA bar met (since 0.181.0, gate blast-radius-gate) |
-| blast-radius:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| blast-radius:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | blast-radius:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | blast-radius:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
 | blast-radius:GA-09-001 | manual | GA-09 | not-started | qualification repositories not pinned |
@@ -416,7 +416,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | artifact-provenance:REG-BAR | mechanical |  | passed | GA bar met (since 0.183.1, gate remote-ci-green) |
-| artifact-provenance:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| artifact-provenance:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | artifact-provenance:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | artifact-provenance:GA-04-001 | manual | GA-04 | not-started | fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved |
 | artifact-provenance:GA-08-001 | manual | GA-08 | not-started | hosted Linux confinement capacity not reserved |
@@ -428,7 +428,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | safe-fix:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate fix-verification-gate) |
-| safe-fix:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| safe-fix:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | safe-fix:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | safe-fix:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | safe-fix:GA-08-001 | manual | GA-08 | not-started | hosted Linux confinement capacity not reserved |
@@ -439,7 +439,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | verified-remediation:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate fix-verification-gate) |
-| verified-remediation:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| verified-remediation:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | verified-remediation:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | verified-remediation:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | verified-remediation:GA-08-001 | manual | GA-08 | not-started | hosted Linux confinement capacity not reserved |
@@ -451,7 +451,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | proof-gated-fix:REG-BAR | mechanical |  | passed | GA bar met (since 0.183.1, gate remote-ci-green) |
-| proof-gated-fix:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| proof-gated-fix:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | proof-gated-fix:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | proof-gated-fix:GA-08-001 | manual | GA-08 | not-started | hosted Linux confinement capacity not reserved |
 | proof-gated-fix:GA-12-001 | manual | GA-12 | not-started | pilot repositories not selected; maintainer not named |
@@ -461,7 +461,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | scan-health:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate contract-conformance) |
-| scan-health:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| scan-health:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | scan-health:UNKNOWN-IS-UNKNOWN | manual | GA-11 | passed | cd scanner && node --test test/scan-health.test.js test/ignore-pragma.test.js (exit 0) at 759828e2c258: scanner/test/scan-health.test.js |
 | scan-health:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | scan-health:GA-04-001 | manual | GA-04 | not-started | fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved |
@@ -473,7 +473,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | assurance-modes:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate contract-conformance) |
-| assurance-modes:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| assurance-modes:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | assurance-modes:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | assurance-modes:GA-11-001 | manual | GA-11 | not-started | clean-machine verifier qualification not run; compliance mapping review not scheduled |
 | assurance-modes:GA-12-001 | manual | GA-12 | not-started | pilot repositories not selected; maintainer not named |
@@ -483,7 +483,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | model-egress-policy:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate contract-conformance) |
-| model-egress-policy:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| model-egress-policy:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | model-egress-policy:EGRESS-ALL-PATHS | mechanical |  | passed | 9 model-call site(s) evaluate the policy and send through the shared transport; 2 exempt with a reason |
 | model-egress-policy:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | model-egress-policy:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
@@ -497,7 +497,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | agent-guardrails:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate contract-conformance) |
-| agent-guardrails:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| agent-guardrails:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | agent-guardrails:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | agent-guardrails:GA-08-001 | manual | GA-08 | not-started | hosted Linux confinement capacity not reserved |
 | agent-guardrails:GA-12-001 | manual | GA-12 | not-started | pilot repositories not selected; maintainer not named |
@@ -507,7 +507,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | mcp-server:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate contract-conformance) |
-| mcp-server:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| mcp-server:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | mcp-server:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | mcp-server:GA-08-001 | manual | GA-08 | not-started | hosted Linux confinement capacity not reserved |
 | mcp-server:GA-12-001 | manual | GA-12 | not-started | pilot repositories not selected; maintainer not named |
@@ -517,7 +517,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 | Record | Kind | Workstream | Status | Detail |
 |---|---|---|---|---|
 | ci-gating:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate contract-conformance) |
-| ci-gating:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at ead942ba677d, bundle 27c30ed53146 |
+| ci-gating:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.195.32 at a9ce9129abf3, bundle 27c30ed53146 |
 | ci-gating:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | ci-gating:GA-11-001 | manual | GA-11 | not-started | clean-machine verifier qualification not run; compliance mapping review not scheduled |
 | ci-gating:GA-12-001 | manual | GA-12 | not-started | pilot repositories not selected; maintainer not named |

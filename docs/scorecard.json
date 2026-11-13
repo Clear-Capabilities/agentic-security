@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.195.32",
     "bundleSha256": "27c30ed5314608be8e43f22e3dfc1f3d659f83a5bc9e280229c3dc172052107d",
-    "commit": "ead942ba677da14daddb1b3c0a380b5b4a9734cd",
+    "commit": "a9ce9129abf33863c18f3cbe921d78ca48b6a84b",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-13T13:54:03.084Z",
+    "generatedAt": "2026-11-13T14:29:01.140Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -1000,7 +1000,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 278,
+    "n": 276,
     "d": 571
   },
   "taintRecall": {
@@ -2255,11 +2255,12 @@
   },
   "measurement": {
     "engineVersion": "0.195.32",
-    "commit": "ead942ba677da14daddb1b3c0a380b5b4a9734cd",
+    "commit": "a9ce9129abf33863c18f3cbe921d78ca48b6a84b",
     "bundleSha256": "27c30ed5314608be8e43f22e3dfc1f3d659f83a5bc9e280229c3dc172052107d",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "passed",
     "currentEngineRealcodeReason": "6 language(s) at or above their pre-registered floors",
+    "approvedIndependentBaseline": "a72968195aa1",
     "identity": "the commit and bundle below identify exactly the tree that was measured",
     "currentEngineIndependentAccuracy": "measured",
     "currentEngineIndependentReason": "measured by run 83df9f624d98 on a clean commit; the figures are for the development and validation splits only",
