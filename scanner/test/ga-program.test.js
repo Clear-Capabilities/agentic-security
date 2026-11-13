@@ -17,6 +17,11 @@ import { latestRunId } from '../../bench/independent/realcode.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const version = JSON.parse(readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8')).version;
+const latestRun = () => {
+  const runId = latestRunId(path.join(REPO, 'bench', 'independent', 'runs'));
+  const run = JSON.parse(readFileSync(path.join(REPO, 'bench', 'independent', 'runs', runId, 'RESULT.json'), 'utf8'));
+  return { runId, current: run.engineVersion === version };
+};
 const clone = (x) => JSON.parse(JSON.stringify(x));
 let inventory;
 test.before(() => { inventory = buildInventory(REPO); });
@@ -49,12 +54,18 @@ test('mechanical records are computed from the artifacts: the GA bar passes for 
   const model = evaluate(REPO);
   const ds = model.capabilities.find((c) => c.capabilityId === 'deterministic-scan');
   assert.equal(ds.records.find((r) => r.check === 'registry-ga-bar').status, 'passed');
-  // 0.195.32 committed run 83df9f624d98 of this engine; realcode.mjs judges it against the approved floors (the runs-dir tests pin the blocked cases)
+  // The latest committed run passes only while it measured this version (realcode.mjs judges it against the approved floors); after a
+  // version bump with no new run it is historical and blocks. Both states follow from the committed artifacts, so the test reads them.
   const ind = ds.records.find((r) => r.check === 'independent-accuracy-current');
-  const runId = latestRunId(path.join(REPO, 'bench', 'independent', 'runs'));
-  assert.equal(ind.status, 'passed', ind.detail);
-  assert.match(ind.detail, new RegExp(`independent run ${runId} on ${version}`));
-  assert.equal(ind.evidencePath, `bench/independent/runs/${runId}/RESULT.json`);
+  const { runId, current } = latestRun();
+  if (current) {
+    assert.equal(ind.status, 'passed', ind.detail);
+    assert.match(ind.detail, new RegExp(`independent run ${runId} on ${version}`));
+    assert.equal(ind.evidencePath, `bench/independent/runs/${runId}/RESULT.json`);
+  } else {
+    assert.equal(ind.status, 'blocked', ind.detail);
+    assert.match(ind.detail, new RegExp(`\\(${runId}\\) measured engine .* not ${version.replace(/\./g, '\\.')} \\(historical\\)`));
+  }
   const preview = model.capabilities.find((c) => c.registryMaturity === 'Preview');
   assert.equal(preview.records.find((r) => r.check === 'registry-ga-bar').status, 'not-started');
   const mep = model.capabilities.find((c) => c.capabilityId === 'model-egress-policy');
@@ -92,7 +103,7 @@ test('the headline is honest: verified GA is 0 of 36 while other records are ope
   assert.equal(model.program.verifiedGa, 0);
   assert.equal(model.program.registryGa, 19);
   assert.equal(model.milestone.met, false);
-  assert.ok(!model.milestone.reasons.some((r) => /no current-engine independent accuracy record/.test(r)), 'a current-engine run is committed');
+  assert.equal(model.milestone.reasons.some((r) => /no current-engine independent accuracy record/.test(r)), !latestRun().current, 'the reason is listed exactly when the latest run measured another engine');
   assert.ok(model.milestone.reasons.some((r) => /owner unassigned/.test(r)));
   const md = readFileSync(path.join(REPO, STATUS_MD), 'utf8');
   assert.match(md, /Verified GA \(every required acceptance record passed\) \| 0 of 36/);
