@@ -135,7 +135,7 @@ function callerControlledParams(fn, sig, exported, imports) {
   // The result type is the part of the signature after the last top-level arrow; a function returning a framework handler value gets its text
   // parameters labelled as request input, any other exported function keeps the weaker caller-controlled label.
   const handler = handlerFrameworkOf(imports, sig.resultText);
-  const decorator = handler ? handler.decorator : 'hs:caller-controlled';
+  const decorator = handler && handler.params !== false ? handler.decorator : 'hs:caller-controlled';   // WAI: the framework supplies no text parameter
   sig.argTypes.forEach((t, i) => { const name = fn.params[i]; if (name && TEXT_LIKE.test(t)) out.push({ index: i, name, decorator }); });
   return out;
 }
@@ -614,7 +614,10 @@ class FnLowerer {
       case 'rec': return this.lowerRecord(e, ln);
       case 'recupd': {
         const base = this.lowerExpr(e.base, ln);
-        return mkUnion(base, { kind: 'object', props: e.fields.map((f) => ({ key: f.name, value: this.lowerExpr(f.e, ln) })), hs: { update: true } });
+        // `hs.base` names what is being updated (`def`, a parameter, a call's result), so a rule can tell a record built from a default from a
+        // decoration of a record it was handed, whose untouched fields were set elsewhere.
+        const baseName = base && base.kind === 'ident' ? base.name : base && base.kind === 'call' && typeof base.callee === 'string' ? base.callee : base ? base.kind : null;
+        return mkUnion(base, { kind: 'object', props: e.fields.map((f) => ({ key: f.name, value: this.lowerExpr(f.e, ln) })), hs: { update: true, base: baseName } });
       }
       case 'if': {
         const c = this.lowerExpr(e.c, ln);

@@ -1401,14 +1401,6 @@
       "HS-RULES"
      ]
     ],
-    "ihp:ihp-ide/IHP/IDE/Data/View/Layout.hs:92:Partial function applied to caller-supplied text": [
-     [
-      "low",
-      null,
-      null,
-      "HS-RULES"
-     ]
-    ],
     "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:72:Partial function applied to caller-supplied text": [
      [
       "low",
@@ -1827,9 +1819,9 @@
     ],
     "ihp:ihp/IHP/Controller/Render.hs:43:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -2027,9 +2019,9 @@
     ],
     "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:276:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -2302,11 +2294,11 @@
      }
     },
     "ihp": {
-     "rows": 177,
-     "flagged": 16,
-     "loweredToInfo": 161,
+     "rows": 176,
+     "flagged": 13,
+     "loweredToInfo": 163,
      "byStatus": {
-      "no-verdict": 110,
+      "no-verdict": 109,
       "unknown": 19,
       "entrypoint-reachable": 43,
       "external-api": 5
@@ -2323,8 +2315,8 @@
     },
     "scotty": {
      "rows": 21,
-     "flagged": 21,
-     "loweredToInfo": 0,
+     "flagged": 20,
+     "loweredToInfo": 1,
      "byStatus": {
       "external-api": 1,
       "no-verdict": 9,

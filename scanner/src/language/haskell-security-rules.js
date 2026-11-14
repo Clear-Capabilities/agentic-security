@@ -158,6 +158,10 @@ const EMPTINESS_CHECK = /(?:^|\.)(?:null|notNull|isEmpty|length|size|isJust|isNo
 // A call whose result has a different shape from its argument (pieces of it, or a parse of it): a test of the argument says nothing about the result.
 const SPLITTER = /(?:^|\.)(?:words|lines|splitOn|split|splitWhen|chunksOf|breakOn|decode|decodeStrict|eitherDecode|decodeEither|parseMaybe|parseEither|parse|readMaybe|readEither|reads)$/;
 const SESSION_COOKIE = /(?:sess|sid|token|tok|auth|jwt|csrf|login|remember|secret)/i;
+// The double-submit cookie of an XSRF defence: the page's script reads it, so HttpOnly is not an attribute it can have. Matched on the name
+// expression (a literal, or the field/function/variable that carries the configured name), never on the value.
+const XSRF_COOKIE = /xsrf|csrf/i;
+const xsrfNamed = (e) => !!e && ((e.kind === 'literal' && XSRF_COOKIE.test(String(e.value))) || (e.kind === 'call' && XSRF_COOKIE.test(String(e.callee || ''))) || (e.kind === 'member' && XSRF_COOKIE.test(String(e.prop || ''))) || (e.kind === 'ident' && XSRF_COOKIE.test(String(e.name || ''))));
 
 // What makes a bound variable security-shaped, and what makes a value sensitive for logging.
 const SECURITY_VAR = /^(?:.*(?:token|secret|nonce|otp|csrf|apikey|api_?key|sessionid|session_?key|sessiontoken|resettoken)[a-z0-9_']*|key|iv|sessionId|sid)$/i;
@@ -566,7 +570,8 @@ export function analyzeHaskellRules(files, opts = {}) {
       // `case length xs of 3 -> ..`, `if length xs == 3`: a comparison of the list's LENGTH with a number is a test of the list (the IR lowers the
       // case alternative to an equality on the scrutinee variable, so the length call sits behind an assignment).
       const lengthVars = new Set();
-      for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source && n.source.kind === 'call' && typeof n.source.callee === 'string' && LENGTH_CALL.test(n.source.callee)) lengthVars.add(n.target);
+      const lengthSrc = new Map();   // the length call itself, so the expression it measures can be read back (a split has no direct name)
+      for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source && n.source.kind === 'call' && typeof n.source.callee === 'string' && LENGTH_CALL.test(n.source.callee)) { lengthVars.add(n.target); lengthSrc.set(n.target, n.source); }
       // The conditions this function tests: every `if`, plus the first argument of `when` / `unless` / `guard` wherever the call sits
       // (`when (length xs > 2) (putStrLn (xs !! 2))` is a guard written as a combinator, not an `if` node).
       const condExprs = [];
@@ -576,6 +581,18 @@ export function analyzeHaskellRules(files, opts = {}) {
       }
       for (const cond of condExprs) {
         for (const x of walk(cond)) {
+          // `case length xs of 3 -> ..`: the IR lowers a literal alternative to a `<match>` on the scratch variable holding the length, so the
+          // alternative runs only for lists of that length (IHP `renderDefaultWithoutType`: `case length (splitOn "'" s) of 3 -> .. !! 1`).
+          if (x.kind === 'call' && x.callee === '<match>') {
+            for (const a of x.args || []) {
+              // the list measured is named, or is a split expression (`T.splitOn "'" input`), which the rule tracks by its own signature
+              const measured = a && a.kind === 'ident' && lengthVars.has(a.name) ? lengthSrc.get(a.name) : a && a.kind === 'call' && typeof a.callee === 'string' && LENGTH_CALL.test(a.callee) ? a : null;
+              if (!measured) continue;
+              for (const nm of directNames(measured)) testedVars.add(nm);
+              for (const s of splitsIn(measured)) testedSplits.add(s);
+            }
+            continue;
+          }
           if (x.kind === 'call' && typeof x.callee === 'string' && EMPTINESS_CHECK.test(x.callee)) {
             for (const nm of directNames(x)) testedVars.add(nm);
             for (const s of splitsIn(x)) testedSplits.add(s);
@@ -670,7 +687,7 @@ export function analyzeHaskellRules(files, opts = {}) {
                 const text = literalTextOf(v);
                 const nm = /^\s*([^=;\s]+)\s*=/.exec(text);
                 const sessionLike = !nm || SESSION_COOKIE.test(nm[1]);
-                const secure = /;\s*Secure\b/i.test(text); const httpOnly = /;\s*HttpOnly\b/i.test(text);
+                const secure = /;\s*Secure\b/i.test(text); const httpOnly = /;\s*HttpOnly\b/i.test(text) || (!!nm && XSRF_COOKIE.test(nm[1]));   // an XSRF cookie is readable by design
                 // an attribute string that is not written here (a rendered cookie value) cannot be judged: only a cookie whose text is visible is
                 // a header value that is entirely constant text (`authn=0` written to clear a login) carries no per-user credential
                 if (text && sessionLike && !isLiteralLike(v) && !constantConcat(v) && (!secure || !httpOnly)) emit('hs-insecure-cookie', file, e.line || node.line, { detail: `${!httpOnly ? 'HttpOnly missing' : ''}${!httpOnly && !secure ? ', ' : ''}${!secure ? 'Secure missing' : ''}`, evidence: { httpOnly, secure, cookie: nm ? nm[1] : null } });
@@ -687,9 +704,30 @@ export function analyzeHaskellRules(files, opts = {}) {
                 const nm = prop('setCookieName').value;
                 const sessionLike = !nm || nm.kind !== 'literal' || SESSION_COOKIE.test(String(nm.value));
                 const isTrue = (p) => p && p.value && ((p.value.kind === 'literal' && /^true$/i.test(String(p.value.value))) || (p.value.kind === 'ident' && /\.True$/.test(p.value.name)));
-                const httpOnly = isTrue(prop('setCookieHttpOnly')); const secure = isTrue(prop('setCookieSecure'));
-                if (sessionLike && (!httpOnly || !secure)) {
-                  emit('hs-insecure-cookie', file, node.line, { detail: `${!httpOnly ? 'HttpOnly missing' : ''}${!httpOnly && !secure ? ', ' : ''}${!secure ? 'Secure missing' : ''}`, evidence: { httpOnly, secure, sameSite: !!prop('setCookieSameSite') } });
+                // an XSRF double-submit cookie is READ by the page's script and sent back in a header: HttpOnly would break it, so its absence is
+                // the design (servant-auth-server's `xsrfCookieName` cookie); Secure still applies. Decided from the cookie's name, which is the
+                // protocol's own identifier here.
+                // An attribute's state: `true`, `false` (an explicit False, or absent), or `configured` (set from an expression the rule cannot
+                // evaluate, servant-auth-server's `case cookieIsSecure cookieSettings of ..`). Configured is not missing: the attribute IS set, by
+                // the deployment; it is reported at `info` as unjudged, never as a vulnerability (the NotSecure setting has its own rule above).
+                // `inherited`: the update decorates a record it was HANDED (a parameter, a call's result), so a field it leaves alone was set by
+                // whoever built it (servant-auth-server applies Secure in one helper and HttpOnly in another); only a record built from a default
+                // (`def { .. }`) has "absent" meaning "not set".
+                const isFalse = (v) => !!v && ((v.kind === 'literal' && /^false$/i.test(String(v.value))) || (v.kind === 'ident' && /(?:^|\.)False$/.test(String(v.name || ''))));
+                const freshBase = !e.hs.base || /(?:^|\.)(?:def|defaultSetCookie|mempty)$/.test(String(e.hs.base)) || e.hs.base === 'object';
+                const attr = (k) => { const p = prop(k); if (!p || !p.value) return freshBase ? 'false' : 'inherited'; if (isTrue(p)) return 'true'; if (isFalse(p.value)) return 'false'; return 'configured'; };
+                const httpOnlyState = xsrfNamed(nm) ? 'true' : attr('setCookieHttpOnly'); const secureState = attr('setCookieSecure');
+                const httpOnly = httpOnlyState === 'true'; const secure = secureState === 'true';
+                const named = (state) => [httpOnlyState === state ? 'HttpOnly' : null, secureState === state ? 'Secure' : null].filter(Boolean);
+                const missing = named('false'); const configured = named('configured'); const inherited = named('inherited');
+                // a constant value (`setCookieValue = ""`, the cookie being cleared) carries no per-user credential, as in the header-string form
+                const valueConstant = !!prop('setCookieValue') && !!prop('setCookieValue').value && prop('setCookieValue').value.kind === 'literal';
+                const evidence = { httpOnly, secure, sameSite: !!prop('setCookieSameSite'), configured, inherited };
+                if (sessionLike && !valueConstant && missing.length) {
+                  emit('hs-insecure-cookie', file, node.line, { detail: `${missing.join(' missing, ')} missing`, evidence });
+                } else if (sessionLike && !valueConstant && (configured.length || inherited.length)) {
+                  const parts = [configured.length ? `${configured.join(', ')} set from configuration, not judged` : null, inherited.length ? `${inherited.join(', ')} set elsewhere, not judged` : null].filter(Boolean);
+                  emit('hs-insecure-cookie', file, node.line, { severity: 'info', detail: parts.join('; '), evidence });
                 }
               }
               continue;

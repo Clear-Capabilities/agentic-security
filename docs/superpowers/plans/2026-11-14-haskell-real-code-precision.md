@@ -39,3 +39,14 @@ Each lever: failing test first, regression gates (`test:haskell`, `test:language
 - Lever 3: `fix-real.mjs ihp --all` verifies `Enums.hs:72`, `Enums.hs:75`, `SchemaOperations.hs:542` (MITIGATION): 23 of 27 labelled true positives patched. Still refused with the decision named: the variable-program command, the open redirect, the chain row, `Layout.hs:92`.
 - Lever 4 (the 2 development true positives at `info`) was not reached in this release.
 - Remaining fresh false positives (11): operator configuration feeding a path (SchemaCompiler 360/363, Cache.hs:45, Render.hs:43, Middleware.hs:276, scotty Util.hs:46), the pid-file read (CompileTimeDatabase:811, `data-input` in a service role), the two static error pages (`low` by the fixed-file rule), one partial function (`Layout.hs:92`), one cookie.
+
+## Round 2 (0.195.38), from the remaining labelled false positives
+
+| mechanism | source of the shape | sites |
+|---|---|---|
+| a text parameter of a WAI-typed function (`IO ResponseReceived`, `Application`, `Middleware`) is the caller's value, not request input; the function stays an entry handler | IHP `Controller/Render.hs:43` (`renderFile filePath contentType`) | fresh 1 |
+| a path operation on an uploaded part's `fileContent` reads the framework's temporary file (`tempFileBackEnd`): verdict `framework-controlled`, lowered; `fileName` stays a source | wai-request-params `Middleware.hs:276`; scotty `Action.hs:377` (unlabelled census) | fresh 1 |
+| `case length xs of 3 -> xs !! 1`: the IR's `<match>` on the length scratch variable is a bounds test, and the measured expression may be a split tracked by signature | IHP `Layout.hs:92` | fresh 1 |
+| an XSRF double-submit cookie is readable by design: HttpOnly is not missing on it, Secure still is | servant-auth-server `Cookie.hs:90,115,123` (discovery set) | discovery 3 |
+
+Rulings: the cookie decision reads the cookie's NAME expression (literal, field, function or variable carrying `xsrf`/`csrf`), the protocol's own identifier, as the session-ness test already does; `fileContent` is told apart from the other upload fields by its source label, so no provenance or lineage category changes.

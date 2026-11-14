@@ -88,6 +88,8 @@ export const HS_PACKAGES = Object.freeze({
 // provenance follows the existing taxonomy: http-body | url-param | path-param | header | cookie | env | cli | file-read | stdin | network
 const SRC = [];
 const src = (module, names, provenance, label, extra = {}) => { for (const e of E(module, names)) SRC.push({ ...e, provenance, label: `${label}${names.length > 1 ? '' : ''}`, package: extra.package, framework: extra.framework || null }); };
+/** The label of wai-extra's `fileContent` source, read by `haskell-trust.js` (a path operation on it reads the framework's temporary file). */
+export const UPLOAD_CONTENT_LABEL = 'uploaded file content';
 
 src('Prelude', ['getLine', 'getContents', 'readLn', 'interact'], 'stdin', 'standard input', { package: 'base' });
 // `getLine` and `getContents` read standard input. `hGetLine`/`hGetContents`/`hGetChar` read WHATEVER handle they are given (a file the program opened,
@@ -169,7 +171,11 @@ src('Yesod.Core.Json', ['parseJsonBody', 'requireJsonBody', 'parseCheckJsonBody'
 // WAI: the multipart/form body parsers and the conduit request body, and the request's host and cookie headers
 src('Network.Wai.Parse', ['parseRequestBody', 'parseRequestBodyEx'], 'http-body', 'WAI parsed request body', { package: 'wai-extra', framework: 'wai' });
 // the name and content type of an uploaded file are fields the client wrote into the multipart body (`fileName fi` is the browser's file name, verbatim)
-src('Network.Wai.Parse', ['fileName', 'fileContentType', 'fileContent'], 'upload', 'uploaded file field', { package: 'wai-extra', framework: 'wai' });
+src('Network.Wai.Parse', ['fileName', 'fileContentType'], 'upload', 'uploaded file field', { package: 'wai-extra', framework: 'wai' });
+// `fileContent` is the client's bytes under `lbsBackEnd` and, under `tempFileBackEnd`, the PATH of the temporary file the framework wrote them
+// to. Only the second type-checks as a FilePath, so a path operation on `fileContent` always reads the framework's own file: `haskell-trust.js`
+// lowers such a CWE-22 finding (`framework-controlled`); every other use of the content stays request input. The label is what tells them apart.
+src('Network.Wai.Parse', ['fileContent'], 'upload', UPLOAD_CONTENT_LABEL, { package: 'wai-extra', framework: 'wai' });
 src('Network.Wai.Conduit', ['sourceRequestBody'], 'http-body', 'WAI request body stream', { package: 'wai-extra', framework: 'wai' });
 
 // A text parameter of an exported function that returns a web-framework HANDLER value (a Scotty action, a Yesod handler or widget, a Servant handler,
@@ -181,7 +187,11 @@ export const HS_HANDLER_PARAM_SOURCES = Object.freeze({
   scotty: { decorator: 'hs:handler-param:scotty', framework: 'scotty', modules: ['Web.Scotty', 'Web.Scotty.Trans'], result: /\b(?:ActionM|ActionT)\b/, provenance: 'url-param', label: 'route, query or body value handed to a Scotty action (request input)' },
   yesod: { decorator: 'hs:handler-param:yesod', framework: 'yesod', modules: ['Yesod', 'Yesod.Core', 'Yesod.Auth'], result: /\b(?:Handler|HandlerFor|HandlerT|Widget|WidgetFor|WidgetT)\b/, provenance: 'url-param', label: 'route piece or request value handed to a Yesod handler (request input)' },
   servant: { decorator: 'hs:handler-param:servant', framework: 'servant', modules: ['Servant', 'Servant.API', 'Servant.Server', 'Servant.Auth', 'Servant.Auth.Server'], result: /\b(?:Handler|ServerT|AppM)\b/, provenance: 'url-param', label: 'capture, query or body value handed to a Servant handler (request input)' },
-  wai: { decorator: 'hs:handler-param:wai', framework: 'wai', modules: ['Network.Wai', 'Network.Wai.Handler.Warp'], result: /\b(?:ResponseReceived|Application|Middleware)\b/, provenance: 'url-param', label: 'request value handed to a WAI application (request input)' },
+  // WAI hands an application only the Request (and the respond continuation): a text parameter of a function returning `IO ResponseReceived`,
+  // `Application` or `Middleware` is whatever its CALLER passed (IHP's `renderFile filePath contentType`, called with the application's own
+  // paths), never a request value. The result type still makes the function an entry handler for reachability (`entryHandlerOf`); `params:
+  // false` keeps its text parameters at the weaker caller-controlled label. Request data reaches a WAI handler through the Request accessors.
+  wai: { decorator: 'hs:handler-param:wai', framework: 'wai', modules: ['Network.Wai', 'Network.Wai.Handler.Warp'], result: /\b(?:ResponseReceived|Application|Middleware)\b/, provenance: 'url-param', label: 'request value handed to a WAI application (request input)', params: false },
 });
 /** What a parameter-annotation source says about itself: the label an evidence chain shows and, for a request value, its provenance. */
 export function paramSourceInfo(decorator) {
