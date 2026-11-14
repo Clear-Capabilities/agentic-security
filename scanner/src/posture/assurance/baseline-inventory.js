@@ -157,7 +157,7 @@ export const CAPABILITY_INVENTORY = Object.freeze([
     status: 'partial',
     source: ['scanner/src/posture/model-routing.js', 'scanner/src/posture/model-trust.js', 'scanner/src/posture/cache-economics.js', 'scanner/src/posture/provider-catalog.js'],
     entryPoints: [{ path: 'scanner/src/posture/model-trust.js', symbol: 'createTrustLedger' }, { path: 'scanner/src/posture/model-routing.js', symbol: 'routeModelWithTrust' }],
-    evidence: [t('scanner/test/model-routing.test.js'), t('scanner/test/model-trust.test.js'), t('scanner/test/cache-economics.test.js'), t('scanner/test/providers.test.js'), a('bench/router-replay/baseline.json')],
+    evidence: [t('scanner/test/model-routing.test.js'), t('scanner/test/model-trust.test.js'), t('scanner/test/cache-economics.test.js'), t('scanner/test/providers.test.js'), a('scripts/routing-replay.mjs')],
     gap: 'trust is a per-key miss-rate ledger; there are no adjudicated task strata, calibrated quality intervals, shadow validation or drift circuit breakers',
     prd: ['X-601', 'X-603', 'X-604', 'X-605'],
   },

@@ -12,7 +12,7 @@ Agentic Security is an autonomous security assurance platform. It pairs **determ
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.195.34-blue)]()
+[![Version](https://img.shields.io/badge/version-0.195.35-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 > Built by **[Clear Capabilities](https://www.clearcapabilities.com/)**. Also known as an *agentic security harness* for Claude Code, Codex, Cursor and Gemini CLI.
@@ -391,7 +391,7 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 - **Limitations:** [Trust & Limitations](docs/trust/trust-and-limitations.md), the maturity of every capability in [`docs/capabilities.yaml`](docs/capabilities.yaml), and each capability's own "what this does not do" section (for example [exploit proof](docs/guides/exploit-proof-fabric.md#what-this-does-not-prove), [fleet](docs/guides/fleet.md#what-is-not-built), [source-to-artifact provenance](docs/guides/artifact-provenance.md#what-this-does-not-do)).
 - **Benchmarking:** Agentic Security is evaluated against neutralized NIST SARD datasets with leakage controls, and once against an independent population of advisories (low accuracy, published with its forensics in the [evidence](docs/engineering-excellence/README.md)); no SARD scores are published in this repository. See [benchmarking methodology](docs/trust/benchmarking-methodology.md).
 - **Compliance:** automated technical-control evidence for 10 bundled frameworks, with per-control coverage maps for all 10, generated from the framework files and checked for drift ([summary](docs/compliance/COVERAGE.md)) (NIST AI 600-1, NIST SP 800-171 Rev. 3, NIST CSF 2.0, NIST Privacy Framework 1.1, OWASP ASVS 5.0, OWASP Top 10 for LLM Applications 2025, EU AI Act, GDPR, HIPAA Security Rule, CCPA). Never "compliant" or "certified". The framework table, coverage maps and the Privacy Framework section are in the [capability reference](docs/reference/capability-reference.md#compliance-frameworks) and [compliance evidence](docs/workflows/compliance-evidence.md).
-- **Moved from this README:** the detailed capability descriptions, sample report output, token-cost advisor, local-model setup and the full "what makes it different" list are preserved in the [capability reference](docs/reference/capability-reference.md). See the [documentation migration map](docs/DOCS-MIGRATION.md).
+- **Moved from this README:** the detailed capability descriptions, sample report output, local-model setup and the full "what makes it different" list are preserved in the [capability reference](docs/reference/capability-reference.md). See the [documentation migration map](docs/DOCS-MIGRATION.md).
 - **Style:** [Style and terminology](docs/STYLE-AND-TERMINOLOGY.md).
 
 ---

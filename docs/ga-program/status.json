@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/ga-program-status@1",
-  "engineVersion": "0.195.34",
+  "engineVersion": "0.195.35",
   "program": {
     "baselineCapabilities": 36,
     "capabilitiesInLedger": 36,
@@ -12,7 +12,7 @@
   },
   "records": {
     "required": 253,
-    "passed": 74
+    "passed": 38
   },
   "realCodeAccuracy": {
     "label": "historical (not this engine)",
@@ -169,8 +169,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 8,
       "records": [
         {
@@ -189,9 +189,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "agentic-discovery:INDEP-ACCURACY",
@@ -200,7 +200,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.35 (historical)",
           "evidencePath": null
         },
         {
@@ -272,8 +272,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 8,
       "records": [
         {
@@ -292,9 +292,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "context-intelligence:INDEP-ACCURACY",
@@ -303,7 +303,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.35 (historical)",
           "evidencePath": null
         },
         {
@@ -376,8 +376,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 8,
       "records": [
         {
@@ -396,9 +396,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "language-depth-haskell-nix:INDEP-ACCURACY",
@@ -407,7 +407,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.35 (historical)",
           "evidencePath": null
         },
         {
@@ -479,8 +479,8 @@
         "GA-06",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 8,
       "records": [
         {
@@ -499,9 +499,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "model-validation:INDEP-ACCURACY",
@@ -510,7 +510,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.35 (historical)",
           "evidencePath": null
         },
         {
@@ -583,8 +583,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "failed",
+      "passed": 2,
       "required": 9,
       "records": [
         {
@@ -603,9 +603,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "rule-compiler:GA-01-001",
@@ -696,8 +696,8 @@
         "GA-07",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 6,
       "records": [
         {
@@ -716,9 +716,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "detector-spec-synthesis:GA-01-001",
@@ -779,8 +779,8 @@
         "GA-09",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -799,9 +799,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "fleet-scan:GA-01-001",
@@ -872,8 +872,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 4,
+      "status": "failed",
+      "passed": 3,
       "required": 10,
       "records": [
         {
@@ -892,9 +892,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "code-boundaries:INDEP-ACCURACY",
@@ -903,7 +903,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.35 (historical)",
           "evidencePath": null
         },
         {
@@ -995,8 +995,8 @@
         "GA-05",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "failed",
+      "passed": 2,
       "required": 8,
       "records": [
         {
@@ -1015,9 +1015,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "finding-provenance:GA-01-001",
@@ -1098,8 +1098,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 8,
       "records": [
         {
@@ -1118,9 +1118,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "graph-precision:INDEP-ACCURACY",
@@ -1129,7 +1129,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.35 (historical)",
           "evidencePath": null
         },
         {
@@ -1202,8 +1202,8 @@
         "GA-10",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 8,
       "records": [
         {
@@ -1222,9 +1222,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "detection-and-response:GA-01-001",
@@ -1305,8 +1305,8 @@
         "GA-07",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "failed",
+      "passed": 2,
       "required": 8,
       "records": [
         {
@@ -1325,9 +1325,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "local-models:GA-01-001",
@@ -1408,8 +1408,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 6,
       "records": [
         {
@@ -1428,9 +1428,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "compliance-evidence:GA-01-001",
@@ -1490,8 +1490,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 5,
       "records": [
         {
@@ -1510,9 +1510,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "capability-enforcement:GA-01-001",
@@ -1562,8 +1562,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 6,
       "records": [
         {
@@ -1582,9 +1582,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "strategic-metrics:GA-01-001",
@@ -1646,8 +1646,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 8,
       "records": [
         {
@@ -1666,9 +1666,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "eval-lab:GA-01-001",
@@ -1748,8 +1748,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 1,
+      "status": "failed",
+      "passed": 0,
       "required": 5,
       "records": [
         {
@@ -1768,9 +1768,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "release-assurance:GA-01-001",
@@ -1821,8 +1821,8 @@
         "GA-04",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -1841,9 +1841,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "deterministic-scan:INDEP-ACCURACY",
@@ -1852,7 +1852,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.35 (historical)",
           "evidencePath": null
         },
         {
@@ -1896,7 +1896,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "deterministic-scan:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)"
+      "nextAction": "deterministic-scan:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "dependency-risk",
@@ -1913,8 +1913,8 @@
         "GA-04",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -1933,9 +1933,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "dependency-risk:GA-01-001",
@@ -1968,7 +1968,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "dependency-risk:GA-01-001: owner unassigned"
+      "nextAction": "dependency-risk:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "taint-and-reachability",
@@ -1986,8 +1986,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -2006,9 +2006,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "taint-and-reachability:INDEP-ACCURACY",
@@ -2017,7 +2017,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.35 (historical)",
           "evidencePath": null
         },
         {
@@ -2061,7 +2061,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "taint-and-reachability:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)"
+      "nextAction": "taint-and-reachability:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "falsification",
@@ -2079,8 +2079,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -2099,9 +2099,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "falsification:INDEP-ACCURACY",
@@ -2110,7 +2110,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.35 (historical)",
           "evidencePath": null
         },
         {
@@ -2154,7 +2154,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "falsification:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)"
+      "nextAction": "falsification:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "exploit-proof",
@@ -2171,8 +2171,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -2191,9 +2191,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "exploit-proof:GA-01-001",
@@ -2226,7 +2226,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "exploit-proof:GA-01-001: owner unassigned"
+      "nextAction": "exploit-proof:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "root-cause-sweep",
@@ -2244,8 +2244,8 @@
         "GA-03",
         "GA-12"
       ],
-      "status": "blocked",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -2264,9 +2264,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "root-cause-sweep:INDEP-ACCURACY",
@@ -2275,7 +2275,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.35 (historical)",
           "evidencePath": null
         },
         {
@@ -2319,7 +2319,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "root-cause-sweep:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)"
+      "nextAction": "root-cause-sweep:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "federation",
@@ -2337,8 +2337,8 @@
         "GA-09",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 6,
       "records": [
         {
@@ -2357,9 +2357,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "federation:GA-01-001",
@@ -2402,7 +2402,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "federation:GA-01-001: owner unassigned"
+      "nextAction": "federation:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "runtime-corroboration",
@@ -2420,8 +2420,8 @@
         "GA-10",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 6,
       "records": [
         {
@@ -2440,9 +2440,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "runtime-corroboration:GA-01-001",
@@ -2485,7 +2485,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "runtime-corroboration:GA-01-001: owner unassigned"
+      "nextAction": "runtime-corroboration:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "blast-radius",
@@ -2503,8 +2503,8 @@
         "GA-09",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 6,
       "records": [
         {
@@ -2523,9 +2523,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "blast-radius:GA-01-001",
@@ -2568,7 +2568,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "blast-radius:GA-01-001: owner unassigned"
+      "nextAction": "blast-radius:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "artifact-provenance",
@@ -2587,8 +2587,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -2607,9 +2607,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "artifact-provenance:GA-01-001",
@@ -2662,7 +2662,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "artifact-provenance:GA-01-001: owner unassigned"
+      "nextAction": "artifact-provenance:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "safe-fix",
@@ -2680,8 +2680,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 6,
       "records": [
         {
@@ -2700,9 +2700,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "safe-fix:GA-01-001",
@@ -2745,7 +2745,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "safe-fix:GA-01-001: owner unassigned"
+      "nextAction": "safe-fix:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "verified-remediation",
@@ -2764,8 +2764,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 7,
       "records": [
         {
@@ -2784,9 +2784,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "verified-remediation:GA-01-001",
@@ -2839,7 +2839,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "verified-remediation:GA-01-001: owner unassigned"
+      "nextAction": "verified-remediation:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "proof-gated-fix",
@@ -2856,8 +2856,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -2876,9 +2876,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "proof-gated-fix:GA-01-001",
@@ -2911,7 +2911,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "proof-gated-fix:GA-01-001: owner unassigned"
+      "nextAction": "proof-gated-fix:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "scan-health",
@@ -2929,8 +2929,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 3,
+      "status": "failed",
+      "passed": 2,
       "required": 7,
       "records": [
         {
@@ -2949,9 +2949,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "scan-health:UNKNOWN-IS-UNKNOWN",
@@ -3004,7 +3004,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "scan-health:GA-01-001: owner unassigned"
+      "nextAction": "scan-health:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "assurance-modes",
@@ -3021,8 +3021,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -3041,9 +3041,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "assurance-modes:GA-01-001",
@@ -3076,7 +3076,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "assurance-modes:GA-01-001: owner unassigned"
+      "nextAction": "assurance-modes:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "model-egress-policy",
@@ -3095,8 +3095,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 4,
+      "status": "failed",
+      "passed": 3,
       "required": 9,
       "records": [
         {
@@ -3115,9 +3115,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "model-egress-policy:EGRESS-ALL-PATHS",
@@ -3190,7 +3190,7 @@
           "blocker": null
         }
       ],
-      "nextAction": "model-egress-policy:GA-01-001: owner unassigned"
+      "nextAction": "model-egress-policy:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "agent-guardrails",
@@ -3207,8 +3207,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -3227,9 +3227,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "agent-guardrails:GA-01-001",
@@ -3262,7 +3262,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "agent-guardrails:GA-01-001: owner unassigned"
+      "nextAction": "agent-guardrails:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "mcp-server",
@@ -3279,8 +3279,8 @@
         "GA-08",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -3299,9 +3299,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "mcp-server:GA-01-001",
@@ -3334,7 +3334,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "mcp-server:GA-01-001: owner unassigned"
+      "nextAction": "mcp-server:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     },
     {
       "capabilityId": "ci-gating",
@@ -3351,8 +3351,8 @@
         "GA-11",
         "GA-12"
       ],
-      "status": "in-progress",
-      "passed": 2,
+      "status": "failed",
+      "passed": 1,
       "required": 5,
       "records": [
         {
@@ -3371,9 +3371,9 @@
           "workstream": null,
           "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
           "check": "evidence-identity",
-          "status": "passed",
-          "detail": "clean measurement of 0.195.34 at f3230aa335ce, bundle a5bf1d4710fb",
-          "evidencePath": "docs/scorecard.json"
+          "status": "failed",
+          "detail": "the scorecard describes engine 0.195.34, the tree is 0.195.35",
+          "evidencePath": null
         },
         {
           "id": "ci-gating:GA-01-001",
@@ -3406,7 +3406,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "ci-gating:GA-01-001: owner unassigned"
+      "nextAction": "ci-gating:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35"
     }
   ],
   "subcapabilities": [
@@ -3614,77 +3614,77 @@
   "milestone": {
     "met": false,
     "reasons": [
-      "agentic-discovery: 1/8 acceptance records passed (blocked); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "agentic-discovery: 0/8 acceptance records passed (failed); next: agentic-discovery:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "agentic-discovery: owner unassigned (role security evaluation lead)",
-      "context-intelligence: 2/8 acceptance records passed (blocked); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "context-intelligence: 1/8 acceptance records passed (failed); next: context-intelligence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "context-intelligence: owner unassigned (role security evaluation lead)",
-      "language-depth-haskell-nix: 1/8 acceptance records passed (blocked); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "language-depth-haskell-nix: 0/8 acceptance records passed (failed); next: language-depth-haskell-nix:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "language-depth-haskell-nix: owner unassigned (role security evaluation lead)",
-      "model-validation: 2/8 acceptance records passed (blocked); next: model-validation:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "model-validation: 1/8 acceptance records passed (failed); next: model-validation:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "model-validation: owner unassigned (role security evaluation lead)",
-      "rule-compiler: 3/9 acceptance records passed (in-progress); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "rule-compiler: 2/9 acceptance records passed (failed); next: rule-compiler:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "rule-compiler: owner unassigned (role security evaluation lead)",
-      "detector-spec-synthesis: 1/6 acceptance records passed (in-progress); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself",
+      "detector-spec-synthesis: 0/6 acceptance records passed (failed); next: detector-spec-synthesis:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself",
       "detector-spec-synthesis: owner unassigned (role inference/evaluation engineer)",
-      "fleet-scan: 2/7 acceptance records passed (in-progress); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "fleet-scan: 1/7 acceptance records passed (failed); next: fleet-scan:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "fleet-scan: owner unassigned (role graph/analysis lead)",
-      "code-boundaries: 4/10 acceptance records passed (blocked); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "code-boundaries: 3/10 acceptance records passed (failed); next: code-boundaries:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "code-boundaries: owner unassigned (role security evaluation lead)",
-      "finding-provenance: 3/8 acceptance records passed (in-progress); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "finding-provenance: 2/8 acceptance records passed (failed); next: finding-provenance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "finding-provenance: owner unassigned (role security evaluation lead)",
-      "graph-precision: 2/8 acceptance records passed (blocked); next: graph-precision:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "graph-precision: 1/8 acceptance records passed (failed); next: graph-precision:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "graph-precision: owner unassigned (role security evaluation lead)",
-      "detection-and-response: 2/8 acceptance records passed (in-progress); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "detection-and-response: 1/8 acceptance records passed (failed); next: detection-and-response:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "detection-and-response: owner unassigned (role analysis/platform engineer)",
-      "local-models: 3/8 acceptance records passed (in-progress); next: local-models:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "local-models: 2/8 acceptance records passed (failed); next: local-models:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "local-models: owner unassigned (role inference/evaluation engineer)",
-      "compliance-evidence: 1/6 acceptance records passed (in-progress); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "compliance-evidence: 0/6 acceptance records passed (failed); next: compliance-evidence:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "compliance-evidence: owner unassigned (role language/supply-chain lead)",
-      "capability-enforcement: 1/5 acceptance records passed (in-progress); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself",
+      "capability-enforcement: 0/5 acceptance records passed (failed); next: capability-enforcement:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself",
       "capability-enforcement: owner unassigned (role platform security engineer)",
-      "strategic-metrics: 2/6 acceptance records passed (in-progress); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "strategic-metrics: 1/6 acceptance records passed (failed); next: strategic-metrics:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "strategic-metrics: owner unassigned (role assurance engineer)",
-      "eval-lab: 2/8 acceptance records passed (in-progress); next: eval-lab:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "eval-lab: 1/8 acceptance records passed (failed); next: eval-lab:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "eval-lab: owner unassigned (role security evaluation lead)",
-      "release-assurance: 1/5 acceptance records passed (in-progress); next: release-assurance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
+      "release-assurance: 0/5 acceptance records passed (failed); next: release-assurance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "release-assurance: owner unassigned (role assurance engineer)",
-      "deterministic-scan: 2/7 acceptance records passed (blocked); next: deterministic-scan:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+      "deterministic-scan: 1/7 acceptance records passed (failed); next: deterministic-scan:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "deterministic-scan: owner unassigned (role security evaluation lead)",
-      "dependency-risk: 2/5 acceptance records passed (in-progress); next: dependency-risk:GA-01-001: owner unassigned",
+      "dependency-risk: 1/5 acceptance records passed (failed); next: dependency-risk:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "dependency-risk: owner unassigned (role language/supply-chain lead)",
-      "taint-and-reachability: 2/7 acceptance records passed (blocked); next: taint-and-reachability:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+      "taint-and-reachability: 1/7 acceptance records passed (failed); next: taint-and-reachability:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "taint-and-reachability: owner unassigned (role security evaluation lead)",
-      "falsification: 2/7 acceptance records passed (blocked); next: falsification:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+      "falsification: 1/7 acceptance records passed (failed); next: falsification:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "falsification: owner unassigned (role security evaluation lead)",
-      "exploit-proof: 2/5 acceptance records passed (in-progress); next: exploit-proof:GA-01-001: owner unassigned",
+      "exploit-proof: 1/5 acceptance records passed (failed); next: exploit-proof:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "exploit-proof: owner unassigned (role platform security engineer)",
-      "root-cause-sweep: 2/7 acceptance records passed (blocked); next: root-cause-sweep:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.195.34 (historical)",
+      "root-cause-sweep: 1/7 acceptance records passed (failed); next: root-cause-sweep:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "root-cause-sweep: owner unassigned (role security evaluation lead)",
-      "federation: 2/6 acceptance records passed (in-progress); next: federation:GA-01-001: owner unassigned",
+      "federation: 1/6 acceptance records passed (failed); next: federation:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "federation: owner unassigned (role graph/analysis lead)",
-      "runtime-corroboration: 2/6 acceptance records passed (in-progress); next: runtime-corroboration:GA-01-001: owner unassigned",
+      "runtime-corroboration: 1/6 acceptance records passed (failed); next: runtime-corroboration:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "runtime-corroboration: owner unassigned (role graph/analysis lead)",
-      "blast-radius: 2/6 acceptance records passed (in-progress); next: blast-radius:GA-01-001: owner unassigned",
+      "blast-radius: 1/6 acceptance records passed (failed); next: blast-radius:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "blast-radius: owner unassigned (role graph/analysis lead)",
-      "artifact-provenance: 2/7 acceptance records passed (in-progress); next: artifact-provenance:GA-01-001: owner unassigned",
+      "artifact-provenance: 1/7 acceptance records passed (failed); next: artifact-provenance:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "artifact-provenance: owner unassigned (role language/supply-chain lead)",
-      "safe-fix: 2/6 acceptance records passed (in-progress); next: safe-fix:GA-01-001: owner unassigned",
+      "safe-fix: 1/6 acceptance records passed (failed); next: safe-fix:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "safe-fix: owner unassigned (role security evaluation lead)",
-      "verified-remediation: 2/7 acceptance records passed (in-progress); next: verified-remediation:GA-01-001: owner unassigned",
+      "verified-remediation: 1/7 acceptance records passed (failed); next: verified-remediation:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "verified-remediation: owner unassigned (role security evaluation lead)",
-      "proof-gated-fix: 2/5 acceptance records passed (in-progress); next: proof-gated-fix:GA-01-001: owner unassigned",
+      "proof-gated-fix: 1/5 acceptance records passed (failed); next: proof-gated-fix:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "proof-gated-fix: owner unassigned (role platform security engineer)",
-      "scan-health: 3/7 acceptance records passed (in-progress); next: scan-health:GA-01-001: owner unassigned",
+      "scan-health: 2/7 acceptance records passed (failed); next: scan-health:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "scan-health: owner unassigned (role language/supply-chain lead)",
-      "assurance-modes: 2/5 acceptance records passed (in-progress); next: assurance-modes:GA-01-001: owner unassigned",
+      "assurance-modes: 1/5 acceptance records passed (failed); next: assurance-modes:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "assurance-modes: owner unassigned (role assurance engineer)",
-      "model-egress-policy: 4/9 acceptance records passed (in-progress); next: model-egress-policy:GA-01-001: owner unassigned",
+      "model-egress-policy: 3/9 acceptance records passed (failed); next: model-egress-policy:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "model-egress-policy: owner unassigned (role inference/evaluation engineer)",
-      "agent-guardrails: 2/5 acceptance records passed (in-progress); next: agent-guardrails:GA-01-001: owner unassigned",
+      "agent-guardrails: 1/5 acceptance records passed (failed); next: agent-guardrails:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "agent-guardrails: owner unassigned (role platform security engineer)",
-      "mcp-server: 2/5 acceptance records passed (in-progress); next: mcp-server:GA-01-001: owner unassigned",
+      "mcp-server: 1/5 acceptance records passed (failed); next: mcp-server:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "mcp-server: owner unassigned (role platform security engineer)",
-      "ci-gating: 2/5 acceptance records passed (in-progress); next: ci-gating:GA-01-001: owner unassigned",
+      "ci-gating: 1/5 acceptance records passed (failed); next: ci-gating:EVIDENCE-IDENTITY: the scorecard describes engine 0.195.34, the tree is 0.195.35",
       "ci-gating: owner unassigned (role assurance engineer)",
       "subcapability distribution (deterministic-scan): 0/1 passed (not-started)",
       "subcapability harness-manifests (agent-guardrails): 0/1 passed (not-started)",

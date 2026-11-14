@@ -271,7 +271,7 @@ test('[REL-003.AC02] the real profile declares the protected checks beyond per-r
   for (const group of ['quality', 'routing', 'release']) assert.ok(c.requiredGates[group].length > 0, `${group} gates are required`);
   for (const id of [...c.requiredGates.quality, ...c.requiredGates.routing, ...c.requiredGates.release]) assert.ok(gateIds.includes(id), `${id} is a final gate`);
   assert.ok(c.requiredGates.release.includes('release-closure-check'), 'the release closure check is a required release gate');
-  assert.ok(c.requiredGates.routing.includes('bench-router-replay'));
+  assert.ok(c.requiredGates.routing.includes('routing-replay'));
   assert.ok(c.measuredGates.some((m) => m.group === 'quality') && c.measuredGates.some((m) => m.group === 'routing'), 'a measured quality and a measured routing gate');
   assert.equal(c.requireCleanTree, true);
   // the PRD section 7 ceilings are what the closure holds the profile to

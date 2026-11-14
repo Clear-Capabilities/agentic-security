@@ -2,7 +2,7 @@
 //
 // Turns token usage into a cost that says how it was obtained. Extends the provider catalog (posture/provider-catalog.js, which
 // already carries the dated $/1M-token rates and each provider's cache model) rather than keeping a second price table, and sits
-// beside cache-economics.js, which prices Claude Code's own transcript. That module and the interactive cost advisor are unchanged.
+// beside cache-economics.js, which prices Claude Code's own transcript. That module is unchanged.
 //
 // What "auditable" means here:
 //
