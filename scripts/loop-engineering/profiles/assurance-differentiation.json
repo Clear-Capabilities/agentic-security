@@ -214,7 +214,7 @@
           "bench-layer-recall"
         ],
         "routing": [
-          "bench-router-replay"
+          "routing-replay"
         ],
         "release": [
           "build",
@@ -293,8 +293,6 @@
           "docs/guides/routing-policy-card.md"
         ],
         "replayableFixtures": [
-          "bench/router-replay/corpus.jsonl",
-          "bench/router-replay/baseline.json",
           "scripts/routing-replay.mjs",
           "docs/guides/routing-replay.md",
           "docs/guides/offline-reproduction.md"
@@ -870,12 +868,12 @@
       "timeoutSeconds": 300
     },
     {
-      "id": "bench-router-replay",
+      "id": "routing-replay",
       "cwd": "scanner",
       "executable": "npm",
       "args": [
         "run",
-        "bench:router-replay:check"
+        "reproduce:routing"
       ],
       "timeoutSeconds": 300
     },

@@ -1,6 +1,6 @@
 {
   "name": "@clear-capabilities/agentic-security-scanner",
-  "version": "0.195.34",
+  "version": "0.195.35",
   "description": "Scanner engine for the agentic-security Claude Code plugin: SAST, SCA with reachability and CISA KEV, secrets, IaC, Haskell and Nix/NixOS, prompt-injection, MCP/agent-tool audit, authZ analysis, SBOM, compliance attestation, and more.",
   "type": "module",
   "main": "src/index.js",
@@ -156,9 +156,6 @@
     "bench:realcode:check:quick": "node ../bench/independent/realcode.mjs check --tier quick",
     "bench:independent:gate:check": "node ../scripts/independent-population-gate.mjs",
     "bench:independent:update-gate-baseline": "node ../scripts/independent-population-gate.mjs --update-baseline",
-    "bench:router-replay": "node ../bench/router-replay/runner.mjs",
-    "bench:router-replay:check": "node ../bench/router-replay/runner.mjs --check-baseline",
-    "bench:router-replay:update-baseline": "node ../bench/router-replay/runner.mjs --update-baseline",
     "bench:bigquery:smoke": "node ../bench/bigquery-github/bin/run-cycle.mjs --smoke",
     "bench:bigquery": "node ../bench/bigquery-github/bin/run-cycle.mjs",
     "bench:agent-tasks": "node ../bench/agent-tasks/security-fixer/runner.mjs",

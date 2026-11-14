@@ -133,7 +133,7 @@ node bench/realworld-recall/runner.mjs --smoke --json
 node bench/realworld-recall/runner.mjs --smoke --gate '{"minDetectionRate":0.7,"minSamples":50}'
 node bench/realworld-recall/runner.mjs --smoke --gate default
 
-# baseline gate (same shape as bench/cve-replay + bench/router-replay)
+# baseline gate (same shape as bench/cve-replay)
 node bench/realworld-recall/runner.mjs --smoke --update-baseline   # record per-vuln verdicts
 node bench/realworld-recall/runner.mjs --smoke --check-baseline    # fail on drift
 ```

@@ -9,6 +9,15 @@
 > make the history less accurate, not more.
 
 
+## 0.195.35 - The router-replay bench, which graded the removed cost advisor, is removed
+
+**Measured, 0.195.34:** `TIMINGS preflight=3s push=9s pr=4s checks=432s merge=7s verify=9s tag=2s release=224s npm=90s total=780s release-clock=242s`, shipped from the merge to the published release in 242 s on the first push.
+
+- **Fixed, listed first.** 0.195.34 deleted the model-cost advisor but left `bench/router-replay/`, whose runner imports the deleted hook, so `npm run bench:router-replay:check` crashed with a missing module. The bench measured only that advisor's tier advice, so it is deleted with its three npm scripts. No released check ran it: it was a final gate of the assurance-differentiation loop profile, which is a development tool.
+- That profile's required routing gate is now `routing-replay` (`npm run reproduce:routing`, the offline routing replay that already fed the profile's measured routing gate). It exits 0 when every control behaves and 1 when one is broken; both directions were run for this change. The replayable fixtures drop the bench's corpus and baseline, and the assurance baseline inventory cites `scripts/routing-replay.mjs` as routing evidence in their place.
+- Two leftover mentions of the advisor are gone: the README's list of what moved to the capability reference, and a comment in the routing economics module.
+- The generated engineering-excellence inventory lists one bench directory fewer.
+
 ## 0.195.34 - The per-prompt model-cost advisor is removed
 
 **Measured, 0.195.33:** `TIMINGS preflight=5s push=6s pr=1s checks=494s merge=5s verify=6s tag=2s release=224s npm=90s total=833s release-clock=237s`, shipped from the merge to the published release in 237 s; the npm listing lagged the publish and was confirmed afterwards. The first push failed one hosted test shard: the GA ledger test written in 0.195.32 pinned the independent-accuracy record as passed, which stops holding at the next version bump; it now reads which engine the latest run measured.
