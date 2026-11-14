@@ -10,8 +10,8 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.195.36 |
-| Bundle SHA-256 | `01edddd93218c1fe612bc460212da2a9a632551bbd1c2fb97ce1cad72316c3a5` |
-| Commit | `dcae12eda17a85466bb7868fd897750d651617dc` |
+| Bundle SHA-256 | `0f04844e5836541b9858d73cb6e57ee19516868049ca94de49208c578dc2d961` |
+| Commit | `f18cd174b0b6ba39c9280942c26a30b60e01fd86` |
 | Worktree at measurement time | clean |
 | Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -20,7 +20,7 @@ that produced them.
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-14T18:11:52.490Z |
+| Generated (UTC) | 2026-11-14T18:50:24.242Z |
 
 ## What these numbers are, and what they are not
 
@@ -237,7 +237,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 319/571 (55.9%) |
+| 308/571 (53.9%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -250,7 +250,7 @@ Counted on a scan of examples/assurance-demo (network off). These describe one r
 
 | Metric | Figure | Basis |
 | --- | --- | --- |
-| Assurance Coverage | 100% (files 3/3 (100%), analyzers 120/120 (100%)) | the lower of files completed and analyzers completed |
+| Assurance Coverage | 100% (files 3/3 (100%), analyzers 121/121 (100%)) | the lower of files completed and analyzers completed |
 | Evidence Conversion | 2/11 (18.2%) | findings corroborated or stronger, over all findings |
 | Verified Remediation Rate | 2/3 (66.7%) | the three patches the committed end-to-end demo verified; a lower bound where a class has no attack replay |
 | Security Learning Rate | not measured | nothing measures it independently of the rule compiler's own corpus |

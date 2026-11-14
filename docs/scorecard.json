@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.195.36",
-    "bundleSha256": "01edddd93218c1fe612bc460212da2a9a632551bbd1c2fb97ce1cad72316c3a5",
-    "commit": "dcae12eda17a85466bb7868fd897750d651617dc",
+    "bundleSha256": "0f04844e5836541b9858d73cb6e57ee19516868049ca94de49208c578dc2d961",
+    "commit": "f18cd174b0b6ba39c9280942c26a30b60e01fd86",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-14T18:11:52.490Z",
+    "generatedAt": "2026-11-14T18:50:24.242Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -999,7 +999,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 319,
+    "n": 308,
     "d": 571
   },
   "taintRecall": {
@@ -2201,8 +2201,8 @@
           "timedOut": 0
         },
         "analyzers": {
-          "numerator": 120,
-          "denominator": 120,
+          "numerator": 121,
+          "denominator": 121,
           "percent": 100,
           "failed": 0,
           "timedOut": 0,
@@ -2254,8 +2254,8 @@
   },
   "measurement": {
     "engineVersion": "0.195.36",
-    "commit": "dcae12eda17a85466bb7868fd897750d651617dc",
-    "bundleSha256": "01edddd93218c1fe612bc460212da2a9a632551bbd1c2fb97ce1cad72316c3a5",
+    "commit": "f18cd174b0b6ba39c9280942c26a30b60e01fd86",
+    "bundleSha256": "0f04844e5836541b9858d73cb6e57ee19516868049ca94de49208c578dc2d961",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",
