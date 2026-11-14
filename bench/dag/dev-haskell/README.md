@@ -105,6 +105,14 @@ Every one of the six new patches is a MITIGATION and says what it leaves open: t
 
 The patch is a MITIGATION: it says the component must declare `SHA`, `bytestring` and `utf8-string` (all three already in `gitit.cabal`), that the kept hash stays until the caller re-hashes at the next successful login, and that one hash costs seconds of CPU with this pure-Haskell HMAC at 600000 iterations (4.3 s measured once on the maintainer's host at `-O2`; the count is a declared default). The construction was checked against the RFC 7914 vectors with the real package (`haskell-remediation-kdf.test.js`). The compile gate did not run on the gitit clone, as before (its original does not type-check on this host). Still refused, now each naming its decision: IHP's editor command, the open redirect, the four request-indexed `!!` sites (the three labelled ones and `Data/View/Layout.hs:92`; CWE-248 has a class reason since this release), the multi-sink chain rows, and the three CPP files. The 63 flagged sites over the five projects are the same before and after, and the fresh set still flags 51 with 21 true positives (`bench:haskell-precision:check` passes unchanged).
 
+**2026-11-14 (0.195.37).** Run again after `hs-index-bounds` (`fix-real.mjs ihp --all`, GHC 9.4.8 on PATH):
+
+| | labelled true-positive sites with a verified patch |
+| --- | --- |
+| after 0.195.37 | 23 of 27 (the twenty above, and the three IHP schema-designer `!!` sites, `Enums.hs:72`, `Enums.hs:75` and `SchemaOperations.hs:542`: a guard equation before each helper's first equation returns the list unchanged when the request-derived index is out of range) |
+
+Each is a MITIGATION: the handler is not told the index was ignored (the class reason still names an error response or a default as the other two decisions); the compile gate did not run on this clone, as before. Still refused with the decision named: IHP's variable-program command (`Controller.hs:42`), the open redirect (`urlshortener.hs:65`), the chain row (`basic.hs:42`), and `Layout.hs:92` (a partial function that is not an `Int`-indexed list parameter).
+
 The first measurement on the fresh set is the honest generalisation figure, and it is modest (9.5% to 10.6%): 112 of its 161
 remaining flagged sites were `unsafe*` boundary notes that an existing test pins at `low`. Four true positives were **lost**
 (three distinct flaws: a command injection and two request-indexed `!!`, all in IHP's own development IDE, found before only because

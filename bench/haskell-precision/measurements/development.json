@@ -1467,9 +1467,9 @@
     ],
     "ihp:ihp-ide/Test/ServerSpec.hs:14:Cross-Site Scripting (HTML response body from text)": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -1651,41 +1651,41 @@
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:393:Argument Injection (process arguments)": [
      [
-      "medium",
+      "info",
       "entrypoint-reachable",
-      null,
+      "medium",
       "IR-TAINT"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:404:OS Command Injection (attacker-chosen executable)": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:575:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:579:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:580:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -1731,17 +1731,17 @@
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:654:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:749:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -1755,17 +1755,17 @@
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:839:Argument Injection (process arguments)": [
      [
-      "medium",
+      "info",
       "entrypoint-reachable",
-      null,
+      "medium",
       "IR-TAINT"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:865:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -1923,73 +1923,65 @@
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:218:Cross-Site Scripting (HTML response body from text)": [
      [
-      "high",
+      "info",
       "unknown",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:229:path-traversal": [
      [
-      "high",
+      "info",
       "unknown",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:230:path-traversal": [
      [
-      "high",
+      "info",
       "unknown",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:232:Cross-Site Scripting (HTML response body from text)": [
      [
-      "high",
+      "info",
       "unknown",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:248:path-traversal": [
      [
-      "high",
+      "info",
       "unknown",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:250:Cross-Site Scripting (HTML response body from text)": [
      [
-      "high",
+      "info",
       "unknown",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:276:Cross-Site Scripting (HTML response body from text)": [
      [
-      "high",
+      "info",
       "unknown",
-      null,
-      "IR-TAINT"
-     ]
-    ],
-    "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:276:Multi-Sink Taint Chain — uploaded file field reaches 7 sinks": [
-     [
       "high",
-      null,
-      null,
-      "MULTI-SINK"
+      "IR-TAINT"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:53:Cross-Site Scripting (HTML response body from text)": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -2310,11 +2302,11 @@
      }
     },
     "ihp": {
-     "rows": 178,
-     "flagged": 35,
-     "loweredToInfo": 143,
+     "rows": 177,
+     "flagged": 16,
+     "loweredToInfo": 161,
      "byStatus": {
-      "no-verdict": 111,
+      "no-verdict": 110,
       "unknown": 19,
       "entrypoint-reachable": 43,
       "external-api": 5

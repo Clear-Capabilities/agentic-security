@@ -59,6 +59,17 @@ app.get('/returned', (req, res) => {
   res.send('ok');
 });
 
+function spawnWrapped(cfg) {
+  exec(cfg.cmd);
+}
+
+app.get('/wrapped', (req, res) => {
+  const cfg = {};
+  cfg.cmd = req.query.cmd;
+  spawnWrapped(cfg);
+  res.send('ok');
+});
+
 app.get('/clean', (req, res) => {
   const b = 'ls ' + 'static';
   exec(b);
@@ -67,6 +78,16 @@ app.get('/clean', (req, res) => {
 
 app.listen(3000);
 `;
+
+test('a source stored in a field keeps its origin when the object is handed on whole and the callee reads the field', async () => {
+  const fs = await scan({ 'app.js': APP });
+  const wrapped = byLine(fs, lineOf(APP, 'exec(cfg.cmd);'));
+  assert.ok(wrapped.length >= 1, JSON.stringify(fs.map((f) => [f.line, f.source && f.source.label])));
+  for (const f of wrapped) {
+    const named = (f.source && /req\.query/.test(f.source.label)) || (f.sourceRoots || []).some((r) => /req\.query/.test(r.label));
+    assert.ok(named, `line ${f.line}: ${JSON.stringify(f.source)} roots ${JSON.stringify(f.sourceRoots)}`);
+  }
+});
 
 test('a finding names the request value it came from whether the sink sees it directly, after a derivation, after a call, or after a return', async () => {
   const fs = await scan({ 'app.js': APP });

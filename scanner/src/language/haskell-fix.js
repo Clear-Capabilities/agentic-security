@@ -1273,7 +1273,51 @@ function fixScottyBody(text, f) {
   };
 }
 
+// hs-index-bounds (0.195.37): `list !! i` with a caller-supplied index (the three IHP schema-designer true positives: `deleteEnum tableId list =
+// delete (list !! tableId) list`, `updateEnum`, `updateTable`). A guard EQUATION is added before the function's first equation, answering the
+// list unchanged when the index is out of range, and falling through otherwise, so no body line moves. The CWE-248 class reason names three
+// candidate failure values (an error response, an unchanged result, a default); "an unchanged result" is the one that type-checks by
+// construction, so the fixer applies only where the declared result type IS the indexed parameter's type (`Int -> [Statement] -> [Statement]`),
+// the index is an Int parameter, and the line indexes one list with one index. The check is a relational test of the index against the list's
+// length, which `haskell-security-rules.js` already reads as the bounds test, so the rescan judges the semantics. A MITIGATION: the caller is
+// not told its input was ignored; where the handler should answer the client, the check belongs at the read.
+function fixIndexBounds(text, f) {
+  const clean = stripComments(text);
+  const srcLine = clean.split('\n')[f.line - 1] || '';
+  const uses = [...srcLine.matchAll(/(?<![\w'.])([a-z_][\w']*)\s*!!\s*([a-z_][\w']*)(?![\w'])/g)];
+  if (!uses.length) return null;
+  const idxs = new Set(uses.map((u) => u[2])); const lists = new Set(uses.map((u) => u[1]));
+  if (idxs.size !== 1 || lists.size !== 1) return null;                         // one list, one index, or the guard would cover only part of the line
+  const [idx] = idxs; const [list] = lists;
+  const sig = signatureAt(text, f.line);
+  if (!sig || sig.types.length !== sig.params.length + 1) return null;         // every parameter named by a plain variable, every type known
+  const pi = sig.params.indexOf(idx); const li = sig.params.indexOf(list);
+  if (pi < 0 || li < 0) return null;                                            // the list or the index is built in the body: not judged
+  if ((sig.types[pi] || '').trim() !== 'Int') return null;                      // `!!` takes an Int; anything else is not this shape
+  const listType = (sig.types[li] || '').trim(); const result = (sig.types[sig.types.length - 1] || '').trim();
+  if (!listType || listType !== result) return null;                            // "unchanged result" must be a value of the result type
+  const lines = text.split('\n');
+  let first = sig.clause; for (let i = 0; i < sig.clause; i++) if (new RegExp(`^${sig.name}(?![\\w'])`).test(lines[i]) && !new RegExp(`^${sig.name}\\s*::`).test(lines[i])) { first = i; break; }
+  // the function's own text: from its first equation to the next top-level declaration
+  let end = first + 1; while (end < lines.length && !/^[a-zA-Z_]/.test(lines[end])) end++;
+  const fnText = clean.split('\n').slice(first, end).join('\n');
+  if (new RegExp(`(?<![\\w'])length\\s+${list}(?![\\w'])`).test(fnText)) return null;   // already measured against its length: the rule's own bounds test
+  const guard = `${sig.name} ${sig.params.join(' ')}\n    | ${idx} < 0 || ${idx} >= length ${list} = ${list}`;
+  lines.splice(first, 0, guard);
+  return {
+    ruleId: 'hs-index-bounds', label: 'MITIGATION', text: lines.join('\n'),
+    explanation: `Added a guard equation to \`${sig.name}\` that returns \`${list}\` unchanged when \`${idx}\` is negative or not below its length, before the \`!!\` runs; every other call falls through to the existing equations unchanged.`,
+    consequences: [
+      `An out-of-range ${idx} now leaves ${list} unchanged instead of raising an exception in the handler; the caller is not told its input was ignored (if it should be answered with an error, check ${idx} where it is read).`,
+      `The check uses the length of ${list} as received; an index applied to a list derived from it inside the function is not re-checked.`,
+    ],
+    behavior: { kind: 'index-bounds', fn: sig.name, index: idx, list },
+    expectEffective: { kind: 'index-bounds', fn: sig.name, params: sig.params.join(' '), index: idx, list },
+  };
+}
+
 const FIXERS = [
+  { id: 'hs-index-bounds', applies: (f) => f.rule === 'hs-partial-function-on-input' && /!!/.test(String(f.description || '')), run: fixIndexBounds, reportedLineOnly: true },
   { id: 'hs-scotty-body-limit', applies: (f) => f.rule === 'hs-unbounded-request-body' && /Web\.Scotty(?:\.Trans)?\.body\b/.test(String(f.description || f.detail || '')), run: fixScottyBody, reportedLineOnly: true },
   { id: 'hs-password-kdf-migrate', applies: (f) => f.cwe === 'CWE-916' && (f.rule === 'hs-fast-password-hash' || f.rule === 'hs-pbkdf2-low-iterations' || /fast general-purpose hash|too few iterations/i.test(String(f.vuln || ''))), run: fixPasswordKdf },
   { id: 'hs-tls-validate', applies: (f) => f.cwe === 'CWE-295' || f.rule === 'hs-tls-validation-disabled', run: fixTls, reportedLineOnly: true },
@@ -1364,7 +1408,7 @@ export const CLASS_REASONS = Object.freeze({
   'CWE-78': 'a shell command string is replaced by a direct call of the program with an argument list. The recognised shape is callCommand/system/spawnCommand of a ++ or <> concatenation (String, or Text under cs/unpack, on the line or in a one-line let of the same function) whose first word is a string literal naming the program. The decision needed: when the program itself is a variable (an editor or tool chosen through an environment variable, say), how that value splits into a program and its own arguments, because a configured command such as "code --goto" is not one program name; and for an argument built with if/case or a function call, the exact argument list.',
   'CWE-88': 'argument injection is repaired by a rule about what the called program accepts; inserting "--" only helps programs that honour it, so no patch is made. The decision needed: the permitted values for this argument (a closed list or a strict pattern), or the option of that program that ends option parsing.',
   'CWE-916': 'password hashing needs a password KDF (Argon2id, scrypt, bcrypt, or PBKDF2 with a high iteration count) from a library the project may not declare as a dependency, and every stored hash was produced by the old function: swapping it makes every existing password fail to verify and locks the users out. The one shape rewritten is a migration: a pure one-line `name salt password = ...` of one text type (String, Text or strict ByteString) in a file that already imports cryptonite or crypton (with Data.Text or Data.ByteString), or the SHA package (with utf8-string or text for the bytes of a String), whose comparisons all sit in this file; it keeps the old function for verification, adds PBKDF2-HMAC-SHA256 (the library KDF, or the RFC 8018 construction written out over the SHA package\'s HMAC) and a verify helper, and this is not that shape. The decision needed: which KDF and library, with which cost parameters, and the migration (verify the old hash once, then re-hash with the new KDF at the next successful login, or force a password reset).',
-  'CWE-248': 'a partial function on caller-supplied input (an index with !!, head, fromJust, read) has no rewrite that keeps the function\'s type: the total form needs a value for the failure, and the code does not say which. The decision needed: what the function returns when the input is out of range or does not parse (an error response from the handler that read the input, an unchanged result, a default), and where that check belongs (at the read, so the handler answers the caller, or before the index).',
+  'CWE-248': 'a partial function on caller-supplied input (an index with !!, head, fromJust, read) has no rewrite that keeps the function\'s type: the total form needs a value for the failure, and the code does not say which (the one shape with a value of the right type, a list parameter indexed by an Int parameter in a function that returns that list\'s type, gets hs-index-bounds: an out-of-range index returns the list unchanged). The decision needed: what the function returns when the input is out of range or does not parse (an error response from the handler that read the input, an unchanged result, a default), and where that check belongs (at the read, so the handler answers the caller, or before the index).',
   'CWE-327': 'a broken cipher or ECB mode is replaced by an AEAD (AES-GCM or ChaCha20-Poly1305), which changes the stored form: everything encrypted so far must be re-encrypted or read through the old cipher once, and the nonce and authentication tag need a place beside the ciphertext. The decision needed: the AEAD and key size, the migration of the ciphertext already stored, and where the nonce and tag are kept.',
   'CWE-329': 'a static IV or nonce is replaced by a fresh random one per message, which then has to travel with the ciphertext: the decrypting side must read it from there, and the messages encrypted so far carry none. The decision needed: where the IV is stored or sent (in front of the ciphertext, a separate field) and how the decrypting code tells an old message from a new one.',
   'CWE-338': 'a predictable generator is replaced by the operating system CSPRNG (System.Entropy or Crypto.Random), whose result type is bytes, not System.Random\'s: the surrounding code must change with it. Four shapes are rewritten (System.Entropy imported when missing, which makes the patch a MITIGATION until `entropy` is declared): a one-line action of type IO <fixed-width integer> equal to randomIO; `replicateM n (randomRIO (c1, c2))` over a character range; `randomRIO (lo, hi)` over integer literals; `(take n . map f . randomRs (lo, hi)) <$> newStdGen`. Any other shape (a generator threaded through other code, a non-literal range, a non-integer result) is not. The decision needed: the token\'s type and size (a 30-bit integer cannot be made unguessable by changing the generator) and the entropy library the project declares.',
@@ -1509,6 +1553,13 @@ export function haskellEffectiveCheck(plan, patched) {
     const yes = (t) => (stripComments(t).match(/withSubstDTDEntities\s+(?:(?:[A-Z][\w']*\.)?yes|True)(?![\w'])/g) || []).length;
     if (yes(after) !== yes(before) - 1) return { ok: false, ran: true, detail: 'the patch did not turn off exactly one entity substitution' };
     return { ok: true, ran: true, detail: `line ${want.line} no longer substitutes DTD entities` };
+  }
+  if (want.kind === 'index-bounds') {
+    const re = new RegExp(`^${want.fn} ${want.params}\\n\\s+\\| ${want.index} < 0 \\|\\| ${want.index} >= length ${want.list} = ${want.list}\\s*$`, 'm');
+    if (!re.test(stripComments(after))) return { ok: false, ran: true, detail: `no guard equation on ${want.fn} tests ${want.index} against the length of ${want.list}` };
+    const eqs = (t) => stripComments(t).split('\n').filter((l) => new RegExp(`^${want.fn}(?![\\w'])`).test(l) && !new RegExp(`^${want.fn}\\s*::`).test(l)).length;
+    if (eqs(after) !== eqs(before) + 1) return { ok: false, ran: true, detail: 'the patch did not add exactly one equation' };
+    return { ok: true, ran: true, detail: `${want.fn} returns ${want.list} unchanged for an out-of-range ${want.index} before its body runs` };
   }
   if (want.kind === 'path-contain') {
     const re = new RegExp(`^${want.fn} ${want.param}\\n\\s+\\| "\\.\\." \`elem\` (?:[A-Z][\\w']*\\.)?splitDirectories ${want.param} \\|\\| (?:[A-Z][\\w']*\\.)?isAbsolute ${want.param} = ${want.fail.replace(/ /g, '\\s+')}\\s*$`, 'm');
