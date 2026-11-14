@@ -37,9 +37,9 @@ const JAVA_RE = /\.java$/i;
 const JS_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i;
 
 /** At least this many handlers must check the subject before an unchecked one means anything. */
-export const MIN_GUARDED = 3;
+const MIN_GUARDED = 3;
 /** And they must be most of the handlers that take it. */
-export const MIN_GUARDED_RATIO = 0.6;
+const MIN_GUARDED_RATIO = 0.6;
 
 // An authorization-shaped callee. Verb-anchored so `getAccessToken` or `accessLog` is not a check, and authentication
 // (`authenticate*`) never counts: knowing who the caller is says nothing about what they may touch. `is*Allowed` is left out on
@@ -290,7 +290,7 @@ function kind(u) {
 }
 
 /** Pure analysis over one file's units; returns the outliers with their evidence. */
-export function analyseHandlers(units) {
+function analyseHandlers(units) {
   const bySubject = new Map();
   for (const u of units) for (const s of u.introduces) {
     if (!bySubject.has(s)) bySubject.set(s, []);
@@ -376,4 +376,4 @@ export function scanAuthzSubjectConsistency(file, raw) {
   } catch { return []; }
 }
 
-export const _internals = { AUTHZ_NAME, subjectsOf, guardCalls, paramNames, assignedLocals, phpUnits, javaUnits, jsRouteUnits };
+export const _internals = { MIN_GUARDED, MIN_GUARDED_RATIO, analyseHandlers, AUTHZ_NAME, subjectsOf, guardCalls, paramNames, assignedLocals, phpUnits, javaUnits, jsRouteUnits };
