@@ -103,6 +103,7 @@ import { scanJavaDeserialization } from './sast/java-deserialization.js';
 import { blankComments } from './sast/_comment-strip.js';
 import { scanJwtExp } from './sast/jwt-exp.js';
 import { scanSiblingGuard } from './sast/sibling-guard.js';
+import { scanAuthzSubjectConsistency } from './sast/authz-subject-consistency.js';
 import { scanZipSlip } from './sast/zip-slip.js';
 import { scanFileUpload } from './sast/file-upload.js';
 import { scanHostHeader } from './sast/host-header.js';
@@ -8892,7 +8893,7 @@ async function queryRegistries(components){
       _aF.push(...(runDetector(_detectorErrors,p,'scanJNDI',()=>scanJNDI(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanJavaDeserialization',()=>scanJavaDeserialization(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanJwtExp',()=>scanJwtExp(p,cc))||[]));
-      _aF.push(...(runDetector(_detectorErrors,p,'scanZipSlip',()=>scanZipSlip(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanSiblingGuard',()=>scanSiblingGuard(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanZipSlip',()=>scanZipSlip(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanSiblingGuard',()=>scanSiblingGuard(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanAuthzSubjectConsistency',()=>scanAuthzSubjectConsistency(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanFileUpload',()=>scanFileUpload(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanHostHeader',()=>scanHostHeader(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanPythonSinks',()=>scanPythonSinks(p,cc))||[]));
