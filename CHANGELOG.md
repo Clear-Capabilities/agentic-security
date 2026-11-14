@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.195.36 - Recall, cluster 1: a handler that skips the authorization check its siblings apply
+
+**Measured, 0.195.35:** `TIMINGS preflight=4s push=8s pr=4s checks=393s merge=6s verify=9s tag=2s release=193s npm=90s total=709s release-clock=210s`, shipped from the merge to the published release in 210 s on the first push; the npm listing lagged the publish and `ship --resume` confirmed it.
+
+The first rule from Phase 3 of the GA gap closure plan, which works on the misses of the independent run `83df9f624d98` on the development split only. Sub-plan and rulings: `docs/superpowers/plans/2026-11-14-recall-sibling-authz.md`.
+
+- **Changed results, listed first.** On the 131 development entries of the largest miss cluster (no detector fired near the defect), localized true positives go from 0 to 3, deep configuration, 0 unscored: GHSA-r9r3-g9fp-3q4q (PHP), GHSA-jxpj-9j24-w337 (Java) and GHSA-382c-vx95-w3p5 (TypeScript), each reported at the line the upstream fix changed. Localized false positives stay at 1 (an unrelated Python entry). On the cluster's 21 validation entries, scored once, localized true positives stay at 0 and false positives at 0. **The rule does not generalize on validation**; it ships because it is correct on its fixtures and lowers no precision on either split. The published independent figures are not re-measured by this release.
+- **New rule, `authz-subject-consistency`** (CWE-285, PHP, Java, JavaScript/TypeScript). It reports a request handler that takes a subject (a bound model, a route parameter, a loaded record) which at least 3 sibling handlers in the same file, and most of those that take it, pass through an authorization check, while it checks nothing. The finding names the check and the siblings, and sits where the check belongs. It does not fire on an unchecked read when the file checks only writes, on test code, on the permission model's own methods, on a handler that only redirects, or on one that delegates to a checked sibling.
+- Across all 115,141 PHP, Java and JS/TS files of the 225 cached development entries it fires at 6 distinct sites: the 3 targets, 2 read endpoints in the same Java controllers with the same omission that the upstream fix left alone, and 1 probable false positive.
+- The self-scan found three regexes with nested quantifiers in the new module before release; they were rewritten without nesting, and the self-scan baseline is unchanged.
+
 ## 0.195.35 - The router-replay bench, which graded the removed cost advisor, is removed
 
 **Measured, 0.195.34:** `TIMINGS preflight=3s push=9s pr=4s checks=432s merge=7s verify=9s tag=2s release=224s npm=90s total=780s release-clock=242s`, shipped from the merge to the published release in 242 s on the first push.
