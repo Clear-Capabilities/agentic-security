@@ -35,7 +35,7 @@ Both key on the SECRET-NESS of the identifier, never on the comparison or the ty
 
 **Agent-of-agent / Claude Code hardening** — `claude-hook-injection.js`, `claude-md-prompt-injection.js`, `claude-settings.js`.
 
-**Auth / web** — `auth-provider.js`, `client-side.js`, `frontend-hygiene.js` (reverse tabnabbing CWE-1022, missing Subresource Integrity CWE-353, Angular `bypassSecurityTrust*` sanitizer-bypass CWE-79).
+**Auth / web** — `authz-subject-consistency.js` (CWE-285, PHP/Java/JS/TS: a handler that takes a subject its sibling handlers in the same file pass through an authorization check, at least 3 and a majority of those that take it, and checks nothing itself. Route handlers are grouped by the path parameter the subject is; an unchecked read is compared only with checked reads; test code, the permission model's own methods and redirect-only handlers are excluded. Reported where the check belongs: after the assignment of a variable the siblings check, else the first statement. Measured in `docs/superpowers/plans/2026-11-14-recall-sibling-authz.md`), `auth-provider.js`, `client-side.js`, `frontend-hygiene.js` (reverse tabnabbing CWE-1022, missing Subresource Integrity CWE-353, Angular `bypassSecurityTrust*` sanitizer-bypass CWE-79).
 
 **Bench-shape adapters (label-leakage, OFF by default)** — `bench-shape/` directory, plus `cpp-bench-extras.js`, `java-bench-extras.js`, `juliet-shape.js`, `primary-cwe-java.js`. These read Juliet / OWASP-Benchmark answer keys. Disabled unless `AGENTIC_SECURITY_BENCH_SHAPE=1`; `AGENTIC_SECURITY_BLIND_BENCH=1` overrides to force everything off. **Never use their emissions as a quality signal.**
 

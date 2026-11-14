@@ -25,9 +25,22 @@
 
 ## Steps
 
-- [ ] Fixture pair `scanner/test/fixtures/authz-subject-consistency/{vulnerable,clean}/` per language, written from the general shape (a CRUD controller), not copied from an entry. Test `scanner/test/authz-subject-consistency.test.js`, failing first; add to `test:sast`.
-- [ ] Implement, wire into `engine.js` per-file dispatch, build.
-- [ ] Regression gates: `test:sast`, `test:smoke`, `bench:cve-replay:check`, `bench:mutation:check`, `bench:self-scan:check`, `bench:layer-recall:check`.
-- [ ] Dev re-measure: the 131 dev entries of the cluster, `runner.mjs --deep --selection=<file>`; localized recall and precision with n/d, and every new finding read by hand on `pre/` and `post/`.
-- [ ] Exit, checked once: score the cluster's 21 validation entries a single time. Exit when validation localized recall rises and localized precision stays at or above the floor for each language touched; otherwise record "does not generalize" and ship only if the rule is correct on its fixtures and lowers no precision.
+- [x] Fixture pair `scanner/test/fixtures/authz-subject-consistency/{vulnerable,clean}/` per language, written from the general shape (a CRUD controller), not copied from an entry. Test `scanner/test/authz-subject-consistency.test.js`, failing first; add to `test:sast`.
+- [x] Implement, wire into `engine.js` per-file dispatch, build.
+- [x] Regression gates: `test:sast`, `test:smoke`, `bench:cve-replay:check`, `bench:mutation:check`, `bench:self-scan:check`, `bench:layer-recall:check`.
+- [x] Dev re-measure: the 131 dev entries of the cluster, `runner.mjs --deep --selection=<file>`; localized recall and precision with n/d, and every new finding read by hand on `pre/` and `post/`.
+- [x] Exit, checked once: score the cluster's 21 validation entries a single time. Exit when validation localized recall rises and localized precision stays at or above the floor for each language touched; otherwise record "does not generalize" and ship only if the rule is correct on its fixtures and lowers no precision.
 - [ ] Ship as its own release with the before/after n/d in the changelog.
+
+## Results (2026-11-14, engine at commit eab1e212, deep configuration)
+
+| Split | Entries | Localized TP before | Localized TP after | Localized FP before | Localized FP after |
+|---|---|---|---|---|---|
+| dev (cluster) | 131 | 0 | 3 (GHSA-r9r3-g9fp-3q4q php, GHSA-jxpj-9j24-w337 java, GHSA-382c-vx95-w3p5 typescript) | 1 | 1 (the same python entry, not this rule) |
+| validation (cluster, scored once) | 21 | 0 | 0 | 0 | 0 |
+
+Unscored: 0 of 131 and 0 of 21.
+
+**Exit verdict: does not generalize.** Validation localized recall did not move. The rule ships because it is correct on its fixtures and lowers no precision on either split. Across all 115,141 PHP/Java/JS/TS files of the 225 cached dev entries it fires at 6 distinct sites: the 3 targets, 2 Apollo read endpoints with the same omission that the upstream fix did not touch (`compareRelease`, `getBranchGrayRules`), and 1 probable false positive (Statamic `editFormBlueprint`).
+
+Regression gates: `test:sast` 974/974, `test:smoke`, `bench:cve-replay:check`, `bench:mutation:check`, `bench:layer-recall:check` and `bench:self-scan:check` pass. The first self-scan found three nested-quantifier regexes in the new module (CWE-1333); they were rewritten, not baselined.
