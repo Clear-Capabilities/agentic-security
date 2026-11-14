@@ -532,6 +532,8 @@ export function parseCabalFile(text, opts = {}) {
       for (const s of c.surfaces) into.surfaces.push({ ...s, via: `common:${imp.name}` });
       for (const r of c.flagRefs) into.flagRefs.push(r);
       for (const k of c.opaque) if (!into.opaque.includes(k)) into.opaque.push(k);
+      // A common stanza's source directories belong to every component that imports it (`testComponentIndex` reads them).
+      if (into.fields && c.fields && c.fields['hs-source-dirs']) into.fields['hs-source-dirs'] = [into.fields['hs-source-dirs'], c.fields['hs-source-dirs']].filter(Boolean).join(' ');
       expand(c, into, nextSeen, via);
     }
   };
@@ -539,7 +541,7 @@ export function parseCabalFile(text, opts = {}) {
   const declared = new Set(flags.map((f) => f.name));
   const unknownFlags = [];
   const components = stanzas.map((st) => {
-    const own = { deps: st.deps.slice(), surfaces: st.surfaces.slice(), flagRefs: st.flagRefs.slice(), opaque: [] };
+    const own = { deps: st.deps.slice(), surfaces: st.surfaces.slice(), flagRefs: st.flagRefs.slice(), opaque: [], fields: { ...st.fields } };
     expand(st, own, new Set(), null);
     for (const r of own.flagRefs) {
       if (!declared.has(r.flag)) {
@@ -555,7 +557,7 @@ export function parseCabalFile(text, opts = {}) {
       file,
       line: st.line,
       imports: st.imports,
-      fields: st.fields,
+      fields: own.fields,
       exposedModules: st.exposedModules,
       otherModules: st.otherModules,
       opaque: [...new Set([...st.opaque, ...own.opaque])],
@@ -667,8 +669,16 @@ export function parseHpackFile(text, opts = {}) {
       if (!(key in sec)) continue;
       const v = Array.isArray(sec[key]) ? sec[key] : [sec[key]];
       for (const m of v) if (typeof m === 'string') (key === 'exposed-modules' ? st.exposedModules : st.otherModules).push(m.trim());
-      if (key === 'exposed-modules') st.exposedDeclared = true;
+      if (key === 'exposed-modules') st.exposedDeclared = true; else st.otherDeclared = true;
     }
+    // Where the component's sources live and its entry file (hpack `source-dirs` is a string or a list; cabal spells it `hs-source-dirs`).
+    // Recorded under the cabal field names so one reader (`testComponentIndex`) serves both manifest kinds.
+    if ('source-dirs' in sec) {
+      const v = Array.isArray(sec['source-dirs']) ? sec['source-dirs'] : [sec['source-dirs']];
+      const dirs = v.filter((d) => typeof d === 'string' && d.trim()).map((d) => d.trim());
+      if (dirs.length) st.fields['hs-source-dirs'] = [...(st.fields['hs-source-dirs'] ? st.fields['hs-source-dirs'].split(/\s+/) : []), ...dirs].join(' ');
+    }
+    if (typeof sec.main === 'string' && sec.main.trim()) st.fields['main-is'] = sec.main.trim();
     if ('generated-exposed-modules' in sec || 'generated-other-modules' in sec) st.opaque.push('hpack-generated-modules');
     if ('ghc-options' in sec) {
       const opt = Array.isArray(sec['ghc-options']) ? sec['ghc-options'].join(' ') : String(sec['ghc-options']);
@@ -694,7 +704,7 @@ export function parseHpackFile(text, opts = {}) {
     }
   };
 
-  const mkStanza = (kind, name, scope) => ({ kind, name, scope, deps: [], flagRefs: [], exposedModules: [], otherModules: [], opaque: [], exposedDeclared: false });
+  const mkStanza = (kind, name, scope) => ({ kind, name, scope, deps: [], flagRefs: [], exposedModules: [], otherModules: [], opaque: [], exposedDeclared: false, otherDeclared: false, fields: {} });
   const finish = (st, line) => {
     for (const r of st.flagRefs) {
       if (!(doc.flags && isObj(doc.flags) && r.flag in doc.flags)) {
@@ -702,7 +712,7 @@ export function parseHpackFile(text, opts = {}) {
         diagnostics.push(diag('unknown_flag', `condition references flag '${r.flag}' that package.yaml never declares`, file, r.line, 'warning', { flag: r.flag }));
       }
     }
-    return { kind: st.kind, name: st.name, scope: st.scope, file, line, exposedModules: st.exposedModules, otherModules: st.otherModules, exposedDeclared: st.exposedDeclared, opaque: st.opaque, buildTools: st.deps.filter((d) => d.scopeOverride === 'build-tool').map((d) => d.name), dependencies: st.deps.map((d) => ({ ...d, scope: d.scopeOverride || st.scope, scopeOverride: undefined })) };
+    return { kind: st.kind, name: st.name, scope: st.scope, file, line, exposedModules: st.exposedModules, otherModules: st.otherModules, exposedDeclared: st.exposedDeclared, otherDeclared: st.otherDeclared, fields: st.fields, opaque: st.opaque, buildTools: st.deps.filter((d) => d.scopeOverride === 'build-tool').map((d) => d.name), dependencies: st.deps.map((d) => ({ ...d, scope: d.scopeOverride || st.scope, scopeOverride: undefined })) };
   };
 
   const components = [];
@@ -1339,6 +1349,91 @@ export function exposedModuleIndex(manifests, opts = {}) {
   }
   if (unknown) return { modules: null, reason: unknown, packages, libraries };
   return { modules, reason: null, packages, libraries };
+}
+
+// ---------------------------------------------------------------------------
+// Test-component scope: which source directories the manifests assign ONLY to a test-suite or benchmark.
+// ---------------------------------------------------------------------------
+
+const RUNTIME_KINDS = new Set(['library', 'executable', 'foreign-library']);
+const TEST_KINDS = new Set(['test-suite', 'benchmark']);
+
+/** `hs-source-dirs` of a stanza (cabal: comma or space separated; hpack: joined by the parser), resolved against the manifest's directory. Default `.`. */
+function sourceDirsOf(c, manifestDir) {
+  const raw = (c.fields && c.fields['hs-source-dirs']) || '.';
+  const dirs = String(raw).split(/[,\s]+/).map((d) => d.trim()).filter(Boolean);
+  const out = new Set();
+  for (const d of dirs.length ? dirs : ['.']) {
+    const joined = path.posix.normalize(path.posix.join(manifestDir, d.replace(/\\/g, '/'))).replace(/\/+$/, '');
+    if (joined.startsWith('..') || path.posix.isAbsolute(joined)) continue;   // outside the package tree: not a directory this package owns
+    out.add(joined === '' ? '.' : joined);
+  }
+  return out;
+}
+
+const isUnder = (file, dir) => dir === '.' ? true : file === dir || file.startsWith(dir + '/');
+const moduleOf = (file, dir) => (dir === '.' ? file : file.slice(dir.length + 1)).replace(/\.(?:l?hs|hsc|hs-boot|hsig)$/i, '').replace(/\//g, '.');
+
+/**
+ * The directories the manifests assign ONLY to test-suite and benchmark components, over every `.cabal` (and every `package.yaml` with no `.cabal`
+ * beside it) in `manifests` (path -> text). Returns `{ dirs: [{dir, kind, component, manifest}], reason, ownerOf(file) }`: `ownerOf` names the test
+ * component a Haskell file belongs to, or `null`.
+ *
+ * Decided from the manifest alone, never from a path name: `Test/` is test code because a `test-suite` stanza says `hs-source-dirs: Test`. A
+ * `common` stanza's directories go to every component that imports it. Three refusals keep it sound: a directory a runtime component also lists is
+ * not test-only; the package root (`.`) is never test-only; and a file under a runtime component's directory whose module list is UNKNOWN (an
+ * hpack library or executable that lists no modules exposes every module under its directories, test modules included) stays runtime. A manifest
+ * that fails to parse contributes nothing and is named in `reason`.
+ */
+export function testComponentIndex(manifests, opts = {}) {
+  const budgets = budgetsOf(opts);
+  const entries = Object.entries(manifests || {}).map(([p, text]) => [String(p).replace(/\\/g, '/'), typeof text === 'string' ? text : '']).filter(([p]) => { const k = classifyManifest(p); return k === 'cabal' || k === 'hpack'; }).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  const dirs = [];
+  const runtime = [];   // { dirs:Set, modules:Set|null, mainIs, manifestDir }
+  let reason = entries.length ? null : 'no-manifest';
+  const cabalDirs = new Set(entries.filter(([p]) => classifyManifest(p) === 'cabal').map(([p]) => path.posix.dirname(p)));
+  for (const [p, text] of entries) {
+    const kind = classifyManifest(p);
+    const manifestDir = path.posix.dirname(p) === '.' ? '' : path.posix.dirname(p);
+    if (kind === 'hpack' && cabalDirs.has(path.posix.dirname(p))) continue;
+    let r;
+    try { r = kind === 'cabal' ? parseCabalFile(text, { file: p, budgets }) : parseHpackFile(text, { file: p, budgets }); } catch { reason = reason || 'manifest-parse-failure'; continue; }
+    if (!r || r.incomplete || (r.diagnostics || []).some((d) => d.code === 'budget_exceeded' || d.kind === 'budget_exceeded')) { reason = reason || 'manifest-incomplete'; continue; }
+    const comps = r.components || [];
+    const common = new Map(comps.filter((c) => c.kind === 'common').map((c) => [c.name, sourceDirsOf(c, manifestDir)]));
+    const dirsOf = (c) => { const s = sourceDirsOf(c, manifestDir); for (const i of c.imports || []) for (const d of common.get(i.name) || []) s.add(d); return s; };
+    const runtimeDirs = new Set();
+    for (const c of comps) {
+      if (!RUNTIME_KINDS.has(c.kind)) continue;
+      const ds = dirsOf(c);
+      for (const d of ds) runtimeDirs.add(d);
+      const unknown = (c.opaque || []).length > 0 || (kind === 'hpack' && !(c.kind === 'library' ? c.exposedDeclared && c.otherDeclared : c.otherDeclared));
+      runtime.push({ dirs: ds, modules: unknown ? null : new Set([...(c.exposedModules || []), ...(c.otherModules || [])]), mainIs: (c.fields && c.fields['main-is']) || null });
+    }
+    for (const c of comps) {
+      if (!TEST_KINDS.has(c.kind)) continue;
+      for (const d of dirsOf(c)) {
+        if (d === (manifestDir || '.') || runtimeDirs.has(d)) continue;   // the package root holds everything; never test-only
+        if (!dirs.some((x) => x.dir === d)) dirs.push({ dir: d, kind: c.kind, component: c.name, manifest: p });
+      }
+    }
+  }
+  const ownerOf = (file) => {
+    const f = String(file || '').replace(/\\/g, '/').replace(/^\.\//, '');
+    if (!/\.(?:l?hs|hsc)$/i.test(f)) return null;
+    const hit = dirs.find((d) => isUnder(f, d.dir));
+    if (!hit) return null;
+    for (const rc of runtime) {
+      for (const d of rc.dirs) {
+        if (!isUnder(f, d)) continue;
+        if (rc.modules === null) return null;                                           // the runtime component may own every module under here
+        if (rc.modules.has(moduleOf(f, d))) return null;
+        if (rc.mainIs && path.posix.normalize(path.posix.join(d === '.' ? '' : d, rc.mainIs)) === f) return null;
+      }
+    }
+    return hit;
+  };
+  return { dirs, reason, ownerOf };
 }
 
 const WALK_SKIP = new Set(['node_modules', '.git', '.hg', '.svn']);

@@ -28,6 +28,7 @@
 // parameter annotations the IR derived from the signature.
 
 import { findSites, identNames } from './haskell-guards.js';
+import { testComponentIndex } from './haskell-manifests.js';
 
 export const TRUST_VERDICTS = Object.freeze(['attacker-reachable', 'operator-controlled', 'api-contract', 'entry-parameter', 'data-input', 'unattributed']);
 
@@ -244,6 +245,32 @@ export function lowerFinding(f, { kind, reason, controlKind, guard, keepNote = f
   f.controls = [...(f.controls || []), { kind: controlKind, evidenceKind: 'source' }];
   if (!keepNote || !f.guardNote) f.guardNote = { kind, reason };
   return true;
+}
+
+/**
+ * Lowers to `info` every Haskell finding in a file the package manifests assign ONLY to a test-suite or benchmark component
+ * (`testComponentIndex`): an hspec suite's in-process application echoes a request on purpose, and nothing a client reaches runs it. The
+ * finding is kept (test code can hold a real secret, or an injection the author will copy into the program), with `originalSeverity`,
+ * a `test-component` control and a `guardNote` naming the stanza and the manifest, and `componentScope` on the finding. Decided from the
+ * manifest's `hs-source-dirs`, never from a path name. Applies to every parser (a rule finding in test code is test code too). Idempotent.
+ */
+export function applyTestComponentScope(findings, manifests) {
+  const stats = { lowered: 0, inTestComponent: 0, reason: null };
+  if (!Array.isArray(findings) || !findings.length) return stats;
+  const idx = testComponentIndex(manifests || {});
+  stats.reason = idx.reason;
+  if (!idx.dirs.length) return stats;
+  for (const f of findings) {
+    if (!f || !/\.(?:l?hs|hsc)$/i.test(String(f.file || ''))) continue;
+    const owner = idx.ownerOf(f.file);
+    if (!owner) continue;
+    stats.inTestComponent++;
+    if (!f.componentScope) f.componentScope = { kind: owner.kind, component: owner.component, manifest: owner.manifest, dir: owner.dir };
+    if (f.severity === 'info') continue;
+    const reason = `the file is under '${owner.dir}', which ${owner.manifest} lists as hs-source-dirs of the ${owner.kind} '${owner.component}' and of no library or executable: test code exercises the program, it is not the program a request reaches`;
+    if (lowerFinding(f, { kind: 'test-component', reason, controlKind: 'test-component', guard: '_testScopeLowered' })) stats.lowered++;
+  }
+  return stats;
 }
 
 /** The classes of origin a finding's recorded roots fall in (`operator`, `external`, `data`, `weak-param`, `other`), and the roots themselves. */

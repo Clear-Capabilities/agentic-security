@@ -330,7 +330,7 @@ import { stripComments as stripHaskellComments } from './language/haskell-commen
 import { annotateHaskellLlm, analyzeHaskellLlmRules } from './language/haskell-llm.js';
 import { languagePragmaOnLine as _languagePragmaOnLine, languagePragmaSuppresses as _languagePragmaSuppresses } from './language/pragma.js';
 import { applyHaskellGuards, consolidateFlowSinks } from './language/haskell-guards.js';
-import { applyTrustBoundary } from './language/haskell-trust.js';
+import { applyTrustBoundary, applyTestComponentScope } from './language/haskell-trust.js';
 import { applyHaskellReachability } from './language/haskell-reachability.js';
 import { annotateUnresolvedTargets, attachEvidenceChains } from './language/haskell-disclosure.js';
 import { analyzeHaskellRules } from './language/haskell-security-rules.js';
@@ -9935,6 +9935,10 @@ function _deterministicFileTimings(timings) {
   // cross-file pass has appended", which was false for the deep path — a
   // correctly-formed pragma on the exact line of an ir-taint finding did
   // nothing, silently, in the mode the CLI actually uses.
+  // A Haskell finding in a file the package manifests assign only to a test-suite or benchmark is lowered to `info` with the stanza named
+  // (language/haskell-trust.js `applyTestComponentScope`): decided from `hs-source-dirs`, never from a path name. Every parser's Haskell
+  // findings are in `finalFindings` by here; the call is idempotent, and repeated after the late privacy-flow append below.
+  try { applyTestComponentScope(finalFindings, _hsReachCtx().manifests); } catch (_) { /* metadata and a lowering only; the findings stand */ }
   try{ _applyIgnorePragmas(finalFindings, fc); _applyIgnorePragmas(aLogic, fc); _applyIgnorePragmas(aSecrets, fc); }catch(_){}
   // #1 — centralized SSRF/path guard recognition: drop CWE-918/CWE-22 findings
   // on code hardened by a host allow/deny check or a path containment guard,
@@ -10332,6 +10336,7 @@ function _deterministicFileTimings(timings) {
         // The privacy flows land AFTER both pragma passes, so an `agentic-security-ignore` on a credential-to-HTTP line was inert for
         // them (found by the self-scan of 0.195.22): the documented rule is that a stage appending findings runs the pragma filter
         // after itself. Idempotent for everything already filtered; the suppression is logged like every other.
+        try { applyTestComponentScope(finalFindings, _hsReachCtx().manifests); } catch (_) { /* see the first call */ }
         try { _applyIgnorePragmas(finalFindings, fc); } catch (_) {}
         // Persist the DPIA scaffold for compliance review.
         if (r && r.piiFields) {

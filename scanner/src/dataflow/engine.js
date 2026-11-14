@@ -683,16 +683,21 @@ function _sourcesReachingExpr(expr, _state, taintSources) {
   const vars = new Set();
   _collectExprVars(expr, vars);
   if (vars.size === 0) return [];
-  // Match by exact varName OR by access-path prefix (a source recorded for
-  // `user` covers `user.email`, and a source recorded for `user.email`
-  // covers the literal expression `user.email`).
+  // Match by exact varName OR by access-path prefix in EITHER direction: a source recorded for
+  // `user` covers `user.email`, a source recorded for `user.email` covers the literal expression
+  // `user.email`, and a source recorded for `database.adbRoot` covers a read of the whole `database`
+  // (the record is handed on whole and the callee reads the field back out). The last case was
+  // missing: a Haskell record construction lowers to `database = {}; database.adbRoot = root`, so
+  // every origin stored in a field was lost at the call that passed the record, and the finding at
+  // the field's sink said "the engine recorded no origin" (fourteen flagged sites on one real
+  // project, none attributable). Attribution only: taint itself was already propagating.
   const matched = [];
   for (const s of taintSources) {
     const v = s.varName;
     if (!v) continue;
     if (vars.has(v)) { matched.push(s); continue; }
     for (const candidate of vars) {
-      if (typeof candidate === 'string' && (candidate === v || candidate.startsWith(v + '.'))) {
+      if (typeof candidate === 'string' && (candidate === v || candidate.startsWith(v + '.') || v.startsWith(candidate + '.'))) {
         matched.push(s); break;
       }
     }
