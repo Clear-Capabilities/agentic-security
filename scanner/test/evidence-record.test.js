@@ -29,6 +29,12 @@ test('scan record ties the run to a commit and names the dirty files with digest
   assert.equal(dirty.dirty, true);
   assert.deepEqual(dirty.dirtyFiles.map((f) => f.file).sort(), ['app.js', 'new.js']);
   assert.ok(dirty.dirtyFiles.every((f) => /^[0-9a-f]{64}$/.test(f.sha256)));
+  // an untracked directory (the scan's own state directory, written into the tree) is listed file by file, never as a directory with no digest
+  fs.mkdirSync(path.join(d, '.agentic-security'), { recursive: true });
+  fs.writeFileSync(path.join(d, '.agentic-security', 'last-scan.json'), '{}\n');
+  const withDir = sourceState(d);
+  assert.deepEqual(withDir.dirtyFiles.map((f) => f.file).sort(), ['.agentic-security/last-scan.json', 'app.js', 'new.js']);
+  assert.ok(withDir.dirtyFiles.every((f) => /^[0-9a-f]{64}$/.test(f.sha256)), JSON.stringify(withDir.dirtyFiles));
   const none = sourceState(mkTestTmp('agsec-evid-nogit-'));
   assert.equal(none.vcs, 'none');
 });

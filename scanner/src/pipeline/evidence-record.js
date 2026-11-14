@@ -23,7 +23,10 @@ export function sourceState(root) {
   const inside = git(root, ['rev-parse', '--is-inside-work-tree']);
   if (!inside || inside.trim() !== 'true') return { vcs: 'none', commit: null, dirty: null, dirtyFiles: [], dirtyFilesTruncated: false };
   const commit = (git(root, ['rev-parse', 'HEAD']) || '').trim() || null;
-  const status = git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=normal']);
+  // `--untracked-files=all`: every untracked FILE is listed and digested. `normal` collapses an untracked directory (the scan's own
+  // `.agentic-security/` state, written into the scanned tree) to one entry with no digest, and whether git chooses the directory or its
+  // files differed between hosts, so the record's shape (`sha256: string`) was not stable across them. A directory is never an entry now.
+  const status = git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
   const entries = (status || '').split('\0').filter(Boolean).map((e) => ({ code: e.slice(0, 2), file: e.slice(3) }));
   const dirtyFiles = entries.slice(0, DIRTY_CAP).map((e) => {
     let digest = null;
