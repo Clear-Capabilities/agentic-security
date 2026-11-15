@@ -48,7 +48,7 @@ loadSchema = do
   assert.match(f[0].trustBoundary.reason, /literal path/);
 });
 
-test('fixed-file: the same read from a path held in a name, a parameter or standard input keeps its severity', async () => {
+test('fixed-file: a path held in a name bound once to a literal is the literal (low); a parameter or standard input keeps its severity', async () => {
   const fs = await scanAll({
     'app.cabal': CABAL,
     'Lib.hs': `module Lib (viaName, viaParam, viaStdin) where
@@ -71,7 +71,11 @@ viaStdin = do
   readFile ("schemas" </> ref)
 `,
   });
-  for (const line of [8, 13, 18]) {
+  // since 0.195.39 a name bound once to a literal in the function is read as that literal (`fixedPathExpr`): the program text still fixes the location
+  const named = at(fs, 8, 'CWE-22');
+  assert.ok(named.length >= 1, JSON.stringify(fs.map((x) => [x.line, x.severity])));
+  for (const x of named) { assert.equal(x.severity, 'low', 'a let-bound literal path is a fixed location'); assert.equal(x.originalSeverity, 'high'); }
+  for (const line of [13, 18]) {
     const f = at(fs, line, 'CWE-22');
     assert.ok(f.length >= 1, `line ${line} still reported: ${JSON.stringify(fs.map((x) => [x.line, x.severity]))}`);
     for (const x of f) assert.notEqual(x.severity, 'low', `line ${line} must not be lowered by the fixed-file rule: ${x.severity}`);

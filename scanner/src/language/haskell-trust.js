@@ -283,6 +283,30 @@ export function originClasses(f) {
 const FILE_READ_CALL = /(?:^|\.)(?:readFile|readFile'|readFileUtf8|readBinaryFile|decodeFileThrow|decodeFileEither|decodeFile)$/;
 const isFixedPath = (e) => !!e && e.kind === 'literal' && typeof e.value === 'string' && e.value.length > 0 && !/^[a-z][a-z0-9+.-]*:\/\//i.test(e.value);
 
+/** A top-level definition with no parameters whose whole body is one literal (`schemaFilePath = "Application/Schema.sql"`): that literal. */
+function constantLiteral(fn) {
+  if (!fn || (Array.isArray(fn.params) && fn.params.length) || !fn.cfg || !fn.cfg.nodes) return null;
+  const nodes = Object.values(fn.cfg.nodes).filter((n) => n && n.kind !== 'entry' && n.kind !== 'exit');
+  if (nodes.length !== 1 || nodes[0].kind !== 'return' || !isFixedPath(nodes[0].value)) return null;
+  return nodes[0].value;
+}
+
+/**
+ * Is this path expression fixed by the program text? A string literal; a name bound once in the function to one (`let fp = ..`); a reference to a
+ * project constant that is one (`Paths.schemaFilePath`, followed through the IR's `functionRef`); any of those under a type conversion
+ * (`decodeUtf`, `cs`, `pack`). IHP's schema compiler reads `Application/Schema.sql` through a constant two modules away. Anything else (a parameter,
+ * a computed value) is not judged.
+ */
+function fixedPathExpr(e, fn, perFile, depth = 0) {
+  if (!e || depth > 6) return false;
+  if (isFixedPath(e)) return true;
+  if (e.kind === 'call' && typeof e.callee === 'string' && (CONVERSIONS.test(e.callee) || /(?:^|\.)decodeUtf$/.test(e.callee)) && (e.args || []).length === 1) return fixedPathExpr(e.args[0], fn, perFile, depth + 1);
+  if (e.kind !== 'ident') return false;
+  if (e.hs && e.hs.functionRef) return isFixedPath(constantLiteral(fnByQid(perFile, e.hs.functionRef)));
+  const r = fn ? localResolver(fn)(e) : e;
+  return r !== e && fixedPathExpr(r, fn, perFile, depth + 1);
+}
+
 /**
  * Is every file-read origin of this finding a read of a file whose location the program text fixes (`readFile "config/schema.dhall"`)? Judged from
  * the call at the origin's recorded line: its first argument must be a string literal. A path held in a name, built from parts or taken from
@@ -291,14 +315,15 @@ const isFixedPath = (e) => !!e && e.kind === 'literal' && typeof e.value === 'st
  */
 function fixedFileReads(perFile, f, roots) {
   const reads = roots.filter((r) => r.provenance === 'file-read');
-  if (!reads.length || reads.length !== roots.length) return false;
+  // every root is a file read, or the operator's own argument or environment beside one (the schema compiler's `IHP_RELATION_SUPPORT`)
+  if (!reads.length || roots.some((r) => r.provenance !== 'file-read' && classOf(r) !== 'operator')) return false;
   const chain = (f.chain || []).filter((c) => c && c.provenance === 'file-read');
   const where = reads.map((r, i) => ({ file: r.file || (chain[i] && chain[i].file) || (f.source && f.source.file), line: Number.isInteger(r.line) ? r.line : (chain[i] && chain[i].line) || (f.source && f.source.line) }));
   return where.every((w) => {
     const ir = perFile && perFile[w.file];
     if (!ir || !Number.isInteger(w.line)) return false;
     let seen = false;
-    for (const fn of ir.functions) for (const s of findSites(fn, FILE_READ_CALL, w.line)) { seen = true; if (!isFixedPath((s.call.args || [])[0])) return false; }
+    for (const fn of ir.functions) for (const s of findSites(fn, FILE_READ_CALL, w.line)) { seen = true; if (!fixedPathExpr((s.call.args || [])[0], fn, perFile)) return false; }
     return seen;
   });
 }
@@ -337,8 +362,8 @@ export function applyTrustBoundary(findings, perFile) {
         : 'the function belongs to a command-line program (reached from a main that imports no server framework) and the value comes from files the person running it pointed the program at, or from its arguments and environment; standard input is covered by this rule only for a path operation';
     } else if (classes.has('data')) {
       verdict = 'data-input'; reason = 'standard input or file content supplies the value';
-      if (!classes.has('operator') && !classes.has('weak-param') && !classes.has('other') && fixedFileReads(perFile, f, roots)) {
-        reason = 'the value is the content of a file at a location the program text fixes (a literal path), not a request or a caller-supplied name; another part of the program could still write that file, so the finding is lowered to low and kept';
+      if (!classes.has('weak-param') && !classes.has('other') && fixedFileReads(perFile, f, roots)) {
+        reason = 'the value is the content of a file at a location the program text fixes (a literal path, or a project constant holding one), not a request or a caller-supplied name; another part of the program could still write that file, so the finding is lowered to low and kept';
         lowToLow = true;
       }
     }
