@@ -9,9 +9,9 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.195.43 |
-| Bundle SHA-256 | `123d46c8dc12b27ce85c5281536eb35b6a1dd8357f986a6090cf2d73190cba36` |
-| Commit | `6383c13d84164b60ae07441f61cb7fd371683edf` |
+| Engine version | 0.195.44 |
+| Bundle SHA-256 | `a677e7b10a456400f2de126bb08f1d92700240ba1dc1dcc7bda7d3dfe677a9e4` |
+| Commit | `dcb625687e3672aa62c5f99f5bad30abf7eee5b7` |
 | Worktree at measurement time | clean |
 | Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -20,7 +20,7 @@ that produced them.
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-15T14:52:28.085Z |
+| Generated (UTC) | 2026-11-15T17:47:23.568Z |
 
 ## What these numbers are, and what they are not
 
@@ -379,7 +379,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.195.43), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.195.44), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both
