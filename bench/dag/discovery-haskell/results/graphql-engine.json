@@ -1,0 +1,279 @@
+{
+ "id": "graphql-engine",
+ "commit": "96f68d0a35a2b3ee153ce67585d37efb3cfa6598",
+ "rows": [
+  {
+   "file": "server/lib/api-tests/app-produce-feature-matrix/Main.hs",
+   "line": 133,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "server/lib/api-tests/app-produce-feature-matrix/Main.hs",
+   "line": 146,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "server/lib/api-tests/app-produce-feature-matrix/Main.hs",
+   "line": 30,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "server/lib/hasura-prelude/src/Hasura/Prelude.hs",
+   "line": 339,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "entrypoint-reachable",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "server/lib/pg-client/src/Database/PG/Query/Pool.hs",
+   "line": 327,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "entrypoint-reachable",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "server/src-lib/Hasura/Server/CheckUpdates.hs",
+   "line": 43,
+   "severity": "info",
+   "cwe": "CWE-918",
+   "vuln": "Server-Side Request Forgery",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "server/lib/test-harness/src/Harness/Services/Composed.hs",
+   "line": 70,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "server/lib/test-harness/src/Harness/Services/Composed.hs",
+   "line": 72,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "server/src-lib/Hasura/Server/API/PGDump.hs",
+   "line": 62,
+   "severity": "medium",
+   "cwe": "CWE-88",
+   "vuln": "Argument Injection (process arguments)",
+   "parser": "IR-TAINT",
+   "trust": "unattributed",
+   "reach": "entrypoint-reachable",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "server/lib/test-harness/src/Harness/RemoteServer.hs",
+   "line": 70,
+   "severity": "medium",
+   "cwe": "CWE-770",
+   "vuln": "Request body read without a size limit",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/lib/test-harness/src/Harness/Webhook.hs",
+   "line": 63,
+   "severity": "medium",
+   "cwe": "CWE-770",
+   "vuln": "Request body read without a size limit",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/src-lib/Hasura/Server/App.hs",
+   "line": 345,
+   "severity": "medium",
+   "cwe": "CWE-770",
+   "vuln": "Request body read without a size limit",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/src-lib/Hasura/Server/App.hs",
+   "line": 1178,
+   "severity": "medium",
+   "cwe": "CWE-770",
+   "vuln": "Request body read without a size limit",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/lib/pg-client/src/Database/PG/Query/Connection.hs",
+   "line": 273,
+   "severity": "info",
+   "cwe": "CWE-918",
+   "vuln": "Server-Side Request Forgery",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "server/forks/hedis/src/Database/Redis/Cluster.hs",
+   "line": 201,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/forks/hedis/src/Database/Redis/ProtocolPipelining.hs",
+   "line": 125,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/forks/hedis/src/Database/Redis/ProtocolPipelining.hs",
+   "line": 140,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/lib/graphql-parser/src/Language/GraphQL/Draft/Syntax.hs",
+   "line": 611,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/lib/hasura-prelude/src/Hasura/Prelude.hs",
+   "line": 339,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/lib/hasura-prelude/src/Hasura/Prelude.hs",
+   "line": 350,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/lib/incremental/src/Hasura/Incremental/Select.hs",
+   "line": 119,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/lib/incremental/src/Hasura/Incremental/Select.hs",
+   "line": 125,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/lib/incremental/src/Hasura/Incremental/Select.hs",
+   "line": 149,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/lib/incremental/src/Hasura/Incremental/Select.hs",
+   "line": 156,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeCoerce",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/src-lib/Hasura/Backends/Postgres/SQL/RenameIdentifiers.hs",
+   "line": 91,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "server/src-lib/Hasura/CachedTime.hs",
+   "line": 34,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  }
+ ]
+}

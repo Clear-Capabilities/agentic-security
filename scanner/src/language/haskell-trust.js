@@ -96,6 +96,14 @@ function operandsOf(e, out = [], depth = 0, resolve = null) {
  * LEFTMOST operand, so it chooses the whole location and the fixed tail is only a file name inside it.
  */
 export function isPassThrough(arg, params, family, resolve = null) {
+  // a path join whose FIRST component is the parameter (`base </> name`, `joinPath (base : pieces)`) hands the parameter on as the directory the
+  // whole location lies in, whatever the tail is (a literal index name, a destructured list element, a request path the caller checked)
+  const r0 = resolve ? resolve(arg) : arg;
+  if (family === 'path' && r0 && r0.kind === 'call' && typeof r0.callee === 'string' && PATH_JOIN.test(r0.callee) && (r0.args || []).length) {
+    const first = r0.args[0];
+    const head = first && first.kind === 'array' && Array.isArray(first.elements) && first.elements.length ? first.elements[0] : first;
+    if (head && head.kind === 'ident' && params.has(head.name)) return true;
+  }
   const ops = operandsOf(arg, [], 0, resolve);
   if (!ops.length || ops.some((o) => !o)) return false;
   const dyn = ops.filter((o) => o.kind !== 'literal');
@@ -108,6 +116,13 @@ export function isPassThrough(arg, params, family, resolve = null) {
     if (o.kind === 'member') return ok(o.object, depth + 1);
     if (o.kind === 'array') return o.elements.length > 0 && o.elements.every((x) => ok(x, depth + 1));
     if (o.kind === 'call' && typeof o.callee === 'string' && LIST_LAYOUT.test(o.callee)) return (o.args || []).length > 0 && o.args.every((x) => ok(x, depth + 1));
+    // a path join whose FIRST component is the parameter (`joinPath (base : pieces)`, `base </> rest`): the parameter chooses the directory the
+    // whole location lies in; the tail picks a file inside it and has its own origin (happstack's `fileServe' .. localPath`)
+    if (family === 'path' && o.kind === 'call' && typeof o.callee === 'string' && PATH_JOIN.test(o.callee) && (o.args || []).length) {
+      const first = o.args[0];
+      const head = first && first.kind === 'array' && Array.isArray(first.elements) && first.elements.length ? first.elements[0] : first;
+      return !!head && head.kind === 'ident' && params.has(head.name);
+    }
     return false;
   };
   if (!dyn.every((o) => ok(o))) return false;
@@ -183,8 +198,19 @@ function passThroughVerdict(perFile, f) {
   for (const a of args) findSpecs(a);
   if (specArgs.length) args = specArgs;
   if (!args.length) return null;
-  const analysed = fnByQid(perFile, f._funcQid);
+  let analysed = fnByQid(perFile, f._funcQid);
   if (!analysed) return null;
+  // The finding may have been collected under an intermediate or a recursive callee (happstack's `tryIndex`), whose own parameters carry no
+  // weak label; the function that HOLDS the parameter is the one at the root of the evidence chain, found by its file and line.
+  if (!weakParamsOf(analysed).size) {
+    const root = Array.isArray(f.chain) && f.chain.length ? f.chain[0] : null;
+    const rootFile = root && root.file ? root.file : f.file;
+    const ir = perFile && perFile[rootFile];
+    if (ir && root && Number.isInteger(root.line)) {
+      const holder = ir.functions.filter((x) => Number.isInteger(x.line) && x.line <= root.line && weakParamsOf(x).size).sort((a, b) => b.line - a.line)[0];
+      if (holder) analysed = holder;
+    }
+  }
   if (sink.fn.qid === analysed.qid) {
     const weak = weakParamsOf(analysed);
     if (!weak.size) return null;
@@ -195,24 +221,75 @@ function passThroughVerdict(perFile, f) {
   }
   // the sink is in a callee
   const own = new Set(Array.isArray(sink.fn.params) ? sink.fn.params : []);
-  const ownVars = [...new Set(args.flatMap((a) => [...identNames(a)]))];
-  if (!own.size || !ownVars.length || !ownVars.every((v) => own.has(v)) || !args.every((a) => isPassThrough(a, own, family))) return null;
+  // a local bound once in the callee stands for its definition (`let fp = joinPath (localPath : rqPaths rq)`, `let path = fp </> index`); the
+  // names tracked back to the caller are the parameters the (resolved) argument hands on: for a path join with a parameter head, the head alone
+  // (the tail picks a file inside the directory the parameter chose and has its own origin)
+  const sinkRes = localResolver(sink.fn);
+  // A pattern-bound parameter (`tryIndex (index:rest) fp`) is `$argN` in the IR with `fp` a local assigned from it: the aliases stand for the
+  // parameter when the argument is judged, and are mapped back to the positional parameter when the caller's call is read.
+  const paramAliases = (g) => {
+    const map = new Map((Array.isArray(g.params) ? g.params : []).map((p) => [p, p]));
+    const defs = new Map();
+    for (const n of Object.values(g.cfg.nodes)) if (n.kind === 'assign' && typeof n.target === 'string' && n.source) defs.set(n.target, [...(defs.get(n.target) || []), n.source]);
+    for (let grew = true; grew;) { grew = false; for (const [t, ds] of defs) if (!map.has(t) && ds.length === 1 && ds[0].kind === 'ident' && map.has(ds[0].name)) { map.set(t, map.get(ds[0].name)); grew = true; } }
+    return map;
+  };
+  const sinkAliases = paramAliases(sink.fn);
+  const trackedOf = (a, res, params) => {
+    const r = res(a);
+    if (r && r.kind === 'call' && typeof r.callee === 'string' && PATH_JOIN.test(r.callee) && (r.args || []).length && family === 'path') {
+      const first = r.args[0];
+      const head = first && first.kind === 'array' && Array.isArray(first.elements) && first.elements.length ? first.elements[0] : first;
+      if (head && head.kind === 'ident' && params.has(head.name)) return [head.name];
+    }
+    return [...identNames(r)];
+  };
+  const ownAll = new Set(sinkAliases.keys());
+  const ownVars = [...new Set(args.flatMap((a) => trackedOf(a, sinkRes, ownAll)))];
+  if (!own.size || !ownVars.length || !ownVars.every((v) => ownAll.has(v)) || !args.every((a) => isPassThrough(a, ownAll, family, sinkRes))) return null;
   const weak = weakParamsOf(analysed);
   if (!weak.size) return null;
-  const calls = findCallsTo(analysed, sink.fn);
-  if (!calls.length) return null;
-  const used = new Set(ownVars);
-  for (const call of calls) {
-    for (let i = 0; i < (call.args || []).length; i++) {
-      const p = sink.fn.params[i];
-      if (!p || !used.has(p)) continue;
-      const a = call.args[i];
-      if (!a) return null;
-      if (a.kind === 'literal') continue;
-      if (!isPassThrough(a, weak, family)) return null;
+  // The handoff may run through intermediate project functions of the file (snap's `initJsonFileAuthManager fp` to `mkJsonAuthMgr fp` to
+  // `loadUserCache fp`): each hop must pass the tracked parameters on whole, from the caller's own parameters, up to three hops.
+  const fileFns = (perFile[f.file] && perFile[f.file].functions) || [];
+  // `used` holds the callee's POSITIONAL parameter names; the caller's arguments are judged against the caller's parameters and their aliases
+  const handsOn = (caller, callee, used, callerParams, depth) => {
+    const calls = findCallsTo(caller, callee);
+    if (!calls.length) return null;
+    const res = localResolver(caller);
+    const aliases = paramAliases(caller);
+    const callerAll = new Set([...aliases.keys()].filter((k) => callerParams.has(aliases.get(k))));
+    const reached = new Set();   // the caller's parameters (positional names) that feed the callee's tracked parameters
+    for (const call of calls) {
+      for (let i = 0; i < (call.args || []).length; i++) {
+        const p = callee.params[i];
+        if (!p || !used.has(p)) continue;
+        const a = call.args[i];
+        if (!a) return null;
+        if (a.kind === 'literal') continue;
+        if (!isPassThrough(a, callerAll, family, res)) return null;
+        for (const nm of trackedOf(a, res, callerAll)) if (callerAll.has(nm)) reached.add(aliases.get(nm));
+      }
     }
-  }
-  return 'chain';
+    return reached;
+  };
+  const usedParams = new Set(ownVars.map((v) => sinkAliases.get(v)).filter(Boolean));
+  const direct = handsOn(analysed, sink.fn, usedParams, weak, 0);
+  if (direct) return 'chain';
+  // through intermediaries: a function of the file that calls the sink's function with its own parameters, and is itself handed to by the analysed one
+  const search = (callee, used, depth) => {
+    if (depth > 2) return false;
+    for (const mid of fileFns) {
+      if (mid === callee || mid === analysed || !Array.isArray(mid.params) || !mid.params.length) continue;
+      const midParams = new Set(mid.params);
+      const reached = handsOn(mid, callee, used, midParams, depth);
+      if (!reached || !reached.size) continue;
+      if (handsOn(analysed, mid, reached, weak, depth)) return true;
+      if (search(mid, reached, depth + 1)) return true;
+    }
+    return false;
+  };
+  return search(sink.fn, usedParams, 0) ? 'chain' : null;
 }
 
 function findCallsTo(fn, target) {

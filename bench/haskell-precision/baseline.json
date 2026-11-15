@@ -1,7 +1,7 @@
 {
  "schema": "agentic-security/haskell-precision-baseline@1",
  "comparison": "equality: a regression fails, and so does an improvement that was not recorded here",
- "engineVersion": "0.195.40",
+ "engineVersion": "0.195.41",
  "labelsDigests": {
   "development-tuning": "f599e1edc2e1e8b68756b4d25c238daf0f0f04b34ea30983a16a793615e40395",
   "development-verification": "39b0c5bf5cd20298a8e7ab608e5d7b938c4725a8f8d51e5b22a4ba011f1d0870",
@@ -87,10 +87,10 @@
    "labelled": 11,
    "reported": 10,
    "notReported": 1,
-   "flagged": 6,
-   "loweredToInfo": 4,
+   "flagged": 5,
+   "loweredToInfo": 5,
    "tp": 0,
-   "fp": 6,
+   "fp": 5,
    "tpNotFlagged": 0,
    "byStatus": {
     "entrypoint-reachable": {
@@ -117,7 +117,7 @@
    "precision": 0,
    "wilson95": [
     0,
-    0.3903
+    0.4345
    ]
   },
   "fresh": {
@@ -226,8 +226,8 @@
     },
     "xmonad-contrib": {
      "rows": 15,
-     "flagged": 4,
-     "loweredToInfo": 11,
+     "flagged": 3,
+     "loweredToInfo": 12,
      "byStatus": {
       "no-verdict": 3,
       "entrypoint-reachable": 7,

@@ -1,0 +1,110 @@
+{
+ "id": "happstack-server",
+ "commit": "dc5d52662583b22b97ffb240ee137264ee2d8648",
+ "rows": [
+  {
+   "file": "src/Happstack/Server/Internal/Handler.hs",
+   "line": 133,
+   "severity": "high",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "entrypoint-reachable",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/Happstack/Server/FileServe/BuildingBlocks.hs",
+   "line": 510,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "src/Happstack/Server/FileServe/BuildingBlocks.hs",
+   "line": 279,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "src/Happstack/Server/FileServe/BuildingBlocks.hs",
+   "line": 357,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "src/Happstack/Server/FileServe/BuildingBlocks.hs",
+   "line": 358,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "src/Happstack/Server/FileServe/GenMimeTypes.hs",
+   "line": 21,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "cli"
+  },
+  {
+   "file": "src/Happstack/Server/Internal/Clock.hs",
+   "line": 35,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Happstack/Server/Internal/Timeout.hs",
+   "line": 118,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Happstack/Server/Internal/TimeoutSocket.hs",
+   "line": 52,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafeInterleaveIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  }
+ ]
+}

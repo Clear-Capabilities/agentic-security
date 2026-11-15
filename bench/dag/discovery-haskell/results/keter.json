@@ -15,18 +15,6 @@
    "provenance": "header"
   },
   {
-   "file": "src/Keter/Rewrite.hs",
-   "line": 135,
-   "severity": "high",
-   "cwe": "CWE-918",
-   "vuln": "Server-Side Request Forgery",
-   "parser": "IR-TAINT",
-   "trust": "attacker-reachable",
-   "reach": "external-api",
-   "proof": "feasible",
-   "provenance": "interproc"
-  },
-  {
    "file": "incoming/foo/hello.hs",
    "line": 30,
    "severity": "info",
@@ -51,6 +39,19 @@
    "guard": "non-html-content-type",
    "proof": "feasible",
    "provenance": "header"
+  },
+  {
+   "file": "src/Keter/Rewrite.hs",
+   "line": 135,
+   "severity": "info",
+   "cwe": "CWE-918",
+   "vuln": "Server-Side Request Forgery",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "external-api",
+   "guard": "fixed-host-request",
+   "proof": "feasible",
+   "provenance": "interproc"
   },
   {
    "file": "src/Keter/Main.hs",

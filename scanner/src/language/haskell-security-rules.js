@@ -262,6 +262,46 @@ function* walk(e, depth = 0) {
 
 // Does a recursive call of `fn` take an argument built from the result of the read call `read`? The read's result is the variable its statement
 // assigns; a value is built from it through the function's assignments (closure). Answered from the IR, never from a name.
+// Is the clock reading `read` (a call in `node`) used only as an operand of time arithmetic or a time comparison? The value is the one the
+// statement binds (`now <- getPOSIXTime`), or the call itself when it sits inside an expression; every use must have an arithmetic or comparison
+// ancestor with another operand (`round now + ttl`, `diffUTCTime exp now`, `now > exp`), numeric conversions being transparent. A use that reaches
+// anything else (`show now`, a return of the bare value, a hash) keeps the finding. Decided from the IR, never from a name.
+const TIME_ARITH_CALL = /(?:^|\.)(?:diffUTCTime|addUTCTime|diffDays|addDays|compare|max|min)$/;
+const NUMERIC_WRAP = /(?:^|\.)(?:round|truncate|floor|ceiling|realToFrac|fromIntegral|toRational|fromRational|utcTimeToPOSIXSeconds|posixSecondsToUTCTime|nominalDiffTimeToSeconds)$/;
+function clockOnlyInTimeArithmetic(fn, node, read) {
+  const nodes = Object.values((fn.cfg && fn.cfg.nodes) || {});
+  const isArith = (x) => (x.kind === 'binary' && ['+', '-', '<', '>', '<=', '>=', '*'].includes(x.op)) || (x.kind === 'call' && typeof x.callee === 'string' && TIME_ARITH_CALL.test(x.callee) && (x.args || []).length >= 2);
+  // every path from the root to a use must pass through arithmetic (numeric wrappers do not count either way)
+  const usesOk = (root, isUse) => {
+    let all = true; let any = false;
+    const visit = (x, arith, d) => {
+      if (!all || !x || typeof x !== 'object' || d > 60) return;
+      if (isUse(x)) { any = true; if (!arith) all = false; return; }
+      const here = arith || isArith(x);
+      for (const k of Object.keys(x)) { if (k === 'hs') continue; const v = x[k]; if (Array.isArray(v)) { for (const y of v) visit(y, here, d + 1); } else if (v && typeof v === 'object') visit(v, here, d + 1); }
+    };
+    visit(root, false, 0);
+    return { all, any };
+  };
+  if (node.kind === 'assign' && node.target && node.source) {
+    const bare = node.source === read || (node.source.kind === 'call' && node.source.args && node.source.args.length === 1 && node.source.args[0] === read && NUMERIC_WRAP.test(String(node.source.callee)));
+    if (!bare) return usesOk(node.source, (x) => x === read).all;   // the clock inside an expression of its own statement
+    const v = node.target; let seen = false;
+    for (const n of nodes) {
+      if (n === node) continue;
+      for (const root of [n.value, n.source, n.cond, ...(n.args || [])]) {
+        if (!root) continue;
+        const r = usesOk(root, (x) => x.kind === 'ident' && x.name === v);
+        if (r.any) seen = true;
+        if (!r.all) return false;
+      }
+    }
+    return seen;
+  }
+  for (const root of [node.value, node.source, node.cond, ...(node.args || [])]) if (root) { const r = usesOk(root, (x) => x === read); if (r.any) return r.all; }
+  return false;
+}
+
 function loopCarriesRead(fn, read) {
   const nodes = Object.values((fn.cfg && fn.cfg.nodes) || {});
   const seeds = new Set();
@@ -704,7 +744,7 @@ export function analyzeHaskellRules(files, opts = {}) {
             if (e.kind === 'ident') {
               if (e.name === 'Crypto.Cipher.Types.nullIV') emit('hs-static-iv', file, node.line, { vuln: 'Static IV (nullIV)', detail: 'nullIV is a constant all-zero IV' });
               // a clock reading used as the value of a security-shaped function (a "nonce" that is the time)
-              if (TIME_SOURCES.has(e.name) && SECURITY_FN.test(fnBase)) emitRandom(node.line, { vuln: 'Clock value used as a security value', detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
+              if (TIME_SOURCES.has(e.name) && SECURITY_FN.test(fnBase) && !clockOnlyInTimeArithmetic(fn, node, e)) emitRandom(node.line, { vuln: 'Clock value used as a security value', detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
               // a generator named as the whole value of a security-shaped action (`newCsrfToken = randomIO`): no call is written, the name is the call
               if (RANDOM_CALLS.has(e.name) && SECURITY_FN.test(fnBase) && !(e.hs && e.hs.functionRef)) emitRandom(node.line, { detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
               if (INPUT_READS.has(e.name) && !bounded && readsOutsideInput(fn, e.name, [], importsNetwork)) emit('hs-unbounded-input-read', file, node.line, { detail: `${e.name} reads everything`, confidence: 0.6 });
@@ -856,7 +896,9 @@ export function analyzeHaskellRules(files, opts = {}) {
             if (RANDOM_CALLS.has(c) && SECURITY_FN.test(fnBase) && node.kind !== 'assign') {
               emitRandom(line, { detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
             }
-            if (TIME_SOURCES.has(c) && SECURITY_FN.test(fnBase)) emitRandom(line, { vuln: 'Clock value used as a security value', detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
+            // (a reading that only enters time arithmetic or a time comparison, `expiresAt = e + now`, `diffUTCTime exp now`, is an expiry
+            // computation in a token-shaped function, not the token: Hasura's access-token refresh and its expiry sleeper)
+            if (TIME_SOURCES.has(c) && SECURITY_FN.test(fnBase) && !clockOnlyInTimeArithmetic(fn, node, e)) emitRandom(line, { vuln: 'Clock value used as a security value', detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
             if (INPUT_READS.has(c) && !bounded && readsOutsideInput(fn, c, args, importsNetwork)) emit('hs-unbounded-input-read', file, line, { detail: `${c} reads everything`, confidence: 0.6 });
             // an allocation whose size is parsed caller text and is not clamped
             // (a number the framework parsed from the request, `n <- param "count" :: ActionM Int`, is parsed caller text too)

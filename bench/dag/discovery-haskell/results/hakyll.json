@@ -1,0 +1,105 @@
+{
+ "id": "hakyll",
+ "commit": "064ed163d0224df54099e81754ee23ea2fb9e113",
+ "rows": [
+  {
+   "file": "lib/Hakyll/Core/File.hs",
+   "line": 84,
+   "severity": "high",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "entry-parameter",
+   "reach": "external-api",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "lib/Hakyll/Web/Template/Internal.hs",
+   "line": 258,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "src/Init.hs",
+   "line": 89,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "cli"
+  },
+  {
+   "file": "src/Init.hs",
+   "line": 72,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (copy/rename)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "cli"
+  },
+  {
+   "file": "src/Init.hs",
+   "line": 117,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "cli"
+  },
+  {
+   "file": "src/Init.hs",
+   "line": 75,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "cli"
+  },
+  {
+   "file": "src/Init.hs",
+   "line": 76,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "cli"
+  },
+  {
+   "file": "lib/Hakyll/Main.hs",
+   "line": 202,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  }
+ ]
+}

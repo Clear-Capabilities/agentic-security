@@ -24,7 +24,8 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..');
 const SRC_FRONTEND = path.join(REPO_ROOT, 'frontend');
-const DEST_FRONTEND = path.resolve(HERE, '..', 'dist', 'frontend');
+// AGENTIC_SECURITY_BUILD_DIST: the staging directory scripts/build.mjs assembles before swapping it into dist/
+const DEST_FRONTEND = path.join(process.env.AGENTIC_SECURITY_BUILD_DIST || path.resolve(HERE, '..', 'dist'), 'frontend');
 
 function copyFile(srcAbs, destAbs) {
   fs.mkdirSync(path.dirname(destAbs), { recursive: true });

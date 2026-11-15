@@ -529,9 +529,9 @@
     ],
     "xmonad-contrib:XMonad/Prompt/DirExec.hs:101:path-traversal": [
      [
-      "high",
+      "info",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -2256,8 +2256,8 @@
     },
     "xmonad-contrib": {
      "rows": 15,
-     "flagged": 4,
-     "loweredToInfo": 11,
+     "flagged": 3,
+     "loweredToInfo": 12,
      "byStatus": {
       "no-verdict": 3,
       "entrypoint-reachable": 7,

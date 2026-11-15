@@ -16,6 +16,7 @@ ide/vscode/dist/
 # (Premortem 4R-2: the previous gitignore comment claimed dist was "Not
 # committed" — incorrect. The file IS committed; only the rest of dist/ is
 # transient build output we don't care to track.)
+scanner/dist.staging/
 scanner/dist/*
 !scanner/dist/agentic-security.mjs
 !scanner/dist/agentic-security.mjs.sha256

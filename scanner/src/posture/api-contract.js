@@ -32,10 +32,13 @@ const CONTRACT_FILE_PATTERNS = [
  */
 export function loadContracts(scanRoot) {
   const out = [];
+  // the directories (below the root) that hold a package manifest, found on the same walk: a root-level contract is judged against them
+  const packageDirs = [];
   function walk(dir, depth) {
     if (depth > 4) return;
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    if (depth > 0 && entries.some((e) => e.isFile() && PACKAGE_MANIFEST.test(e.name))) packageDirs.push(path.resolve(dir));
     for (const e of entries) {
       if (e.name.startsWith('.') || e.name === 'node_modules') continue;
       const fp = path.join(dir, e.name);
@@ -54,6 +57,7 @@ export function loadContracts(scanRoot) {
     }
   }
   walk(scanRoot, 0);
+  out.packageDirs = packageDirs;
   return out;
 }
 
@@ -181,7 +185,9 @@ export function runApiContractScan(scanRoot, codeRoutes, opts = {}) {
   const findings = [];
   // A route whose path is not a path cannot be compared with a contract: an extractor reading the text between two string literals on one line
   // produced `GET  ++ toS k ++` from PostgREST's parser error message. A path starts with `/` and holds no whitespace.
-  const comparable = (codeRoutes || []).filter((r) => r && typeof r.path === 'string' && /^\/\S*$/.test(r.path.trim()));
+  // A route whose path was INFERRED from a handler's name (`conventional`, haskell-web's Yesod `getFooR` to `/foo`) is a guess at the route table's
+  // path, not evidence of an undocumented endpoint (hledger-web's UI pages against its JSON API's OpenAPI).
+  const comparable = (codeRoutes || []).filter((r) => r && typeof r.path === 'string' && /^\/\S*$/.test(r.path.trim()) && !r.conventional);
   for (const c of contracts) {
     if (c.error) continue;
     // A contract file under a directory the project's manifest lists for a TEST component is a fixture of that suite, not the API the code must
@@ -191,7 +197,7 @@ export function runApiContractScan(scanRoot, codeRoutes, opts = {}) {
     if (c.kind === 'openapi') contractRoutes = parseOpenAPI(c.doc);
     else if (c.kind === 'graphql') contractRoutes = parseGraphQL(c.doc);
     contractRoutes.forEach(r => { r.contractFile = c.path; });
-    findings.push(...diffRoutes(contractRoutes, routesGovernedBy(c.path, scanRoot, comparable)));
+    findings.push(...diffRoutes(contractRoutes, routesGovernedBy(c.path, scanRoot, comparable, contracts.packageDirs || [])));
   }
   return findings;
 }
@@ -224,9 +230,25 @@ export function contractScope(contractPath, scanRoot) {
   }
 }
 
-function routesGovernedBy(contractPath, scanRoot, codeRoutes) {
+// The package a route's file belongs to: the nearest ancestor directory with a manifest, else the root.
+function packageOfRoute(scanRoot, r, packageDirs) {
+  if (!r || typeof r.file !== 'string') return null;
+  let dir = path.dirname(path.resolve(scanRoot, r.file));
+  const top = path.resolve(scanRoot);
+  while (dir.startsWith(top + path.sep)) { if (packageDirs.includes(dir)) return dir; dir = path.dirname(dir); }
+  return top;
+}
+
+function routesGovernedBy(contractPath, scanRoot, codeRoutes, packageDirs = []) {
   const scope = contractScope(contractPath, scanRoot);
-  if (scope === path.resolve(scanRoot)) return codeRoutes;
+  if (scope === path.resolve(scanRoot)) {
+    // A contract at the root describes one API. With no package below the root, or exactly one, that is the root's own routes or that package's;
+    // with several packages (graphql-engine: the server, the data-connector agent, the CLI, the console) the detector cannot tell which one the
+    // contract describes and compares none of their routes rather than report every other package's as undocumented.
+    const top = path.resolve(scanRoot);
+    const pkgs = [...new Set(packageDirs)];
+    return codeRoutes.filter((r) => { const own = packageOfRoute(scanRoot, r, pkgs); return own === top || (pkgs.length === 1 && own === pkgs[0]); });
+  }
   return codeRoutes.filter((r) => {
     if (!r || typeof r.file !== 'string') return false;
     const abs = path.resolve(scanRoot, r.file);
