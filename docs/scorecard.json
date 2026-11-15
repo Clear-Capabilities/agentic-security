@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.195.46",
     "bundleSha256": "881e1db035db247b1e214a6215d07e3ebd3e4ec7c1941320d983be4232445e58",
-    "commit": "d697f414cff370afb7dce559ba1670013429cc6e",
+    "commit": "d55747d5b833f62a09a5c215f46fdc87b7bfb5e0",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-15T23:01:07.673Z",
+    "generatedAt": "2026-11-15T23:24:20.367Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -2254,7 +2254,7 @@
   },
   "measurement": {
     "engineVersion": "0.195.46",
-    "commit": "d697f414cff370afb7dce559ba1670013429cc6e",
+    "commit": "d55747d5b833f62a09a5c215f46fdc87b7bfb5e0",
     "bundleSha256": "881e1db035db247b1e214a6215d07e3ebd3e4ec7c1941320d983be4232445e58",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
