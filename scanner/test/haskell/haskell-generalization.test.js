@@ -212,8 +212,12 @@ test('an exported function\'s text parameter is a request value only when the fu
   };
   const scotty = await sourceOf(['import Web.Scotty', 'import qualified Data.Text as T'], 'download :: String -> ActionM ()', 'download name = file ("/srv/" ++ name)');
   assert.match(scotty, /Scotty action \(request input\)/);
-  const yesod = await sourceOf(['import Yesod'], 'showFile :: String -> Handler ()', 'showFile name = sendFile "text/plain" ("/srv/" ++ name)');
+  // Yesod: the routes DSL dispatches by name (`getFileR`), and only such a function takes route pieces from its parameters (round 5); a helper
+  // returning a Handler value (`showFile`) takes its caller's value
+  const yesod = await sourceOf(['import Yesod'], 'getFileR :: String -> Handler ()', 'getFileR name = sendFile "text/plain" ("/srv/" ++ name)');
   assert.match(yesod, /Yesod handler \(request input\)/);
+  const yesodHelper = await sourceOf(['import Yesod'], 'showFile :: String -> Handler ()', 'showFile name = sendFile "text/plain" ("/srv/" ++ name)');
+  assert.match(yesodHelper, /caller-controlled/);
   const lib = await sourceOf(['import System.IO'], 'load :: String -> IO String', 'load name = readFile ("/srv/" ++ name)');
   assert.match(lib, /exported function \(caller-controlled\)/);
   // a framework module whose function returns plain text: still a library export

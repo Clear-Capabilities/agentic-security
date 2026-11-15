@@ -1376,7 +1376,7 @@ const moduleOf = (file, dir) => (dir === '.' ? file : file.slice(dir.length + 1)
 
 /**
  * The directories the manifests assign ONLY to test-suite and benchmark components, over every `.cabal` (and every `package.yaml` with no `.cabal`
- * beside it) in `manifests` (path -> text). Returns `{ dirs: [{dir, kind, component, manifest}], reason, ownerOf(file) }`: `ownerOf` names the test
+ * beside it) in `manifests` (path -> text). Returns `{ dirs: [{dir, kind, component, manifest}], reason, ownerOf(file), dirOwnerOf(file) }`: `ownerOf` names the test
  * component a Haskell file belongs to, or `null`.
  *
  * Decided from the manifest alone, never from a path name: `Test/` is test code because a `test-suite` stanza says `hs-source-dirs: Test`. A
@@ -1433,7 +1433,13 @@ export function testComponentIndex(manifests, opts = {}) {
     }
     return hit;
   };
-  return { dirs, reason, ownerOf };
+  // Any file (a contract fixture, a data file) under a test-only directory: membership alone, since a non-Haskell file has no module a runtime
+  // component could own. `posture/api-contract.js` uses it to leave a test suite's `openapi.json` out of the project's declared API.
+  const dirOwnerOf = (file) => {
+    const f = String(file || '').replace(/\\/g, '/').replace(/^\.\//, '');
+    return dirs.find((d) => isUnder(f, d.dir)) || null;
+  };
+  return { dirs, reason, ownerOf, dirOwnerOf };
 }
 
 const WALK_SKIP = new Set(['node_modules', '.git', '.hg', '.svn']);

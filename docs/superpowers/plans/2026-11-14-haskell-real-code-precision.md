@@ -75,3 +75,25 @@ Round 3 results (2026-11-14): fresh set unchanged at 29 flagged / 21 TP / 8 FP; 
 | an evidence-chain hop names the file its record was made in; the collector stamped the collecting function's file on every hop, so a summary finding merged into its caller put every hop in the caller's file | IHP `SchemaCompiler/Cache.hs:45` (a read at Cache.hs line 38 was looked for at SchemaCompiler.hs:38) | the fixed-file judgement now finds the read: `high` to `low` |
 
 Ruling: the CPP refusal stands for the two remaining body sites. A rewrite inside a file with conditional compilation can change a branch the scan cannot see; the decision (which configuration the patch is for) is the operator's, and the class reason names it.
+
+## Round 5 (0.195.41): discovery batch 2
+
+Six more projects the engine had never been run on (PostgREST, the yesod monorepo, snap-server, keter, Spock, spacecookie; `bench/dag/discovery-haskell`,
+`batch: 2`), scanned once and every flagged site labelled: 21 sites, 1 true positive (PostgREST's unbounded `strictRequestBody`), 18 false positives, 2 ambiguous.
+Each mechanism below is general and pinned both ways in `scanner/test/haskell/haskell-real-code-round5.test.js`.
+
+| mechanism | source of the shape | effect |
+|---|---|---|
+| `posture/api-contract.js`: a contract file under a directory a `test-suite` stanza lists is that suite's fixture, not the API (`isTestFile`, decided from the manifest through `testComponentIndex().dirOwnerOf`); a code route whose path does not start with `/` or holds whitespace is not compared | PostgREST `test/spec/fixtures/openapi.json` judged the admin routes (4 high); the text between two string literals read as `GET  ++ toS k ++` | 5 flagged sites gone |
+| `hs-partial-function-on-input`: `last`/`head` on a splitter that returns a non-empty list for every input (`NONEMPTY_RESULT`: `Data.Text.split`/`splitOn`/`inits`/`tails`, `Data.List.Split.splitOn`/`splitWhen`/`splitOneOf`, `inits`/`tails`/`scanl`/`scanr`/`subsequences`/`permutations`, `NonEmpty.toList`) is total; a call under a qualifier two modules share (`T` for `Data.Text` and `Data.Text.Encoding`) is judged from the IR's `hs.candidates` when one candidate is in the set and every candidate is that module or a submodule of it | PostgREST `QueryParams.hs:191` | 1 gone; the ByteString `split` (empty for an empty input) and `words` stay reported |
+| `hs-partial-function-on-input`: a partial name the function binds itself (a where-bound `fromJust = error ..`), or that the IR resolved to a project definition or a local function value, is not the library partial | yesod-core `TypeCache.hs:88` | 1 gone |
+| `hs-unbounded-input-read`: a socket read repeated by a recursive loop is unbounded only when an argument of the recursive call is built from the read (`loopCarriesRead`); a loop that answers each chunk and recurses with the socket alone holds one chunk | keter `Cli.hs:93` | 1 gone; `slurp conn (acc <> chunk)` stays reported |
+| `HS_HANDLER_PARAM_SOURCES.yesod.handlerName`: a Yesod text parameter is request input only on a function the routes DSL dispatches to by name (`getFooR`, `postFooR`, `handleFooR`); a `Handler`/`HandlerFor`/`Widget` helper keeps the caller-controlled label and stays an entry handler for reachability | yesod `Default/Util.hs:52` (`addStaticContentExternal`) | the root is the caller's value; the site stays flagged as `entry-parameter` (a parameter under a fixed directory, the 0.195.9 policy) |
+| `assignEntryRoles`: the role follows the call PATH from `main` (a function reached only through modules that import no server library is `cli`; a path through a server module is `service`), and a function's module is found by FILE (a repository with several `Main`s kept only the first under the bare name) | yesod-bin `AddHandler.hs` (4 high: the developer's answers to `yesod add-handler`, in the binary that also runs `yesod devel`); fresh set IHP `CompileTimeDatabase.hs:811` | 4 gone on the discovery set; 1 labelled fresh-set false positive to info |
+
+Discovery batch 2 flagged 21 to 9 (postgrest 8 to 2, yesod 10 to 5, keter 3 to 2; the true positive kept). Fresh set: false positives 7 to 6, flagged 28 to 27, precision 75.0% to 77.8%.
+
+Not changed, each recorded in `labels.json`: keter's reverse proxy (SSRF: host, port and scheme from a configuration record; the fixed-host judgement reads a literal), keter's
+function-valued configuration field applied to the host, yesod-static's lookup-served file, PostgREST's content type held in a response record's field, yesod-auth's legacy MD5
+verifier beside a vendored KDF module under another name, and the two yesod-core cookie defaults (ambiguous). Ruling: the CSRF double-submit cookie without Secure keeps its severity;
+the attribute is absent and the rule's title overstates the stake, which is a wording question, not a precision one.

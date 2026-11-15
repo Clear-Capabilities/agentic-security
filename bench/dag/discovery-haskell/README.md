@@ -58,8 +58,48 @@ its own token.
 - The API-contract detector scopes a contract to the package that holds it (`scanner/src/posture/api-contract.js` `contractScope`): servant's
   78 contract findings became 3. Cross-language; `test/api-contract-scope.test.js`.
 
+## Batch 2 (2026-11-15; `manifest.json` entries with `batch: 2`)
+
+Six more projects the engine had never been run on, chosen the same way (a web or input-processing surface, absent from every other set) and
+read the same way: PostgREST, the yesod monorepo, snap-server, keter, Spock, spacecookie (655 Haskell files). Scanned with the engine at
+0.195.39 plus round 4, every flagged site labelled (`labels.json`, keyed as before), then scanned again after the round-5 changes.
+
+| project | Haskell findings | flagged before | TP | FP | ambiguous | flagged after round 5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| postgrest | 12 | 8 | 1 | 7 | 0 | 2 |
+| yesod | 15 | 10 | 0 | 8 | 2 | 5 |
+| snap-server | 2 | 0 | | | | 0 |
+| keter | 8 | 3 | 0 | 3 | 0 | 2 |
+| Spock | 2 | 0 | | | | 0 |
+| spacecookie | 0 | 0 | | | | 0 |
+| **total** | **39** | **21** | **1** | **18** | **2** | **9** |
+
+**The one true positive** is PostgREST's `strictRequestBody` with no size limit anywhere in the application (`App.hs:232`, medium; its
+documentation leaves the limit to a reverse proxy), the class the fresh set and batch 1 already hold. Spock, snap-server and spacecookie
+flagged nothing; snap-server's body reads carry their own limit.
+
+**The false positives, by cause** (each reason in `labels.json`; the round-5 column says what changed):
+
+| cause | sites | round 5 |
+| --- | ---: | --- |
+| a test suite's `openapi.json` fixture judged the admin routes (api-contract) | 4 | a contract under a `test-suite` directory is that suite's fixture (decided from the manifest) |
+| the text between two string literals read as a route (`" ++ toS k ++ "`) | 1 | a route whose path is not a path is not compared |
+| the developer's answers to a scaffolding prompt, in a binary whose other branch serves (`yesod add-handler`) | 4 | entry roles are decided along the call path from `main` |
+| a `HandlerFor` helper's parameters read as route pieces (`addStaticContentExternal`) | 1 | request input only on a dispatch-named handler; the site stays flagged as `entry-parameter` (a parameter under a fixed directory, the standing policy) |
+| `last` on `Data.Text.split`, which never returns an empty list | 1 | total splitters, through a shared qualifier |
+| a where-bound `fromJust` taken for `Data.Maybe.fromJust` | 1 | a name the module defines is that definition |
+| a socket loop that handles each chunk and recurses with the socket alone (keter's REPL) | 1 | the recursive call must carry what it read |
+| a reverse proxy: host, port and scheme from configuration, path and headers from the request (SSRF) | 1 | not changed: the fixed-host judgement reads a literal host |
+| a function-valued configuration field applied to the host (the default escapes it) | 1 | not changed |
+| a static file found by a path-keyed lookup, served with its own mime type | 1 | not changed |
+| the content type held in a response record's field (PostgREST's `toWaiResponse`) | 1 | not changed |
+| a legacy MD5 verifier beside a vendored KDF module under another name | 1 | not changed |
+
+The two ambiguous sites are yesod-core's cookie defaults: the session cookie without Secure (`sslOnlySessions` is the documented opt-in) and
+the CSRF double-submit cookie without Secure (a token, not a session credential).
+
 ## Limits
 
-Six projects, one commit each, one labeller, one reading. Three of the six are frameworks or libraries, whose "requests" are their users'
+Twelve projects over two batches, one commit each, one labeller, one reading. Three of the six are frameworks or libraries, whose "requests" are their users'
 applications; the precision figure describes these projects and this engine, nothing wider. The sealed sets were not re-scored for this
 directory.

@@ -1739,9 +1739,9 @@
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:811:Argument Injection (process arguments)": [
      [
-      "medium",
+      "info",
       "entrypoint-reachable",
-      null,
+      "medium",
       "IR-TAINT"
      ]
     ],
@@ -2287,8 +2287,8 @@
     },
     "ihp": {
      "rows": 176,
-     "flagged": 13,
-     "loweredToInfo": 163,
+     "flagged": 12,
+     "loweredToInfo": 164,
      "byStatus": {
       "no-verdict": 109,
       "unknown": 19,
