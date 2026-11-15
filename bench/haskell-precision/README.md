@@ -12,6 +12,11 @@ is silent on a rise leaves the published numbers stale (the lesson `bench/layer-
 
 | file | what it is |
 | --- | --- |
+**Flagged means actionable (since 0.195.44).** A site counts as flagged when the engine reports it at a severity above `info` AND has not proved the flow
+clean or infeasible (`proof.verdict` `proven-*`): the same `actionable` rule the frozen-split harness has applied since 0.195.9. The proof gate keeps a
+refuted finding's severity by design (a recall-preserving demotion of confidence), so counting by severity alone had recorded every guard-refuted site
+as a flagged false positive; each stored row now carries the proof verdict as its fifth element.
+
 | `baseline.json` | per-set aggregates (flagged, true and false positives, lowered to `info`, the cross-tab by reachability status), a whole-report census per project, and a digest of each label set |
 | `measurements/development.json` | what the engine reported at each labelled site when the baseline was recorded: severity, reachability status, original severity, parser |
 | `runner.mjs` | the gate |

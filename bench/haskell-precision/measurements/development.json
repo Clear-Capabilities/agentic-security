@@ -8,7 +8,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ghcup-hs:lib/GHCup/Download.hs:851:path-traversal": [
@@ -16,7 +17,8 @@
       "high",
       "external-api",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Download/IOStreams.hs:59:path-traversal": [
@@ -24,7 +26,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Legacy/Cabal.hs:72:path-traversal": [
@@ -32,7 +35,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Prelude/File.hs:321:path-traversal": [
@@ -40,7 +44,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:268:OS Command Injection (shell command spec)": [
@@ -48,7 +53,8 @@
       "info",
       "external-api",
       "critical",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "gitit:expireGititCache.hs:60:Server-Side Request Forgery": [
@@ -56,7 +62,8 @@
       "info",
       "entrypoint-reachable",
       "info",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "gitit:src/Network/Gitit/State.hs:124:Predictable random number generator used for a security value": [
@@ -64,7 +71,8 @@
       "high",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "gitit:src/Network/Gitit/State.hs:40:unsafe-boundary": [
@@ -72,7 +80,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:207:path-traversal": [
@@ -80,7 +89,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:243:path-traversal": [
@@ -88,7 +98,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:644:path-traversal": [
@@ -96,7 +107,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:683:path-traversal": [
@@ -104,7 +116,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:781:path-traversal": [
@@ -112,7 +125,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:860:path-traversal": [
@@ -120,7 +134,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:src/Distribution/Server/Features/DownloadCount/State.hs:214:unsafe-boundary": [
@@ -128,7 +143,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hackage-server:src/Distribution/Server/Framework/Auth.hs:445:Predictable random number generator used for a security value": [
@@ -136,7 +152,8 @@
       "high",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hackage-server:src/Distribution/Server/Util/NLP/Snowball.hs:25:unsafe-boundary": [
@@ -144,7 +161,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hackage-server:src/Distribution/Server/Util/ServeTarball.hs:162:path-traversal": [
@@ -152,7 +170,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "pandoc:pandoc-lua-engine/src/Text/Pandoc/Lua/Module/Utils.hs:333:Weak hash function (MD5/SHA-1)": [
@@ -160,7 +179,8 @@
       "info",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "pandoc:src/Text/Pandoc/Readers/Ipynb.hs:194:Weak hash function (MD5/SHA-1)": [
@@ -168,7 +188,8 @@
       "info",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "pandoc:src/Text/Pandoc/Readers/RTF.hs:1196:Weak hash function (MD5/SHA-1)": [
@@ -176,7 +197,8 @@
       "info",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "pandoc:src/Text/Pandoc/Writers/Docx/OpenXML.hs:1324:Weak hash function (MD5/SHA-1)": [
@@ -184,7 +206,8 @@
       "info",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "stack:etc/scripts/build-stack-installer.hs:20:path-traversal": [
@@ -192,7 +215,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "stack:etc/scripts/install-many-stack-releases.hs:66:path-traversal": [
@@ -200,7 +224,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "stackage-server:src/Data/WebsiteContent.hs:86:Cross-Site Scripting (unescaped HTML)": [
@@ -208,7 +233,8 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "xmonad-contrib:XMonad/Util/Loggers.hs:159:path-traversal": [
@@ -216,7 +242,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "xmonad-contrib:XMonad/Util/Loggers.hs:504:Partial function applied to caller-supplied text": [
@@ -224,7 +251,8 @@
       "low",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ]
    },
@@ -234,7 +262,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ghcup-hs:lib/GHCup/CabalConfig.hs:35:path-traversal": [
@@ -242,7 +271,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Command/Rm.hs:164:path-traversal": [
@@ -250,7 +280,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Command/Set.hs:135:path-traversal": [
@@ -258,7 +289,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Download/IOStreams.hs:58:path-traversal": [
@@ -266,7 +298,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Legacy/HLS.hs:259:path-traversal": [
@@ -274,7 +307,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Prelude/Process/Windows.hs:254:OS Command Injection (attacker-chosen executable)": [
@@ -282,7 +316,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Query/DB.hs:204:path-traversal": [
@@ -290,7 +325,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Query/DB.hs:72:path-traversal": [
@@ -298,7 +334,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Query/GHCupDirs.hs:539:path-traversal": [
@@ -306,7 +343,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Unpack.hs:129:path-traversal": [
@@ -314,7 +352,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Unpack.hs:74:path-traversal": [
@@ -322,7 +361,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Unpack.hs:76:path-traversal": [
@@ -330,7 +370,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "gitit:src/Network/Gitit/Plugins.hs:77:unsafe-boundary": [
@@ -338,7 +379,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "gitit:src/Network/Gitit/State.hs:69:Password hashed with a fast general-purpose hash": [
@@ -346,7 +388,8 @@
       "high",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:211:path-traversal": [
@@ -354,7 +397,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:437:path-traversal": [
@@ -362,7 +406,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:589:path-traversal": [
@@ -370,7 +415,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:628:path-traversal": [
@@ -378,7 +424,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:670:path-traversal": [
@@ -386,7 +433,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:798:path-traversal": [
@@ -394,7 +442,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:922:path-traversal": [
@@ -402,7 +451,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:924:path-traversal": [
@@ -410,7 +460,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:exes/BuildClient.hs:932:path-traversal": [
@@ -418,7 +469,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:101:path-traversal": [
@@ -426,7 +478,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:82:path-traversal": [
@@ -434,7 +487,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:src/Distribution/Server/Framework/BackupDump.hs:114:unsafe-boundary": [
@@ -442,7 +496,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "pandoc:src/Text/Pandoc/PDF.hs:262:Weak hash function (MD5/SHA-1)": [
@@ -450,7 +505,8 @@
       "info",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "pandoc:src/Text/Pandoc/SelfContained.hs:220:Weak hash function (MD5/SHA-1)": [
@@ -458,7 +514,8 @@
       "info",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "pandoc:src/Text/Pandoc/Writers/LaTeX.hs:195:Weak hash function (MD5/SHA-1)": [
@@ -466,7 +523,8 @@
       "info",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ]
    },
@@ -476,7 +534,8 @@
       "high",
       "external-api",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/PlanJson.hs:18:path-traversal": [
@@ -484,7 +543,8 @@
       "high",
       "external-api",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ghcup-hs:lib/GHCup/Prelude/File/Search.hs:118:path-traversal": [
@@ -492,7 +552,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "gitit:src/Network/Gitit/Util.hs:53:path-traversal": [
@@ -500,7 +561,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:100:path-traversal": [
@@ -508,7 +570,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:83:path-traversal": [
@@ -516,7 +579,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hackage-server:src/Distribution/Server/Framework/BlobStorage.hs:217:path-traversal": [
@@ -524,7 +588,8 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "xmonad-contrib:XMonad/Prompt/DirExec.hs:101:path-traversal": [
@@ -532,7 +597,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "xmonad-contrib:XMonad/Prompt/Man.hs:76:path-traversal": [
@@ -540,7 +606,8 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "xmonad-contrib:XMonad/Prompt/OrgMode.hs:274:path-traversal": [
@@ -548,7 +615,8 @@
       "high",
       "external-api",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ]
    },
@@ -558,7 +626,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Backend/Freezing.hs:106:unsafe-boundary": [
@@ -566,7 +635,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Backend/Freezing.hs:118:unsafe-boundary": [
@@ -574,7 +644,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Features.hs:506:unsafe-boundary": [
@@ -582,7 +653,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:1673:unsafe-boundary": [
@@ -590,7 +662,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:213:unsafe-boundary": [
@@ -598,7 +671,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:666:unsafe-boundary": [
@@ -606,7 +680,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:680:unsafe-boundary": [
@@ -614,7 +689,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:687:unsafe-boundary": [
@@ -622,7 +698,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:689:unsafe-boundary": [
@@ -630,7 +707,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:691:unsafe-boundary": [
@@ -638,7 +716,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-lsp-server/src/Dhall/LSP/Handlers.hs:720:unsafe-boundary": [
@@ -646,7 +725,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-nixpkgs/Main.hs:398:path-traversal": [
@@ -654,7 +734,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall-test-server/src/Dhall/Test/Server.hs:184:path-traversal": [
@@ -662,7 +743,8 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall-test-server/src/Dhall/Test/Server.hs:205:path-traversal": [
@@ -670,7 +752,8 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall-try/src/Callback.hs:18:unsafe-boundary": [
@@ -678,7 +761,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-try/src/Main.hs:168:unsafe-boundary": [
@@ -686,7 +770,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall-try/src/Main.hs:182:unsafe-boundary": [
@@ -694,7 +779,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/benchmark/evaluation/Bench/Common.hs:138:unsafe-boundary": [
@@ -702,7 +788,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/ghcjs-src/Dhall/Crypto.hs:65:unsafe-boundary": [
@@ -710,7 +797,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall.hs:436:unsafe-boundary": [
@@ -718,7 +806,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Bounded.hs:102:unsafe-boundary": [
@@ -726,7 +815,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Bounded.hs:95:unsafe-boundary": [
@@ -734,7 +824,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/DirectoryTree/Types.hs:147:unsafe-boundary": [
@@ -742,7 +833,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Format.hs:70:path-traversal": [
@@ -750,7 +842,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Freeze.hs:309:path-traversal": [
@@ -758,7 +851,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1028:unsafe-boundary": [
@@ -766,7 +860,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1046:path-traversal": [
@@ -774,7 +869,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1047:path-traversal": [
@@ -782,7 +878,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1120:unsafe-boundary": [
@@ -790,7 +887,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1121:unsafe-boundary": [
@@ -798,7 +896,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1161:unsafe-boundary": [
@@ -806,7 +905,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1210:unsafe-boundary": [
@@ -814,7 +914,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1226:unsafe-boundary": [
@@ -822,7 +923,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1314:unsafe-boundary": [
@@ -830,7 +932,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1342:unsafe-boundary": [
@@ -838,7 +941,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1365:unsafe-boundary": [
@@ -846,7 +950,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1392:unsafe-boundary": [
@@ -854,7 +959,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1524:unsafe-boundary": [
@@ -862,7 +968,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1852:path-traversal": [
@@ -870,7 +977,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1853:path-traversal": [
@@ -878,7 +986,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1876:path-traversal": [
@@ -886,7 +995,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1879:path-traversal": [
@@ -894,7 +1004,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1908:path-traversal": [
@@ -902,7 +1013,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:1910:path-traversal": [
@@ -910,7 +1022,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2021:path-traversal": [
@@ -918,7 +1031,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2045:path-traversal": [
@@ -926,7 +1040,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2049:path-traversal": [
@@ -934,7 +1049,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2053:path-traversal": [
@@ -942,7 +1058,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2306:unsafe-boundary": [
@@ -950,7 +1067,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2332:unsafe-boundary": [
@@ -958,7 +1076,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2390:unsafe-boundary": [
@@ -966,7 +1085,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2395:unsafe-boundary": [
@@ -974,7 +1094,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2474:unsafe-boundary": [
@@ -982,7 +1103,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2489:unsafe-boundary": [
@@ -990,7 +1112,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2490:unsafe-boundary": [
@@ -998,7 +1121,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2526:unsafe-boundary": [
@@ -1006,7 +1130,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2550:unsafe-boundary": [
@@ -1014,7 +1139,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2577:unsafe-boundary": [
@@ -1022,7 +1148,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2591:unsafe-boundary": [
@@ -1030,7 +1157,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2634:unsafe-boundary": [
@@ -1038,7 +1166,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2645:unsafe-boundary": [
@@ -1046,7 +1175,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2660:unsafe-boundary": [
@@ -1054,7 +1184,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2678:unsafe-boundary": [
@@ -1062,7 +1193,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2711:unsafe-boundary": [
@@ -1070,7 +1202,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2722:unsafe-boundary": [
@@ -1078,7 +1211,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2724:unsafe-boundary": [
@@ -1086,7 +1220,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2844:unsafe-boundary": [
@@ -1094,7 +1229,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:2925:unsafe-boundary": [
@@ -1102,7 +1238,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:515:unsafe-boundary": [
@@ -1110,7 +1247,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:788:unsafe-boundary": [
@@ -1118,7 +1256,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:840:unsafe-boundary": [
@@ -1126,7 +1265,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:849:unsafe-boundary": [
@@ -1134,7 +1274,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:865:unsafe-boundary": [
@@ -1142,7 +1283,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Import.hs:890:unsafe-boundary": [
@@ -1150,7 +1292,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Main.hs:1314:path-traversal": [
@@ -1158,7 +1301,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Main.hs:1412:unsafe-boundary": [
@@ -1166,7 +1310,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Main.hs:1432:unsafe-boundary": [
@@ -1174,7 +1319,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Main.hs:971:unsafe-boundary": [
@@ -1182,7 +1328,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TH.hs:112:unsafe-boundary": [
@@ -1190,7 +1337,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/Tags.hs:93:path-traversal": [
@@ -1198,7 +1346,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:153:unsafe-boundary": [
@@ -1206,7 +1355,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:1560:unsafe-boundary": [
@@ -1214,7 +1364,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:171:unsafe-boundary": [
@@ -1222,7 +1373,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:283:unsafe-boundary": [
@@ -1230,7 +1382,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:295:unsafe-boundary": [
@@ -1238,7 +1391,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:308:unsafe-boundary": [
@@ -1246,7 +1400,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:316:unsafe-boundary": [
@@ -1254,7 +1409,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:330:unsafe-boundary": [
@@ -1262,7 +1418,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:358:unsafe-boundary": [
@@ -1270,7 +1427,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "dhall-haskell:dhall/src/Dhall/TypeCheck.hs:438:unsafe-boundary": [
@@ -1278,7 +1436,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hlint:cc/Engine.hs:65:Argument Injection (process arguments)": [
@@ -1286,7 +1445,8 @@
       "info",
       "entrypoint-reachable",
       "medium",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hlint:data/HLint_QuickCheck.hs:63:unsafe-boundary": [
@@ -1294,7 +1454,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hlint:data/HLint_QuickCheck.hs:86:unsafe-boundary": [
@@ -1302,7 +1463,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hlint:data/HLint_QuickCheck.hs:98:unsafe-boundary": [
@@ -1310,7 +1472,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hlint:src/Parallel.hs:27:unsafe-boundary": [
@@ -1318,7 +1481,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hlint:src/Test/All.hs:39:path-traversal": [
@@ -1326,7 +1490,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hlint:src/Test/Annotations.hs:121:path-traversal": [
@@ -1334,7 +1499,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hlint:src/Test/InputOutput.hs:36:path-traversal": [
@@ -1342,7 +1508,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hlint:src/Test/InputOutput.hs:38:path-traversal": [
@@ -1350,7 +1517,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "hlint:src/Timing.hs:26:unsafe-boundary": [
@@ -1358,7 +1526,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hlint:src/Timing.hs:30:unsafe-boundary": [
@@ -1366,7 +1535,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hlint:src/Timing.hs:34:unsafe-boundary": [
@@ -1374,7 +1544,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hlint:src/Timing.hs:38:unsafe-boundary": [
@@ -1382,7 +1553,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "hlint:src/Util.hs:55:unsafe-boundary": [
@@ -1390,7 +1562,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-hsx/direct/IHP/HSX/Markup.hs:85:unsafe-boundary": [
@@ -1398,7 +1571,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:72:Partial function applied to caller-supplied text": [
@@ -1406,7 +1580,8 @@
       "low",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:75:Partial function applied to caller-supplied text": [
@@ -1414,7 +1589,8 @@
       "low",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Migrations.hs:118:path-traversal": [
@@ -1422,7 +1598,8 @@
       "info",
       "unknown",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Migrations.hs:90:path-traversal": [
@@ -1430,7 +1607,8 @@
       "info",
       "unknown",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-ide/IHP/IDE/SchemaDesigner/SchemaOperations.hs:542:Partial function applied to caller-supplied text": [
@@ -1438,7 +1616,8 @@
       "low",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-ide/IHP/IDE/ToolServer/Helper/Controller.hs:42:OS Command Injection (shell string)": [
@@ -1446,7 +1625,8 @@
       "critical",
       "unknown",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-ide/IHP/IDE/WorkerSignal.hs:35:path-traversal": [
@@ -1454,7 +1634,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-ide/Test/ServerSpec.hs:14:Cross-Site Scripting (HTML response body from text)": [
@@ -1462,7 +1643,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-migrate/exe/Migrate.hs:63:path-traversal": [
@@ -1470,7 +1652,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-modal/IHP/Modal/Types.hs:33:unsafe-boundary": [
@@ -1478,7 +1661,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-modal/IHP/Modal/ViewFunctions.hs:60:unsafe-boundary": [
@@ -1486,7 +1670,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-openai/IHP/OpenAI.hs:284:TLS certificate validation is disabled": [
@@ -1494,7 +1679,8 @@
       "high",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-pagehead/IHP/PageHead/Types.hs:49:unsafe-boundary": [
@@ -1502,7 +1688,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-pagehead/IHP/PageHead/ViewFunctions.hs:232:unsafe-boundary": [
@@ -1510,7 +1697,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-pagehead/IHP/PageHead/ViewFunctions.hs:262:unsafe-boundary": [
@@ -1518,7 +1706,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-pagehead/IHP/PageHead/ViewFunctions.hs:81:unsafe-boundary": [
@@ -1526,7 +1715,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-schema-compiler/IHP/SchemaCompiler.hs:360:path-traversal": [
@@ -1534,7 +1724,8 @@
       "low",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-schema-compiler/IHP/SchemaCompiler.hs:363:path-traversal": [
@@ -1542,7 +1733,17 @@
       "low",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
+     ]
+    ],
+    "ihp:ihp-schema-compiler/IHP/SchemaCompiler/Cache.hs:45:Multi-Sink Taint Chain — file content reaches 3 sinks": [
+     [
+      "high",
+      null,
+      null,
+      "MULTI-SINK",
+      null
      ]
     ],
     "ihp:ihp-schema-compiler/IHP/SchemaCompiler/Cache.hs:45:path-traversal": [
@@ -1550,7 +1751,8 @@
       "low",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:1061:path-traversal": [
@@ -1558,7 +1760,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:1063:path-traversal": [
@@ -1566,7 +1769,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:143:unsafe-boundary": [
@@ -1574,7 +1778,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:151:unsafe-boundary": [
@@ -1582,7 +1787,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:155:unsafe-boundary": [
@@ -1590,7 +1796,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:159:unsafe-boundary": [
@@ -1598,7 +1805,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:163:unsafe-boundary": [
@@ -1606,7 +1814,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:332:path-traversal": [
@@ -1614,7 +1823,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:345:path-traversal": [
@@ -1622,7 +1832,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:346:path-traversal": [
@@ -1630,7 +1841,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:363:path-traversal": [
@@ -1638,7 +1850,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:393:Argument Injection (process arguments)": [
@@ -1646,7 +1859,8 @@
       "info",
       "entrypoint-reachable",
       "medium",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:404:OS Command Injection (attacker-chosen executable)": [
@@ -1654,7 +1868,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:575:path-traversal": [
@@ -1662,7 +1877,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:579:path-traversal": [
@@ -1670,7 +1886,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:580:path-traversal": [
@@ -1678,7 +1895,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:588:path-traversal": [
@@ -1686,7 +1904,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:589:path-traversal": [
@@ -1694,7 +1913,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:590:path-traversal": [
@@ -1702,7 +1922,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:591:path-traversal": [
@@ -1710,7 +1931,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:597:path-traversal": [
@@ -1718,7 +1940,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:654:path-traversal": [
@@ -1726,7 +1949,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:749:path-traversal": [
@@ -1734,7 +1958,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:811:Argument Injection (process arguments)": [
@@ -1742,7 +1967,8 @@
       "info",
       "entrypoint-reachable",
       "medium",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:839:Argument Injection (process arguments)": [
@@ -1750,7 +1976,8 @@
       "info",
       "entrypoint-reachable",
       "medium",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:865:path-traversal": [
@@ -1758,7 +1985,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:919:path-traversal": [
@@ -1766,7 +1994,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:986:path-traversal": [
@@ -1774,7 +2003,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp-typed-sql/IHP/TypedSql/CompileTimeDatabase.hs:992:path-traversal": [
@@ -1782,7 +2012,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp/IHP/ActionType.hs:30:unsafe-boundary": [
@@ -1790,7 +2021,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp/IHP/Controller/AccessDenied.hs:144:Cross-Site Scripting (HTML response body from text)": [
@@ -1798,7 +2030,8 @@
       "low",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp/IHP/Controller/Layout.hs:25:unsafe-boundary": [
@@ -1806,7 +2039,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp/IHP/Controller/NotFound.hs:145:Cross-Site Scripting (HTML response body from text)": [
@@ -1814,7 +2048,8 @@
       "low",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp/IHP/Controller/Render.hs:43:path-traversal": [
@@ -1822,7 +2057,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp/IHP/Controller/Response.hs:56:unsafe-boundary": [
@@ -1830,7 +2066,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp/IHP/Controller/Session.hs:175:unsafe-boundary": [
@@ -1838,7 +2075,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp/IHP/FileStorage/ControllerFunctions.hs:191:path-traversal": [
@@ -1846,7 +2084,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:ihp/IHP/FlashMessages.hs:60:unsafe-boundary": [
@@ -1854,7 +2093,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp/IHP/Prelude.hs:141:unsafe-boundary": [
@@ -1862,7 +2102,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp/IHP/Prelude.hs:146:unsafe-boundary": [
@@ -1870,7 +2111,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp/IHP/Prelude.hs:151:unsafe-boundary": [
@@ -1878,7 +2120,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp/IHP/RequestVault/ModelContext.hs:21:unsafe-boundary": [
@@ -1886,7 +2129,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp/IHP/RouterSupport.hs:1269:unsafe-boundary": [
@@ -1894,7 +2138,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp/IHP/RouterSupport.hs:645:unsafe-boundary": [
@@ -1902,7 +2147,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:wai-asset-path/Network/Wai/Middleware/AssetPath.hs:38:unsafe-boundary": [
@@ -1910,7 +2156,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:218:Cross-Site Scripting (HTML response body from text)": [
@@ -1918,7 +2165,8 @@
       "info",
       "unknown",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:229:path-traversal": [
@@ -1926,7 +2174,8 @@
       "info",
       "unknown",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:230:path-traversal": [
@@ -1934,7 +2183,8 @@
       "info",
       "unknown",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:232:Cross-Site Scripting (HTML response body from text)": [
@@ -1942,7 +2192,8 @@
       "info",
       "unknown",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:248:path-traversal": [
@@ -1950,7 +2201,8 @@
       "info",
       "unknown",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:250:Cross-Site Scripting (HTML response body from text)": [
@@ -1958,7 +2210,8 @@
       "info",
       "unknown",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:276:Cross-Site Scripting (HTML response body from text)": [
@@ -1966,7 +2219,8 @@
       "info",
       "unknown",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:wai-request-params/Test/Wai/Request/Params/MiddlewareSpec.hs:53:Cross-Site Scripting (HTML response body from text)": [
@@ -1974,7 +2228,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:100:unsafe-boundary": [
@@ -1982,7 +2237,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:109:unsafe-boundary": [
@@ -1990,7 +2246,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:115:unsafe-boundary": [
@@ -1998,7 +2255,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:155:Request body read without a size limit": [
@@ -2006,7 +2264,8 @@
       "medium",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:187:Request body read without a size limit": [
@@ -2014,7 +2273,8 @@
       "medium",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:276:path-traversal": [
@@ -2022,7 +2282,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:276:unsafe-boundary": [
@@ -2030,7 +2291,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:wai-request-params/Wai/Request/Params/Middleware.hs:94:unsafe-boundary": [
@@ -2038,7 +2300,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ormolu:ormolu-live/app/Pregen.hs:11:path-traversal": [
@@ -2046,7 +2309,8 @@
       "info",
       "entrypoint-reachable",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "ormolu:src/Ormolu/Utils/Cabal.hs:104:unsafe-boundary": [
@@ -2054,7 +2318,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ormolu:src/Ormolu/Utils/Fixity.hs:59:unsafe-boundary": [
@@ -2062,7 +2327,8 @@
       "info",
       null,
       "low",
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "scotty:Web/Scotty/Session.hs:180:Session cookie without HttpOnly or Secure": [
@@ -2070,7 +2336,8 @@
       "medium",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "scotty:Web/Scotty/Session.hs:187:Predictable random number generator used for a security value": [
@@ -2078,7 +2345,26 @@
       "high",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
+    "scotty:Web/Scotty/Util.hs:45:Cross-Site Scripting (HTML response body from text)": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT",
+      "feasible"
+     ]
+    ],
+    "scotty:Web/Scotty/Util.hs:45:Multi-Sink Taint Chain — interproc-return:Web.Scotty.Route.mkEnv reaches 2 sinks": [
+     [
+      "high",
+      null,
+      null,
+      "MULTI-SINK",
+      null
      ]
     ],
     "scotty:Web/Scotty/Util.hs:46:path-traversal": [
@@ -2086,7 +2372,8 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "scotty:examples/basic.hs:106:Request body read without a size limit": [
@@ -2094,7 +2381,8 @@
       "medium",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "scotty:examples/basic.hs:42:Cross-Site Scripting (HTML response from text)": [
@@ -2102,15 +2390,8 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
-     ]
-    ],
-    "scotty:examples/basic.hs:42:Multi-Sink Taint Chain — scotty request parameter reaches 5 sinks": [
-     [
-      "high",
-      null,
-      null,
-      "MULTI-SINK"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "scotty:examples/basic.hs:47:Cross-Site Scripting (HTML response from text)": [
@@ -2118,7 +2399,8 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "scotty:examples/basic.hs:52:Cross-Site Scripting (HTML response from text)": [
@@ -2126,7 +2408,8 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "scotty:examples/basic.hs:78:Cross-Site Scripting (HTML response from text)": [
@@ -2134,7 +2417,8 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "scotty:examples/bodyecho.hs:19:Request body read without a size limit": [
@@ -2142,7 +2426,8 @@
       "medium",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "scotty:examples/middleware.hs:68:Request body read without a size limit": [
@@ -2150,7 +2435,8 @@
       "medium",
       null,
       null,
-      "HS-RULES"
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "scotty:examples/nested.hs:38:Cross-Site Scripting (HTML response from text)": [
@@ -2158,7 +2444,44 @@
       "high",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
+     ]
+    ],
+    "scotty:examples/upload.hs:52:Multi-Sink Taint Chain — uploaded file field reaches 3 sinks": [
+     [
+      "high",
+      null,
+      null,
+      "MULTI-SINK",
+      null
+     ]
+    ],
+    "scotty:examples/upload.hs:52:path-traversal": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT",
+      "feasible"
+     ]
+    ],
+    "scotty:examples/upload.hs:53:path-traversal": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT",
+      "feasible"
+     ]
+    ],
+    "scotty:examples/upload.hs:58:Cross-Site Scripting (HTML response from text)": [
+     [
+      "high",
+      "entrypoint-reachable",
+      null,
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "scotty:examples/urlshortener.hs:65:Open Redirect": [
@@ -2166,7 +2489,8 @@
       "medium",
       "entrypoint-reachable",
       null,
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "summoner:summoner-cli/src/Summoner/Project.hs:284:path-traversal": [
@@ -2174,7 +2498,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ],
     "summoner:summoner-cli/src/Summoner/Tree.hs:42:path-traversal": [
@@ -2182,7 +2507,8 @@
       "info",
       "external-api",
       "high",
-      "IR-TAINT"
+      "IR-TAINT",
+      "feasible"
      ]
     ]
    }
@@ -2199,13 +2525,13 @@
      }
     },
     "ghcup-hs": {
-     "rows": 41,
+     "rows": 42,
      "flagged": 3,
-     "loweredToInfo": 38,
+     "loweredToInfo": 39,
      "byStatus": {
       "no-verdict": 2,
-      "external-api": 15,
-      "entrypoint-reachable": 24
+      "entrypoint-reachable": 25,
+      "external-api": 15
      }
     },
     "gitit": {
@@ -2219,13 +2545,13 @@
      }
     },
     "hackage-server": {
-     "rows": 47,
+     "rows": 57,
      "flagged": 2,
-     "loweredToInfo": 45,
+     "loweredToInfo": 55,
      "byStatus": {
       "entrypoint-reachable": 35,
       "external-api": 6,
-      "no-verdict": 6
+      "no-verdict": 16
      }
     },
     "pandoc": {
@@ -2267,30 +2593,30 @@
    },
    "fresh": {
     "dhall-haskell": {
-     "rows": 111,
+     "rows": 113,
      "flagged": 3,
-     "loweredToInfo": 108,
+     "loweredToInfo": 110,
      "byStatus": {
       "entrypoint-reachable": 26,
-      "external-api": 13,
-      "no-verdict": 72
+      "external-api": 14,
+      "no-verdict": 73
      }
     },
     "hlint": {
-     "rows": 14,
+     "rows": 15,
      "flagged": 0,
-     "loweredToInfo": 14,
+     "loweredToInfo": 15,
      "byStatus": {
       "entrypoint-reachable": 5,
-      "no-verdict": 9
+      "no-verdict": 10
      }
     },
     "ihp": {
-     "rows": 176,
-     "flagged": 12,
+     "rows": 177,
+     "flagged": 13,
      "loweredToInfo": 164,
      "byStatus": {
-      "no-verdict": 109,
+      "no-verdict": 110,
       "unknown": 19,
       "entrypoint-reachable": 43,
       "external-api": 5
@@ -2306,12 +2632,12 @@
      }
     },
     "scotty": {
-     "rows": 20,
-     "flagged": 19,
+     "rows": 19,
+     "flagged": 18,
      "loweredToInfo": 1,
      "byStatus": {
       "external-api": 1,
-      "no-verdict": 8,
+      "no-verdict": 7,
       "entrypoint-reachable": 11
      }
     },

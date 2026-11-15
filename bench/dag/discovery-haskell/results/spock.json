@@ -1,0 +1,19 @@
+{
+ "id": "spock",
+ "commit": "872f97d5c81f262fa56648c517b5883dcda3bec4",
+ "rows": [
+  {
+   "file": "benchmarks/http/Main.hs",
+   "line": 65,
+   "severity": "info",
+   "cwe": "CWE-79",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "parser": "IR-TAINT",
+   "trust": "unattributed",
+   "reach": "entrypoint-reachable",
+   "guard": "non-html-content-type",
+   "proof": "feasible",
+   "provenance": null
+  }
+ ]
+}

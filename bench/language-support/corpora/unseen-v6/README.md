@@ -1,4 +1,6 @@
-# unseen-v6 (Haskell): MEASUREMENT ONLY
+# unseen-v6 (Haskell): a DEVELOPMENT set since 2026-11-15
+
+**Status.** On 2026-11-15 (round 8 of the Haskell work, 0.195.44) the per-case failures of this split were read and the engine changed for their general causes, after unseen-v7 had been frozen and measured as the generalisation measure (`USE-LOG.md`, `manifest.json` `role: development`). Every number from this split from then on is a development measure; quote unseen-v7 for generalisation. The rules below are kept as written for the record of what the split was until then.
 
 A frozen split of single-flaw Haskell code forms: 13 vulnerability families, 3 vulnerable and 3 safe forms each, 78 forms in all. It replaces unseen-v5 as the generalisation measure: on 2026-11-01 unseen-v5's failures were read to change the engine (its USE-LOG records the use), so from that day unseen-v5 is a development set and this split is the one no engine change has been motivated by.
 

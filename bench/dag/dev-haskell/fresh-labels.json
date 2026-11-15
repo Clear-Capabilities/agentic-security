@@ -2460,6 +2460,69 @@
    "project": "ihp",
    "label": "FP",
    "reason": "The hspec suite of the request-body middleware: in-process test applications echo the parsed body, the params and the uploaded file contents back in a response with no content type, and read the temporary upload file the middleware itself wrote (a path the client does not choose). Test code exercising the middleware, not a shipped program. First reachable since 0.195.12, when the suite's record patterns (FormBody { params, files, rawPayload }) parsed (added 2026-11-02, LABEL-CHANGES.md)."
+  },
+  "scotty:examples/upload.hs:53:path-traversal": {
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "The upload example writes each part to `examples/uploads/<client file name>`: `fileName fi` is the browser's file name verbatim and `</>` does not stop `..`, so a crafted name writes outside the uploads directory. Found in round 8: the write sits inside `liftIO (do ..) \\`catch\\` handler`, an argument the nested-sink walk now enters."
+  },
+  "scotty:examples/upload.hs:58:Cross-Site Scripting (HTML response from text)": {
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response from text)",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "The response lists the uploaded files with `TL.fromStrict fName` (the multipart field name, client text) spliced raw into `html $ mconcat [..]`; only the link text goes through `toHtml`. Found in round 8 (the nested-sink walk through the concatenation and the `for_` body)."
+  },
+  "scotty:examples/upload.hs:52:path-traversal": {
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "scotty",
+   "label": "FP",
+   "reason": "`B.readFile fpath` where `fpath` is `fileContent fi`: under scotty's `filesOpts` the parts are written to temporary files the framework names, so the path read back is the framework's own (the round-2 `framework-controlled` judgement). Not lowered here because `fpath` and `fnam` come out of one tuple built by a list comprehension and taken apart by the `for_` lambda, and the engine taints the tuple as a whole: the roots carry both the file name and the content. A tuple that keeps its fields through a comprehension and a higher-order loop is the mechanism this needs."
+  },
+  "scotty:examples/upload.hs:52:Multi-Sink Taint Chain — uploaded file field reaches 3 sinks": {
+   "kind": "flagged-after",
+   "parser": "MULTI-SINK",
+   "severity": "high",
+   "vuln": "Multi-Sink Taint Chain — uploaded file field reaches 3 sinks",
+   "project": "scotty",
+   "label": "TP",
+   "reason": "The aggregate of the upload example's flows: two of its three sinks (the write under the client's file name, the field name in the HTML listing) are true positives."
+  },
+  "scotty:Web/Scotty/Util.hs:45:Cross-Site Scripting (HTML response body from text)": {
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "project": "scotty",
+   "label": "FP",
+   "reason": "`mkResponse` is the framework assembling the WAI response from the `ScottyResponse` the application built: the body is whatever the handler set (`ContentBuilder b`), the headers the handler's. A library handing on its user's response is not the library's injection; the same class as the `ContentFile` branch on the next line. Reported since round 8 through the field-sensitive return of the route environment (`mkEnv`)."
+  },
+  "scotty:Web/Scotty/Util.hs:45:Multi-Sink Taint Chain — interproc-return:Web.Scotty.Route.mkEnv reaches 2 sinks": {
+   "kind": "flagged-after",
+   "parser": "MULTI-SINK",
+   "severity": "high",
+   "vuln": "Multi-Sink Taint Chain — interproc-return:Web.Scotty.Route.mkEnv reaches 2 sinks",
+   "project": "scotty",
+   "label": "FP",
+   "reason": "The aggregate of the two `mkResponse` branches (the body builder and the file), both the framework handing on its user's response."
+  },
+  "ihp:ihp-schema-compiler/IHP/SchemaCompiler/Cache.hs:45:Multi-Sink Taint Chain — file content reaches 3 sinks": {
+   "kind": "flagged-after",
+   "parser": "MULTI-SINK",
+   "severity": "high",
+   "vuln": "Multi-Sink Taint Chain — file content reaches 3 sinks",
+   "project": "ihp",
+   "label": "FP",
+   "reason": "The aggregate of the schema compiler's cache flows, every member of which is the cache file the compiler itself wrote and reads back (the labelled `Cache.hs:45` and `SchemaCompiler.hs:360/363` sites, all low): an aggregate of false positives."
   }
  }
 }

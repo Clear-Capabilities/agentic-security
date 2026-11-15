@@ -148,11 +148,34 @@ function callerControlledParams(fn, sig, exported, imports) {
 // when its API combinator reads the request (capture, query, header, body) and its declared type is text; an authenticated principal is not.
 const SERVANT_READS = new Set(['Capture', "Capture'", 'QueryParam', "QueryParam'", 'QueryParams', 'Header', "Header'", 'ReqBody', "ReqBody'"]);
 const SERVANT_PRINCIPAL = new Set(['AuthProtect', 'BasicAuth', 'Auth']);
+// `serve (Proxy :: Proxy API) handler` / `serveWithContext (Proxy :: Proxy API) ctx handler`: the handler name each API is served by, read from the
+// module's tokens (the application may be partial, `(server conn)`: the first variable after the proxy's closing parenthesis is the handler).
+const SERVE_TARGETS = new WeakMap();
+function serveTargets(mod) {
+  if (SERVE_TARGETS.has(mod)) return SERVE_TARGETS.get(mod);
+  const out = new Map();
+  const T = mod.parse.tokens || [];
+  for (let i = 0; i < T.length; i++) {
+    if (T[i].t !== 'var' || !/^serve(?:WithContext)?$/.test(T[i].v)) continue;
+    let j = i + 1; let api = null; let sawProxy = false;
+    for (; j < Math.min(T.length, i + 16) && !api; j++) { if (T[j].t === 'con' && T[j].v === 'Proxy') sawProxy = true; else if (sawProxy && T[j].t === 'con') api = T[j].v; }
+    if (!api) continue;
+    for (; j < Math.min(T.length, i + 40); j++) { if (T[j].t === 'var' && !/^serve/.test(T[j].v)) { if (!out.has(T[j].v)) out.set(T[j].v, api); break; } if (T[j].t === 'sp' && T[j].v === ')' && T[j + 1] && T[j + 1].t === 'var' && T[j + 1].v === 'serve') break; }
+  }
+  SERVE_TARGETS.set(mod, out);
+  return out;
+}
+
 function servantEndpointParams(mod, fn, sig, exported) {
-  if (!exported || !sig || !sig.resultText || !Array.isArray(fn.params) || !fn.params.length) return [];
+  // The result type `Server API` says what the parameters are, exported or not (`module Api (app)` keeps its `server` private).
+  if (!sig || !sig.resultText || !Array.isArray(fn.params) || !fn.params.length) return [];
+  if (!mod.imports.some((i) => /^Servant(?:\.|$)/.test(i.module))) return [];
   const m = /^\s*(?:Server|ServerT)\s+([A-Z][A-Za-z0-9_']*)\b/.exec(sig.resultText);
-  if (!m || !mod.imports.some((i) => /^Servant(?:\.|$)/.test(i.module))) return [];
-  const td = (mod.parse.typeDecls || []).find((d) => d.name === m[1]);
+  // A handler typed by its own result (`testHandler :: TestRequest -> Handler TestResult`) is paired with the API it is handed to:
+  // `serve (Proxy :: Proxy API) testHandler` names both.
+  const apiName = m ? m[1] : serveTargets(mod).get(String(fn.name).replace(/^.*\./, '')) || null;
+  if (!apiName) return [];
+  const td = (mod.parse.typeDecls || []).find((d) => d.name === apiName);
   if (!td) return [];
   const T = mod.parse.tokens;
   const slice = T.slice(td.a, td.b);
@@ -191,7 +214,10 @@ function servantEndpointParams(mod, fn, sig, exported) {
     let rest = part.slice(lastStr >= 0 ? lastStr + 1 : 1);
     if (/^ReqBody/.test(head.v)) { const close = rest.findIndex((t) => t.t === 'sp' && t.v === ']'); rest = close >= 0 ? rest.slice(close + 1) : rest; }
     const type = rest.map((t) => t.v).join(' ').trim();
-    if (type && TEXT_LIKE.test(type.replace(/^\[\s*(.*)\s*\]$/, '[ $1 ]').replace(/\s+/g, ' '))) out.push({ index: offset + idx - 1, name, decorator: 'hs:handler-param:servant' });
+    // A request BODY is request input whatever its type: a project record decoded from the JSON body hands every field it carries to the
+    // handler (`searchTerm req` into a query). A text type decides the other reads, as before.
+    const isBody = /^ReqBody/.test(head.v);
+    if (isBody || (type && TEXT_LIKE.test(type.replace(/^\[\s*(.*)\s*\]$/, '[ $1 ]').replace(/\s+/g, ' ')))) out.push({ index: offset + idx - 1, name, decorator: 'hs:handler-param:servant' });
   }
   return out;
 }
@@ -502,7 +528,8 @@ function aliasBodyOf(fnAst) {
 function lambdaBodied(f) {
   if (!f || f.clauses.length !== 1) return f;
   const c = f.clauses[0];
-  const body = c.pats.length === 0 && c.rhs && !(c.rhs.guards && c.rhs.guards.length) && !(c.rhs.where && c.rhs.where.length) ? unparen(c.rhs.body) : null;
+  const plain = c.rhs && !(c.rhs.guards && c.rhs.guards.length) && !(c.rhs.where && c.rhs.where.length) ? unparen(c.rhs.body) : null;
+  const body = c.pats.length === 0 ? plain : null;
   if (!body) return f;
   if (body.t === 'lam' && body.params.every((p) => p && p.t === 'pvar')) return { ...f, clauses: [{ ...c, pats: body.params, rhs: { ...c.rhs, body: body.body } }] };
   if (body.t === 'lamcase') return { ...f, clauses: [{ ...c, pats: [{ t: 'pvar', name: '$lc' }], rhs: { ...c.rhs, body: { t: 'case', scrut: { t: 'var', name: '$lc', qual: null }, alts: body.alts, line: body.line } } }] };
@@ -514,6 +541,34 @@ function lambdaBodied(f) {
     return { ...f, clauses: [{ ...c, pats, rhs: { ...c.rhs, body: { t: 'case', scrut, alts, line: body.line } } }] };
   }
   return f;
+}
+
+// `f = g . h` (any chain of `.`, each piece a name or a partial application) is a function of one more argument by construction: `f x = g (h x)`,
+// `server conn = liftIO . work conn` is `server conn x = liftIO (work conn x)`. A point-free handler then has the parameter the framework's reads
+// pair with. Applied only when a piece of the chain is a PROJECT function (`isProject`): a chain of library names only (`rf = liftIO . BL.readFile`)
+// stays the alias `aliasBodyOf` already expands at each call site, which keeps the sink at the caller's line and reports it once per call. The
+// `.` here is composition: the parser reads record dot as a selection token.
+function composedBodied(f, isProject) {
+  if (!f || f.clauses.length !== 1) return f;
+  const c = f.clauses[0];
+  const plain = c.rhs && !(c.rhs.guards && c.rhs.guards.length) && !(c.rhs.where && c.rhs.where.length) ? unparen(c.rhs.body) : null;
+  if (!plain || plain.t !== 'op' || plain.op !== '.' || plain.qual) return f;
+  let project = false;
+  const scanNames = (e, d) => {
+    const u = unparen(e);
+    if (!u || d > 20) return;
+    if (u.t === 'var') { if (isProject(u.name, u.qual)) project = true; return; }
+    if (u.t === 'op' && u.op === '.' && !u.qual) { scanNames(u.l, d + 1); scanNames(u.r, d + 1); return; }
+    if (u.t === 'app') scanNames(u.f, d + 1);
+  };
+  scanNames(plain, 0);
+  // A chain of library names with no parameters is the alias `aliasBodyOf` inlines at each call; anything else (a project function in the chain,
+  // or a clause with parameters, `jsonResponse st = responseLBS st hdrs . encode`, which the alias path cannot take) becomes the function.
+  if (!project && c.pats.length === 0 && aliasBodyOf(f)) return f;
+  const apply = (e, arg) => { const u = unparen(e); return u && u.t === 'app' ? { ...u, args: [...u.args, arg] } : { t: 'app', f: e, args: [arg], line: plain.line }; };
+  const compose = (e, arg) => { const u = unparen(e); return u && u.t === 'op' && u.op === '.' && !u.qual ? apply(u.l, compose(u.r, arg)) : apply(e, arg); };
+  const x = { t: 'var', name: '$pf', qual: null, line: plain.line };
+  return { ...f, clauses: [{ ...c, pats: [...c.pats, { t: 'pvar', name: '$pf' }], rhs: { ...c.rhs, body: compose(plain, x) } }] };
 }
 
 // A module-level mutable cell: `name = unsafePerformIO (newIORef ..)` (MVar, TVar, STRef alike; the NOINLINE pragma is a comment the parser
@@ -782,6 +837,9 @@ class FnLowerer {
         ? this.branch(scrut, ln, () => this.lowerApp(argAsts[1], [inner], ln, f.name), () => this.lowerExpr(argAsts[0], ln))
         : this.branch(scrut, ln, () => this.lowerApp(argAsts[1], [inner], ln, f.name), () => this.lowerApp(argAsts[0], [inner], ln, f.name));
     }
+    // `flip f a b` is `f b a`: the function is applied with its first two arguments exchanged (`slug >>= flip Map.lookup templates` is
+    // `Map.lookup slug templates`, whose result comes from the table). Fewer than three arguments is still the partial value it was.
+    if ((r.kind === 'builtin' || r.kind === 'external') && !f.qual && f.name === 'flip' && argAsts.length >= 3) return this.lowerApp(argAsts[0], [argAsts[2], argAsts[1], ...argAsts.slice(3)], ln, via);
     // Selectors and combinators over a tuple that is written out: `fst (a, b)` is `a`, `const x y` is `x`, `uncurry f (a, b)` is `f a b`.
     if ((r.kind === 'builtin' || r.kind === 'external') && !f.qual) {
       const tup = (a) => { const u = unparen(a); return u && u.t === 'tuple' && u.items.length === 2 ? u.items : null; };
@@ -820,6 +878,7 @@ class FnLowerer {
     // flows to the result, so a constant table gives a constant result however tainted the key is.
     let selector = null;
     if (f.name === 'lookup' && args.length === 2 && (r.kind === 'builtin' || r.kind === 'external')) { selector = args[0]; args = [args[1]]; }
+    else if (f.name === 'findWithDefault' && args.length === 3 && (r.kind === 'builtin' || r.kind === 'external')) { selector = args[1]; args = [args[0], args[2]]; }
     const hs = { via };
     // The key stays on the call as `hs.selector`: taint ignores it (it only chooses), but a rule asking "does caller text decide whether
     // this fails" (fromJust (lookup key t)) still sees it.
@@ -1342,7 +1401,8 @@ class FnLowerer {
     const g = groupDecls(decls);
     // `let run = \x -> ...` is a function of one parameter written in lambda form: treat it as `run x = ...` so a call `run c` is resolved and analysed
     // for the value it is given, instead of being an unknown call of a local value.
-    g.funs = g.funs.map(lambdaBodied);
+    const isProject = (name, qual) => { const r = this.resolve(name, qual); return r.kind === 'def' || r.kind === 'localfn' || r.kind === 'unknown'; };
+    g.funs = g.funs.map((f) => composedBodied(lambdaBodied(f), isProject));
     const scope = this.scopes[this.scopes.length - 1];
     const parent = this.info.parentName || this.info.name;
     for (const f of g.funs) {
@@ -1673,6 +1733,10 @@ function entryHandlerOf(mod, sig) {
 function lowerTopFunction(proj, mod, fun, def) {
   const info = { qid: def.qid, name: `${mod.name}.${fun.name}`, line: fun.line, parentName: `${mod.name}.${fun.name}` };
   const L = new FnLowerer(proj, mod, info, []);
+  const isProject = (name, qual) => { const r = L.resolve(name, qual); return r.kind === 'def' || r.kind === 'localfn' || r.kind === 'unknown'; };
+  const expanded = composedBodied(fun, isProject);
+  // written back into the module's AST, so an inliner or a later reader of the definition sees the function, not the composition value
+  if (expanded !== fun) { fun.clauses = expanded.clauses; def.arity = Math.max(1, ...fun.clauses.map((c) => c.pats.length)); }
   L.lowerClauses(fun.clauses, fun.line);
   const sig = def.sig;
   const kind = def.arity > 0 ? 'function' : (sig && sig.returnsIO) || fun.name === 'main' ? 'io-action' : 'value';
@@ -1847,7 +1911,16 @@ function buildHaskellIRUncached(fileContents) {
       fn.hs.reachedBy = byCall.has(fn.qid) ? 'call' : (byRef.has(fn.qid) ? 'reference' : null);
       if (fn.paramAnnotations) fn.hs.paramEntry = fn.paramAnnotations.map((a) => ({ name: a.name, decorator: a.decorator, reach: !fn.hs.reached ? 'entry' : (fn.hs.reachedBy === 'call' ? 'called-in-project' : 'referenced-only') }));
     }
-    if (reached.has(fn.qid)) { if (fn.paramAnnotations) delete fn.paramAnnotations; if (fn.hs && fn.hs.recordParams) fn.hs.recordParams = []; }
+    if (reached.has(fn.qid)) {
+      if (fn.paramAnnotations) {
+        // A function reached only by REFERENCE (`serve api (server conn)`, a handler stored in a table) has its framework-paired parameters
+        // supplied by the framework at request time, not by the reference, which passes the closure arguments at most: those stay. A CALL in
+        // the project supplies every parameter and removes them all, as before.
+        const kept = fn.hs && fn.hs.reachedBy === 'reference' ? fn.paramAnnotations.filter((a) => /^hs:handler-param:/.test(a.decorator)) : [];
+        if (kept.length) fn.paramAnnotations = kept; else delete fn.paramAnnotations;
+      }
+      if (fn.hs && fn.hs.recordParams) fn.hs.recordParams = [];
+    }
   }
   return { perFile, callGraph, modules: proj.modules, diagnostics: proj.diagnostics, project: proj, haskellReachability: null, _reachSig: null };
 }

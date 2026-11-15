@@ -54,19 +54,6 @@
    "provenance": "interproc"
   },
   {
-   "file": "src/library/PostgREST/Unix.hs",
-   "line": 70,
-   "severity": "info",
-   "cwe": "CWE-22",
-   "vuln": "Path Traversal (filesystem operation)",
-   "parser": "IR-TAINT",
-   "trust": "api-contract",
-   "reach": "external-api",
-   "guard": "api-contract",
-   "proof": "feasible",
-   "provenance": null
-  },
-  {
    "file": "src/library/PostgREST/App.hs",
    "line": 232,
    "severity": "medium",

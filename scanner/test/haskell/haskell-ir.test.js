@@ -52,10 +52,13 @@ guarded s
 test('[HS-002.AC01] a labeled multi-module program yields exactly the expected call graph ($, ., currying, aliases, re-exports, do/bind, records, guards, map/traverse/fmap)', () => {
   const r = buildHaskellIR(LIB);
   assert.deepEqual(r.diagnostics, []);
+  // `helper = sink . wrap` is the function `helper x = sink (wrap x)` since round 8 of the Haskell work (a composition is a function of one
+  // more argument by construction), so its pieces are CALLS it makes, not names it references; `guarded`'s call of `helper` inlines them too.
   assert.deepEqual(edgeSet(r), [
-    'Lib.helper@4 -> Lib.Core.sink [potential/reference:reference]',
-    'Lib.helper@4 -> Lib.Core.wrap [potential/reference:reference]',
+    'Lib.helper@4 -> Lib.Core.sink [resolved/direct]',
+    'Lib.helper@4 -> Lib.Core.wrap [resolved/direct]',
     'Main.guarded@18 -> Lib.Core.sink [resolved/direct]',
+    'Main.guarded@18 -> Lib.Core.wrap [resolved/direct]',
     'Main.guarded@18 -> Lib.helper [resolved/direct]',
     'Main.main@5 -> Lib.Core.sink [resolved/direct]',
     'Main.main@5 -> Lib.Core.sink [resolved/higher-order:bind]',

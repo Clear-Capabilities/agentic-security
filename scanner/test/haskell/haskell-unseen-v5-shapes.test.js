@@ -116,7 +116,10 @@ test('xss: a blaze helper that escapes its parameter is an escaper for the calle
   const escaped = await scan({ 'src/Welcome.hs': page('H.h1 ("Welcome back, " <> toHtml name)') });
   assert.equal(live(escaped, 'CWE-79').length, 0, JSON.stringify(escaped.filter((f) => f.cwe === 'CWE-79').map((f) => [f.line, f.severity, f.proof && f.proof.verdict])));
   const raw = await scan({ 'src/Welcome.hs': page('H.h1 ("Welcome back, " <> preEscapedToHtml name)') });
-  assert.equal(live(raw, 'CWE-79').length, 1, 'the pre-escaped combinator keeps the markup');
+  // the response write keeps its finding; since round 8 the raw insertion itself (`preEscapedToHtml name` under the `<>` inside `H.h1`) is a second
+  // site, found by the nested-sink walk through a concatenation, so the count is at least one and the `html` write is among them
+  const rawSites = live(raw, 'CWE-79');
+  assert.ok(rawSites.length >= 1 && rawSites.some((f) => f.callee === 'Web.Scotty.html'), `the pre-escaped combinator keeps the markup: ${JSON.stringify(rawSites.map((f) => [f.line, f.vuln, f.callee]))}`);
 });
 
 test('sensitive logging: a record built from a credential logged through another field, a yes/no answer about it, and a masked card number are not the secret', () => {

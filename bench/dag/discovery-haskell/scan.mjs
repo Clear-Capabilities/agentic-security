@@ -31,7 +31,9 @@ for (const p of manifest.projects) {
     guard: f.guardNote && f.guardNote.kind, proof: f.proof && f.proof.verdict, provenance: f.sourceProvenance,
   }));
   fs.writeFileSync(path.join(HERE, 'results', `${p.id}.json`), JSON.stringify({ id: p.id, commit: p.commit, rows }, null, 1) + '\n');
-  const flagged = rows.filter((r) => r.severity !== 'info');
+  // flagged = actionable: not lowered to info, and not a flow the engine PROVED clean or infeasible (`proof.verdict` proven-*), the rule the
+  // frozen-split harness has applied since 0.195.9 (bench/language-support/lib.mjs `actionable`); a refuted finding keeps its severity by design
+  const flagged = rows.filter((r) => r.severity !== 'info' && !/^proven-/.test(r.proof || ''));
   console.log(`== ${p.id}: ${rows.length} haskell findings, ${flagged.length} flagged (${Date.now() - t0} ms)`);
   for (const r of flagged) {
     const k = `${p.id}:${r.file}:${r.line}:${stratumOf(r.vuln)}`;

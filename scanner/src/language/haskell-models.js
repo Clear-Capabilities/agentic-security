@@ -66,6 +66,8 @@ export const HS_PACKAGES = Object.freeze({
   req: { modules: ['Network.HTTP.Req'], tested: [] },
   HTTP: { modules: ['Network.HTTP'], tested: [] },
   snap: { modules: ['Snap.Core', 'Snap'], tested: [] },
+  websockets: { modules: ['Network.WebSockets'], tested: [] },
+  amqp: { modules: ['Network.AMQP'], tested: [] },
   Spock: { modules: ['Web.Spock', 'Web.Spock.Core'], tested: [] },
   happstack: { modules: ['Happstack.Server', 'Happstack.Server.Internal.Types'], tested: [] },
   network: { modules: ['Network.Socket.ByteString', 'Network.Socket.ByteString.Lazy'], tested: [] },
@@ -114,10 +116,10 @@ src('Data.ByteString.Lazy', ['readFile'], 'file-read', 'file content', { package
 // HTTP: scotty
 src('Web.Scotty', ['param', 'params', 'queryParam', 'queryParams', 'captureParam', 'captureParams', 'formParam', 'formParams', 'pathParam'], 'url-param', 'scotty request parameter', { package: 'scotty', framework: 'scotty' });
 src('Web.Scotty', ['header', 'headers'], 'header', 'scotty request header', { package: 'scotty', framework: 'scotty' });
-src('Web.Scotty', ['body', 'jsonData', 'files'], 'http-body', 'scotty request body', { package: 'scotty', framework: 'scotty' });
+src('Web.Scotty', ['body', 'jsonData', 'files', 'filesOpts'], 'http-body', 'scotty request body', { package: 'scotty', framework: 'scotty' });
 src('Web.Scotty.Trans', ['param', 'params', 'queryParam', 'queryParams', 'captureParam', 'captureParams', 'formParam', 'formParams', 'pathParam'], 'url-param', 'scotty request parameter', { package: 'scotty', framework: 'scotty' });
 src('Web.Scotty.Trans', ['header', 'headers'], 'header', 'scotty request header', { package: 'scotty', framework: 'scotty' });
-src('Web.Scotty.Trans', ['body', 'jsonData', 'files'], 'http-body', 'scotty request body', { package: 'scotty', framework: 'scotty' });
+src('Web.Scotty.Trans', ['body', 'jsonData', 'files', 'filesOpts'], 'http-body', 'scotty request body', { package: 'scotty', framework: 'scotty' });
 // HTTP: WAI
 src('Network.Wai', ['queryString', 'rawQueryString', 'rawPathInfo', 'pathInfo'], 'url-param', 'WAI request target', { package: 'wai', framework: 'wai' });
 src('Network.Wai', ['requestHeaders', 'requestHeaderHost', 'requestHeaderReferer', 'requestHeaderUserAgent'], 'header', 'WAI request header', { package: 'wai', framework: 'wai' });
@@ -139,6 +141,15 @@ src('Network.HTTP', ['getResponseBody'], 'network', 'remote HTTP response', { pa
 src('Snap.Core', ['getParam', 'getPostParam', 'getQueryParam', 'getParams', 'getPostParams', 'getQueryParams'], 'url-param', 'snap request parameter', { package: 'snap', framework: 'snap' });
 src('Snap.Core', ['readRequestBody', 'getRequestBody'], 'http-body', 'snap request body', { package: 'snap', framework: 'snap' });
 src('Snap', ['getParam', 'getPostParam', 'getQueryParam', 'getParams', 'getPostParams', 'getQueryParams'], 'url-param', 'snap request parameter', { package: 'snap', framework: 'snap' });
+// Snap's request record and cookies: a header read from the Request (`getHeader "X-Repo-Url" req`), the request line's pieces, a cookie's value.
+src('Snap.Core', ['getHeader', 'rqHeaders', 'getsRequest'], 'header', 'snap request header', { package: 'snap', framework: 'snap' });
+src('Snap.Core', ['rqURI', 'rqPathInfo', 'rqQueryString', 'rqContextPath'], 'url-param', 'snap request line', { package: 'snap', framework: 'snap' });
+src('Snap.Core', ['getCookie', 'rqCookies', 'cookieValue'], 'cookie', 'snap request cookie', { package: 'snap', framework: 'snap' });
+src('Snap', ['getHeader', 'rqHeaders', 'getsRequest'], 'header', 'snap request header', { package: 'snap', framework: 'snap' });
+src('Snap', ['getCookie', 'rqCookies', 'cookieValue'], 'cookie', 'snap request cookie', { package: 'snap', framework: 'snap' });
+// A websocket message is the remote client's bytes; a message-queue payload is whatever a producer put on the queue.
+src('Network.WebSockets', ['receiveData', 'receiveDataMessage', 'receive', 'fromDataMessage'], 'network', 'websocket message', { package: 'websockets' });
+src('Network.AMQP', ['msgBody'], 'network', 'message-queue payload', { package: 'amqp' });
 // Spock
 src('Web.Spock', ['param', "param'", 'params'], 'url-param', 'spock request parameter', { package: 'Spock', framework: 'spock' });
 src('Web.Spock', ['header', 'cookie', 'cookies'], 'header', 'spock request header or cookie', { package: 'Spock', framework: 'spock' });

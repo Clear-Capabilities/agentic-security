@@ -1,0 +1,388 @@
+{
+  "schema": "agentic-security/language-support-measurement@2",
+  "split": "unseen-v7",
+  "measuredAt": "2026-11-15",
+  "corpusVersion": "qa001-v2",
+  "ecosystems": {
+    "haskell": {
+      "detection": {
+        "cases": 78,
+        "scored": 78,
+        "advisoryFindingsNotScored": 8,
+        "layers": {
+          "sast": {
+            "cases": 48,
+            "tp": 15,
+            "fp": 2,
+            "fn": 9,
+            "tn": 17,
+            "precision": 0.8823529411764706,
+            "recall": 0.625,
+            "f1": 0.7317073170731708,
+            "measured": true,
+            "families": {
+              "resource-limits": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "weak-randomness": {
+                "tp": 3,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "parser-safety": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "weak-password-hash": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "route-authentication": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
+                "measured": true
+              },
+              "session-cookie": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "object-authorization": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "sensitive-logging": {
+                "tp": 3,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              }
+            },
+            "misses": [
+              {
+                "case": "hs-v7-0e4371cefe",
+                "label": {
+                  "cwe": "CWE-770"
+                }
+              },
+              {
+                "case": "hs-v7-20e173a6fe",
+                "label": {
+                  "cwe": "CWE-770"
+                }
+              },
+              {
+                "case": "hs-v7-47072ec2f6",
+                "label": {
+                  "cwe": "CWE-916"
+                }
+              },
+              {
+                "case": "hs-v7-47b29826f6",
+                "label": {
+                  "cwe": "CWE-306"
+                }
+              },
+              {
+                "case": "hs-v7-74149a1360",
+                "label": {
+                  "cwe": "CWE-1004"
+                }
+              },
+              {
+                "case": "hs-v7-a5298456f4",
+                "label": {
+                  "cwe": "CWE-639"
+                }
+              },
+              {
+                "case": "hs-v7-c4652ee03e",
+                "label": {
+                  "cwe": "CWE-248"
+                }
+              },
+              {
+                "case": "hs-v7-e008eb7203",
+                "label": {
+                  "cwe": "CWE-248"
+                }
+              },
+              {
+                "case": "hs-v7-f80c03ab3d",
+                "label": {
+                  "cwe": "CWE-306"
+                }
+              }
+            ],
+            "strays": [
+              {
+                "file": "hs-v7-8801c4b5f2/src/Portal/Authenticate.hs",
+                "line": 27,
+                "cwe": "CWE-1004"
+              },
+              {
+                "file": "hs-v7-d0cdddc94b/src/Invoices/Detail.hs",
+                "line": 33,
+                "cwe": "CWE-639"
+              }
+            ],
+            "crossFamilyFindingsNotScored": 15,
+            "strict": {
+              "fp": 17,
+              "precision": 0.46875,
+              "f1": 0.5357142857142857
+            }
+          },
+          "taint": {
+            "cases": 30,
+            "tp": 10,
+            "fp": 3,
+            "fn": 5,
+            "tn": 11,
+            "precision": 0.7692307692307693,
+            "recall": 0.6666666666666666,
+            "f1": 0.7142857142857142,
+            "measured": true,
+            "families": {
+              "html-injection": {
+                "tp": 1,
+                "fp": 1,
+                "fn": 2,
+                "precision": 0.5,
+                "recall": 0.3333333333333333,
+                "f1": 0.4,
+                "measured": true
+              },
+              "sql-injection": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 1,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "ssrf": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "path-traversal": {
+                "tp": 2,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
+                "measured": true
+              },
+              "command-injection": {
+                "tp": 3,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              }
+            },
+            "misses": [
+              {
+                "case": "hs-v7-1737e21e88",
+                "label": {
+                  "cwe": "CWE-79"
+                }
+              },
+              {
+                "case": "hs-v7-25bdd5382f",
+                "label": {
+                  "cwe": "CWE-79"
+                }
+              },
+              {
+                "case": "hs-v7-32dd631eed",
+                "label": {
+                  "cwe": "CWE-89"
+                }
+              },
+              {
+                "case": "hs-v7-6d6226ddd0",
+                "label": {
+                  "cwe": "CWE-22"
+                }
+              },
+              {
+                "case": "hs-v7-9b693c32d5",
+                "label": {
+                  "cwe": "CWE-918"
+                }
+              }
+            ],
+            "strays": [
+              {
+                "file": "hs-v7-237b405902/src/Exports/Download.hs",
+                "line": 34,
+                "cwe": "CWE-22"
+              },
+              {
+                "file": "hs-v7-82ebac5d2c/src/Preview/Routes.hs",
+                "line": 31,
+                "cwe": "CWE-918"
+              },
+              {
+                "file": "hs-v7-c5ee4761f3/src/Members/Profile.hs",
+                "line": 18,
+                "cwe": "CWE-79"
+              }
+            ],
+            "crossFamilyFindingsNotScored": 3,
+            "strict": {
+              "fp": 6,
+              "precision": 0.625,
+              "f1": 0.6451612903225806
+            }
+          }
+        },
+        "perFamilyCases": {
+          "object-authorization": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "command-injection": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "resource-limits": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "weak-randomness": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "html-injection": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "parser-safety": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "route-authentication": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "path-traversal": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "sql-injection": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "weak-password-hash": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "ssrf": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "session-cookie": {
+            "vulnerable": 3,
+            "safe": 3
+          },
+          "sensitive-logging": {
+            "vulnerable": 3,
+            "safe": 3
+          }
+        },
+        "unknownOutcomes": {
+          "total": 0,
+          "disclosed": 0,
+          "withFinding": 0,
+          "silentClean": 0,
+          "requiredDisclosure": 0,
+          "requiredDisclosureMissing": 0
+        }
+      }
+    }
+  },
+  "splitRole": "generalisation",
+  "corpusTotals": {
+    "haskell": {
+      "security": {
+        "vulnerable": 260,
+        "safe": 260,
+        "unknown": 52,
+        "families": 13
+      },
+      "privacy": {
+        "positives": 100,
+        "negatives": 200
+      }
+    },
+    "nix": {
+      "security": {
+        "vulnerable": 240,
+        "safe": 240,
+        "unknown": 52,
+        "families": 12
+      },
+      "privacy": {
+        "positives": 100,
+        "negatives": 200
+      }
+    }
+  },
+  "hashes": {
+    "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
+    "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+    "shapeDev2Rollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+    "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+    "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
+    "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+    "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+    "manifestSha256": "d8e595d43b09852f5990bc16bc40db8b1b88dce3cc65786ad128b85da4dd9707"
+  }
+}

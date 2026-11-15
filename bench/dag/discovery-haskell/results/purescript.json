@@ -3,6 +3,19 @@
  "commit": "17d1ec1f587071bd44f3aae78ad6c65f0d7b9342",
  "rows": [
   {
+   "file": "src/System/IO/UTF8.hs",
+   "line": 20,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
    "file": "src/Language/PureScript/Docs/Collect.hs",
    "line": 225,
    "severity": "info",

@@ -46,13 +46,36 @@ export function identNames(e, out = new Set(), depth = 0) {
 const mentions = (e, vars) => { for (const n of identNames(e)) if (vars.has(n)) return true; return false; };
 
 /** Classify a condition over the value `vars`. -> {safeWhen, kind, families, needsCanon?, subject} | null */
-export function classifyCondition(c, vars, derived = new Set()) {
+// `inside root file` where `inside root file = root `isPrefixOf` file` (a where-bound predicate, or a top-level one): the call is its body with the
+// arguments in the parameters' places, so the classifier reads the check it stands for. One expression bodies only, one level deep.
+export function inlinePredicate(c, resolve, depth = 0) {
+  if (!c || c.kind !== 'call' || !c.hs || !c.hs.target || typeof resolve !== 'function' || depth > 2) return null;
+  const fn = resolve(c.hs.target);
+  if (!fn || !Array.isArray(fn.params) || !fn.cfg || !fn.cfg.nodes) return null;
+  const nodes = Object.values(fn.cfg.nodes).filter((n) => n && n.kind !== 'entry' && n.kind !== 'exit' && n.kind !== 'noop');
+  if (nodes.length !== 1 || nodes[0].kind !== 'return' || !nodes[0].value) return null;
+  const args = c.args || [];
+  if (args.length !== fn.params.length) return null;
+  const sub = new Map(fn.params.map((p, i) => [p, args[i]]));
+  const clone = (e, d) => {
+    if (!e || typeof e !== 'object' || d > 40) return e;
+    if (Array.isArray(e)) return e.map((x) => clone(x, d + 1));
+    if (e.kind === 'ident' && sub.has(e.name)) return sub.get(e.name);
+    const out = {};
+    for (const [k, v] of Object.entries(e)) out[k] = (v && typeof v === 'object') ? clone(v, d + 1) : v;
+    return out;
+  };
+  return clone(nodes[0].value, 0);
+}
+
+export function classifyCondition(c, vars, derived = new Set(), resolve = null) {
   if (!c || typeof c !== 'object') return null;
+  if (c.kind === 'call' && c.hs && c.hs.target && resolve) { const body = inlinePredicate(c, resolve); if (body) return classifyCondition(body, vars, derived, null); }
   // The IR lowers `&&` / `||` to a `logical` node (`and` / `or`); a `binary` node is kept for the same operators from other lowerings.
-  if (c.kind === 'logical' && (c.op === 'and' || c.op === 'or')) return classifyCondition({ kind: 'binary', op: c.op === 'and' ? '&&' : '||', left: c.left, right: c.right }, vars, derived);
+  if (c.kind === 'logical' && (c.op === 'and' || c.op === 'or')) return classifyCondition({ kind: 'binary', op: c.op === 'and' ? '&&' : '||', left: c.left, right: c.right }, vars, derived, resolve);
   if (c.kind === 'binary') {
-    if (c.op === '&&') { const a = classifyCondition(c.left, vars, derived); const b = classifyCondition(c.right, vars, derived); return [a, b].find((x) => x && x.safeWhen === true) || null; }
-    if (c.op === '||') { const a = classifyCondition(c.left, vars, derived); const b = classifyCondition(c.right, vars, derived); return [a, b].find((x) => x && x.safeWhen === false) || null; }
+    if (c.op === '&&') { const a = classifyCondition(c.left, vars, derived, resolve); const b = classifyCondition(c.right, vars, derived, resolve); return [a, b].find((x) => x && x.safeWhen === true) || null; }
+    if (c.op === '||') { const a = classifyCondition(c.left, vars, derived, resolve); const b = classifyCondition(c.right, vars, derived, resolve); return [a, b].find((x) => x && x.safeWhen === false) || null; }
     if (c.op === '==' || c.op === '===') {
       const pair = (l, r) => l && l.kind === 'call' && /(?:^|\.)takeFileName$/.test(l.callee || '') && l.args && l.args[0] && r && r.kind === 'ident' && l.args[0].kind === 'ident' && l.args[0].name === r.name && vars.has(r.name);
       if (pair(c.left, c.right) || pair(c.right, c.left)) return { safeWhen: true, kind: 'bare-filename', families: ['path'], subject: (c.left.kind === 'ident' ? c.left : c.right).name };
@@ -62,7 +85,7 @@ export function classifyCondition(c, vars, derived = new Set()) {
   if (c.kind !== 'call') return null;
   const name = c.callee || '';
   const a = c.args || [];
-  if (name === 'not' || name === 'Prelude.not') { const inner = classifyCondition(a[0], vars, derived); return inner ? { ...inner, safeWhen: !inner.safeWhen } : null; }
+  if (name === 'not' || name === 'Prelude.not') { const inner = classifyCondition(a[0], vars, derived, resolve); return inner ? { ...inner, safeWhen: !inner.safeWhen } : null; }
   if (name === 'Data.List.isInfixOf' && isStr(a[0]) && a[0].value.includes('..') && a[1] && a[1].kind === 'ident' && vars.has(a[1].name)) {
     return { safeWhen: false, kind: 'traversal-check', families: ['path'], subject: a[1].name };
   }
@@ -338,6 +361,65 @@ function allUsesEscaped(fn, e, escapers, depth = 0) {
  * Judge one finding. Mutates it when a dominating, family-appropriate guard refutes the flow.
  * @returns {{status:'refuted'|'weak-guard'|'none', guard?:object}}
  */
+// The value the sink reads was handed back by a project function that hands it over only under a guard: `resolveLog name` returns `Right full`
+// when `base isPrefixOf full` (both canonicalised) and `Left reason` otherwise, and the caller reads the file on the `Right`. The IR keeps the
+// condition of an `if` expression on the union of its branches (`hs.branchConds`), so each returned branch that carries a value is judged with
+// the condition it was returned under, in the CALLEE's own scope (its canonicalisation, its predicate helpers). Every branch carrying a value
+// must be guarded for the family; a branch that returns only literals (`Left "outside"`, `Nothing`) carries nothing.
+export function returnGuard(fn, vars, fam, perFile, resolve) {
+  const WRAP = /(?:^|\.)(?:liftIO|pure|return|lift|id|Control\.Exception\.try|try|evaluate)$/;
+  const peel = (e) => { let x = e; for (let i = 0; i < 8 && x; i++) { if (x.kind === 'call' && typeof x.callee === 'string' && WRAP.test(x.callee) && (x.args || []).length === 1) x = x.args[0]; else break; } return x; };
+  const fnByQid = (qid) => { for (const ir of Object.values(perFile || {})) { const hit = (ir.functions || []).find((x) => x.qid === qid); if (hit) return hit; } return null; };
+  for (const n of nodeList(fn)) {
+    if (n.kind !== 'assign' || !n.source || !vars.has(n.target)) continue;
+    const src = peel(n.source);
+    if (!src || src.kind !== 'call' || !src.hs || !src.hs.target) continue;
+    const callee = fnByQid(src.hs.target);
+    if (!callee || !callee.cfg) continue;
+    const calleeResolve = (qid) => fnByQid(qid);
+    const assigns = new Map();
+    for (const m of nodeList(callee)) if (m.kind === 'assign' && m.target && m.source && !assigns.has(m.target)) assigns.set(m.target, m.source);
+    let guard = null;
+    // Is every value this expression can hand back guarded? A union whose branch conditions classify as a control is judged branch by branch
+    // (a branch that carries no value, `Left "..."`, `Nothing`, needs none); a union whose conditions classify as nothing (the `case` on an
+    // `Either`, a `try`) is transparent, so each value-carrying branch must be guarded further in; anything else is guarded when every value
+    // it carries was bound to a guarded expression (followed through the callee's own bindings), and a bare value is not.
+    const guarded = (e, depth, seen) => {
+      if (!e || typeof e !== 'object' || depth > 24) return false;
+      if (e.kind === 'union' && e.hs && Array.isArray(e.hs.branchConds)) {
+        const judged = (e.branches || []).map((b, i) => {
+          const names = identNames(b);
+          const bc = e.hs.branchConds[i];
+          const cls = bc && names.size ? classifyCondition(bc.cond, names, derivedFrom(callee, names), calleeResolve) : null;
+          return { b, names, bc, cls };
+        });
+        if (judged.some((j) => j.cls)) {
+          for (const j of judged) {
+            if (!j.names.size) continue;
+            if (!j.cls || j.cls.safeWhen !== j.bc.when || !(j.cls.families.includes('*') || j.cls.families.includes(fam))) return false;
+            if (j.cls.needsCanon && !isCanonical(callee, j.cls.subject)) return false;
+            guard = guard || { kind: `guarded-return:${j.cls.kind}`, line: (j.bc.cond && j.bc.cond.line) || callee.line, subject: callee.name };
+          }
+          return true;
+        }
+        return judged.every((j) => !j.names.size || guarded(j.b, depth + 1, seen));
+      }
+      if (e.kind === 'ident') {
+        if (seen.has(e.name)) return true;
+        const bound = assigns.get(e.name);
+        if (!bound) return false;                                   // a parameter, a pattern-bound piece: a bare value
+        return guarded(bound, depth + 1, new Set([...seen, e.name]));
+      }
+      if (e.kind === 'literal') return true;
+      for (const [, c] of exprChildren(e)) if (c && typeof c === 'object' && !guarded(c, depth + 1, seen)) return false;
+      return true;
+    };
+    const returns = nodeList(callee).filter((m) => m.kind === 'return' && m.value);
+    if (returns.length && returns.every((m) => guarded(m.value, 0, new Set())) && guard) return guard;
+  }
+  return null;
+}
+
 export function judgeFinding(f, perFile) {
   const fam = FAMILY_BY_CWE[f.cwe];
   const ir = perFile && perFile[f.file];
@@ -413,15 +495,17 @@ export function judgeFinding(f, perFile) {
       findIn(argExpr, 0);
       if (calls.length && allUsesEscaped(fn, argExpr, escapers)) refuted = { kind: 'html-escaper', line: calls[0].line || fn.line, subject: calls[0].callee };
     }
+    const resolve = (qid) => ir.functions.find((x) => x.qid === qid) || null;
     for (const fact of facts) {
       if (refuted) break;
-      const cls = classifyCondition(fact.cond, vars, derived);
+      const cls = classifyCondition(fact.cond, vars, derived, resolve);
       if (!cls || cls.safeWhen !== fact.when) continue;
       if (!(cls.families.includes('*') || cls.families.includes(fam))) continue;          // wrong-context control
       if (cls.needsCanon && !isCanonical(fn, cls.subject)) { weak = { kind: cls.kind, line: fact.line || fn.line, reason: 'containment check on a path that was not canonicalised' }; continue; }
       refuted = { kind: cls.kind, line: fact.line || (fact.cond && fact.cond.line) || fn.line, subject: cls.subject };
       break;
     }
+    if (!refuted) refuted = returnGuard(fn, vars, fam, perFile, resolve);
     if (!refuted) return weak ? { status: 'weak-guard', guard: weak } : { status: 'none' };
     if (!first) first = refuted;
   }
@@ -541,11 +625,21 @@ export function waiHtmlContext(f, perFile) {
     const sites = findSites(fn, f.callee, f.line);
     if (!sites.length) continue;
     const texts = [];
+    // the header list may be a local binding, or a project constant (`apiHeaders = [(hContentType, "application/json")]`, reached through the
+    // IR's `hs.functionRef`, or by its bare name among the file's parameterless functions): its one return is the list
+    const constantOf = (e) => {
+      const qid = e.hs && e.hs.functionRef;
+      const bare = String(e.name || '').replace(/^.*\./, '');
+      const c = (qid && ir.functions.find((x) => x.qid === qid)) || ir.functions.find((x) => (!x.params || !x.params.length) && String(x.name || '').replace(/^.*\./, '') === bare && x.cfg);
+      if (!c || !c.cfg) return null;
+      const rets = Object.values(c.cfg.nodes).filter((n) => n && n.kind === 'return' && n.value);
+      return rets.length === 1 ? rets[0].value : null;
+    };
     const resolveLocal = (name) => { for (const n of nodeList(fn)) if (n.kind === 'assign' && n.target === name && n.source) return n.source; return null; };
     const visit = (e, d) => {
       if (!e || typeof e !== 'object' || d > 40) return;
       if (e.kind === 'literal' && typeof e.value === 'string') texts.push(e.value);
-      if (e.kind === 'ident' && d < 2) { const src = resolveLocal(e.name); if (src) visit(src, d + 1); }
+      if (e.kind === 'ident' && d < 2) { const src = resolveLocal(e.name) || constantOf(e); if (src) visit(src, d + 1); }
       for (const [, c] of exprChildren(e)) visit(c, d + 1);
     };
     for (const site of sites) visit((site.call.args || [])[1], 0);

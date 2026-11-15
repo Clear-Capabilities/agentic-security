@@ -153,8 +153,8 @@ then scanned again after the round-7 rule change.
 | purescript | 8 | 6 | 0 | 6 | 0 | 0 |
 | pandoc | 10 | 0 | | | | 0 |
 | duckling | 1 | 0 | | | | 0 |
-| simplex-chat | 12 | 5 | 0 | 5 | 0 | 5 |
-| **total** | **39** | **11** | **0** | **11** | **0** | **5** |
+| simplex-chat | 12 | 5 | 0 | 5 | 0 | 5 (4 after round 8) |
+| **total** | **39** | **11** | **0** | **11** | **0** | **5 (4 after round 8)** |
 
 **The six false positives are one shape:** `pwd <- getCurrentDirectory`, bound into the error pretty-printer's options so paths print relative to
 the working directory, logged with the errors; the sensitive-logging rule read the Unix "print working directory" name as a password. Round 7: a
@@ -172,6 +172,15 @@ manifest's `deferred` field (honoured by `scan.mjs`) exists for the next project
 while the sink is in the caller (two sites, one of them the existence probe before the test); and a clock read in a function named for a token
 (`takeToken`, a rate limiter; `bearerToken` twice, where the clock dates a signed JWT or a cached expiry) that is handed to a project helper or
 stored in a timestamp field, which the clock rule's time-arithmetic test does not follow (three sites).
+
+## Round 8 (0.195.44): the taint work, counted as actionable sites
+
+Round 8 read unseen-v6's taint misses (a development set from then on) and the two simplex-chat shapes above. The static-file server's `serveStatic`
+site is now proven infeasible: `judgeFinding` follows the served path back to `resolveInside` and judges the branch that returns it under its own
+canonicalised prefix check, read through the where-bound predicate. The existence probe before that check and the three clock reads stay. From this
+round the census counts ACTIONABLE sites, not `info` and not a flow the engine proved clean or infeasible (the frozen-split harness's rule since 0.195.9;
+`scan.mjs`), so a refuted finding that keeps its severity by the proof gate's design is no longer a flagged false positive here. The whole census after
+round 8: batch 1 11, batch 2 9, batch 3 13, batch 4 4; no new site anywhere.
 
 ## Limits
 
