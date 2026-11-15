@@ -1,6 +1,6 @@
 {
   "name": "@clear-capabilities/agentic-security-scanner",
-  "version": "0.195.39",
+  "version": "0.195.40",
   "description": "Scanner engine for the agentic-security Claude Code plugin: SAST, SCA with reachability and CISA KEV, secrets, IaC, Haskell and Nix/NixOS, prompt-injection, MCP/agent-tool audit, authZ analysis, SBOM, compliance attestation, and more.",
   "type": "module",
   "main": "src/index.js",
@@ -61,7 +61,7 @@
     "lodash-es": "^4.18.1"
   },
   "scripts": {
-    "build": "node scripts/vendor-java-parser.mjs && ncc build bin/agentic-security.js -o dist --minify -e web-tree-sitter -e tree-sitter-wasms -e z3-solver && rm -rf dist/compliance-frameworks && mkdir -p dist/compliance-frameworks && cp src/posture/compliance-frameworks/*.json dist/compliance-frameworks/ && node scripts/copy-frontend.mjs && mv dist/index.js dist/agentic-security.mjs && rm -f dist/package.json && chmod +x dist/agentic-security.mjs && node -e \"const fs=require('fs');const p='dist/agentic-security.mjs';const c=fs.readFileSync(p,'utf8');if(!c.startsWith('#!'))fs.writeFileSync(p,'#!/usr/bin/env node\\n'+c);\" && node -e \"const fs=require('fs');const c=require('crypto');const h=c.createHash('sha256').update(fs.readFileSync('dist/agentic-security.mjs')).digest('hex');fs.writeFileSync('dist/agentic-security.mjs.sha256',h+'  agentic-security.mjs\\n');\"",
+    "build": "node scripts/vendor-java-parser.mjs && rm -rf dist && ncc build bin/agentic-security.js -o dist --minify -e web-tree-sitter -e tree-sitter-wasms -e z3-solver && rm -rf dist/compliance-frameworks && mkdir -p dist/compliance-frameworks && cp src/posture/compliance-frameworks/*.json dist/compliance-frameworks/ && node scripts/copy-frontend.mjs && mv dist/index.js dist/agentic-security.mjs && rm -f dist/package.json && chmod +x dist/agentic-security.mjs && node -e \"const fs=require('fs');const p='dist/agentic-security.mjs';const c=fs.readFileSync(p,'utf8');if(!c.startsWith('#!'))fs.writeFileSync(p,'#!/usr/bin/env node\\n'+c);\" && node -e \"const fs=require('fs');const c=require('crypto');const h=c.createHash('sha256').update(fs.readFileSync('dist/agentic-security.mjs')).digest('hex');fs.writeFileSync('dist/agentic-security.mjs.sha256',h+'  agentic-security.mjs\\n');\"",
     "prepare": "node scripts/prepare.mjs",
     "prepublishOnly": "npm run build && node ../scripts/sync-scanner-changelog.mjs && node ../scripts/release-check.mjs",
     "test": "node ../scripts/run-unit-tests.mjs",
