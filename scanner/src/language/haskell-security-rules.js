@@ -32,6 +32,7 @@ export const RULES = Object.freeze({
   'hs-sensitive-logging': { cwe: 'CWE-532', severity: 'high', family: 'sensitive-logging', vuln: 'Sensitive value written to a log or trace', remediation: 'Do not log credentials or secrets. Log an identifier, or redact the value before it reaches the logger.' },
   'hs-insecure-cookie': { cwe: 'CWE-1004', severity: 'medium', family: 'cookie-attributes', vuln: 'Session cookie without HttpOnly or Secure', remediation: 'Set `setCookieHttpOnly = True`, `setCookieSecure = True` and `setCookieSameSite = Just sameSiteStrict` (or Lax) on a session or token cookie.' },
   'hs-unbounded-input-read': { cwe: 'CWE-770', severity: 'medium', family: 'resource-exhaustion', vuln: 'Whole input read into memory without a size limit', remediation: 'Bound the read (`BL.take n`, `hGetSome`, a request-size limit) before the data is consumed.' },
+  'hs-unbounded-decompression': { cwe: 'CWE-770', severity: 'medium', family: 'resource-exhaustion', vuln: 'Decompression of caller-supplied bytes without a size limit', remediation: 'Bound the input (reject a body over a limit) and bound the output (read the decompressed stream up to a cap, or set the decoder\'s window and buffer limits) before using the result.' },
   'hs-unbounded-allocation': { cwe: 'CWE-770', severity: 'medium', family: 'resource-exhaustion', vuln: 'Allocation sized by parsed caller text without an upper bound', remediation: 'Clamp the size (`min limit n`) before allocating.' },
   'hs-partial-function-on-input': { cwe: 'CWE-248', severity: 'low', family: 'unhandled-exception', vuln: 'Partial function applied to caller-supplied text', remediation: 'Use the total variant (`readMaybe`, `listToMaybe`, pattern matching) and handle the failure.' },
   'hs-tls-validation-disabled': { cwe: 'CWE-295', severity: 'high', family: 'tls-validation', vuln: 'TLS certificate validation is disabled', remediation: 'Do not disable certificate validation. Use the default settings (`tlsManagerSettings`, `TLSSettingsSimple False False False`, `VerifyPeer`) and, for a private certificate authority, add that authority to the trust store instead.' },
@@ -92,7 +93,8 @@ const INPUT_READS = new Set(['Prelude.getContents', 'System.IO.getContents', 'Sy
 const BOUNDING = /(?:^|\.)(?:take|takeE|isolate|hGetSome|hGet|splitAt|limit|limitedRead)$/;
 // Source provenances (haskell-models.js) that mean "the HTTP client supplied this text": a read with one of these inside a function makes the
 // value caller-supplied for the partial-function, allocation and bounding rules, whatever the function's own parameters are.
-const REQUEST_PROVENANCE = new Set(['url-param', 'path-param', 'http-body', 'header', 'cookie', 'upload']);
+// `network`: bytes from a socket, a websocket message, a queue payload, a remote response: whoever is on the other end wrote them
+const REQUEST_PROVENANCE = new Set(['url-param', 'path-param', 'http-body', 'header', 'cookie', 'upload', 'network']);
 // wai-extra's `requestSizeCheck (Just n) req` wraps the request so the body read after it fails past n bytes: a bound on every body read of the function.
 const WAI_SIZE_CHECK = /(?:^|\.)requestSizeCheck$/;
 // scotty's global body limit: `setMaxRequestBodySize kb` in the ScottyM block answers every body read of the application it builds with a 413.
@@ -111,7 +113,8 @@ function requestTextParams(ir) {
   for (let round = 0; round < 4; round++) {
     let grew = false;
     for (const fn of byQid.values()) {
-      const from = new Set(out.get(fn.qid) || []);
+      // the function's own framework-supplied parameters (`hs:handler-param:*`) are request text from the start
+      const from = new Set([...(out.get(fn.qid) || []), ...((fn.hs && fn.hs.paramSources) || []).filter((p) => /^hs:handler-param:/.test(p.decorator || '')).map((p) => p.name)]);
       for (let k = 0; k < 8; k++) {
         let g = false;
         for (const n of fnNodes(fn)) {
@@ -145,6 +148,8 @@ function requestTextParams(ir) {
 }
 // `replicateM n getLine` reads n lines: the count is an allocation (and an input loop) sized by whoever supplied n.
 const ALLOCATORS = new Set(['replicate', 'Prelude.replicate', 'Data.List.replicate', 'Data.ByteString.replicate', 'Data.ByteString.Char8.replicate', 'Data.ByteString.Lazy.replicate', 'Data.Text.replicate', 'Data.Vector.replicate', 'Control.Monad.replicateM', 'Control.Monad.replicateM_', 'Data.Vector.replicateM', 'Data.List.genericReplicate']);
+// zlib, bzlib and lzma: `decompress bytes` and `decompressWith params bytes` inflate whatever they are given; a compressed kilobyte can be gigabytes
+const DECOMPRESSORS = /^Codec\.Compression\.(?:GZip|Zlib|BZip|Lzma)\.decompress(?:With)?$/;
 const CLAMPS = /^(?:(?:Prelude|Data\.Ord)\.)?(?:min|clamp)$/;
 const PARTIAL_NAMES = ['read', 'head', 'tail', 'last', 'init', 'maximum', 'minimum', 'foldr1', 'foldl1', 'maximumBy', 'minimumBy', 'toEnum', 'succ', 'pred', 'fromJust', 'cycle'];
 const PARTIAL_MODULES = ['Prelude', 'Data.List', 'Data.Foldable', 'Data.Maybe'];
@@ -605,7 +610,8 @@ export function analyzeHaskellRules(files, opts = {}) {
       // a parameter a caller fills with request-derived text (`requestTextParams`) is caller text here too, whatever this function's own label
       const helperParams = requestParams.get(fn.qid) || new Set();
       const derivedText = new Set([...(fnHs.textParams || []).filter((n) => strongParam.has(n) || entryLike), ...(entryLike ? (fnHs.inputParams || []) : []), ...helperParams]);
-      const fromRequest = new Set(helperParams);
+      // a framework handler parameter (`hs:handler-param:*`) IS request text, as a helper parameter a caller fills with one is
+      const fromRequest = new Set([...helperParams, ...strongParam]);
       for (let round = 0; round < 8; round++) {
         let grew = false;
         for (const n of fnNodes(fn)) {
@@ -682,6 +688,26 @@ export function analyzeHaskellRules(files, opts = {}) {
       }
       const localBindings = new Set(fnNodes(fn).filter((n) => n.kind === 'assign' && typeof n.target === 'string').map((n) => n.target));
       const testedAll = withOrigins(testedVars);
+      // An irrefutable constructor pattern on a value parsed from caller text: `let Just order = decode (msgBody msg)` lowers to a member read
+      // `order = $p.Just.0` with no `<match>` on `$p` anywhere in the function (a `case` with a `Nothing` alternative has one); one malformed
+      // payload raises an uncaught exception, the same failure `fromJust` would.
+      // A `<match>` names the scrutinee as a variable (a `case` alternative) or as the lowered expression itself (a pattern guard, `| Just x <- f t`):
+      // the pattern-bound temporary is matched when its own source is that expression. A comprehension generator's pattern filters instead of
+      // failing (`hs.generator` on the element read), so a value read from one is not a crash either.
+      const matchedVars = new Set(); const matchedExprs = new Set();
+      for (const cond of condExprs) for (const x of walk(cond)) if (x.kind === 'call' && x.callee === '<match>') for (const a of x.args || []) { if (a && a.kind === 'ident') matchedVars.add(a.name); else if (a) matchedExprs.add(JSON.stringify(a)); }
+      const sourceOf = new Map(); for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source && !sourceOf.has(n.target)) sourceOf.set(n.target, n.source);
+      const fromGenerator = (e, d = 0) => !!e && d < 6 && ((e.kind === 'member' && e.hs && e.hs.generator) || (e.kind === 'member' && fromGenerator(e.object, d + 1)) || (e.kind === 'ident' && fromGenerator(sourceOf.get(e.name), d + 1)));
+      for (const n of fnNodes(fn)) {
+        if (n.kind !== 'assign' || !n.source || n.source.kind !== 'member' || !/^(?:Just|Right|Left)\.\d+$/.test(String(n.source.prop || ''))) continue;
+        const obj = n.source.object;
+        if (!obj || obj.kind !== 'ident' || matchedVars.has(obj.name)) continue;
+        const bound = sourceOf.get(obj.name);
+        if (bound && matchedExprs.has(JSON.stringify(bound))) continue;
+        if (fromGenerator(obj)) continue;
+        if (!derivedText.has(obj.name) && ![...withOrigins(new Set([obj.name]))].some((v) => derivedText.has(v))) continue;
+        emit('hs-partial-function-on-input', file, n.line, { detail: `an irrefutable \`${n.source.prop.replace(/\.\d+$/, '')}\` pattern on a value parsed from caller text`, evidence: { partial: 'irrefutable-pattern', constructor: n.source.prop.replace(/\.\d+$/, '') } });
+      }
       // `head (x : xs)`, `last (xs ++ [x])`, `head [a, b]`: the list has at least one element, so the call is total (real code: xmonad's `last (["Root"] ++ ..)`).
       const nonEmptyList = (e) => {
         if (!e || typeof e !== 'object') return false;
@@ -725,6 +751,12 @@ export function analyzeHaskellRules(files, opts = {}) {
         let root = n.source; for (let i = 0; i < 6 && root && root.kind === 'call' && typeof root.callee === 'string' && /(?:^|\.)(?:liftIO|pure|return|lift)$/.test(root.callee) && (root.args || []).length === 1; i++) root = root.args[0];
         if (root && ((root.kind === 'call' && PATH_PRODUCERS.has(root.callee)) || (root.kind === 'ident' && PATH_PRODUCERS.has(root.name)))) pathBound.add(n.target);
       }
+      // The names this function tests as a Bool (`if accepted`, `when accepted`, `unless ok`): a yes/no answer, whatever it was computed from.
+      const condIdents = new Set();
+      for (const n of fnNodes(fn)) {
+        if (n.kind === 'if' && n.cond && n.cond.kind === 'ident') condIdents.add(n.cond.name);
+        for (const root of [n.value, n.source, n.cond, ...(n.args || [])]) if (root) for (const x of walk(root)) if (x.kind === 'call' && typeof x.callee === 'string' && COND_COMBINATOR.test(x.callee) && x.args && x.args[0] && x.args[0].kind === 'ident') condIdents.add(x.args[0].name);
+      }
       const seeds = (e) => { for (const n of names(e)) if (!pathBound.has(n) && SENSITIVE.test(n.replace(/^\./, ''))) return n.replace(/^\./, ''); return null; };
       // A parameter whose declared type is a record of this project with a credential or card field (`Card { cardNumber, cardCvv }`), written
       // to a log WHOLE: `show card`, or the value spliced into the message. Handed to any other function (`masked card`) it is that function's
@@ -756,6 +788,12 @@ export function analyzeHaskellRules(files, opts = {}) {
 
         for (const root of exprs) {
           for (const e of walk(root)) {
+            // an enumeration up to a parsed caller count, `[1 .. count]` handed to `mapM`/`forM`/`replicateM`: an allocation (and a loop) the caller sizes
+            if (e.kind === 'array' && e.hs && e.hs.range && Array.isArray(e.elements) && e.elements.length >= 2) {
+              const bound = e.elements[e.elements.length - 1];
+              if (bound && mentionsText(bound) && mentionsRequest(bound) && !callsIn(bound).some((x) => CLAMPS.test(x.callee)) && ![...names(bound)].some((v) => sizeTestedVars.has(v))) emit('hs-unbounded-allocation', file, node.line, { detail: 'an enumeration sized by parsed caller text', evidence: { allocator: 'enumFromTo' } });
+              continue;
+            }
             if (e.kind === 'ident') {
               if (e.name === 'Crypto.Cipher.Types.nullIV') emit('hs-static-iv', file, node.line, { vuln: 'Static IV (nullIV)', detail: 'nullIV is a constant all-zero IV' });
               // a clock reading used as the value of a security-shaped function (a "nonce" that is the time)
@@ -915,6 +953,8 @@ export function analyzeHaskellRules(files, opts = {}) {
             // computation in a token-shaped function, not the token: Hasura's access-token refresh and its expiry sleeper)
             if (TIME_SOURCES.has(c) && SECURITY_FN.test(fnBase) && !clockOnlyInTimeArithmetic(fn, node, e)) emitRandom(line, { vuln: 'Clock value used as a security value', detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
             if (INPUT_READS.has(c) && !bounded && readsOutsideInput(fn, c, args, importsNetwork)) emit('hs-unbounded-input-read', file, line, { detail: `${c} reads everything`, confidence: 0.6 });
+            // decompression of caller-supplied bytes with no bound on the input or the output: the caller sizes the allocation (a decompression bomb)
+            if (DECOMPRESSORS.test(c) && args.length && mentionsRequest(args[args.length - 1]) && !bounded) emit('hs-unbounded-decompression', file, line, { detail: `${c} inflates caller-supplied bytes`, evidence: { decompressor: c } });
             // an allocation whose size is parsed caller text and is not clamped
             // (a number the framework parsed from the request, `n <- param "count" :: ActionM Int`, is parsed caller text too)
             if (ALLOCATORS.has(c) && args[0] && mentionsText(args[0]) && (mentionsRequest(args[0]) || callsIn(args[0]).some((x) => /(?:^|\.)(?:read|readMaybe|readEither)$/.test(x.callee))) && !callsIn(args[0]).some((x) => CLAMPS.test(x.callee)) && ![...names(args[0])].some((v) => sizeTestedVars.has(v))) {
@@ -969,6 +1009,8 @@ export function analyzeHaskellRules(files, opts = {}) {
             if (root && ((root.kind === 'binary' && ['==', '/=', '!=', '&&', '||', '<', '>', '<=', '>='].includes(root.op)) || root.kind === 'logical')) cleared = true;
             // the binding says it holds a hash or digest (`hashedPassword <- hashPassword plain`): the stored form, whatever made it
             if (HASH_NAMED.test(node.target || '')) cleared = true;
+            // the binding is later tested as a Bool (`if accepted`): it holds a yes/no answer about the credential, not its text
+            if (condIdents.has(node.target)) cleared = true;
             if (root && root.kind === 'call' && typeof root.callee === 'string' && /(?:^|\.)(?:not|elem|notElem|null|isJust|isNothing|any|all|and|or)$/.test(root.callee)) cleared = true;
             // a project helper whose every return is such an answer (`checkCredentials a = pure (user a == "x" && password a == "y")`)
             if (root && root.kind === 'call' && typeof root.callee === 'string' && returnsYesNo(fir, root.callee)) cleared = true;

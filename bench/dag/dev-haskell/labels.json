@@ -1180,6 +1180,16 @@
    "half": "verification",
    "label": "FP",
    "reason": "Not a vulnerability: the flagged identifier is a let-bound local function, not an unsafe boundary."
+  },
+  "hackage-server:src/Data/TarIndex.hs:168:hs-rule:hs-partial-function-on-input:src/Data/TarIndex.hs:168": {
+   "index": 118,
+   "project": "hackage-server",
+   "file": "src/Data/TarIndex.hs",
+   "line": 168,
+   "vuln": "Partial function applied to caller-supplied text",
+   "half": "verification",
+   "label": "FP",
+   "reason": "`let Just cids = toComponentIds pathTable path` inside the comprehension that builds the index: `pathTable` was built from the components of these same paths a few lines above, so every lookup succeeds by construction. An irrefutable pattern whose failure the surrounding code rules out; the rule cannot see the invariant."
   }
  }
 }

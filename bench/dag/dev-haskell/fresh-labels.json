@@ -2523,6 +2523,105 @@
    "project": "ihp",
    "label": "FP",
    "reason": "The aggregate of the schema compiler's cache flows, every member of which is the cache file the compiler itself wrote and reads back (the labelled `Cache.hs:45` and `SchemaCompiler.hs:360/363` sites, all low): an aggregate of false positives."
+  },
+  "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:87:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The IDE's code-generator action binds `let (Right plan) = ..Generator.buildPlan name ..` where the name is a request parameter: a name the generator rejects returns `Left`, and the irrefutable pattern raises an uncaught exception in the IDE action (the same failure the `!!` sites labelled TP have). Found in round 9 (an irrefutable constructor pattern on a value parsed from caller text)."
+  },
+  "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:103:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The IDE's code-generator action binds `let (Right plan) = ..Generator.buildPlan name ..` where the name is a request parameter: a name the generator rejects returns `Left`, and the irrefutable pattern raises an uncaught exception in the IDE action (the same failure the `!!` sites labelled TP have). Found in round 9 (an irrefutable constructor pattern on a value parsed from caller text)."
+  },
+  "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:125:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The IDE's code-generator action binds `let (Right plan) = ..Generator.buildPlan name ..` where the name is a request parameter: a name the generator rejects returns `Left`, and the irrefutable pattern raises an uncaught exception in the IDE action (the same failure the `!!` sites labelled TP have). Found in round 9 (an irrefutable constructor pattern on a value parsed from caller text)."
+  },
+  "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:147:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The IDE's code-generator action binds `let (Right plan) = ..Generator.buildPlan name ..` where the name is a request parameter: a name the generator rejects returns `Left`, and the irrefutable pattern raises an uncaught exception in the IDE action (the same failure the `!!` sites labelled TP have). Found in round 9 (an irrefutable constructor pattern on a value parsed from caller text)."
+  },
+  "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:167:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The IDE's code-generator action binds `let (Right plan) = ..Generator.buildPlan name ..` where the name is a request parameter: a name the generator rejects returns `Left`, and the irrefutable pattern raises an uncaught exception in the IDE action (the same failure the `!!` sites labelled TP have). Found in round 9 (an irrefutable constructor pattern on a value parsed from caller text)."
+  },
+  "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:179:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The IDE's code-generator action binds `let (Right plan) = ..Generator.buildPlan name ..` where the name is a request parameter: a name the generator rejects returns `Left`, and the irrefutable pattern raises an uncaught exception in the IDE action (the same failure the `!!` sites labelled TP have). Found in round 9 (an irrefutable constructor pattern on a value parsed from caller text)."
+  },
+  "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:195:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The IDE's code-generator action binds `let (Right plan) = ..Generator.buildPlan name ..` where the name is a request parameter: a name the generator rejects returns `Left`, and the irrefutable pattern raises an uncaught exception in the IDE action (the same failure the `!!` sites labelled TP have). Found in round 9 (an irrefutable constructor pattern on a value parsed from caller text)."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Columns.hs:61:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The schema-designer action binds `let (Just table) = findStatementByName tableName statements` where the table name is a request parameter: a name that is not a table in the schema returns `Nothing`, and the irrefutable pattern raises an uncaught exception in the IDE action. Found in round 9."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Policies.hs:21:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The schema-designer action binds `let (Just table) = findStatementByName tableName statements` where the table name is a request parameter: a name that is not a table in the schema returns `Nothing`, and the irrefutable pattern raises an uncaught exception in the IDE action. Found in round 9."
+  },
+  "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Tables.hs:37:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "The schema-designer action binds `let (Just table) = findStatementByName tableName statements` where the table name is a request parameter: a name that is not a table in the schema returns `Nothing`, and the irrefutable pattern raises an uncaught exception in the IDE action. Found in round 9."
+  },
+  "ihp:ihp/IHP/NameSupport.hs:280:Partial function applied to caller-supplied text": {
+   "kind": "flagged-after",
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "ihp",
+   "label": "TP",
+   "reason": "`columnNameToFieldLabel` binds `let (Right parts) = Text.Inflections.parseSnakeCase [] columnName`; the IDE's schema designer hands it column names from request parameters, and a name the inflector rejects raises an uncaught exception. Found in round 9."
   }
  }
 }

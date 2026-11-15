@@ -40,7 +40,8 @@ const PERSIST_FNS = new Set(['get', 'getBy', 'selectFirst', 'selectList', 'inser
 const GUARD_PRIMITIVES = new Set(['Yesod.Core.requireAuthId', 'Yesod.Core.requireAuth', 'Yesod.Auth.requireAuthId', 'Yesod.Auth.requireAuth', 'Yesod.requireAuthId', 'Yesod.requireAuth', 'Network.Wai.Middleware.HttpAuth.basicAuth']);
 // a header that carries the caller's credential: the standard two, and the custom names projects give a token or session header
 const CREDENTIAL_HEADER = /^(?:authorization|cookie|x-api-key|x-api-token|x-auth-token|x-auth|x-access-token|x-session(?:-(?:id|token|key))?|x-token|x-user-token|x-csrf-token|x-xsrf-token)$/i;
-const ADMIN_PATH = /(?:^|\/)(?:admin|internal|manage|superuser)(?:\/|$|:)/i;
+// a path that names administration, or the service's own settings and configuration: privileged by what it reaches, whoever the caller is
+const ADMIN_PATH = /(?:^|\/)(?:admin|internal|manage|superuser|settings|config|configuration)(?:\/|$|:)/i;
 // an authentication endpoint (sign-in, registration, password reset, logout, an OAuth callback) is public by construction
 const AUTH_ENDPOINT_PATH = /(?:^|\/)(?:login|log-in|sign-?in|sign-?up|signup|register|registration|logout|log-out|sign-?out|password\/(?:reset|forgot)|reset-password|forgot-password|password-reset|oauth|callback|token|auth|authenticate|session)(?:\/|$|:|\.)/i;
 const AUTH_ENDPOINT_NAME = /(?:login|signin|signup|register|logout|signout|resetpassword|passwordreset|forgotpassword|authenticate)/i;
@@ -741,10 +742,42 @@ function middlewareGuard(ctx, mod, expr) {
 }
 
 // ── WAI ────────────────────────────────────────────────────────────────────
+// A route written as a guard equation: `app req respond | pathInfo req == ["admin", "flush"] && requestMethod req == "POST" = ..`. The
+// conjuncts of a boolean guard are read for an equality of `pathInfo`/`rawPathInfo` with a list of string literals (the path) and of
+// `requestMethod` with a string literal (the method); a guard naming neither is not a route.
+function guardRoute(quals) {
+  let segs = null; let method = null;
+  const conj = (e, out) => { const u = unparen(e); if (!u) return out; if (u.t === 'op' && u.op === '&&') { conj(u.l, out); conj(u.r, out); } else out.push(u); return out; };
+  const headOf = (e) => { const u = unparen(e); return u && u.t === 'app' && unparen(u.f) && unparen(u.f).t === 'var' ? unparen(u.f).name : null; };
+  for (const q of quals || []) {
+    if (!q || q.t !== 'qbool') continue;
+    for (const c of conj(q.e, [])) {
+      if (c.t !== 'op' || c.op !== '==') continue;
+      for (const [a, b] of [[c.l, c.r], [c.r, c.l]]) {
+        const h = headOf(a); const v = unparen(b);
+        if ((h === 'pathInfo' || h === 'rawPathInfo') && v && v.t === 'list' && v.items.every((i) => unparen(i) && unparen(i).t === 'lit')) segs = v.items.map((i) => String(unparen(i).v));
+        if (h === 'requestMethod' && v && v.t === 'lit') method = String(v.v).toUpperCase();
+      }
+    }
+  }
+  return segs || method ? { segs, method: method || 'ANY' } : null;
+}
+
+// the variables a router clause binds (`app req respond`): the synthetic handler of a route in its body takes them as parameters
+const clauseVars = (clause) => ((clause && clause.pats) || []).map((x) => (x && x.t === 'pvar' ? x.name : null)).filter(Boolean);
+
 function waiRoutes(ctx, add) {
   for (const mod of ctx.modules) {
     for (const fun of mod.groups.funs) {
       for (const clause of fun.clauses) {
+        for (const g of (clause.rhs && clause.rhs.guards) || []) {
+          const r = guardRoute(g.quals);
+          if (!r || !g.body) continue;
+          // a guard route in a function typed `Middleware` (`answerPings lastping app req send | pathInfo req == ["_ping"] = ..`) is an intercept the
+          // middleware answers itself, not an endpoint the API declares: judged for authentication like any route, never compared with a contract
+          const sigText = ((mod.sigs && mod.sigs.get(fun.name)) || {}).text || '';
+          add({ framework: 'wai', method: r.method, path: r.segs ? `/${r.segs.join('/')}` : '<any>', file: mod.file, line: g.body.line || clause.line || fun.line, mod, handlerAst: g.body, owner: `${mod.name}.${fun.name}`, routerFn: `${mod.name}.${fun.name}`, guardRoute: true, routerParams: clauseVars(clause), conventional: /\bMiddleware\b/.test(sigText) || undefined });
+        }
         for (const n of walkAst(clause.rhs.body)) {
           if (n.t !== 'case') continue;
           const scrutText = JSON.stringify(n.scrut);
@@ -763,7 +796,7 @@ function waiRoutes(ctx, add) {
             if (pPat && pPat.t === 'plist') segs = pPat.items.map((p) => (p.t === 'plit' ? String(p.v) : ':param'));
             else if (pPat && pPat.t === 'pwild') segs = null;
             if (!segs && !(mPat && mPat.t === 'plit')) continue;   // a pure fallback alternative is not a route
-            add({ framework: 'wai', method, path: segs ? `/${segs.join('/')}` : '<any>', file: mod.file, line: alt.line || fun.line, mod, handlerAst: alt.rhs.body, owner: `${mod.name}.${fun.name}`, routerFn: `${mod.name}.${fun.name}` });
+            add({ framework: 'wai', method, path: segs ? `/${segs.join('/')}` : '<any>', file: mod.file, line: alt.line || fun.line, mod, handlerAst: alt.rhs.body, owner: `${mod.name}.${fun.name}`, routerFn: `${mod.name}.${fun.name}`, routerParams: clauseVars(clause) });
           }
         }
       }
@@ -826,7 +859,8 @@ function expandChain(chain, acc) {
   if (name === 'Capture' || name === 'Capture\'') { const nm = head.find((t) => t.t === 'str'); a.path.push(`:${nm ? nm.v : 'param'}`); a.captures.push(nm ? nm.v : 'param'); a.order.push(`capture:${nm ? nm.v : 'param'}`); }
   else if (name === 'QueryParam' || name === 'QueryParam\'' || name === 'QueryParams') { const nm = head.find((t) => t.t === 'str'); a.params.push(nm ? nm.v : '?'); a.order.push(`query:${nm ? nm.v : '?'}`); }
   else if (name === 'Header' || name === 'Header\'') { const nm = head.find((t) => t.t === 'str'); a.order.push(`header:${nm ? nm.v : '?'}`); }
-  else if (name === 'ReqBody') a.order.push('body');
+  // the body's TYPE rides along (`ReqBody '[JSON] AddressUpdate` is `body:AddressUpdate`): a record with an id field is an object selector
+  else if (name === 'ReqBody') { const ty = [...head].reverse().find((t) => t.t === 'con' && !/^(?:ReqBody|JSON|PlainText|OctetStream|FormUrlEncoded|HTML)$/.test(t.v)); a.order.push(ty ? `body:${ty.v}` : 'body'); }
   else if (name === 'BasicAuth') { a.auth = { kind: 'basic', tag: 'BasicAuth' }; a.order.push('auth'); }
   else if (name === 'AuthProtect') { const nm = head.find((t) => t.t === 'str'); a.auth = { kind: 'token', tag: nm ? nm.v : 'AuthProtect' }; a.order.push('auth'); if (nm && /admin|role|perm/i.test(nm.v)) a.role = true; }
   else if (name === 'Auth') { a.auth = { kind: 'token', tag: 'Auth' }; a.order.push('auth'); if (head.some((t) => t.t === 'con' && t.v !== 'Auth' && /admin|role|perm/i.test(t.v))) a.role = true; }   // `Auth '[JWT] Admin`: the principal type names the role, as an AuthProtect tag does
@@ -837,6 +871,28 @@ function expandChain(chain, acc) {
 function finishServant(a, head) {
   const verb = head.find((t) => t.t === 'con' && /^(?:Get|Post|Put|Delete|Patch)(?:NoContent)?$/.test(t.v));
   return { method: verb ? verb.v.replace(/NoContent$/, '').toUpperCase() : 'ANY', path: `/${a.path.join('/')}`, auth: a.auth, params: a.params, captures: a.captures, role: a.role, order: a.order };
+}
+
+// A request body whose record type (`body:AddressUpdate`) declares a field named for an id (`addressId`) selects the object the handler works on,
+// the way a `Capture "id"` does: the body parameter counts as an id variable for the object-authorization judgement.
+function bodyCarriesId(mod, kind) {
+  const m = /^body:([A-Z][\w']*)$/.exec(kind || '');
+  if (!m || !mod || !mod.cons) return false;
+  for (const c of mod.cons.values()) if (c && c.type === m[1] && (c.fields || []).some((f) => /id$/i.test(String(f)))) return true;
+  return false;
+}
+
+// From a token just after the served API's name: step past the proxy's closing parenthesis, then past `extra` whole arguments (a parenthesised
+// group or one token each; `serveWithContext`'s context), to the first token of the handler argument.
+function skipServeArgs(T, j, extra) {
+  let depth = 0;
+  // to the end of the proxy group
+  for (; j < T.length; j++) { if (T[j].t === 'sp' && T[j].v === '(') depth++; else if (T[j].t === 'sp' && T[j].v === ')') { if (depth === 0) { j++; break; } depth--; } }
+  for (let k = 0; k < extra && j < T.length; k++) {
+    if (T[j].t === 'sp' && T[j].v === '(') { let d = 0; for (; j < T.length; j++) { if (T[j].t === 'sp' && T[j].v === '(') d++; else if (T[j].t === 'sp' && T[j].v === ')') { d--; if (d === 0) { j++; break; } } } }
+    else j++;
+  }
+  return j;
 }
 
 function servantHandlers(ctx, mod, apiName) {
@@ -853,6 +909,41 @@ function servantHandlers(ctx, mod, apiName) {
     const clause = fun.clauses[0];
     const params = flat.length === 1 && clause && (clause.pats || []).length ? clause.pats.map((x) => (x && x.t === 'pvar' ? x.name : null)) : null;
     if (flat.length > 0) return { fnName: fun.name, handlers: flat, fun, params };
+  }
+  // No definition typed `Server API`: the handler is whatever the module hands to `serve (Proxy :: Proxy API) h` or `serveWithContext (Proxy ..) ctx h`
+  // (`app ref = serve (Proxy :: Proxy API) (settingsHandler ref)`), typed by its own result. A partial application names the handler function with
+  // its closure arguments supplied; the pairing from the end leaves those to the closure.
+  // The parser keeps no type annotation, so `(Proxy :: Proxy API)` is a bare `Proxy` in the tree: the API each serve call names is read from the
+  // module's tokens (`serve`, `Proxy`, `::`, `Proxy`, the API's name), and the handler is the first variable after the proxy's closing parenthesis.
+  const T = mod.parse.tokens || [];
+  const servedBy = new Set();
+  for (let i = 0; i < T.length; i++) {
+    if (T[i].t !== 'var' || !/^serve(?:WithContext)?$/.test(T[i].v)) continue;
+    let j = i + 1; let api = null; let sawProxy = false;
+    for (; j < Math.min(T.length, i + 16) && !api; j++) { if (T[j].t === 'con' && T[j].v === 'Proxy') sawProxy = true; else if (sawProxy && T[j].t === 'con') api = T[j].v; }
+    if (api !== apiName) continue;
+    j = skipServeArgs(T, j, T[i].v === 'serveWithContext' ? 1 : 0);
+    for (; j < Math.min(T.length, i + 60); j++) { if (T[j].t === 'var' && !/^serve/.test(T[j].v)) { servedBy.add(T[j].v); break; } }
+  }
+  for (const fun of servedBy.size ? mod.groups.funs : []) {
+    for (const clause of fun.clauses) {
+      for (const n of walkAst(clause.rhs && clause.rhs.body)) {
+        if (!n || n.t !== 'app') continue;
+        const h = unparen(n.f);
+        if (!h || h.t !== 'var' || !/^serve(?:WithContext)?$/.test(h.name) || (h.qual && !/^Servant/.test(h.qual))) continue;
+        const idx = h.name === 'serve' ? 1 : 2;
+        if (!n.args || n.args.length <= idx) continue;
+        const handler = unparen(n.args[idx]);
+        const hs = spine(handler); const hv = hs && hs.head && hs.head.t === 'var' ? hs.head.name : (handler.t === 'var' ? handler.name : null);
+        if (!hv || !servedBy.has(hv)) continue;
+        const sp = spine(handler);
+        const head = sp && sp.head && sp.head.t === 'var' && !sp.head.qual ? sp.head : (handler.t === 'var' && !handler.qual ? handler : null);
+        const target = head ? mod.groups.funs.find((f) => f.name === head.name) : null;
+        const clause0 = target && target.clauses[0];
+        const params = clause0 && (clause0.pats || []).length ? clause0.pats.map((x) => (x && x.t === 'pvar' ? x.name : null)) : null;
+        return { fnName: target ? target.name : '<inline>', handlers: [handler], fun: target || fun, params, viaServe: true };
+      }
+    }
   }
   return null;
 }
@@ -1033,7 +1124,10 @@ export function analyzeHaskellWeb(files, opts = {}) {
       }
     } else if (p.handlerAst) {
       const sp = spine(p.handlerAst);
-      if (p.handlerAst.t === 'var' || (sp && sp.head && sp.args.length === 0)) {
+      // a bare name, or a project function applied to its closure arguments (`settingsHandler ref`): the function is the handler, the supplied
+      // arguments are the closure the pairing from the end leaves out
+      const headFun = sp && sp.head && sp.head.t === 'var' && !sp.head.qual && sp.args.length > 0 ? p.mod.groups.funs.find((f) => f.name === sp.head.name) : null;
+      if (p.handlerAst.t === 'var' || (sp && sp.head && (sp.args.length === 0 || headFun))) {
         const head = sp ? sp.head : p.handlerAst;
         // a handler bound in the enclosing `where` (Servant servers usually are)
         const local = (p.whereDecls || []).find((d) => d.name === head.name && !head.qual);
@@ -1045,7 +1139,7 @@ export function analyzeHaskellWeb(files, opts = {}) {
           else if (q) handlerName = q.name;
         }
       } else {
-        try { handlerFn = lowerHandlerExpr(ctx.project, p.mod, p.handlerAst, `${p.framework}-${p.line}`, p.line); ctx.handlerAst.set(handlerFn, { mod: p.mod, rhss: [{ guards: null, body: p.handlerAst, where: [] }] }); handlerName = '<inline>'; if (p.handlerParams) paramNames = p.handlerParams; } catch { handlerFn = null; }
+        try { handlerFn = lowerHandlerExpr(ctx.project, p.mod, p.handlerAst, `${p.framework}-${p.line}`, p.line, p.routerParams || []); ctx.handlerAst.set(handlerFn, { mod: p.mod, rhss: [{ guards: null, body: p.handlerAst, where: [] }] }); handlerName = '<inline>'; if (p.handlerParams) paramNames = p.handlerParams; } catch { handlerFn = null; }
       }
     }
     R.handler = handlerFn ? { kind: handlerName === '<inline>' ? 'inline' : 'named', name: handlerName } : { kind: 'unknown', name: handlerName };
@@ -1066,13 +1160,13 @@ export function analyzeHaskellWeb(files, opts = {}) {
         const nm = paramNames[i + servantOffset]; if (!nm) return;
         if (kind === 'auth') o.principalVars.push(nm);
         else if (/^header:/.test(kind) && CREDENTIAL_HEADER.test(kind.slice(7))) (o.credentialParams ||= []).push({ name: nm, kind: /cookie/i.test(kind) ? 'cookie' : 'token' });
-        else if (/^(?:capture|query):.*id$/i.test(kind)) o.idVars.push(nm);
+        else if (/^(?:capture|query):.*id$/i.test(kind) || bodyCarriesId(p.mod, kind)) o.idVars.push(nm);
       });
     } else if (p.framework === 'servant') {
       o.idVars = [];
       (p.servant.order || []).forEach((kind, i) => {
         const nm = paramNames[i + servantOffset]; if (!nm) return;
-        if (/^(?:capture|query):.*id$/i.test(kind)) o.idVars.push(nm);
+        if (/^(?:capture|query):.*id$/i.test(kind) || bodyCarriesId(p.mod, kind)) o.idVars.push(nm);
         else if (/^header:/.test(kind) && CREDENTIAL_HEADER.test(kind.slice(7))) (o.credentialParams ||= []).push({ name: nm, kind: /cookie/i.test(kind) ? 'cookie' : 'token' });
       });
     }
