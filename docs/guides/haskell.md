@@ -444,7 +444,7 @@ FULL (full-source-edit): Moved 1 interpolated value(s) out of the SQL text into 
 +lookupOrder conn ref = query conn "SELECT status FROM orders WHERE ref = ?" (Only ref)
   note: Interpolated values are now bound parameters. A splice that is not a value (a table or column name, an operator, a keyword) cannot be a parameter and needs an allow-list instead.
 
-  compile was not run: GHC is not available on this host; compile verification was not performed
+  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling
 ```
 <!-- generated:fix-hs-sql:end -->
 
@@ -462,7 +462,7 @@ MITIGATION (full-source-edit): Replaced 1 sensitive log argument(s) with "[REDAC
 +logLogin user password = putStrLn ("login " ++ user ++ " password=" ++ "[REDACTED]")
   note: The redacted value no longer appears in the log; the line loses that detail.
 
-  compile was not run: GHC is not available on this host; compile verification was not performed
+  compile was not run: the original does not type-check on this host either (src/Main.hs:6:1: error: [GHC-87110]), so the patch could not be judged by compiling
 ```
 <!-- generated:fix-hs-logging:end -->
 
