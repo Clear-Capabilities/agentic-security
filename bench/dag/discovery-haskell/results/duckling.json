@@ -1,0 +1,19 @@
+{
+ "id": "duckling",
+ "commit": "59a13ff87b1aa8be6b93d387244f8636b26185c5",
+ "rows": [
+  {
+   "file": "exe/Duckling/Ranking/Generate.hs",
+   "line": 105,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  }
+ ]
+}

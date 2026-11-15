@@ -1,7 +1,7 @@
 // The release flow, as a state machine over an injected context (scripts/ship.mjs wires the real one; the tests wire a scripted one).
 // Each phase starts the moment the previous one finishes: no human or agent polling sits between a green check and the next step.
 
-import { staleVersionArtifacts, scorecardPreflight, PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm, earlyGateArgs, lateGateArgs, scratchEnv } from './lib.mjs';
+import { retryOnIndexLock, staleVersionArtifacts, scorecardPreflight, PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm, earlyGateArgs, lateGateArgs, scratchEnv } from './lib.mjs';
 
 const PKG = '@clear-capabilities/agentic-security-scanner';
 const CRED = ['-c', "credential.helper=!gh auth git-credential"];
@@ -225,7 +225,8 @@ export async function runShip(ctx, opts = {}) {
         const bad = ok.value.filter((x) => x.conclusion !== 'success' && /^ci$/i.test(x.workflowName));
         if (bad.length) throw new Stop('verify', `CI failed on the merge commit ${releaseSha.slice(0, 8)}`);
       }
-      git(['checkout', '--detach', releaseSha]);
+      // the warm gate that started at the last commit may hold the index for a moment: wait it out rather than stop (three stops in two days)
+      retryOnIndexLock(() => git(['checkout', '--detach', releaseSha]), { attempts: 120, waitMs: 5000 });
       // The gate gets an EMPTY temp directory unless the operator named one: leftover temp files from earlier runs slow the suite.
       let tmp = o.tmpdir || autoTmp;
       if (!tmp && ctx.makeTmpdir) { tmp = autoTmp = ctx.makeTmpdir(); state.set({ tmpdir: tmp }); log(`  release gate TMPDIR: ${tmp} (fresh and empty)`); }

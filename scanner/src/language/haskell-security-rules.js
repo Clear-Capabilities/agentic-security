@@ -228,6 +228,14 @@ function fnMentions(fn, re) {
   return false;
 }
 export const SENSITIVE = /(?:pass(?:word|wd|phrase)?|pwd|(?:^|[^a-z])pw(?:[^a-z]|$)|secret|token|api_?key|ssn|credit_?card|card_?number|cvv|authorization|bearer|private_?key|session_?id)/i;
+// Producers whose result is a filesystem path: a credential-shaped NAME bound from one (`pwd <- getCurrentDirectory`, the Unix "print
+// working directory" idiom) holds a path, not a password, so the sensitive-logging rule judges the producer, not the name. Module-qualified:
+// the IR qualifies a resolved library call, and an unqualified name of the same spelling is not one of these.
+const PATH_PRODUCERS = new Set([
+  'getCurrentDirectory', 'getHomeDirectory', 'getTemporaryDirectory', 'getUserDocumentsDirectory', 'getAppUserDataDirectory', 'getXdgDirectory',
+  'getXdgDirectoryList', 'canonicalizePath', 'makeAbsolute', 'makeRelativeToCurrentDirectory', 'findExecutable', 'findExecutables', 'findFile',
+  'listDirectory', 'getDirectoryContents',
+].map((n) => `System.Directory.${n}`).concat(['System.Environment.getExecutablePath', 'System.Posix.Directory.getWorkingDirectory']));
 // (a helper that keeps only a few characters of the value, `lastFour`, `last4`, `fingerprint`, `takeEnd`, is a masking helper by its name too)
 const REDACTOR = /(?:^|\.)(?:redact|mask|scrub|obfuscate|anonymi[sz]e|censor|length|null|takeEnd|fingerprint|abbreviate|truncate)$|(?:^|\.)(?:redact|mask|scrub|obfuscate|anonymi[sz]e|censor|last(?:four|4|digits|chars)|fingerprint)/i;
 
@@ -710,7 +718,14 @@ export function analyzeHaskellRules(files, opts = {}) {
       let randomEmitted = false;
       const emitRandom = (line, extra) => { if (randomEmitted) return; randomEmitted = true; emit('hs-predictable-random', file, line, extra); };
 
-      const seeds = (e) => { for (const n of names(e)) if (SENSITIVE.test(n.replace(/^\./, ''))) return n.replace(/^\./, ''); return null; };
+      // The names this function binds from a path producer (`pwd <- getCurrentDirectory`, under `liftIO`/`pure` or not): paths, whatever they are called.
+      const pathBound = new Set();
+      for (const n of fnNodes(fn)) {
+        if (n.kind !== 'assign' || typeof n.target !== 'string' || !n.source) continue;
+        let root = n.source; for (let i = 0; i < 6 && root && root.kind === 'call' && typeof root.callee === 'string' && /(?:^|\.)(?:liftIO|pure|return|lift)$/.test(root.callee) && (root.args || []).length === 1; i++) root = root.args[0];
+        if (root && ((root.kind === 'call' && PATH_PRODUCERS.has(root.callee)) || (root.kind === 'ident' && PATH_PRODUCERS.has(root.name)))) pathBound.add(n.target);
+      }
+      const seeds = (e) => { for (const n of names(e)) if (!pathBound.has(n) && SENSITIVE.test(n.replace(/^\./, ''))) return n.replace(/^\./, ''); return null; };
       // A parameter whose declared type is a record of this project with a credential or card field (`Card { cardNumber, cardCvv }`), written
       // to a log WHOLE: `show card`, or the value spliced into the message. Handed to any other function (`masked card`) it is that function's
       // result that is logged, which is judged by the names it carries, not here.
@@ -999,7 +1014,7 @@ export function analyzeHaskellRules(files, opts = {}) {
                 // (`attemptUser attempt`, lowered to a member of `attempt`) is that field, not the secret
                 if (sensitive.has(n) && !usedOnlyAsNonSensitiveField(arg, n)) hit = { ...sensitive.get(n), var: n };
                 // a name that says it holds a hash or digest of the credential (`hashedPassword`, `tokenDigest`) is the stored form, not the secret
-                else if (SENSITIVE.test(bare) && !/^[A-Z][A-Za-z0-9_.]*\./.test(n) && !HASH_NAMED.test(bare)) hit = { name: bare, low: LOW_ENTROPY.test(bare), hashed: false, var: n };
+                else if (SENSITIVE.test(bare) && !pathBound.has(n) && !/^[A-Z][A-Za-z0-9_.]*\./.test(n) && !HASH_NAMED.test(bare)) hit = { name: bare, low: LOW_ENTROPY.test(bare), hashed: false, var: n };
                 // the record itself, logged whole (`show attempt`), when one of its fields was built from a credential (`attempt.attemptPassword`)
                 else if (!sensitive.has(n)) { const field = [...sensitive.keys()].find((k) => k.startsWith(`${n}.`)); if (field && !usedOnlyAsNonSensitiveField(arg, n)) hit = { ...sensitive.get(field), name: field, var: n }; }
                 if (hit) break;

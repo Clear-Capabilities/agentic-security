@@ -375,7 +375,7 @@
    "vuln": "Path Traversal (filesystem operation)",
    "project": "hledger",
    "label": "FP",
-   "reason": "`ensureJournalFileExists f` works on the journal file the operator named (`-f`); the recorded origins are yesod request parameters because `getViewData` returns one record built from the request's query parameters AND the journal, and the engine's summary taints the whole record. Not fixed: field-sensitive return records."
+   "reason": "`ensureJournalFileExists f` works on the journal file the operator named (`-f`); the recorded origins were yesod request parameters because `getViewData` returns one record built from the request's query parameters AND the journal. Fixed in round 7: a function returning a record whose fields differ in taint (`getViewData`'s query values beside the journal) hands each field its own taint (field-sensitive return records), so the journal path read from it is clean."
   },
   "hledger:hledger/Hledger/Cli/Commands/Add.hs:570:path-traversal": {
    "parser": "IR-TAINT",
@@ -383,31 +383,31 @@
    "vuln": "Path Traversal",
    "project": "hledger",
    "label": "FP",
-   "reason": "`appendFile f` writes the operator's journal file; the path comes from the same `getViewData` record (see Read.hs:472). The CONTENT is the request's, which is the add form's purpose. Not fixed (record-return precision)."
+   "reason": "`appendFile f` writes the operator's journal file; the path came from the same `getViewData` record. The CONTENT is the request's, which is the add form's purpose. Fixed in round 7: a function returning a record whose fields differ in taint (`getViewData`'s query values beside the journal) hands each field its own taint (field-sensitive return records), so the journal path read from it is clean."
   },
   "hledger:hledger/Hledger/Cli/Utils.hs:433:path-traversal": {
    "parser": "IR-TAINT",
    "severity": "high",
    "vuln": "Path Traversal",
    "project": "hledger",
-   "label": "FP",
-   "reason": "`writeFileWithBackupIfChanged f t`: the path `f` is the journal file from the view data record, the text is the edit form's; the path is the operator's. Not fixed (record-return precision)."
+   "label": "ambiguous",
+   "reason": "`postEditR f`: the file to edit is a ROUTE PIECE (`/edit/#FilePath`), checked by `journalFile404 f j` against the journal's own file list (the handler ends with 404 otherwise) before `writeJournalTextIfValidAndChanged f newtxt` writes it; the write uses the name as given, relying on the check having passed. Ambiguous: the allow-list is real and the engine does not read a project guard that ends the handler, but the write of a request-named path after a membership check elsewhere is what the rule is for. Round 7's field-sensitive return removed the record's share of the roots; the route piece remains."
   },
   "hledger:hledger/Hledger/Cli/Utils.hs:454:path-traversal": {
    "parser": "IR-TAINT",
    "severity": "high",
    "vuln": "Path Traversal (filesystem operation)",
    "project": "hledger",
-   "label": "FP",
-   "reason": "`safeGetDirectoryContents fp` lists the journal's directory for backups, the path from the same record. Not fixed (record-return precision)."
+   "label": "ambiguous",
+   "reason": "`postEditR f`: the file to edit is a ROUTE PIECE (`/edit/#FilePath`), checked by `journalFile404 f j` against the journal's own file list (the handler ends with 404 otherwise) before `writeJournalTextIfValidAndChanged f newtxt` writes it; the write uses the name as given, relying on the check having passed. Ambiguous: the allow-list is real and the engine does not read a project guard that ends the handler, but the write of a request-named path after a membership check elsewhere is what the rule is for. Round 7's field-sensitive return removed the record's share of the roots; the route piece remains."
   },
   "hledger:hledger/Hledger/Cli/Utils.hs:450:path-traversal": {
    "parser": "IR-TAINT",
    "severity": "high",
    "vuln": "Path Traversal (copy/rename)",
    "project": "hledger",
-   "label": "FP",
-   "reason": "`copyFile fp (d </> f')` backs the journal file up beside itself, the path from the same record. Not fixed (record-return precision)."
+   "label": "ambiguous",
+   "reason": "`postEditR f`: the file to edit is a ROUTE PIECE (`/edit/#FilePath`), checked by `journalFile404 f j` against the journal's own file list (the handler ends with 404 otherwise) before `writeJournalTextIfValidAndChanged f newtxt` writes it; the write uses the name as given, relying on the check having passed. Ambiguous: the allow-list is real and the engine does not read a project guard that ends the handler, but the write of a request-named path after a membership check elsewhere is what the rule is for. Round 7's field-sensitive return removed the record's share of the roots; the route piece remains."
   },
   "hledger:hledger-web/Hledger/Web/Settings.hs:93:path-traversal": {
    "parser": "IR-TAINT",
@@ -632,6 +632,94 @@
    "project": "graphql-engine",
    "label": "FP",
    "reason": "As API.hs:134. Fixed in round 6."
+  },
+  "purescript:app/Command/Compile.hs:45:Sensitive value written to a log or trace": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Sensitive value written to a log or trace",
+   "project": "purescript",
+   "label": "FP",
+   "reason": "`pwd <- getCurrentDirectory` names the working directory (the Unix idiom), bound into the pretty-printer options as `ppeRelativeDirectory` so error paths print relative to it; the rule read the name as a password. Fixed in round 7: a credential-shaped name bound from a path producer (`PATH_PRODUCERS`) holds a path, not a credential, so it neither seeds a binding nor is reported at a log sink."
+  },
+  "purescript:app/Command/Compile.hs:48:Sensitive value written to a log or trace": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Sensitive value written to a log or trace",
+   "project": "purescript",
+   "label": "FP",
+   "reason": "`pwd <- getCurrentDirectory` names the working directory (the Unix idiom), bound into the pretty-printer options as `ppeRelativeDirectory` so error paths print relative to it; the rule read the name as a password. Fixed in round 7: a credential-shaped name bound from a path producer (`PATH_PRODUCERS`) holds a path, not a credential, so it neither seeds a binding nor is reported at a log sink."
+  },
+  "purescript:app/Command/Graph.hs:72:Sensitive value written to a log or trace": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Sensitive value written to a log or trace",
+   "project": "purescript",
+   "label": "FP",
+   "reason": "`pwd <- getCurrentDirectory` names the working directory (the Unix idiom), bound into the pretty-printer options as `ppeRelativeDirectory` so error paths print relative to it; the rule read the name as a password. Fixed in round 7: a credential-shaped name bound from a path producer (`PATH_PRODUCERS`) holds a path, not a credential, so it neither seeds a binding nor is reported at a log sink."
+  },
+  "purescript:app/Command/Graph.hs:75:Sensitive value written to a log or trace": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Sensitive value written to a log or trace",
+   "project": "purescript",
+   "label": "FP",
+   "reason": "`pwd <- getCurrentDirectory` names the working directory (the Unix idiom), bound into the pretty-printer options as `ppeRelativeDirectory` so error paths print relative to it; the rule read the name as a password. Fixed in round 7: a credential-shaped name bound from a path producer (`PATH_PRODUCERS`) holds a path, not a credential, so it neither seeds a binding nor is reported at a log sink."
+  },
+  "purescript:app/Command/REPL.hs:156:Sensitive value written to a log or trace": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Sensitive value written to a log or trace",
+   "project": "purescript",
+   "label": "FP",
+   "reason": "`pwd <- getCurrentDirectory` names the working directory (the Unix idiom), bound into the pretty-printer options as `ppeRelativeDirectory` so error paths print relative to it; the rule read the name as a password. Fixed in round 7: a credential-shaped name bound from a path producer (`PATH_PRODUCERS`) holds a path, not a credential, so it neither seeds a binding nor is reported at a log sink."
+  },
+  "purescript:src/Language/PureScript/Interactive.hs:50:Sensitive value written to a log or trace": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Sensitive value written to a log or trace",
+   "project": "purescript",
+   "label": "FP",
+   "reason": "`pwd <- getCurrentDirectory` names the working directory (the Unix idiom), bound into the pretty-printer options as `ppeRelativeDirectory` so error paths print relative to it; the rule read the name as a password. Fixed in round 7: a credential-shaped name bound from a path producer (`PATH_PRODUCERS`) holds a path, not a credential, so it neither seeds a binding nor is reported at a log sink."
+  },
+  "simplex-chat:apps/simplex-badge-service/src/BadgeService/Web/Server.hs:300:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (file served from a request-chosen path)",
+   "project": "simplex-chat",
+   "label": "FP",
+   "reason": "`serveStatic` serves only the path `resolveInside` hands back, and `resolveInside` returns `Just (root, file)` only when both are canonicalised (`canonicalizePath`) and `inside root file` holds, a prefix test with the separator appended (the project comment says why a `..` test would not do). The guard the classifier already knows (containment on a canonicalised path), but it dominates the callee's RETURN and the sink is in the caller, and the test is a where-bound predicate helper rather than `isPrefixOf` written in the condition. Not changed in round 7; the two mechanisms (a guard-dominated return is a sanitised return; a predicate helper is its body) are round 8's."
+  },
+  "simplex-chat:apps/simplex-badge-service/src/BadgeService/Web/Server.hs:370:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "simplex-chat",
+   "label": "FP",
+   "reason": "`doesFileExist file` on the canonicalised request path before the containment test. An existence probe outside the tree is not observable: `Nothing` (404) is the answer both when the file is missing and when it is outside the root, and nothing is read. Not changed."
+  },
+  "simplex-chat:apps/simplex-badge-service/src/BadgeService/Web/Server.hs:144:Clock value used as a security value": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Clock value used as a security value",
+   "project": "simplex-chat",
+   "label": "FP",
+   "reason": "`takeToken` is a rate limiter (a token-bucket token, not a credential): `now` is compared with bucket starts (`fresh`, `diffUTCTime`), stored as a bucket start and handed to the helpers `reclaim` and `takeFrom`, which only compare and subtract it. The rule accepts time arithmetic in the function itself; a clock passed to a project helper, or stored in a timestamp field, is not followed. Not changed."
+  },
+  "simplex-chat:apps/simplex-badge-service/src/BadgeService/StoreReceipts/Apple.hs:267:Clock value used as a security value": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Clock value used as a security value",
+   "project": "simplex-chat",
+   "label": "FP",
+   "reason": "`bearerToken` compares `now` with the cached token's expiry and hands it to `signedApiToken`, where it becomes the `iat`/`exp` claims of an ES256-signed JWT: the clock is a timestamp inside a signed structure, not the token's unpredictable value. The rule does not follow the clock into a project callee or past a signing call. Not changed."
+  },
+  "simplex-chat:apps/simplex-badge-service/src/BadgeService/StoreReceipts/Google.hs:281:Clock value used as a security value": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Clock value used as a security value",
+   "project": "simplex-chat",
+   "label": "FP",
+   "reason": "`bearerToken` compares `now` with the cached token's expiry and hands it to `requestAccessToken`, where it dates the signed service-account assertion and the cached expiry (`addUTCTime`); the bearer itself comes from Google's response. Same shape as the Apple site. Not changed."
   }
  }
 }

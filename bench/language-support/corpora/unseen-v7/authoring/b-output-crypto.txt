@@ -1,0 +1,797 @@
+@@@ weak-password-hash | vulnerable | app/OperatorAdd.hs
+module Main (main) where
+
+import Crypto.Hash.MD5 (hash)
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as BC
+import Database.SQLite.Simple
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [login] -> addOperator login
+    _ -> hPutStrLn stderr "usage: operator-add <login>" >> exitFailure
+
+addOperator :: String -> IO ()
+addOperator login = do
+  putStr "Password: " >> hFlush stdout
+  hSetEcho stdin False
+  pw <- BC.getLine
+  hSetEcho stdin True
+  putStrLn ""
+  conn <- open "operators.db"
+  execute conn "INSERT INTO operators (login, password_hash) VALUES (?, ?)" (login, digest pw)
+  close conn
+  putStrLn ("operator " ++ login ++ " created")
+
+digest :: BC.ByteString -> BC.ByteString
+digest = B16.encode . hash --@@
+
+@@@ weak-password-hash | vulnerable | src/Accounts/Register.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Accounts.Register (RegisterApi, registerServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.Hash (SHA256(..), hashWith)
+import Data.Aeson (FromJSON)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import Database.PostgreSQL.Simple
+import GHC.Generics (Generic)
+import Servant
+
+data Registration = Registration
+  { email    :: Text
+  , password :: Text
+  } deriving (Generic)
+
+instance FromJSON Registration
+
+type RegisterApi = "accounts" :> ReqBody '[JSON] Registration :> PostNoContent
+
+registerServer :: Connection -> Server RegisterApi
+registerServer conn reg = do
+  _ <- liftIO (execute conn "INSERT INTO accounts (email, password_hash) VALUES (?, ?)" (email reg, storedHash (password reg)))
+  pure NoContent
+
+storedHash :: Text -> Text
+storedHash pw = T.pack (show (hashWith SHA256 (TE.encodeUtf8 pw))) --@@
+
+@@@ weak-password-hash | vulnerable | src/Portal/Login.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Portal.Login (loginRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.Hash.Algorithms (SHA256(..))
+import qualified Crypto.KDF.PBKDF2 as PBKDF2
+import Data.ByteArray (constEq)
+import Data.ByteString (ByteString)
+import qualified Data.Text.Encoding as TE
+import Network.HTTP.Types.Status (status401)
+import Web.Spock
+
+import Portal.Accounts (Account(..), lookupAccount)
+
+loginRoutes :: SpockM () () () ()
+loginRoutes =
+  post "login" $ do
+    login <- param' "login"
+    pw <- param' "password"
+    found <- liftIO (lookupAccount login)
+    case found of
+      Just acct | derive (TE.encodeUtf8 pw) (accountSalt acct) `constEq` accountHash acct ->
+        text "welcome"
+      _ -> setStatus status401 >> text "login failed"
+
+derive :: ByteString -> ByteString -> ByteString
+derive pw salt = PBKDF2.generate (PBKDF2.prfHMAC SHA256) (PBKDF2.Parameters 10 32) pw salt --@@
+
+@@@ weak-password-hash | safe | src/Accounts/Signup.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Accounts.Signup (signupRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.BCrypt (hashPasswordUsingPolicy, slowerBcryptHashingPolicy)
+import Data.Aeson (object, (.=))
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status500)
+import Web.Scotty
+
+signupRoutes :: Connection -> ScottyM ()
+signupRoutes conn =
+  post "/accounts" $ do
+    email <- param "email"
+    pw <- param "password"
+    hashed <- liftIO (hashPasswordUsingPolicy slowerBcryptHashingPolicy (TE.encodeUtf8 (TL.toStrict pw))) --@@
+    case hashed of
+      Nothing -> status status500 >> text "could not create account"
+      Just h -> do
+        _ <- liftIO (execute conn "INSERT INTO accounts (email, password_hash) VALUES (?, ?)" (TL.toStrict email, h))
+        json (object ["created" .= TL.toStrict email])
+
+@@@ weak-password-hash | safe | src/Handler/Signin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Handler.Signin (postSigninR) where
+
+import Crypto.Scrypt (EncryptedPass(..), Pass(..), verifyPass')
+import qualified Data.Text.Encoding as TE
+import Database.Persist (Entity(..), getBy)
+import Yesod.Core
+import Yesod.Form (ireq, passwordField, runInputPost, textField)
+import Yesod.Persist (runDB)
+
+import Foundation
+import Model
+
+postSigninR :: Handler Value
+postSigninR = do
+  login <- runInputPost (ireq textField "login")
+  pw <- runInputPost (ireq passwordField "password")
+  found <- runDB (getBy (UniqueOperatorLogin login))
+  case found of
+    Just (Entity oid op)
+      | verifyPass' (Pass (TE.encodeUtf8 pw)) (EncryptedPass (operatorPassword op)) -> do --@@
+          setSession "operator" (toPathPiece oid)
+          returnJson (object ["signedIn" .= True])
+    _ -> permissionDenied "login failed"
+
+@@@ weak-password-hash | safe | app/ClinicianAdd.hs
+module Main (main) where
+
+import Crypto.PasswordStore (makePassword)
+import qualified Data.ByteString.Char8 as BC
+import Database.SQLite.Simple
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [login, ward] -> addClinician login ward
+    _ -> hPutStrLn stderr "usage: clinician-add <login> <ward>" >> exitFailure
+
+readPassword :: IO BC.ByteString
+readPassword = do
+  putStr "Password: " >> hFlush stdout
+  hSetEcho stdin False
+  pw <- BC.getLine
+  hSetEcho stdin True
+  putStrLn ""
+  pure pw
+
+addClinician :: String -> String -> IO ()
+addClinician login ward = do
+  pw <- readPassword
+  stored <- makePassword pw 17 --@@
+  conn <- open "clinicians.db"
+  execute conn "INSERT INTO clinicians (login, ward, password_hash) VALUES (?, ?, ?)" (login, ward, stored)
+  close conn
+  putStrLn ("clinician " ++ login ++ " added to " ++ ward)
+
+@@@ weak-randomness | vulnerable | src/Accounts/Reset.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Accounts.Reset (ResetApi, resetServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Database.PostgreSQL.Simple
+import Servant
+import System.Random (randomRIO)
+
+import Mail (sendResetMail)
+
+type ResetApi =
+  "accounts" :> "reset" :> ReqBody '[JSON] Text :> PostNoContent
+
+resetServer :: Connection -> Server ResetApi
+resetServer conn email = do
+  code <- liftIO (randomRIO (100000, 999999 :: Int)) --@@
+  let codeText = T.pack (show code)
+  _ <- liftIO (execute conn "INSERT INTO reset_codes (email, code, issued_at) VALUES (?, ?, now())" (email, codeText))
+  liftIO (sendResetMail email codeText)
+  pure NoContent
+
+@@@ weak-randomness | vulnerable | src/Portal/Session.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Portal.Session (loginHandler) where
+
+import Control.Monad (replicateM)
+import Control.Monad.IO.Class (liftIO)
+import Crypto.BCrypt (validatePassword)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as BC
+import Snap.Core
+import System.Random.MWC (createSystemRandom, uniformR)
+
+import Portal.Accounts (Account(..), lookupAccount, storeSession)
+
+loginHandler :: Snap ()
+loginHandler = do
+  login <- getPostParam "login"
+  pw <- getPostParam "password"
+  found <- maybe (pure Nothing) (liftIO . lookupAccount) login
+  case (found, pw) of
+    (Just acct, Just p) | validatePassword (accountHash acct) p -> do
+      token <- liftIO newSessionToken
+      liftIO (storeSession (accountId acct) token)
+      modifyResponse (setContentType "application/json")
+      writeBS (BC.concat ["{\"token\":\"", token, "\"}"])
+    _ -> do
+      modifyResponse (setResponseStatus 401 "Unauthorized")
+      writeBS "login failed"
+
+newSessionToken :: IO BS.ByteString
+newSessionToken = do
+  gen <- createSystemRandom
+  bytes <- replicateM 32 (uniformR (0, 255 :: Int) gen) --@@
+  pure (B16.encode (BS.pack (map fromIntegral bytes)))
+
+@@@ weak-randomness | vulnerable | app/IssueApiKey.hs
+module Main (main) where
+
+import Data.Time.Clock.POSIX (getPOSIXTime)
+import Database.SQLite.Simple
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
+import System.Random (mkStdGen, randomRs)
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [partner] -> issue partner
+    _ -> hPutStrLn stderr "usage: issue-api-key <partner>" >> exitFailure
+
+issue :: String -> IO ()
+issue partner = do
+  key <- take 40 . randomRs ('a', 'z') . mkStdGen . round <$> getPOSIXTime --@@
+  conn <- open "partners.db"
+  execute conn "INSERT INTO api_keys (partner, key, created_at) VALUES (?, ?, datetime('now'))" (partner, key)
+  close conn
+  putStrLn ("key for " ++ partner ++ ": " ++ key)
+
+@@@ weak-randomness | safe | src/Accounts/ResetLink.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Accounts.ResetLink (ResetApi, resetServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Base16 as B16
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Database.PostgreSQL.Simple
+import Servant
+import System.Entropy (getEntropy)
+
+import Mail (sendResetMail)
+
+type ResetApi =
+  "accounts" :> "reset" :> ReqBody '[JSON] Text :> PostNoContent
+
+resetServer :: Connection -> Server ResetApi
+resetServer conn email = do
+  token <- liftIO (TE.decodeUtf8 . B16.encode <$> getEntropy 24) --@@
+  _ <- liftIO (execute conn "INSERT INTO reset_tokens (email, token, issued_at) VALUES (?, ?, now())" (email, token))
+  liftIO (sendResetMail email ("https://portal.example/reset/" <> token))
+  pure NoContent
+
+@@@ weak-randomness | safe | src/Portal/SessionStart.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Portal.SessionStart (loginHandler) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.BCrypt (validatePassword)
+import Crypto.Random (getRandomBytes)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64.URL as B64
+import qualified Data.ByteString.Char8 as BC
+import Snap.Core
+
+import Portal.Accounts (Account(..), lookupAccount, storeSession)
+
+loginHandler :: Snap ()
+loginHandler = do
+  login <- getPostParam "login"
+  pw <- getPostParam "password"
+  found <- maybe (pure Nothing) (liftIO . lookupAccount) login
+  case (found, pw) of
+    (Just acct, Just p) | validatePassword (accountHash acct) p -> do
+      token <- liftIO newSessionToken
+      liftIO (storeSession (accountId acct) token)
+      modifyResponse (setContentType "application/json")
+      writeBS (BC.concat ["{\"token\":\"", token, "\"}"])
+    _ -> do
+      modifyResponse (setResponseStatus 401 "Unauthorized")
+      writeBS "login failed"
+
+newSessionToken :: IO BS.ByteString
+newSessionToken = do
+  bytes <- getRandomBytes 32 :: IO BS.ByteString --@@
+  pure (B64.encodeUnpadded bytes)
+
+@@@ weak-randomness | safe | app/MintApiKey.hs
+module Main (main) where
+
+import Crypto.Random (drgNew, randomBytesGenerate)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as BC
+import Database.SQLite.Simple
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [partner] -> mint partner
+    _ -> hPutStrLn stderr "usage: mint-api-key <partner>" >> exitFailure
+
+newKey :: IO BS.ByteString
+newKey = do
+  drg <- drgNew
+  let (bytes, _) = randomBytesGenerate 30 drg --@@
+  pure (B16.encode bytes)
+
+mint :: String -> IO ()
+mint partner = do
+  key <- newKey
+  conn <- open "partners.db"
+  execute conn "INSERT INTO api_keys (partner, key, created_at) VALUES (?, ?, datetime('now'))" (partner, key)
+  close conn
+  putStrLn ("key for " ++ partner ++ ": " ++ BC.unpack key)
+
+@@@ sensitive-logging | vulnerable | src/Gateway/BasicAuth.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Gateway.BasicAuth (withOperatorAuth) where
+
+import Crypto.BCrypt (validatePassword)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64 as B64
+import qualified Data.ByteString.Char8 as BC
+import Network.HTTP.Types (hAuthorization, status401)
+import Network.Wai
+import System.IO (hPutStrLn, stderr)
+
+import Gateway.Operators (operatorHash)
+
+withOperatorAuth :: Middleware
+withOperatorAuth app req respond =
+  case credentials req of
+    Just (user, pw) -> do
+      stored <- operatorHash user
+      case stored of
+        Just h | validatePassword h pw -> app req respond
+        _ -> do
+          hPutStrLn stderr ("operator login failed: " ++ BC.unpack user ++ " / " ++ BC.unpack pw) --@@
+          reject
+    Nothing -> reject
+  where
+    reject = respond (responseLBS status401 [("WWW-Authenticate", "Basic realm=\"gateway\"")] "")
+
+credentials :: Request -> Maybe (BS.ByteString, BS.ByteString)
+credentials req = do
+  header <- lookup hAuthorization (requestHeaders req)
+  encoded <- BS.stripPrefix "Basic " header
+  let (user, rest) = BC.break (== ':') (B64.decodeLenient encoded)
+  if BS.null rest then Nothing else Just (user, BS.drop 1 rest)
+
+@@@ sensitive-logging | vulnerable | src/Shipments/Api.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Shipments.Api (ShipmentApi, shipmentServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Logger (logInfoN, runStdoutLoggingT)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Servant
+
+import Shipments.Store (Shipment, listShipments)
+import Tokens (tokenValid)
+
+type ShipmentApi =
+  "shipments" :> Header' '[Required] "Authorization" Text :> Get '[JSON] [Shipment]
+
+shipmentServer :: Server ShipmentApi
+shipmentServer authHeader = do
+  let token = T.strip (T.replace "Bearer" "" authHeader)
+  ok <- liftIO (checkToken token)
+  if ok then liftIO listShipments else throwError err401
+
+checkToken :: Text -> IO Bool
+checkToken token = runStdoutLoggingT $ do
+  logInfoN ("verifying bearer token " <> token) --@@
+  liftIO (tokenValid token)
+
+@@@ sensitive-logging | vulnerable | app/ChargeWorker.hs
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
+
+import Control.Monad (forM_)
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON, eitherDecodeStrict)
+import qualified Data.ByteString.Char8 as BC
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Katip
+import System.IO (stdout)
+
+import Payments (submitCharge)
+
+data Charge = Charge
+  { cardNumber :: Text
+  , amountCents :: Int
+  , invoiceRef :: Text
+  } deriving (Generic)
+
+instance FromJSON Charge
+
+main :: IO ()
+main = do
+  scribe <- mkHandleScribe ColorIfTerminal stdout (permitItem InfoS) V2
+  env <- registerScribe "stdout" scribe defaultScribeSettings =<< initLogEnv "charge-worker" "production"
+  lines' <- BC.lines <$> BC.getContents
+  runKatipContextT env () "charges" $
+    forM_ lines' $ \line ->
+      case eitherDecodeStrict line of
+        Left err -> logFM ErrorS (ls ("unreadable charge: " ++ err))
+        Right charge -> process charge
+
+process :: Charge -> KatipContextT IO ()
+process charge = do
+  logFM InfoS (ls ("charging card " <> cardNumber charge <> " for invoice " <> invoiceRef charge)) --@@
+  liftIO (submitCharge (cardNumber charge) (amountCents charge))
+
+@@@ sensitive-logging | safe | src/Gateway/OperatorAuth.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Gateway.OperatorAuth (withOperatorAuth) where
+
+import Crypto.BCrypt (validatePassword)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64 as B64
+import qualified Data.ByteString.Char8 as BC
+import Network.HTTP.Types (hAuthorization, status401)
+import Network.Wai
+import System.IO (hPutStrLn, stderr)
+
+import Gateway.Operators (operatorHash)
+
+withOperatorAuth :: Middleware
+withOperatorAuth app req respond =
+  case credentials req of
+    Just (user, pw) -> do
+      stored <- operatorHash user
+      case stored of
+        Just h | validatePassword h pw -> app req respond
+        _ -> do
+          hPutStrLn stderr ("operator login failed for " ++ BC.unpack user ++ " from " ++ show (remoteHost req)) --@@
+          reject
+    Nothing -> reject
+  where
+    reject = respond (responseLBS status401 [("WWW-Authenticate", "Basic realm=\"gateway\"")] "")
+
+credentials :: Request -> Maybe (BS.ByteString, BS.ByteString)
+credentials req = do
+  header <- lookup hAuthorization (requestHeaders req)
+  encoded <- BS.stripPrefix "Basic " header
+  let (user, rest) = BC.break (== ':') (B64.decodeLenient encoded)
+  if BS.null rest then Nothing else Just (user, BS.drop 1 rest)
+
+@@@ sensitive-logging | safe | src/Shipments/Listing.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Shipments.Listing (ShipmentApi, shipmentServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Logger (logInfoN, runStdoutLoggingT)
+import Crypto.Hash (SHA256(..), hashWith)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import Servant
+
+import Shipments.Store (Shipment, listShipments)
+import Tokens (tokenValid)
+
+type ShipmentApi =
+  "shipments" :> Header' '[Required] "Authorization" Text :> Get '[JSON] [Shipment]
+
+-- a short identifier for a token that does not reveal the token itself
+fingerprint :: Text -> Text
+fingerprint = T.take 12 . T.pack . show . hashWith SHA256 . TE.encodeUtf8
+
+shipmentServer :: Server ShipmentApi
+shipmentServer authHeader = do
+  let token = T.strip (T.replace "Bearer" "" authHeader)
+  ok <- liftIO (checkToken token)
+  if ok then liftIO listShipments else throwError err401
+
+checkToken :: Text -> IO Bool
+checkToken token = runStdoutLoggingT $ do
+  logInfoN ("verifying bearer token " <> fingerprint token) --@@
+  liftIO (tokenValid token)
+
+@@@ sensitive-logging | safe | app/SettlementWorker.hs
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
+
+import Control.Monad (forM_)
+import Data.Aeson (FromJSON, eitherDecodeStrict)
+import qualified Data.ByteString.Char8 as BC
+import Data.Text (Text)
+import qualified Data.Text as T
+import GHC.Generics (Generic)
+import System.Log.FastLogger
+
+import Payments (submitCharge)
+
+data Charge = Charge
+  { cardNumber :: Text
+  , amountCents :: Int
+  , invoiceRef :: Text
+  } deriving (Generic)
+
+instance FromJSON Charge
+
+main :: IO ()
+main = do
+  logger <- newStdoutLoggerSet defaultBufSize
+  lines' <- BC.lines <$> BC.getContents
+  forM_ lines' $ \line ->
+    case eitherDecodeStrict line of
+      Left err -> pushLogStrLn logger (toLogStr ("unreadable charge: " ++ err))
+      Right charge -> process logger charge
+  flushLogStr logger
+
+process :: LoggerSet -> Charge -> IO ()
+process logger charge = do
+  pushLogStrLn logger (toLogStr ("charging card ending " <> T.takeEnd 4 (cardNumber charge) <> " for invoice " <> invoiceRef charge)) --@@
+  submitCharge (cardNumber charge) (amountCents charge)
+
+@@@ session-cookie | vulnerable | src/Portal/SignIn.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Portal.SignIn (signInRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.BCrypt (validatePassword)
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Lazy as TL
+import Network.HTTP.Types.Status (status401)
+import System.Entropy (getEntropy)
+import Web.Scotty
+import Web.Scotty.Cookie (setSimpleCookie)
+
+import Portal.Accounts (Account(..), lookupAccount, storeSession)
+
+signInRoutes :: ScottyM ()
+signInRoutes =
+  post "/signin" $ do
+    login <- param "login"
+    pw <- param "password"
+    found <- liftIO (lookupAccount (TL.toStrict login))
+    case found of
+      Just acct | validatePassword (accountHash acct) (TE.encodeUtf8 (TL.toStrict pw)) -> do
+        token <- liftIO (TE.decodeUtf8 . B16.encode <$> getEntropy 32)
+        liftIO (storeSession (accountId acct) token)
+        setSimpleCookie "session" token --@@
+        redirect "/dashboard"
+      _ -> status status401 >> text "login failed"
+
+@@@ session-cookie | vulnerable | src/Clinic/Login.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Clinic.Login (LoginApi, loginServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.BCrypt (validatePassword)
+import Crypto.Random (getRandomBytes)
+import Data.Aeson (FromJSON)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64.URL as B64
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import GHC.Generics (Generic)
+import Servant
+import Web.Cookie
+
+import Clinic.Staff (Staff(..), lookupStaff, storeSession)
+
+data Credentials = Credentials { login :: Text, password :: Text } deriving (Generic)
+
+instance FromJSON Credentials
+
+type LoginApi =
+  "login" :> ReqBody '[JSON] Credentials
+          :> Post '[JSON] (Headers '[Header "Set-Cookie" SetCookie] NoContent)
+
+loginServer :: Server LoginApi
+loginServer creds = do
+  found <- liftIO (lookupStaff (login creds))
+  case found of
+    Just s | validatePassword (staffHash s) (TE.encodeUtf8 (password creds)) -> do
+      raw <- liftIO (getRandomBytes 32 :: IO BS.ByteString)
+      let token = B64.encodeUnpadded raw
+      liftIO (storeSession (staffId s) token)
+      let cookie = defaultSetCookie { setCookieName = "sid", setCookieValue = token, setCookiePath = Just "/" }
+      pure (addHeader cookie NoContent) --@@
+    _ -> throwError err401
+
+@@@ session-cookie | vulnerable | src/Badges/Session.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Badges.Session (badgeLoginHandler) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.BCrypt (validatePassword)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
+import Snap.Core
+import System.Entropy (getEntropy)
+
+import Badges.Holders (Holder(..), lookupHolder, storeSession)
+
+badgeLoginHandler :: Snap ()
+badgeLoginHandler = do
+  serial <- getPostParam "serial"
+  pin <- getPostParam "pin"
+  found <- maybe (pure Nothing) (liftIO . lookupHolder) serial
+  case (found, pin) of
+    (Just holder, Just p) | validatePassword (holderPinHash holder) p -> do
+      token <- liftIO (B16.encode <$> getEntropy 32)
+      liftIO (storeSession (holderId holder) token)
+      modifyResponse (addResponseCookie (sessionCookie token)) --@@
+      writeBS "badge session opened"
+    _ -> do
+      modifyResponse (setResponseStatus 401 "Unauthorized")
+      writeBS "pin not accepted"
+
+sessionCookie :: BS.ByteString -> Cookie
+sessionCookie token = Cookie
+  { cookieName = "badge_session"
+  , cookieValue = token
+  , cookieExpires = Nothing
+  , cookieDomain = Nothing
+  , cookiePath = Just "/"
+  , cookieSecure = False
+  , cookieHttpOnly = False
+  }
+
+@@@ session-cookie | safe | src/Portal/Authenticate.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Portal.Authenticate (authRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.BCrypt (validatePassword)
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Lazy as TL
+import Network.HTTP.Types.Status (status401)
+import System.Entropy (getEntropy)
+import Web.Cookie (sameSiteLax, setCookieHttpOnly, setCookieSameSite, setCookieSecure)
+import Web.Scotty
+import Web.Scotty.Cookie (makeSimpleCookie, setCookie)
+
+import Portal.Accounts (Account(..), lookupAccount, storeSession)
+
+authRoutes :: ScottyM ()
+authRoutes =
+  post "/signin" $ do
+    login <- param "login"
+    pw <- param "password"
+    found <- liftIO (lookupAccount (TL.toStrict login))
+    case found of
+      Just acct | validatePassword (accountHash acct) (TE.encodeUtf8 (TL.toStrict pw)) -> do
+        token <- liftIO (TE.decodeUtf8 . B16.encode <$> getEntropy 32)
+        liftIO (storeSession (accountId acct) token)
+        let cookie = (makeSimpleCookie "session" token)
+              { setCookieHttpOnly = True
+              , setCookieSecure = True
+              , setCookieSameSite = Just sameSiteLax
+              }
+        setCookie cookie --@@
+        redirect "/dashboard"
+      _ -> status status401 >> text "login failed"
+
+@@@ session-cookie | safe | src/Clinic/Authenticate.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Clinic.Authenticate (LoginApi, loginServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.BCrypt (validatePassword)
+import Crypto.Random (getRandomBytes)
+import Data.Aeson (FromJSON)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64.URL as B64
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import GHC.Generics (Generic)
+import Servant
+import Web.Cookie
+
+import Clinic.Staff (Staff(..), lookupStaff, storeSession)
+
+data Credentials = Credentials { login :: Text, password :: Text } deriving (Generic)
+
+instance FromJSON Credentials
+
+type LoginApi =
+  "login" :> ReqBody '[JSON] Credentials
+          :> Post '[JSON] (Headers '[Header "Set-Cookie" SetCookie] NoContent)
+
+sessionCookie :: BS.ByteString -> SetCookie
+sessionCookie token = defaultSetCookie
+  { setCookieName = "sid"
+  , setCookieValue = token
+  , setCookiePath = Just "/"
+  , setCookieHttpOnly = True
+  , setCookieSecure = True
+  , setCookieSameSite = Just sameSiteStrict
+  , setCookieMaxAge = Just 43200
+  }
+
+loginServer :: Server LoginApi
+loginServer creds = do
+  found <- liftIO (lookupStaff (login creds))
+  case found of
+    Just s | validatePassword (staffHash s) (TE.encodeUtf8 (password creds)) -> do
+      raw <- liftIO (getRandomBytes 32 :: IO BS.ByteString)
+      let token = B64.encodeUnpadded raw
+      liftIO (storeSession (staffId s) token)
+      pure (addHeader (sessionCookie token) NoContent) --@@
+    _ -> throwError err401
+
+@@@ session-cookie | safe | src/Warehouse/Login.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Warehouse.Login (loginPart) where
+
+import Control.Monad.IO.Class (liftIO)
+import Crypto.BCrypt (validatePassword)
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as BC
+import Happstack.Server
+import System.Entropy (getEntropy)
+
+import Warehouse.Staff (Picker(..), lookupPicker, storeSession)
+
+loginPart :: ServerPart Response
+loginPart = dir "login" $ do
+  method POST
+  badge <- look "badge"
+  pin <- look "pin"
+  found <- liftIO (lookupPicker badge)
+  case found of
+    Just picker | validatePassword (pickerPinHash picker) (BC.pack pin) -> do
+      token <- liftIO (BC.unpack . B16.encode <$> getEntropy 32)
+      liftIO (storeSession (pickerId picker) token)
+      addCookie Session ((mkCookie "sid" token) { secure = True, httpOnly = True }) --@@
+      ok (toResponse ("signed in" :: String))
+    _ -> unauthorized (toResponse ("pin not accepted" :: String))

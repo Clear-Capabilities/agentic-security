@@ -1,0 +1,887 @@
+@@@ sql-injection | vulnerable | src/Tickets/Lookup.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Tickets.Lookup (ticketRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.String (fromString)
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status404)
+import Web.Scotty
+
+data Ticket = Ticket
+  { ticketId    :: Int
+  , ticketTitle :: String
+  , ticketState :: String
+  }
+
+instance FromRow Ticket where
+  fromRow = Ticket <$> field <*> field <*> field
+
+ticketRoutes :: Connection -> ScottyM ()
+ticketRoutes conn =
+  get "/tickets/:ref" $ do
+    ref <- param "ref"
+    rows <- liftIO (fetchTicket conn (TL.unpack ref))
+    case rows of
+      (t:_) -> json (ticketId t, ticketTitle t, ticketState t)
+      []    -> status status404 >> text "no such ticket"
+
+fetchTicket :: Connection -> String -> IO [Ticket]
+fetchTicket conn ref =
+  query_ conn (fromString ("SELECT id, title, state FROM tickets WHERE reference = '" ++ ref ++ "'")) --@@
+
+@@@ sql-injection | vulnerable | app/ShipmentPurge.hs
+module Main (main) where
+
+import Data.String (fromString)
+import Database.SQLite.Simple
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [dbPath, carrier] -> purge dbPath carrier
+    _ -> do
+      hPutStrLn stderr "usage: shipment-purge <db> <carrier>"
+      exitFailure
+
+purge :: FilePath -> String -> IO ()
+purge dbPath carrier = do
+  conn <- open dbPath
+  let stmt = "DELETE FROM shipments WHERE carrier = '" ++ carrier ++ "' AND delivered = 1"
+  execute_ conn (fromString stmt) --@@
+  n <- changes conn
+  putStrLn (show n ++ " delivered shipments removed for " ++ carrier)
+  close conn
+
+@@@ sql-injection | vulnerable | src/Handler/PatientSearch.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Handler.PatientSearch (getPatientSearchR) where
+
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Database.Persist.Sql (Entity(..), rawSql)
+import Yesod.Core
+import Yesod.Persist (YesodDB, runDB)
+
+import Foundation
+import Model
+
+getPatientSearchR :: Handler Value
+getPatientSearchR = do
+  surname <- fromMaybe "" <$> lookupGetParam "surname"
+  found <- runDB (searchBySurname surname)
+  returnJson (map (patientMrn . entityVal) found)
+
+searchBySurname :: Text -> YesodDB App [Entity Patient]
+searchBySurname surname =
+  rawSql ("SELECT ?? FROM patient WHERE surname LIKE '" <> T.strip surname <> "%' ORDER BY surname") [] --@@
+
+@@@ sql-injection | safe | src/Invoices/Api.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Invoices.Api (InvoiceApi, invoiceServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import Servant
+
+data InvoiceRow = InvoiceRow Int Text Double
+
+instance FromRow InvoiceRow where
+  fromRow = InvoiceRow <$> field <*> field <*> field
+
+type InvoiceApi =
+  "invoices" :> QueryParam' '[Required] "customer" Text :> Get '[JSON] [(Int, Text, Double)]
+
+invoiceServer :: Connection -> Server InvoiceApi
+invoiceServer conn customer = do
+  rows <- liftIO (byCustomer conn customer)
+  pure [ (i, n, t) | InvoiceRow i n t <- rows ]
+
+byCustomer :: Connection -> Text -> IO [InvoiceRow]
+byCustomer conn customer =
+  query conn "SELECT id, number, total FROM invoices WHERE customer_code = ? ORDER BY issued_at DESC" (Only customer) --@@
+
+@@@ sql-injection | safe | app/BadgeRevoke.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
+
+import Control.Monad (forM_, unless)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import Database.SQLite.Simple
+
+main :: IO ()
+main = do
+  conn <- open "badges.db"
+  contents <- TIO.getContents
+  forM_ (T.lines contents) $ \line -> do
+    let serial = T.strip line
+    unless (T.null serial) (revoke conn serial)
+  close conn
+
+revoke :: Connection -> T.Text -> IO ()
+revoke conn serial = do
+  executeNamed conn "UPDATE badges SET revoked = 1, revoked_at = datetime('now') WHERE serial = :serial" [":serial" := serial] --@@
+  n <- changes conn
+  TIO.putStrLn (serial <> ": " <> T.pack (show n) <> " row(s) updated")
+
+@@@ sql-injection | safe | src/Workers/ShipmentStatus.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Workers.ShipmentStatus (onStatusMessage, updateState) where
+
+import qualified Data.ByteString.Lazy as BL
+import Data.Functor.Contravariant ((>$<))
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import qualified Hasql.Connection as Conn
+import qualified Hasql.Decoders as D
+import qualified Hasql.Encoders as E
+import qualified Hasql.Session as Session
+import Hasql.Statement (Statement(..))
+import Network.AMQP (Envelope, Message(..), ackEnv)
+
+-- payload shape: "<tracking code>|<state>"
+onStatusMessage :: Conn.Connection -> (Message, Envelope) -> IO ()
+onStatusMessage conn (msg, env) = do
+  let payload = TE.decodeUtf8 (BL.toStrict (msgBody msg))
+      (code, rest) = T.breakOn "|" payload
+      state = T.drop 1 rest
+  result <- Session.run (Session.statement (code, state) updateState) conn
+  case result of
+    Left err -> putStrLn ("status update failed: " ++ show err)
+    Right () -> ackEnv env
+
+updateState :: Statement (Text, Text) ()
+updateState = Statement sql encoder D.noResult True --@@
+  where
+    sql = "UPDATE shipments SET state = $2, updated_at = now() WHERE tracking_code = $1"
+    encoder =
+      (fst >$< E.param (E.nonNullable E.text))
+        <> (snd >$< E.param (E.nonNullable E.text))
+
+@@@ command-injection | vulnerable | src/Thumbnails.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Thumbnails (thumbnailRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text.Lazy as TL
+import Network.HTTP.Types.Status (status400)
+import Network.Wai.Parse (FileInfo(..))
+import System.FilePath ((</>), takeFileName)
+import System.Process (callCommand)
+import Web.Scotty
+
+thumbnailRoutes :: ScottyM ()
+thumbnailRoutes =
+  post "/badges/photo" $ do
+    uploads <- files
+    case lookup "photo" uploads of
+      Nothing -> status status400 >> text "photo missing"
+      Just info -> do
+        let name = takeFileName (BC.unpack (fileName info))
+            dest = "incoming" </> name
+        liftIO (BL.writeFile dest (fileContent info))
+        liftIO (makeThumbnail dest)
+        text (TL.pack ("stored " ++ name))
+
+makeThumbnail :: FilePath -> IO ()
+makeThumbnail src =
+  callCommand ("convert " ++ src ++ " -resize 128x128 " ++ src ++ ".thumb.png") --@@
+
+@@@ command-injection | vulnerable | app/ResolveHosts.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
+
+import Control.Monad (forM_)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import Turtle (ExitCode(..), empty, shell)
+
+main :: IO ()
+main = do
+  contents <- TIO.getContents
+  forM_ (filter (not . T.null) (map T.strip (T.lines contents))) $ \host -> do
+    code <- resolve host
+    case code of
+      ExitSuccess   -> TIO.putStrLn ("resolved " <> host)
+      ExitFailure n -> TIO.putStrLn ("lookup of " <> host <> " failed with " <> T.pack (show n))
+
+resolve :: T.Text -> IO ExitCode
+resolve host = shell ("dig +short " <> host) empty --@@
+
+@@@ command-injection | vulnerable | src/Repo/History.hs
+module Repo.History (historyHandler) where
+
+import Control.Monad.IO.Class (liftIO)
+import Happstack.Server
+import System.Process (readCreateProcess, shell)
+
+historyHandler :: ServerPart Response
+historyHandler = dir "history" $ do
+  method GET
+  branch <- look "branch"
+  out <- liftIO (recentCommits branch)
+  ok (toResponse out)
+
+recentCommits :: String -> IO String
+recentCommits branch =
+  readCreateProcess (shell ("git -C /srv/repos/billing log --oneline -n 20 " ++ branch)) "" --@@
+
+@@@ command-injection | safe | src/Handler/BadgePhoto.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Handler.BadgePhoto (postBadgePhotoR) where
+
+import qualified Data.Text as T
+import System.FilePath ((</>), (<.>), takeFileName)
+import System.Process (callProcess)
+import Yesod.Core
+
+import Foundation
+
+postBadgePhotoR :: Handler Value
+postBadgePhotoR = do
+  (_, uploads) <- runRequestBody
+  case lookup "photo" uploads of
+    Nothing -> invalidArgs ["photo"]
+    Just info -> do
+      let name = takeFileName (T.unpack (fileName info))
+          dest = "incoming" </> name
+      liftIO (fileMove info dest)
+      liftIO (makeThumbnail dest (dest <.> "thumb.png"))
+      returnJson (object ["stored" .= name])
+
+makeThumbnail :: FilePath -> FilePath -> IO ()
+makeThumbnail src out =
+  callProcess "convert" [src, "-resize", "128x128", out] --@@
+
+@@@ command-injection | safe | app/ResolveNames.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
+
+import Control.Monad (forM_)
+import Data.Char (isAlphaNum)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import Turtle (ExitCode(..), empty, proc)
+
+main :: IO ()
+main = do
+  contents <- TIO.getContents
+  forM_ (map T.strip (T.lines contents)) $ \host -> do
+    result <- resolve host
+    case result of
+      Nothing -> TIO.putStrLn ("skipping malformed name " <> host)
+      Just ExitSuccess -> TIO.putStrLn ("resolved " <> host)
+      Just (ExitFailure n) -> TIO.putStrLn ("lookup of " <> host <> " failed with " <> T.pack (show n))
+
+hostChar :: Char -> Bool
+hostChar c = isAlphaNum c || c == '.' || c == '-'
+
+resolve :: T.Text -> IO (Maybe ExitCode)
+resolve host
+  | T.null host || T.length host > 253 || not (T.all hostChar host) = pure Nothing
+  | T.isPrefixOf "-" host = pure Nothing
+  | otherwise = Just <$> proc "dig" ["+short", host] empty --@@
+
+@@@ command-injection | safe | src/Repo/Commits.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Repo.Commits (commitRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Char (isAlphaNum)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Network.HTTP.Types.Status (status400)
+import Shelly (run, shelly, silently)
+import Web.Spock
+
+commitRoutes :: SpockM () () () ()
+commitRoutes =
+  get ("repos" <//> "billing" <//> "commits") $ do
+    branch <- param' "branch"
+    if validRef branch
+      then do
+        out <- liftIO (recentCommits branch)
+        text out
+      else do
+        setStatus status400
+        text "branch name not accepted"
+
+validRef :: Text -> Bool
+validRef ref =
+  not (T.null ref)
+    && not (T.isPrefixOf "-" ref)
+    && T.all (\c -> isAlphaNum c || c `elem` ("/_.-" :: String)) ref
+
+recentCommits :: Text -> IO Text
+recentCommits branch =
+  shelly . silently $ run "git" ["-C", "/srv/repos/billing", "log", "--oneline", "-n", "20", branch] --@@
+
+@@@ path-traversal | vulnerable | src/Invoices/Documents.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Invoices.Documents (documentRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import System.FilePath ((</>))
+import Web.Spock
+
+invoiceStore :: FilePath
+invoiceStore = "/srv/invoices/rendered"
+
+documentRoutes :: SpockM () () () ()
+documentRoutes =
+  get ("invoices" <//> var <//> "pdf") $ \number -> do
+    pdf <- liftIO (loadRendered number)
+    setHeader "Content-Type" "application/pdf"
+    lazyBytes pdf
+
+loadRendered :: String -> IO BL.ByteString
+loadRendered number = BL.readFile (invoiceStore </> number ++ ".pdf") --@@
+
+@@@ path-traversal | vulnerable | app/ExportServer.hs
+module Main (main) where
+
+import Control.Monad (forever)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BC
+import Network.Socket
+import System.FilePath ((</>))
+import System.IO
+
+exportRoot :: FilePath
+exportRoot = "/srv/exports"
+
+main :: IO ()
+main = withSocketsDo $ do
+  addr:_ <- getAddrInfo (Just defaultHints { addrFlags = [AI_PASSIVE] }) Nothing (Just "7070")
+  sock <- socket (addrFamily addr) Stream defaultProtocol
+  bind sock (addrAddress addr)
+  listen sock 8
+  forever $ do
+    (client, _) <- accept sock
+    h <- socketToHandle client ReadWriteMode
+    hSetBuffering h LineBuffering
+    serve h
+
+serve :: Handle -> IO ()
+serve h = do
+  name <- BC.unpack . BC.strip <$> BS.hGetLine h
+  payload <- readExport name
+  BS.hPut h payload
+  hClose h
+
+readExport :: String -> IO BS.ByteString
+readExport name = withFile (exportRoot </> name) ReadMode BS.hGetContents --@@
+
+@@@ path-traversal | vulnerable | src/Handler/Statement.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Handler.Statement (getStatementR) where
+
+import Data.Text (Text)
+import qualified Data.Text as T
+import System.FilePath ((</>))
+import Yesod.Core
+
+import Foundation
+
+statementDir :: FilePath
+statementDir = "/var/lib/billing/statements"
+
+getStatementR :: Text -> Handler TypedContent
+getStatementR ref = do
+  _ <- requireAuthId
+  let path = statementDir </> T.unpack ref
+  sendFile "application/pdf" path --@@
+
+@@@ path-traversal | safe | src/Exports/Download.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Exports.Download (downloadHandler) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BC
+import Data.List (isPrefixOf)
+import Snap.Core
+import System.Directory (canonicalizePath, doesFileExist)
+import System.FilePath ((</>), addTrailingPathSeparator)
+
+exportRoot :: FilePath
+exportRoot = "/srv/exports"
+
+downloadHandler :: Snap ()
+downloadHandler = do
+  mname <- getParam "name"
+  case mname of
+    Nothing -> badRequest
+    Just raw -> do
+      resolved <- liftIO (resolveExport (BC.unpack raw))
+      case resolved of
+        Nothing -> badRequest
+        Just path -> do
+          modifyResponse (setContentType "application/octet-stream")
+          liftIO (BS.readFile path) >>= writeBS --@@
+  where
+    badRequest = modifyResponse (setResponseStatus 400 "Bad Request") >> writeBS "no such export"
+
+resolveExport :: String -> IO (Maybe FilePath)
+resolveExport name = do
+  root <- addTrailingPathSeparator <$> canonicalizePath exportRoot
+  full <- canonicalizePath (exportRoot </> name)
+  exists <- doesFileExist full
+  pure (if root `isPrefixOf` full && exists then Just full else Nothing)
+
+@@@ path-traversal | safe | app/ReportServer.hs
+module Main (main) where
+
+import Control.Monad (forever)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BC
+import Network.Socket
+import System.FilePath ((</>), isValid, takeFileName)
+import System.IO
+
+reportRoot :: FilePath
+reportRoot = "/srv/reports"
+
+main :: IO ()
+main = withSocketsDo $ do
+  addr:_ <- getAddrInfo (Just defaultHints { addrFlags = [AI_PASSIVE] }) Nothing (Just "7071")
+  sock <- socket (addrFamily addr) Stream defaultProtocol
+  bind sock (addrAddress addr)
+  listen sock 8
+  forever $ do
+    (client, _) <- accept sock
+    h <- socketToHandle client ReadWriteMode
+    serve h
+
+plainName :: String -> Bool
+plainName name =
+  isValid name && takeFileName name == name && name /= "." && name /= ".."
+
+serve :: Handle -> IO ()
+serve h = do
+  name <- BC.unpack . BC.strip <$> BS.hGetLine h
+  if plainName name
+    then withFile (reportRoot </> name) ReadMode BS.hGetContents >>= BS.hPut h --@@
+    else BC.hPutStrLn h (BC.pack "ERR unknown report")
+  hClose h
+
+@@@ path-traversal | safe | src/Statements/Serve.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Statements.Serve (StatementApi, statementServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Map.Strict as Map
+import Data.Text (Text)
+import Servant
+import System.FilePath ((</>))
+
+type StatementApi =
+  "statements" :> Capture "period" Text :> Get '[OctetStream] BL.ByteString
+
+statementDir :: FilePath
+statementDir = "/var/lib/billing/statements"
+
+-- known periods and the file each one renders to
+periods :: Map.Map Text FilePath
+periods = Map.fromList
+  [ ("2025-q1", "statement-2025-q1.pdf")
+  , ("2025-q2", "statement-2025-q2.pdf")
+  , ("2025-q3", "statement-2025-q3.pdf")
+  , ("2025-q4", "statement-2025-q4.pdf")
+  ]
+
+statementServer :: Server StatementApi
+statementServer period =
+  case Map.lookup period periods of
+    Nothing -> throwError err404 { errBody = "unknown statement period" }
+    Just file -> liftIO (BL.readFile (statementDir </> file)) --@@
+
+@@@ ssrf | vulnerable | src/Preview/App.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Preview.App (previewApp) where
+
+import Control.Lens ((^.))
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy as BL
+import Network.HTTP.Types (status200, status400)
+import Network.Wai
+import Network.Wreq (get, responseBody)
+
+previewApp :: Application
+previewApp req respond =
+  case lookup "url" (queryString req) of
+    Just (Just target) -> do
+      body <- fetchPreview (BC.unpack target)
+      respond (responseLBS status200 [("Content-Type", "text/html")] body)
+    _ -> respond (responseLBS status400 [] "url parameter required")
+
+fetchPreview :: String -> IO BL.ByteString
+fetchPreview target = do
+  r <- get target --@@
+  pure (r ^. responseBody)
+
+@@@ ssrf | vulnerable | src/Webhooks/Register.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Webhooks.Register (WebhookApi, webhookServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import Data.Text (Text)
+import qualified Data.Text as T
+import GHC.Generics (Generic)
+import Network.HTTP.Client
+import Network.HTTP.Types.Status (statusCode)
+import Servant
+
+data Registration = Registration
+  { shipmentId  :: Int
+  , callbackUrl :: Text
+  } deriving (Show, Generic)
+
+instance FromJSON Registration
+
+type WebhookApi =
+  "webhooks" :> ReqBody '[JSON] Registration :> Post '[JSON] Bool
+
+webhookServer :: Manager -> Server WebhookApi
+webhookServer mgr reg = liftIO (ping mgr (callbackUrl reg))
+
+-- send a probe so the caller can confirm the endpoint is reachable
+ping :: Manager -> Text -> IO Bool
+ping mgr url = do
+  request <- parseRequest (T.unpack url)
+  response <- httpLbs request { method = "HEAD" } mgr --@@
+  pure (statusCode (responseStatus response) < 400)
+
+@@@ ssrf | vulnerable | app/FeedRelay.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
+
+import Control.Monad (forever)
+import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
+import qualified Data.Text as T
+import Network.HTTP.Req
+import qualified Network.WebSockets as WS
+import Text.URI (mkURI)
+
+main :: IO ()
+main = WS.runServer "0.0.0.0" 9160 relay
+
+relay :: WS.ServerApp
+relay pending = do
+  conn <- WS.acceptRequest pending
+  forever $ do
+    msg <- WS.receiveData conn :: IO Text
+    body <- fetchFeed (T.strip msg)
+    WS.sendBinaryData conn body
+
+fetchFeed :: Text -> IO BL.ByteString
+fetchFeed target = do
+  uri <- mkURI target
+  case useHttpsURI uri of
+    Nothing -> pure "feed address must be https"
+    Just (url, opts) -> runReq defaultHttpConfig $ do
+      r <- req GET url NoReqBody lbsResponse opts --@@
+      pure (responseBody r)
+
+@@@ ssrf | safe | src/Preview/Routes.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Preview.Routes (previewRoutes) where
+
+import Control.Lens ((^.))
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Set as Set
+import qualified Data.Text.Lazy as TL
+import Network.HTTP.Types.Status (status400)
+import Network.URI (URI(..), URIAuth(..), parseURI)
+import Network.Wreq (get, responseBody)
+import Web.Scotty
+
+allowedHosts :: Set.Set String
+allowedHosts = Set.fromList ["cdn.ticketing.example", "images.ticketing.example"]
+
+permitted :: String -> Maybe URI
+permitted raw = do
+  uri <- parseURI raw
+  auth <- uriAuthority uri
+  if uriScheme uri == "https:" && Set.member (uriRegName auth) allowedHosts
+    then Just uri
+    else Nothing
+
+previewRoutes :: ScottyM ()
+previewRoutes =
+  get "/preview" $ do
+    target <- param "url"
+    case permitted (TL.unpack target) of
+      Nothing -> status status400 >> text "preview host not permitted"
+      Just uri -> do
+        r <- liftIO (get (show uri)) --@@
+        setHeader "Content-Type" "image/png"
+        raw (r ^. responseBody)
+
+@@@ ssrf | safe | app/RateCheck.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
+
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import qualified Data.Map.Strict as Map
+import Network.HTTP.Client
+import Network.HTTP.Client.TLS (tlsManagerSettings)
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+
+-- carrier codes accepted on the command line and the endpoint each maps to
+carriers :: Map.Map String String
+carriers = Map.fromList
+  [ ("dhl", "https://rates.dhl.example/v2/quote")
+  , ("ups", "https://quote.ups.example/api/rates")
+  , ("gls", "https://api.gls.example/rates")
+  ]
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [code] | Just endpoint <- Map.lookup code carriers -> quote endpoint
+    _ -> do
+      putStrLn ("usage: rate-check <" ++ unwords (Map.keys carriers) ++ ">")
+      exitFailure
+
+quote :: String -> IO ()
+quote endpoint = do
+  mgr <- newManager tlsManagerSettings
+  request <- parseRequest endpoint
+  response <- httpLbs request mgr --@@
+  BLC.putStrLn (responseBody response)
+
+@@@ ssrf | safe | src/Parcels/Track.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+module Parcels.Track (trackHandler) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy as BL
+import Data.Char (isAlphaNum)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import Network.HTTP.Req
+import Snap.Core
+
+trackHandler :: Snap ()
+trackHandler = do
+  mcode <- getParam "code"
+  case mcode of
+    Just raw | BC.length raw <= 32 && BC.all isAlphaNum raw -> do
+      body <- liftIO (lookupParcel (TE.decodeUtf8 raw))
+      modifyResponse (setContentType "application/json")
+      writeLBS body
+    _ -> do
+      modifyResponse (setResponseStatus 400 "Bad Request")
+      writeBS "tracking code must be alphanumeric"
+
+lookupParcel :: T.Text -> IO BL.ByteString
+lookupParcel code = runReq defaultHttpConfig $ do
+  r <- req GET (https "track.carrier.example" /: "v1" /: "parcels" /~ code) NoReqBody lbsResponse mempty --@@
+  pure (responseBody r)
+
+@@@ html-injection | vulnerable | src/Catalog/Search.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Catalog.Search (searchRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Web.Spock
+
+import Catalog.Store (Store, findParts)
+
+searchRoutes :: Store -> SpockM () () () ()
+searchRoutes store =
+  get "parts" $ do
+    q <- param' "q"
+    parts <- liftIO (findParts store q)
+    html (renderResults q parts) --@@
+
+renderResults :: Text -> [(Text, Text)] -> Text
+renderResults q parts = T.concat
+  [ "<!doctype html><html><body>"
+  , "<h1>Results for ", q, "</h1>"
+  , "<ul>", T.concat [ "<li>" <> sku <> ": " <> name <> "</li>" | (sku, name) <- parts ], "</ul>"
+  , "<p>", T.pack (show (length parts)), " part(s) matched.</p>"
+  , "</body></html>"
+  ]
+
+@@@ html-injection | vulnerable | src/Tickets/Comments.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Tickets.Comments (CommentsApi, commentsServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Servant
+import Servant.HTML.Blaze (HTML)
+import Text.Blaze.Html (Html, preEscapedToHtml, toHtml)
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
+
+import Tickets.Store (Comment(..), loadComments)
+
+type CommentsApi =
+  "tickets" :> Capture "id" Int :> "comments" :> Get '[HTML] Html
+
+commentsServer :: Server CommentsApi
+commentsServer tid = do
+  comments <- liftIO (loadComments tid)
+  pure (page tid comments)
+
+page :: Int -> [Comment] -> Html
+page tid comments = H.docTypeHtml $ do
+  H.head (H.title (toHtml ("Ticket #" ++ show tid)))
+  H.body $ do
+    H.h1 (toHtml ("Comments on ticket " ++ show tid))
+    mapM_ renderComment comments
+
+renderComment :: Comment -> Html
+renderComment c = H.div H.! A.class_ "comment" $ do
+  H.span H.! A.class_ "author" $ toHtml (commentAuthor c)
+  H.p (preEscapedToHtml (commentBody c)) --@@
+
+@@@ html-injection | vulnerable | src/Members/Profile.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Members.Profile (profileRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Lucid
+import Web.Scotty
+
+import Members.Store (Member(..), memberByHandle)
+
+profileRoutes :: ScottyM ()
+profileRoutes =
+  get "/members/:handle" $ do
+    handle <- param "handle"
+    found <- liftIO (memberByHandle handle)
+    case found of
+      Nothing -> text "no such member"
+      Just m -> html (renderText (profilePage m))
+
+profilePage :: Member -> Html ()
+profilePage m = doctypehtml_ $ do
+  head_ (title_ (toHtml (memberHandle m)))
+  body_ $ do
+    h1_ (toHtml (memberHandle m))
+    p_ [class_ "joined"] (toHtml ("Member since " <> memberSince m))
+    div_ [class_ "bio"] (toHtmlRaw (memberBio m)) --@@
+
+@@@ html-injection | safe | src/Catalog/Lookup.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Catalog.Lookup (lookupHandler) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import Snap.Core
+import Text.Blaze.Html.Renderer.Utf8 (renderHtml)
+import Text.Blaze.Html5 (Html, toHtml, (!))
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
+
+import Catalog.Store (Store, findParts)
+
+lookupHandler :: Store -> Snap ()
+lookupHandler store = do
+  q <- maybe "" TE.decodeUtf8 <$> getParam "q"
+  parts <- liftIO (findParts store q)
+  modifyResponse (setContentType "text/html; charset=utf-8")
+  writeLBS (renderHtml (resultsPage q parts))
+
+resultsPage :: T.Text -> [(T.Text, T.Text)] -> Html
+resultsPage q parts = H.docTypeHtml $ do
+  H.head (H.title "Parts")
+  H.body $ do
+    H.h1 (toHtml ("Results for " <> q)) --@@
+    H.ul ! A.class_ "parts" $
+      mapM_ (\(sku, name) -> H.li (toHtml (sku <> ": " <> name))) parts
+
+@@@ html-injection | safe | src/Handler/Visitor.hs
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+module Handler.Visitor (getVisitorR) where
+
+import Data.Maybe (fromMaybe)
+import qualified Data.Text as T
+import Yesod.Core
+
+import Foundation
+
+getVisitorR :: Handler Html
+getVisitorR = do
+  name <- fromMaybe "guest" <$> lookupGetParam "name"
+  company <- fromMaybe "" <$> lookupGetParam "company"
+  defaultLayout $ do
+    setTitle "Visitor badge"
+    [whamlet|
+      <div .badge>
+        <h1>Welcome, #{name}
+        $if not (T.null company)
+          <p .company>#{company}
+        <p .note>Please wear this badge at all times.
+    |] --@@
+
+@@@ html-injection | safe | src/Shipments/Status.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Shipments.Status (statusApp) where
+
+import Control.Monad (join)
+import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import Network.HTTP.Types (status200)
+import Network.Wai
+
+escapeHtml :: Text -> Text
+escapeHtml = T.concatMap esc
+  where
+    esc '<'  = "&lt;"
+    esc '>'  = "&gt;"
+    esc '&'  = "&amp;"
+    esc '"'  = "&quot;"
+    esc '\'' = "&#39;"
+    esc c    = T.singleton c
+
+statusApp :: Application
+statusApp req respond = do
+  let code = maybe "" TE.decodeUtf8 (join (lookup "code" (queryString req)))
+      page = T.concat
+        [ "<!doctype html><html><body>"
+        , "<h1>Shipment ", escapeHtml code, "</h1>" --@@
+        , "<p>Status lookups are refreshed every ten minutes.</p>"
+        , "</body></html>"
+        ]
+  respond (responseLBS status200 [("Content-Type", "text/html; charset=utf-8")] (BL.fromStrict (TE.encodeUtf8 page)))

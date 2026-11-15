@@ -811,3 +811,19 @@ test('flow: a scorecard measured on a dirty tree stops ship at preflight, before
   assert.equal(r.ok, false); assert.equal(r.phase, 'preflight');
   assert.equal(ran(w, /push/).length, 0, 'nothing was pushed');
 });
+
+// Round 7: the warm gate that starts after every commit runs many short git commands and holds `.git/index.lock` for moments at a time;
+// `verify`'s detached checkout lost that race three times in two days. A git call that fails on the lock is retried, bounded; any other
+// failure is thrown at once.
+test('retryOnIndexLock: a lock failure is retried until it clears, a different failure is not retried, and the bound is honoured', async () => {
+  const { isIndexLockError, retryOnIndexLock } = await import('../../scripts/ship/lib.mjs');
+  assert.equal(isIndexLockError("fatal: Unable to create '/r/.git/index.lock': File exists."), true);
+  assert.equal(isIndexLockError('error: pathspec did not match'), false);
+  let calls = 0; const slept = [];
+  const out = retryOnIndexLock(() => { calls++; if (calls < 3) throw new Error("git checkout: fatal: Unable to create '/r/.git/index.lock': File exists."); return 'ok'; }, { attempts: 10, waitMs: 7, sleep: (ms) => slept.push(ms) });
+  assert.equal(out, 'ok'); assert.equal(calls, 3); assert.deepEqual(slept, [7, 7]);
+  assert.throws(() => retryOnIndexLock(() => { throw new Error('git checkout: error: pathspec x'); }, { attempts: 10, waitMs: 1, sleep: () => {} }), /pathspec/);
+  let n = 0;
+  assert.throws(() => retryOnIndexLock(() => { n++; throw new Error("fatal: Unable to create '.git/index.lock': File exists."); }, { attempts: 4, waitMs: 1, sleep: () => {} }), /index\.lock/);
+  assert.equal(n, 4);
+});

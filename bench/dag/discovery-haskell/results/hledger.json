@@ -12,37 +12,13 @@
    "proof": "unproven"
   },
   {
-   "file": "hledger-lib/Hledger/Read.hs",
-   "line": 472,
-   "severity": "high",
-   "cwe": "CWE-22",
-   "vuln": "Path Traversal (filesystem operation)",
-   "parser": "IR-TAINT",
-   "trust": "attacker-reachable",
-   "reach": "external-api",
-   "proof": "feasible",
-   "provenance": "interproc"
-  },
-  {
-   "file": "hledger/Hledger/Cli/Commands/Add.hs",
-   "line": 570,
-   "severity": "high",
-   "cwe": "CWE-22",
-   "vuln": "Path Traversal",
-   "parser": "IR-TAINT",
-   "trust": "attacker-reachable",
-   "reach": "external-api",
-   "proof": "feasible",
-   "provenance": "interproc"
-  },
-  {
    "file": "hledger/Hledger/Cli/Utils.hs",
    "line": 433,
    "severity": "high",
    "cwe": "CWE-22",
    "vuln": "Path Traversal",
    "parser": "IR-TAINT",
-   "trust": "attacker-reachable",
+   "trust": "entry-parameter",
    "reach": "external-api",
    "proof": "feasible",
    "provenance": null
@@ -54,7 +30,7 @@
    "cwe": "CWE-22",
    "vuln": "Path Traversal (filesystem operation)",
    "parser": "IR-TAINT",
-   "trust": "attacker-reachable",
+   "trust": "entry-parameter",
    "reach": "external-api",
    "proof": "feasible",
    "provenance": null
@@ -66,7 +42,7 @@
    "cwe": "CWE-22",
    "vuln": "Path Traversal (copy/rename)",
    "parser": "IR-TAINT",
-   "trust": "attacker-reachable",
+   "trust": "entry-parameter",
    "reach": "external-api",
    "proof": "feasible",
    "provenance": null

@@ -19,6 +19,8 @@ fs.mkdirSync(path.join(HERE, 'results'), { recursive: true });
 let unlabelled = 0;
 for (const p of manifest.projects) {
   if (only.length && !only.includes(p.id)) continue;
+  // a project whose scan is known not to finish is skipped unless named, so the census of the others is still reachable
+  if (p.deferred && !only.includes(p.id)) { console.log(`deferred ${p.id}: ${p.deferred}`); continue; }
   const dir = path.join(HERE, '.cache', p.id);
   if (!fs.existsSync(dir)) { console.log(`missing ${p.id}: run acquire.mjs`); continue; }
   const t0 = Date.now();
