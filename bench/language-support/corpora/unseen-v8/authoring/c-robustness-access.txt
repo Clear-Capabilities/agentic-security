@@ -1,0 +1,618 @@
+@@@ resource-limits | vulnerable | src/Lab/ResultUpload.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Lab.ResultUpload (uploadApp) where
+
+import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
+import Network.HTTP.Types (status201, status404)
+import Network.Wai
+
+-- Instruments post their raw result files here after each run.
+uploadApp :: (Text -> BL.ByteString -> IO ()) -> Application
+uploadApp store req respond =
+  case (requestMethod req, pathInfo req) of
+    ("PUT", ["instruments", instrumentId, "results"]) -> do
+      payload <- strictRequestBody req --@@
+      store instrumentId payload
+      respond (responseLBS status201 [] "stored")
+    _ -> respond (responseLBS status404 [] "")
+
+@@@ resource-limits | vulnerable | src/Warehouse/RobotLink.hs
+module Warehouse.RobotLink (serveRobot) where
+
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as B8
+import Network.Socket (Socket, socketToHandle)
+import System.IO
+
+-- Each frame is a decimal length, a newline, then that many bytes of status.
+serveRobot :: Socket -> (BS.ByteString -> IO ()) -> IO ()
+serveRobot sock handleFrame = do
+  h <- socketToHandle sock ReadMode
+  hSetBuffering h (BlockBuffering Nothing)
+  loop h
+  where
+    loop h = do
+      eof <- hIsEOF h
+      if eof
+        then hClose h
+        else do
+          header <- B8.hGetLine h
+          case B8.readInt header of
+            Just (len, _) -> do
+              frame <- BS.hGet h len --@@
+              handleFrame frame
+              loop h
+            Nothing -> hClose h
+
+@@@ resource-limits | vulnerable | src/Fleet/CompressedUpload.hs
+module Fleet.CompressedUpload (drainSpool) where
+
+import qualified Codec.Compression.GZip as GZip
+import qualified Data.ByteString.Lazy as BL
+import System.Directory (listDirectory, removeFile)
+import System.FilePath (takeExtension, (</>))
+
+-- Trackers upload gzip batches to the spool; this worker unpacks them.
+drainSpool :: FilePath -> (BL.ByteString -> IO ()) -> IO ()
+drainSpool spool ingest = do
+  names <- filter ((== ".gz") . takeExtension) <$> listDirectory spool
+  mapM_ unpackOne names
+  where
+    unpackOne name = do
+      compressed <- BL.readFile (spool </> name)
+      ingest (GZip.decompress compressed) --@@
+      removeFile (spool </> name)
+
+@@@ resource-limits | safe | src/Museum/ImageUpload.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.ImageUpload (imageUploadApp) where
+
+import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
+import Network.HTTP.Types (status201, status404, status411, status413)
+import Network.Wai
+
+maxImageBytes :: Integer
+maxImageBytes = 25 * 1024 * 1024
+
+imageUploadApp :: (Text -> BL.ByteString -> IO ()) -> Application
+imageUploadApp store req respond =
+  case (requestMethod req, pathInfo req, requestBodyLength req) of
+    ("PUT", ["objects", accession, "image"], KnownLength n)
+      | fromIntegral n <= maxImageBytes -> do
+          image <- BL.take (fromIntegral maxImageBytes) <$> lazyRequestBody req --@@
+          store accession image
+          respond (responseLBS status201 [] "image stored")
+      | otherwise -> respond (responseLBS status413 [] "image too large")
+    ("PUT", ["objects", _, "image"], ChunkedBody) -> respond (responseLBS status411 [] "length required")
+    _ -> respond (responseLBS status404 [] "")
+
+@@@ resource-limits | safe | src/Radio/FeedSocket.hs
+module Radio.FeedSocket (readFrames) where
+
+import Control.Exception (throwIO)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as B8
+import System.IO
+
+maxFrameBytes :: Int
+maxFrameBytes = 65536
+
+-- Schedule updates arrive as "<length>\n<payload>" frames from the automation desk.
+readFrames :: Handle -> (BS.ByteString -> IO ()) -> IO ()
+readFrames h onFrame = go
+  where
+    go = do
+      done <- hIsEOF h
+      if done
+        then pure ()
+        else do
+          header <- B8.hGetLine h
+          len <- case B8.readInt header of
+            Just (n, rest) | B8.null rest, n >= 0, n <= maxFrameBytes -> pure n
+            _ -> throwIO (userError "bad frame header")
+          frame <- BS.hGet h len --@@
+          onFrame frame
+          go
+
+@@@ resource-limits | safe | src/Grants/ReviewQueue.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Grants.ReviewQueue (reviewQueue) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (encode)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import Happstack.Server
+
+maxPageSize :: Int
+maxPageSize = 100
+
+reviewQueue :: Connection -> ServerPart Response
+reviewQueue conn = dir "reviews" $ dir "queue" $ do
+  method GET
+  requested <- lookRead "limit"
+  let pageSize = max 1 (min maxPageSize requested)
+  titles <- liftIO (query conn "SELECT title FROM applications WHERE status = 'submitted' ORDER BY submitted_at LIMIT ?" (Only pageSize)) --@@
+  ok (toResponseBS "application/json" (encode (map fromOnly (titles :: [Only Text]))))
+
+@@@ parser-safety | vulnerable | src/Ferry/PassengerCount.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Ferry.PassengerCount (fareRoutes) where
+
+import Data.Maybe (fromMaybe)
+import qualified Data.Text.Lazy as TL
+import Text.Read (readMaybe)
+import Web.Scotty
+
+adultFare, childFare :: Int
+adultFare = 1850
+childFare = 920
+
+quote :: Int -> Int -> Int
+quote adults children = adults * adultFare + children * childFare
+
+fareRoutes :: ScottyM ()
+fareRoutes =
+  get "/fares/quote" $ do
+    adultsRaw <- param "adults" :: ActionM TL.Text
+    childrenRaw <- param "children" `rescue` (\_ -> pure "0") :: ActionM TL.Text
+    let adults = read (TL.unpack adultsRaw) :: Int --@@
+        children = fromMaybe 0 (readMaybe (TL.unpack childrenRaw))
+    text (TL.pack (show (quote adults children)))
+
+@@@ parser-safety | vulnerable | src/Apiary/HiveWeights.hs
+module Apiary.HiveWeights (main) where
+
+import qualified Data.Map.Strict as Map
+import Data.Maybe (mapMaybe)
+
+splitOn :: Char -> String -> [String]
+splitOn sep s = case break (== sep) s of
+  (chunk, []) -> [chunk]
+  (chunk, _ : rest) -> chunk : splitOn sep rest
+
+-- Lines from the scale logger look like: 2026-05-14,HIVE-07,38.4
+data Reading = Reading { hive :: String, kilos :: Double }
+
+parseReading :: String -> Maybe Reading
+parseReading line =
+  case reads (last fields) of
+    [(w, "")] -> Just (Reading (fields !! 1) w) --@@
+    _ -> Nothing
+  where
+    fields = splitOn ',' line
+
+averages :: [Reading] -> Map.Map String Double
+averages rs = Map.map (\(total, n) -> total / n) sums
+  where
+    sums = Map.fromListWith add [(hive r, (kilos r, 1)) | r <- rs]
+    add (a, n) (b, m) = (a + b, n + m)
+
+main :: IO ()
+main = do
+  readings <- mapMaybe parseReading . lines <$> getContents
+  mapM_ (\(h, avg) -> putStrLn (h ++ "\t" ++ show avg)) (Map.toList (averages readings))
+
+@@@ parser-safety | vulnerable | src/Warehouse/RobotSocket.hs
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+module Warehouse.RobotSocket (RobotStatus (..), robotApp) where
+
+import Control.Monad (forever)
+import Data.Aeson (FromJSON, decode)
+import Data.Maybe (fromJust)
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import qualified Network.WebSockets as WS
+
+data RobotStatus = RobotStatus { robotId :: Text, battery :: Int, aisle :: Text }
+  deriving (Generic, Show)
+
+instance FromJSON RobotStatus
+
+robotApp :: (RobotStatus -> IO ()) -> WS.ServerApp
+robotApp record pending = do
+  conn <- WS.acceptRequest pending
+  WS.withPingThread conn 30 (pure ()) $ forever $ do
+    msg <- WS.receiveData conn
+    let status = fromJust (decode msg) --@@
+    record status
+
+@@@ parser-safety | safe | src/Museum/LoanYear.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Museum.LoanYear (LoansByYearAPI, loansByYear) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Servant
+import Text.Read (readMaybe)
+
+type LoansByYearAPI = "loans" :> "by-year" :> QueryParam' '[Required] "year" Text :> Get '[JSON] [Text]
+
+loansByYear :: (Int -> IO [Text]) -> Server LoansByYearAPI
+loansByYear fetch yearText =
+  case readMaybe (T.unpack yearText) of --@@
+    Just year | year >= 1850, year <= 2100 -> liftIO (fetch year)
+    _ -> throwError err400 { errBody = "year must be a four digit number" }
+
+@@@ parser-safety | safe | src/Radio/ScheduleLines.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Radio.ScheduleLines (Slot (..), main, parseSlot) where
+
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import Data.Time (TimeOfDay)
+import Data.Time.Format (defaultTimeLocale, parseTimeM)
+
+data Slot = Slot { startsAt :: TimeOfDay, programme :: Text, presenter :: Text }
+
+-- A schedule line: "06:00|Breakfast Show|Dana Okafor"
+parseSlot :: Text -> Either Text Slot
+parseSlot line =
+  case T.splitOn "|" line of --@@
+    [timeText, prog, who]
+      | Just t <- parseTimeM True defaultTimeLocale "%H:%M" (T.unpack timeText) ->
+          Right (Slot t (T.strip prog) (T.strip who))
+      | otherwise -> Left ("bad start time: " <> timeText)
+    _ -> Left ("expected three fields: " <> line)
+
+main :: IO ()
+main = do
+  contents <- TIO.getContents
+  mapM_ report (zip [1 :: Int ..] (T.lines contents))
+  where
+    report (n, line) = case parseSlot line of
+      Right s -> TIO.putStrLn (programme s <> " with " <> presenter s)
+      Left err -> TIO.putStrLn ("line " <> T.pack (show n) <> ": " <> err)
+
+@@@ parser-safety | safe | src/Grants/SubmissionQueue.hs
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+module Grants.SubmissionQueue (Submission (..), consumeSubmissions) where
+
+import Control.Monad (void)
+import Data.Aeson (FromJSON, eitherDecode)
+import Data.Text (Text)
+import qualified Data.Text as T
+import GHC.Generics (Generic)
+import Network.AMQP
+
+data Submission = Submission { applicationId :: Int, applicant :: Text, requestedAmount :: Int }
+  deriving (Generic, Show)
+
+instance FromJSON Submission
+
+consumeSubmissions :: Channel -> (Submission -> IO ()) -> (Text -> IO ()) -> IO ()
+consumeSubmissions chan accept reject =
+  void $ consumeMsgs chan "grants.submissions" Ack $ \(msg, env) -> do
+    case eitherDecode (msgBody msg) of --@@
+      Right s -> accept s
+      Left err -> reject (T.pack err)
+    ackEnv env
+
+@@@ route-authentication | vulnerable | src/Apiary/HiveAdmin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Apiary.HiveAdmin (HiveStore (..), hiveRoutes) where
+
+import Control.Monad (unless)
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import qualified Data.Text.Lazy as TL
+import Network.HTTP.Types.Status (status401)
+import Web.Scotty
+
+data HiveStore = HiveStore
+  { listHives :: IO [Text]
+  , renameHive :: Int -> Text -> IO ()
+  , removeHive :: Int -> IO ()
+  }
+
+requireKeeper :: Text -> ActionM ()
+requireKeeper expected = do
+  provided <- header "X-Keeper-Key"
+  unless (provided == Just (TL.fromStrict expected)) $ do
+    status status401
+    text "keeper key required"
+    finish
+
+hiveRoutes :: Text -> HiveStore -> ScottyM ()
+hiveRoutes keeperKey store = do
+  get "/hives" $ liftIO (listHives store) >>= json
+  put "/hives/:id" $ do
+    requireKeeper keeperKey
+    hid <- param "id"
+    name <- param "name"
+    liftIO (renameHive store hid name)
+    text "renamed"
+  delete "/hives/:id" $ do --@@
+    hid <- param "id"
+    liftIO (removeHive store hid)
+    text "removed"
+
+@@@ route-authentication | vulnerable | src/Catalogue/Maintenance.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Catalogue.Maintenance (Librarian (..), MaintenanceAPI, Ops (..), maintenanceServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Servant
+
+newtype Librarian = Librarian Text
+
+type ProtectedAPI =
+  BasicAuth "catalogue-staff" Librarian :>
+    (    "holds" :> "expire" :> Post '[JSON] Int
+    :<|> "branches" :> Capture "branch" Text :> "reindex" :> Post '[JSON] NoContent
+    )
+
+type MaintenanceAPI = ProtectedAPI :<|> "catalogue" :> "purge-withdrawn" :> Post '[JSON] Int --@@
+
+data Ops = Ops { expireHolds :: IO Int, reindexBranch :: Text -> IO (), purgeWithdrawn :: IO Int }
+
+maintenanceServer :: Ops -> Server MaintenanceAPI
+maintenanceServer ops = protected :<|> liftIO (purgeWithdrawn ops)
+  where
+    protected _librarian =
+      liftIO (expireHolds ops) :<|> (\b -> liftIO (reindexBranch ops b) >> pure NoContent)
+
+@@@ route-authentication | vulnerable | src/Fleet/VehicleControl.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.VehicleControl (postVehicleDisableR, postVehicleNoteR) where
+
+import Data.Text (Text)
+import Database.Persist
+import Fleet.Foundation
+import Fleet.Model
+import Yesod.Auth (requireAuthId)
+import Yesod.Core
+import Yesod.Form (ireq, runInputPost, textField)
+import Yesod.Persist.Core (runDB)
+
+postVehicleNoteR :: VehicleId -> Handler Value
+postVehicleNoteR vid = do
+  uid <- requireAuthId
+  note <- runInputPost (ireq textField "note")
+  _ <- runDB (insert (VehicleNote vid uid note))
+  returnJson ("noted" :: Text)
+
+-- Immobilises the vehicle at its next stop.
+postVehicleDisableR :: VehicleId -> Handler Value
+postVehicleDisableR vid = do --@@
+  reason <- runInputPost (ireq textField "reason")
+  runDB (update vid [VehicleDisabled =. True, VehicleDisableReason =. Just reason])
+  returnJson ("disabled" :: Text)
+
+@@@ route-authentication | safe | src/Museum/LoanAdmin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.LoanAdmin (LoanOps (..), loanAdminApp) where
+
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
+import Data.Text (Text)
+import Network.HTTP.Types (status200, status401, status404)
+import Network.Wai
+
+data LoanOps = LoanOps { closeLoan :: Text -> IO Bool, validToken :: ByteString -> IO Bool }
+
+bearer :: Request -> Maybe ByteString
+bearer req = do
+  h <- lookup "Authorization" (requestHeaders req)
+  let (scheme, rest) = BS.splitAt 7 h
+  if scheme == "Bearer " && not (BS.null rest) then Just rest else Nothing
+
+loanAdminApp :: LoanOps -> Application
+loanAdminApp ops req respond =
+  case (requestMethod req, pathInfo req) of
+    ("POST", ["loans", ref, "close"]) -> do
+      authorised <- maybe (pure False) (validToken ops) (bearer req)
+      if not authorised
+        then respond (responseLBS status401 [("WWW-Authenticate", "Bearer")] "registrar token required")
+        else do
+          closed <- closeLoan ops ref --@@
+          respond (responseLBS (if closed then status200 else status404) [] (if closed then "loan closed" else "no such loan"))
+    _ -> respond (responseLBS status404 [] "")
+
+@@@ route-authentication | safe | src/Orchestra/ConcertAdmin.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Orchestra.ConcertAdmin (ConcertAdminAPI, Manager (..), concertAdminServer, managerCheck) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Data.Text.Encoding.Error (lenientDecode)
+import Servant
+
+newtype Manager = Manager { managerName :: Text }
+
+type ConcertAdminAPI =
+  BasicAuth "orchestra-management" Manager :> "concerts" :> Capture "concert" Int :> DeleteNoContent --@@
+
+concertAdminServer :: (Text -> Int -> IO Bool) -> Server ConcertAdminAPI
+concertAdminServer cancel mgr concertId = do
+  done <- liftIO (cancel (managerName mgr) concertId)
+  if done then pure NoContent else throwError err404
+
+managerCheck :: (Text -> Text -> IO (Maybe Manager)) -> BasicAuthCheck Manager
+managerCheck lookupManager = BasicAuthCheck $ \(BasicAuthData u p) -> do
+  let decode = TE.decodeUtf8With lenientDecode
+  r <- lookupManager (decode u) (decode p)
+  pure (maybe Unauthorized Authorized r)
+
+@@@ route-authentication | safe | src/Ferry/SailingAdmin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Ferry.SailingAdmin (Session (..), sailingAdminRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Network.HTTP.Types (status401)
+import Web.Spock
+
+data Session = Anonymous | HarbourMaster Text
+
+requireHarbourMaster :: SpockAction conn Session st Text
+requireHarbourMaster = do
+  s <- readSession
+  case s of
+    HarbourMaster who -> pure who
+    Anonymous -> do
+      setStatus status401
+      text "harbour master login required"
+
+sailingAdminRoutes :: (Text -> Int -> IO ()) -> SpockM conn Session st ()
+sailingAdminRoutes cancelSailing =
+  post ("sailings" <//> var <//> "cancel") $ \sailingId -> do
+    who <- requireHarbourMaster
+    liftIO (cancelSailing who sailingId) --@@
+    text "sailing cancelled"
+
+@@@ object-authorization | vulnerable | src/Grants/ApplicationFetch.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Grants.ApplicationFetch (Applicant (..), ApplicationAPI, applicationServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Pool (Pool)
+import Database.Persist
+import Database.Persist.Sql (SqlBackend, runSqlPool)
+import Grants.Model
+import Servant
+
+newtype Applicant = Applicant { applicantId :: ApplicantId }
+
+type ApplicationAPI =
+  BasicAuth "grants" Applicant :> "applications" :> Capture "id" ApplicationId :> Get '[JSON] Application
+
+applicationServer :: Pool SqlBackend -> Server ApplicationAPI
+applicationServer pool _applicant appId = do
+  found <- liftIO (runSqlPool (get appId) pool) --@@
+  maybe (throwError err404) pure found
+
+@@@ object-authorization | vulnerable | src/Lab/SampleResults.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Lab.SampleResults (resultRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Database.SQLite.Simple
+import Network.HTTP.Types.Status (status401)
+import Web.Scotty
+import Web.Scotty.Cookie (getCookie)
+
+currentAnalyst :: (Text -> IO (Maybe Int)) -> ActionM Int
+currentAnalyst resolve = do
+  c <- getCookie "lab_session"
+  r <- maybe (pure Nothing) (liftIO . resolve) c
+  case r of
+    Just a -> pure a
+    Nothing -> status status401 >> text "sign in first" >> finish
+
+resultRoutes :: Connection -> (Text -> IO (Maybe Int)) -> ScottyM ()
+resultRoutes conn resolve =
+  get "/samples/:sample/results" $ do
+    _analyst <- currentAnalyst resolve
+    sampleId <- param "sample" :: ActionM Int
+    rows <- liftIO (query conn "SELECT analyte, value, unit FROM results WHERE sample_id = ?" (Only sampleId)) --@@
+    json (rows :: [(Text, Double, Text)])
+
+@@@ object-authorization | vulnerable | src/Museum/LoanDocuments.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.LoanDocuments (getLoanDocumentR) where
+
+import Museum.Foundation
+import Museum.Model
+import Yesod.Auth (requireAuthId)
+import Yesod.Core
+import Yesod.Persist.Core (get404, runDB)
+
+-- Serves the signed loan agreement for a borrowing institution.
+getLoanDocumentR :: LoanDocumentId -> Handler TypedContent
+getLoanDocumentR docId = do
+  _borrower <- requireAuthId
+  doc <- runDB (get404 docId) --@@
+  addHeader "Content-Disposition" ("attachment; filename=" <> loanDocumentFileName doc)
+  sendResponse (TypedContent "application/pdf" (toContent (loanDocumentBytes doc)))
+
+@@@ object-authorization | safe | src/Ferry/BookingDetail.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Ferry.BookingDetail (BookingDetailAPI, Traveller (..), bookingDetailServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Pool (Pool)
+import Database.Persist
+import Database.Persist.Sql (SqlBackend, runSqlPool)
+import Ferry.Model
+import Servant
+
+newtype Traveller = Traveller { travellerId :: TravellerId }
+
+type BookingDetailAPI =
+  BasicAuth "ferry" Traveller :> "bookings" :> Capture "booking" BookingId :> Get '[JSON] Booking
+
+bookingDetailServer :: Pool SqlBackend -> Server BookingDetailAPI
+bookingDetailServer pool traveller bid = do
+  found <- liftIO (runSqlPool (selectFirst [BookingId ==. bid, BookingOwner ==. travellerId traveller] []) pool) --@@
+  case found of
+    Just (Entity _ b) -> pure b
+    Nothing -> throwError err404
+
+@@@ object-authorization | safe | src/Fleet/VehicleDetail.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.VehicleDetail (vehicleRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status401, status404)
+import Web.Scotty
+import Web.Scotty.Cookie (getCookie)
+
+operatorId :: (Text -> IO (Maybe Int)) -> ActionM Int
+operatorId resolveSession = do
+  c <- getCookie "fleet_session"
+  r <- maybe (pure Nothing) (liftIO . resolveSession) c
+  case r of
+    Just oid -> pure oid
+    Nothing -> status status401 >> text "operator sign-in required" >> finish
+
+vehicleRoutes :: Connection -> (Text -> IO (Maybe Int)) -> ScottyM ()
+vehicleRoutes conn resolveSession =
+  get "/vehicles/:vin" $ do
+    oid <- operatorId resolveSession
+    vin <- param "vin" :: ActionM Text
+    rows <- liftIO (query conn "SELECT vin, make, odometer_km FROM vehicles WHERE vin = ? AND operator_id = ?" (vin, oid)) --@@
+    case rows of
+      [(v, mk, km)] -> json (v :: Text, mk :: Text, km :: Int)
+      _ -> status status404 >> text "no such vehicle"
+
+@@@ object-authorization | safe | src/Orchestra/PartsLibrary.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Orchestra.PartsLibrary (getPartR) where
+
+import Control.Monad (when)
+import Orchestra.Foundation
+import Orchestra.Model
+import Yesod.Auth (requireAuthId)
+import Yesod.Core
+import Yesod.Persist.Core (get404, runDB)
+
+-- A player downloads the marked-up part assigned to their chair.
+getPartR :: PartId -> Handler TypedContent
+getPartR partId = do
+  playerId <- requireAuthId
+  part <- runDB (get404 partId) --@@
+  when (partAssignedTo part /= playerId) notFound
+  addHeader "Content-Disposition" ("inline; filename=" <> partFileName part)
+  sendResponse (TypedContent "application/pdf" (toContent (partPdf part)))

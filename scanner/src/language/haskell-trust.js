@@ -409,6 +409,32 @@ function fixedFileReads(perFile, f, roots) {
  * Stamps `trustBoundary` on every Haskell IR-TAINT finding and lowers to `info` the verdicts that name no boundary crossed
  * (`operator-controlled`, `api-contract`). Mutates the findings; returns counts.
  */
+const EXISTENCE_PROBE = /(?:^|\.)does(?:File|Directory|Path)Exist$/;
+// The probe's bound answer (`exists <- doesFileExist p`, under `liftIO` or not) is used only in conditions: an `if` condition, a `when`/`unless`
+// condition, a branch condition of a conditional expression. An unbound probe (`doesFileExist p >>= ..`) or any other use keeps the finding.
+function probeOnlyTested(perFile, f) {
+  const loc = locateSink(perFile, f);
+  if (!loc) return false;
+  const nodes = Object.values((loc.fn.cfg && loc.fn.cfg.nodes) || {});
+  const isProbe = (e) => { let x = e; for (let i = 0; i < 4 && x; i++) { if (x.kind === 'call' && EXISTENCE_PROBE.test(String(x.callee || '')) && (x.line === f.line || !x.line)) return true; if (x.kind === 'call' && (x.args || []).length === 1) x = x.args[0]; else break; } return false; };
+  const bound = nodes.filter((n) => n.kind === 'assign' && n.target && n.source && isProbe(n.source)).map((n) => n.target);
+  if (!bound.length) return false;
+  const uses = (e, allowed, d = 0) => {
+    if (!e || typeof e !== 'object' || d > 60) return true;
+    if (e.kind === 'ident' && bound.includes(e.name)) return allowed;
+    if (e.kind === 'call' && /(?:^|\.)(?:when|unless)$/.test(String(e.callee || '')) && e.args && e.args.length) return uses(e.args[0], true, d + 1) && e.args.slice(1).every((a) => uses(a, allowed, d + 1));
+    if (e.kind === 'union' && e.hs && Array.isArray(e.hs.branchConds) && !e.hs.branchConds.every((bc) => uses(bc && bc.cond, true, d + 1))) return false;
+    for (const k of Object.keys(e)) { if (k === 'hs') continue; const v = e[k]; if (Array.isArray(v)) { for (const y of v) if (!uses(y, allowed, d + 1)) return false; } else if (v && typeof v === 'object' && !uses(v, allowed, d + 1)) return false; }
+    return true;
+  };
+  for (const n of nodes) {
+    if (n.kind === 'assign' && n.target && bound.includes(n.target) && isProbe(n.source)) continue;
+    if (n.kind === 'if') { if (!uses(n.cond, true)) return false; continue; }
+    for (const root of [n.value, n.source, n.cond, ...(n.args || [])]) if (root && !uses(root, false)) return false;
+  }
+  return true;
+}
+
 export function applyTrustBoundary(findings, perFile) {
   const stats = { attackerReachable: 0, operatorControlled: 0, frameworkControlled: 0, apiContract: 0, entryParameter: 0, dataInput: 0, unattributed: 0 };
   for (const f of findings || []) {
@@ -458,6 +484,13 @@ export function applyTrustBoundary(findings, perFile) {
       inferred = true;
     } else { verdict = 'unattributed'; reason = roots.length ? 'the recorded origins are not classified' : 'the engine recorded no origin for the value'; }
 
+    // `exists <- doesFileExist full; pure (if root `isPrefixOf` full && exists then Just full else Nothing)`: a probe on a caller-reachable path
+    // reads no content and writes nothing, and its answer is only tested, so it is part of validating the path (the access it guards is judged
+    // on its own). Only an attacker-reachable probe is re-judged: a library wrapper's or an operator's path keeps the verdict that names its caller.
+    if (verdict === 'attacker-reachable' && f.cwe === 'CWE-22' && EXISTENCE_PROBE.test(String(f.callee || '')) && probeOnlyTested(perFile, f)) {
+      verdict = 'validation-probe';
+      reason = 'the operation only asks whether the path exists and its answer is used only in a condition: it is part of validating the path, not an access of it';
+    }
     f.trustBoundary = { verdict, reason, role, ...(inferred ? { inferred: true } : {}), roots: roots.slice(0, 5) };
     const key = verdict.replace(/-(\w)/g, (_, c) => c.toUpperCase());
     stats[key] = (stats[key] || 0) + 1;
@@ -468,8 +501,8 @@ export function applyTrustBoundary(findings, perFile) {
       f.controls = [...(f.controls || []), { kind: 'fixed-file-source', evidenceKind: 'source' }];
       f.guardNote = { kind: 'data-input', reason };
     }
-    if (verdict === 'operator-controlled' || verdict === 'api-contract' || verdict === 'framework-controlled') {
-      const controlKind = verdict === 'operator-controlled' ? 'operator-controlled-input' : verdict === 'framework-controlled' ? 'framework-temp-file' : 'api-contract-wrapper';
+    if (verdict === 'operator-controlled' || verdict === 'api-contract' || verdict === 'framework-controlled' || verdict === 'validation-probe') {
+      const controlKind = verdict === 'operator-controlled' ? 'operator-controlled-input' : verdict === 'framework-controlled' ? 'framework-temp-file' : verdict === 'validation-probe' ? 'existence-probe' : 'api-contract-wrapper';
       lowerFinding(f, { kind: verdict, reason, controlKind, guard: '_trustLowered' });
     }
   }

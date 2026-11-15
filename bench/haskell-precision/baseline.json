@@ -1,12 +1,12 @@
 {
  "schema": "agentic-security/haskell-precision-baseline@1",
  "comparison": "equality: a regression fails, and so does an improvement that was not recorded here",
- "engineVersion": "0.195.44",
+ "engineVersion": "0.195.45",
  "labelsDigests": {
   "development-tuning": "f599e1edc2e1e8b68756b4d25c238daf0f0f04b34ea30983a16a793615e40395",
   "development-verification": "e575adf342a784bb63468658e7a3ef04cbc75451d077030ba55bc1ee1f6b4f63",
   "development-remainder": "0ebfc7a4e2cb100185c089b841fafe6f861d7eea3940952ce615158f719d3a52",
-  "fresh": "27d06c15fb4a1e5e0b66b0166bb34be38ed860f65b67cecb49ca92b916d738f7"
+  "fresh": "0f380c057874deb8c15aca772387d7558cd670508986de8221cbf428a8fafe43"
  },
  "aggregates": {
   "development-tuning": {
@@ -121,18 +121,18 @@
    ]
   },
   "fresh": {
-   "labelled": 264,
-   "reported": 221,
-   "notReported": 43,
-   "flagged": 44,
-   "loweredToInfo": 177,
-   "tp": 34,
-   "fp": 10,
-   "tpNotFlagged": 1,
+   "labelled": 265,
+   "reported": 218,
+   "notReported": 47,
+   "flagged": 38,
+   "loweredToInfo": 180,
+   "tp": 32,
+   "fp": 6,
+   "tpNotFlagged": 3,
    "byStatus": {
     "entrypoint-reachable": {
      "TP": 10,
-     "FP": 53
+     "FP": 52
     },
     "external-api": {
      "TP": 0,
@@ -147,14 +147,14 @@
      "FP": 0
     },
     "no-verdict": {
-     "TP": 23,
-     "FP": 114
+     "TP": 22,
+     "FP": 113
     }
    },
-   "precision": 0.7727,
+   "precision": 0.8421,
    "wilson95": [
-    0.6301,
-    0.8716
+    0.6958,
+    0.9256
    ]
   },
   "census": {
@@ -237,13 +237,13 @@
    },
    "fresh": {
     "dhall-haskell": {
-     "rows": 113,
-     "flagged": 3,
-     "loweredToInfo": 110,
+     "rows": 114,
+     "flagged": 2,
+     "loweredToInfo": 112,
      "byStatus": {
       "entrypoint-reachable": 26,
       "external-api": 14,
-      "no-verdict": 73
+      "no-verdict": 74
      }
     },
     "hlint": {
@@ -276,13 +276,13 @@
      }
     },
     "scotty": {
-     "rows": 19,
-     "flagged": 18,
-     "loweredToInfo": 1,
+     "rows": 16,
+     "flagged": 14,
+     "loweredToInfo": 2,
      "byStatus": {
       "external-api": 1,
-      "no-verdict": 7,
-      "entrypoint-reachable": 11
+      "no-verdict": 6,
+      "entrypoint-reachable": 9
      }
     },
     "summoner": {
