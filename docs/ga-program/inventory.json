@@ -16,7 +16,7 @@
       "slash-command": 17,
       "ticket-provider": 3
     },
-    "environmentVariables": 232
+    "environmentVariables": 233
   },
   "surfaces": [
     {
@@ -1382,6 +1382,7 @@
     "AGENTIC_SECURITY_OLLAMA_HOST",
     "AGENTIC_SECURITY_OLLAMA_KEEP_ALIVE",
     "AGENTIC_SECURITY_OLLAMA_MAX_CONCURRENCY",
+    "AGENTIC_SECURITY_OWASP_BENCHMARK_DIR",
     "AGENTIC_SECURITY_PAGERDUTY_KEY",
     "AGENTIC_SECURITY_PARALLEL",
     "AGENTIC_SECURITY_PERSONALITY",
