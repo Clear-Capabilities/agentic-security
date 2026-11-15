@@ -704,6 +704,11 @@ export function analyzeHaskellRules(files, opts = {}) {
               }
               if (prop('setCookieName')) {
                 const nm = prop('setCookieName').value;
+                // a cookie whose name is one of THIS function's parameters (`makeSimpleCookie n v = defaultSetCookie { setCookieName = T.encodeUtf8 n ..}`)
+                // is a helper's definition: the call that passes a session name is the site to report (the helper-call path below does), not the builder
+                const nameRoot = (x, d = 0) => (x && x.kind === 'call' && typeof x.callee === 'string' && /(?:^|\.)(?:encodeUtf8|decodeUtf8|pack|unpack|toStrict|fromStrict|cs|fromString|toString)$/.test(x.callee) && (x.args || []).length === 1 && d < 4 ? nameRoot(x.args[0], d + 1) : x);
+                const root = nameRoot(nm);
+                if (root && root.kind === 'ident' && Array.isArray(fn.params) && fn.params.includes(root.name)) continue;
                 const sessionLike = !nm || nm.kind !== 'literal' || SESSION_COOKIE.test(String(nm.value));
                 const isTrue = (p) => p && p.value && ((p.value.kind === 'literal' && /^true$/i.test(String(p.value.value))) || (p.value.kind === 'ident' && /\.True$/.test(p.value.name)));
                 // an XSRF double-submit cookie is READ by the page's script and sent back in a header: HttpOnly would break it, so its absence is

@@ -1547,9 +1547,9 @@
     ],
     "ihp:ihp-schema-compiler/IHP/SchemaCompiler/Cache.hs:45:path-traversal": [
      [
-      "high",
+      "low",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
@@ -2065,14 +2065,6 @@
       "HS-RULES"
      ]
     ],
-    "scotty:Web/Scotty/Cookie.hs:132:Session cookie without HttpOnly or Secure": [
-     [
-      "medium",
-      null,
-      null,
-      "HS-RULES"
-     ]
-    ],
     "scotty:Web/Scotty/Session.hs:180:Session cookie without HttpOnly or Secure": [
      [
       "medium",
@@ -2314,12 +2306,12 @@
      }
     },
     "scotty": {
-     "rows": 21,
-     "flagged": 20,
+     "rows": 20,
+     "flagged": 19,
      "loweredToInfo": 1,
      "byStatus": {
       "external-api": 1,
-      "no-verdict": 9,
+      "no-verdict": 8,
       "entrypoint-reachable": 11
      }
     },

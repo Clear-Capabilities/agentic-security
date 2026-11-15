@@ -894,7 +894,10 @@ function fixBody(text, f) {
   // The rule reports one finding per function, so fixing only the reported call would leave the next call of the same function as "the" finding. Every
   // `strictRequestBody <variable>` call in the file is rewritten, and the plan says how many.
   const code = stripComments(text);
-  const hits = [...code.matchAll(/(?<![\w'])strictRequestBody\s+([a-z_][\w']*)(?![\w'])/g)].map((h) => { const q = qualifierBefore(code, h.index); return { index: h.index - q.length, end: h.index + h[0].length, variable: h[1] }; });
+  // `lazyRequestBody` too (0.195.40): the three discovery-set true positives read the body lazily with no bound (servant-server's ReqBody handler,
+  // wai-extra's MethodOverridePost, wai-frontend-monadcgi). The bounded reader already returns a lazy ByteString, so the same helper serves; the
+  // stated consequence is that the body is now read eagerly, up to the limit, before the handler continues.
+  const hits = [...code.matchAll(/(?<![\w'])(strictRequestBody|lazyRequestBody)\s+([a-z_][\w']*)(?![\w'])/g)].map((h) => { const q = qualifierBefore(code, h.index); return { index: h.index - q.length, end: h.index + h[0].length, variable: h[2], lazy: h[1] === 'lazyRequestBody' }; });
   const lineAt = (off) => text.slice(0, off).split('\n').length;
   if (!hits.some((h) => lineAt(h.index) === f.line)) return null;
   if (!importInfo(text, 'Network.Wai') || !importInfo(text, 'Data.ByteString.Lazy')) return null;      // wai and bytestring are then declared by this component
@@ -910,11 +913,12 @@ function fixBody(text, f) {
     lines.splice(at + 1, 0, 'import qualified Network.Wai as AgentcW', 'import qualified Data.ByteString as AgentcBS', 'import qualified Data.ByteString.Lazy as AgentcLBS', 'import qualified Control.Exception as AgentcE');
     next = lines.join('\n').replace(/\n*$/, '\n') + '\n' + BODY_HELPER;
   }
-  const n = hits.length;
+  const n = hits.length; const lazy = hits.filter((h) => h.lazy).length;
+  const named = lazy === 0 ? 'strictRequestBody' : lazy === n ? 'lazyRequestBody' : 'strictRequestBody/lazyRequestBody';
   return {
     ruleId: 'hs-request-body-bound', label: 'MITIGATION', text: next,
-    explanation: `Replaced ${n} strictRequestBody call${n === 1 ? '' : 's'} with boundedRequestBody, which stops reading and throws once the body passes requestBodyLimitBytes (${BODY_LIMIT_DEFAULT} bytes, a declared default, not a measured need).`,
-    consequences: [`A request body larger than ${BODY_LIMIT_DEFAULT} bytes now raises an IOException in the ${n} rewritten call${n === 1 ? '' : 's'} (a 500 from the default handler, not a 413). Legitimate large uploads are rejected until requestBodyLimitBytes is raised.`, 'The limit applies only to the calls rewritten; every other body read keeps its old behavior.'],
+    explanation: `Replaced ${n} ${named} call${n === 1 ? '' : 's'} with boundedRequestBody, which stops reading and throws once the body passes requestBodyLimitBytes (${BODY_LIMIT_DEFAULT} bytes, a declared default, not a measured need).`,
+    consequences: [`A request body larger than ${BODY_LIMIT_DEFAULT} bytes now raises an IOException in the ${n} rewritten call${n === 1 ? '' : 's'} (a 500 from the default handler, not a 413). Legitimate large uploads are rejected until requestBodyLimitBytes is raised.`, 'The limit applies only to the calls rewritten; every other body read keeps its old behavior.', ...(lazy ? [`${lazy} of the rewritten call${lazy === 1 ? ' was' : 's were'} lazyRequestBody: the body is now read eagerly, up to the limit, before the handler continues, instead of being streamed as it is consumed.`] : [])],
     behavior: { kind: 'body-limit', limit: BODY_LIMIT_DEFAULT, replaced: n },
     expectEffective: { kind: 'body', replaced: n },
   };
@@ -1587,8 +1591,8 @@ export function haskellEffectiveCheck(plan, patched) {
   }
   if (want.kind === 'body') {
     const count = (t, re) => (stripComments(t).match(re) || []).length;
-    const calls = (t) => count(t, /(?<![\w'])(?:[A-Z][\w']*\.)?strictRequestBody(?![\w'])/g);
-    if (calls(after) !== calls(before) - want.replaced) return { ok: false, ran: true, detail: `exactly ${want.replaced} strictRequestBody call(s) should have been replaced` };
+    const calls = (t) => count(t, /(?<![\w'])(?:[A-Z][\w']*\.)?(?:strictRequestBody|lazyRequestBody)(?![\w'])/g);
+    if (calls(after) !== calls(before) - want.replaced) return { ok: false, ran: true, detail: `exactly ${want.replaced} strictRequestBody/lazyRequestBody call(s) should have been replaced` };
     if (!after.includes(BODY_HELPER)) return { ok: false, ran: true, detail: 'the bounded reader is not defined in the patched file' };
     if (!new RegExp(`requestBodyLimitBytes\\s*=\\s*${BODY_LIMIT_DEFAULT}\\b`).test(after)) return { ok: false, ran: true, detail: 'the declared limit is not the one the patch states' };
     return { ok: true, ran: true, detail: `${want.replaced} strictRequestBody call(s) were replaced by the bounded reader, whose limit is the declared constant` };

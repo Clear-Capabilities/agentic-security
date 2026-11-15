@@ -352,9 +352,10 @@ main = do
   assert.equal(out['original-hostile'].pulled, 200, 'the original pulled every chunk into memory');
 });
 
-test('request body: near-misses are refused (lazyRequestBody, no wai import, a taken name) and a second call reuses the one helper', () => {
+test('request body: near-misses are refused (no wai import, a taken name, NoImplicitPrelude), lazyRequestBody is rewritten too (since 0.195.40), and a second call reuses the one helper', () => {
   const plan = (files, line) => planHaskellFix({ cwe: 'CWE-770', rule: 'hs-unbounded-request-body', file: 'src/Svc.hs', line }, files);
-  assert.equal(plan({ 'src/Svc.hs': BODY['src/Svc.hs'].replace('strictRequestBody req', 'lazyRequestBody req') }, 8).ok, false);
+  const lazy = plan({ 'src/Svc.hs': BODY['src/Svc.hs'].replace('strictRequestBody req', 'lazyRequestBody req') }, 8);
+  assert.equal(lazy.ok, true, JSON.stringify(lazy)); assert.match(lazy.after, /boundedRequestBody req\n/); assert.ok(lazy.consequences.some((c) => /eagerly/.test(c)));
   assert.equal(plan({ 'src/Svc.hs': BODY['src/Svc.hs'].replace('import Network.Wai\n', 'import Network.Wai.Internal\n') }, 8).ok, false);
   assert.equal(plan({ 'src/Svc.hs': `${BODY['src/Svc.hs']}\nboundedRequestBody :: Int\nboundedRequestBody = 1\n` }, 8).ok, false, 'a name of ours is already used by something else');
   assert.equal(plan({ 'src/Svc.hs': BODY['src/Svc.hs'].replace('module Svc', '{-# LANGUAGE NoImplicitPrelude #-}\nmodule Svc') }, 9).ok, false);
