@@ -40,8 +40,7 @@ const PERSIST_FNS = new Set(['get', 'getBy', 'selectFirst', 'selectList', 'inser
 const GUARD_PRIMITIVES = new Set(['Yesod.Core.requireAuthId', 'Yesod.Core.requireAuth', 'Yesod.Auth.requireAuthId', 'Yesod.Auth.requireAuth', 'Yesod.requireAuthId', 'Yesod.requireAuth', 'Network.Wai.Middleware.HttpAuth.basicAuth']);
 // a header that carries the caller's credential: the standard two, and the custom names projects give a token or session header
 const CREDENTIAL_HEADER = /^(?:authorization|cookie|x-api-key|x-api-token|x-auth-token|x-auth|x-access-token|x-session(?:-(?:id|token|key))?|x-token|x-user-token|x-csrf-token|x-xsrf-token)$/i;
-// a path that names administration, or the service's own settings and configuration: privileged by what it reaches, whoever the caller is
-const ADMIN_PATH = /(?:^|\/)(?:admin|internal|manage|superuser|settings|config|configuration)(?:\/|$|:)/i;
+const ADMIN_PATH = /(?:^|\/)(?:admin|internal|manage|superuser)(?:\/|$|:)/i;
 // an authentication endpoint (sign-in, registration, password reset, logout, an OAuth callback) is public by construction
 const AUTH_ENDPOINT_PATH = /(?:^|\/)(?:login|log-in|sign-?in|sign-?up|signup|register|registration|logout|log-out|sign-?out|password\/(?:reset|forgot)|reset-password|forgot-password|password-reset|oauth|callback|token|auth|authenticate|session)(?:\/|$|:|\.)/i;
 const AUTH_ENDPOINT_NAME = /(?:login|signin|signup|register|logout|signout|resetpassword|passwordreset|forgotpassword|authenticate)/i;
@@ -292,13 +291,27 @@ function kidsIr(e) {
 function* walkIr(e, depth = 0) { if (!e || typeof e !== 'object' || depth > 80) return; yield e; for (const c of kidsIr(e)) yield* walkIr(c, depth + 1); }
 const identsIr = (e) => { const out = new Set(); for (const x of walkIr(e)) { if (x.kind === 'ident' && x.name) out.add(x.name); if (x.kind === 'member' && x.object) { for (const y of walkIr(x.object)) if (y.kind === 'ident') out.add(y.name); } } return out; };
 
-function isSensitiveCall(ctx, c) {
+// A write to a mutable cell the function did not create (an `IORef`, `TVar` or `MVar` handed in from the application's closure, `app ref = serve ..
+// (settingsHandler ref)`) changes state every later request sees: the service's settings, a cache, a counter. A cell made in the function itself
+// (`ref <- newIORef ..`) is request-local and is not.
+const CELL_WRITE = /^(?:Data\.IORef\.(?:writeIORef|modifyIORef|modifyIORef'|atomicModifyIORef|atomicModifyIORef'|atomicWriteIORef)|Control\.Concurrent\.STM(?:\.TVar)?\.(?:writeTVar|modifyTVar|modifyTVar'|stateTVar|swapTVar)|Control\.Concurrent\.MVar\.(?:putMVar|modifyMVar_|modifyMVar|swapMVar)|Control\.Concurrent\.(?:putMVar|modifyMVar_|modifyMVar|swapMVar))$/;
+const CELL_NEW = /(?:^|\.)(?:newIORef|newTVar|newTVarIO|newMVar|newEmptyMVar)$/;
+function writesSharedCell(fn, c) {
+  if (!CELL_WRITE.test(c.callee || '')) return false;
+  const cell = (c.args || [])[0];
+  if (!cell || cell.kind !== 'ident') return true;
+  for (const n of Object.values(fn.cfg.nodes)) if (n.kind === 'assign' && n.target === cell.name && n.source && n.source.kind === 'call' && CELL_NEW.test(n.source.callee || '')) return false;
+  return true;
+}
+
+function isSensitiveCall(ctx, c, fn = null) {
   if (SENSITIVE_PREFIX.some((p) => c.callee.startsWith(p))) return true;
   const bare = c.callee.split('.').pop();
   if (PERSIST_FNS.has(bare) && !/^(?:Prelude|Data|Web)\./.test(c.callee)) return true;
+  if (fn && writesSharedCell(fn, c)) return true;
   if (c.hs && c.hs.status === 'resolved' && c.hs.target) {
     const sub = ctx.fnByQid.get(c.hs.target);
-    if (sub && callsOf(sub).some((x) => SENSITIVE_PREFIX.some((p) => (x.callee || '').startsWith(p)))) return true;
+    if (sub && callsOf(sub).some((x) => SENSITIVE_PREFIX.some((p) => (x.callee || '').startsWith(p)) || writesSharedCell(sub, x))) return true;
   }
   return false;
 }
@@ -328,7 +341,7 @@ function handlerFacts(ctx, fn, opts = {}) {
     if (c.hs && c.hs.status === 'resolved' && c.hs.target) return guardSummary(ctx, ctx.fnByQid.get(c.hs.target)).auth;
     return false;
   };
-  const isSensitive = (c) => isSensitiveCall(ctx, c);
+  const isSensitive = (c) => isSensitiveCall(ctx, c, fn);
   const guardIdx = ordered.findIndex((o) => isGuardCall(o.call));
   const sensIdx = ordered.findIndex((o) => isSensitive(o.call));
   // An INLINE guard: the handler itself reads a credential and, before any sensitive operation, rejects. Scotty's `status` only sets the
@@ -486,7 +499,7 @@ function inlineOrder(ctx, fn, facts, opts) {
   const src = handlerSource(ctx, fn);
   if (!src) return { verdict: 'unknown', reason: 'the handler body is not available as source structure' };
   const credNames = new Set((opts.credentialParams || []).map((c) => c.name));
-  const irSens = callsOf(fn).filter((c) => typeof c.callee === 'string' && isSensitiveCall(ctx, c)).length;
+  const irSens = callsOf(fn).filter((c) => typeof c.callee === 'string' && isSensitiveCall(ctx, c, fn)).length;
   const T = { astSens: 0, failed: false, unordered: false };
   const memo = new Map();
   const localSens = new Map();    // a name bound by let/where to an expression that performs a sensitive operation -> how many
@@ -502,7 +515,7 @@ function inlineOrder(ctx, fn, facts, opts) {
         // an argument-less credential read (`maybeAuthId`, `lookupBearerAuth`) is an identifier, not a call, when it is lowered on its own
         reads: credentialReadsOf(f2).size > 0 || Object.values(f2.cfg.nodes).some((n) => exprsOfNode(n).some((r) => [...walkIr(r)].some((x) => x.kind === 'ident' && typeof x.name === 'string' && !!credentialKind({ callee: x.name, args: [] })))),
         rej: calls.some((c) => isRejection(c) && !SCOTTY_STATUS.test(c.callee) && stopsHandler(c, calls)),
-        sensN: callsOf(f2).filter((c) => typeof c.callee === 'string' && isSensitiveCall(ctx, c)).length,
+        sensN: callsOf(f2).filter((c) => typeof c.callee === 'string' && isSensitiveCall(ctx, c, f2)).length,
         // Scotty: `status 40x` only sets the code; a halting call (`finish`, `raise`, `redirect`) ends the handler. Both are tracked so the PAIR counts
         // as a rejection wherever the two sit in sequence (`status status401 >> finish`), in either order of statements within one branch.
         stat: calls.some((c) => SCOTTY_STATUS.test(c.callee) && isRejection(c)),
