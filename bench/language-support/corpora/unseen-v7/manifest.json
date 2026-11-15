@@ -4,8 +4,8 @@
  "frozenOn": "2026-11-15",
  "cases": 78,
  "perFamily": 3,
- "role": "generalisation",
- "developmentSince": null,
+ "role": "development",
+ "developmentSince": "2026-11-15",
  "sourcesSha256": "e9f991a01ed6f2aae06fd2903f8eb2818d09ac2cdccbcdc7d92e25f26cb7befd",
  "labelsSha256": "bf4c3bbc94f8df28ca78894c4e6071c06267ec9c2d944d5f3a875459c6502a3c",
  "note": "sourcesSha256 = sha256 over \"id:sha256(source)\" lines in id order; labelsSha256 = sha256 of the exact JSON array of cases (canonical build order); role is generalisation until USE-LOG.md records a use that changed the engine"

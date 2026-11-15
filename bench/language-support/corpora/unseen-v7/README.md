@@ -1,5 +1,7 @@
 # unseen-v7 (Haskell): MEASUREMENT ONLY
 
+> **Status (2026-11-15, 0.195.46): a DEVELOPMENT set.** Its per-case misses and strays were read for round 10 of the taint work after unseen-v8 was frozen and measured once (USE-LOG.md, manifest.json `role`). The generalisation measure from 0.195.46 on is unseen-v8. The rules below describe the split as it was written and still govern how it is run; only rule 4 no longer holds.
+
 A frozen split of single-flaw Haskell code forms: 13 vulnerability families, 3 vulnerable and 3 safe forms each, 78 forms in all. It is the generalisation measure
 from 0.195.43 on; it exists so that unseen-v6's failures can be read for round 8 of the taint work (which turns unseen-v6 into a development set, recorded in its
 USE-LOG) while a measure no engine change has been motivated by still exists.

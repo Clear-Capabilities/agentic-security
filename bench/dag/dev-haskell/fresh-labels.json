@@ -2622,6 +2622,16 @@
    "project": "ihp",
    "label": "TP",
    "reason": "`columnNameToFieldLabel` binds `let (Right parts) = Text.Inflections.parseSnakeCase [] columnName`; the IDE's schema designer hands it column names from request parameters, and a name the inflector rejects raises an uncaught exception. Found in round 9."
+  },
+  "dhall-haskell:dhall-test-server/src/Dhall/Test/Server.hs:226:Cross-Site Scripting (HTML response body from text)": {
+   "index": 246,
+   "kind": "flagged-after",
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "project": "dhall-haskell",
+   "label": "FP",
+   "reason": "`corsText mOrigin body` answers with `responseLBS status200 headers ..` where `headers` is `baseHeaders` (`[(hContentType, \"text/plain\")]`) or that list with a CORS header consed on, chosen by a `case` on the origin: a text/plain response, never a page. Appeared with the released 0.195.45 engine (the header judgement stopped at the identifier inside the case's branches), lowered in round 10 (`waiHtmlContext` walks a union's branches)."
   }
  }
 }

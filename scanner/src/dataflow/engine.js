@@ -388,7 +388,7 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext, argT
   const { qid, fn } = target;
   const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
   const entry = _withCapturedTaint(paramNames.length
-    ? entryStateFromCall(paramNames, argExprs || [], state, argTaint || ((a) => exprTaint(a, state, callContext)))
+    ? entryStateFromCall(paramNames, argExprs || [], state, argTaint || ((a) => exprTaint(a, state, callContext)), { fieldPaths: _isHsFile(_currentFile) })
     : new Set(), fn, state, callContext);
   let sum = callContext._summaryCache.get(qid, entry);
   if (!sum && fn && fn.cfg) {
@@ -879,6 +879,8 @@ function _arrayLiteralTaint(expr, prefix, state, callContext, bracket = false) {
   });
   return out;
 }
+
+const _isHsFile = (file) => /\.l?hs$/i.test(file || '');
 
 function _objectLiteralTaint(expr, prefix, state, callContext) {
   const out = { whole: false, paths: [] };
@@ -1607,11 +1609,18 @@ function _inheritSources(callContext, target, exprs, state) {
   if (!target || !Array.isArray(list) || list.length === 0 || list.length > 4000) return;
   let n = 0;
   for (const ex of exprs) {
+    // a record on a FIELD of the expression's path (`y.[2]` for the expression `y`) is inherited onto the same field of the target (`x.[2]`), so the
+    // origin stays with its component; a record on the path itself, or on an ancestor, lands on the target
+    const exPath = accessPathOf(ex);
     for (const s of _sourcesReachingExpr(ex, state, list)) {
-      if (n >= 5) return;
-      if (s.varName === target) continue;
-      if (list.some((x) => x.varName === target && x.sourceId === s.sourceId && x.line === s.line)) continue;
-      list.push({ ...s, varName: target, derivedFrom: s.varName });
+      if (n >= 8) return;
+      // the expression is one access path (`t.[1]`): a record on a SIBLING field (`t.[2]`, matched through the bare `t`) is not an origin of it
+      if (exPath && typeof s.varName === 'string' && s.varName !== exPath && !s.varName.startsWith(`${exPath}.`) && !exPath.startsWith(`${s.varName}.`)) continue;
+      const suffix = exPath && typeof s.varName === 'string' && s.varName.startsWith(`${exPath}.`) ? s.varName.slice(exPath.length) : '';
+      const dest = `${target}${suffix}`;
+      if (s.varName === dest) continue;
+      if (list.some((x) => x.varName === dest && x.sourceId === s.sourceId && x.line === s.line)) continue;
+      list.push({ ...s, varName: dest, derivedFrom: s.varName });
       n++;
     }
   }
@@ -1781,7 +1790,7 @@ function step(node, stateIn, callContext) {
           const callArgs = (node.source.args || []);
           const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
           const entry = _withCapturedTaint(paramNames.length
-            ? entryStateFromCall(paramNames, callArgs, callerTainted, (a) => exprTaint(a, callerTainted, callContext))
+            ? entryStateFromCall(paramNames, callArgs, callerTainted, (a) => exprTaint(a, callerTainted, callContext), { fieldPaths: _isHsFile(_currentFile) })
             : new Set(), fn, callerTainted, callContext);
           let sum = callContext._summaryCache.get(qid, entry);
           if (!sum && fn && fn.cfg) {
@@ -1927,6 +1936,22 @@ function step(node, stateIn, callContext) {
         for (const p of lit.paths) newState = _addPathAliasAware(newState, `${target}.${p}`, callContext);
         return { state: newState, findings };
       }
+      // Haskell: a tuple (`array` with `hs.tuple`) is assigned COMPONENT BY COMPONENT (`(field, name, path)` taints `t.[0]`, `t.[1]`, `t.[2]` each on
+      // its own), and a comprehension whose head is a tuple taints the element's components (`fs'.[].[k]`), so a loop that takes the element
+      // apart (`for_ fs' $ \(_, fnam, fpath) -> ..`) reads each component with its own taint and its own origin. Before, the loop's element was one
+      // tainted value carrying every component's roots (scotty's upload example: the framework's temp-file path and the client's file name).
+      if (target && !src && _isHsFile(_currentFile) && node.source.kind === 'array' && node.source.hs && (node.source.hs.tuple || (node.source.hs.comprehension && node.source.elements && node.source.elements.length === 1 && node.source.elements[0] && node.source.elements[0].kind === 'array' && node.source.elements[0].hs && node.source.elements[0].hs.tuple))) {
+        const tupleExpr = node.source.hs.tuple ? node.source : node.source.elements[0];
+        const prefix = node.source.hs.tuple ? target : `${target}.[]`;
+        newState = removePathAndDescendants(newState, target);
+        (tupleExpr.elements || []).forEach((el, k) => {
+          if (!el || !exprTaint(el, newState, callContext)) return;
+          const path = `${prefix}.[${k}]`;
+          newState = _addPathAliasAware(newState, path, callContext);
+          _inheritSources(callContext, path, [el], newState);
+        });
+        return { state: newState, findings };
+      }
       if (target && _isCoercionCall(node.source)) {
         // See _isCoercionCall's header comment: a real type coercion kills
         // taint outright, unconditionally of sink family — the one case in
@@ -1943,9 +1968,18 @@ function step(node, stateIn, callContext) {
         // later uses of the same source remain tainted. The target path
         // becomes the new tainted location.
         if (target) {
-          newState = _addPathAliasAware(newState, target, callContext);
           const sourcePath = accessPathOf(node.source);
-          if (sourcePath && !isCoveredBy(newState, sourcePath)) newState = addPath(newState, sourcePath);
+          // `x = y` where `y` is clean itself and only FIELDS of it are tainted (`y.q`, `y.[2]`): the fields move to `x` under the same names
+          // (`x.q`, `x.[2]`) instead of `x` becoming tainted whole, so a later read of another field of `x` stays clean (round 7's record returns,
+          // round 10's tuple components). A source tainted whole, or with no access path, taints the target whole as before.
+          const fieldPaths = sourcePath && !isCoveredBy(newState, sourcePath) ? [...newState].filter((st) => typeof st === 'string' && st.startsWith(`${sourcePath}.`)) : [];
+          if (fieldPaths.length) {
+            newState = removePathAndDescendants(newState, target);
+            for (const st of fieldPaths) newState = _addPathAliasAware(newState, `${target}${st.slice(sourcePath.length)}`, callContext);
+          } else {
+            newState = _addPathAliasAware(newState, target, callContext);
+            if (sourcePath && !isCoveredBy(newState, sourcePath)) newState = addPath(newState, sourcePath);
+          }
           _inheritSources(callContext, target, [node.source], newState);
         }
       } else {

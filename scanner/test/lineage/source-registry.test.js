@@ -278,12 +278,14 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // (`getHeader`, `rqHeaders`, `getsRequest`, `rqURI`, `rqPathInfo`, `rqQueryString`, `rqContextPath`, `getCookie`, `rqCookies`, `cookieValue`, from
   // Snap.Core and the Snap re-export), websockets' message readers (`receiveData`, `receiveDataMessage`, `receive`, `fromDataMessage`) and
   // amqp's `msgBody`, each as a call form and a lineage twin, every provenance modeled (header, url-param, cookie, network). Re-measured against the live catalog.
-  assert.equal(SOURCES.length, 728);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 570);
+  // 728 -> 730 and 570 -> 572 modeled (0.195.46, round 10): Spock's route capture `var`, the source `haskell-ir.js` seeds a route handler lambda's
+  // parameters with (`get ("a" <//> var) $ \x -> ..`), as a call form and a lineage twin, provenance url-param. Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 730);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 572);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 41);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 117);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(570 + 41 + 117, SOURCES.length);
+  assert.equal(572 + 41 + 117, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

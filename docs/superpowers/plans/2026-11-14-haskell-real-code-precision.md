@@ -206,3 +206,30 @@ Measured on the splits (unseen-v7's per-case lists still never read): unseen-v7 
 pattern layer F1 73.2% to 77.3% (15/2/9 to 17/3/7: two more vulnerable forms found, one safe form newly reported), taint unchanged at 71.4%. unseen-v6
 (development) overall F1 83.8% to 93.8%, pattern layer F1 75.6% to 92.3% (17 to 24 true positives, no miss left), taint unchanged at 96.6% (the `getArgs`
 decision). The one safe form unseen-v7 newly reports is not read; it is the generalisation cost of this round, recorded here.
+
+## Round 10 (0.195.46): taint precision on the real-code shapes left, then unseen-v7 read after unseen-v8 was frozen
+
+The first half took the shapes rounds 8 and 9 recorded as open (scotty's upload example, scotty's response assembly, simplex-chat's signed bearer
+tokens, dhall's text-only response helper); the second half froze and measured unseen-v8 (a blind split written by a separate agent session, F1 81.7%
+at 0.195.45) and then read unseen-v7's twelve misses and five false positives as a development set (its USE-LOG). Every mechanism is pinned both ways
+in `scanner/test/haskell/haskell-round10-taint.test.js` (taint) and `scanner/test/haskell/haskell-round10-rules.test.js` (pattern layer).
+
+| mechanism | source of the shape | effect |
+|---|---|---|
+| a Haskell tuple, and a comprehension whose head is one, is assigned component by component; an alias of a value tainted only in some fields moves the fields; inherited origins keep their field suffix and skip a sibling's | scotty `examples/upload.hs` (`for_ [ (f, unpack (fileName fi), fileContent fi) \| (f, fi) <- fs ] $ \(_, fnam, fpath) -> ..`) | the temp-file read (52) lowered, the write under the client's name (53) kept, each with its own root |
+| a record argument that is clean itself and tainted in some fields enters a callee as those fields (`entryStateFromCall` `fieldPaths`, Haskell only) | scotty `Web/Scotty/Util.hs:45` (`mkResponse` of `runAction (mkEnv req ..)`) | the framework's response assembly (three rows) gone |
+| a lambda handed to a source api starts with each parameter assigned the api's value (`filesOpts opts $ \_ fs -> ..`); a framework scanning itself seeds its own modelled apis | scotty upload example line 58 (an uploaded field NAME written into the page) | found again after the tuple precision would have lost it |
+| the clock rule follows a reading into a project helper's parameter; a helper that only compares, subtracts or dates a claim handed to a signing call keeps it an expiry | simplex-chat (`signedApiToken api now`) | the three bearer-token sites quiet (checked on the fixture; the discovery project was not rescanned this round) |
+| `waiHtmlContext` follows every binding once and walks a union's branches | dhall `corsText` (`headers = case mOrigin of Nothing -> base; Just o -> (cors, o) : base`) | the text/plain response lowered |
+| Spock: `html` is the page sink, `var` is a route-capture source seeded into the handler lambda's parameters; req: `useHttpsURI`/`useHttpURI` are request-target sinks | unseen-v7 Search, Documents, FeedRelay | three taint misses found |
+| `Set.member (uriRegName auth) allowedHosts` is a host allow-list; an attacker-reachable existence probe whose answer is only tested is `validation-probe` | unseen-v7 Preview/Routes, Exports/Download | two taint false positives gone |
+| positional `PBKDF2.Parameters 10 32`; Snap's `Cookie {..}` record; a record update over `makeSimpleCookie`; a size test on an expression (also under `when`/`unless`); a tested value counts only before the partial call and its origins stop at the call's result; `hs-raw-html-insertion` | unseen-v7 Login, Session, Authenticate, Reprint, DispatchSocket, Comments | five pattern misses found, two false positives gone (Comments stays a miss: its record is outside the split) |
+| a servant endpoint served by the function itself is analysed as its own IR function; pattern-bound parameters take the IR's name; a value bound from a principal or an id is one; `effectfulCall` sees under `liftIO`; a Yesod route whose `isAuthorized` can only answer `Authorized` is reported at the clause | unseen-v7 Detail, Admin, Foundation/Badges | one false positive gone, two route misses found |
+
+Measured on the splits: unseen-v8 (generalisation, frozen and measured once at 0.195.45 before any of this: F1 81.7%, precision 90.6, recall 74.4, taint
+82.8, pattern 81.0) after the round: see the 0.195.46 changelog entry (the round's second half changed one safe form's reading and no vulnerable one;
+the strict precision line is unchanged). unseen-v7 (development from this round on): overall F1 75.0% to 90.9% (precision 81.8 to 92.1, recall 69.2 to
+89.7), taint 71.4% to 89.7%, pattern 77.3% to 91.7%; strict precision also rose (sast 48.6 to 57.9, taint 62.5 to 76.5). unseen-v6 unchanged at 93.8%.
+Left as misses on unseen-v7: a CLI argument into SQL (the operator-controlled policy), a read sized by a count parsed from a socket handle a caller
+opened, a Spock PUT with a session check and no ownership scope, and the raw insertion of a field of a record outside the split. Real-code (fresh)
+precision: in the changelog entry.

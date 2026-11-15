@@ -1,0 +1,516 @@
+@@@ weak-password-hash | vulnerable | src/Museum/StaffAuth.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.StaffAuth (registerStaff, verifyStaff) where
+
+import Crypto.Hash (Digest, SHA256, hash)
+import Data.ByteArray.Encoding (Base (Base16), convertToBase)
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Database.Persist
+import Database.Persist.Sql (SqlPersistT)
+import Museum.Model
+
+digestFor :: Text -> Text
+digestFor pw = TE.decodeUtf8 (convertToBase Base16 (hash (TE.encodeUtf8 pw) :: Digest SHA256)) --@@
+
+registerStaff :: Text -> Text -> SqlPersistT IO (Key Staff)
+registerStaff login pw = insert (Staff login (digestFor pw))
+
+verifyStaff :: Text -> Text -> SqlPersistT IO Bool
+verifyStaff login pw = do
+  found <- getBy (UniqueStaffLogin login)
+  pure $ case found of
+    Just (Entity _ s) -> staffPasswordDigest s == digestFor pw
+    Nothing -> False
+
+@@@ weak-password-hash | vulnerable | src/Ferry/AgentAccounts.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Ferry.AgentAccounts (NewAgent (..), createAgent) where
+
+import qualified Crypto.Hash.MD5 as MD5
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as B8
+import Data.Int (Int64)
+import Database.PostgreSQL.Simple
+
+data NewAgent = NewAgent { agentEmail :: String, agentPassword :: String, office :: String }
+
+createAgent :: Connection -> NewAgent -> IO Int64
+createAgent conn a =
+  execute conn
+    "INSERT INTO booking_agents (email, password_hash, office) VALUES (?, ?, ?)"
+    (agentEmail a, stored, office a)
+  where
+    stored = B8.unpack (B16.encode (MD5.hash (B8.pack (agentPassword a)))) --@@
+
+@@@ weak-password-hash | vulnerable | src/Apiary/Portal.hs
+module Apiary.Portal (checkMemberPassword, setMemberPassword) where
+
+import qualified Data.ByteString.Lazy.Char8 as BL
+import Data.Digest.Pure.SHA (sha1, showDigest)
+import Database.SQLite.Simple
+
+saltedDigest :: String -> String -> String
+saltedDigest salt pw = showDigest (sha1 (BL.pack (salt ++ ":" ++ pw))) --@@
+
+setMemberPassword :: Connection -> Int -> String -> String -> IO ()
+setMemberPassword conn memberId salt pw =
+  execute conn "UPDATE members SET salt = ?, pw_digest = ? WHERE id = ?" (salt, saltedDigest salt pw, memberId)
+
+checkMemberPassword :: Connection -> Int -> String -> IO Bool
+checkMemberPassword conn memberId pw = do
+  rows <- query conn "SELECT salt, pw_digest FROM members WHERE id = ?" (Only memberId)
+  pure $ case rows of
+    [(salt, digest)] -> saltedDigest salt pw == digest
+    _ -> False
+
+@@@ weak-password-hash | safe | src/Catalogue/PatronLogin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Catalogue.PatronLogin (enrolPatron, patronLogin) where
+
+import Crypto.PasswordStore (makePassword, verifyPassword)
+import Data.ByteString (ByteString)
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Database.SQLite.Simple
+
+enrolPatron :: Connection -> Text -> Text -> IO ()
+enrolPatron conn cardNo pw = do
+  stored <- makePassword (TE.encodeUtf8 pw) 17 --@@
+  execute conn "INSERT INTO patrons (card_no, pw) VALUES (?, ?)" (cardNo, stored)
+
+patronLogin :: Connection -> Text -> Text -> IO Bool
+patronLogin conn cardNo pw = do
+  rows <- query conn "SELECT pw FROM patrons WHERE card_no = ?" (Only cardNo) :: IO [Only ByteString]
+  pure $ case rows of
+    [Only stored] -> verifyPassword (TE.encodeUtf8 pw) stored
+    _ -> False
+
+@@@ weak-password-hash | safe | src/Warehouse/OperatorAuth.hs
+module Warehouse.OperatorAuth (PinHash, hashOperatorPin, operatorPinMatches, loadPinHash) where
+
+import Crypto.BCrypt (hashPasswordUsingPolicy, slowerBcryptHashingPolicy, validatePassword)
+import qualified Data.ByteString.Char8 as B8
+import Database.SQLite.Simple
+
+newtype PinHash = PinHash B8.ByteString
+
+hashOperatorPin :: String -> IO (Maybe PinHash)
+hashOperatorPin pin = fmap PinHash <$> hashPasswordUsingPolicy slowerBcryptHashingPolicy (B8.pack pin) --@@
+
+operatorPinMatches :: PinHash -> String -> Bool
+operatorPinMatches (PinHash stored) pin = validatePassword stored (B8.pack pin)
+
+loadPinHash :: Connection -> String -> IO (Maybe PinHash)
+loadPinHash conn badge = do
+  rows <- query conn "SELECT pin_hash FROM operators WHERE badge = ?" (Only badge)
+  pure $ case rows of
+    [Only h] -> Just (PinHash h)
+    _ -> Nothing
+
+@@@ weak-password-hash | safe | src/Radio/AdminAuth.hs
+module Radio.AdminAuth (adminPasswordOk, storeAdminPassword) where
+
+import Crypto.Scrypt (EncryptedPass (..), Pass (..), defaultParams, encryptPassIO, verifyPass')
+import qualified Data.ByteString.Char8 as B8
+import Database.MySQL.Simple
+
+storeAdminPassword :: Connection -> String -> String -> IO ()
+storeAdminPassword conn login pw = do
+  EncryptedPass enc <- encryptPassIO defaultParams (Pass (B8.pack pw)) --@@
+  _ <- execute conn "UPDATE station_admins SET pw = ? WHERE login = ?" (enc, login)
+  pure ()
+
+adminPasswordOk :: Connection -> String -> String -> IO Bool
+adminPasswordOk conn login pw = do
+  rows <- query conn "SELECT pw FROM station_admins WHERE login = ?" (Only login)
+  pure $ case rows of
+    [Only enc] -> verifyPass' (Pass (B8.pack pw)) (EncryptedPass enc)
+    _ -> False
+
+@@@ weak-randomness | vulnerable | src/Grants/ResetCode.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Grants.ResetCode (ResetCode (..), issueResetCode) where
+
+import Control.Monad (replicateM)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Time (UTCTime, addUTCTime, getCurrentTime)
+import System.Random (randomRIO)
+
+data ResetCode = ResetCode { code :: Text, expiresAt :: UTCTime, applicant :: Text }
+
+alphabet :: String
+alphabet = ['A' .. 'Z'] ++ ['2' .. '9']
+
+issueResetCode :: Text -> IO ResetCode
+issueResetCode applicantEmail = do
+  picks <- replicateM 8 (randomRIO (0, length alphabet - 1)) --@@
+  now <- getCurrentTime
+  pure ResetCode
+    { code = T.pack (map (alphabet !!) picks)
+    , expiresAt = addUTCTime 900 now
+    , applicant = applicantEmail
+    }
+
+@@@ weak-randomness | vulnerable | src/Orchestra/SessionToken.hs
+module Orchestra.SessionToken (newSessionId) where
+
+import Control.Monad (replicateM)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64.URL as B64
+import System.Random.MWC (createSystemRandom, uniformR)
+
+-- Session identifiers handed out after a box-office login.
+newSessionId :: IO BS.ByteString
+newSessionId = do
+  gen <- createSystemRandom
+  bytes <- replicateM 24 (uniformR (0, 255 :: Int) gen) --@@
+  pure (B64.encode (BS.pack (map fromIntegral bytes)))
+
+@@@ weak-randomness | vulnerable | src/Fleet/DeviceKey.hs
+module Fleet.DeviceKey (DeviceKey (..), provisionDeviceKey) where
+
+import Data.Time.Clock.POSIX (getPOSIXTime)
+import Numeric (showHex)
+import System.Random (mkStdGen, randomRs)
+
+newtype DeviceKey = DeviceKey String
+  deriving (Show)
+
+-- Each tracker unit receives a key at enrolment and signs its telemetry with it.
+provisionDeviceKey :: String -> IO DeviceKey
+provisionDeviceKey vin = do
+  seed <- floor . (* 1000) <$> getPOSIXTime
+  let gen = mkStdGen seed
+      nibbles = take 64 (randomRs (0, 15 :: Int) gen) --@@
+  pure (DeviceKey (vin ++ "-" ++ concatMap (`showHex` "") nibbles))
+
+@@@ weak-randomness | safe | src/Lab/PortalSession.hs
+module Lab.PortalSession (Session (..), mintSession) where
+
+import Crypto.Random (getRandomBytes)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64.URL as B64
+import Data.Time (UTCTime, getCurrentTime)
+
+data Session = Session { sessionId :: BS.ByteString, analyst :: String, startedAt :: UTCTime }
+
+mintSession :: String -> IO Session
+mintSession analystLogin = do
+  raw <- getRandomBytes 32 :: IO BS.ByteString --@@
+  now <- getCurrentTime
+  pure (Session (B64.encode raw) analystLogin now)
+
+@@@ weak-randomness | safe | src/Ferry/ResetToken.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Ferry.ResetToken (resetLink) where
+
+import qualified Data.ByteString.Base16 as B16
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import System.Entropy (getEntropy)
+
+resetLink :: Text -> IO Text
+resetLink bookingRef = do
+  token <- getEntropy 24 --@@
+  pure ("https://book.ferry.example/reset/" <> bookingRef <> "/" <> TE.decodeUtf8 (B16.encode token))
+
+@@@ weak-randomness | safe | src/Apiary/ApiToken.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Apiary.ApiToken (ApiToken (..), issueApiToken) where
+
+import Crypto.Random (SystemDRG, getSystemDRG, randomBytesGenerate)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64.URL as B64
+import Database.SQLite.Simple
+
+newtype ApiToken = ApiToken BS.ByteString
+
+issueApiToken :: Connection -> Int -> IO ApiToken
+issueApiToken conn memberId = do
+  drg <- getSystemDRG
+  let (bytes, _) = randomBytesGenerate 32 drg :: (BS.ByteString, SystemDRG) --@@
+      token = B64.encode bytes
+  execute conn "INSERT INTO api_tokens (member_id, token) VALUES (?, ?)" (memberId, token)
+  pure (ApiToken token)
+
+@@@ sensitive-logging | vulnerable | src/Museum/LoginAudit.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.LoginAudit (Attempt (..), recordLoginAttempt) where
+
+import Data.Text (Text)
+import Katip
+
+data Attempt = Attempt { curatorLogin :: Text, suppliedPassword :: Text, fromAddress :: Text }
+
+recordLoginAttempt :: (KatipContext m) => Attempt -> Bool -> m ()
+recordLoginAttempt a accepted = do
+  let outcome = if accepted then "accepted" else "rejected"
+  logFM InfoS (ls ("login " <> outcome <> " for " <> curatorLogin a <> " from " <> fromAddress a <> " using password " <> suppliedPassword a)) --@@
+
+@@@ sensitive-logging | vulnerable | src/Fleet/GatewayLog.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.GatewayLog (logTelemetryRequests) where
+
+import Control.Monad.Logger (LoggingT, logInfoN, runStdoutLoggingT)
+import qualified Data.Text.Encoding as TE
+import Data.Text.Encoding.Error (lenientDecode)
+import Network.Wai
+
+-- Traces every telemetry upload so gateway problems can be reconstructed.
+logTelemetryRequests :: Middleware
+logTelemetryRequests app req respond = do
+  runStdoutLoggingT (describe req)
+  app req respond
+
+describe :: Request -> LoggingT IO ()
+describe req = do
+  let decode = TE.decodeUtf8With lenientDecode
+      auth = maybe "<none>" decode (lookup "Authorization" (requestHeaders req))
+      path = decode (rawPathInfo req)
+  logInfoN ("telemetry " <> decode (requestMethod req) <> " " <> path <> " authorization=" <> auth) --@@
+
+@@@ sensitive-logging | vulnerable | src/Ferry/PaymentTrace.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Ferry.PaymentTrace (CardPayment (..), tracePayment) where
+
+import Data.Text (Text)
+import qualified Data.Text as T
+import System.Log.FastLogger (LoggerSet, ToLogStr (..), pushLogStrLn)
+
+data CardPayment = CardPayment { bookingRef :: Text, cardNumber :: Text, expiry :: Text, amountPence :: Int }
+
+tracePayment :: LoggerSet -> CardPayment -> IO ()
+tracePayment logger p =
+  pushLogStrLn logger (toLogStr line) --@@
+  where
+    line = T.intercalate " "
+      [ "payment", bookingRef p
+      , "card=" <> cardNumber p
+      , "exp=" <> expiry p
+      , "amount=" <> T.pack (show (amountPence p))
+      ]
+
+@@@ sensitive-logging | safe | src/Catalogue/FineReceipt.hs
+module Catalogue.FineReceipt (FinePayment (..), logFinePayment) where
+
+import System.IO (hPutStrLn, stderr)
+
+data FinePayment = FinePayment { patronId :: String, paymentCard :: String, pence :: Int }
+
+maskPan :: String -> String
+maskPan pan = replicate (length pan - 4) '*' ++ drop (length pan - 4) pan
+
+logFinePayment :: FinePayment -> IO ()
+logFinePayment p =
+  hPutStrLn stderr ("fine paid by patron " ++ patronId p ++ " card " ++ maskPan (paymentCard p) ++ " amount " ++ show (pence p)) --@@
+
+@@@ sensitive-logging | safe | src/Warehouse/OperatorLogin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Warehouse.OperatorLogin (LoginForm (..), auditLogin) where
+
+import Data.Aeson (ToJSON (..), object, (.=))
+import Data.Text (Text)
+import Katip
+
+data LoginForm = LoginForm { badge :: Text, pin :: Text, terminal :: Text }
+
+newtype LoginEvent = LoginEvent LoginForm
+
+instance ToJSON LoginEvent where
+  toJSON (LoginEvent f) = object ["badge" .= badge f, "terminal" .= terminal f, "pin" .= ("[redacted]" :: Text)]
+
+instance ToObject LoginEvent
+
+instance LogItem LoginEvent where
+  payloadKeys _ _ = AllKeys
+
+auditLogin :: (KatipContext m) => LoginForm -> Bool -> m ()
+auditLogin form accepted =
+  katipAddContext (LoginEvent form) $
+    logFM (if accepted then InfoS else WarningS) (if accepted then "operator login accepted" else "operator login rejected") --@@
+
+@@@ sensitive-logging | safe | src/Radio/ApiKeyLog.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Radio.ApiKeyLog (noteApiKeyUse) where
+
+import Control.Monad.Logger (MonadLogger, logInfoN)
+import Crypto.Hash (Digest, SHA256, hash)
+import Data.ByteString (ByteString)
+import Data.Text (Text)
+import qualified Data.Text as T
+
+fingerprint :: ByteString -> Text
+fingerprint key = T.take 12 (T.pack (show (hash key :: Digest SHA256)))
+
+noteApiKeyUse :: (MonadLogger m) => ByteString -> Text -> m ()
+noteApiKeyUse apiKey endpoint =
+  logInfoN ("schedule api call " <> endpoint <> " key=" <> fingerprint apiKey) --@@
+
+@@@ session-cookie | vulnerable | src/Orchestra/BoxOfficeLogin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Orchestra.BoxOfficeLogin (loginRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import Network.HTTP.Types.Status (status401)
+import Web.Scotty
+
+loginRoutes :: (TL.Text -> TL.Text -> IO (Maybe TL.Text)) -> ScottyM ()
+loginRoutes authenticate =
+  post "/box-office/login" $ do
+    user <- param "user"
+    pass <- param "password"
+    result <- liftIO (authenticate user pass)
+    case result of
+      Nothing -> status status401 >> text "login failed"
+      Just sessionId -> do
+        setHeader "Set-Cookie" ("boxoffice_session=" <> sessionId <> "; Path=/") --@@
+        redirect "/box-office"
+
+@@@ session-cookie | vulnerable | src/Grants/PortalSession.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Grants.PortalSession (Credentials (..), LoginAPI, loginServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as B8
+import Data.Text (Text)
+import Servant
+import Web.Cookie (SetCookie (..), defaultSetCookie)
+import Web.FormUrlEncoded (FromForm (..), parseUnique)
+
+data Credentials = Credentials { applicantEmail :: Text, applicantPassword :: Text }
+
+instance FromForm Credentials where
+  fromForm f = Credentials <$> parseUnique "email" f <*> parseUnique "password" f
+
+type LoginAPI =
+  "portal" :> "login" :> ReqBody '[FormUrlEncoded] Credentials
+    :> Post '[JSON] (Headers '[Header "Set-Cookie" SetCookie] NoContent)
+
+sessionCookie :: B8.ByteString -> SetCookie
+sessionCookie sid = defaultSetCookie { setCookieName = "portal_sid", setCookieValue = sid, setCookiePath = Just "/" } --@@
+
+loginServer :: (Credentials -> IO (Maybe B8.ByteString)) -> Server LoginAPI
+loginServer authenticate creds = do
+  m <- liftIO (authenticate creds)
+  case m of
+    Nothing -> throwError err401
+    Just sid -> pure (addHeader (sessionCookie sid) NoContent)
+
+@@@ session-cookie | vulnerable | src/Apiary/MemberSession.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Apiary.MemberSession (memberLogin) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Network.HTTP.Types.Status (status403)
+import Web.Scotty
+import Web.Scotty.Cookie (setSimpleCookie)
+
+memberLogin :: (Text -> Text -> IO (Maybe Text)) -> ScottyM ()
+memberLogin checkCredentials =
+  post "/members/login" $ do
+    email <- param "email"
+    pw <- param "password"
+    outcome <- liftIO (checkCredentials email pw)
+    case outcome of
+      Just token -> setSimpleCookie "apiary_session" token >> redirect "/hives" --@@
+      Nothing -> status status403 >> text "no such member"
+
+@@@ session-cookie | safe | src/Ferry/CrewLogin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Ferry.CrewLogin (crewLoginApp) where
+
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Builder as B
+import qualified Data.ByteString.Lazy as BL
+import Network.HTTP.Types (hAuthorization, hSetCookie, status200, status401, status405)
+import Network.Wai
+import Web.Cookie
+
+crewCookie :: ByteString -> SetCookie
+crewCookie sid = defaultSetCookie
+  { setCookieName = "crew_session"
+  , setCookieValue = sid
+  , setCookiePath = Just "/"
+  , setCookieHttpOnly = True
+  , setCookieSecure = True
+  , setCookieSameSite = Just sameSiteStrict
+  , setCookieMaxAge = Just 28800
+  }
+
+renderCookie :: SetCookie -> ByteString
+renderCookie = BL.toStrict . B.toLazyByteString . renderSetCookie
+
+crewLoginApp :: (ByteString -> IO (Maybe ByteString)) -> Application
+crewLoginApp authenticate req respond
+  | requestMethod req /= "POST" = respond (responseLBS status405 [] "")
+  | otherwise = do
+      result <- maybe (pure Nothing) authenticate (lookup hAuthorization (requestHeaders req))
+      case result of
+        Nothing -> respond (responseLBS status401 [("WWW-Authenticate", "Basic realm=\"crew\"")] "crew login failed")
+        Just sid -> respond (responseLBS status200 [(hSetCookie, renderCookie (crewCookie sid))] "welcome aboard") --@@
+
+@@@ session-cookie | safe | src/Lab/AnalystSession.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Lab.AnalystSession (analystLogin) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Network.HTTP.Types.Status (status401)
+import Web.Cookie (SetCookie (..), sameSiteLax)
+import Web.Scotty
+import Web.Scotty.Cookie (makeSimpleCookie, setCookie)
+
+analystCookie :: Text -> SetCookie
+analystCookie sid = (makeSimpleCookie "lab_session" sid)
+  { setCookieHttpOnly = True
+  , setCookieSecure = True
+  , setCookieSameSite = Just sameSiteLax
+  , setCookiePath = Just "/"
+  }
+
+analystLogin :: (Text -> Text -> IO (Maybe Text)) -> ScottyM ()
+analystLogin verify =
+  post "/analysts/login" $ do
+    login <- param "login"
+    pw <- param "password"
+    r <- liftIO (verify login pw)
+    case r of
+      Just sid -> setCookie (analystCookie sid) >> redirect "/samples" --@@
+      Nothing -> status status401 >> text "login refused"
+
+@@@ session-cookie | safe | src/Warehouse/ConsoleLogin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Warehouse.ConsoleLogin (consoleLogin) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.ByteString (ByteString)
+import Snap.Core
+
+consoleCookie :: ByteString -> Cookie
+consoleCookie sid = Cookie
+  { cookieName = "console_session"
+  , cookieValue = sid
+  , cookieExpires = Nothing
+  , cookieDomain = Nothing
+  , cookiePath = Just "/"
+  , cookieSecure = True
+  , cookieHttpOnly = True
+  }
+
+consoleLogin :: (ByteString -> ByteString -> IO (Maybe ByteString)) -> Snap ()
+consoleLogin authenticate = method POST $ do
+  mBadge <- getPostParam "badge"
+  mPin <- getPostParam "pin"
+  case (mBadge, mPin) of
+    (Just badge, Just pin) -> do
+      r <- liftIO (authenticate badge pin)
+      case r of
+        Just sid -> modifyResponse (addResponseCookie (consoleCookie sid)) >> redirect "/console" --@@
+        Nothing -> modifyResponse (setResponseStatus 401 "Unauthorized") >> writeBS "login refused"
+    _ -> modifyResponse (setResponseStatus 400 "Bad Request") >> writeBS "badge and pin required"

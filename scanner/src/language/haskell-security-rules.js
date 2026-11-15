@@ -33,6 +33,7 @@ export const RULES = Object.freeze({
   'hs-insecure-cookie': { cwe: 'CWE-1004', severity: 'medium', family: 'cookie-attributes', vuln: 'Session cookie without HttpOnly or Secure', remediation: 'Set `setCookieHttpOnly = True`, `setCookieSecure = True` and `setCookieSameSite = Just sameSiteStrict` (or Lax) on a session or token cookie.' },
   'hs-unbounded-input-read': { cwe: 'CWE-770', severity: 'medium', family: 'resource-exhaustion', vuln: 'Whole input read into memory without a size limit', remediation: 'Bound the read (`BL.take n`, `hGetSome`, a request-size limit) before the data is consumed.' },
   'hs-unbounded-decompression': { cwe: 'CWE-770', severity: 'medium', family: 'resource-exhaustion', vuln: 'Decompression of caller-supplied bytes without a size limit', remediation: 'Bound the input (reject a body over a limit) and bound the output (read the decompressed stream up to a cap, or set the decoder\'s window and buffer limits) before using the result.' },
+  'hs-raw-html-insertion': { cwe: 'CWE-79', severity: 'medium', family: 'xss', vuln: 'Stored text inserted into a page without escaping', remediation: 'Render stored text with `toHtml` (blaze) or `toHtml` (lucid), which escape it; use the pre-escaped insertion only for markup the program built itself.' },
   'hs-unbounded-allocation': { cwe: 'CWE-770', severity: 'medium', family: 'resource-exhaustion', vuln: 'Allocation sized by parsed caller text without an upper bound', remediation: 'Clamp the size (`min limit n`) before allocating.' },
   'hs-partial-function-on-input': { cwe: 'CWE-248', severity: 'low', family: 'unhandled-exception', vuln: 'Partial function applied to caller-supplied text', remediation: 'Use the total variant (`readMaybe`, `listToMaybe`, pattern matching) and handle the failure.' },
   'hs-tls-validation-disabled': { cwe: 'CWE-295', severity: 'high', family: 'tls-validation', vuln: 'TLS certificate validation is disabled', remediation: 'Do not disable certificate validation. Use the default settings (`tlsManagerSettings`, `TLSSettingsSimple False False False`, `VerifyPeer`) and, for a private certificate authority, add that authority to the trust store instead.' },
@@ -68,6 +69,7 @@ const SOCKET_READS = new Set(['Network.Socket.ByteString.recv', 'Network.Socket.
 const SET_COOKIE_HEADER = new Set(['Network.HTTP.Types.Header.hSetCookie', 'Network.HTTP.Types.hSetCookie']);
 const REQUEST_LENGTH = new Set(['Network.Wai.requestBodyLength']);
 const RELATIONAL = new Set(['<', '<=', '>', '>=']);
+const RAW_HTML = new Set(['Text.Blaze.Html.preEscapedToHtml', 'Text.Blaze.preEscapedToHtml', 'Text.Blaze.Html5.preEscapedToHtml', 'Text.Blaze.Internal.preEscapedText', 'Text.Blaze.Internal.preEscapedString', 'Text.Blaze.Internal.preEscapedLazyText', 'Text.Blaze.Html.preEscapedText', 'Text.Blaze.Html5.preEscapedText', 'Text.Blaze.Html.preEscapedString', 'Text.Blaze.Html5.preEscapedString', 'Text.Blaze.Html.preEscapedToMarkup', 'Text.Blaze.preEscapedToMarkup', 'Text.Blaze.Html5.preEscapedToMarkup', 'Lucid.toHtmlRaw', 'Lucid.Base.toHtmlRaw', 'Text.Blaze.Internal.unsafeByteString', 'Text.Blaze.Html.unsafeByteString', 'Text.Blaze.Html5.unsafeByteString']);
 const PBKDF2_CALLS = new Set(['Crypto.KDF.PBKDF2.generate', 'Crypto.KDF.PBKDF2.fastPBKDF2_SHA1', 'Crypto.KDF.PBKDF2.fastPBKDF2_SHA256', 'Crypto.KDF.PBKDF2.fastPBKDF2_SHA512']);
 // The HMACs a written-out PBKDF2 may be built on (SHA 1.6.4.4: `hmacSha256 :: ByteString -> ByteString -> Digest SHA256State`, lazy bytes;
 // crypton/cryptonite `Crypto.MAC.HMAC.hmac`), and the names of Prelude's `iterate` the resolver records.
@@ -281,21 +283,67 @@ function* walk(e, depth = 0) {
 // anything else (`show now`, a return of the bare value, a hash) keeps the finding. Decided from the IR, never from a name.
 const TIME_ARITH_CALL = /(?:^|\.)(?:diffUTCTime|addUTCTime|diffDays|addDays|compare|max|min)$/;
 const NUMERIC_WRAP = /(?:^|\.)(?:round|truncate|floor|ceiling|realToFrac|fromIntegral|toRational|fromRational|utcTimeToPOSIXSeconds|posixSecondsToUTCTime|nominalDiffTimeToSeconds)$/;
-function clockOnlyInTimeArithmetic(fn, node, read) {
-  const nodes = Object.values((fn.cfg && fn.cfg.nodes) || {});
-  const isArith = (x) => (x.kind === 'binary' && ['+', '-', '<', '>', '<=', '>=', '*'].includes(x.op)) || (x.kind === 'call' && typeof x.callee === 'string' && TIME_ARITH_CALL.test(x.callee) && (x.args || []).length >= 2);
-  // every path from the root to a use must pass through arithmetic (numeric wrappers do not count either way)
+// The walkers the two clock judgements share. `isArith`: time arithmetic, a comparison, or a signing call (a clock inside a SIGNED structure is a
+// claim, not the secret: the signature carries the security). `usesOk(root, isUse)`: every path from `root` to a use passes through one of those,
+// or the use is an argument a project helper treats as time (`helperOk`, followed three hops at most through the helper's parameter).
+const SIGN_CALL = /(?:^|\.)(?:sign|signJWT|signJwt|encodeSigned|hmac\w*|hmacSign|signWith|createJWT|mkSignature)$/i;
+function clockWalkers(resolve, depth) {
+  const isArith = (x) => (x.kind === 'binary' && ['+', '-', '<', '>', '<=', '>=', '*'].includes(x.op)) || (x.kind === 'call' && typeof x.callee === 'string' && ((TIME_ARITH_CALL.test(x.callee) && (x.args || []).length >= 2) || SIGN_CALL.test(x.callee)));
+  const helperOk = (call, argIdx) => {
+    if (!resolve || depth > 2 || !call.hs || call.hs.status !== 'resolved' || !call.hs.target) return false;
+    const callee = resolve(call.hs.target);
+    if (!callee || !Array.isArray(callee.params) || !callee.params[argIdx]) return false;
+    return paramOnlyInTimeArithmetic(callee, callee.params[argIdx], resolve, depth + 1);
+  };
   const usesOk = (root, isUse) => {
     let all = true; let any = false;
     const visit = (x, arith, d) => {
       if (!all || !x || typeof x !== 'object' || d > 60) return;
       if (isUse(x)) { any = true; if (!arith) all = false; return; }
       const here = arith || isArith(x);
+      if (!here && x.kind === 'call' && Array.isArray(x.args)) {
+        let covered = false;
+        x.args.forEach((a, i) => { if (a && isUse(a) && helperOk(x, i)) { covered = true; any = true; } });
+        if (covered) { for (const a of x.args) if (!(a && isUse(a))) visit(a, here, d + 1); return; }
+      }
       for (const k of Object.keys(x)) { if (k === 'hs') continue; const v = x[k]; if (Array.isArray(v)) { for (const y of v) visit(y, here, d + 1); } else if (v && typeof v === 'object') visit(v, here, d + 1); }
     };
     visit(root, false, 0);
     return { all, any };
   };
+  return { isArith, usesOk };
+}
+
+// A helper's PARAMETER (`signedApiToken api now`): the parameter, and every value built from it by numeric wrappers alone (`floor (utcTimeToPOSIXSeconds
+// now)`, with or without a type annotation the IR keeps in `hs.inner`), is used only in time arithmetic, comparisons or under a signing call.
+function paramOnlyInTimeArithmetic(fn, pname, resolve, depth) {
+  const nodes = Object.values((fn.cfg && fn.cfg.nodes) || {});
+  const tracked = new Set([pname]);
+  const unwrap = (e) => { let x = e; for (let i = 0; i < 6 && x; i++) { if (x.kind === 'literal' && x.hs && x.hs.inner) x = x.hs.inner; else if (x.kind === 'call' && typeof x.callee === 'string' && NUMERIC_WRAP.test(x.callee) && (x.args || []).length === 1) x = x.args[0]; else break; } return x; };
+  for (let round = 0; round < 6; round++) {
+    let grew = false;
+    for (const n of nodes) if (n.kind === 'assign' && n.target && n.source && !tracked.has(n.target)) { const u = unwrap(n.source); if (u && u.kind === 'ident' && tracked.has(u.name)) { tracked.add(n.target); grew = true; } }
+    if (!grew) break;
+  }
+  const { usesOk } = clockWalkers(resolve, depth);
+  const isUse = (x) => x.kind === 'ident' && tracked.has(x.name);
+  let seen = false;
+  for (const n of nodes) {
+    for (const root of [n.value, n.source, n.cond, ...(n.args || [])]) {
+      if (!root) continue;
+      // the wrapper assignments that only rename the value are the tracking itself, not a use
+      if (n.kind === 'assign' && root === n.source && tracked.has(n.target) && unwrap(root) && unwrap(root).kind === 'ident' && tracked.has(unwrap(root).name)) continue;
+      const r = usesOk(root, isUse);
+      if (r.any) seen = true;
+      if (!r.all) return false;
+    }
+  }
+  return seen || true;   // a parameter never used is not a security value either
+}
+
+function clockOnlyInTimeArithmetic(fn, node, read, resolve = null, depth = 0) {
+  const nodes = Object.values((fn.cfg && fn.cfg.nodes) || {});
+  const { usesOk } = clockWalkers(resolve, depth);
   if (node.kind === 'assign' && node.target && node.source) {
     const bare = node.source === read || (node.source.kind === 'call' && node.source.args && node.source.args.length === 1 && node.source.args[0] === read && NUMERIC_WRAP.test(String(node.source.callee)));
     if (!bare) return usesOk(node.source, (x) => x === read).all;   // the clock inside an expression of its own statement
@@ -539,6 +587,10 @@ export function analyzeHaskellRules(files, opts = {}) {
   }
 
   const requestParams = requestTextParams(ir);
+  // the clock judgement follows a reading into a project helper's parameter: the helpers by qid
+  const fnByQid = new Map();
+  for (const fir of Object.values(ir.perFile)) for (const f of fir.functions || []) fnByQid.set(f.qid, f);
+  const resolveFn = (qid) => fnByQid.get(qid) || null;
   // A ScottyM block that calls setMaxRequestBodySize bounds every body read of the application it builds: certain for a body read in the SAME
   // function (an inline route) and for a handler the block references; a block elsewhere in the project is a control whose reach is not verified
   // (the finding stays, at low, as for the wai middleware).
@@ -640,11 +692,17 @@ export function analyzeHaskellRules(files, opts = {}) {
       const withOrigins = (seed) => { const out = new Set(seed); const queue = [...seed]; while (queue.length) { const v = queue.pop(); for (const o of assignSources.get(v) || []) if (!out.has(o)) { out.add(o); queue.push(o); } } return out; };
       const testedVars = new Set();
       const testedSplits = new Set();
+      // the first line each variable is tested on: a test AFTER a partial call (`cmd = head parts` at line 25, `[_, a, b] <- parts` at 27) does not
+      // protect it, so `isTested` takes the call's line
+      const testedAt = new Map();
+      let testLine = null;
+      const testedAdd = (nm) => { testedVars.add(nm); if (Number.isFinite(testLine) && !(testedAt.has(nm) && testedAt.get(nm) <= testLine)) testedAt.set(nm, testLine); };
       for (const n of fnNodes(fn)) {
         if (n.kind !== 'if' || !n.cond) continue;
+        testLine = n.line;
         for (const x of walk(n.cond)) {
-          if (x.kind === 'call' && typeof x.callee === 'string' && EMPTINESS_CHECK.test(x.callee)) { for (const nm of directNames(x)) testedVars.add(nm); for (const s of splitsIn(x)) testedSplits.add(s); }
-          if (x.kind === 'binary' && ['==', '/=', '!='].includes(x.op) && [x.left, x.right].some((side) => side && side.kind === 'array' && side.elements.length === 0)) for (const nm of directNames(x)) testedVars.add(nm);
+          if (x.kind === 'call' && typeof x.callee === 'string' && EMPTINESS_CHECK.test(x.callee)) { for (const nm of directNames(x)) testedAdd(nm); for (const s of splitsIn(x)) testedSplits.add(s); }
+          if (x.kind === 'binary' && ['==', '/=', '!='].includes(x.op) && [x.left, x.right].some((side) => side && side.kind === 'array' && side.elements.length === 0)) for (const nm of directNames(x)) testedAdd(nm);
         }
       }
       // `case length xs of 3 -> ..`, `if length xs == 3`: a comparison of the list's LENGTH with a number is a test of the list (the IR lowers the
@@ -656,10 +714,11 @@ export function analyzeHaskellRules(files, opts = {}) {
       // (`when (length xs > 2) (putStrLn (xs !! 2))` is a guard written as a combinator, not an `if` node).
       const condExprs = [];
       for (const n of fnNodes(fn)) {
-        if (n.kind === 'if' && n.cond) condExprs.push(n.cond);
-        for (const ex of [n.value, n.source, ...(n.args || [])]) if (ex) for (const x of walk(ex)) if (x.kind === 'call' && typeof x.callee === 'string' && COND_COMBINATOR.test(x.callee) && x.args && x.args[0]) condExprs.push(x.args[0]);
+        if (n.kind === 'if' && n.cond) condExprs.push(Object.assign(Object.create(null), { cond: n.cond, line: n.line }));
+        for (const ex of [n.value, n.source, ...(n.args || [])]) if (ex) for (const x of walk(ex)) if (x.kind === 'call' && typeof x.callee === 'string' && COND_COMBINATOR.test(x.callee) && x.args && x.args[0]) condExprs.push(Object.assign(Object.create(null), { cond: x.args[0], line: n.line }));
       }
-      for (const cond of condExprs) {
+      for (const ce of condExprs) {
+        const cond = ce.cond; testLine = ce.line;
         for (const x of walk(cond)) {
           // `case length xs of 3 -> ..`: the IR lowers a literal alternative to a `<match>` on the scratch variable holding the length, so the
           // alternative runs only for lists of that length (IHP `renderDefaultWithoutType`: `case length (splitOn "'" s) of 3 -> .. !! 1`).
@@ -668,21 +727,21 @@ export function analyzeHaskellRules(files, opts = {}) {
               // the list measured is named, or is a split expression (`T.splitOn "'" input`), which the rule tracks by its own signature
               const measured = a && a.kind === 'ident' && lengthVars.has(a.name) ? lengthSrc.get(a.name) : a && a.kind === 'call' && typeof a.callee === 'string' && LENGTH_CALL.test(a.callee) ? a : null;
               if (!measured) continue;
-              for (const nm of directNames(measured)) testedVars.add(nm);
+              for (const nm of directNames(measured)) testedAdd(nm);
               for (const s of splitsIn(measured)) testedSplits.add(s);
             }
             continue;
           }
           if (x.kind === 'call' && typeof x.callee === 'string' && EMPTINESS_CHECK.test(x.callee)) {
-            for (const nm of directNames(x)) testedVars.add(nm);
+            for (const nm of directNames(x)) testedAdd(nm);
             for (const s of splitsIn(x)) testedSplits.add(s);
             // `case length xs of 3 -> ..`: the match is on a scratch variable holding the length; the list behind it is what was tested
-            for (const a of x.args || []) if (a && a.kind === 'ident' && lengthVars.has(a.name)) for (const nm of assignSources.get(a.name) || []) testedVars.add(nm);
+            for (const a of x.args || []) if (a && a.kind === 'ident' && lengthVars.has(a.name)) for (const nm of assignSources.get(a.name) || []) testedAdd(nm);
           }
           if (x.kind !== 'binary' || !['==', '/=', '!='].includes(x.op)) continue;
           for (const side of [x.left, x.right]) {
-            if (side && side.kind === 'call' && typeof side.callee === 'string' && LENGTH_CALL.test(side.callee)) for (const nm of directNames(side)) testedVars.add(nm);
-            if (side && side.kind === 'ident' && lengthVars.has(side.name)) for (const nm of assignSources.get(side.name) || []) testedVars.add(nm);
+            if (side && side.kind === 'call' && typeof side.callee === 'string' && LENGTH_CALL.test(side.callee)) for (const nm of directNames(side)) testedAdd(nm);
+            if (side && side.kind === 'ident' && lengthVars.has(side.name)) for (const nm of assignSources.get(side.name) || []) testedAdd(nm);
           }
         }
       }
@@ -695,7 +754,7 @@ export function analyzeHaskellRules(files, opts = {}) {
       // the pattern-bound temporary is matched when its own source is that expression. A comprehension generator's pattern filters instead of
       // failing (`hs.generator` on the element read), so a value read from one is not a crash either.
       const matchedVars = new Set(); const matchedExprs = new Set();
-      for (const cond of condExprs) for (const x of walk(cond)) if (x.kind === 'call' && x.callee === '<match>') for (const a of x.args || []) { if (a && a.kind === 'ident') matchedVars.add(a.name); else if (a) matchedExprs.add(JSON.stringify(a)); }
+      for (const ce of condExprs) for (const x of walk(ce.cond)) if (x.kind === 'call' && x.callee === '<match>') for (const a of x.args || []) { if (a && a.kind === 'ident') matchedVars.add(a.name); else if (a) matchedExprs.add(JSON.stringify(a)); }
       const sourceOf = new Map(); for (const n of fnNodes(fn)) if (n.kind === 'assign' && n.target && n.source && !sourceOf.has(n.target)) sourceOf.set(n.target, n.source);
       const fromGenerator = (e, d = 0) => !!e && d < 6 && ((e.kind === 'member' && e.hs && e.hs.generator) || (e.kind === 'member' && fromGenerator(e.object, d + 1)) || (e.kind === 'ident' && fromGenerator(sourceOf.get(e.name), d + 1)));
       for (const n of fnNodes(fn)) {
@@ -723,10 +782,15 @@ export function analyzeHaskellRules(files, opts = {}) {
         }
         return false;
       };
-      const isTested = (args) => {
+      // `skip`: the variable the partial call's own result is bound to (`cmd = head parts`): a test on a value derived from the RESULT
+      // (`case cmd of "ASSIGN" -> ..`) says nothing about the list the call takes apart, so the origins of a tested value stop there
+      const withOriginsSkip = (seed, skip) => { const out = new Set(seed); const queue = [...seed]; while (queue.length) { const v = queue.pop(); if (v === skip) continue; for (const o of assignSources.get(v) || []) if (!out.has(o)) { out.add(o); queue.push(o); } } return out; };
+      const isTested = (args, skip = null, atLine = null) => {
         if (args.some((a) => splitsIn(a).some((s) => testedSplits.has(s)))) return true;
         const mine = withOrigins([...args.flatMap((a) => [...directNames(a)])]);
-        for (const v of mine) if (testedAll.has(v) && derivedText.has(v)) return true;
+        const before = Number.isFinite(atLine) ? new Set([...testedVars].filter((v) => !testedAt.has(v) || testedAt.get(v) <= atLine)) : testedVars;
+        const tested = skip || before !== testedVars ? withOriginsSkip(before, skip) : testedAll;
+        for (const v of mine) if (tested.has(v) && derivedText.has(v)) return true;
         return false;
       };
 
@@ -735,7 +799,25 @@ export function analyzeHaskellRules(files, opts = {}) {
       // The values a relational test in this function compares with something (`n > maxBatch`, `count <= 100`): a count one of them sizes is bounded
       // by that test (the direction is not judged; a test that only rejects negatives still counts, which errs toward silence).
       const sizeTestedVars = new Set();
-      for (const n of fnNodes(fn)) if (n.kind === 'if' && n.cond) for (const x of walk(n.cond)) if (x.kind === 'binary' && RELATIONAL.has(x.op)) for (const nm of names(x)) sizeTestedVars.add(nm);
+      // ... and the EXPRESSIONS it compares (`copies job > maxCopies`: a record field), by structure, so `[1 .. copies job]` is bounded by that test;
+      // a `when`/`unless` condition is a test too (`when (n > limit) $ throwError ..`)
+      const sizeTestedExprs = new Set();
+      const sizeConds = [];
+      for (const n of fnNodes(fn)) {
+        if (n.kind === 'if' && n.cond) sizeConds.push(n.cond);
+        if (n.kind === 'call' && /(?:^|\.)(?:when|unless)$/.test(String(n.callee || '')) && n.args && n.args[0]) sizeConds.push(n.args[0]);
+        for (const root of [n.value, n.source, ...(n.args || [])]) if (root) for (const x of walk(root)) if (x.kind === 'call' && /(?:^|\.)(?:when|unless)$/.test(String(x.callee || '')) && x.args && x.args[0]) sizeConds.push(x.args[0]);
+      }
+      for (const cond of sizeConds) for (const x of walk(cond)) if (x.kind === 'binary' && RELATIONAL.has(x.op)) { for (const nm of names(x)) sizeTestedVars.add(nm); for (const side of [x.left, x.right]) if (side && (side.kind === 'member' || side.kind === 'call')) sizeTestedExprs.add(JSON.stringify(side)); }
+      const sizeTestedExpr = (e) => [...walk(e)].some((x) => (x.kind === 'member' || x.kind === 'call') && sizeTestedExprs.has(JSON.stringify(x)));
+      // scotty-cookie's `makeSimpleCookie`/`setSimpleCookie` as the BASE of a record update that sets the attributes
+      // (`(makeSimpleCookie "session" tok) { setCookieHttpOnly = True, setCookieSecure = True }`): the update is the cookie, judged by its own rule
+      const updatedCookieCalls = new Set();
+      for (const n of fnNodes(fn)) for (const root of [n.value, n.source, n.cond, ...(n.args || [])]) if (root) for (const x of walk(root)) {
+        if (x.kind !== 'union' || !Array.isArray(x.branches) || x.branches.length !== 2) continue;
+        const [base, upd] = x.branches;
+        if (base && base.kind === 'call' && upd && upd.kind === 'object' && upd.hs && upd.hs.update && Array.isArray(upd.props)) updatedCookieCalls.add(base);
+      }
       const readsRequestLength = fnNodes(fn).some((n) => [n.value, n.source, n.cond, ...(n.args || [])].some((ex) => ex && [...walk(ex)].some((x) => (x.kind === 'ident' && REQUEST_LENGTH.has(x.name)) || (x.kind === 'call' && REQUEST_LENGTH.has(x.callee)))));
       const waiSizeChecked = fnNodes(fn).some((n) => [n.value, n.source, n.cond, ...(n.args || [])].some((ex) => ex && callsIn(ex).some((x) => WAI_SIZE_CHECK.test(x.callee))));
       const sizeChecked = (hasSizeTest && readsRequestLength) || waiSizeChecked;
@@ -791,13 +873,13 @@ export function analyzeHaskellRules(files, opts = {}) {
             // an enumeration up to a parsed caller count, `[1 .. count]` handed to `mapM`/`forM`/`replicateM`: an allocation (and a loop) the caller sizes
             if (e.kind === 'array' && e.hs && e.hs.range && Array.isArray(e.elements) && e.elements.length >= 2) {
               const bound = e.elements[e.elements.length - 1];
-              if (bound && mentionsText(bound) && mentionsRequest(bound) && !callsIn(bound).some((x) => CLAMPS.test(x.callee)) && ![...names(bound)].some((v) => sizeTestedVars.has(v))) emit('hs-unbounded-allocation', file, node.line, { detail: 'an enumeration sized by parsed caller text', evidence: { allocator: 'enumFromTo' } });
+              if (bound && mentionsText(bound) && mentionsRequest(bound) && !callsIn(bound).some((x) => CLAMPS.test(x.callee)) && !sizeTestedExpr(bound) && ![...names(bound)].some((v) => sizeTestedVars.has(v))) emit('hs-unbounded-allocation', file, node.line, { detail: 'an enumeration sized by parsed caller text', evidence: { allocator: 'enumFromTo' } });
               continue;
             }
             if (e.kind === 'ident') {
               if (e.name === 'Crypto.Cipher.Types.nullIV') emit('hs-static-iv', file, node.line, { vuln: 'Static IV (nullIV)', detail: 'nullIV is a constant all-zero IV' });
               // a clock reading used as the value of a security-shaped function (a "nonce" that is the time)
-              if (TIME_SOURCES.has(e.name) && SECURITY_FN.test(fnBase) && !clockOnlyInTimeArithmetic(fn, node, e)) emitRandom(node.line, { vuln: 'Clock value used as a security value', detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
+              if (TIME_SOURCES.has(e.name) && SECURITY_FN.test(fnBase) && !clockOnlyInTimeArithmetic(fn, node, e, resolveFn)) emitRandom(node.line, { vuln: 'Clock value used as a security value', detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
               // a generator named as the whole value of a security-shaped action (`newCsrfToken = randomIO`): no call is written, the name is the call
               if (RANDOM_CALLS.has(e.name) && SECURITY_FN.test(fnBase) && !(e.hs && e.hs.functionRef)) emitRandom(node.line, { detail: `${e.name} feeds \`${fnBase}\``, evidence: { function: fnBase, source: e.name } });
               if (INPUT_READS.has(e.name) && !bounded && readsOutsideInput(fn, e.name, [], importsNetwork)) emit('hs-unbounded-input-read', file, node.line, { detail: `${e.name} reads everything`, confidence: 0.6 });
@@ -865,6 +947,18 @@ export function analyzeHaskellRules(files, opts = {}) {
               }
               continue;
             }
+            // Snap's `Cookie { cookieName = .., cookieSecure = False, cookieHttpOnly = False }` built by hand (`addResponseCookie` sends it): the record
+            // names both attributes, so a False (or an absent one) is the cookie's state, in whichever function builds it
+            if (e.kind === 'object' && e.hs && e.hs.con === 'Cookie' && Array.isArray(e.props) && (fir.imports || []).some((im) => /^Snap\.(?:Core|Types|Internal\.Http\.Types)$/.test(im.module))) {
+              const prop = (k) => e.props.find((p) => p && p.key === k);
+              const isTrueV = (p) => p && p.value && ((p.value.kind === 'literal' && /^true$/i.test(String(p.value.value))) || (p.value.kind === 'ident' && /\.True$/.test(p.value.name)));
+              const nm = prop('cookieName') && prop('cookieName').value;
+              const sessionLike = !nm || nm.kind !== 'literal' || SESSION_COOKIE.test(String(nm.value));
+              const valueConstant = !!prop('cookieValue') && !!prop('cookieValue').value && prop('cookieValue').value.kind === 'literal';
+              const missing = [isTrueV(prop('cookieHttpOnly')) ? null : 'HttpOnly', isTrueV(prop('cookieSecure')) ? null : 'Secure'].filter(Boolean);
+              if (sessionLike && !valueConstant && missing.length) emit('hs-insecure-cookie', file, e.line || node.line, { detail: `${missing.join(' missing, ')} missing`, evidence: { httpOnly: !missing.includes('HttpOnly'), secure: !missing.includes('Secure'), record: 'Snap.Core.Cookie' } });
+              continue;
+            }
             // TLS certificate validation switched off, by constructor
             if (e.hs && e.hs.con) {
               const importsFrom = (mods) => (fir.imports || []).some((im) => mods.includes(im.module));
@@ -890,8 +984,14 @@ export function analyzeHaskellRules(files, opts = {}) {
             const line = e.line || node.line;
             const args = e.args || [];
 
+            // blaze's / lucid's raw insertion over a STORED value (a record field of something loaded): the text lands in the page unescaped.
+            // Markup the program rendered itself (a call's result, a literal, constant text) is what the raw form is for, and a bare parameter
+            // handed on is a wrapper's definition (IHP's own `toHtmlRaw mHtml = .. Lucid2.toHtmlRaw`), whose callers decide.
+            if (RAW_HTML.has(c) && args[0] && args[0].kind === 'member' && !isLiteralLike(args[0]) && !constantConcat(args[0])) {
+              emit('hs-raw-html-insertion', file, line, { confidence: 0.6, detail: `${c} of field \`${args[0].prop}\``, evidence: { insertion: c } });
+            }
             // scotty-cookie's helpers build a cookie that carries neither Secure nor HttpOnly
-            if ((c === 'Web.Scotty.Cookie.setSimpleCookie' || c === 'Web.Scotty.Cookie.makeSimpleCookie') && args[0]) {
+            if ((c === 'Web.Scotty.Cookie.setSimpleCookie' || c === 'Web.Scotty.Cookie.makeSimpleCookie') && args[0] && !updatedCookieCalls.has(e)) {
               const nm = args[0];
               // A name that is a PARAMETER of this function is decided by the caller: the function is itself a cookie helper
               // (scotty's own `setSimpleCookie n v`, `deleteCookie c`), and the call that passes a session name is the site to report.
@@ -935,6 +1035,10 @@ export function analyzeHaskellRules(files, opts = {}) {
               }
             }
             if (PBKDF2_CALLS.has(c)) {
+              // `Parameters 10 32` written positionally: the first field of cryptonite's `Parameters` is `iterCounts`
+              for (const a of args) for (const x of walk(a)) if (x.kind === 'array' && x.hs && x.hs.con === 'Parameters' && x.elements && x.elements[0] && x.elements[0].kind === 'literal' && typeof x.elements[0].value === 'number' && x.elements[0].value < 10000) {
+                emit('hs-pbkdf2-low-iterations', file, line, { detail: `iterCounts = ${x.elements[0].value}`, evidence: { iterations: x.elements[0].value, threshold: 10000 } });
+              }
               for (const a of args) for (const x of walk(a)) if (x.kind === 'object') for (const p of x.props || []) if (p.key === 'iterCounts' && p.value && p.value.kind === 'literal' && typeof p.value.value === 'number' && p.value.value < 10000) {
                 emit('hs-pbkdf2-low-iterations', file, line, { detail: `iterCounts = ${p.value.value}`, evidence: { iterations: p.value.value, threshold: 10000 } });
               }
@@ -951,7 +1055,7 @@ export function analyzeHaskellRules(files, opts = {}) {
             }
             // (a reading that only enters time arithmetic or a time comparison, `expiresAt = e + now`, `diffUTCTime exp now`, is an expiry
             // computation in a token-shaped function, not the token: Hasura's access-token refresh and its expiry sleeper)
-            if (TIME_SOURCES.has(c) && SECURITY_FN.test(fnBase) && !clockOnlyInTimeArithmetic(fn, node, e)) emitRandom(line, { vuln: 'Clock value used as a security value', detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
+            if (TIME_SOURCES.has(c) && SECURITY_FN.test(fnBase) && !clockOnlyInTimeArithmetic(fn, node, e, resolveFn)) emitRandom(line, { vuln: 'Clock value used as a security value', detail: `${c} feeds \`${fnBase}\``, evidence: { function: fnBase, source: c } });
             if (INPUT_READS.has(c) && !bounded && readsOutsideInput(fn, c, args, importsNetwork)) emit('hs-unbounded-input-read', file, line, { detail: `${c} reads everything`, confidence: 0.6 });
             // decompression of caller-supplied bytes with no bound on the input or the output: the caller sizes the allocation (a decompression bomb)
             if (DECOMPRESSORS.test(c) && args.length && mentionsRequest(args[args.length - 1]) && !bounded) emit('hs-unbounded-decompression', file, line, { detail: `${c} inflates caller-supplied bytes`, evidence: { decompressor: c } });
@@ -964,7 +1068,7 @@ export function analyzeHaskellRules(files, opts = {}) {
             // (a name the module DEFINES is that definition, not the library partial: yesod-core's where-bound `fromJust = error ..`, evaluated only
             // for its type under `typeOf`; the IR records such a call as resolved to a project function, or as a local function value)
             const shadowed = PARTIALS.has(c) && !!e.hs && (!!e.hs.target || e.hs.reason === 'local-function-value' || localBindings.has(c));
-            if (PARTIALS.has(c) && !shadowed && !(NONEMPTY_TOTAL.test(c) && nonEmptyList(args[0])) && args.some((a) => mentionsText(a)) && !isTested(args)) emit('hs-partial-function-on-input', file, line, { detail: `${c} on caller-supplied input`, evidence: { partial: c }, inlineCtx: e.hs && e.hs.inlineCtx });
+            if (PARTIALS.has(c) && !shadowed && !(NONEMPTY_TOTAL.test(c) && nonEmptyList(args[0])) && args.some((a) => mentionsText(a)) && !isTested(args, node.kind === 'assign' ? node.target : null, line)) emit('hs-partial-function-on-input', file, line, { detail: `${c} on caller-supplied input`, evidence: { partial: c }, inlineCtx: e.hs && e.hs.inlineCtx });
             // a session/token cookie assembled without HttpOnly or Secure
             if (c === 'Web.Cookie.defaultSetCookie') { /* handled on the record update below */ }
             // unbounded body

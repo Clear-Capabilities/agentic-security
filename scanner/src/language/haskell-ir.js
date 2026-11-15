@@ -82,6 +82,18 @@ const CHAR_CLASS = new Set(['Data.Char.isAlphaNum', 'Data.Char.isAlpha', 'Data.C
 const ARITH = new Set(['+', '-', '*', '/', '^', '**', '==', '/=', '<', '<=', '>', '>=', '!!', '%']);
 
 const unknownExpr = (hs) => (hs ? { kind: 'unknown', hs } : { kind: 'unknown' });
+// Route registrations whose path pieces include a capture and whose handler is a lambda over the captures (see applyVar `routeCapture`).
+const ROUTE_CAPTURES = [
+  { route: /^Web\.Spock(?:\.Core)?\.(?:get|post|put|patch|delete|hookRoute|hookRouteAll|hookAny|wildcard)$/, capture: 'var', source: 'Web.Spock.var' },
+];
+// does the (unlowered) argument mention the bare name `v` (a path such as `"a" <//> var <//> "b"`)?
+function astMentionsVar(a, v, d = 0) {
+  if (!a || typeof a !== 'object' || d > 40) return false;
+  if (a.t === 'var' && a.name === v) return true;
+  for (const k of Object.keys(a)) { const x = a[k]; if (Array.isArray(x)) { for (const y of x) if (astMentionsVar(y, v, d + 1)) return true; } else if (x && typeof x === 'object' && astMentionsVar(x, v, d + 1)) return true; }
+  return false;
+}
+
 const mkUnion = (a, b) => (!a ? b : !b ? a : { kind: 'union', branches: [a, b] });
 
 // ── signatures ───────────────────────────────────────────────────────────────
@@ -877,7 +889,24 @@ class FnLowerer {
     }
     const viaAlias = this.applyAlias(r, argAsts, ln, via);
     if (viaAlias) return viaAlias;
-    let args = argAsts.map((a) => this.lowerExpr(a, ln));
+    // A SOURCE api that takes a callback hands the data to the callback (`filesOpts opts $ \\_ fs -> ..`, `receiveData conn >>= \\msg -> ..` is
+    // the bind form and already a source): every parameter of a lambda argument receives the call's value, so the closure starts with
+    // `param = <the call without its callbacks>` and the ordinary source machinery labels it. Only an unbound library name qualifies.
+    // (a project that defines a modelled module, a framework scanning itself, resolves the name to its own definition: the registry still says
+    // what the call hands its caller, so it is a source api here too, as the modelled-definition branch below lowers it)
+    const apiName = (r.kind === 'external' || r.kind === 'builtin') ? libraryName(r, f.name, f.qual).name : (r.kind === 'def' && r.def.kind === 'fun' && isKnownApi(r.mod, r.name)) ? `${r.mod}.${r.name}` : null;
+    const sourceApi = !!apiName && isSourceApi(apiName);
+    // A ROUTE registration whose path has a capture (`get ("invoices" <//> var <//> "pdf") $ \number -> ..`, Spock): the handler lambda's
+    // parameters are the captures, seeded with the capture's own source name (`Web.Spock.var`, a modelled source).
+    const routeCapture = !!apiName && ROUTE_CAPTURES.find((rc) => rc.route.test(apiName) && argAsts.some((a) => { const u = unparen(a); return u && u.t !== 'lam' && astMentionsVar(u, rc.capture); }));
+    let args;
+    if ((sourceApi || routeCapture) && argAsts.some((a) => { const u = unparen(a); return u && u.t === 'lam'; })) {
+      const plain = argAsts.map((a) => { const u = unparen(a); return u && u.t === 'lam' ? null : this.lowerExpr(a, ln); });
+      const seed = routeCapture && !sourceApi
+        ? { kind: 'call', callee: routeCapture.source, args: [], line: ln, hs: { status: 'external', routeCapture: true } }
+        : { kind: 'call', callee: apiName, args: plain.filter(Boolean), line: ln, hs: { status: 'external', callbackSource: true } };
+      args = argAsts.map((a, i) => plain[i] || this.liftClosure(unparen(a), ln, seed));
+    } else args = argAsts.map((a) => this.lowerExpr(a, ln));
     // `lookup key table` returns an element OF the table: the key chooses which, it is not where the value comes from. Only the table
     // flows to the result, so a constant table gives a constant result however tainted the key is.
     let selector = null;
@@ -1222,7 +1251,7 @@ class FnLowerer {
   }
 
   // ── closures ───────────────────────────────────────────────────────────────
-  liftClosure(lam, ln) {
+  liftClosure(lam, ln, seed = null) {
     this.lam++;
     const name = `${this.info.name}.\\lambda${this.lam}`;
     const qid = `${this.mod.file}::${this.info.parentName || this.info.name}.\\lambda${this.lam}@${ln}`;
@@ -1231,6 +1260,8 @@ class FnLowerer {
     const params = lam.params.map((p, i) => (p.t === 'pvar' ? p.name : `$arg${i}`));
     params.forEach((p, i) => sub.declare(p, { kind: 'param', index: i }));
     sub.params = params;
+    // a callback of a source api (applyVar `sourceApi`): each parameter is the api's value before the body runs
+    if (seed) params.forEach((p) => sub.cfg.add('assign', ln, { target: p, source: seed, hs: { demand: 'executed', callbackSource: true } }));
     lam.params.forEach((p, i) => { if (p.t !== 'pvar') sub.bindPattern(p, { kind: 'ident', name: `$arg${i}` }, ln); });
     const body = sub.lowerExpr(lam.body, ln);
     sub.cfg.add('return', (body && body.kind === 'call' && body.line) || ln, { value: body });

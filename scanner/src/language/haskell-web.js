@@ -460,7 +460,17 @@ function ownerEvidence(ctx, fn, facts, lookups) {
 // console write. Its presence means the handler does something the engine cannot see into.
 function effectfulCall(facts) {
   const o = facts.ordered.find((x) => !facts.isSensitive(x.call) && !RESPONSE_ONLY.test(x.call.callee || '') && !/^(?:>>=|>>|<\$>|<\*>|\$|\.|fmap|pure|return)$/.test(x.call.callee || ''));
-  return o ? { callee: o.call.callee, line: o.line } : null;
+  if (o) return { callee: o.call.callee, line: o.line };
+  // `liftIO reindexAll`: the lifted ACTION is a name from a module the analysis cannot see (not a parameter, not a local binding, not a
+  // library name): the handler runs something, and what it is cannot be seen
+  const locals = new Set([...(facts.fn && facts.fn.params) || [], ...(facts.assigns || []).map((a) => a.target)]);
+  for (const x of facts.ordered) {
+    if (!/(?:^|\.)(?:liftIO|lift)$/.test(x.call.callee || '') || !x.call.args || !x.call.args[0] || x.call.args[0].kind !== 'ident') continue;
+    const nm = String(x.call.args[0].name || '');
+    if (!nm || locals.has(nm) || /^(?:Prelude|Data|Control|System|GHC|Text|Network|Web|Servant|Yesod)\./.test(nm) || (x.call.args[0].hs && x.call.args[0].hs.functionRef)) continue;
+    return { callee: nm, line: x.line };
+  }
+  return null;
 }
 
 // ── structural order of an inline guard (WAI, Servant, Yesod) ──────────────────
@@ -653,6 +663,20 @@ function analyzeRoute(ctx, route, handlerFn, opts) {
   if (!handlerFn) { R.handler = R.handler || { kind: 'unknown' }; R.auth = { status: 'unknown', kind: null, evidence: [], reason: 'handler not resolved' }; return; }
   const facts = handlerFacts(ctx, handlerFn, opts);
   for (const v of opts.principalVars || []) facts.principals.add(v);
+  // a value bound FROM the principal or an id by a pattern or a plain rebinding (`(Authenticated caller)` binds `caller` from the Auth parameter,
+  // `iid` from the capture parameter) is that principal or id too; a call's result is not (a row looked up by an id is not the id)
+  const rootIdent = (e) => (e && e.kind === 'ident') ? e.name : (e && e.kind === 'member') ? rootIdent(e.object) : null;
+  for (let round = 0; round < 4; round++) {
+    let grew = false;
+    for (const a of facts.assigns || []) {
+      if (!a || !a.target || !a.source) continue;
+      const root = rootIdent(a.source);
+      if (!root) continue;
+      if (facts.principals.has(root) && !facts.principals.has(a.target)) { facts.principals.add(a.target); grew = true; }
+      if (facts.idVars.has(root) && !facts.idVars.has(a.target)) { facts.idVars.add(a.target); grew = true; }
+    }
+    if (!grew) break;
+  }
   for (const v of opts.idVars || []) facts.idVars.add(v);
   const gs = guardSummary(ctx, handlerFn);
   R.facts = facts;
@@ -1065,7 +1089,10 @@ export function analyzeHaskellWeb(files, opts = {}) {
     list.forEach((e, i) => {
       const hAst = h && h.handlers.length === list.length ? h.handlers[i] : null;
       if (h && h.handlers.length !== list.length) ctx.gaps.push({ kind: 'servant-handler-arity', detail: `${apiName} has ${list.length} endpoints but ${h.fnName} lists ${h.handlers.length} handlers; handlers are not paired`, file: mod.file, line: e.line });
-      add({ framework: 'servant', method: e.method, path: e.path, file: mod.file, line: e.line, mod, handlerAst: hAst, handlerParams: h && h.handlers.length === list.length ? h.params : null, servant: e, owner: apiName, whereDecls: h && h.fun && h.fun.clauses[0] && h.fun.clauses[0].rhs.where });
+      // one endpoint served by the function ITSELF (its body is the handler, its parameters the endpoint's values, some of them patterns such as
+      // `(Authenticated caller)`): the function is the handler, so its own IR, with the pattern bindings, is analysed rather than a relowering of the body
+      const selfHandler = h && h.fun && list.length === 1 && h.handlers.length === 1 && hAst && !['var', 'app'].includes(hAst.t) ? h.fnName : undefined;
+      add({ framework: 'servant', method: e.method, path: e.path, file: mod.file, line: e.line, mod, handlerAst: hAst, handlerName: selfHandler, handlerParams: h && h.handlers.length === list.length ? h.params : null, servant: e, owner: apiName, whereDecls: h && h.fun && h.fun.clauses[0] && h.fun.clauses[0].rhs.where });
     });
   }
 
@@ -1170,7 +1197,9 @@ export function analyzeHaskellWeb(files, opts = {}) {
       o.typeAuth = p.servant.auth; if (p.servant.role) o.typeRole = true;
       o.principalVars = []; o.idVars = [];
       (p.servant.order || []).forEach((kind, i) => {
-        const nm = paramNames[i + servantOffset]; if (!nm) return;
+        // a parameter written as a pattern (`(Authenticated caller)`) has no name in the clause; the IR's own name for it (`$arg1`) is the
+        // one the handler's bindings read from, so the facts follow it to `caller`
+        const nm = paramNames[i + servantOffset] || (handlerFn && Array.isArray(handlerFn.params) ? handlerFn.params[i + servantOffset] : null); if (!nm) return;
         if (kind === 'auth') o.principalVars.push(nm);
         else if (/^header:/.test(kind) && CREDENTIAL_HEADER.test(kind.slice(7))) (o.credentialParams ||= []).push({ name: nm, kind: /cookie/i.test(kind) ? 'cookie' : 'token' });
         else if (/^(?:capture|query):.*id$/i.test(kind) || bodyCarriesId(p.mod, kind)) o.idVars.push(nm);
@@ -1193,7 +1222,7 @@ export function analyzeHaskellWeb(files, opts = {}) {
     }
     analyzeRoute(ctx, R, handlerFn, o);
     if (p.framework === 'servant') { R.params = [...p.servant.captures, ...p.servant.params]; R.servant = { captures: p.servant.captures }; }
-    if (p.framework === 'yesod') R.yesodExplicitPublic = !!(yesodAuthz && yesodAuthz.forRoute(p.resource) && yesodAuthz.forRoute(p.resource).status === 'public');
+    if (p.framework === 'yesod') { const z = yesodAuthz && yesodAuthz.forRoute(p.resource); R.yesodExplicitPublic = !!(z && z.status === 'public'); if (R.yesodExplicitPublic) R.yesodPublicRule = z; }
     result.routes.push(R);
   }
 
@@ -1234,7 +1263,16 @@ function collectYesodAuthz(ctx) {
       else if (/\b(?:AuthenticationRequired|Unauthorized)\b/.test(text)) status = 'authenticated';
       else if (/"Authorized"/.test(text) || names.includes('Authorized')) status = 'public';
       if (names.some((n) => ROLE_CALL.test(n))) role = true;
-      const rec = { status, role, file: mod.file, line: dcl.line || c.line };
+      // the clause's own line: the parser keeps one line per instance declaration, so the clause is found in the module text (the constructor's
+      // clause, `isAuthorized (BadgeRevokeR _) _ = ..`), else the declaration's line
+      let clauseLine = dcl.line || c.line;
+      if (first && first.t === 'pcon' && ctx.files && typeof ctx.files[mod.file] === 'string') {
+        const con = first.con.replace(/^.*\./, '');
+        const re = new RegExp(`^\\s*isAuthorized\\s+\\(?${con}\\b`);
+        const ls = ctx.files[mod.file].split('\n');
+        for (let i = 0; i < ls.length; i++) if (re.test(ls[i])) { clauseLine = i + 1; break; }
+      }
+      const rec = { status, role, file: mod.file, line: clauseLine };
       if (first && first.t === 'pcon') rules.set(first.con.replace(/^.*\./, ''), rec);
       else fallback = rec;
     }
@@ -1269,6 +1307,13 @@ function emitFindings(ctx, result, yesodAuthz) {
     });
   };
   for (const R of result.routes) {
+    // Yesod: a state-changing route whose `isAuthorized` clause can only answer `Authorized` is public by the application's own policy, and the
+    // policy is the flaw whether or not the handler is in the analysed code (a foundation module declares both). Reported at the clause.
+    if (R.framework === 'yesod' && R.yesodExplicitPublic && (WRITE_METHODS.has(R.method) || R.method === 'ANY') && (!R.handler || R.handler.kind === 'unknown') && !AUTH_ENDPOINT_PATH.test(R.path || '')) {
+      R.handler = R.handler && R.handler.kind !== 'unknown' ? R.handler : { kind: 'policy', name: R.resource || null };
+      emit('hs-route-missing-auth', R, { severity: 'high', confidence: 0.7, line: R.yesodPublicRule && R.yesodPublicRule.file === R.file ? R.yesodPublicRule.line : undefined, detail: 'state-changing method; isAuthorized answers Authorized for this route unconditionally (the handler is not in the analysed code)', evidence: { policy: 'isAuthorized', status: 'public' } });
+      continue;
+    }
     if (!R.handler || R.handler.kind === 'unknown') continue;
     const writes = WRITE_METHODS.has(R.method) || R.method === 'ANY';
     const privileged = ADMIN_PATH.test(R.path) || /admin/i.test(R.handler.name || '');

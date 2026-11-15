@@ -345,12 +345,20 @@ function _summaryEq(a, b) {
 // module reaching across the layering boundary. Falls back to the
 // ident/member-only checks above when not provided, so every other caller
 // of this function is unaffected.
-export function entryStateFromCall(paramNames, callArgs, callerTaintedVars, isArgTaintedExpr) {
+export function entryStateFromCall(paramNames, callArgs, callerTaintedVars, isArgTaintedExpr, opts = {}) {
   const out = new Set();
   if (!Array.isArray(paramNames) || !Array.isArray(callArgs)) return out;
   for (let i = 0; i < paramNames.length && i < callArgs.length; i++) {
     const arg = callArgs[i];
     if (!arg) continue;
+    // `opts.fieldPaths` (the Haskell frontend, round 10): a record argument that is clean ITSELF and tainted only in some fields enters the
+    // callee as those fields (`env.envPathParams`), not as a tainted whole, so the callee's read of another field stays clean. The widening
+    // below (PRD W2) stays the behaviour everywhere else; see the Haskell note in dataflow/CLAUDE.md for why records need the precise form.
+    if (opts.fieldPaths && arg.kind === 'ident' && !callerTaintedVars.has(arg.name)) {
+      const prefix = `${arg.name}.`;
+      const fields = [...callerTaintedVars].filter((v) => typeof v === 'string' && v.startsWith(prefix));
+      if (fields.length) { for (const v of fields) out.add(`${paramNames[i]}${v.slice(arg.name.length)}`); continue; }
+    }
     // Each check is independent — arg SHAPE (ident vs. member) selecting a
     // branch must not skip the fallback when that branch's own membership
     // check comes back false. An earlier version used if/else-if keyed on

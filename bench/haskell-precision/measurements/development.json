@@ -758,7 +758,16 @@
     ],
     "dhall-haskell:dhall-test-server/src/Dhall/Test/Server.hs:205:path-traversal": [
      [
+      "info",
+      "entrypoint-reachable",
       "high",
+      "IR-TAINT",
+      "feasible"
+     ]
+    ],
+    "dhall-haskell:dhall-test-server/src/Dhall/Test/Server.hs:226:Cross-Site Scripting (HTML response body from text)": [
+     [
+      "info",
       "entrypoint-reachable",
       null,
       "IR-TAINT",
@@ -2457,33 +2466,6 @@
       "unproven"
      ]
     ],
-    "scotty:Web/Scotty/Util.hs:45:Cross-Site Scripting (HTML response body from text)": [
-     [
-      "high",
-      "entrypoint-reachable",
-      null,
-      "IR-TAINT",
-      "feasible"
-     ]
-    ],
-    "scotty:Web/Scotty/Util.hs:45:Multi-Sink Taint Chain — interproc-return:Web.Scotty.Route.mkEnv reaches 2 sinks": [
-     [
-      "high",
-      null,
-      null,
-      "MULTI-SINK",
-      null
-     ]
-    ],
-    "scotty:Web/Scotty/Util.hs:46:path-traversal": [
-     [
-      "high",
-      "entrypoint-reachable",
-      null,
-      "IR-TAINT",
-      "feasible"
-     ]
-    ],
     "scotty:examples/basic.hs:106:Request body read without a size limit": [
      [
       "medium",
@@ -2556,20 +2538,11 @@
       "feasible"
      ]
     ],
-    "scotty:examples/upload.hs:52:Multi-Sink Taint Chain — uploaded file field reaches 3 sinks": [
-     [
-      "high",
-      null,
-      null,
-      "MULTI-SINK",
-      null
-     ]
-    ],
     "scotty:examples/upload.hs:52:path-traversal": [
      [
-      "high",
+      "info",
       "entrypoint-reachable",
-      null,
+      "high",
       "IR-TAINT",
       "feasible"
      ]
@@ -2701,13 +2674,13 @@
    },
    "fresh": {
     "dhall-haskell": {
-     "rows": 113,
-     "flagged": 3,
-     "loweredToInfo": 110,
+     "rows": 114,
+     "flagged": 2,
+     "loweredToInfo": 112,
      "byStatus": {
       "entrypoint-reachable": 26,
       "external-api": 14,
-      "no-verdict": 73
+      "no-verdict": 74
      }
     },
     "hlint": {
@@ -2740,13 +2713,13 @@
      }
     },
     "scotty": {
-     "rows": 19,
-     "flagged": 18,
-     "loweredToInfo": 1,
+     "rows": 16,
+     "flagged": 14,
+     "loweredToInfo": 2,
      "byStatus": {
       "external-api": 1,
-      "no-verdict": 7,
-      "entrypoint-reachable": 11
+      "no-verdict": 6,
+      "entrypoint-reachable": 9
      }
     },
     "summoner": {

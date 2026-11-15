@@ -1,0 +1,838 @@
+@@@ sql-injection | vulnerable | src/Museum/LoanSearch.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.LoanSearch (loanSearchApp) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.String (fromString)
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Web.Scotty
+
+data Loan = Loan { loanId :: Int, artefact :: String, borrower :: String }
+
+instance FromRow Loan where
+  fromRow = Loan <$> field <*> field <*> field
+
+renderLoan :: Loan -> TL.Text
+renderLoan l = TL.pack (show (loanId l) ++ "  " ++ artefact l ++ " -> " ++ borrower l)
+
+loanSearchApp :: Connection -> ScottyM ()
+loanSearchApp conn =
+  get "/loans/search" $ do
+    borrowerName <- param "borrower"
+    let sql = "SELECT id, artefact, borrower FROM loans WHERE borrower = '" ++ TL.unpack borrowerName ++ "'"
+    rows <- liftIO (query_ conn (fromString sql)) :: ActionM [Loan] --@@
+    text (TL.unlines (map renderLoan rows))
+
+@@@ sql-injection | vulnerable | src/Apiary/Prune.hs
+module Apiary.Prune (main) where
+
+import Database.SQLite.Simple (Query (..), close, execute_, open)
+import qualified Data.Text as T
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
+
+-- Removes inspection records for one apiary, by its site code.
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [dbPath, siteCode] -> prune dbPath siteCode
+    _ -> hPutStrLn stderr "usage: apiary-prune DB SITE" >> exitFailure
+
+prune :: FilePath -> String -> IO ()
+prune dbPath siteCode = do
+  conn <- open dbPath
+  let stmt = Query (T.pack ("DELETE FROM inspections WHERE site_code = '" ++ siteCode ++ "'"))
+  execute_ conn stmt --@@
+  close conn
+  putStrLn ("pruned inspections for " ++ siteCode)
+
+@@@ sql-injection | vulnerable | src/Catalogue/TitleLookup.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Catalogue.TitleLookup (CatalogueAPI, server) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.String (fromString)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Database.MySQL.Simple
+import Database.MySQL.Simple.QueryResults
+import Database.MySQL.Simple.Result (convert)
+import Servant
+
+data Book = Book { isbn :: Text, title :: Text, shelf :: Text }
+
+instance QueryResults Book where
+  convertResults [fa, fb, fc] [va, vb, vc] = Book (convert fa va) (convert fb vb) (convert fc vc)
+  convertResults fs vs = convertError fs vs 3
+
+data TitleQuery = TitleQuery { needle :: Text, branch :: Text }
+
+type CatalogueAPI =
+  "books" :> QueryParam' '[Required] "title" Text :> QueryParam' '[Required] "branch" Text :> Get '[JSON] [Text]
+
+server :: Connection -> Server CatalogueAPI
+server conn t b = liftIO (map shelf <$> lookupTitles conn (TitleQuery t b))
+
+lookupTitles :: Connection -> TitleQuery -> IO [Book]
+lookupTitles conn q = query_ conn (fromString (T.unpack sql)) --@@
+  where
+    sql = T.concat
+      [ "SELECT isbn, title, shelf FROM books WHERE branch = '", branch q
+      , "' AND title LIKE '%", needle q, "%'" ]
+
+@@@ sql-injection | safe | src/Ferry/BookingLookup.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Ferry.BookingLookup (BookingAPI, bookingServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (ToJSON)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import GHC.Generics (Generic)
+import Servant
+
+data Booking = Booking { reference :: Text, sailing :: Text, vehicles :: Int }
+  deriving (Generic)
+
+instance ToJSON Booking
+
+instance FromRow Booking where
+  fromRow = Booking <$> field <*> field <*> field
+
+type BookingAPI = "bookings" :> Capture "reference" Text :> Get '[JSON] Booking
+
+bookingServer :: Connection -> Server BookingAPI
+bookingServer conn ref = do
+  found <- liftIO (query conn "SELECT reference, sailing, vehicles FROM bookings WHERE reference = ?" (Only ref)) --@@
+  case found of
+    [b] -> pure b
+    _ -> throwError err404
+
+@@@ sql-injection | safe | src/Lab/SampleStatus.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Lab.SampleStatus (sampleStatusApp) where
+
+import qualified Data.ByteString.Lazy as BL
+import Data.Int (Int64)
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import qualified Hasql.Connection as Connection
+import qualified Hasql.Decoders as D
+import qualified Hasql.Encoders as E
+import qualified Hasql.Session as Session
+import Hasql.Statement (Statement (..))
+import Network.HTTP.Types (status200, status400, status404)
+import Network.Wai
+
+statusByBarcode :: Statement Text (Maybe (Int64, Text))
+statusByBarcode = Statement sql encoder decoder True
+  where
+    sql = "select id, status from samples where barcode = $1"
+    encoder = E.param (E.nonNullable E.text)
+    decoder = D.rowMaybe ((,) <$> D.column (D.nonNullable D.int8) <*> D.column (D.nonNullable D.text))
+
+sampleStatusApp :: Connection.Connection -> Application
+sampleStatusApp conn req respond =
+  case pathInfo req of
+    ["samples", barcode, "status"] -> do
+      result <- Session.run (Session.statement barcode statusByBarcode) conn --@@
+      case result of
+        Right (Just (_, st)) -> respond (responseLBS status200 [] (BL.fromStrict (TE.encodeUtf8 st)))
+        Right Nothing -> respond (responseLBS status404 [] "no such sample")
+        Left _ -> respond (responseLBS status400 [] "lookup failed")
+    _ -> respond (responseLBS status404 [] "not found")
+
+@@@ sql-injection | safe | src/Grants/ApplicantList.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Grants.ApplicantList (getApplicantsR) where
+
+import Data.Text (Text)
+import Database.Persist
+import Grants.Foundation
+import Grants.Model
+import Yesod.Core
+import Yesod.Persist.Core (runDB)
+
+-- Lists every application filed under one funding call.
+getApplicantsR :: Text -> Handler Value
+getApplicantsR callCode = do
+  mInstitution <- lookupGetParam "institution"
+  let filters = [ApplicationCallCode ==. callCode]
+             ++ maybe [] (\i -> [ApplicationInstitution ==. i]) mInstitution
+  apps <- runDB (selectList filters [Asc ApplicationSubmittedAt, LimitTo 200]) --@@
+  returnJson (map (applicationTitle . entityVal) apps)
+
+@@@ command-injection | vulnerable | src/Radio/Transcode.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Radio.Transcode (transcodeRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text.Lazy as TL
+import Data.Time.Clock.POSIX (getPOSIXTime)
+import Network.HTTP.Types.Status (status400)
+import Network.Wai.Parse (FileInfo (..))
+import System.Process (callCommand)
+import Web.Scotty
+
+-- Accepts a programme segment upload and produces the broadcast mp3.
+transcodeRoutes :: ScottyM ()
+transcodeRoutes =
+  post "/segments" $ do
+    title <- param "title"
+    uploads <- files
+    case uploads of
+      [(_, FileInfo _ _ content)] -> do
+        stamp <- liftIO (round <$> getPOSIXTime) :: ActionM Integer
+        let original = "incoming/segment-" ++ show stamp ++ ".wav"
+            target = "ready/segment-" ++ show stamp ++ ".mp3"
+        liftIO (BL.writeFile original content)
+        liftIO (callCommand ("ffmpeg -loglevel error -i " ++ original ++ " -metadata title=\"" ++ TL.unpack title ++ "\" " ++ target)) --@@
+        text (TL.pack ("queued " ++ target))
+      _ -> status status400 >> text "exactly one segment expected"
+
+@@@ command-injection | vulnerable | src/Warehouse/RobotDispatch.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Warehouse.RobotDispatch (consumeDispatches) where
+
+import Control.Monad (void)
+import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import Data.Text.Encoding.Error (lenientDecode)
+import Network.AMQP
+import Shelly
+
+data Dispatch = Dispatch { robot :: Text, bay :: Text }
+
+parseDispatch :: BL.ByteString -> Maybe Dispatch
+parseDispatch raw =
+  case T.splitOn "|" (TE.decodeUtf8With lenientDecode (BL.toStrict raw)) of
+    [r, b] -> Just (Dispatch r b)
+    _ -> Nothing
+
+consumeDispatches :: Channel -> IO ()
+consumeDispatches chan =
+  void $ consumeMsgs chan "robot.dispatch" Ack $ \(msg, env) -> do
+    mapM_ moveRobot (parseDispatch (msgBody msg))
+    ackEnv env
+
+moveRobot :: Dispatch -> IO ()
+moveRobot d = shelly $ silently $
+  run_ "sh" ["-c", "robotctl --robot " <> robot d <> " goto " <> bay d] --@@
+
+@@@ command-injection | vulnerable | src/Orchestra/ScoreHistory.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Orchestra.ScoreHistory (scoreHistory) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy.Char8 as BL
+import Happstack.Server
+import System.Process.Typed (readProcessStdout_, shell)
+
+-- Shows the edit history of the score library for one arranger.
+scoreHistory :: ServerPart Response
+scoreHistory = dir "scores" $ dir "history" $ do
+  method GET
+  arranger <- look "arranger"
+  out <- liftIO (historyFor arranger)
+  ok (toResponse (BL.unpack out))
+
+historyFor :: String -> IO BL.ByteString
+historyFor arranger = readProcessStdout_ (shell cmd) --@@
+  where
+    cmd = "git -C /srv/scores log --oneline --author=" ++ arranger
+
+@@@ command-injection | safe | src/Radio/Tag.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Radio.Tag (tagRoutes, tagSegment) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import System.Exit (ExitCode (..))
+import System.Process (readProcessWithExitCode)
+import Web.Scotty
+
+-- Writes the programme title into an already transcoded segment.
+tagSegment :: FilePath -> String -> IO ExitCode
+tagSegment segmentPath title = do
+  (code, _, _) <- readProcessWithExitCode "ffmpeg" (ffmpegArgs segmentPath title) "" --@@
+  pure code
+
+ffmpegArgs :: FilePath -> String -> [String]
+ffmpegArgs path title =
+  [ "-loglevel", "error", "-y"
+  , "-i", path
+  , "-metadata", "title=" ++ title
+  , "-codec", "copy"
+  , path ++ ".tagged.mp3"
+  ]
+
+tagRoutes :: (Int -> IO (Maybe FilePath)) -> ScottyM ()
+tagRoutes locateSegment =
+  post "/segments/:id/title" $ do
+    segmentId <- param "id"
+    title <- param "title"
+    located <- liftIO (locateSegment segmentId)
+    case located of
+      Nothing -> text "unknown segment"
+      Just path -> do
+        code <- liftIO (tagSegment path (TL.unpack title))
+        text (if code == ExitSuccess then "tagged" else "ffmpeg reported a problem")
+
+@@@ command-injection | safe | src/Warehouse/RobotCommand.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Warehouse.RobotCommand (consumeCommands, handleDispatch) where
+
+import Control.Monad (void)
+import qualified Data.ByteString.Lazy as BL
+import Data.Char (isAlphaNum)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import Data.Text.Encoding.Error (lenientDecode)
+import Network.AMQP
+import System.Process.Typed (proc, runProcess_)
+
+data Dispatch = Dispatch { robotName :: Text, bayCode :: Text }
+
+validBay :: Text -> Bool
+validBay b = not (T.null b) && T.length b <= 8 && T.all (\c -> isAlphaNum c || c == '-') b
+
+knownRobots :: [Text]
+knownRobots = ["atlas", "bishop", "cass", "dory"]
+
+handleDispatch :: Dispatch -> IO (Either String ())
+handleDispatch d
+  | robotName d `notElem` knownRobots = pure (Left "unknown robot")
+  | not (validBay (bayCode d)) = pure (Left "bad bay code")
+  | otherwise = Right <$> runProcess_ (proc "robotctl" ["--robot", T.unpack (robotName d), "goto", T.unpack (bayCode d)]) --@@
+
+consumeCommands :: Channel -> (String -> IO ()) -> IO ()
+consumeCommands chan report =
+  void $ consumeMsgs chan "robot.commands" Ack $ \(msg, env) -> do
+    case T.splitOn "|" (TE.decodeUtf8With lenientDecode (BL.toStrict (msgBody msg))) of
+      [r, b] -> handleDispatch (Dispatch r b) >>= either report (const (pure ()))
+      _ -> report "malformed dispatch"
+    ackEnv env
+
+@@@ command-injection | safe | src/Museum/Thumbnail.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.Thumbnail (makeThumbnail) where
+
+import Data.Char (isDigit)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Turtle
+
+-- Builds the 240px preview for one accession number.
+makeThumbnail :: Text -> IO (Either Text ())
+makeThumbnail accession
+  | T.null accession || not (T.all isDigit accession) = pure (Left "accession numbers are digits only")
+  | otherwise = do
+      let source = "/srv/museum/originals/" <> accession <> ".tif"
+          target = "/srv/museum/thumbs/" <> accession <> ".jpg"
+      procs "convert" [source, "-resize", "240x240", target] empty --@@
+      pure (Right ())
+
+@@@ path-traversal | vulnerable | src/Fleet/TelemetryExport.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.TelemetryExport (exportRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.IO as TLIO
+import Web.Scotty
+
+telemetryRoot :: FilePath
+telemetryRoot = "/var/lib/fleet/telemetry"
+
+exportRoutes :: ScottyM ()
+exportRoutes =
+  get "/vehicles/:vehicle/telemetry.csv" $ do
+    vehicle <- param "vehicle"
+    day <- param "day"
+    csv <- liftIO (TLIO.readFile (telemetryRoot ++ "/" ++ TL.unpack vehicle ++ "/" ++ TL.unpack day ++ ".csv")) --@@
+    setHeader "Content-Type" "text/csv"
+    text csv
+
+@@@ path-traversal | vulnerable | src/Catalogue/CoverImage.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Catalogue.CoverImage (coverHandler) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as B8
+import Snap.Core
+import System.FilePath ((</>))
+
+coverDir :: FilePath
+coverDir = "/srv/catalogue/covers"
+
+coverHandler :: Snap ()
+coverHandler = do
+  mName <- getParam "file"
+  case mName of
+    Nothing -> do
+      modifyResponse (setResponseStatus 400 "Bad Request")
+      writeBS "file parameter required"
+    Just name -> do
+      bytes <- liftIO (BS.readFile (coverDir </> B8.unpack name)) --@@
+      modifyResponse (setContentType "image/jpeg")
+      writeBS bytes
+
+@@@ path-traversal | vulnerable | src/Lab/NoteWriter.hs
+module Lab.NoteWriter (main) where
+
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath ((<.>), (</>))
+import System.IO
+
+notesDir :: FilePath
+notesDir = "/srv/lab/notes"
+
+-- Reads a barcode and a note from the bench terminal and files the note.
+main :: IO ()
+main = do
+  createDirectoryIfMissing True notesDir
+  hSetBuffering stdout NoBuffering
+  putStr "barcode: "
+  barcode <- getLine
+  putStr "note: "
+  note <- getLine
+  appendNote barcode note
+
+appendNote :: String -> String -> IO ()
+appendNote barcode note =
+  withFile (notesDir </> barcode <.> "txt") AppendMode $ \h -> do --@@
+    hPutStrLn h note
+    hFlush h
+
+@@@ path-traversal | safe | src/Orchestra/PartsDownload.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Orchestra.PartsDownload (PartsAPI, partsServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import Data.List (isPrefixOf)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Servant
+import System.Directory (canonicalizePath, doesFileExist)
+import System.FilePath (addTrailingPathSeparator, (</>))
+
+type PartsAPI = "parts" :> Capture "concert" Text :> Capture "file" Text :> Get '[OctetStream] BL.ByteString
+
+partsRoot :: FilePath
+partsRoot = "/srv/orchestra/parts"
+
+partsServer :: Server PartsAPI
+partsServer concert file = do
+  root <- liftIO (canonicalizePath partsRoot)
+  requested <- liftIO (canonicalizePath (partsRoot </> T.unpack concert </> T.unpack file))
+  let inside = addTrailingPathSeparator root `isPrefixOf` requested
+  exists <- liftIO (doesFileExist requested)
+  if inside && exists
+    then liftIO (BL.readFile requested) --@@
+    else throwError err404
+
+@@@ path-traversal | safe | src/Ferry/TimetableFile.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Ferry.TimetableFile (timetableApp) where
+
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Map.Strict as Map
+import Data.Text (Text)
+import Network.HTTP.Types (status200, status404)
+import Network.Wai
+
+-- Published timetables, keyed by the route code printed on the booking.
+timetables :: Map.Map Text FilePath
+timetables = Map.fromList
+  [ ("HAR-ORK", "/srv/ferry/timetables/harbour-orkney.pdf")
+  , ("HAR-SHE", "/srv/ferry/timetables/harbour-shetland.pdf")
+  , ("ORK-SHE", "/srv/ferry/timetables/orkney-shetland.pdf")
+  ]
+
+timetableApp :: Application
+timetableApp req respond =
+  case pathInfo req of
+    ["timetables", code] | Just path <- Map.lookup code timetables -> do
+      pdf <- BL.readFile path --@@
+      respond (responseLBS status200 [("Content-Type", "application/pdf")] pdf)
+    _ -> respond (responseLBS status404 [] "unknown route")
+
+@@@ path-traversal | safe | src/Apiary/Photos.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Apiary.Photos (photoRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString as BS
+import Data.Char (isAlphaNum)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Network.HTTP.Types (status400)
+import Web.Spock
+
+photoDir :: FilePath
+photoDir = "/srv/apiary/photos/"
+
+hiveNameOk :: Text -> Bool
+hiveNameOk n = not (T.null n) && T.length n <= 32 && T.all (\c -> isAlphaNum c || c == '-') n
+
+photoRoutes :: SpockM () () () ()
+photoRoutes =
+  get ("hives" <//> var <//> "photo") $ \hive ->
+    if hiveNameOk hive
+      then do
+        img <- liftIO (BS.readFile (photoDir ++ T.unpack hive ++ ".jpg")) --@@
+        setHeader "Content-Type" "image/jpeg"
+        bytes img
+      else do
+        setStatus status400
+        text "hive names are letters, digits and dashes"
+
+@@@ ssrf | vulnerable | src/Grants/Webhook.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Grants.Webhook (WebhookAPI, webhookServer) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON, encode)
+import Data.Text (Text)
+import qualified Data.Text as T
+import GHC.Generics (Generic)
+import Network.HTTP.Client
+import Servant
+
+data Subscription = Subscription { grantCall :: Text, callbackUrl :: Text }
+  deriving (Generic)
+
+instance FromJSON Subscription
+
+type WebhookAPI = "subscriptions" :> ReqBody '[JSON] Subscription :> PostNoContent
+
+webhookServer :: Manager -> Server WebhookAPI
+webhookServer mgr sub = do
+  liftIO (sendTestPing mgr sub)
+  pure NoContent
+
+-- Delivers a sample notification so the applicant can confirm wiring.
+sendTestPing :: Manager -> Subscription -> IO ()
+sendTestPing mgr sub = do
+  initial <- parseRequest (T.unpack (callbackUrl sub))
+  let req = initial { method = "POST", requestBody = RequestBodyLBS (encode (grantCall sub)) }
+  _ <- httpLbs req mgr --@@
+  pure ()
+
+@@@ ssrf | vulnerable | src/Radio/FeedImport.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Radio.FeedImport (feedRoutes) where
+
+import Control.Lens ((^.))
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text.Lazy as TL
+import qualified Network.Wreq as Wreq
+import Web.Scotty
+
+-- Pulls a partner station's schedule feed and stores it for the planner.
+feedRoutes :: (BL.ByteString -> IO ()) -> ScottyM ()
+feedRoutes store =
+  post "/schedule/import" $ do
+    feedUrl <- param "feed"
+    feed <- liftIO (fetchFeed (TL.unpack feedUrl))
+    liftIO (store feed)
+    text "imported"
+
+fetchFeed :: String -> IO BL.ByteString
+fetchFeed url = do
+  resp <- Wreq.get url --@@
+  pure (resp ^. Wreq.responseBody)
+
+@@@ ssrf | vulnerable | src/Museum/PartnerSync.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.PartnerSync (partnerSocket) where
+
+import Control.Monad (forever)
+import Data.Aeson (FromJSON (..), decode, withObject, (.:))
+import qualified Data.ByteString.Lazy as BL
+import Data.Text (Text)
+import qualified Data.Text as T
+import Network.HTTP.Conduit (simpleHttp)
+import qualified Network.WebSockets as WS
+
+data SyncRequest = SyncRequest { partner :: Text, inventoryUrl :: Text }
+
+instance FromJSON SyncRequest where
+  parseJSON = withObject "SyncRequest" $ \o ->
+    SyncRequest <$> o .: "partner" <*> o .: "inventoryUrl"
+
+partnerSocket :: (Text -> BL.ByteString -> IO ()) -> WS.ServerApp
+partnerSocket save pending = do
+  conn <- WS.acceptRequest pending
+  forever $ do
+    raw <- WS.receiveData conn
+    case decode raw of
+      Nothing -> WS.sendTextData conn ("unreadable request" :: Text)
+      Just sr -> do
+        inventory <- simpleHttp (T.unpack (inventoryUrl sr)) --@@
+        save (partner sr) inventory
+        WS.sendTextData conn ("synced " <> partner sr)
+
+@@@ ssrf | safe | src/Fleet/ProviderFetch.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.ProviderFetch (fetchPositions) where
+
+import qualified Data.ByteString.Char8 as B8
+import qualified Data.ByteString.Lazy as BL
+import Network.HTTP.Client
+
+-- Telemetry providers the fleet office has a contract with.
+approvedHosts :: [B8.ByteString]
+approvedHosts = ["telemetry.northroad.example", "api.vantrack.example", "feeds.haulnet.example"]
+
+fetchPositions :: Manager -> String -> IO (Either String BL.ByteString)
+fetchPositions mgr providerUrl =
+  case parseRequest providerUrl of
+    Nothing -> pure (Left "unreadable provider url")
+    Just req
+      | secure req && host req `elem` approvedHosts && port req == 443 ->
+          Right . responseBody <$> httpLbs req mgr --@@
+      | otherwise -> pure (Left "provider not on the approved list")
+
+@@@ ssrf | safe | src/Ferry/SailingStatus.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Ferry.SailingStatus (sailingStatus) where
+
+import Data.Aeson (Value)
+import Data.Char (isDigit)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Network.HTTP.Req
+
+-- Asks the harbour authority whether a sailing is still scheduled.
+sailingStatus :: Text -> IO (Either Text Value)
+sailingStatus sailingNo
+  | T.null sailingNo || not (T.all isDigit sailingNo) = pure (Left "sailing numbers are numeric")
+  | otherwise = runReq defaultHttpConfig $ do
+      r <- req GET (https "harbour.example" /: "v2" /: "sailings" /: sailingNo) NoReqBody jsonResponse mempty --@@
+      pure (Right (responseBody r))
+
+@@@ ssrf | safe | src/Catalogue/IsbnLookup.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Catalogue.IsbnLookup (lookupIsbn) where
+
+import Control.Lens ((&), (.~), (^.))
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Map.Strict as Map
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Network.Wreq as Wreq
+
+data Source = OpenShelf | NationalUnion | PublisherDirect
+  deriving (Eq, Ord, Show)
+
+sources :: Map.Map Text (Source, String)
+sources = Map.fromList
+  [ ("openshelf", (OpenShelf, "https://openshelf.example/api/isbn"))
+  , ("union", (NationalUnion, "https://union-catalogue.example/lookup"))
+  , ("publisher", (PublisherDirect, "https://meta.publishers.example/isbn"))
+  ]
+
+lookupIsbn :: Text -> Text -> IO (Either String BL.ByteString)
+lookupIsbn sourceName isbn =
+  case Map.lookup (T.toLower sourceName) sources of
+    Nothing -> pure (Left ("unknown source: " ++ T.unpack sourceName))
+    Just (_, base) -> do
+      let opts = Wreq.defaults & Wreq.param "isbn" .~ [isbn]
+      resp <- Wreq.getWith opts base --@@
+      pure (Right (resp ^. Wreq.responseBody))
+
+@@@ html-injection | vulnerable | src/Orchestra/MemberPage.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Orchestra.MemberPage (memberRoutes) where
+
+import qualified Data.Text.Lazy as TL
+import Web.Scotty
+
+data Member = Member { stageName :: TL.Text, section :: TL.Text }
+
+page :: Member -> TL.Text
+page m = TL.concat
+  [ "<!doctype html><html><body>"
+  , "<h1>", stageName m, "</h1>"
+  , "<p>Section: ", section m, "</p>"
+  , "</body></html>"
+  ]
+
+memberRoutes :: ScottyM ()
+memberRoutes =
+  get "/members/preview" $ do
+    name <- param "name"
+    sec <- param "section"
+    html (page (Member name sec)) --@@
+
+@@@ html-injection | vulnerable | src/Museum/LoanNotes.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Museum.LoanNotes (NotesAPI, notesServer) where
+
+import Data.Text (Text)
+import Servant
+import Servant.HTML.Blaze (HTML)
+import Text.Blaze.Html5 (Html, (!))
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
+import Web.FormUrlEncoded (FromForm (..), parseUnique)
+
+newtype NoteForm = NoteForm { noteBody :: Text }
+
+instance FromForm NoteForm where
+  fromForm f = NoteForm <$> parseUnique "note" f
+
+type NotesAPI = "loans" :> Capture "loan" Int :> "notes" :> ReqBody '[FormUrlEncoded] NoteForm :> Post '[HTML] Html
+
+notesServer :: Server NotesAPI
+notesServer loan form = pure (notePage loan (noteBody form))
+
+notePage :: Int -> Text -> Html
+notePage loan note = H.docTypeHtml $ do
+  H.head (H.title "Loan note recorded")
+  H.body $ do
+    H.h2 (H.toHtml ("Loan #" ++ show loan))
+    H.div ! A.class_ "note" $ H.preEscapedToHtml note --@@
+
+@@@ html-injection | vulnerable | src/Apiary/ForumPost.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Apiary.ForumPost (postPreview) where
+
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Data.Text.Encoding.Error (lenientDecode)
+import Lucid
+import Snap.Core
+
+postPreview :: Snap ()
+postPreview = method POST $ do
+  mBody <- getPostParam "body"
+  mAuthor <- getPostParam "author"
+  let decode = TE.decodeUtf8With lenientDecode
+      author = maybe "anonymous keeper" decode mAuthor
+      contents = maybe "" decode mBody
+  modifyResponse (setContentType "text/html; charset=utf-8")
+  writeLBS (renderBS (previewPage author contents))
+
+previewPage :: Text -> Text -> Html ()
+previewPage author contents = doctypehtml_ $ do
+  head_ (title_ "Preview")
+  body_ $ do
+    h3_ (toHtml author)
+    article_ [class_ "post"] (toHtmlRaw contents) --@@
+
+@@@ html-injection | safe | src/Fleet/DriverProfile.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.DriverProfile (driverRoutes) where
+
+import Data.Text (Text)
+import Text.Blaze.Html.Renderer.Text (renderHtml)
+import Text.Blaze.Html5 (Html, (!))
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
+import Web.Scotty
+
+data Driver = Driver { driverName :: Text, depot :: Text, licenceClass :: Text }
+
+profile :: Driver -> Html
+profile d = H.docTypeHtml $ do
+  H.head (H.title "Driver profile")
+  H.body $ do
+    H.h1 (H.toHtml (driverName d)) --@@
+    H.dl $ do
+      H.dt "Depot" >> H.dd (H.toHtml (depot d))
+      H.dt "Licence" >> H.dd (H.toHtml (licenceClass d))
+    H.a ! A.href "/drivers" $ "Back to roster"
+
+driverRoutes :: ScottyM ()
+driverRoutes =
+  post "/drivers/preview" $ do
+    d <- Driver <$> param "name" <*> param "depot" <*> param "licence"
+    html (renderHtml (profile d))
+
+@@@ html-injection | safe | src/Lab/SampleLabel.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Lab.SampleLabel (labelApp) where
+
+import Data.Text (Text)
+import qualified Data.Text.Encoding as TE
+import Data.Text.Encoding.Error (lenientDecode)
+import Lucid
+import Network.HTTP.Types (status200, status404)
+import Network.Wai
+
+labelPage :: Text -> Text -> Html ()
+labelPage barcode description = doctypehtml_ $ do
+  head_ (title_ "Sample label")
+  body_ $ do
+    h1_ (toHtml barcode)
+    p_ [class_ "description"] (toHtml description) --@@
+
+labelApp :: Application
+labelApp req respond =
+  case (pathInfo req, lookup "description" (queryString req)) of
+    (["samples", barcode, "label"], Just (Just d)) ->
+      respond (responseLBS status200 [("Content-Type", "text/html; charset=utf-8")]
+                 (renderBS (labelPage barcode (TE.decodeUtf8With lenientDecode d))))
+    _ -> respond (responseLBS status404 [] "no such label")
+
+@@@ html-injection | safe | src/Grants/ApplicationView.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Grants.ApplicationView (previewHandler) where
+
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
+import Happstack.Server
+
+escapeHtml :: Text -> Text
+escapeHtml = T.concatMap esc
+  where
+    esc '<' = "&lt;"
+    esc '>' = "&gt;"
+    esc '&' = "&amp;"
+    esc '"' = "&quot;"
+    esc '\'' = "&#39;"
+    esc c = T.singleton c
+
+data Preview = Preview { previewTitle :: Text, abstract :: Text }
+
+renderPreview :: Preview -> Text
+renderPreview p = T.concat
+  [ "<!doctype html><html><body><article class=\"application\">"
+  , "<h1>", escapeHtml (previewTitle p), "</h1>" --@@
+  , "<p class=\"abstract\">", escapeHtml (abstract p), "</p>"
+  , "</article></body></html>"
+  ]
+
+previewHandler :: ServerPart Response
+previewHandler = dir "applications" $ dir "preview" $ do
+  method POST
+  decodeBody (defaultBodyPolicy "/tmp" 0 65536 4096)
+  title <- lookText' "title"
+  summary <- lookText' "abstract"
+  ok (toResponseBS "text/html; charset=utf-8" (TLE.encodeUtf8 (TL.fromStrict (renderPreview (Preview title summary)))))

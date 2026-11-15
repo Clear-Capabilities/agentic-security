@@ -105,9 +105,10 @@ export function classifyCondition(c, vars, derived = new Set(), resolve = null) 
   // checked value, or the check would compare the value with itself.
   const fixedList = (l) => l && ((l.kind === 'array' && l.elements.length && l.elements.every((x) => isStr(x) || (x && x.kind === 'call' && /(?:^|\.)(?:pack|fromString)$/.test(x.callee || '') && x.args && x.args.length === 1 && isStr(x.args[0]))))
     || (l.kind === 'ident' && !mentions(l, vars) && !mentions(l, derived)));
-  if ((IS_ELEM.has(name) || NOT_ELEM.has(name)) && a[0] && a[0].kind === 'call' && /(?:^|\.)(?:uriRegName|uriAuthority|getHost|host|hostName)$/.test(a[0].callee || '') && a[0].args && a[0].args[0] && a[0].args[0].kind === 'ident'
+  // (`Set.member (uriRegName auth) allowedHosts` is the same check over a constant set)
+  if ((IS_ELEM.has(name) || NOT_ELEM.has(name) || IS_MEMBER.test(name) || NOT_MEMBER.test(name)) && a[0] && a[0].kind === 'call' && /(?:^|\.)(?:uriRegName|uriAuthority|getHost|host|hostName)$/.test(a[0].callee || '') && a[0].args && a[0].args[0] && a[0].args[0].kind === 'ident'
       && (vars.has(a[0].args[0].name) || derived.has(a[0].args[0].name)) && fixedList(a[1])) {
-    return { safeWhen: IS_ELEM.has(name), kind: 'host-allow-list', families: ['url'], subject: a[0].args[0].name };
+    return { safeWhen: IS_ELEM.has(name) || IS_MEMBER.test(name), kind: 'host-allow-list', families: ['url'], subject: a[0].args[0].name };
   }
   if ((IS_ELEM.has(name) || NOT_ELEM.has(name)) && a[0] && a[0].kind === 'ident' && vars.has(a[0].name) && !mentions(a[1], vars)) {
     return { safeWhen: IS_ELEM.has(name), kind: 'allow-list', families: ['*'], subject: a[0].name };
@@ -636,10 +637,14 @@ export function waiHtmlContext(f, perFile) {
       return rets.length === 1 ? rets[0].value : null;
     };
     const resolveLocal = (name) => { for (const n of nodeList(fn)) if (n.kind === 'assign' && n.target === name && n.source) return n.source; return null; };
+    // a binding is followed wherever it appears in the header expression (a case over an optional CORS header whose every branch is the
+    // constant list plus one header: `headers = case mOrigin of Nothing -> base; Just o -> (cors, o) : base`), each name once
+    const seen = new Set();
     const visit = (e, d) => {
       if (!e || typeof e !== 'object' || d > 40) return;
       if (e.kind === 'literal' && typeof e.value === 'string') texts.push(e.value);
-      if (e.kind === 'ident' && d < 2) { const src = resolveLocal(e.name) || constantOf(e); if (src) visit(src, d + 1); }
+      if (e.kind === 'ident' && d < 12 && !seen.has(e.name)) { seen.add(e.name); const src = resolveLocal(e.name) || constantOf(e); if (src) visit(src, d + 1); }
+      if (e.kind === 'union') for (const b of e.branches || []) visit(b, d + 1);   // a case or if: every branch
       for (const [, c] of exprChildren(e)) visit(c, d + 1);
     };
     for (const site of sites) visit((site.call.args || [])[1], 0);

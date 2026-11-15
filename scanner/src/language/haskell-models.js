@@ -155,6 +155,9 @@ src('Network.WebSockets', ['receiveData', 'receiveDataMessage', 'receive', 'from
 src('Network.AMQP', ['msgBody'], 'network', 'message-queue payload', { package: 'amqp' });
 // Spock
 src('Web.Spock', ['param', "param'", 'params'], 'url-param', 'spock request parameter', { package: 'Spock', framework: 'spock' });
+// `get ("invoices" <//> var <//> "pdf") $ \number -> ..`: the handler lambda's parameters are the route's captures. `var` is a path piece, not a
+// value; `haskell-ir.js` (`ROUTE_CAPTURES`) seeds each parameter of a route handler lambda with a call of this name so the source machinery labels it.
+src('Web.Spock', ['var'], 'url-param', 'spock route capture', { package: 'Spock', framework: 'spock' });
 src('Web.Spock', ['header', 'cookie', 'cookies'], 'header', 'spock request header or cookie', { package: 'Spock', framework: 'spock' });
 src('Web.Spock', ['body', 'jsonBody', "jsonBody'", 'files'], 'http-body', 'spock request body', { package: 'Spock', framework: 'spock' });
 src('Web.Spock.Core', ['param', "param'", 'params'], 'url-param', 'spock request parameter', { package: 'Spock', framework: 'spock' });
@@ -304,6 +307,8 @@ for (const mod of ['Yesod', 'Yesod.Core', 'Yesod.Core.Widget', 'Text.Blaze', 'Te
   sink(mod, ['preEscapedToMarkup', 'preEscapedToHtml'], { ...XSS, package: mod.startsWith('Yesod') ? 'yesod' : 'blaze-html', ...(mod.startsWith('Yesod') ? { framework: 'yesod' } : {}) });
 }
 sink('Web.Scotty', ['html'], { ...XSS, package: 'scotty', framework: 'scotty', vuln: 'Cross-Site Scripting (HTML response from text)' });
+sink('Web.Spock', ['html'], { ...XSS, package: 'Spock', framework: 'spock', vuln: 'Cross-Site Scripting (HTML response from text)' });
+sink('Web.Spock.Core', ['html'], { ...XSS, package: 'Spock', framework: 'spock', vuln: 'Cross-Site Scripting (HTML response from text)' });
 // A raw WAI response is HTML only when its headers say so: haskell-guards.js `waiHtmlContext` reads the header argument and lowers the finding to
 // `info` for another content type (text/plain, application/json), keeps it for text/html, and keeps it with a stated uncertainty when the headers are opaque.
 sink('Network.Wai', ['responseLBS', 'responseBuilder'], { ...XSS, argIndex: 2, package: 'wai', framework: 'wai', vuln: 'Cross-Site Scripting (HTML response body from text)' });
@@ -347,6 +352,7 @@ sink('Network.HTTP.Req', ['https', 'http'], { ...SSRF, argIndex: 0, package: 're
 // names the host: that is the point the request target is chosen. (`req` itself is not a sink: its URL argument is usually built from a fixed host
 // and tainted path segments, which `https "host" /: segment` keeps on that host.)
 sink('Network.HTTP.Req', ['useURI'], { ...SSRF, argIndex: 0, package: 'req', vuln: 'Server-Side Request Forgery (request target from a parsed URI)' });
+sink('Network.HTTP.Req', ['useHttpsURI', 'useHttpURI'], { ...SSRF, argIndex: 0, package: 'req', vuln: 'Server-Side Request Forgery (request target from a parsed URI)' });
 sink('Network.HTTP', ['getRequest', 'postRequest', 'headRequest', 'simpleHTTP'], { ...SSRF, argIndex: 0, package: 'HTTP' });
 
 // CWE-601. Redirecting to a location taken from the request sends the user to a site the attacker names.

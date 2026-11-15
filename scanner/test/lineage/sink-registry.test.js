@@ -260,7 +260,8 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
   // (`preEscapedToMarkup`, `preEscapedToHtml`) that the earlier list did not resolve through those modules.
   // 59 -> 61 (0.195.8): `Network.Wai.responseLBS`/`responseBuilder` are CWE-79 sinks judged by their content-type header; both are
   // server-side response writers, so they land in the `otherCount` bucket and `domCount` stays 6.
-  assert.equal(cwe79.length, 61);
+  // 61 -> 63 (0.195.46): Spock's `html` (Web.Spock and Web.Spock.Core) as a page sink; server-side, so `otherCount` again and `domCount` stays 6.
+  assert.equal(cwe79.length, 63);
   let domCount = 0;
   let otherCount = 0;
   let stdoutText = 0;
@@ -284,7 +285,7 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
     }
   }
   assert.equal(domCount, 6);   // 4 dom + 2 react
-  assert.equal(otherCount, 49);   // 18 -> 35 with the 17 Haskell server-side XSS sinks, 35 -> 47 with the re-exported pre-escaped constructors, 47 -> 49 with the raw WAI response writers (0.195.8)
+  assert.equal(otherCount, 51);   // 18 -> 35 with the 17 Haskell server-side XSS sinks, 35 -> 47 with the re-exported pre-escaped constructors, 47 -> 49 with the raw WAI response writers (0.195.8)
   assert.equal(stdoutText, 6);
 });
 
@@ -543,12 +544,14 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // by the content-type header in haskell-guards.js. Re-measured against the live catalog.
   // 599 -> 607 and 410 -> 416 modeled, 174 -> 176 unsupported (0.195.14): esqueleto `rawSql`/`rawExecute` in three modules (SQL, modeled) and
   // typed-process `proc` as a program and an arguments sink (process execution, unsupported). Names read from Hackage; re-measured against the live catalog.
-  assert.equal(SINKS.length, 607);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 416);
+  // 607 -> 611 and 416 -> 420 modeled (0.195.46, round 10 of the Haskell work): Spock's `html` in two modules (XSS, http-response, modeled) and req's
+  // `useHttpsURI`/`useHttpURI` (SSRF, modeled). Re-measured against the live catalog.
+  assert.equal(SINKS.length, 611);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 420);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 176);
-  assert.equal(416 + 6 + 9 + 176, SINKS.length);
+  assert.equal(420 + 6 + 9 + 176, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {
