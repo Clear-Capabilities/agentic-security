@@ -1531,17 +1531,17 @@
     ],
     "ihp:ihp-schema-compiler/IHP/SchemaCompiler.hs:360:path-traversal": [
      [
-      "high",
+      "low",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],
     "ihp:ihp-schema-compiler/IHP/SchemaCompiler.hs:363:path-traversal": [
      [
-      "high",
+      "low",
       "external-api",
-      null,
+      "high",
       "IR-TAINT"
      ]
     ],

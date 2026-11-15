@@ -50,3 +50,18 @@ Each lever: failing test first, regression gates (`test:haskell`, `test:language
 | an XSRF double-submit cookie is readable by design: HttpOnly is not missing on it, Secure still is | servant-auth-server `Cookie.hs:90,115,123` (discovery set) | discovery 3 |
 
 Rulings: the cookie decision reads the cookie's NAME expression (literal, field, function or variable carrying `xsrf`/`csrf`), the protocol's own identifier, as the session-ness test already does; `fileContent` is told apart from the other upload fields by its source label, so no provenance or lineage category changes.
+
+## Rulings recorded after round 2
+
+- The two taint misses of the unseen-v3 development split (`hsy-161130c3fe`, `hsy-78da97a753`, both `saveUpload name content = withFile name WriteMode ..`) are the 0.195.9 `api-contract` ruling: a thin path wrapper handing its parameter on whole was a false positive on every real project that had it. They stay misses on the synthetic set by that decision; re-opening it would trade real-code precision for two synthetic cases.
+- A "raw HTML from a non-literal" rule for the stored-XSS advisories (HSEC-2023-0008, HSEC-2026-0004) was examined and not built: 104 raw-HTML render sites across the clones, most of them a markdown renderer's output (cmark-gfm escapes raw HTML unless `optUnsafe`), so the rule would need per-renderer knowledge to be anything but noise. Parked, with the shapes recorded in `bench/cve-replay/real-haskell-advisories.md`.
+
+## Round 3 (0.195.39)
+
+| mechanism | source of the shape | sites |
+|---|---|---|
+| Base64 `encode` of a digest is formatting, not a signing or verifying call (`VERIFY_CALL` matched the bare `encode`) | wai-app-static ETag digests, discovery set | discovery 2 |
+| a file read whose path is a project constant (resolved through the IR's `functionRef` to a definition that returns a literal) is a fixed-location read; with environment roots beside it the finding is `low`, kept | IHP schema compiler `SchemaCompiler.hs:360,363`, `Cache.hs:45` | fresh 3 (severity only; still flagged) |
+| SCA import reachability for every package the Haskell advisory database names, module lists from each package's Hackage cabal file, exact matching where a prefix would claim another package | `haskell-sca.js` `PACKAGE_MODULES` | advisory findings' `reachability.import` leaves `unknown` for 18 packages |
+
+Round 3 results (2026-11-14): fresh set unchanged at 29 flagged / 21 TP / 8 FP; `SchemaCompiler.hs:360,363` high to low (`Cache.hs:45` keeps high: its second read's path comes from the cache file's content, not a constant); discovery wai 4 to 2 flagged, both remaining sites true positives. Gates unchanged. The fixed-file pin "a path held in a name keeps its severity" was narrowed to the let-bound literal being a fixed location.

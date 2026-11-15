@@ -394,7 +394,30 @@ export const PACKAGE_MODULES = Object.freeze({
   'git-annex': ['Annex'],
   'hackage-server': ['Distribution.Server'],
   'cabal-install': ['Distribution.Client'],
+  // The other packages the Haskell security advisory database names (read 2026-11-14), module lists from each package's Hackage cabal file at the
+  // version noted. An entry is a plain list (a listed module and everything beneath it) or `{ modules, exact: true }` where a prefix would claim another
+  // package's modules (`System.Process.Typed` is typed-process; `Data.X509` is x509; `Network.Wai` is wai; `XMonad` itself is xmonad).
+  jwt: { modules: ['Web.JWT'], exact: true },                                                                              // jwt 0.12.0
+  'tls-extra': { modules: ['Network.TLS.Extra'], exact: true },                                                           // tls-extra 0.6.6
+  'x509-validation': { modules: ['Data.X509.Validation'], exact: true },                                                  // x509-validation 1.6.12
+  'x509-store': { modules: ['Data.X509.CertificateStore', 'Data.X509.File', 'Data.X509.Memory'], exact: true },           // x509-store 1.6.9
+  'crypton-x509-store': { modules: ['Data.X509.CertificateStore', 'Data.X509.File', 'Data.X509.Memory'], exact: true },   // crypton-x509-store 1.10.0
+  'biscuit-haskell': ['Auth.Biscuit'],                                                                                    // biscuit-haskell 0.5.0.0
+  process: { modules: ['System.Process', 'System.Process.CommunicationHandle', 'System.Process.CommunicationHandle.Internals', 'System.Process.Environment', 'System.Process.Internals', 'System.Cmd'], exact: true },   // process 1.6.30.0
+  scientific: { modules: ['Data.Scientific', 'Data.ByteString.Builder.Scientific', 'Data.Text.Lazy.Builder.Scientific'], exact: true },   // scientific 0.3.10.0
+  'toml-reader': ['TOML'],                                                                                                // toml-reader 0.3.0.0
+  warp: { modules: ['Network.Wai.Handler.Warp', 'Network.Wai.Handler.Warp.Internal'], exact: true },                     // warp 3.4.21
+  bzlib: { modules: ['Codec.Compression.BZip', 'Codec.Compression.BZip.Internal'], exact: true },                        // bzlib 0.5.3.0
+  bz2: { modules: ['Codec.Compression.BZip'], exact: true },                                                              // bz2 1.0.1.2
+  'bzlib-conduit': ['Data.Conduit.BZlib'],                                                                                // bzlib-conduit 0.3.0.4
+  libarchive: ['Codec.Archive'],                                                                                          // libarchive 3.0.6.0
+  'xmonad-contrib': ['XMonad.Actions', 'XMonad.Config', 'XMonad.Doc', 'XMonad.Hooks', 'XMonad.Layout', 'XMonad.Prelude', 'XMonad.Prompt', 'XMonad.Util'],   // xmonad-contrib 0.18.2
+  keter: ['Keter'],                                                                                                       // keter 2.3.6
+  spacecookie: ['Network.Gopher'],                                                                                        // spacecookie 1.1.0.1
+  'hledger-web': ['Hledger.Web'],                                                                                         // hledger-web 1.52.4
 });
+/** The module names of an entry and whether they match exactly or as prefixes. */
+const moduleRule = (entry) => (Array.isArray(entry) ? { modules: entry, exact: false } : { modules: entry.modules || [], exact: !!entry.exact });
 
 /**
  * @param {string} pkg
@@ -403,9 +426,10 @@ export const PACKAGE_MODULES = Object.freeze({
  * @param {string[]|null} [symbols] advisory-supplied affected symbols ("Text.XML.Stream.Parse.parseBytes"); null = none given
  */
 export function reachability(pkg, imports, usedCallees = new Set(), symbols = null) {
-  const mods = PACKAGE_MODULES[pkg];
-  if (!mods) return { import: 'unknown', function: 'unknown', reason: `no module mapping for ${pkg}: import reachability cannot be decided (this is NOT "unreachable")` };
-  const hit = (imports || []).filter((i) => mods.includes(i.module) || mods.some((m) => i.module.startsWith(`${m}.`)));
+  const entry = PACKAGE_MODULES[pkg];
+  if (!entry) return { import: 'unknown', function: 'unknown', reason: `no module mapping for ${pkg}: import reachability cannot be decided (this is NOT "unreachable")` };
+  const { modules: mods, exact } = moduleRule(entry);
+  const hit = (imports || []).filter((i) => mods.includes(i.module) || (!exact && mods.some((m) => i.module.startsWith(`${m}.`))));
   if (!hit.length) return { import: 'not-imported', function: 'not-imported', reason: `no module of ${pkg} is imported` };
   if (!symbols || !symbols.length) return { import: 'imported', function: 'unknown', modules: [...new Set(hit.map((h) => h.module))], reason: 'the advisory names no affected function, so function-level reachability is unknown' };
   const used = [...usedCallees];

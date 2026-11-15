@@ -12,24 +12,6 @@
    "proof": "unproven"
   },
   {
-   "file": "wai-app-static/WaiAppStatic/Storage/Embedded/Runtime.hs",
-   "line": 60,
-   "severity": "medium",
-   "cwe": "CWE-328",
-   "vuln": "Weak hash function (MD5/SHA-1)",
-   "parser": "HS-RULES",
-   "proof": "unproven"
-  },
-  {
-   "file": "wai-app-static/WaiAppStatic/Storage/Filesystem.hs",
-   "line": 155,
-   "severity": "medium",
-   "cwe": "CWE-328",
-   "vuln": "Weak hash function (MD5/SHA-1)",
-   "parser": "HS-RULES",
-   "proof": "unproven"
-  },
-  {
    "file": "wai-frontend-monadcgi/Network/Wai/Frontend/MonadCGI.hs",
    "line": 35,
    "severity": "low",
@@ -44,6 +26,24 @@
    "severity": "info",
    "cwe": "CWE-676",
    "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai-app-static/WaiAppStatic/Storage/Embedded/Runtime.hs",
+   "line": 60,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "wai-app-static/WaiAppStatic/Storage/Filesystem.hs",
+   "line": 155,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
    "parser": "HS-RULES",
    "proof": "unproven"
   },

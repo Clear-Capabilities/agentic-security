@@ -334,7 +334,9 @@ function readsOutsideInput(fn, callee, args, importsNetwork) {
 }
 
 const EQUALITY_OPS = new Set(['==', '/=', '!=']);
-const VERIFY_CALL = /(?:^|\.)(?:constEq|secureCompare|verify\w*|authenticate\w*|checkPassword|validate\w*|hmac\w*|sign\w*|jwt\w*|encode(?:Signed)?)$/i;
+// `encodeSigned` is a JWT signature; a bare `encode` (Data.ByteString.Base64, Base16, Data.Text.Encoding) is formatting and is in FORMAT below: it read
+// wai-app-static's `encode (MD5.hash bs)`, an ETag, as a signing use.
+const VERIFY_CALL = /(?:^|\.)(?:constEq|secureCompare|verify\w*|authenticate\w*|checkPassword|validate\w*|hmac\w*|sign\w*|jwt\w*|encodeSigned)$/i;
 // Whole camelCase / snake_case words: `sig` must not match `design`, `mac` must not match `machine`.
 const CREDENTIAL_WORDS = new Set(['token', 'secret', 'nonce', 'otp', 'csrf', 'apikey', 'session', 'signature', 'sig', 'mac', 'hmac', 'credential', 'credentials', 'auth', 'cookie', 'passcode', 'cert', 'fingerprint']);
 const CREDENTIAL_NAME = { test: (name) => String(name).replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some((w) => CREDENTIAL_WORDS.has(w)) };
