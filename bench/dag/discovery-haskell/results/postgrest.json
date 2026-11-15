@@ -1,0 +1,79 @@
+{
+ "id": "postgrest",
+ "commit": "e5b4fac1c7a192af50a82dd3639ac47316ba60d3",
+ "rows": [
+  {
+   "file": "src/library/PostgREST/App.hs",
+   "line": 281,
+   "severity": "high",
+   "cwe": "CWE-79",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "external-api",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/library/PostgREST/Config.hs",
+   "line": 553,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/library/PostgREST/Config.hs",
+   "line": 603,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/library/PostgREST/Client.hs",
+   "line": 37,
+   "severity": "info",
+   "cwe": "CWE-918",
+   "vuln": "Server-Side Request Forgery",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/library/PostgREST/Unix.hs",
+   "line": 70,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "src/library/PostgREST/App.hs",
+   "line": 232,
+   "severity": "medium",
+   "cwe": "CWE-770",
+   "vuln": "Request body read without a size limit",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  }
+ ]
+}

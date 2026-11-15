@@ -135,7 +135,9 @@ function callerControlledParams(fn, sig, exported, imports) {
   // The result type is the part of the signature after the last top-level arrow; a function returning a framework handler value gets its text
   // parameters labelled as request input, any other exported function keeps the weaker caller-controlled label.
   const handler = handlerFrameworkOf(imports, sig.resultText);
-  const decorator = handler && handler.params !== false ? handler.decorator : 'hs:caller-controlled';   // WAI: the framework supplies no text parameter
+  const bare = String(fn.name || '').replace(/^.*\./, '');
+  // WAI: the framework supplies no text parameter (`params: false`); Yesod: only a function the routes DSL dispatches to by name (`handlerName`)
+  const decorator = handler && handler.params !== false && (!handler.handlerName || handler.handlerName.test(bare)) ? handler.decorator : 'hs:caller-controlled';
   sig.argTypes.forEach((t, i) => { const name = fn.params[i]; if (name && TEXT_LIKE.test(t)) out.push({ index: i, name, decorator }); });
   return out;
 }
@@ -879,7 +881,7 @@ class FnLowerer {
       // An import that two modules both satisfy (the Posix and Windows variants of one module behind a CPP conditional, two re-exports of
       // one name) is a call to ONE of them, which one is not decided here. Each candidate is referenced, so none of them reads as a
       // function nothing in the project uses.
-      if (r.reason === 'ambiguous-import') for (const q of r.candidates || []) this.noteRef(q, 'ambiguous-import', ln);
+      if (r.reason === 'ambiguous-import') { for (const q of r.candidates || []) this.noteRef(q, 'ambiguous-import', ln); if (r.candidates && r.candidates.length) hs.candidates = [...r.candidates]; }   // the rules may judge a property every candidate shares
     }
     if (hs.status === 'resolved' || hs.status === 'typeclass') {
       const ctxTargets = args.map((a) => argTargets(a));
@@ -1881,16 +1883,37 @@ export function assignEntryRoles(proj, callGraph) {
   for (const e of callGraph.edges || []) if (e && e.callee && e.caller) { if (!out.has(e.caller)) out.set(e.caller, []); out.get(e.caller).push(e.callee); }
   const mains = mainFunctions(callGraph);
   const cli = new Set(); const service = new Set();
+  // The role is decided along the call PATH from `main`: a function is `service` when some path to it passes through a module that imports a
+  // server framework or a socket library (the module of `main`, its own module, or any module between), and `cli` when it is reached only through
+  // modules that import none. One program can be both (yesod-bin's `add-handler` scaffolding beside `yesod devel`'s proxy): the scaffolding branch
+  // reads its standard input from the developer at the keyboard, the serving branch from whoever connects. Before this, one server import anywhere in
+  // a main's closure made every function of that closure `service`. A function on both kinds of path is `service` (the serving path exists).
+  // The module is found by the function's FILE, not by name: a repository with several `Main` modules (yesod-bin's beside its test suites) keeps
+  // only the first under the bare name, and the test suite's imports would otherwise decide the tool's role.
+  const moduleByFile = new Map();
+  for (const mi of proj.modules.values()) if (mi && mi.file && !moduleByFile.has(mi.file)) moduleByFile.set(mi.file, mi);
+  const serverModule = new Map();
+  const isServerModule = (q) => {
+    const f = callGraph.functions.get(q);
+    const mi = f ? (moduleByFile.get(f.file) || (f.hs && proj.modules.get(f.hs.module)) || null) : null;
+    if (!mi) return false;
+    if (!serverModule.has(mi)) serverModule.set(mi, (mi.imports || []).some((i) => SERVER_IMPORT.test(i.module)));
+    return serverModule.get(mi);
+  };
   for (const m of mains) {
-    const seen = new Set([m.qid]);
-    const todo = [m.qid];
-    while (todo.length) { const q = todo.pop(); for (const c of out.get(q) || []) if (!seen.has(c)) { seen.add(c); todo.push(c); } }
-    const mods = new Set();
-    for (const q of seen) { const f = callGraph.functions.get(q); if (f && f.hs && f.hs.module) mods.add(f.hs.module); }
-    let isService = false;
-    for (const name of mods) { const mi = proj.modules.get(name); if (mi && (mi.imports || []).some((i) => SERVER_IMPORT.test(i.module))) { isService = true; break; } }
-    for (const q of seen) (isService ? service : cli).add(q);
+    // state: (function, whether a server module lies on the path so far, this function's module included)
+    const seen = new Set();
+    const todo = [[m.qid, isServerModule(m.qid)]];
+    while (todo.length) {
+      const [q, viaServer] = todo.pop();
+      const key = `${q}\u0000${viaServer ? 1 : 0}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      (viaServer ? service : cli).add(q);
+      for (const c of out.get(q) || []) todo.push([c, viaServer || isServerModule(c)]);
+    }
   }
+  for (const q of service) cli.delete(q);
   for (const fn of callGraph.functions.values()) {
     if (!fn.hs) continue;
     fn.hs.entryRole = service.has(fn.qid) ? 'service' : (cli.has(fn.qid) ? 'cli' : 'library');

@@ -185,7 +185,11 @@ src('Network.Wai.Conduit', ['sourceRequestBody'], 'http-body', 'WAI request body
 // helper in a framework module that returns plain text is not a handler.
 export const HS_HANDLER_PARAM_SOURCES = Object.freeze({
   scotty: { decorator: 'hs:handler-param:scotty', framework: 'scotty', modules: ['Web.Scotty', 'Web.Scotty.Trans'], result: /\b(?:ActionM|ActionT)\b/, provenance: 'url-param', label: 'route, query or body value handed to a Scotty action (request input)' },
-  yesod: { decorator: 'hs:handler-param:yesod', framework: 'yesod', modules: ['Yesod', 'Yesod.Core', 'Yesod.Auth'], result: /\b(?:Handler|HandlerFor|HandlerT|Widget|WidgetFor|WidgetT)\b/, provenance: 'url-param', label: 'route piece or request value handed to a Yesod handler (request input)' },
+  // Yesod's routes DSL dispatches to functions named by convention (`getFooR`, `postFooR`, `handleFooR`; the same rule `haskell-web.js` uses to
+  // list routes), and those are the functions whose parameters are route pieces. Any other function returning a handler or widget value is a helper
+  // whose text parameters its CALLER fills (yesod's own `addStaticContentExternal minify hash staticDir toRoute ext'`), so `handlerName` keeps them at
+  // the weaker caller-controlled label; the result type still makes the function an entry handler for reachability.
+  yesod: { decorator: 'hs:handler-param:yesod', framework: 'yesod', modules: ['Yesod', 'Yesod.Core', 'Yesod.Auth'], result: /\b(?:Handler|HandlerFor|HandlerT|Widget|WidgetFor|WidgetT)\b/, handlerName: /^(?:get|post|put|delete|patch|options|head|handle)[A-Z][A-Za-z0-9_']*R$/, provenance: 'url-param', label: 'route piece or request value handed to a Yesod handler (request input)' },
   servant: { decorator: 'hs:handler-param:servant', framework: 'servant', modules: ['Servant', 'Servant.API', 'Servant.Server', 'Servant.Auth', 'Servant.Auth.Server'], result: /\b(?:Handler|ServerT|AppM)\b/, provenance: 'url-param', label: 'capture, query or body value handed to a Servant handler (request input)' },
   // WAI hands an application only the Request (and the respond continuation): a text parameter of a function returning `IO ResponseReceived`,
   // `Application` or `Middleware` is whatever its CALLER passed (IHP's `renderFile filePath contentType`, called with the application's own

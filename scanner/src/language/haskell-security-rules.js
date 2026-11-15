@@ -157,6 +157,11 @@ const PARTIALS = new Set([...PARTIAL_NAMES, ...PARTIAL_NAMES.flatMap((n) => PART
 const EMPTINESS_CHECK = /(?:^|\.)(?:null|notNull|isEmpty|length|size|isJust|isNothing|member|notMember|lookup|elem|notElem|nonEmpty|<match>)$/;
 // A call whose result has a different shape from its argument (pieces of it, or a parse of it): a test of the argument says nothing about the result.
 const SPLITTER = /(?:^|\.)(?:words|lines|splitOn|split|splitWhen|chunksOf|breakOn|decode|decodeStrict|eitherDecode|decodeEither|parseMaybe|parseEither|parse|readMaybe|readEither|reads)$/;
+// Splitters whose result has at least one element for EVERY input, so `last`/`head` on the result is total: `Data.Text.split p ""` and `splitOn
+// "." ""` are `[""]`, `Data.List.Split.splitOn`/`splitWhen`/`splitOneOf` give `[[]]`, `inits`/`tails`/`scanl`/`scanr`/`subsequences`/`permutations`
+// are non-empty by definition. Module-qualified, because the ByteString `split` returns `[]` for an empty input and `words`/`lines`/`chunksOf` can
+// be empty (PostgREST's `L.last $ T.split (== '.') key` was reported; `L.last (B.split '.' key)` still is).
+const NONEMPTY_RESULT = /^(?:Data\.Text(?:\.Lazy)?\.(?:split|splitOn|inits|tails)|Data\.List\.Split\.(?:splitOn|splitWhen|splitOneOf)|Data\.List\.(?:inits|tails|scanl|scanl'|scanr|subsequences|permutations)|Data\.List\.NonEmpty\.toList|scanl|scanr)$/;
 const SESSION_COOKIE = /(?:sess|sid|token|tok|auth|jwt|csrf|login|remember|secret)/i;
 // The double-submit cookie of an XSRF defence: the page's script reads it, so HttpOnly is not an attribute it can have. Matched on the name
 // expression (a literal, or the field/function/variable that carries the configured name), never on the value.
@@ -253,6 +258,25 @@ function* walk(e, depth = 0) {
   if (!e || typeof e !== 'object' || depth > 80) return;
   yield e;
   for (const c of kids(e)) yield* walk(c, depth + 1);
+}
+
+// Does a recursive call of `fn` take an argument built from the result of the read call `read`? The read's result is the variable its statement
+// assigns; a value is built from it through the function's assignments (closure). Answered from the IR, never from a name.
+function loopCarriesRead(fn, read) {
+  const nodes = Object.values((fn.cfg && fn.cfg.nodes) || {});
+  const seeds = new Set();
+  for (const n of nodes) if (n.kind === 'assign' && n.target && n.source && [...walk(n.source)].some((x) => x === read)) seeds.add(n.target);
+  if (!seeds.size) return true;   // a read whose result is not bound (`recv conn n >> loop`) is not judged: keep the finding
+  const derived = new Set(seeds);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const n of nodes) if (n.kind === 'assign' && n.target && n.source && !derived.has(n.target) && [...names(n.source)].some((v) => derived.has(v))) { derived.add(n.target); grew = true; }
+  }
+  for (const n of nodes) for (const root of [n.value, n.source, n.cond, ...(n.args || [])]) {
+    if (!root) continue;
+    for (const x of walk(root)) if (x.kind === 'call' && x.hs && x.hs.target === fn.qid && (x.args || []).some((a) => [...names(a)].some((v) => derived.has(v)))) return true;
+  }
+  return false;
 }
 
 function names(e, out = new Set()) {
@@ -608,12 +632,21 @@ export function analyzeHaskellRules(files, opts = {}) {
           }
         }
       }
+      const localBindings = new Set(fnNodes(fn).filter((n) => n.kind === 'assign' && typeof n.target === 'string').map((n) => n.target));
       const testedAll = withOrigins(testedVars);
       // `head (x : xs)`, `last (xs ++ [x])`, `head [a, b]`: the list has at least one element, so the call is total (real code: xmonad's `last (["Root"] ++ ..)`).
       const nonEmptyList = (e) => {
         if (!e || typeof e !== 'object') return false;
         if (e.kind === 'array') return !!(e.hs && e.hs.cons) || (!(e.hs && (e.hs.tuple || e.hs.con || e.hs.range)) && (e.elements || []).length > 0);
         if (e.kind === 'binary' && e.hs && e.hs.concat) return nonEmptyList(e.left) || nonEmptyList(e.right);
+        if (e.kind === 'call' && typeof e.callee === 'string' && NONEMPTY_RESULT.test(e.callee)) return true;
+        // a qualifier two modules share (`import qualified Data.Text as T` beside `Data.Text.Encoding as T`, PostgREST): the call is one of the
+        // candidates; accepted when a candidate is in the set and every candidate is that module or one of its submodules (one family), never
+        // when a candidate could be another package's `split` (the ByteString one returns `[]`)
+        if (e.kind === 'call' && e.hs && Array.isArray(e.hs.candidates) && e.hs.candidates.length) {
+          const hit = e.hs.candidates.find((q) => NONEMPTY_RESULT.test(q));
+          if (hit) { const fam = hit.replace(/\.[^.]+$/, ''); if (e.hs.candidates.every((q) => q === hit || q.startsWith(fam + '.'))) return true; }
+        }
         return false;
       };
       const isTested = (args) => {
@@ -772,8 +805,11 @@ export function analyzeHaskellRules(files, opts = {}) {
               const ownParam = nm.kind === 'ident' && Array.isArray(fn.params) && fn.params.includes(nm.name);
               if (!ownParam && (nm.kind !== 'literal' || SESSION_COOKIE.test(String(nm.value)))) emit('hs-insecure-cookie', file, line, { detail: 'HttpOnly missing, Secure missing', evidence: { httpOnly: false, secure: false, helper: c } });
             }
-            // a socket read repeated by a recursive loop, with no size test anywhere in it
-            if (SOCKET_READS.has(c) && !hasSizeTest && !bounded && fn.calls.some((x) => x.callee === fn.name && x.hs && x.hs.target === fn.qid)) {
+            // a socket read repeated by a recursive loop, with no size test anywhere in it, where the loop CARRIES what it read: an argument of the
+            // recursive call is built from the read's result (`slurp conn (acc <> chunk)`). A loop that handles each chunk and recurses with the socket
+            // alone (`talk conn = do msg <- recv conn 1024; ..; talk conn`, keter's REPL) holds one chunk at a time, bounded by the read's own size.
+            // Not seen: an accumulation through a mutable cell or a helper, which keeps the finding only when the chunk is passed on.
+            if (SOCKET_READS.has(c) && !hasSizeTest && !bounded && fn.calls.some((x) => x.callee === fn.name && x.hs && x.hs.target === fn.qid) && loopCarriesRead(fn, e)) {
               emit('hs-unbounded-input-read', file, line, { detail: `${c} is repeated by a loop that never compares the amount read with a limit`, confidence: 0.6, evidence: { read: c, loop: fnBase } });
             }
             // TLS certificate validation switched off
@@ -828,7 +864,10 @@ export function analyzeHaskellRules(files, opts = {}) {
               emit('hs-unbounded-allocation', file, line, { detail: `${c} sized by parsed caller text`, evidence: { allocator: c } });
             }
             // a partial function applied to caller text: one malformed value raises an uncaught exception
-            if (PARTIALS.has(c) && !(NONEMPTY_TOTAL.test(c) && nonEmptyList(args[0])) && args.some((a) => mentionsText(a)) && !isTested(args)) emit('hs-partial-function-on-input', file, line, { detail: `${c} on caller-supplied input`, evidence: { partial: c }, inlineCtx: e.hs && e.hs.inlineCtx });
+            // (a name the module DEFINES is that definition, not the library partial: yesod-core's where-bound `fromJust = error ..`, evaluated only
+            // for its type under `typeOf`; the IR records such a call as resolved to a project function, or as a local function value)
+            const shadowed = PARTIALS.has(c) && !!e.hs && (!!e.hs.target || e.hs.reason === 'local-function-value' || localBindings.has(c));
+            if (PARTIALS.has(c) && !shadowed && !(NONEMPTY_TOTAL.test(c) && nonEmptyList(args[0])) && args.some((a) => mentionsText(a)) && !isTested(args)) emit('hs-partial-function-on-input', file, line, { detail: `${c} on caller-supplied input`, evidence: { partial: c }, inlineCtx: e.hs && e.hs.inlineCtx });
             // a session/token cookie assembled without HttpOnly or Secure
             if (c === 'Web.Cookie.defaultSetCookie') { /* handled on the record update below */ }
             // unbounded body

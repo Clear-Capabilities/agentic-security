@@ -1,0 +1,166 @@
+{
+ "id": "yesod",
+ "commit": "4d3fcc460fabc0b1f85ee4cc705cc79c5753ccfc",
+ "rows": [
+  {
+   "file": "yesod-static/Yesod/EmbeddedStatic/Internal.hs",
+   "line": 116,
+   "severity": "high",
+   "cwe": "CWE-79",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "entrypoint-reachable",
+   "proof": "feasible",
+   "provenance": "url-param"
+  },
+  {
+   "file": "yesod/Yesod/Default/Util.hs",
+   "line": 52,
+   "severity": "high",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "entry-parameter",
+   "reach": "external-api",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "yesod-bin/AddHandler.hs",
+   "line": 135,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "stdin"
+  },
+  {
+   "file": "yesod-bin/AddHandler.hs",
+   "line": 109,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "yesod-bin/AddHandler.hs",
+   "line": 110,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "yesod-bin/AddHandler.hs",
+   "line": 112,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "yesod-bin/Keter.hs",
+   "line": 32,
+   "severity": "info",
+   "cwe": "CWE-78",
+   "vuln": "OS Command Injection (shell string)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "cli"
+  },
+  {
+   "file": "yesod-core/src/Yesod/Core/Internal/Request.hs",
+   "line": 64,
+   "severity": "info",
+   "cwe": "CWE-79",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "entrypoint-reachable",
+   "guard": "non-html-content-type",
+   "proof": "feasible",
+   "provenance": "http-body"
+  },
+  {
+   "file": "yesod-static/Yesod/EmbeddedStatic/Generators.hs",
+   "line": 75,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "yesod-auth/Yesod/Auth/Email.hs",
+   "line": 959,
+   "severity": "high",
+   "cwe": "CWE-916",
+   "vuln": "Password hashed with a fast general-purpose hash",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "yesod-core/src/Yesod/Core/Class/Yesod.hs",
+   "line": 888,
+   "severity": "medium",
+   "cwe": "CWE-1004",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "yesod-core/src/Yesod/Core/Handler.hs",
+   "line": 1604,
+   "severity": "medium",
+   "cwe": "CWE-1004",
+   "vuln": "Session cookie without HttpOnly or Secure",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "yesod-auth/Yesod/Auth/Email.hs",
+   "line": 998,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "yesod-auth/Yesod/Auth/GoogleEmail2.hs",
+   "line": 615,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  }
+ ]
+}

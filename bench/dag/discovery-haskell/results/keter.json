@@ -1,0 +1,95 @@
+{
+ "id": "keter",
+ "commit": "d406bbefeae58f5690206adf0a6555477aebd03a",
+ "rows": [
+  {
+   "file": "src/Keter/Proxy.hs",
+   "line": 203,
+   "severity": "high",
+   "cwe": "CWE-79",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "entrypoint-reachable",
+   "proof": "feasible",
+   "provenance": "header"
+  },
+  {
+   "file": "src/Keter/Rewrite.hs",
+   "line": 135,
+   "severity": "high",
+   "cwe": "CWE-918",
+   "vuln": "Server-Side Request Forgery",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "external-api",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "incoming/foo/hello.hs",
+   "line": 30,
+   "severity": "info",
+   "cwe": "CWE-79",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "entrypoint-reachable",
+   "guard": "non-html-content-type",
+   "proof": "feasible",
+   "provenance": "header"
+  },
+  {
+   "file": "incoming/foo1_0/hello.hs",
+   "line": 29,
+   "severity": "info",
+   "cwe": "CWE-79",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "entrypoint-reachable",
+   "guard": "non-html-content-type",
+   "proof": "feasible",
+   "provenance": "header"
+  },
+  {
+   "file": "src/Keter/Main.hs",
+   "line": 86,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "cli"
+  },
+  {
+   "file": "src/Keter/Main.hs",
+   "line": 87,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "cli"
+  },
+  {
+   "file": "src/Keter/Proxy.hs",
+   "line": 300,
+   "severity": "info",
+   "cwe": "CWE-79",
+   "vuln": "Cross-Site Scripting (HTML response body from text)",
+   "parser": "IR-TAINT",
+   "trust": "unattributed",
+   "reach": "entrypoint-reachable",
+   "guard": "redirect-response-body",
+   "proof": "feasible",
+   "provenance": null
+  }
+ ]
+}

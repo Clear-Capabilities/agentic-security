@@ -331,6 +331,7 @@ import { annotateHaskellLlm, analyzeHaskellLlmRules } from './language/haskell-l
 import { languagePragmaOnLine as _languagePragmaOnLine, languagePragmaSuppresses as _languagePragmaSuppresses } from './language/pragma.js';
 import { applyHaskellGuards, consolidateFlowSinks } from './language/haskell-guards.js';
 import { applyTrustBoundary, applyTestComponentScope } from './language/haskell-trust.js';
+import { testComponentIndex } from './language/haskell-manifests.js';
 import { applyHaskellReachability } from './language/haskell-reachability.js';
 import { annotateUnresolvedTargets, attachEvidenceChains } from './language/haskell-disclosure.js';
 import { analyzeHaskellRules } from './language/haskell-security-rules.js';
@@ -10880,7 +10881,11 @@ function _deterministicFileTimings(timings) {
     }
     // API contract — undocumented endpoints / missing-auth flags.
     if (process.env.AGENTIC_SECURITY_NO_API_CONTRACT !== '1') {
-      try { _apiContractFindings = runApiContractScan(scanRoot, aR) || []; finalFindings.push(..._apiContractFindings); } catch (_) {}
+      // a contract file under a Haskell test component's directory is that suite's fixture, not the API (decided from the manifest, see api-contract.js)
+      try {
+        const _hsTestIdx = testComponentIndex(_hsReachCtx().manifests);
+        _apiContractFindings = runApiContractScan(scanRoot, aR, { isTestFile: (rel) => !!_hsTestIdx.dirOwnerOf(rel) }) || []; finalFindings.push(..._apiContractFindings);
+      } catch (_) {}
     }
     // SBOM diff — drift detection across releases.
     if (process.env.AGENTIC_SECURITY_NO_SBOM_DIFF !== '1') {

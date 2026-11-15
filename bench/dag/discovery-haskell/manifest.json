@@ -1,11 +1,84 @@
 {
-  "note": "Six Haskell projects the engine had never been run on before 2026-11-02, chosen for a web or input-processing surface and for absence from every other set (dev, fresh, sealed, unseen). Shallow clones at these commits; yesod-scaffold is its `postgres` branch (the default branch holds no scaffold).",
+  "note": "Six Haskell projects the engine had never been run on before 2026-11-02, chosen for a web or input-processing surface and for absence from every other set (dev, fresh, sealed, unseen). Shallow clones at these commits; yesod-scaffold is its `postgres` branch (the default branch holds no scaffold). Batch 2 (2026-11-15, `batch: 2`): six more projects the engine had never been run on (postgrest, yesod, snap-server, keter, Spock, spacecookie), shallow clones at their default-branch heads of that day, chosen the same way and absent from every other set.",
   "projects": [
-    { "id": "hoogle", "url": "https://github.com/ndmitchell/hoogle", "commit": "df554c496c676874a889cc6526e154c2d8b5bc7d", "hsFiles": 34 },
-    { "id": "wai", "url": "https://github.com/yesodweb/wai", "commit": "a14965ae1d419a28876b9f66b4126e8d5da475ad", "hsFiles": 200 },
-    { "id": "mighttpd2", "url": "https://github.com/kazu-yamamoto/mighttpd2", "commit": "a4be0e2fff5495db8e74a54424dfefd8f82c0107", "hsFiles": 23 },
-    { "id": "postgres-websockets", "url": "https://github.com/diogob/postgres-websockets", "commit": "68a775dcd5f1eefc767315a7b3ea2b2b1c926b6a", "hsFiles": 16 },
-    { "id": "yesod-scaffold-pg", "url": "https://github.com/yesodweb/yesod-scaffold", "branch": "postgres", "commit": "fce4aa53b4741e9b57b5132317b532b8659d2477", "hsFiles": 20 },
-    { "id": "servant", "url": "https://github.com/haskell-servant/servant", "commit": "5387b8ca96377146e1bdcb72d103ace38a5a9635", "hsFiles": 233 }
+    {
+      "id": "hoogle",
+      "url": "https://github.com/ndmitchell/hoogle",
+      "commit": "df554c496c676874a889cc6526e154c2d8b5bc7d",
+      "hsFiles": 34
+    },
+    {
+      "id": "wai",
+      "url": "https://github.com/yesodweb/wai",
+      "commit": "a14965ae1d419a28876b9f66b4126e8d5da475ad",
+      "hsFiles": 200
+    },
+    {
+      "id": "mighttpd2",
+      "url": "https://github.com/kazu-yamamoto/mighttpd2",
+      "commit": "a4be0e2fff5495db8e74a54424dfefd8f82c0107",
+      "hsFiles": 23
+    },
+    {
+      "id": "postgres-websockets",
+      "url": "https://github.com/diogob/postgres-websockets",
+      "commit": "68a775dcd5f1eefc767315a7b3ea2b2b1c926b6a",
+      "hsFiles": 16
+    },
+    {
+      "id": "yesod-scaffold-pg",
+      "url": "https://github.com/yesodweb/yesod-scaffold",
+      "branch": "postgres",
+      "commit": "fce4aa53b4741e9b57b5132317b532b8659d2477",
+      "hsFiles": 20
+    },
+    {
+      "id": "servant",
+      "url": "https://github.com/haskell-servant/servant",
+      "commit": "5387b8ca96377146e1bdcb72d103ace38a5a9635",
+      "hsFiles": 233
+    },
+    {
+      "id": "postgrest",
+      "url": "https://github.com/PostgREST/postgrest",
+      "commit": "e5b4fac1c7a192af50a82dd3639ac47316ba60d3",
+      "hsFiles": 187,
+      "batch": 2
+    },
+    {
+      "id": "yesod",
+      "url": "https://github.com/yesodweb/yesod",
+      "commit": "4d3fcc460fabc0b1f85ee4cc705cc79c5753ccfc",
+      "hsFiles": 272,
+      "batch": 2
+    },
+    {
+      "id": "snap-server",
+      "url": "https://github.com/snapframework/snap-server",
+      "commit": "554ac12033dd141dc426c94a428cd9d5626b12d2",
+      "hsFiles": 34,
+      "batch": 2
+    },
+    {
+      "id": "keter",
+      "url": "https://github.com/snoyberg/keter",
+      "commit": "d406bbefeae58f5690206adf0a6555477aebd03a",
+      "hsFiles": 34,
+      "batch": 2
+    },
+    {
+      "id": "spock",
+      "url": "https://github.com/agrafix/Spock",
+      "commit": "872f97d5c81f262fa56648c517b5883dcda3bec4",
+      "hsFiles": 112,
+      "batch": 2
+    },
+    {
+      "id": "spacecookie",
+      "url": "https://github.com/sternenseemann/spacecookie",
+      "commit": "aa5c22808f981a7814f0c9cc5525252d56f62623",
+      "hsFiles": 16,
+      "batch": 2
+    }
   ]
 }

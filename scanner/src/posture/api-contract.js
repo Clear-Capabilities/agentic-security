@@ -176,16 +176,22 @@ export function diffRoutes(contractRoutes, codeRoutes) {
  * Run the full pipeline: load contracts, parse, diff vs codeRoutes,
  * return findings.
  */
-export function runApiContractScan(scanRoot, codeRoutes) {
+export function runApiContractScan(scanRoot, codeRoutes, opts = {}) {
   const contracts = loadContracts(scanRoot);
   const findings = [];
+  // A route whose path is not a path cannot be compared with a contract: an extractor reading the text between two string literals on one line
+  // produced `GET  ++ toS k ++` from PostgREST's parser error message. A path starts with `/` and holds no whitespace.
+  const comparable = (codeRoutes || []).filter((r) => r && typeof r.path === 'string' && /^\/\S*$/.test(r.path.trim()));
   for (const c of contracts) {
     if (c.error) continue;
+    // A contract file under a directory the project's manifest lists for a TEST component is a fixture of that suite, not the API the code must
+    // declare (PostgREST's `test/spec/fixtures/openapi.json`); the caller decides from the manifest (`isTestFile(relativePath)`), never from a path name.
+    if (typeof opts.isTestFile === 'function' && opts.isTestFile(path.relative(scanRoot, c.path).split(path.sep).join('/'))) continue;
     let contractRoutes = [];
     if (c.kind === 'openapi') contractRoutes = parseOpenAPI(c.doc);
     else if (c.kind === 'graphql') contractRoutes = parseGraphQL(c.doc);
     contractRoutes.forEach(r => { r.contractFile = c.path; });
-    findings.push(...diffRoutes(contractRoutes, routesGovernedBy(c.path, scanRoot, codeRoutes || [])));
+    findings.push(...diffRoutes(contractRoutes, routesGovernedBy(c.path, scanRoot, comparable)));
   }
   return findings;
 }

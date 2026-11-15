@@ -1,7 +1,7 @@
 {
  "schema": "agentic-security/haskell-precision-baseline@1",
  "comparison": "equality: a regression fails, and so does an improvement that was not recorded here",
- "engineVersion": "0.195.39",
+ "engineVersion": "0.195.40",
  "labelsDigests": {
   "development-tuning": "f599e1edc2e1e8b68756b4d25c238daf0f0f04b34ea30983a16a793615e40395",
   "development-verification": "39b0c5bf5cd20298a8e7ab608e5d7b938c4725a8f8d51e5b22a4ba011f1d0870",
@@ -124,10 +124,10 @@
    "labelled": 246,
    "reported": 204,
    "notReported": 42,
-   "flagged": 28,
-   "loweredToInfo": 176,
+   "flagged": 27,
+   "loweredToInfo": 177,
    "tp": 21,
-   "fp": 7,
+   "fp": 6,
    "tpNotFlagged": 0,
    "byStatus": {
     "entrypoint-reachable": {
@@ -151,10 +151,10 @@
      "FP": 112
     }
    },
-   "precision": 0.75,
+   "precision": 0.7778,
    "wilson95": [
-    0.5664,
-    0.8732
+    0.5924,
+    0.8939
    ]
   },
   "census": {
@@ -257,8 +257,8 @@
     },
     "ihp": {
      "rows": 176,
-     "flagged": 13,
-     "loweredToInfo": 163,
+     "flagged": 12,
+     "loweredToInfo": 164,
      "byStatus": {
       "no-verdict": 109,
       "unknown": 19,
