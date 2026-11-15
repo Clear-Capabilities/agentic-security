@@ -473,6 +473,15 @@
       "feasible"
      ]
     ],
+    "hackage-server:src/Data/TarIndex.hs:168:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
     "hackage-server:src/Distribution/Client/Mirror/Repo/Hackage2.hs:101:path-traversal": [
      [
       "info",
@@ -1575,6 +1584,78 @@
       "unproven"
      ]
     ],
+    "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:103:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:125:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:147:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:167:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:179:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:195:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/CodeGen/Controller.hs:87:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Columns.hs:61:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
     "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Enums.hs:72:Partial function applied to caller-supplied text": [
      [
       "low",
@@ -1609,6 +1690,24 @@
       "high",
       "IR-TAINT",
       "feasible"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Policies.hs:21:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
+    "ihp:ihp-ide/IHP/IDE/SchemaDesigner/Controller/Tables.hs:37:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
      ]
     ],
     "ihp:ihp-ide/IHP/IDE/SchemaDesigner/SchemaOperations.hs:542:Partial function applied to caller-supplied text": [
@@ -2097,6 +2196,15 @@
       "unproven"
      ]
     ],
+    "ihp:ihp/IHP/NameSupport.hs:280:Partial function applied to caller-supplied text": [
+     [
+      "low",
+      null,
+      null,
+      "HS-RULES",
+      "unproven"
+     ]
+    ],
     "ihp:ihp/IHP/Prelude.hs:141:unsafe-boundary": [
      [
       "info",
@@ -2545,13 +2653,13 @@
      }
     },
     "hackage-server": {
-     "rows": 57,
-     "flagged": 2,
+     "rows": 58,
+     "flagged": 3,
      "loweredToInfo": 55,
      "byStatus": {
       "entrypoint-reachable": 35,
-      "external-api": 6,
-      "no-verdict": 16
+      "no-verdict": 17,
+      "external-api": 6
      }
     },
     "pandoc": {
@@ -2612,11 +2720,11 @@
      }
     },
     "ihp": {
-     "rows": 177,
-     "flagged": 13,
+     "rows": 188,
+     "flagged": 24,
      "loweredToInfo": 164,
      "byStatus": {
-      "no-verdict": 110,
+      "no-verdict": 121,
       "unknown": 19,
       "entrypoint-reachable": 43,
       "external-api": 5

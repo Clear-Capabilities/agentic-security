@@ -160,7 +160,10 @@ function serveTargets(mod) {
     let j = i + 1; let api = null; let sawProxy = false;
     for (; j < Math.min(T.length, i + 16) && !api; j++) { if (T[j].t === 'con' && T[j].v === 'Proxy') sawProxy = true; else if (sawProxy && T[j].t === 'con') api = T[j].v; }
     if (!api) continue;
-    for (; j < Math.min(T.length, i + 40); j++) { if (T[j].t === 'var' && !/^serve/.test(T[j].v)) { if (!out.has(T[j].v)) out.set(T[j].v, api); break; } if (T[j].t === 'sp' && T[j].v === ')' && T[j + 1] && T[j + 1].t === 'var' && T[j + 1].v === 'serve') break; }
+    // past the proxy's closing parenthesis, then past `serveWithContext`'s context argument (a parenthesised group or one token)
+    { let depth = 0; for (; j < T.length; j++) { if (T[j].t === 'sp' && T[j].v === '(') depth++; else if (T[j].t === 'sp' && T[j].v === ')') { if (depth === 0) { j++; break; } depth--; } } }
+    if (T[i].v === 'serveWithContext' && j < T.length) { if (T[j].t === 'sp' && T[j].v === '(') { let d = 0; for (; j < T.length; j++) { if (T[j].t === 'sp' && T[j].v === '(') d++; else if (T[j].t === 'sp' && T[j].v === ')') { d--; if (d === 0) { j++; break; } } } } else j++; }
+    for (; j < Math.min(T.length, i + 60); j++) { if (T[j].t === 'var' && !/^serve/.test(T[j].v)) { if (!out.has(T[j].v)) out.set(T[j].v, api); break; } }
   }
   SERVE_TARGETS.set(mod, out);
   return out;
@@ -730,7 +733,8 @@ class FnLowerer {
 
   lowerListComp(e, ln) {
     for (const q of e.quals) {
-      if (q.t === 'qbind') this.bindPattern(q.pat, { kind: 'member', object: this.lowerExpr(q.e, ln), prop: '[]' }, ln);
+      // a generator's pattern FILTERS (`[ r | Right r <- xs ]` skips a `Left`), so the element read is marked: a rule must not read it as a crash
+      if (q.t === 'qbind') this.bindPattern(q.pat, { kind: 'member', object: this.lowerExpr(q.e, ln), prop: '[]', hs: { generator: true } }, ln);
       else if (q.t === 'qlet') this.processDecls(q.decls, [e.head], ln);
     }
     return { kind: 'array', elements: [this.lowerExpr(e.head, ln)], hs: { comprehension: true } };
@@ -2347,10 +2351,13 @@ function buildHaskellCallGraph(perFile, proj) {
  * Lower an arbitrary handler expression (a route's `do` block or lambda) as its own synthetic function, in
  * the context of `mod`, so it can be analysed per route. Returns the function IR (`cfg`, `calls`, ...).
  */
-export function lowerHandlerExpr(project, mod, exprAst, label, line = 1) {
+// `params`: the enclosing clause's variables (a WAI router's `req` and `respond`), declared as the synthetic handler's parameters so a free
+// variable of the expression resolves as the parameter it is, not as an unknown name under an open import (`respond` under `import Network.Wai`).
+export function lowerHandlerExpr(project, mod, exprAst, label, line = 1, params = []) {
   const qid = `${mod.file}::${mod.name}.$handler.${label}@${line}`;
   const L = new FnLowerer(project, mod, { qid, name: `${mod.name}.$handler.${label}`, line, parentName: `${mod.name}.$handler.${label}` }, []);
   L.push();
+  params.filter((n) => typeof n === 'string' && n).forEach((n, i) => L.declare(n, { kind: 'param', index: i }));
   const v = L.lowerExpr(exprAst, line);
   L.cfg.add('return', (v && v.kind === 'call' && v.line) || line, { value: v || unknownExpr() });
   L.pop();

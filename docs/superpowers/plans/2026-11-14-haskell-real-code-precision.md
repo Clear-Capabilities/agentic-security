@@ -181,3 +181,28 @@ irrefutable `let Just x = decode ..` on message data (OrderEvents), gzip decompr
 Not changed, each with its reason in the labels: scotty's `upload.hs:52` (the temp-file path and the client's file name come out of one tuple built by a
 comprehension and taken apart by `for_`, so the roots carry both), `Util.hs:45` (the framework handing on its user's response), simplex-chat's existence
 probe before the containment test and its three clock reads (a clock handed to a project helper or stored in a timestamp field), the IHP cache aggregate.
+
+## Round 9 (0.195.45): the pattern layer's misses, read on unseen-v6
+
+The eight pattern-layer failures of unseen-v6 (a development set since round 8) were read and each general cause fixed, with every mechanism pinned both
+ways in `scanner/test/haskell/haskell-round9-rules.test.js`.
+
+| mechanism | source of the shape | effect |
+|---|---|---|
+| a binding the function tests as a Bool (`if accepted`) is a yes/no answer about the credential, never its text | SignInAudit (the one pattern-layer false positive) | gone |
+| WAI routes written as guard equations (`\| pathInfo req == ["admin", "flush"] && requestMethod req == "POST" = ..`); a synthetic inline handler takes the router clause's variables as parameters, so a 401 handed to `respond` stops it | CacheAdmin | found; the guarded form stays quiet |
+| `hs-unbounded-decompression`: zlib, bzlib or lzma `decompress` of caller-supplied bytes with no bound (a pattern-layer rule; a framework handler's own parameters now seed caller text) | ArchiveImport | found |
+| an enumeration `[1 .. n]` sized by parsed caller text is an allocation | ReportPages | found; a clamped count stays quiet |
+| an irrefutable constructor pattern (`let Just x = decode payload`, a `do` bind) on a value parsed from caller text is a partial function; a comprehension generator's pattern (`hs.generator`) and a pattern guard (its `<match>` names the scrutinee expression) filter and are not | OrderEvents; hackage's BuildReport and stackage's path-piece guards (the two filtering forms, read on real code) | found; the filtering forms quiet |
+| a handler's framework parameters are caller text in the helpers they feed (`requestTextParams` seeds), and `network` is a request provenance | MediaRange (`parseRange header` with `!!` and `[lo, hi]`) | found |
+| a write to a mutable cell the handler did not create is a sensitive operation (`writesSharedCell`; a settings path WORD was tried first and reported the GHC fixture's user-level `/cookie/settings`); a Servant handler typed by its own result is paired with the API `serve`/`serveWithContext` names (tokens, past the context argument), and a partial application's head function is the handler | MailerConfig | found; behind `BasicAuth` quiet |
+| a `ReqBody` carries its record type, and a body record with an `..Id` field is an object selector for the BOLA judgement | AddressBook | found; a principal-scoped query quiet |
+
+Real code: the irrefutable-pattern rule found eleven true positives on IHP's IDE (`let (Right plan) = ..buildPlan name`, `let (Just table) = findStatementByName
+name ..` on request parameters, all low) and one false positive on hackage's TarIndex (an invariant the rule cannot see), each labelled; its first form also
+fired on four filtering patterns (a comprehension generator, three pattern guards), which is what the generator mark and the expression-level match
+handle. No other project of the development, fresh or discovery sets moved. The fresh set is 44 flagged, 34 true positives (77.3%), from 33 / 23 (69.7%).
+Measured on the splits (unseen-v7's per-case lists still never read): unseen-v7 overall F1 72.5% to 75.0% (precision 83.3 to 81.8, recall 64.1 to 69.2),
+pattern layer F1 73.2% to 77.3% (15/2/9 to 17/3/7: two more vulnerable forms found, one safe form newly reported), taint unchanged at 71.4%. unseen-v6
+(development) overall F1 83.8% to 93.8%, pattern layer F1 75.6% to 92.3% (17 to 24 true positives, no miss left), taint unchanged at 96.6% (the `getArgs`
+decision). The one safe form unseen-v7 newly reports is not read; it is the generalisation cost of this round, recorded here.

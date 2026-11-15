@@ -182,6 +182,13 @@ round the census counts ACTIONABLE sites, not `info` and not a flow the engine p
 `scan.mjs`), so a refuted finding that keeps its severity by the proof gate's design is no longer a flagged false positive here. The whole census after
 round 8: batch 1 11, batch 2 9, batch 3 13, batch 4 4; no new site anywhere.
 
+## Round 9 (0.195.45): the pattern layer
+
+The pattern-layer rules of round 9 (guard-equation WAI routes, decompression, enumeration allocations, irrefutable patterns, settings paths, served handlers,
+body-record ids) changed nothing on this set except one new site the guard-equation reader created, hledger-web's `/_ping` middleware intercept compared
+with the OpenAPI contract, fixed in the same round: a guard route in a `Middleware`-typed function is never compared. Census after round 9: batch 1 11,
+batch 2 9, batch 3 13, batch 4 4.
+
 ## Limits
 
 Twenty-four projects over four batches, one commit each, one labeller, one reading. Three of the first six are frameworks or libraries, whose "requests" are their users'
