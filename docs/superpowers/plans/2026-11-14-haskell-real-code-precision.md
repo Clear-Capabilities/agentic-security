@@ -65,3 +65,13 @@ Rulings: the cookie decision reads the cookie's NAME expression (literal, field,
 | SCA import reachability for every package the Haskell advisory database names, module lists from each package's Hackage cabal file, exact matching where a prefix would claim another package | `haskell-sca.js` `PACKAGE_MODULES` | advisory findings' `reachability.import` leaves `unknown` for 18 packages |
 
 Round 3 results (2026-11-14): fresh set unchanged at 29 flagged / 21 TP / 8 FP; `SchemaCompiler.hs:360,363` high to low (`Cache.hs:45` keeps high: its second read's path comes from the cache file's content, not a constant); discovery wai 4 to 2 flagged, both remaining sites true positives. Gates unchanged. The fixed-file pin "a path held in a name keeps its severity" was narrowed to the let-bound literal being a fixed location.
+
+## Round 4 (0.195.40)
+
+| mechanism | source of the shape | effect |
+|---|---|---|
+| `hs-request-body-bound` rewrites `lazyRequestBody` too (the bounded reader already returns a lazy ByteString; the body is now read eagerly up to the limit, stated) | discovery set: servant-server `Internal.hs:1047`, wai-extra `MethodOverridePost.hs:40`, wai-frontend-monadcgi `MonadCGI.hs:35` (the three labelled true positives with no patch) | `MonadCGI.hs:35` verified (MITIGATION); the other two stay refused: their files use CPP |
+| a cookie record whose name is one of the enclosing function's parameters (under a conversion or not) is a helper's definition, judged at the call that passes a session name | scotty `Cookie.hs:132` (`makeSimpleCookie n v`), fresh set | fresh false positives 8 to 7; `Session.hs:180` (the caller) stays a true positive |
+| an evidence-chain hop names the file its record was made in; the collector stamped the collecting function's file on every hop, so a summary finding merged into its caller put every hop in the caller's file | IHP `SchemaCompiler/Cache.hs:45` (a read at Cache.hs line 38 was looked for at SchemaCompiler.hs:38) | the fixed-file judgement now finds the read: `high` to `low` |
+
+Ruling: the CPP refusal stands for the two remaining body sites. A rewrite inside a file with conditional compilation can change a branch the scan cannot see; the decision (which configuration the patch is for) is the operator's, and the class reason names it.

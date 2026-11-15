@@ -3228,19 +3228,23 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         // arguments. Only a finding whose trace has such a hop gets the field, so every other finding is unchanged.
         ...(Array.isArray(f.trace) && f.trace.some((t) => t && t.from) ? { sourceRoots: _rootSources(f.trace) } : {}),
         source: f.trace && f.trace.length ? {
-          file: fn.file,
+          file: f.trace[0].file || file,
           line: f.trace[0].line,
           label: f.trace[0].sourceLabel,
           // a parameter annotated as a source is not part of a finding's stable identity (posture/stable-id.js): naming it must not rename the finding
           ...(f.trace[0].annotation ? { kind: 'parameter' } : {}),
         } : null,
         sink: {
-          file: fn.file,
+          file,   // the finding's own file (resolved above): a summary finding merged into its caller is collected under the caller's function
           line: f.line,
           label: f.sinkId,
         },
+        // A hop names the file the record was made in (`t.file`, set when the source was read); `fn.file` is the function the finding was
+        // COLLECTED under, which for a summary finding merged into its caller is the caller's file. IHP's `SchemaCompiler/Cache.hs:45` had every
+        // hop, the sink included, stamped with `SchemaCompiler.hs`, so a read at Cache.hs line 38 was looked for at SchemaCompiler.hs:38 and the
+        // fixed-file judgement could not find it.
         chain: (f.trace || []).map(t => ({
-          file: fn.file, line: t.line, label: t.sourceLabel, provenance: t.provenance || null,
+          file: t.file || file, line: t.line, label: t.sourceLabel, provenance: t.provenance || null,
         })),
       };
       if (_replay) _replay.record(attributedFn.qid, key, _mapped);

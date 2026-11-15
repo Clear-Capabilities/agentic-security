@@ -9,6 +9,18 @@
 > make the history less accurate, not more.
 
 
+## 0.195.40 - Haskell on real code, round 4: a lazy body read gets the bounded reader, a cookie helper is judged at its caller, and an evidence chain names the right file
+
+**Measured, 0.195.39:** `TIMINGS preflight=6s push=15s pr=4s checks=360s merge=5s verify=11s tag=2s release=224s npm=511s total=1138s release-clock=242s`, shipped from the merge to the published release in 242 s. The run stopped once in `verify` on an `index.lock` held by the post-commit warm gate and was resumed when the lock cleared (never deleted), which is why the npm phase shows the long wait.
+
+Three changes from the labelled real-code sets (`docs/superpowers/plans/2026-11-14-haskell-real-code-precision.md`, round 4). Nothing moved a true positive.
+
+- **Changed results, listed first.** Fresh set: false positives 8 to 7 (scotty `Cookie.hs:132`, a cookie helper's definition), flagged 29 to 28, true positives 21 unchanged, precision 72.4% to 75.0% (Wilson 95%: 56.6% to 87.3%); IHP `SchemaCompiler/Cache.hs:45` goes from `high` to `low` once its evidence chain names the right file. Discovery set: wai-frontend-monadcgi `MonadCGI.hs:35` gets a verified patch (MITIGATION); servant-server `Internal.hs:1047` and wai-extra `MethodOverridePost.hs:40` stay refused because their files use CPP, the standing rule. The precision baseline is re-recorded and the live check passes.
+- **`hs-request-body-bound` rewrites `lazyRequestBody`.** The bounded reader already returns a lazy ByteString, so the same in-file helper replaces a lazy read; the plan states that the body is now read eagerly, up to the limit, before the handler continues. The 0.190 pin that `lazyRequestBody` is refused became the opposite.
+- **A cookie built from the enclosing function's parameters is a helper's definition.** `makeSimpleCookie n v = defaultSetCookie { setCookieName = T.encodeUtf8 n, .. }` takes its name from its caller (under a conversion or not), so it is judged at the call that passes a session name, which the helper-call path already reports (scotty `Session.hs:180` stays a true positive). A name that is a field of a parameter (`xsrfCookieName settings`) is still the cookie's own name.
+- **An evidence-chain hop names the file its record was made in.** The taint engine's collector stamped every hop, the sink included, with the file of the function the finding was collected under; for a summary finding merged into its caller that is the caller's file, so IHP's `Cache.hs:45` said "file content at SchemaCompiler.hs:38" (the right line in the wrong file, an import). A hop and the sink location now carry their own file, and the fixed-file judgement finds the read.
+- Regression gates unchanged: CVE replay 229/229, self-scan, mutation, layer recall, the lineage registry pins, the language-support registry.
+
 ## 0.195.39 - Haskell on real code, round 3: a Base64 encoder is not a signer, a project constant is a fixed path, and SCA knows every advisory package's modules
 
 **Measured, 0.195.38:** `TIMINGS preflight=4s push=7s pr=4s checks=428s merge=5s verify=12s tag=2s release=223s npm=90s total=775s release-clock=242s`, shipped from the merge to the published release in 242 s on the first push; the npm listing lagged the publish and `ship --resume` confirmed it.
