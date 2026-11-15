@@ -29,8 +29,9 @@
 
 import { findSites, identNames } from './haskell-guards.js';
 import { testComponentIndex } from './haskell-manifests.js';
+import { UPLOAD_CONTENT_LABEL } from './haskell-models.js';
 
-export const TRUST_VERDICTS = Object.freeze(['attacker-reachable', 'operator-controlled', 'api-contract', 'entry-parameter', 'data-input', 'unattributed']);
+export const TRUST_VERDICTS = Object.freeze(['attacker-reachable', 'operator-controlled', 'framework-controlled', 'api-contract', 'entry-parameter', 'data-input', 'unattributed']);
 
 const OPERATOR = new Set(['cli', 'env']);
 const EXTERNAL = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie', 'network', 'upload']);
@@ -307,7 +308,7 @@ function fixedFileReads(perFile, f, roots) {
  * (`operator-controlled`, `api-contract`). Mutates the findings; returns counts.
  */
 export function applyTrustBoundary(findings, perFile) {
-  const stats = { attackerReachable: 0, operatorControlled: 0, apiContract: 0, entryParameter: 0, dataInput: 0, unattributed: 0 };
+  const stats = { attackerReachable: 0, operatorControlled: 0, frameworkControlled: 0, apiContract: 0, entryParameter: 0, dataInput: 0, unattributed: 0 };
   for (const f of findings || []) {
     if (!f || f.parser !== 'IR-TAINT' || !/\.(?:l?hs|hsc)$/i.test(String(f.file || ''))) continue;
     const roots = rootsOf(f);
@@ -317,7 +318,12 @@ export function applyTrustBoundary(findings, perFile) {
     let reason;
     let inferred = false;
     let lowToLow = false;
-    if (classes.has('external')) { verdict = 'attacker-reachable'; reason = 'a request, socket, header, cookie or remote response supplies the value'; }
+    if (f.cwe === 'CWE-22' && roots.length && roots.every((r) => r.label === UPLOAD_CONTENT_LABEL)) {
+      // wai-extra: `fileContent` is a FilePath only under `tempFileBackEnd`, where the framework wrote the part to a temporary file of its own
+      // choosing and the application reads it back; the client chose the bytes, never the path. (`fileName` is the client's text and stays a source.)
+      verdict = 'framework-controlled';
+      reason = 'the path is the content field of an uploaded part, which is a FilePath only under tempFileBackEnd: the framework chose the temporary file, the client chose only its bytes';
+    } else if (classes.has('external')) { verdict = 'attacker-reachable'; reason = 'a request, socket, header, cookie or remote response supplies the value'; }
     else if (roots.length && [...classes].every((c) => c === 'operator')) {
       verdict = 'operator-controlled';
       reason = 'only command-line arguments or environment variables supply the value; whoever starts the program chooses them, so no trust boundary is crossed';
@@ -360,8 +366,9 @@ export function applyTrustBoundary(findings, perFile) {
       f.controls = [...(f.controls || []), { kind: 'fixed-file-source', evidenceKind: 'source' }];
       f.guardNote = { kind: 'data-input', reason };
     }
-    if (verdict === 'operator-controlled' || verdict === 'api-contract') {
-      lowerFinding(f, { kind: verdict, reason, controlKind: verdict === 'operator-controlled' ? 'operator-controlled-input' : 'api-contract-wrapper', guard: '_trustLowered' });
+    if (verdict === 'operator-controlled' || verdict === 'api-contract' || verdict === 'framework-controlled') {
+      const controlKind = verdict === 'operator-controlled' ? 'operator-controlled-input' : verdict === 'framework-controlled' ? 'framework-temp-file' : 'api-contract-wrapper';
+      lowerFinding(f, { kind: verdict, reason, controlKind, guard: '_trustLowered' });
     }
   }
   return stats;
