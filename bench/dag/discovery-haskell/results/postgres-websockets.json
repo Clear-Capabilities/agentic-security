@@ -5,12 +5,13 @@
   {
    "file": "src/PostgresWebsockets/Config.hs",
    "line": 99,
-   "severity": "high",
+   "severity": "info",
    "cwe": "CWE-22",
    "vuln": "Path Traversal",
    "parser": "IR-TAINT",
-   "trust": "unattributed",
+   "trust": "operator-controlled",
    "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
    "proof": "feasible",
    "provenance": null
   }

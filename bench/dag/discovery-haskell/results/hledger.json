@@ -61,6 +61,19 @@
    "provenance": null
   },
   {
+   "file": "hledger-lib/Hledger/Data/Json.hs",
+   "line": 334,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
    "file": "hledger-lib/Hledger/Utils/IO.hs",
    "line": 803,
    "severity": "info",
@@ -274,6 +287,19 @@
    "proof": "unproven"
   },
   {
+   "file": "hledger/Hledger/Cli/CliOptions.hs",
+   "line": 1002,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "external-api",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
    "file": "hledger-lib/Hledger/Read/JournalReader.hs",
    "line": 1220,
    "severity": "info",
@@ -357,6 +383,15 @@
   {
    "file": "hledger-lib/Hledger/Utils/IO.hs",
    "line": 937,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "hledger-lib/Hledger/Utils/IO.hs",
+   "line": 1133,
    "severity": "info",
    "cwe": "CWE-676",
    "vuln": "Unsafe boundary: unsafePerformIO",

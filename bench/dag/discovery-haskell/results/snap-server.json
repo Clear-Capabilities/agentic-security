@@ -1,0 +1,24 @@
+{
+ "id": "snap-server",
+ "commit": "554ac12033dd141dc426c94a428cd9d5626b12d2",
+ "rows": [
+  {
+   "file": "src/Snap/Internal/Http/Server/Date.hs",
+   "line": 31,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Snap/Internal/Http/Server/Session.hs",
+   "line": 194,
+   "severity": "info",
+   "cwe": "CWE-676",
+   "vuln": "Unsafe boundary: unsafePerformIO",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  }
+ ]
+}

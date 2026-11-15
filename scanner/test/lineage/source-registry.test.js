@@ -274,12 +274,16 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // `fileContent`), provenance `upload` (http-upload, modeled), each as a call form and a lineage twin. Re-measured against the live catalog.
   // 678 -> 682 and 520 -> 524 modeled (0.195.14): optparse-applicative `execParser` and `customExecParser` as `cli` sources (the parsed options
   // record is the command line), each as a call form and a lineage twin. Re-measured against the live catalog.
-  assert.equal(SOURCES.length, 682);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 524);
+  // 682 -> 728 and 524 -> 570 modeled (0.195.44, round 8 of the Haskell work): scotty's `filesOpts` beside `files`, Snap's request header, request-line and cookie readers
+  // (`getHeader`, `rqHeaders`, `getsRequest`, `rqURI`, `rqPathInfo`, `rqQueryString`, `rqContextPath`, `getCookie`, `rqCookies`, `cookieValue`, from
+  // Snap.Core and the Snap re-export), websockets' message readers (`receiveData`, `receiveDataMessage`, `receive`, `fromDataMessage`) and
+  // amqp's `msgBody`, each as a call form and a lineage twin, every provenance modeled (header, url-param, cookie, network). Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 728);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 570);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 41);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 117);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(524 + 41 + 117, SOURCES.length);
+  assert.equal(570 + 41 + 117, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

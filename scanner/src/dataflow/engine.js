@@ -1132,9 +1132,22 @@ function _unsanitizersInExprTree(expr, out) {
   if (Array.isArray(expr.props)) for (const p of expr.props) _unsanitizersInExprTree(p && p.value, out);
 }
 
+// Does an expression carry a VALUE a sanitizer could act on (a variable, a member read, another call), or only literals? `T.length "build "`
+// measures a literal: it stands beside the tainted value (`T.drop (T.length "build ") msg`), nothing tainted passes through it, and it
+// sanitizes nothing. Recording it labelled a websocket message reaching a shell "sanitized via Data.Text.length" (round 8 of the Haskell work).
+function _carriesValue(expr, depth = 0) {
+  if (!expr || typeof expr !== 'object' || depth > 40) return false;
+  if (expr.kind === 'ident' || expr.kind === 'member' || expr.kind === 'call' || expr.kind === 'this') return true;
+  if (expr.kind === 'literal') return false;
+  for (const k of ['left', 'right', 'object', 'property', 'value', 'test', 'consequent', 'alternate']) if (expr[k] && typeof expr[k] === 'object' && _carriesValue(expr[k], depth + 1)) return true;
+  for (const k of ['args', 'parts', 'branches', 'elements']) if (Array.isArray(expr[k]) && expr[k].some((e) => _carriesValue(e, depth + 1))) return true;
+  if (Array.isArray(expr.props) && expr.props.some((p) => p && _carriesValue(p.value, depth + 1))) return true;
+  return false;
+}
+
 function _sanitizersInExprTree(expr, out) {
   if (!expr || typeof expr !== 'object') return;
-  if (expr.kind === 'call') {
+  if (expr.kind === 'call' && (expr.args || []).some((a) => _carriesValue(a)) ) {
     const cat = matchSinkOrSanitizer(expr.callee, _currentFile);
     if (cat) {
       for (const e of cat) {
@@ -1487,6 +1500,15 @@ function _nestedSinkFindings(argExprs, state, callContext, line) {
     if (arg && arg.kind === 'array' && arg.hs && (arg.hs.tuple || arg.hs.con) && /\.(?:hs|lhs)$/i.test(_currentFile || '')) {
       findings.push(..._nestedSinkFindings(arg.elements, state, callContext, line));
       continue;
+    }
+    // Haskell: a sink can also sit under a mapped collection (`map fromOnly <$> query_ conn q` lowers to an `array` of the mapped call, whose
+    // argument is a `member` read of the query's result), or under a concatenation (`"n=" <> show (sink x)`). Each of those evaluates the
+    // call it holds, so the call is a sink site; the other IRs never nest a sink call this way (round 8 of the Haskell real-code work: a
+    // Servant handler written as one expression, `liftIO (map fromOnly <$> query_ conn ..)`, had no site while the `do` form did).
+    if (arg && /\.(?:hs|lhs)$/i.test(_currentFile || '')) {
+      if (arg.kind === 'array' && Array.isArray(arg.elements)) { findings.push(..._nestedSinkFindings(arg.elements, state, callContext, line)); continue; }
+      if (arg.kind === 'member' && arg.object && typeof arg.object === 'object') { findings.push(..._nestedSinkFindings([arg.object], state, callContext, line)); continue; }
+      if (arg.kind === 'binary' && arg.hs && arg.hs.concat) { findings.push(..._nestedSinkFindings([arg.left, arg.right], state, callContext, line)); continue; }
     }
     if (!arg || arg.kind !== 'call') continue;
     const { cat, argTaints } = _matchCallCatalog(arg.callee, arg.args, state, callContext);

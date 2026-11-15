@@ -152,3 +152,32 @@ names, the CWE meanings, the authoring format and a library list; copied in unre
 overall P 80.0% / R 61.5% / F1 69.6% (24 TP, 6 FP, 15 FN); pattern layer 88.2% / 62.5% / 73.2%; taint 69.2% / 60.0% / 64.3% (9 TP, 4 FP, 6 FN); strict precision
 46.9% and 56.3%. Per family the weakest cells are html-injection (1/1/2), ssrf (1/1/2), path-traversal (2/2/1), parser-safety, resource-limits and route-authentication
 (1/0/2 each). The per-case lists were not read.
+
+## Round 8 (0.195.44): taint recall, unseen-v6 read as a development set
+
+The direction (user, 2026-11-15): "continue improving the taint analysis, make it truly world class". unseen-v7 was frozen and measured first (round 7,
+F1 69.6%, taint 64.3%), then unseen-v6's per-case lists were read (its USE-LOG records the use; its manifest is `role: development` from 2026-11-15) and
+the engine changed for the general cause behind each of its seven taint misses and its one taint false positive, plus simplex-chat's two real-code shapes
+from batch 4. Every mechanism is pinned both ways in `scanner/test/haskell/haskell-round8-taint.test.js`.
+
+| mechanism | source of the shape | effect |
+|---|---|---|
+| sources the registry lacked: Snap's request header, request-line and cookie readers, websockets' message readers (`receiveData`, ...), amqp's `msgBody`, scotty's `filesOpts` (`haskell-models.js`) | unseen-v6 BuildConsole, RepoMirror, ProfileBanner, ExportJob | four misses found |
+| a Servant `ReqBody` of any type is request input; a handler is paired with the API it is handed to (`serve (Proxy :: Proxy API) h`, `serveWithContext`), exported or not; a handler reached only by reference keeps its framework-supplied parameters (`haskell-ir.js`) | unseen-v6 TicketSearch, WebhookTester | two misses found |
+| `f = g . h` is `f x = g (h x)` when a project function is in the chain or the clause has parameters; `flip f a b` is `f b a`; `findWithDefault` takes its result from the default and the table (`haskell-ir.js`) | WebhookTester's `liftIO . deliverSample`; TemplatePreview's `slug >>= flip Map.lookup templates` | a miss found, a false positive gone |
+| nested sinks under a mapped collection, a member read, a concatenation (`dataflow/engine.js` `_nestedSinkFindings`) | a Servant handler written as one expression: `liftIO (map fromOnly <$> query_ conn ..)` had no site while the `do` form did | the Servant misses found at all; scotty's upload example now shows two true positives (the write under the client's file name, the field name in the HTML listing) |
+| a sanitizer counts only when a value passes through it (`_carriesValue`) | `T.drop (T.length "build ") msg` was "sanitized via Data.Text.length" | a proven-clean miss becomes a finding |
+| `returnGuard` in `judgeFinding`: a containment guard that decides which branch of a callee returns the value guards the caller's sink; `inlinePredicate` reads a where-bound predicate as its body; `waiHtmlContext` follows a project constant header list (`haskell-guards.js`) | simplex-chat's `resolveInside` / `serveStatic` and `jsonResponse`; unseen-v6's LogViewer | simplex-chat 5 to 4 actionable (the existence probe before the check stays); the LogViewer false positive gone |
+| the census and the precision gate count ACTIONABLE sites (not `info`, no `proven-*` proof), the frozen-split rule since 0.195.9 (`bench/haskell-precision/runner.mjs`, `bench/dag/discovery-haskell/scan.mjs`) | a refuted finding keeps its severity by the proof gate's design and was counted as a flagged false positive | the baseline re-recorded under the honest definition |
+
+Measured on the splits (per-case lists of unseen-v7 never read): unseen-v7 overall F1 69.6% to 72.5% (precision 80.0 to 83.3, recall 61.5 to 64.1), taint
+F1 64.3% to 71.4% (9/4/6 to 10/3/5). unseen-v6 (development) overall F1 72.5% to 83.8%, taint F1 66.7% to 96.6% (8/1/7 to 14/0/1); the one taint miss
+left is `getArgs` into a SQL statement in a command-line program, which the engine lowers as operator-controlled by a standing decision. The pattern layer
+of unseen-v6 is unchanged (17/1/7); its seven misses and one false positive were read and are the next round's list: a binding used as a Bool is not a
+credential (SignInAudit), WAI routes written as `pathInfo req == [..]` guards (CacheAdmin), a Servant settings PUT with no auth (MailerConfig), an
+irrefutable `let Just x = decode ..` on message data (OrderEvents), gzip decompression of a request body (ArchiveImport), a count-driven allocation
+(ReportPages), a `serveWithContext` handler for BOLA (AddressBook), `!!` and `[lo, hi]` on a header (MediaRange).
+
+Not changed, each with its reason in the labels: scotty's `upload.hs:52` (the temp-file path and the client's file name come out of one tuple built by a
+comprehension and taken apart by `for_`, so the roots carry both), `Util.hs:45` (the framework handing on its user's response), simplex-chat's existence
+probe before the containment test and its three clock reads (a clock handed to a project helper or stored in a timestamp field), the IHP cache aggregate.

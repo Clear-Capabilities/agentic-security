@@ -62,7 +62,12 @@ function loadLabels() {
 }
 
 // ── what the engine reported at each labelled site ───────────────────────────
-// scan-all.mjs writes <dir>/<project>.json with { id, haskell: [rows] }; a row carries severity, reachability {status} and originalSeverity.
+// scan-all.mjs writes <dir>/<project>.json with { id, haskell: [rows] }; a row carries severity, reachability {status}, originalSeverity and proof.
+// FLAGGED means actionable (since 0.195.44): not lowered to `info`, and not a flow the engine PROVED clean or infeasible (`proof` proven-*), the
+// rule the frozen-split harness has applied since 0.195.9 (bench/language-support/lib.mjs `actionable`). The proof gate keeps a refuted finding's
+// severity by design (recall-preserving demotion), so counting by severity alone had recorded every guard-refuted site as a flagged false positive.
+const proven = (p) => typeof p === 'string' && /^proven-/.test(p);
+const actionable = (row) => row[0] !== 'info' && !proven(row[4]);
 function loadResults(dir) {
   const rows = new Map();
   const census = {};
@@ -74,9 +79,10 @@ function loadResults(dir) {
       const k = `${j.id}:${r.file}:${r.line}:${stratumOf(r.vuln)}`;
       if (!rows.has(k)) rows.set(k, []);
       const st = r.reachability && r.reachability.status ? r.reachability.status : null;
-      rows.get(k).push([r.severity, st, r.originalSeverity || null, r.parser || null]);
+      const row = [r.severity, st, r.originalSeverity || null, r.parser || null, r.proof || null];
+      rows.get(k).push(row);
       c.rows++;
-      if (r.severity === 'info') c.loweredToInfo++; else c.flagged++;
+      if (actionable(row)) c.flagged++; else c.loweredToInfo++;
       const sk = st || 'no-verdict';
       c.byStatus[sk] = (c.byStatus[sk] || 0) + 1;
     }
@@ -109,7 +115,7 @@ function aggregate(sets, measurement) {
       const rows = measurement.sites[name][key];
       if (!rows) { a.notReported++; if (label === 'TP') a.tpNotFlagged++; continue; }
       a.reported++;
-      const flagged = rows.some((r) => r[0] !== 'info');
+      const flagged = rows.some(actionable);
       if (flagged) { a.flagged++; a[label === 'TP' ? 'tp' : 'fp']++; } else { a.loweredToInfo++; if (label === 'TP') a.tpNotFlagged++; }
       a.byStatus[statusOfSite(rows)][label === 'TP' ? 'TP' : 'FP']++;
     }

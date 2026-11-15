@@ -4,32 +4,6 @@
  "rows": [
   {
    "file": "server/lib/api-tests/app-produce-feature-matrix/Main.hs",
-   "line": 133,
-   "severity": "info",
-   "cwe": "CWE-22",
-   "vuln": "Path Traversal (filesystem operation)",
-   "parser": "IR-TAINT",
-   "trust": "operator-controlled",
-   "reach": "entrypoint-reachable",
-   "guard": "operator-controlled",
-   "proof": "feasible",
-   "provenance": "interproc"
-  },
-  {
-   "file": "server/lib/api-tests/app-produce-feature-matrix/Main.hs",
-   "line": 146,
-   "severity": "info",
-   "cwe": "CWE-22",
-   "vuln": "Path Traversal (filesystem operation)",
-   "parser": "IR-TAINT",
-   "trust": "operator-controlled",
-   "reach": "entrypoint-reachable",
-   "guard": "operator-controlled",
-   "proof": "feasible",
-   "provenance": "interproc"
-  },
-  {
-   "file": "server/lib/api-tests/app-produce-feature-matrix/Main.hs",
    "line": 30,
    "severity": "info",
    "cwe": "CWE-22",
@@ -44,6 +18,19 @@
   {
    "file": "server/lib/hasura-prelude/src/Hasura/Prelude.hs",
    "line": 339,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "entrypoint-reachable",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "server/lib/hasura-prelude/src/Hasura/Prelude.hs",
+   "line": 350,
    "severity": "info",
    "cwe": "CWE-22",
    "vuln": "Path Traversal",

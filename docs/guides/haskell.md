@@ -192,7 +192,7 @@ Besides direct calls, binds and the usual combinators, the engine follows these 
   on the index in that function covers it, as an emptiness test covers the list.
 
 <!-- generated:hs-models:start -->
-The model registry (`scanner/src/language/haskell-models.js`) holds 200 sources, 293 sinks and 84 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
+The model registry (`scanner/src/language/haskell-models.js`) holds 223 sources, 293 sinks and 84 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
 | Sink family | CWE | APIs modelled | Examples |
 | --- | --- | --- | --- |
@@ -206,7 +206,7 @@ The model registry (`scanner/src/language/haskell-models.js`) holds 200 sources,
 | `url` | CWE-918 | 59 | `Network.HTTP.Client.Conduit.http`, `Network.HTTP.Client.Conduit.httpLbs`, `Network.HTTP.Client.Conduit.httpNoBody`, ... |
 | `xss` | CWE-79 | 37 | `Data.Text.IO.putStr`, `Data.Text.IO.putStrLn`, `Lucid.Base.toHtmlRaw`, ... |
 
-Source provenances: cli (3), cookie (2), env (3), file-read (17), header (13), http-body (51), network (7), stdin (13), upload (3), url-param (88).
+Source provenances: cli (3), cookie (8), env (3), file-read (17), header (19), http-body (53), network (12), stdin (13), upload (3), url-param (92).
 
 Sanitizer effects: * (10), other (1), path (4), xss (69).
 <!-- generated:hs-models:end -->
