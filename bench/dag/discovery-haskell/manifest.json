@@ -1,5 +1,5 @@
 {
-  "note": "Six Haskell projects the engine had never been run on before 2026-11-02, chosen for a web or input-processing surface and for absence from every other set (dev, fresh, sealed, unseen). Shallow clones at these commits; yesod-scaffold is its `postgres` branch (the default branch holds no scaffold). Batch 2 (2026-11-15, `batch: 2`): six more projects the engine had never been run on (postgrest, yesod, snap-server, keter, Spock, spacecookie), shallow clones at their default-branch heads of that day, chosen the same way and absent from every other set.",
+  "note": "Six Haskell projects the engine had never been run on before 2026-11-02, chosen for a web or input-processing surface and for absence from every other set (dev, fresh, sealed, unseen). Shallow clones at these commits; yesod-scaffold is its `postgres` branch (the default branch holds no scaffold). Batch 2 (2026-11-15, `batch: 2`): six more projects the engine had never been run on (postgrest, yesod, snap-server, keter, Spock, spacecookie), shallow clones at their default-branch heads of that day, chosen the same way and absent from every other set. Batch 3 (2026-11-15, `batch: 3`): snap, happstack-server, hakyll, clckwrks, hledger, graphql-engine (1567 Haskell files; graphql-engine is the largest project in any set), default-branch heads of that day.",
   "projects": [
     {
       "id": "hoogle",
@@ -79,6 +79,48 @@
       "commit": "aa5c22808f981a7814f0c9cc5525252d56f62623",
       "hsFiles": 16,
       "batch": 2
+    },
+    {
+      "id": "snap",
+      "url": "https://github.com/snapframework/snap",
+      "commit": "93ac0673b6d20ae4c7778e2323188f1a93cfc52c",
+      "hsFiles": 51,
+      "batch": 3
+    },
+    {
+      "id": "happstack-server",
+      "url": "https://github.com/Happstack/happstack-server",
+      "commit": "dc5d52662583b22b97ffb240ee137264ee2d8648",
+      "hsFiles": 59,
+      "batch": 3
+    },
+    {
+      "id": "hakyll",
+      "url": "https://github.com/jaspervdj/hakyll",
+      "commit": "064ed163d0224df54099e81754ee23ea2fb9e113",
+      "hsFiles": 81,
+      "batch": 3
+    },
+    {
+      "id": "clckwrks",
+      "url": "https://github.com/clckwrks/clckwrks",
+      "commit": "9b21dc951cd3d68c38250afc853b4d11a075950d",
+      "hsFiles": 50,
+      "batch": 3
+    },
+    {
+      "id": "hledger",
+      "url": "https://github.com/simonmichael/hledger",
+      "commit": "bc8362cef0ac15512aa0d3b18445a2380946c3d7",
+      "hsFiles": 199,
+      "batch": 3
+    },
+    {
+      "id": "graphql-engine",
+      "url": "https://github.com/hasura/graphql-engine",
+      "commit": "96f68d0a35a2b3ee153ce67585d37efb3cfa6598",
+      "hsFiles": 1127,
+      "batch": 3
     }
   ]
 }

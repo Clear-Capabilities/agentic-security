@@ -98,8 +98,45 @@ flagged nothing; snap-server's body reads carry their own limit.
 The two ambiguous sites are yesod-core's cookie defaults: the session cookie without Secure (`sslOnlySessions` is the documented opt-in) and
 the CSRF double-submit cookie without Secure (a token, not a session credential).
 
+## Batch 3 (2026-11-15; `manifest.json` entries with `batch: 3`)
+
+Six more projects, chosen the same way: snap, happstack-server, hakyll, clckwrks, hledger (with hledger-web) and hasura's graphql-engine (1567 Haskell files;
+graphql-engine alone is 1127 and scans in about 3.5 minutes). Scanned with the engine at 0.195.41 plus round 6's SSRF guard, every flagged site labelled, then
+scanned again after the round-6 changes.
+
+| project | Haskell findings | flagged before | TP | FP | ambiguous | flagged after round 6 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| snap | 3 | 2 | 0 | 2 | 0 | 0 |
+| happstack-server | 9 | 5 | 0 | 5 | 0 | 1 |
+| hakyll | 8 | 1 | 0 | 1 | 0 | 1 |
+| clckwrks | 0 | 0 | | | | 0 |
+| hledger | 46 | 19 | 2 | 17 | 0 | 8 |
+| graphql-engine | 36 | 15 | 2 | 12 | 1 | 5 |
+| **total** | **102** | **42** | **4** | **37** | **1** | **15** |
+
+**The four true positives:** hledger-web's `POST /add` writes the journal with no authentication (`require AddPermission` is an operator capability, not a
+check of who asks; the tool documents itself as local-only, and the finding states the fact); `underline s` applies `last` to a possibly empty string; Hasura's
+GraphQL endpoint and its 404 logger read the whole request body with no size limit, the class PostgREST and the earlier batches hold. The ambiguous site is
+Hasura's admin `pg_dump` API, which passes request-supplied options to `pg_dump` by design.
+
+**The false positives, by cause** (each reason in `labels.json`; the round-6 column says what changed):
+
+| cause | sites | round 6 |
+| --- | ---: | --- |
+| the HTML UI's routes compared with an OpenAPI that documents only the JSON API, their paths inferred from handler names | 9 | a conventional route is not compared |
+| the data-connector agent's and the server's routes compared with the repository-root `metadata.openapi.json` (a repository of many packages) | 8 | a root contract governs only the root package or a lone sub-package |
+| a library's directory or file parameter handed on whole through calls, or as the base of a path join (snap's auth file, happstack's file serving) | 6 | the api-contract verdict follows the chain and the join's head |
+| the journal path read from one record that also carries the request's query values (`getViewData`) | 5 | not changed: field-sensitive return records |
+| a clock reading in expiry arithmetic in a token-named function | 2 | time arithmetic is not a security value |
+| the test harness's own servers (a `library` package) | 2 | not changed: the manifest calls it runtime code |
+| a compile-time Template Haskell file check | 1 | a `Q`-typed function is a splice |
+| a typed-route redirect with query parameters | 1 | a tuple target is this site |
+| the multipart parser's temporary file removed by the framework | 1 | not changed |
+| a random temp-file name under the configured directory with the author's suffix (hakyll) | 1 | not changed: the parameter is the join's tail |
+| `init $ tailErr s` under a project predicate whose pattern proves two characters | 1 | not changed |
+
 ## Limits
 
-Twelve projects over two batches, one commit each, one labeller, one reading. Three of the six are frameworks or libraries, whose "requests" are their users'
+Eighteen projects over three batches, one commit each, one labeller, one reading. Three of the six are frameworks or libraries, whose "requests" are their users'
 applications; the precision figure describes these projects and this engine, nothing wider. The sealed sets were not re-scored for this
 directory.

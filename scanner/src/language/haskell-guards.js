@@ -18,7 +18,7 @@
 
 const CANON_CALLS = new Set(['System.Directory.canonicalizePath', 'System.Directory.makeAbsolute', 'System.FilePath.normalise']);
 import { createHash } from 'node:crypto';
-import { HS_SANITIZERS } from './haskell-models.js';
+import { HS_SANITIZERS, isSourceApi } from './haskell-models.js';
 // the catalog's HTML escapers (blaze, lucid): the same list the taint catalog is generated from
 const CATALOG_HTML_ESCAPERS = new Set(HS_SANITIZERS.filter((s) => (s.appliesTo || []).includes('xss')).map((s) => `${s.module}.${s.name}`));
 const EXIT_CALLS = new Set(['Control.Exception.throwIO', 'Control.Exception.throw', 'System.Exit.die', 'System.Exit.exitFailure', 'System.Exit.exitWith', 'throwIO', 'throw', 'die', 'exitFailure', 'exitWith', 'error', 'fail', 'ioError', 'Control.Monad.Fail.fail']);
@@ -571,6 +571,8 @@ const REQUEST_BUILDERS = /(?:^|\.)(?:parseRequest|parseRequest_|parseUrlThrow|pa
 const REQUEST_MODIFIERS = /(?:^|\.)(?:setRequestQueryString|setRequestQuery|setQueryString|setRequestPath|setRequestBody|setRequestBodyLBS|setRequestBodyJSON|setRequestBodyURLEncoded|setRequestBodyFile|setRequestBodySource|setRequestHeader|setRequestHeaders|addRequestHeader|setRequestMethod|setRequestBasicAuth|setRequestBearerAuth|setRequestIgnoreStatus|setRequestResponseTimeout|setRequestCheckStatus|setRequestManager|urlEncodedBody|applyBasicAuth|applyBearerAuth)$/;
 const PEEL_WRAPPERS = /(?:^|\.)(?:liftIO|pure|return|unpack|pack|fromString|toStrict|fromStrict|encodeUtf8|decodeUtf8|toText|fromText)$/;
 const HOST_FIELD = /^(?:host|port|secure|url|uri|requestHost)$/i;
+const TH_RESULT = /(?:->|^)\s*Q\s+(?:Exp|Pat|Type|Dec|Name|\[Dec\]|\(.*\))\s*$/;   // a Template Haskell splice's result
+const DEFAULT_REQUEST = /(?:^|\.)defaultRequest$/;   // http-client: a request for localhost:80, every field a literal
 // Record fields and modifiers that leave the destination exactly as the literal names it. Anything else on the way (a concatenation, a
 // path setter, a custom manager, which can carry a proxy, an unknown field) leaves the PATH or the route open, and then the finding is
 // only lowered, never refuted.
@@ -590,7 +592,7 @@ function fixedHostRequest(f, perFile) {
   if (!fn || !sites.length) return null;
   const argIdx = Number.isInteger(f.argIndex) ? f.argIndex : 0;
   // a local name bound once stands for its definition; a zero-parameter function of the module whose body is one literal is a constant
-  const localDef = (name) => { const defs = []; for (const n of nodeList(fn)) if (n.kind === 'assign' && n.target === name && n.source) defs.push(n.source); return defs.length === 1 ? defs[0] : null; };
+  const localDef = (name, g) => { const defs = []; for (const n of nodeList(g)) if (n.kind === 'assign' && n.target === name && n.source) defs.push(n.source); return defs.length === 1 ? defs[0] : null; };
   const constDef = (name) => {
     const bare = name.replace(/^.*\./, '');
     const c = ir.functions.find((x) => (x.name === name || x.qid === name || (x.name || '').replace(/^.*\./, '') === bare) && (!Array.isArray(x.params) || x.params.length === 0));
@@ -598,31 +600,80 @@ function fixedHostRequest(f, perFile) {
     const rets = Object.values(c.cfg.nodes).filter((n) => n.kind === 'return' && n.value);
     return rets.length === 1 ? rets[0].value : null;
   };
+  const singleReturn = (g) => { const rets = Object.values(g.cfg.nodes).filter((n) => n.kind === 'return' && n.value); return rets.length === 1 ? rets[0].value : null; };
+  // The names a modelled REQUEST SOURCE in function `g` reads from (`rawPathInfo req`: `req`), plus its parameters annotated as sources: anything
+  // built from one of them is the client's. A destination field whose expression contains no source call and none of these names is the
+  // operator's (keter's `host = encodeUtf8 (reversedHost rpConfig)` beside `path = rawPathInfo request`). Decided from the catalog and the IR,
+  // never from a name: `cfg` is accepted because nothing reads the request through it, not because it is called a config.
+  const requestBearing = (g) => {
+    const names = new Set((g.hs && Array.isArray(g.hs.paramEntry) ? g.hs.paramEntry : []).map((a) => a && a.name).filter(Boolean));
+    const visit = (x, d) => {
+      if (!x || typeof x !== 'object' || d > 60) return;
+      if (x.kind === 'call' && typeof x.callee === 'string' && isSourceApi(x.callee)) for (const a of x.args || []) for (const nm of identsIn(a)) names.add(nm);
+      for (const k of Object.keys(x)) { if (k === 'hs') continue; const v = x[k]; if (Array.isArray(v)) { for (const y of v) visit(y, d + 1); } else if (v && typeof v === 'object') visit(v, d + 1); }
+    };
+    for (const n of nodeList(g)) for (const root of [n.value, n.source, n.cond, ...(n.args || [])]) visit(root, 0);
+    // a local built from a request-bearing name is request-bearing too (closure over the function's assignments)
+    for (let grew = true; grew;) { grew = false; for (const n of nodeList(g)) if (n.kind === 'assign' && n.target && n.source && !names.has(n.target) && [...identsIn(n.source)].some((v) => names.has(v))) { names.add(n.target); grew = true; } }
+    return names;
+  };
+  const identsIn = (e) => { const out = new Set(); const visit = (x, d) => { if (!x || typeof x !== 'object' || d > 60) return; if (x.kind === 'ident' && typeof x.name === 'string') out.add(x.name); for (const k of Object.keys(x)) { if (k === 'hs') continue; const v = x[k]; if (Array.isArray(v)) { for (const y of v) visit(y, d + 1); } else if (v && typeof v === 'object') visit(v, d + 1); } }; visit(e, 0); return out; };
+  const bearingMemo = new Map();
+  const operatorDerived = (e, g) => {
+    if (!bearingMemo.has(g)) bearingMemo.set(g, requestBearing(g));
+    const bearing = bearingMemo.get(g);
+    let ok = true;
+    const visit = (x, d) => {
+      if (!ok || !x || typeof x !== 'object' || d > 60) return;
+      if (x.kind === 'call' && typeof x.callee === 'string' && isSourceApi(x.callee)) { ok = false; return; }
+      if (x.kind === 'ident' && bearing.has(x.name)) { ok = false; return; }
+      for (const k of Object.keys(x)) { if (k === 'hs') continue; const v = x[k]; if (Array.isArray(v)) { for (const y of v) visit(y, d + 1); } else if (v && typeof v === 'object') visit(v, d + 1); }
+    };
+    visit(e, 0);
+    return ok;
+  };
+  const describe = (e) => e && e.kind === 'call' && typeof e.callee === 'string' ? e.callee.replace(/^.*\./, '') : e && e.kind === 'ident' ? e.name : 'an expression';
   let evidence = null;
+  let kind = 'literal';
   let open = false;
-  const fixed = (e, seen, depth) => {
+  const fixed = (e, seen, depth, g) => {
     if (!e || typeof e !== 'object' || depth > 24) return false;
     if (e.kind === 'literal') { const ok = typeof e.value === 'string' && HOST_ANCHORED.test(e.value); if (ok) evidence = e.value.replace(/^([a-z][a-z0-9+.-]*:\/\/[^/@?#\s]+\/).*$/i, '$1'); return ok; }
     if (e.kind === 'ident') {
+      // http-client's `defaultRequest` is a request for localhost:80: a fixed base a record update then changes field by field
+      if (DEFAULT_REQUEST.test(e.name)) { if (!evidence) evidence = 'defaultRequest'; return true; }
       if (seen.has(e.name)) return false;
       seen.add(e.name);
-      const d = localDef(e.name) || constDef(e.name);
-      return d ? fixed(d, seen, depth + 1) : false;
+      const d = localDef(e.name, g) || constDef(e.name);
+      return d ? fixed(d, seen, depth + 1, g) : false;
     }
-    if (e.kind === 'union') return Array.isArray(e.branches) && e.branches.length > 0 && e.branches.every((b) => fixed(b, new Set(seen), depth + 1));
+    if (e.kind === 'union') return Array.isArray(e.branches) && e.branches.length > 0 && e.branches.every((b) => fixed(b, new Set(seen), depth + 1, g));
     if (e.kind === 'object' && Array.isArray(e.props)) {
-      // a record update: `{ method = "POST" }` joined (as a union) with its base; a field that names the host makes it unknown
-      if (e.props.some((p) => HOST_FIELD.test(String(p.key || p.name || '')))) return false;
-      if (e.props.some((p) => !DESTINATION_NEUTRAL_FIELD.test(String(p.key || p.name || '')))) open = true;
-      return e.object ? fixed(e.object, seen, depth + 1) : true;
+      // a record update: `{ method = "POST" }` joined (as a union) with its base. A field that names the destination (host, port, secure, url)
+      // is accepted only when its expression is the operator's (no request source, no request-bearing name); the client's text may still
+      // reach the path, so the destination is fixed as to host but open as to path (lowered, never refuted).
+      const hostProps = e.props.filter((p) => HOST_FIELD.test(String(p.key || p.name || '')));
+      if (hostProps.length) {
+        if (!hostProps.every((p) => operatorDerived(p.value, g))) return false;
+        kind = 'configuration'; evidence = hostProps.map((p) => `${p.key || p.name} = ${describe(p.value)}`).join(', '); open = true;
+      }
+      if (e.props.some((p) => !DESTINATION_NEUTRAL_FIELD.test(String(p.key || p.name || '')) && !HOST_FIELD.test(String(p.key || p.name || '')))) open = true;
+      return e.object ? fixed(e.object, seen, depth + 1, g) : true;
     }
-    if (e.kind === 'binary' && (e.op === '<>' || e.op === '++' || (e.hs && e.hs.concat))) { open = true; return fixed(e.left, seen, depth + 1); }
+    if (e.kind === 'binary' && (e.op === '<>' || e.op === '++' || (e.hs && e.hs.concat))) { open = true; return fixed(e.left, seen, depth + 1, g); }
     if (e.kind === 'call' && typeof e.callee === 'string') {
       const args = e.args || [];
-      if (PEEL_WRAPPERS.test(e.callee) && args.length === 1) return fixed(args[0], seen, depth + 1);
-      if (REQUEST_BUILDERS.test(e.callee) && args.length >= 1) return fixed(args[args.length - 1], seen, depth + 1);
-      if (REQUEST_MODIFIERS.test(e.callee) && args.length >= 1) { if (PATH_OPENING_MODIFIER.test(e.callee)) open = true; return fixed(args[args.length - 1], seen, depth + 1); }
-      if (/(?:^|\.)(?:<\/>|combine|joinPath)$/.test(e.callee) && args.length === 2) { open = true; return fixed(args[0], seen, depth + 1); }
+      if (PEEL_WRAPPERS.test(e.callee) && args.length === 1) return fixed(args[0], seen, depth + 1, g);
+      if (REQUEST_BUILDERS.test(e.callee) && args.length >= 1) return fixed(args[args.length - 1], seen, depth + 1, g);
+      if (REQUEST_MODIFIERS.test(e.callee) && args.length >= 1) { if (PATH_OPENING_MODIFIER.test(e.callee)) open = true; return fixed(args[args.length - 1], seen, depth + 1, g); }
+      if (/(?:^|\.)(?:<\/>|combine|joinPath)$/.test(e.callee) && args.length === 2) { open = true; return fixed(args[0], seen, depth + 1, g); }
+      // a project function of this file that BUILDS the request (keter's `mkRequest rpConfig request`): judged by its one return expression, in
+      // its own scope (its locals, its request-bearing names)
+      if (e.hs && e.hs.status === 'resolved' && e.hs.target) {
+        const callee = ir.functions.find((x) => x.qid === e.hs.target);
+        const ret = callee ? singleReturn(callee) : null;
+        if (ret) return fixed(ret, new Set(), depth + 1, callee);
+      }
     }
     return false;
   };
@@ -631,15 +682,47 @@ function fixedHostRequest(f, perFile) {
     if (!arg) return null;
     // a record update is a union of the base and the update: a union judged branch by branch above; an `object` branch with no base is the
     // update alone, which is fixed when it names no host field, so the base branch decides
-    if (!fixed(arg, new Set(), 0)) return null;
+    if (!fixed(arg, new Set(), 0, fn)) return null;
   }
-  return { kind: 'fixed-host-request', base: evidence, destinationFixed: !open };
+  return { kind: 'fixed-host-request', base: evidence, basis: kind, destinationFixed: !open };
 }
 
 export function applyHaskellGuards(findings, perFile, fileContents = null) {
   const stats = { refuted: 0, weak: 0 };
   for (const f of findings || []) {
     if (!f || f.parser !== 'IR-TAINT') continue;
+    // A function whose declared result is a Template Haskell Q type runs at compile time (hledger-web's `staticFileRoute :: FilePath -> Q Exp`
+    // checks a file exists under `runIO`): the operation is the build's, not the program's. Decided from the signature's result type.
+    try {
+      const cfn = f._funcQid && perFile && perFile[f.file] ? perFile[f.file].functions.find((x) => x.qid === f._funcQid) : null;
+      const csig = cfn && cfn.hs && typeof cfn.hs.sig === 'string' ? cfn.hs.sig : null;
+      if (csig && TH_RESULT.test(csig) && !f._compileTime) {
+        f._compileTime = true; f.severity = 'info';
+        f.controls = [...(f.controls || []), { kind: 'compile-time-splice', evidenceKind: 'source' }];
+        f.guardNote = { kind: 'compile-time-splice', reason: 'the function returns a Template Haskell Q value, so it runs when the program is compiled: the operation reads the build machine, not a request' };
+        stats.weak++;
+        continue;
+      }
+    } catch { /* judged below */ }
+    // Yesod's `redirect` of a tuple: the only tuple instances of RedirectUrl are `(Route site, [(Text, Text)])` and `(Route site, Map Text Text)`,
+    // a typed route of this site with query parameters; the client's text can only fill the query (hledger-web's `redirect (route, params')`).
+    try {
+      if (f.cwe === 'CWE-601' && !f._typedRoute && typeof f.callee === 'string' && /^Yesod(?:\.Core)?\.redirect(?:With)?$/.test(f.callee) && perFile && perFile[f.file]) {
+        const ir = perFile[f.file];
+        const argIdx = Number.isInteger(f.argIndex) ? f.argIndex : 0;
+        // the finding may have been found from a caller: the site is wherever the call at this line is
+        const fnR = ir.functions.find((x) => x.qid === f._funcQid);
+        let sites = fnR ? findSites(fnR, f.callee, f.line) : [];
+        if (!sites.length) for (const cand of ir.functions) { sites = findSites(cand, f.callee, f.line); if (sites.length) break; }
+        if (sites.length && sites.every((st) => { const a = (st.call.args || [])[argIdx]; return a && a.kind === 'array' && a.hs && a.hs.tuple && Array.isArray(a.elements) && a.elements.length === 2; })) {
+          f._typedRoute = true; f.severity = 'info';
+          f.controls = [...(f.controls || []), { kind: 'typed-route-redirect', evidenceKind: 'source' }];
+          f.guardNote = { kind: 'typed-route-redirect', reason: 'the redirect target is a (route, query) pair: Yesod resolves the route to this site and the client\'s text can only fill the query string' };
+          stats.weak++;
+          continue;
+        }
+      }
+    } catch { /* judged below */ }
     try {
       const ctx = waiHtmlContext(f, perFile);
       if (ctx === 'other' && !f._notHtmlContext) {
@@ -663,7 +746,7 @@ export function applyHaskellGuards(findings, perFile, fileContents = null) {
       if (fh && !f._fixedHost) {
         f._fixedHost = true; f.severity = 'info';
         f.controls = [...(f.controls || []), { kind: 'fixed-host-request', evidenceKind: 'source' }];
-        f.guardNote = { kind: 'fixed-host-request', reason: `the request's host is fixed by the literal${fh.base ? ` "${fh.base}"` : ''} the URL or base request starts from; the client's text can only choose the path, query or fragment, which is not a server-side request forgery (a path it chooses on that host is still worth a look)` };
+        f.guardNote = { kind: 'fixed-host-request', reason: `${fh.basis === 'configuration' ? `the request's destination is set from the operator's configuration (${fh.base}), not from the request` : `the request's host is fixed by the literal${fh.base ? ` "${fh.base}"` : ''} the URL or base request starts from`}; the client's text can only choose the path, query or fragment, which is not a server-side request forgery (a path it chooses on that host is still worth a look)` };
         // When the whole destination (scheme, host and path) is the literal and the client's text reaches only the query, headers, body,
         // method or authentication, the claim that the client chooses where the request goes is disproved by the code itself: an
         // evidence-backed refutation, tied to this file's content. A path the client can still choose is lowered only (above).

@@ -1,0 +1,45 @@
+{
+ "id": "snap",
+ "commit": "93ac0673b6d20ae4c7778e2323188f1a93cfc52c",
+ "rows": [
+  {
+   "file": "src/Snap/Snaplet/Auth/Backends/JsonFile.hs",
+   "line": 144,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "src/Snap/Snaplet/Auth/Backends/JsonFile.hs",
+   "line": 147,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  },
+  {
+   "file": "src/Snap/Snaplet/Test.hs",
+   "line": 50,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "api-contract",
+   "reach": "external-api",
+   "guard": "api-contract",
+   "proof": "feasible",
+   "provenance": null
+  }
+ ]
+}

@@ -97,3 +97,28 @@ Not changed, each recorded in `labels.json`: keter's reverse proxy (SSRF: host, 
 function-valued configuration field applied to the host, yesod-static's lookup-served file, PostgREST's content type held in a response record's field, yesod-auth's legacy MD5
 verifier beside a vendored KDF module under another name, and the two yesod-core cookie defaults (ambiguous). Ruling: the CSRF double-submit cookie without Secure keeps its severity;
 the attribute is absent and the rule's title overstates the stake, which is a wording question, not a precision one.
+
+## Round 6 (0.195.42): the sites the earlier rounds left, and discovery batch 3
+
+Discovery batch 3 (`bench/dag/discovery-haskell`, `batch: 3`): snap, happstack-server, hakyll, clckwrks, hledger (with hledger-web) and hasura's graphql-engine
+(1567 Haskell files, the largest project in any set), scanned once and every flagged site labelled: 42 sites, 4 true positives (hledger-web's unauthenticated
+`POST /add`, `last` on a possibly empty string, Hasura's two unbounded request-body reads), 1 ambiguous (the admin `pg_dump` options), 37 false positives.
+Seven mechanisms, each general and pinned both ways in `scanner/test/haskell/haskell-real-code-round6.test.js`.
+
+| mechanism | source of the shape | effect |
+|---|---|---|
+| `fixedHostRequest` follows the sink's argument into the project function that builds the request record and accepts a destination field (host, port, secure, url) whose expression contains no request source and names nothing a request source in that function reads from (`requestBearing`); http-client's `defaultRequest` is a fixed base. Lowered to info, never refuted (the path is the client's) | keter `Rewrite.hs:135` (a reverse proxy: host, port and scheme from `ReverseProxyConfig`) | 1 gone (keter 2 to 1) |
+| api-contract: a route whose path was INFERRED from a handler's name (`conventional`, carried from haskell-web through `newRoute` and `toEngineRoutes`) is not compared; a root-level contract governs a route only when the route's own package is the root or the repository holds exactly one package below the root (`loadContracts` records the package directories it walks) | hledger-web's nine UI pages against its JSON API's OpenAPI; graphql-engine's root `metadata.openapi.json` against the data-connector agent's package and the server's `/api/rest/` (eight) | 17 gone |
+| `api-contract` trust verdict: the whole handoff is followed through a chain of project calls (`handsOn`, up to three hops), each hop judged in its own scope (locals resolved, pattern-bound parameters mapped to their positional names); a parameter that is the FIRST component of a path join (`joinPath (base : pieces)`, `base </> name`) hands the directory on whatever the tail is; the trace starts from the function that holds the parameter (the chain's root) when the finding was collected under a callee | snap `JsonFile.hs:144/147`, happstack `BuildingBlocks.hs:279/357/358/510`; dev set xmonad-contrib `DirExec.hs:101` (labelled FP) | 6 gone on batch 3; 1 development-set false positive to info |
+| `hs-predictable-random`: a clock reading that only enters time arithmetic or a time comparison (`clockOnlyInTimeArithmetic`: `+`, `-`, comparisons, `diffUTCTime`, `addUTCTime`, numeric conversions transparent) is an expiry computation, not a security value, whatever the function is called | graphql-engine `Connection.hs:136` (`getAccessToken`), `WebSocket.hs:327` (`tokenExpiryHandler`) | 2 gone |
+| a function whose declared result is a Template Haskell `Q` type (`Q Exp`, `Q [Dec]`, ...) runs at compile time: its taint findings are lowered to info (`compile-time-splice`) | hledger-web `Settings.hs:93` (`staticFileRoute`, `runIO $ doesFileExist`) | 1 gone |
+| Yesod `redirect` of a TUPLE is the typed `(Route, query)` instance: this site by construction (`typed-route-redirect`, info) | hledger-web `App.hs:535` | 1 gone |
+| the build runs in `scripts/build.mjs`: assembled in `dist.staging/`, swapped into `dist/` at the end | 0.195.41's push stop and a refused scorecard measurement during the warm gate's in-place rebuild | the tree is dirty for a rename, not a build |
+
+Batch 3 flagged 42 to 15 (snap 2 to 0, happstack 5 to 1, hakyll 1, clckwrks 0, hledger 19 to 8, graphql-engine 15 to 5); the four true positives and the ambiguous site kept.
+Fresh set unchanged (21 TP, 6 FP of 27, 77.8%); development-remainder flagged 4 to 3 (the xmonad-contrib directory listing). Precision baseline re-recorded.
+
+Not changed, each with its reason in `labels.json`: hledger's five journal-path sites (one record returned by `getViewData` carries the request's query values and the
+journal, and the summary taints the whole record: field-sensitive return records), happstack's multipart temp-file removal, hakyll's temp-file suffix (a tail), the
+test-harness body reads (a `library` stanza of its own package), `init $ tailErr s` under a project predicate with a pattern match. Ruling: hledger-web's `POST /add`
+without authentication is a true positive even though the tool documents itself as local-only; the finding states the fact and the operator decides.

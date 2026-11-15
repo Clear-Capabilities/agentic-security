@@ -1018,6 +1018,7 @@ export function analyzeHaskellWeb(files, opts = {}) {
   // ── resolve handlers and analyse ─────────────────────────────────────────
   for (const p of pending) {
     const R = newRoute({ framework: p.framework, method: p.method, path: p.path, file: p.file, line: p.line, owner: p.owner });
+    if (p.conventional) R.conventional = true;   // the path is a guess from the handler's name, not a route table's
     if (p.dynamicPath) { R.auth = { status: 'unknown', kind: null, evidence: [], reason: 'route path is not a literal' }; ctx.gaps.push({ kind: 'dynamic-route-path', detail: `${p.framework} route path is computed at runtime`, file: p.file, line: p.line }); R.handler = { kind: 'unknown' }; result.routes.push(R); continue; }
     let handlerFn = null; let handlerName = null; let paramNames = [];
     const paramsOf = (clause) => ((clause && clause.pats) || []).map((x) => (x && x.t === 'pvar' ? x.name : null));
@@ -1210,5 +1211,7 @@ export function toEngineRoutes(web) {
     hasAuth: R.auth.status === 'authenticated', authStatus: R.auth.status, hasFileUpload: !!R.uploads,
     params: Array.isArray(R.params) ? R.params : [], classifications: [], classifiedFields: {},
     language: 'haskell', handler: R.handler ? { kind: R.handler.kind, name: R.handler.name || null } : null,
+    // a path inferred from the handler's name (Yesod's `getFooR` to `/foo`), which the API-contract check does not compare with a contract
+    ...(R.conventional ? { conventional: true } : {}),
   }));
 }

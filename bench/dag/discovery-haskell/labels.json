@@ -1,5 +1,5 @@
 {
- "note": "Discovery set (bench/dag/discovery-haskell): every flagged (non-info) site of the six projects at the pinned commits, labelled by reading the code after the scan found it, by one labeller. A development set: it may inform general engine changes; it is not sealed and nothing was tuned against it before the labels were written. Keyed project:file:line:stratum. Batch 2 (2026-11-15): six more projects (postgrest, yesod, snap-server, keter, Spock, spacecookie), scanned once with the engine at 0.195.39 plus round 4, every flagged site labelled the same way; the labels name the round-5 mechanism where one followed.",
+ "note": "Discovery set (bench/dag/discovery-haskell): every flagged (non-info) site of the six projects at the pinned commits, labelled by reading the code after the scan found it, by one labeller. A development set: it may inform general engine changes; it is not sealed and nothing was tuned against it before the labels were written. Keyed project:file:line:stratum. Batch 2 (2026-11-15): six more projects (postgrest, yesod, snap-server, keter, Spock, spacecookie), scanned once with the engine at 0.195.39 plus round 4, every flagged site labelled the same way; the labels name the round-5 mechanism where one followed. Batch 3 (2026-11-15): snap, happstack-server, hakyll, clckwrks, hledger, graphql-engine, scanned once with the engine at 0.195.41 plus round 6's SSRF guard, every flagged site labelled; the labels name the round-6 mechanism where one followed.",
  "labels": {
   "hoogle:src/General/Web.hs:178:Cross-Site Scripting (HTML response body from text)": {
    "parser": "IR-TAINT",
@@ -287,7 +287,7 @@
    "vuln": "Server-Side Request Forgery",
    "project": "keter",
    "label": "FP",
-   "reason": "`simpleReverseProxy` is a reverse proxy: `mkRequest` takes host, port and scheme from the ReverseProxyConfig (`reversedHost rpConfig`, `reversedPort rpConfig`, `reversedUseSSL rpConfig`) and only the path, query string, headers and body from the client's request. The destination is the operator's; the request content is what a proxy forwards. Not fixed this round: the fixed-host judgement reads a literal host, not a configuration field."
+   "reason": "`simpleReverseProxy` is a reverse proxy: `mkRequest` takes host, port and scheme from the ReverseProxyConfig (`reversedHost rpConfig`, `reversedPort rpConfig`, `reversedUseSSL rpConfig`) and only the path, query string, headers and body from the client's request. The destination is the operator's; the request content is what a proxy forwards. Fixed in round 6: the fixed-host judgement follows the request builder and accepts a destination field set from configuration (no request source, no request-bearing name); lowered to info, never refuted."
   },
   "keter:src/Keter/Cli.hs:93:Whole input read into memory without a size limit": {
    "parser": "HS-RULES",
@@ -296,6 +296,342 @@
    "project": "keter",
    "label": "FP",
    "reason": "`recv conn 1024` in `talk`, which decodes each message, answers it and recurses with the socket alone (`when isLoop $ talk conn`): one chunk of at most 1024 bytes is held at a time. The loop rule asked only for a recursive call. Fixed in round 5: the recursive call must carry a value built from the read."
+  },
+  "snap:src/Snap/Snaplet/Auth/Backends/JsonFile.hs:144:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "snap",
+   "label": "FP",
+   "reason": "`loadUserCache fp` reads the JSON auth backend's user file, whose path the application passed to `initJsonFileAuthManager` (its configuration); the parameter is handed on whole through `mkJsonAuthMgr`. Fixed in round 6: the api-contract verdict follows a whole handoff through a chain of project calls."
+  },
+  "snap:src/Snap/Snaplet/Auth/Backends/JsonFile.hs:147:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "snap",
+   "label": "FP",
+   "reason": "As JsonFile.hs:144: the configured user file. Fixed in round 6 (chained handoff)."
+  },
+  "happstack-server:src/Happstack/Server/Internal/Handler.hs:133:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "happstack-server",
+   "label": "FP",
+   "reason": "`removeFile fp` deletes the temporary file the multipart parser wrote for an uploaded part (`inputValue = Left tmpPath`), a path the framework chose under its upload directory; the engine taints everything the body parser returns from the socket bytes. Not fixed: a model of happstack's `Input` temp-file path."
+  },
+  "happstack-server:src/Happstack/Server/FileServe/BuildingBlocks.hs:510:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "happstack-server",
+   "label": "FP",
+   "reason": "`tryIndex .. fp` looks for an index file under the directory the application asked the library to serve (`serveDirectory dir`): the parameter is the base and the tail a literal index name, the file-serving library's contract. Fixed in round 6: a parameter that is the base of a path join is the caller's choice (api-contract)."
+  },
+  "happstack-server:src/Happstack/Server/FileServe/BuildingBlocks.hs:279:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "happstack-server",
+   "label": "FP",
+   "reason": "`serveFileUsing .. fp` serves the file the application named (`serveFile`), handed on whole; the library warns in its own documentation that it performs no checks. Fixed in round 6 (whole handoff)."
+  },
+  "happstack-server:src/Happstack/Server/FileServe/BuildingBlocks.hs:357:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "happstack-server",
+   "label": "FP",
+   "reason": "`fileServe' .. localPath`: the directory to serve is the application's parameter, the request's path pieces are checked by `isSafePath` before `joinPath (localPath : rqPaths rq)`; the only recorded origin is the directory parameter. Fixed in round 6: a parameter that is the base of a path join is the caller's choice."
+  },
+  "happstack-server:src/Happstack/Server/FileServe/BuildingBlocks.hs:358:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "happstack-server",
+   "label": "FP",
+   "reason": "As BuildingBlocks.hs:357 (the directory test on the same path). Fixed in round 6."
+  },
+  "hakyll:lib/Hakyll/Core/File.hs:84:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "hakyll",
+   "label": "FP",
+   "reason": "`newTmpFile suffix` builds `tmpDirectory </> hash [show rand] ++ \"-\" ++ suffix`: a random name under the configured temporary directory with the compiler author's literal suffix (\".pdf\"); nothing a reader controls. Not fixed: the parameter is the TAIL of the join (the standing entry-parameter policy keeps it)."
+  },
+  "hledger:hledger-web/Hledger/Web/Handler/AddR.hs:53:State-changing route without authentication": {
+   "parser": "HS-WEB",
+   "severity": "high",
+   "vuln": "State-changing route without authentication",
+   "project": "hledger",
+   "label": "TP",
+   "reason": "`postAddR` appends a transaction to the journal with no authentication at all; `require AddPermission` is a capability the operator grants on the command line (`--allow=add`), not a check of who is asking. hledger-web documents that it is meant for trusted networks; the finding states the fact."
+  },
+  "hledger:hledger-lib/Hledger/Read.hs:472:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "`ensureJournalFileExists f` works on the journal file the operator named (`-f`); the recorded origins are yesod request parameters because `getViewData` returns one record built from the request's query parameters AND the journal, and the engine's summary taints the whole record. Not fixed: field-sensitive return records."
+  },
+  "hledger:hledger/Hledger/Cli/Commands/Add.hs:570:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "`appendFile f` writes the operator's journal file; the path comes from the same `getViewData` record (see Read.hs:472). The CONTENT is the request's, which is the add form's purpose. Not fixed (record-return precision)."
+  },
+  "hledger:hledger/Hledger/Cli/Utils.hs:433:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "`writeFileWithBackupIfChanged f t`: the path `f` is the journal file from the view data record, the text is the edit form's; the path is the operator's. Not fixed (record-return precision)."
+  },
+  "hledger:hledger/Hledger/Cli/Utils.hs:454:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "`safeGetDirectoryContents fp` lists the journal's directory for backups, the path from the same record. Not fixed (record-return precision)."
+  },
+  "hledger:hledger/Hledger/Cli/Utils.hs:450:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (copy/rename)",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "`copyFile fp (d </> f')` backs the journal file up beside itself, the path from the same record. Not fixed (record-return precision)."
+  },
+  "hledger:hledger-web/Hledger/Web/Settings.hs:93:path-traversal": {
+   "parser": "IR-TAINT",
+   "severity": "high",
+   "vuln": "Path Traversal (filesystem operation)",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "`staticFileRoute :: FilePath -> Q Exp` runs at compile time (`runIO $ doesFileExist path`) to check that a static file named in the source exists. Fixed in round 6: a function returning a Template Haskell Q type is a compile-time splice."
+  },
+  "hledger:hledger-web/Hledger/Web/App.hs:535:Open Redirect": {
+   "parser": "IR-TAINT",
+   "severity": "low",
+   "vuln": "Open Redirect",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "`redirect (route, params')` is Yesod's typed `(Route, [(Text, Text)])` instance: the destination is this site's route, the request's values only fill the query string. Fixed in round 6: a tuple redirect target is a typed route."
+  },
+  "hledger:hledger-lib/Hledger/Utils/String.hs:142:Partial function applied to caller-supplied text": {
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "hledger",
+   "label": "TP",
+   "reason": "`underline s` guards on `last s == '\\n'` with no emptiness test: `underline \"\"` raises. A real partial-function crash on an empty argument of an exported function, low because the callers pass report text."
+  },
+  "hledger:hledger-lib/Hledger/Utils/String.hs:259:Partial function applied to caller-supplied text": {
+   "parser": "HS-RULES",
+   "severity": "low",
+   "vuln": "Partial function applied to caller-supplied text",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "`init $ tailErr s` runs only under `isSingleQuoted s || isDoubleQuoted s`, whose pattern `(_:_:_)` proves two characters; the comment says so (PARTIAL). Not fixed: a guard expressed as a project predicate with a pattern match."
+  },
+  "hledger:hledger-web/Hledger/Web/Handler/AddR.hs:48:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /add is implemented but not declared in the API contract",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "hledger-web's HTML pages compared with `config/openapi.yaml`, which documents only the JSON API; the route's path (`/add`) was inferred from the handler's name, not read from the route table. Fixed in round 6: a route whose path is a name-convention guess is not compared with a contract."
+  },
+  "hledger:hledger-web/Hledger/Web/Handler/AddR.hs:53:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route POST /add is implemented but not declared in the API contract",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "As AddR.hs:48 (POST /add, the same handler file). Fixed in round 6 (conventional route)."
+  },
+  "hledger:hledger-web/Hledger/Web/Handler/AddR.hs:87:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route PUT /add is implemented but not declared in the API contract",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "As AddR.hs:48. Fixed in round 6 (conventional route)."
+  },
+  "hledger:hledger-web/Hledger/Web/Handler/BalanceR.hs:33:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /balance is implemented but not declared in the API contract",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "As AddR.hs:48. Fixed in round 6 (conventional route)."
+  },
+  "hledger:hledger-web/Hledger/Web/Handler/HoldingsR.hs:39:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /holdings is implemented but not declared in the API contract",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "As AddR.hs:48. Fixed in round 6 (conventional route)."
+  },
+  "hledger:hledger-web/Hledger/Web/Handler/StatementsR.hs:50:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /balancesheet is implemented but not declared in the API contract",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "As AddR.hs:48. Fixed in round 6 (conventional route)."
+  },
+  "hledger:hledger-web/Hledger/Web/Handler/StatementsR.hs:57:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /incomestatement is implemented but not declared in the API contract",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "As AddR.hs:48. Fixed in round 6 (conventional route)."
+  },
+  "hledger:hledger-web/Hledger/Web/Handler/StatementsR.hs:58:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /cashflow is implemented but not declared in the API contract",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "As AddR.hs:48. Fixed in round 6 (conventional route)."
+  },
+  "hledger:hledger-web/Hledger/Web/Handler/StatementsR.hs:62:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /balancesheetequity is implemented but not declared in the API contract",
+   "project": "hledger",
+   "label": "FP",
+   "reason": "As AddR.hs:48. Fixed in round 6 (conventional route)."
+  },
+  "graphql-engine:server/src-lib/Hasura/Backends/BigQuery/Connection.hs:136:Clock value used as a security value": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Clock value used as a security value",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "`expiresAt <- (fromIntegral _trExpiresAt +) <$> getPOSIXTime` records when the fetched access token expires; the clock enters arithmetic with the token's lifetime and nothing else. The rule fired because the function is named `getAccessToken`. Fixed in round 6: a clock reading that only enters time arithmetic is an expiry, not a security value."
+  },
+  "graphql-engine:server/src-lib/Hasura/GraphQL/Transport/WebSocket.hs:327:Clock value used as a security value": {
+   "parser": "HS-RULES",
+   "severity": "high",
+   "vuln": "Clock value used as a security value",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "`currTime <- getCurrentTime` is used only in `diffUTCTime expTime currTime`, the sleep until the JWT expires (`tokenExpiryHandler`). Fixed in round 6 (time arithmetic)."
+  },
+  "graphql-engine:server/src-lib/Hasura/Server/API/PGDump.hs:62:Argument Injection (process arguments)": {
+   "parser": "IR-TAINT",
+   "severity": "medium",
+   "vuln": "Argument Injection (process arguments)",
+   "project": "graphql-engine",
+   "label": "ambiguous",
+   "reason": "`readProcessWithExitCode \"pg_dump\" opts` with `opts` taken from the request body (`prbOpts`): the pg_dump API is an admin-only endpoint whose documented feature is passing pg_dump options; an admin can pass any option. Argument injection by design for the admin; ambiguous rather than TP because the trust is the admin secret's."
+  },
+  "graphql-engine:server/lib/test-harness/src/Harness/RemoteServer.hs:70:Request body read without a size limit": {
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "A Spock server the test harness starts to play a remote schema; the body read has no limit, but the package exists to run the test suite. Not fixed: `test-harness` is a `library` stanza of its own package, so the manifest rule does not call it test code."
+  },
+  "graphql-engine:server/lib/test-harness/src/Harness/Webhook.hs:63:Request body read without a size limit": {
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "As RemoteServer.hs:70: the harness's event webhook receiver."
+  },
+  "graphql-engine:server/src-lib/Hasura/Server/App.hs:345:Request body read without a size limit": {
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "project": "graphql-engine",
+   "label": "TP",
+   "reason": "The GraphQL endpoint reads the whole request body with `strictRequestBody` and no size limit anywhere in the server; the deployment is expected to put a proxy in front. The same class as PostgREST's read."
+  },
+  "graphql-engine:server/src-lib/Hasura/Server/App.hs:1178:Request body read without a size limit": {
+   "parser": "HS-RULES",
+   "severity": "medium",
+   "vuln": "Request body read without a size limit",
+   "project": "graphql-engine",
+   "label": "TP",
+   "reason": "The 404 logger reads the whole body of a request to a missing resource with no limit (to log it). As App.hs:345."
+  },
+  "graphql-engine:server/src-lib/Hasura/Server/OpenAPI.hs:80:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /api/rest/ is implemented but not declared in the API contract",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "The `/api/rest/` route of the server package compared with the repository's root `metadata.openapi.json`, which documents the metadata API of a different surface; the repository holds many packages (server, dc-api, cli, console, frontend). Fixed in round 6: a root contract governs only the root package or a lone sub-package."
+  },
+  "graphql-engine:server/lib/dc-api/src/Hasura/Backends/DataConnector/API.hs:134:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route POST /explain is implemented but not declared in the API contract",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "The data-connector agent API (its own package, `server/lib/dc-api`) compared with the root `metadata.openapi.json`, a different API. Fixed in round 6 (root contract, many packages)."
+  },
+  "graphql-engine:server/lib/dc-api/src/Hasura/Backends/DataConnector/API.hs:148:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /health is implemented but not declared in the API contract",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "As API.hs:134. Fixed in round 6."
+  },
+  "graphql-engine:server/lib/dc-api/src/Hasura/Backends/DataConnector/API.hs:154:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route POST /raw is implemented but not declared in the API contract",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "As API.hs:134. Fixed in round 6."
+  },
+  "graphql-engine:server/lib/dc-api/src/Hasura/Backends/DataConnector/API.hs:161:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /datasets/templates/:template_name is implemented but not declared in the API contract",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "As API.hs:134. Fixed in round 6."
+  },
+  "graphql-engine:server/lib/dc-api/src/Hasura/Backends/DataConnector/API.hs:167:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route POST /datasets/clones/:clone_name is implemented but not declared in the API contract",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "As API.hs:134. Fixed in round 6."
+  },
+  "graphql-engine:server/lib/dc-api/src/Hasura/Backends/DataConnector/API.hs:174:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route DELETE /datasets/clones/:clone_name is implemented but not declared in the API contract",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "As API.hs:134. Fixed in round 6."
+  },
+  "graphql-engine:server/lib/dc-api/src/Hasura/Backends/DataConnector/API.hs:198:api-contract": {
+   "parser": "REGEX",
+   "severity": "high",
+   "vuln": "Route GET /metrics is implemented but not declared in the API contract",
+   "project": "graphql-engine",
+   "label": "FP",
+   "reason": "As API.hs:134. Fixed in round 6."
   }
  }
 }
