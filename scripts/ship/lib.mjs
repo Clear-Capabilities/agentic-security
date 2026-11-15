@@ -346,3 +346,21 @@ export function removeFreshTmpdir(dir, { base = osTmpdir() } = {}) {
   if (!dir || !basename(dir).startsWith(TMP_PREFIX) || dirname(dir) !== real) return false;
   try { if (!lstatSync(dir).isDirectory()) return false; rmSync(dir, { recursive: true, force: true }); return true; } catch { return false; }
 }
+
+// The post-commit warm gate runs many short git commands and holds `.git/index.lock` for moments at a time; a git call of ours that loses that
+// race fails with "Unable to create '.../index.lock': File exists". Such a failure is retried, bounded; any other failure is thrown at once.
+export function isIndexLockError(message) {
+  return /index\.lock['"]?: File exists/.test(String(message || ''));
+}
+export function retryOnIndexLock(fn, { attempts = 60, waitMs = 5000, sleep = sleepMs } = {}) {
+  let last = null;
+  for (let i = 0; i < attempts; i++) {
+    try { return fn(); } catch (err) {
+      if (!isIndexLockError(err && err.message)) throw err;
+      last = err;
+      if (i + 1 < attempts) sleep(waitMs);
+    }
+  }
+  throw last;
+}
+function sleepMs(ms) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); }

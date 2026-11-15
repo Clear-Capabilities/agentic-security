@@ -104,3 +104,21 @@ test('scanRegexReDoS: no findings for safe JS regex', () => {
   const findings = scanRegexReDoS('app.js', code);
   assert.equal(findings.length, 0);
 });
+
+// ── the extractors must be linear on their own input (round 7 of the Haskell real-code work found this on a Kotlin app) ──
+// `(?:\\.|[^"\n])+` lets a backslash match either branch, so a string literal with many escapes and no `.toRegex(` after it
+// backtracks exponentially: simplex-chat's desktop app took the whole scan past 3 hours 40 minutes. A backslash must be
+// consumed only by the escape branch. Pinned for every language extractor, with the literal still extracted when it IS a regex.
+test('a string literal with many escapes does not stall the Kotlin, Java, C#, Go, Ruby or JS extractors', () => {
+  const esc = '\\\\'.repeat(28); // 28 backslash pairs inside one literal
+  const t0 = Date.now();
+  const kt = `val p = "${esc}"\nval q = "a\\\\d+".toRegex()\nval r = Regex("${esc}")\n`;
+  const ktBodies = scanRegexReDoS('App.kt', kt);
+  assert.ok(Array.isArray(ktBodies));
+  scanRegexReDoS('App.java', `String p = "${esc}"; Pattern.compile("${esc}"); s.matches("${esc}");`);
+  scanRegexReDoS('App.cs', `var p = "${esc}"; new Regex("${esc}"); Regex.IsMatch(s, "${esc}");`);
+  scanRegexReDoS('app.rb', `p = "${esc}"; Regexp.new("${esc}"); s =~ /${esc}/`);
+  scanRegexReDoS('app.js', `const p = "${esc}"; new RegExp("${esc}"); s.match(/${esc}/);`);
+  scanRegexReDoS('app.php', `$p = preg_match("/${esc}/", $s);`);
+  assert.ok(Date.now() - t0 < 2000, `extractors took ${Date.now() - t0} ms`);
+});

@@ -110,9 +110,13 @@ scanned again after the round-6 changes.
 | happstack-server | 9 | 5 | 0 | 5 | 0 | 1 |
 | hakyll | 8 | 1 | 0 | 1 | 0 | 1 |
 | clckwrks | 0 | 0 | | | | 0 |
-| hledger | 46 | 19 | 2 | 17 | 0 | 8 |
+| hledger | 46 | 19 | 2 | 14 | 3 | 8 (6 after round 7) |
 | graphql-engine | 36 | 15 | 2 | 12 | 1 | 5 |
-| **total** | **102** | **42** | **4** | **37** | **1** | **15** |
+| **total** | **102** | **42** | **4** | **34** | **4** | **15 (13 after round 7)** |
+
+Round 7 re-read hledger's eight: the two `getViewData` record sites are gone (field-sensitive return records, below), and the three `postEditR` writes
+were relabelled ambiguous, because the file is a route piece that `journalFile404 f j` checks against the loaded journal before the write, a project guard
+the engine does not read.
 
 **The four true positives:** hledger-web's `POST /add` writes the journal with no authentication (`require AddPermission` is an operator capability, not a
 check of who asks; the tool documents itself as local-only, and the finding states the fact); `underline s` applies `last` to a possibly empty string; Hasura's
@@ -126,7 +130,7 @@ Hasura's admin `pg_dump` API, which passes request-supplied options to `pg_dump`
 | the HTML UI's routes compared with an OpenAPI that documents only the JSON API, their paths inferred from handler names | 9 | a conventional route is not compared |
 | the data-connector agent's and the server's routes compared with the repository-root `metadata.openapi.json` (a repository of many packages) | 8 | a root contract governs only the root package or a lone sub-package |
 | a library's directory or file parameter handed on whole through calls, or as the base of a path join (snap's auth file, happstack's file serving) | 6 | the api-contract verdict follows the chain and the join's head |
-| the journal path read from one record that also carries the request's query values (`getViewData`) | 5 | not changed: field-sensitive return records |
+| the journal path read from one record that also carries the request's query values (`getViewData`) | 5 | round 7: a returned record hands each field its own taint (two sites gone; the three `postEditR` writes are now labelled ambiguous) |
 | a clock reading in expiry arithmetic in a token-named function | 2 | time arithmetic is not a security value |
 | the test harness's own servers (a `library` package) | 2 | not changed: the manifest calls it runtime code |
 | a compile-time Template Haskell file check | 1 | a `Q`-typed function is a splice |
@@ -135,8 +139,42 @@ Hasura's admin `pg_dump` API, which passes request-supplied options to `pg_dump`
 | a random temp-file name under the configured directory with the author's suffix (hakyll) | 1 | not changed: the parameter is the join's tail |
 | `init $ tailErr s` under a project predicate whose pattern proves two characters | 1 | not changed |
 
+## Batch 4 (2026-11-15; `manifest.json` entries with `batch: 4`)
+
+Six projects with a network or untrusted-input surface outside the web frameworks the earlier batches lean on: simplex-chat (a messaging client and
+server), matterhorn (a chat client), pandoc (a document converter reading untrusted input), shellcheck (a shell-script parser), duckling (a text parser)
+and purescript (a compiler with a REPL). Scanned with the engine at 0.195.42 plus round 7's field-sensitive return records, every flagged site labelled,
+then scanned again after the round-7 rule change.
+
+| project | Haskell findings | flagged before | TP | FP | ambiguous | flagged after round 7 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| shellcheck | 1 | 0 | | | | 0 |
+| matterhorn | 7 | 0 | | | | 0 |
+| purescript | 8 | 6 | 0 | 6 | 0 | 0 |
+| pandoc | 10 | 0 | | | | 0 |
+| duckling | 1 | 0 | | | | 0 |
+| simplex-chat | 12 | 5 | 0 | 5 | 0 | 5 |
+| **total** | **39** | **11** | **0** | **11** | **0** | **5** |
+
+**The six false positives are one shape:** `pwd <- getCurrentDirectory`, bound into the error pretty-printer's options so paths print relative to
+the working directory, logged with the errors; the sensitive-logging rule read the Unix "print working directory" name as a password. Round 7: a
+credential-shaped name bound from a path producer (`System.Directory`'s directory readers and path resolvers) holds a path, not a credential, so it
+neither seeds a binding nor is reported at a log sink; the same name bound from anything else is still a credential by name.
+
+**simplex-chat's first scan did not finish.** It ran 3 hours 40 minutes at full CPU without completing, while graphql-engine's 1127 files take 3.5
+minutes. Not Haskell: the inspector's sampling profiler on the live process put every sample in the ReDoS detector's Kotlin string-literal regex,
+`(?:\\.|[^"\n])+`, which lets a backslash match both branches and so backtracks exponentially on a literal with many escapes in the project's
+Kotlin desktop app (`apps/multiplatform`). Round 7 writes the class as `[^\\"\n]` in every extractor; the project scans in 111 s since, and the
+manifest's `deferred` field (honoured by `scan.mjs`) exists for the next project whose scan is known not to finish.
+
+**simplex-chat's five sites, all false positives, two shapes, left for round 8:** the badge service's static files are served only after
+`resolveInside` canonicalises the path and checks it with a where-bound prefix predicate, a containment guard that dominates the callee's RETURN
+while the sink is in the caller (two sites, one of them the existence probe before the test); and a clock read in a function named for a token
+(`takeToken`, a rate limiter; `bearerToken` twice, where the clock dates a signed JWT or a cached expiry) that is handed to a project helper or
+stored in a timestamp field, which the clock rule's time-arithmetic test does not follow (three sites).
+
 ## Limits
 
-Eighteen projects over three batches, one commit each, one labeller, one reading. Three of the six are frameworks or libraries, whose "requests" are their users'
+Twenty-four projects over four batches, one commit each, one labeller, one reading. Three of the first six are frameworks or libraries, whose "requests" are their users'
 applications; the precision figure describes these projects and this engine, nothing wider. The sealed sets were not re-scored for this
 directory.

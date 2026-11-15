@@ -34,6 +34,7 @@ export const FROZEN_SPLITS = {
   'unseen-v4': path.join(HERE, 'corpora', 'unseen-v4'),
   'unseen-v5': path.join(HERE, 'corpora', 'unseen-v5'),
   'unseen-v6': path.join(HERE, 'corpora', 'unseen-v6'),
+  'unseen-v7': path.join(HERE, 'corpora', 'unseen-v7'),
   'unseen-nix-v1': path.join(HERE, 'corpora', 'unseen-nix-v1'),
 };
 export const isFrozenSplit = (split) => Object.hasOwn(FROZEN_SPLITS, split);

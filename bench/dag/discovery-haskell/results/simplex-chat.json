@@ -1,0 +1,148 @@
+{
+ "id": "simplex-chat",
+ "commit": "62ea5dc4afb73a0256ba0088f0ae85be750afc99",
+ "rows": [
+  {
+   "file": "apps/simplex-badge-service/src/BadgeService/Web/Server.hs",
+   "line": 370,
+   "severity": "high",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (filesystem operation)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "entrypoint-reachable",
+   "proof": "feasible",
+   "provenance": "url-param"
+  },
+  {
+   "file": "apps/simplex-badge-service/src/BadgeService/Web/Server.hs",
+   "line": 300,
+   "severity": "high",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal (file served from a request-chosen path)",
+   "parser": "IR-TAINT",
+   "trust": "attacker-reachable",
+   "reach": "entrypoint-reachable",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "apps/simplex-badge-service/src/BadgeService/Web/Server.hs",
+   "line": 144,
+   "severity": "high",
+   "cwe": "CWE-338",
+   "vuln": "Clock value used as a security value",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "apps/simplex-badge-service/src/BadgeService/Config.hs",
+   "line": 206,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "apps/simplex-badge-service/src/BadgeService/StoreReceipts/Apple.hs",
+   "line": 204,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "apps/simplex-badge-service/src/BadgeService/StoreReceipts/Apple.hs",
+   "line": 234,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "apps/simplex-badge-service/src/BadgeService/StoreReceipts/Google.hs",
+   "line": 80,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "apps/simplex-directory-service/src/Directory/Service.hs",
+   "line": 309,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "apps/simplex-directory-service/src/Directory/Service.hs",
+   "line": 310,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "apps/simplex-directory-service/src/Directory/Service.hs",
+   "line": 312,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "apps/simplex-badge-service/src/BadgeService/StoreReceipts/Apple.hs",
+   "line": 267,
+   "severity": "high",
+   "cwe": "CWE-338",
+   "vuln": "Clock value used as a security value",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "apps/simplex-badge-service/src/BadgeService/StoreReceipts/Google.hs",
+   "line": 281,
+   "severity": "high",
+   "cwe": "CWE-338",
+   "vuln": "Clock value used as a security value",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  }
+ ]
+}

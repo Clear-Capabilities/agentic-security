@@ -122,3 +122,33 @@ Not changed, each with its reason in `labels.json`: hledger's five journal-path 
 journal, and the summary taints the whole record: field-sensitive return records), happstack's multipart temp-file removal, hakyll's temp-file suffix (a tail), the
 test-harness body reads (a `library` stanza of its own package), `init $ tailErr s` under a project predicate with a pattern match. Ruling: hledger-web's `POST /add`
 without authentication is a true positive even though the tool documents itself as local-only; the finding states the fact and the operator decides.
+
+## Round 7 (0.195.43): the record hledger left, discovery batch 4, and a release stop
+
+Discovery batch 4 (`bench/dag/discovery-haskell`, `batch: 4`): six projects with a network or untrusted-input surface outside the web frameworks the earlier
+batches lean on: simplex-chat, matterhorn, pandoc, shellcheck, duckling, purescript (2252 Haskell files). Scanned once and every flagged site labelled: 11 sites,
+all false positives: purescript's six are one shape (`pwd <- getCurrentDirectory` logged with the compiler's errors), simplex-chat's five are two shapes left for round 8.
+simplex-chat's first scan did not finish, and the cause was a detector, not Haskell (below). Three engine mechanisms and one release mechanism, each general and pinned both ways.
+
+| mechanism | source of the shape | effect |
+|---|---|---|
+| field-sensitive return records (`dataflow/engine.js` `_returnFieldTaint`, `summaries.js` `returnFields` in `_summaryEq`): a function returning a record whose fields differ in taint hands each field its own taint to the caller; `VD{j, q} <- getViewData` leaves the journal path clean and the query tainted; a record read whole, or returned whole-tainted, is unchanged. Language neutral: `test/dataflow-field-return.test.js` pins it on JavaScript | hledger-web's `getViewData` record (round 6's "not changed" row) | hledger 8 to 6 |
+| `PATH_PRODUCERS` (`haskell-security-rules.js`): a credential-shaped name bound from a path producer (`System.Directory`'s directory readers and path resolvers, `getExecutablePath`, `getWorkingDirectory`; under `liftIO`/`pure` or not) is a path: it neither seeds a sensitive binding nor is reported at a log sink; the same name bound from anything else is still a credential by name | purescript's six `ppeRelativeDirectory = pwd` sites (CWE-532 high) | purescript 6 to 0 |
+| `sast/redos-nfa.js`: every string-literal reader's class excludes the backslash (`[^\\"\n]`), so a backslash is consumed only by the escape branch; before, `(?:\\.|[^"\n])+` backtracked 2^k ways on a literal with k escapes when the rest of the pattern then failed (`"…".toRegex(` on every literal of a Kotlin file) | simplex-chat's Kotlin desktop app: the whole scan past 3 h 40 min; found with the inspector's sampling profiler on the live process after the Haskell passes (3.2 s), the taint engine (as slow with deep mode off) and directory bisection had each been ruled out or misled | the project scans in 111 s |
+| `scripts/ship/lib.mjs` `retryOnIndexLock`: the verify phase's detached checkout retries a transient `index.lock` for up to ten minutes instead of stopping | three releases stopped at verify by the warm gate's lock (0.195.40 to 0.195.42) | no stop at verify |
+
+Batch 4 flagged 11 to 5 (purescript 6 to 0; simplex-chat's five stay: a containment guard that dominates a callee's return with the sink in the caller, written as a where-bound predicate, and a clock handed to a project helper or stored in a timestamp field in a token-named function; both for round 8). Batch 3 after round 7: hledger 8 to 6, the three remaining `postEditR` writes relabelled ambiguous (the file is a route piece
+`journalFile404 f j` checks against the loaded journal before the write, a project guard the engine does not read); batch 3 is now 4 TP, 34 FP, 4 ambiguous.
+Fresh set unchanged (21 TP, 6 FP of 27, 77.8%); development remainder unchanged; layer recall matches the baseline exactly; the precision baseline matches live, so it
+was not re-recorded.
+
+Ruling: the discovery manifest may carry a `deferred` field, read by `scan.mjs`, so a project whose scan is known not to finish does not hide the census of the
+others (simplex-chat carried it for the hours before the cause was found); a census is never recorded for a deferred project. Not changed, each with its reason in `labels.json`: happstack's multipart temp-file removal, hakyll's temp-file suffix,
+the test-harness body reads, `init $ tailErr s` under a project predicate.
+
+**unseen-v7, frozen and measured at this release.** The next programme (round 8: taint recall) needs to read unseen-v6's misses, which turns that split into a
+development set, so a new blind split was written first: `bench/language-support/corpora/unseen-v7`, 78 forms by a separate agent session given only the family
+names, the CWE meanings, the authoring format and a library list; copied in unread, digest-frozen, measured once at 0.195.43. Baseline (`results/unseen-v7-baseline.md`):
+overall P 80.0% / R 61.5% / F1 69.6% (24 TP, 6 FP, 15 FN); pattern layer 88.2% / 62.5% / 73.2%; taint 69.2% / 60.0% / 64.3% (9 TP, 4 FP, 6 FN); strict precision
+46.9% and 56.3%. Per family the weakest cells are html-injection (1/1/2), ssrf (1/1/2), path-traversal (2/2/1), parser-safety, resource-limits and route-authentication
+(1/0/2 each). The per-case lists were not read.

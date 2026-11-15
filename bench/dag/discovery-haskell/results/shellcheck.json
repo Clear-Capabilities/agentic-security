@@ -1,0 +1,19 @@
+{
+ "id": "shellcheck",
+ "commit": "1046c00b61516a64f85a45e5fbdc69c6c1654eb5",
+ "rows": [
+  {
+   "file": "shellcheck.hs",
+   "line": 258,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  }
+ ]
+}

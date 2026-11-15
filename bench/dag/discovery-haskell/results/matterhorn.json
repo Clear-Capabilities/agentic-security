@@ -1,0 +1,97 @@
+{
+ "id": "matterhorn",
+ "commit": "5e015ce2b89a5597a12526cf59e5c1946af28880",
+ "rows": [
+  {
+   "file": "src/Matterhorn/Config.hs",
+   "line": 574,
+   "severity": "info",
+   "cwe": "CWE-78",
+   "vuln": "OS Command Injection (attacker-chosen executable)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/Matterhorn/Config.hs",
+   "line": 574,
+   "severity": "info",
+   "cwe": "CWE-88",
+   "vuln": "Argument Injection (process arguments)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/Matterhorn/Config.hs",
+   "line": 585,
+   "severity": "info",
+   "cwe": "CWE-78",
+   "vuln": "OS Command Injection (attacker-chosen executable)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/Matterhorn/Config.hs",
+   "line": 585,
+   "severity": "info",
+   "cwe": "CWE-88",
+   "vuln": "Argument Injection (process arguments)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/Matterhorn/Config.hs",
+   "line": 596,
+   "severity": "info",
+   "cwe": "CWE-78",
+   "vuln": "OS Command Injection (attacker-chosen executable)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/Matterhorn/Config.hs",
+   "line": 596,
+   "severity": "info",
+   "cwe": "CWE-88",
+   "vuln": "Argument Injection (process arguments)",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/Matterhorn/LastRunState.hs",
+   "line": 106,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  }
+ ]
+}

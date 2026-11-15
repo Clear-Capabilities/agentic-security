@@ -1,0 +1,732 @@
+@@@ resource-limits | vulnerable | src/Labels/Ingest.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Labels.Ingest (ingestApp) where
+
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Network.HTTP.Types
+import Network.Wai
+
+import Labels.Queue (enqueueLabelBatch)
+
+ingestApp :: Application
+ingestApp req respond
+  | requestMethod req == methodPost && pathInfo req == ["labels", "batch"] = do
+      body <- strictRequestBody req --@@
+      count <- enqueueLabelBatch body
+      respond (responseLBS status202 [("Content-Type", "text/plain")] (BLC.pack (show count)))
+  | otherwise =
+      respond (responseLBS status404 [] "")
+
+@@@ resource-limits | vulnerable | app/ScanReceiver.hs
+module Main (main) where
+
+import Control.Monad (forever)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BC
+import Network.Socket
+import System.IO
+import Text.Read (readMaybe)
+
+import Scans (storeScan)
+
+main :: IO ()
+main = withSocketsDo $ do
+  addr:_ <- getAddrInfo (Just defaultHints { addrFlags = [AI_PASSIVE] }) Nothing (Just "6000")
+  sock <- socket (addrFamily addr) Stream defaultProtocol
+  bind sock (addrAddress addr)
+  listen sock 16
+  forever $ do
+    (client, _) <- accept sock
+    h <- socketToHandle client ReadWriteMode
+    hSetBinaryMode h True
+    serve h
+    hClose h
+
+-- protocol: one ASCII line with the byte count, then that many bytes of scan data
+serve :: Handle -> IO ()
+serve h = do
+  header <- BC.unpack . BC.strip <$> BS.hGetLine h
+  case readMaybe header of
+    Nothing -> BC.hPutStrLn h (BC.pack "ERR expected a length")
+    Just n -> do
+      payload <- BS.hGet h n --@@
+      storeScan payload
+      BC.hPutStrLn h (BC.pack "OK")
+
+@@@ resource-limits | vulnerable | src/Labels/Print.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Labels.Print (PrintApi, printServer) where
+
+import Control.Concurrent.Async (mapConcurrently_)
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Servant
+
+import Printers (printLabel)
+
+data PrintJob = PrintJob
+  { shipmentRef :: Text
+  , printer     :: Text
+  , copies      :: Int
+  } deriving (Generic)
+
+instance FromJSON PrintJob
+
+type PrintApi = "labels" :> "print" :> ReqBody '[JSON] PrintJob :> PostNoContent
+
+printServer :: Server PrintApi
+printServer job = do
+  liftIO (mapConcurrently_ (const (printLabel (printer job) (shipmentRef job))) [1 .. copies job]) --@@
+  pure NoContent
+
+@@@ resource-limits | safe | src/Labels/Intake.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Labels.Intake (intakeApp) where
+
+import qualified Data.ByteString.Lazy.Char8 as BLC
+import Data.Word (Word64)
+import Network.HTTP.Types
+import Network.Wai
+
+import Labels.Queue (enqueueLabelBatch)
+
+maxBatchBytes :: Word64
+maxBatchBytes = 2 * 1024 * 1024
+
+intakeApp :: Application
+intakeApp req respond
+  | requestMethod req == methodPost && pathInfo req == ["labels", "batch"] =
+      case requestBodyLength req of
+        KnownLength n | n <= maxBatchBytes -> do
+          body <- strictRequestBody req --@@
+          count <- enqueueLabelBatch body
+          respond (responseLBS status202 [("Content-Type", "text/plain")] (BLC.pack (show count)))
+        _ ->
+          respond (responseLBS status413 [] "batch too large or of unknown length")
+  | otherwise =
+      respond (responseLBS status404 [] "")
+
+@@@ resource-limits | safe | app/ScanListener.hs
+module Main (main) where
+
+import Control.Monad (forever)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BC
+import Network.Socket
+import System.IO
+import Text.Read (readMaybe)
+
+import Scans (storeScan)
+
+maxScanBytes :: Int
+maxScanBytes = 4 * 1024 * 1024
+
+main :: IO ()
+main = withSocketsDo $ do
+  addr:_ <- getAddrInfo (Just defaultHints { addrFlags = [AI_PASSIVE] }) Nothing (Just "6001")
+  sock <- socket (addrFamily addr) Stream defaultProtocol
+  bind sock (addrAddress addr)
+  listen sock 16
+  forever $ do
+    (client, _) <- accept sock
+    h <- socketToHandle client ReadWriteMode
+    hSetBinaryMode h True
+    serve h
+    hClose h
+
+serve :: Handle -> IO ()
+serve h = do
+  header <- BC.unpack . BC.strip <$> BS.hGetLine h
+  case readMaybe header of
+    Just n | n > 0 && n <= maxScanBytes -> do
+      payload <- BS.hGet h n --@@
+      storeScan payload
+      BC.hPutStrLn h (BC.pack "OK")
+    Just _ -> BC.hPutStrLn h (BC.pack "ERR length out of range")
+    Nothing -> BC.hPutStrLn h (BC.pack "ERR expected a length")
+
+@@@ resource-limits | safe | src/Labels/Reprint.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Labels.Reprint (ReprintApi, reprintServer) where
+
+import Control.Concurrent.Async (mapConcurrently_)
+import Control.Monad (when)
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Servant
+
+import Printers (printLabel)
+
+data ReprintJob = ReprintJob
+  { shipmentRef :: Text
+  , printer     :: Text
+  , copies      :: Int
+  } deriving (Generic)
+
+instance FromJSON ReprintJob
+
+type ReprintApi = "labels" :> "reprint" :> ReqBody '[JSON] ReprintJob :> PostNoContent
+
+maxCopies :: Int
+maxCopies = 25
+
+reprintServer :: Server ReprintApi
+reprintServer job = do
+  when (copies job < 1 || copies job > maxCopies) $
+    throwError err422 { errBody = "copies must be between 1 and 25" }
+  liftIO (mapConcurrently_ (const (printLabel (printer job) (shipmentRef job))) [1 .. copies job]) --@@
+  pure NoContent
+
+@@@ parser-safety | vulnerable | src/Tickets/Listing.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Tickets.Listing (listingRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import Web.Scotty
+
+import Tickets.Store (Store, ticketsPage)
+
+pageSize :: Int
+pageSize = 50
+
+listingRoutes :: Store -> ScottyM ()
+listingRoutes store =
+  get "/tickets" $ do
+    pageStr <- param "page" `rescue` (\_ -> pure "1")
+    let page = read (TL.unpack pageStr) :: Int --@@
+    rows <- liftIO (ticketsPage store ((page - 1) * pageSize) pageSize)
+    json rows
+
+@@@ parser-safety | vulnerable | app/DispatchSocket.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
+
+import Control.Monad (forever)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Network.WebSockets as WS
+
+import Dispatch (assignDriver, releaseDriver, listOpen)
+
+main :: IO ()
+main = WS.runServer "0.0.0.0" 9200 dispatch
+
+dispatch :: WS.ServerApp
+dispatch pending = do
+  conn <- WS.acceptRequest pending
+  forever $ do
+    msg <- WS.receiveData conn :: IO Text
+    reply <- handle msg
+    WS.sendTextData conn reply
+
+-- messages look like "ASSIGN <shipment> <driver>", "RELEASE <driver>" or "LIST"
+handle :: Text -> IO Text
+handle msg =
+  let parts = T.words msg
+      cmd = head parts --@@
+  in case cmd of
+       "ASSIGN" | [_, shipment, driver] <- parts -> assignDriver shipment driver
+       "RELEASE" | [_, driver] <- parts -> releaseDriver driver
+       "LIST" -> listOpen
+       _ -> pure "ERR unknown command"
+
+@@@ parser-safety | vulnerable | src/Workers/Refunds.hs
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+module Workers.Refunds (onRefundMessage) where
+
+import Data.Aeson (FromJSON, decode)
+import Data.Maybe (fromJust)
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Network.AMQP (Envelope, Message(..), ackEnv)
+
+import Payments (issueRefund)
+
+data Refund = Refund
+  { orderRef    :: Text
+  , amountCents :: Int
+  , reason      :: Text
+  } deriving (Generic)
+
+instance FromJSON Refund
+
+onRefundMessage :: (Message, Envelope) -> IO ()
+onRefundMessage (msg, env) = do
+  let refund = fromJust (decode (msgBody msg)) --@@
+  issueRefund (orderRef refund) (amountCents refund) (reason refund)
+  ackEnv env
+
+@@@ parser-safety | safe | src/Tickets/Page.hs
+module Tickets.Page (ticketPagePart) where
+
+import Control.Monad (mplus)
+import Control.Monad.IO.Class (liftIO)
+import Happstack.Server
+import Text.Read (readMaybe)
+
+import Tickets.Store (Store, ticketsPage, renderTickets)
+
+pageSize :: Int
+pageSize = 50
+
+ticketPagePart :: Store -> ServerPart Response
+ticketPagePart store = dir "tickets" $ do
+  method GET
+  pageStr <- look "page" `mplus` pure "1"
+  case readMaybe pageStr of --@@
+    Just page | page >= 1 -> do
+      rows <- liftIO (ticketsPage store ((page - 1) * pageSize) pageSize)
+      ok (toResponse (renderTickets rows))
+    _ -> badRequest (toResponse "page must be a positive whole number")
+
+@@@ parser-safety | safe | app/DispatchFeed.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
+
+import Control.Monad (forever)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Network.WebSockets as WS
+
+import Dispatch (assignDriver, releaseDriver, listOpen)
+
+main :: IO ()
+main = WS.runServer "0.0.0.0" 9201 dispatch
+
+dispatch :: WS.ServerApp
+dispatch pending = do
+  conn <- WS.acceptRequest pending
+  forever $ do
+    msg <- WS.receiveData conn :: IO Text
+    reply <- handle msg
+    WS.sendTextData conn reply
+
+handle :: Text -> IO Text
+handle msg =
+  case T.words msg of --@@
+    ["ASSIGN", shipment, driver] -> assignDriver shipment driver
+    ["RELEASE", driver] -> releaseDriver driver
+    ["LIST"] -> listOpen
+    [] -> pure "ERR empty message"
+    _ -> pure "ERR unknown command"
+
+@@@ parser-safety | safe | src/Workers/Credits.hs
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+module Workers.Credits (onCreditMessage) where
+
+import Data.Aeson (FromJSON, eitherDecode)
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Network.AMQP (Envelope, Message(..), ackEnv, rejectEnv)
+
+import Payments (issueCredit)
+
+data Credit = Credit
+  { orderRef    :: Text
+  , amountCents :: Int
+  , reason      :: Text
+  } deriving (Generic)
+
+instance FromJSON Credit
+
+onCreditMessage :: (Message, Envelope) -> IO ()
+onCreditMessage (msg, env) =
+  case eitherDecode (msgBody msg) of --@@
+    Left err -> do
+      putStrLn ("credit message not understood: " ++ err)
+      rejectEnv env False
+    Right credit -> do
+      issueCredit (orderRef credit) (amountCents credit) (reason credit)
+      ackEnv env
+
+@@@ route-authentication | vulnerable | src/Invoices/Admin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Invoices.Admin (invoiceAdminRoutes) where
+
+import Control.Monad (unless)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status204, status401)
+import Web.Scotty
+
+import Tokens (tokenValid)
+
+requireToken :: ActionM ()
+requireToken = do
+  tok <- header "X-Api-Token"
+  valid <- liftIO (maybe (pure False) (tokenValid . TL.toStrict) tok)
+  unless valid $ do
+    status status401
+    text "api token required"
+    finish
+
+invoiceAdminRoutes :: Connection -> ScottyM ()
+invoiceAdminRoutes conn = do
+  get "/invoices/:id" $ do
+    requireToken
+    iid <- param "id"
+    rows <- liftIO (query conn "SELECT number, total FROM invoices WHERE id = ?" (Only (iid :: Int)))
+    json (rows :: [(TL.Text, Double)])
+
+  post "/invoices/:id/void" $ do
+    requireToken
+    iid <- param "id"
+    _ <- liftIO (execute conn "UPDATE invoices SET voided = true WHERE id = ?" (Only (iid :: Int)))
+    status status204
+
+  delete "/invoices/:id" $ do --@@
+    iid <- param "id"
+    _ <- liftIO (execute conn "DELETE FROM invoices WHERE id = ?" (Only (iid :: Int)))
+    status status204
+
+@@@ route-authentication | vulnerable | src/Search/Admin.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Search.Admin (AdminApi, adminServer, operatorCheck) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Servant
+
+import Search.Index (listSnapshots, purgeIndex, reindexAll)
+import Operators (Operator, authenticateOperator)
+
+type AdminApi =
+       BasicAuth "ops" Operator :> "admin" :> "snapshots" :> Get '[JSON] [Text]
+  :<|> BasicAuth "ops" Operator :> "admin" :> "purge" :> PostNoContent
+  :<|> "admin" :> "reindex" :> PostNoContent --@@
+
+adminServer :: Server AdminApi
+adminServer = snapshots :<|> purge :<|> reindex
+  where
+    snapshots _op = liftIO listSnapshots
+    purge _op = liftIO purgeIndex >> pure NoContent
+    reindex = liftIO reindexAll >> pure NoContent
+
+operatorCheck :: BasicAuthCheck Operator
+operatorCheck = BasicAuthCheck $ \(BasicAuthData user pw) -> do
+  found <- authenticateOperator user pw
+  pure (maybe Unauthorized Authorized found)
+
+@@@ route-authentication | vulnerable | src/Foundation/Badges.hs
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+module Foundation.Badges where
+
+import Yesod.Core
+import Yesod.Auth
+
+import Badges.Types (BadgeId)
+
+data App = App
+
+mkYesodData "App" [parseRoutes|
+/                        HomeR        GET
+/auth                    AuthR        Auth getAuth
+/badges                  BadgesR      GET POST
+/badges/#BadgeId         BadgeR       GET
+/badges/#BadgeId/revoke  BadgeRevokeR POST
+|]
+
+requireOperator :: Handler AuthResult
+requireOperator = do
+  mu <- maybeAuthId
+  pure (maybe AuthenticationRequired (const Authorized) mu)
+
+instance Yesod App where
+  isAuthorized HomeR _ = pure Authorized
+  isAuthorized (AuthR _) _ = pure Authorized
+  isAuthorized (BadgeRevokeR _) _ = pure Authorized --@@
+  isAuthorized _ _ = requireOperator
+
+@@@ route-authentication | safe | src/Invoices/Operations.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Invoices.Operations (invoiceOperationRoutes) where
+
+import Control.Monad (unless)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status204, status401)
+import Web.Scotty
+
+import Tokens (tokenValid)
+
+requireToken :: ActionM ()
+requireToken = do
+  tok <- header "X-Api-Token"
+  valid <- liftIO (maybe (pure False) (tokenValid . TL.toStrict) tok)
+  unless valid $ do
+    status status401
+    text "api token required"
+    finish
+
+invoiceOperationRoutes :: Connection -> ScottyM ()
+invoiceOperationRoutes conn = do
+  get "/invoices/:id" $ do
+    requireToken
+    iid <- param "id"
+    rows <- liftIO (query conn "SELECT number, total FROM invoices WHERE id = ?" (Only (iid :: Int)))
+    json (rows :: [(TL.Text, Double)])
+
+  delete "/invoices/:id" $ do --@@
+    requireToken
+    iid <- param "id"
+    _ <- liftIO (execute conn "DELETE FROM invoices WHERE id = ?" (Only (iid :: Int)))
+    status status204
+
+@@@ route-authentication | safe | src/Search/Maintenance.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Search.Maintenance (MaintenanceApi, maintenanceServer, operatorCheck) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Servant
+
+import Search.Index (listSnapshots, purgeIndex, reindexAll)
+import Operators (Operator, authenticateOperator)
+
+type MaintenanceApi =
+       BasicAuth "ops" Operator :> "admin" :> "snapshots" :> Get '[JSON] [Text]
+  :<|> BasicAuth "ops" Operator :> "admin" :> "purge" :> PostNoContent
+  :<|> BasicAuth "ops" Operator :> "admin" :> "reindex" :> PostNoContent --@@
+
+maintenanceServer :: Server MaintenanceApi
+maintenanceServer = snapshots :<|> purge :<|> reindex
+  where
+    snapshots _op = liftIO listSnapshots
+    purge _op = liftIO purgeIndex >> pure NoContent
+    reindex _op = liftIO reindexAll >> pure NoContent
+
+operatorCheck :: BasicAuthCheck Operator
+operatorCheck = BasicAuthCheck $ \(BasicAuthData user pw) -> do
+  found <- authenticateOperator user pw
+  pure (maybe Unauthorized Authorized found)
+
+@@@ route-authentication | safe | src/Shipments/Control.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Shipments.Control (controlApp) where
+
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import Network.HTTP.Types
+import Network.Wai
+
+import Shipments.Store (setShipmentState, shipmentState)
+import Tokens (tokenValid)
+
+controlApp :: Application
+controlApp req respond =
+  case (requestMethod req, pathInfo req) of
+    ("GET", ["shipments", ref, "state"]) -> do
+      st <- shipmentState ref
+      respond (responseLBS status200 [("Content-Type", "text/plain")] (BL.fromStrict (TE.encodeUtf8 st)))
+    ("PUT", ["shipments", ref, "state"]) -> withBearer req respond (updateState ref) --@@
+    _ -> respond (responseLBS status404 [] "")
+
+updateState :: T.Text -> Application
+updateState ref req respond = do
+  newState <- TE.decodeUtf8 . BL.toStrict <$> strictRequestBody req
+  setShipmentState ref (T.strip newState)
+  respond (responseLBS status204 [] "")
+
+withBearer :: Request -> (Response -> IO ResponseReceived) -> Application -> IO ResponseReceived
+withBearer req respond app =
+  case lookup hAuthorization (requestHeaders req) >>= BS.stripPrefix "Bearer " of
+    Nothing -> respond (responseLBS status401 [("WWW-Authenticate", "Bearer")] "")
+    Just tok -> do
+      ok <- tokenValid (TE.decodeUtf8 tok)
+      if ok then app req respond else respond (responseLBS status401 [] "")
+
+@@@ object-authorization | vulnerable | src/Invoices/View.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Invoices.View (InvoiceApi, invoiceServer, Caller(..)) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON, ToJSON)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import GHC.Generics (Generic)
+import Servant
+import Servant.Auth.Server
+
+data Caller = Caller { callerId :: Int, callerEmail :: Text } deriving (Generic)
+
+instance FromJSON Caller
+instance ToJSON Caller
+instance FromJWT Caller
+instance ToJWT Caller
+
+data Invoice = Invoice { number :: Text, total :: Double, customerId :: Int } deriving (Generic)
+
+instance ToJSON Invoice
+instance FromRow Invoice where
+  fromRow = Invoice <$> field <*> field <*> field
+
+type InvoiceApi =
+  Auth '[JWT] Caller :> "invoices" :> Capture "id" Int :> Get '[JSON] Invoice
+
+invoiceServer :: Connection -> Server InvoiceApi
+invoiceServer conn (Authenticated _caller) iid = do
+  rows <- liftIO (query conn "SELECT number, total, customer_id FROM invoices WHERE id = ?" (Only iid)) --@@
+  case rows of
+    (inv:_) -> pure inv
+    [] -> throwError err404
+invoiceServer _ _ _ = throwAll err401
+
+@@@ object-authorization | vulnerable | src/Tickets/Notes.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Tickets.Notes (noteRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status401)
+import Web.Spock
+
+import Portal.Session (SessionData(..))
+
+noteRoutes :: Connection -> SpockM () SessionData () ()
+noteRoutes conn =
+  put ("tickets" <//> var <//> "notes") $ \tid -> do
+    sess <- readSession
+    case sessionUser sess of
+      Nothing -> setStatus status401 >> text "sign in first"
+      Just _uid -> do
+        notes <- body
+        _ <- liftIO (execute conn "UPDATE tickets SET notes = ? WHERE id = ?" (notes, tid :: Int)) --@@
+        text "notes saved"
+
+@@@ object-authorization | vulnerable | src/Handler/PatientRecord.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Handler.PatientRecord (getPatientRecordR) where
+
+import Yesod.Auth (requireAuthId)
+import Yesod.Core
+import Yesod.Persist (get404, runDB)
+
+import Foundation
+import Model
+
+getPatientRecordR :: PatientId -> Handler Value
+getPatientRecordR pid = do
+  _clinician <- requireAuthId
+  patient <- runDB (get404 pid) --@@
+  returnJson (object
+    [ "mrn" .= patientMrn patient
+    , "surname" .= patientSurname patient
+    , "ward" .= patientWard patient
+    ])
+
+@@@ object-authorization | safe | src/Invoices/Detail.hs
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+module Invoices.Detail (InvoiceApi, invoiceServer, Caller(..)) where
+
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON, ToJSON)
+import Data.Text (Text)
+import Database.PostgreSQL.Simple
+import GHC.Generics (Generic)
+import Servant
+import Servant.Auth.Server
+
+data Caller = Caller { callerId :: Int, callerEmail :: Text } deriving (Generic)
+
+instance FromJSON Caller
+instance ToJSON Caller
+instance FromJWT Caller
+instance ToJWT Caller
+
+data Invoice = Invoice { number :: Text, total :: Double } deriving (Generic)
+
+instance ToJSON Invoice
+instance FromRow Invoice where
+  fromRow = Invoice <$> field <*> field
+
+type InvoiceApi =
+  Auth '[JWT] Caller :> "invoices" :> Capture "id" Int :> Get '[JSON] Invoice
+
+invoiceServer :: Connection -> Server InvoiceApi
+invoiceServer conn (Authenticated caller) iid = do
+  rows <- liftIO (query conn "SELECT number, total FROM invoices WHERE id = ? AND customer_id = ?" (iid, callerId caller)) --@@
+  case rows of
+    (inv:_) -> pure inv
+    [] -> throwError err404
+invoiceServer _ _ _ = throwAll err401
+
+@@@ object-authorization | safe | src/Tickets/Annotate.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Tickets.Annotate (annotateRoutes) where
+
+import Control.Monad.IO.Class (liftIO)
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status401, status404)
+import Web.Spock
+
+import Portal.Session (SessionData(..))
+
+annotateRoutes :: Connection -> SpockM () SessionData () ()
+annotateRoutes conn =
+  put ("tickets" <//> var <//> "notes") $ \tid -> do
+    sess <- readSession
+    case sessionUser sess of
+      Nothing -> setStatus status401 >> text "sign in first"
+      Just uid -> do
+        notes <- body
+        changed <- liftIO (execute conn "UPDATE tickets SET notes = ? WHERE id = ? AND reporter_id = ?" (notes, tid :: Int, uid)) --@@
+        if changed == 0
+          then setStatus status404 >> text "no such ticket"
+          else text "notes saved"
+
+@@@ object-authorization | safe | src/Handler/PatientChart.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Handler.PatientChart (getPatientChartR) where
+
+import Yesod.Auth (requireAuthId)
+import Yesod.Core
+import Yesod.Persist (get404, runDB)
+
+import Foundation
+import Model
+
+assignedTo :: UserId -> Patient -> Handler Patient
+assignedTo clinician patient
+  | patientClinician patient == clinician = pure patient
+  | otherwise = permissionDenied "patient is not on your list"
+
+getPatientChartR :: PatientId -> Handler Value
+getPatientChartR pid = do
+  clinician <- requireAuthId
+  patient <- runDB (get404 pid) >>= assignedTo clinician --@@
+  returnJson (object
+    [ "mrn" .= patientMrn patient
+    , "surname" .= patientSurname patient
+    , "ward" .= patientWard patient
+    ])

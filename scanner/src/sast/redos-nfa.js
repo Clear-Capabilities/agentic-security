@@ -288,7 +288,7 @@ function extractJsRegexBodies(code) {
 
 export function extractPyRegexBodies(code) {
   const out = [];
-  for (const m of code.matchAll(/\bre\.(?:compile|match|search|sub|findall|fullmatch)\s*\(\s*r?['"]((?:\\.|[^'"\n])+)['"]/g)) {
+  for (const m of code.matchAll(/\bre\.(?:compile|match|search|sub|findall|fullmatch)\s*\(\s*r?['"]((?:\\.|[^\\'"\n])+)['"]/g)) {
     out.push({ body: m[1], line: code.slice(0, m.index).split('\n').length });
   }
   return out;
@@ -296,10 +296,10 @@ export function extractPyRegexBodies(code) {
 
 export function extractJavaRegexBodies(code) {
   const out = [];
-  for (const m of code.matchAll(/\bPattern\.compile\s*\(\s*"((?:\\.|[^"\n])+)"/g)) {
+  for (const m of code.matchAll(/\bPattern\.compile\s*\(\s*"((?:\\.|[^\\"\n])+)"/g)) {
     out.push({ body: m[1].replace(/\\\\/g, '\\'), line: code.slice(0, m.index).split('\n').length });
   }
-  for (const m of code.matchAll(/\.matches\s*\(\s*"((?:\\.|[^"\n])+)"/g)) {
+  for (const m of code.matchAll(/\.matches\s*\(\s*"((?:\\.|[^\\"\n])+)"/g)) {
     out.push({ body: m[1].replace(/\\\\/g, '\\'), line: code.slice(0, m.index).split('\n').length });
   }
   return out;
@@ -309,7 +309,7 @@ export function extractJavaRegexBodies(code) {
 // "…" (interpreted) or `…` (raw). Both carry the pattern verbatim.
 function extractGoRegexBodies(code) {
   const out = [];
-  for (const m of code.matchAll(/\bregexp\.(?:MustCompile|Compile|CompilePOSIX|MatchString|Match)\s*\(\s*"((?:\\.|[^"\n])+)"/g)) {
+  for (const m of code.matchAll(/\bregexp\.(?:MustCompile|Compile|CompilePOSIX|MatchString|Match)\s*\(\s*"((?:\\.|[^\\"\n])+)"/g)) {
     out.push({ body: m[1].replace(/\\\\/g, '\\'), line: code.slice(0, m.index).split('\n').length });
   }
   for (const m of code.matchAll(/\bregexp\.(?:MustCompile|Compile|CompilePOSIX|MatchString|Match)\s*\(\s*`([^`]+)`/g)) {
@@ -336,10 +336,10 @@ function extractPhpRegexBodies(code) {
 // Ruby: a regex literal /…/ used with =~ / .match / .match? / Regexp.new("…").
 function extractRubyRegexBodies(code) {
   const out = [];
-  for (const m of code.matchAll(/(?:=~|\.match\??|\.scan|\.gsub|\.sub|grep)\s*\(?\s*\/((?:\\.|[^\/\n])+)\//g)) {
+  for (const m of code.matchAll(/(?:=~|\.match\??|\.scan|\.gsub|\.sub|grep)\s*\(?\s*\/((?:\\.|[^\\\/\n])+)\//g)) {
     out.push({ body: m[1], line: code.slice(0, m.index).split('\n').length });
   }
-  for (const m of code.matchAll(/\bRegexp\.new\s*\(\s*['"]((?:\\.|[^'"\n])+)['"]/g)) {
+  for (const m of code.matchAll(/\bRegexp\.new\s*\(\s*['"]((?:\\.|[^\\'"\n])+)['"]/g)) {
     out.push({ body: m[1], line: code.slice(0, m.index).split('\n').length });
   }
   return out;
@@ -348,10 +348,10 @@ function extractRubyRegexBodies(code) {
 // C#: new Regex("…") / Regex.IsMatch(s, "…") / Regex.Match / Regex.Replace.
 function extractCsharpRegexBodies(code) {
   const out = [];
-  for (const m of code.matchAll(/\bnew\s+Regex\s*\(\s*@?"((?:\\.|""|[^"\n])+)"/g)) {
+  for (const m of code.matchAll(/\bnew\s+Regex\s*\(\s*@?"((?:\\.|""|[^\\"\n])+)"/g)) {
     out.push({ body: m[1].replace(/""/g, '"'), line: code.slice(0, m.index).split('\n').length });
   }
-  for (const m of code.matchAll(/\bRegex\.(?:IsMatch|Match|Matches|Replace|Split)\s*\(\s*[^,]+,\s*@?"((?:\\.|""|[^"\n])+)"/g)) {
+  for (const m of code.matchAll(/\bRegex\.(?:IsMatch|Match|Matches|Replace|Split)\s*\(\s*[^,]+,\s*@?"((?:\\.|""|[^\\"\n])+)"/g)) {
     out.push({ body: m[1].replace(/""/g, '"'), line: code.slice(0, m.index).split('\n').length });
   }
   return out;
@@ -360,13 +360,13 @@ function extractCsharpRegexBodies(code) {
 // Kotlin: Regex("…") / "…".toRegex() / Pattern.compile("…").
 function extractKotlinRegexBodies(code) {
   const out = [];
-  for (const m of code.matchAll(/\bRegex\s*\(\s*"((?:\\.|[^"\n])+)"/g)) {
+  for (const m of code.matchAll(/\bRegex\s*\(\s*"((?:\\.|[^\\"\n])+)"/g)) {
     out.push({ body: m[1].replace(/\\\\/g, '\\'), line: code.slice(0, m.index).split('\n').length });
   }
-  for (const m of code.matchAll(/"((?:\\.|[^"\n])+)"\s*\.\s*toRegex\s*\(/g)) {
+  for (const m of code.matchAll(/"((?:\\.|[^\\"\n])+)"\s*\.\s*toRegex\s*\(/g)) {
     out.push({ body: m[1].replace(/\\\\/g, '\\'), line: code.slice(0, m.index).split('\n').length });
   }
-  for (const m of code.matchAll(/\bPattern\.compile\s*\(\s*"((?:\\.|[^"\n])+)"/g)) {
+  for (const m of code.matchAll(/\bPattern\.compile\s*\(\s*"((?:\\.|[^\\"\n])+)"/g)) {
     out.push({ body: m[1].replace(/\\\\/g, '\\'), line: code.slice(0, m.index).split('\n').length });
   }
   return out;

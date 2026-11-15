@@ -1,5 +1,5 @@
 {
-  "note": "Six Haskell projects the engine had never been run on before 2026-11-02, chosen for a web or input-processing surface and for absence from every other set (dev, fresh, sealed, unseen). Shallow clones at these commits; yesod-scaffold is its `postgres` branch (the default branch holds no scaffold). Batch 2 (2026-11-15, `batch: 2`): six more projects the engine had never been run on (postgrest, yesod, snap-server, keter, Spock, spacecookie), shallow clones at their default-branch heads of that day, chosen the same way and absent from every other set. Batch 3 (2026-11-15, `batch: 3`): snap, happstack-server, hakyll, clckwrks, hledger, graphql-engine (1567 Haskell files; graphql-engine is the largest project in any set), default-branch heads of that day.",
+  "note": "Six Haskell projects the engine had never been run on before 2026-11-02, chosen for a web or input-processing surface and for absence from every other set (dev, fresh, sealed, unseen). Shallow clones at these commits; yesod-scaffold is its `postgres` branch (the default branch holds no scaffold). Batch 2 (2026-11-15, `batch: 2`): six more projects the engine had never been run on (postgrest, yesod, snap-server, keter, Spock, spacecookie), shallow clones at their default-branch heads of that day, chosen the same way and absent from every other set. Batch 3 (2026-11-15, `batch: 3`): snap, happstack-server, hakyll, clckwrks, hledger, graphql-engine (1567 Haskell files; graphql-engine is the largest project in any set), default-branch heads of that day. Batch 4 (2026-11-15, `batch: 4`): simplex-chat, matterhorn, pandoc, shellcheck, duckling, purescript (2252 Haskell files), chosen for a network or untrusted-input surface outside the web frameworks, default-branch heads of that day. simplex-chat's first deep scan did not finish in 3 h 40 min: the ReDoS detector's own string-literal regex backtracked on its Kotlin desktop app (fixed in round 7; the project scans in 111 s since). A project may carry `deferred: <reason>`, which scan.mjs honours by skipping it unless named with --only.",
   "projects": [
     {
       "id": "hoogle",
@@ -121,6 +121,48 @@
       "commit": "96f68d0a35a2b3ee153ce67585d37efb3cfa6598",
       "hsFiles": 1127,
       "batch": 3
+    },
+    {
+      "id": "simplex-chat",
+      "url": "https://github.com/simplex-chat/simplex-chat",
+      "commit": "62ea5dc4afb73a0256ba0088f0ae85be750afc99",
+      "hsFiles": 423,
+      "batch": 4
+    },
+    {
+      "id": "matterhorn",
+      "url": "https://github.com/matterhorn-chat/matterhorn",
+      "commit": "5e015ce2b89a5597a12526cf59e5c1946af28880",
+      "hsFiles": 122,
+      "batch": 4
+    },
+    {
+      "id": "pandoc",
+      "url": "https://github.com/jgm/pandoc",
+      "commit": "616faaad43e19c6c0d7631c73fffd1e6d3a38cde",
+      "hsFiles": 368,
+      "batch": 4
+    },
+    {
+      "id": "shellcheck",
+      "url": "https://github.com/koalaman/shellcheck",
+      "commit": "1046c00b61516a64f85a45e5fbdc69c6c1654eb5",
+      "hsFiles": 31,
+      "batch": 4
+    },
+    {
+      "id": "duckling",
+      "url": "https://github.com/facebook/duckling",
+      "commit": "59a13ff87b1aa8be6b93d387244f8636b26185c5",
+      "hsFiles": 1083,
+      "batch": 4
+    },
+    {
+      "id": "purescript",
+      "url": "https://github.com/purescript/purescript",
+      "commit": "17d1ec1f587071bd44f3aae78ad6c65f0d7b9342",
+      "hsFiles": 225,
+      "batch": 4
     }
   ]
 }

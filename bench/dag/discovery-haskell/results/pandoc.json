@@ -1,0 +1,104 @@
+{
+ "id": "pandoc",
+ "commit": "616faaad43e19c6c0d7631c73fffd1e6d3a38cde",
+ "rows": [
+  {
+   "file": "src/Text/Pandoc/App/CommandLineOptions.hs",
+   "line": 176,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "src/Text/Pandoc/App/CommandLineOptions.hs",
+   "line": 179,
+   "severity": "info",
+   "cwe": "CWE-22",
+   "vuln": "Path Traversal",
+   "parser": "IR-TAINT",
+   "trust": "operator-controlled",
+   "reach": "entrypoint-reachable",
+   "guard": "operator-controlled",
+   "proof": "feasible",
+   "provenance": "interproc"
+  },
+  {
+   "file": "pandoc-lua-engine/src/Text/Pandoc/Lua/Module/Utils.hs",
+   "line": 333,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Text/Pandoc/MediaBag.hs",
+   "line": 107,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Text/Pandoc/PDF.hs",
+   "line": 262,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Text/Pandoc/Readers/Ipynb.hs",
+   "line": 194,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Text/Pandoc/Readers/RTF.hs",
+   "line": 1196,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Text/Pandoc/SelfContained.hs",
+   "line": 220,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Text/Pandoc/Writers/Docx/OpenXML.hs",
+   "line": 1345,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  },
+  {
+   "file": "src/Text/Pandoc/Writers/LaTeX.hs",
+   "line": 195,
+   "severity": "info",
+   "cwe": "CWE-328",
+   "vuln": "Weak hash function (MD5/SHA-1)",
+   "parser": "HS-RULES",
+   "proof": "unproven"
+  }
+ ]
+}

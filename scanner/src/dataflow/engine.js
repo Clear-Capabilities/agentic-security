@@ -405,6 +405,7 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext, argT
       return {
         returnTainted: !!inner._returnTainted,
                 returnSources: inner._returnSources || [],
+                returnFields: inner._returnFields || null,
         mutatedParams: inner._mutatedParamsOut || new Set(),
         mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
         taintedGlobals: new Set(),
@@ -545,6 +546,36 @@ function _calleeGetterFieldTainted(calleeExpr, state, callContext) {
 
 // Work counter for the scaling guard in test/dataflow-expr-taint-scaling.test.js (a count, not a clock).
 export const _perf = { exprTaintCalls: 0 };
+
+// The per-field taint of a returned record (`return { j: jf, q: req.query.q }`, Haskell `pure VD { j = jf, q = qp }` under a `pure`/`return`
+// wrapper, or a local object whose fields were assigned): `{ field: { tainted, sources } }`, or null when the value is not such a record, a field
+// is not named, or no field is clean (the one-bit summary then says everything). Decided from the state at the return, never from a name.
+const _RETURN_WRAPPER = /(?:^|\.)(?:pure|return|liftIO|Just|Right)$/;
+function _returnFieldTaint(value, state, callContext) {
+  let v = value;
+  for (let i = 0; i < 3 && v && v.kind === 'call' && typeof v.callee === 'string' && _RETURN_WRAPPER.test(v.callee) && (v.args || []).length === 1; i++) v = v.args[0];
+  if (!v || typeof v !== 'object') return null;
+  const fields = {};
+  if (v.kind === 'object' && Array.isArray(v.props) && v.props.length) {
+    for (const p of v.props) {
+      if (!p || typeof p.key !== 'string' || !p.key || p.spread || p.computed) return null;
+      const t = !!exprTaint(p.value, state, callContext);
+      fields[p.key] = { tainted: t, sources: t ? _sourcesReachingExpr(p.value, state, callContext._taintSources).slice(0, 4) : [] };
+    }
+  } else if (v.kind === 'ident' && typeof v.name === 'string') {
+    if (isCoveredBy(state, v.name) || !hasTaintedDescendant(state, v.name)) return null;   // whole, or clean
+    for (const p of state) {
+      if (typeof p !== 'string' || !p.startsWith(`${v.name}.`)) continue;
+      const rest = p.slice(v.name.length + 1);
+      if (!rest || rest.includes('.') || rest === '*') return null;   // a nested or unknown-key write: not a flat record
+      fields[rest] = { tainted: true, sources: _sourcesReachingExpr({ kind: 'member', object: v, prop: rest }, state, callContext._taintSources).slice(0, 4) };
+    }
+    return Object.keys(fields).length ? fields : null;   // the fields the map does not name were never written tainted
+  } else return null;
+  const vals = Object.values(fields);
+  if (!vals.length || !vals.some((f) => f.tainted) || vals.every((f) => f.tainted)) return null;
+  return fields;
+}
 
 function exprTaint(expr, state, callContext) {
   _perf.exprTaintCalls += 1;
@@ -1748,6 +1779,7 @@ function step(node, stateIn, callContext) {
               return {
                 returnTainted: !!inner._returnTainted,
                 returnSources: inner._returnSources || [],
+                returnFields: inner._returnFields || null,
                 mutatedParams: inner._mutatedParamsOut || new Set(),
                 mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
                 taintedGlobals: new Set(),
@@ -1769,7 +1801,20 @@ function step(node, stateIn, callContext) {
           // receiver already carries that field, independent of `sum`
           // (a zero-param getter's entry-state summary can never see it).
           const _getterTainted = _calleeGetterFieldTainted(node.source.callee, newState, callContext);
-          if ((sum && sum.returnTainted) || _getterTainted) {
+          // a callee that returns a record with per-field taint (`returnFields`) taints the caller's `target.field` paths, not the whole target
+          const _rf = sum && sum.returnTainted && !_getterTainted && sum.returnFields && typeof sum.returnFields === 'object' ? sum.returnFields : null;
+          if (_rf) {
+            const _argFrom = [];
+            for (const a of callArgs) for (const sr of _sourcesReachingExpr(a, callerTainted, callContext._taintSources)) _argFrom.push(sr);
+            for (const [k, info] of Object.entries(_rf)) {
+              if (!info || !info.tainted) continue;
+              const fpath = `${target}.${k}`;
+              newState = _addPathAliasAware(newState, fpath, callContext);
+              const _from = _argFrom.slice();
+              if (Array.isArray(info.sources)) for (const sr of _resolveParams(info.sources, _from.slice())) _from.push(sr);
+              callContext._taintSources.push({ varName: fpath, sourceId: `interproc:${qid}`, sourceLabel: `interproc-return:${calleeName}`, provenance: 'interproc', line: node.line, file: _currentFile || null, ...(_from.length ? { from: _from.slice(0, 5) } : {}) });
+            }
+          } else if ((sum && sum.returnTainted) || _getterTainted) {
             newState = _addPathAliasAware(newState, target, callContext);
             // `from`: what made the arguments tainted. The return is the callee's, but the taint it carries began wherever the
             // caller's own arguments got theirs, and a reader (or a trust-boundary check) needs that origin, not the hop.
@@ -1796,7 +1841,7 @@ function step(node, stateIn, callContext) {
             for (const v of applied.mutated) newState = addPath(newState, v);
             for (const p of applied.mutatedThisPaths) newState = addPath(newState, p);
           }
-          if ((sum && sum.returnTainted) || _getterTainted) return { state: newState, findings };
+          if (_rf || (sum && sum.returnTainted) || _getterTainted) return { state: newState, findings };
         } else if (target && calleeName) {
           // Fallback: check builtin summaries for unresolved external calls
           const builtin = lookupBuiltinSummary(calleeName);
@@ -1929,6 +1974,7 @@ function step(node, stateIn, callContext) {
               return {
                 returnTainted: !!inner._returnTainted,
                 returnSources: inner._returnSources || [],
+                returnFields: inner._returnFields || null,
                 mutatedParams: inner._mutatedParamsOut || new Set(),
                 mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
                 taintedGlobals: new Set(),
@@ -2185,6 +2231,18 @@ function step(node, stateIn, callContext) {
         if (rs.length) {
           const keep = (callContext._returnSources ||= []);
           for (const r of rs) if (keep.length < 8 && !keep.some((k) => k.sourceId === r.sourceId && k.line === r.line)) keep.push(r);
+        }
+        // Field-sensitive return: a returned RECORD whose fields differ in taint hands each field its own taint to the caller (hledger-web's
+        // `getViewData` returns the request's query values beside the operator's journal path; the caller reads `j` and `q` as members). The
+        // map is kept only when every field is named and at least one is clean; a whole-tainted return, a spread, or two returns that disagree
+        // about the shape fall back to the one bit `returnTainted` has always been.
+        const fields = _returnFieldTaint(node.value, state, callContext);
+        if (fields && callContext._returnFields !== null) {
+          const prev = callContext._returnFields;
+          if (!prev) callContext._returnFields = fields;
+          else { for (const [k, v] of Object.entries(fields)) { if (!prev[k]) prev[k] = v; else if (v.tainted) { prev[k].tainted = true; prev[k].sources = [...(prev[k].sources || []), ...(v.sources || [])].slice(0, 4); } } }
+        } else {
+          callContext._returnFields = null;   // a whole-tainted return: the record is one value to its callers
         }
       }
       return { state, findings };
@@ -2647,6 +2705,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       exitStateByQid.set(fn.qid, ctx._exitState || new Set());
       const next = {
         returnTainted: !!ctx._returnTainted,
+      returnFields: ctx._returnFields || null,
         returnSources: ctx._returnSources || [],
         mutatedParams: ctx._mutatedParamsOut || new Set(),
         mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
@@ -2850,6 +2909,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       // _mergeSummaryFindings — dedup in _collectFindings makes this safe.
       const fieldSummary = {
         returnTainted: !!ctx._returnTainted,
+      returnFields: ctx._returnFields || null,
         returnSources: ctx._returnSources || [],
         mutatedParams: ctx._mutatedParamsOut || new Set(),
         mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
@@ -2957,6 +3017,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _collectFindings(fn, ctx._findings);
         summaryCache.set(fn.qid, qualifiedSeeds, {
           returnTainted: !!ctx._returnTainted,
+      returnFields: ctx._returnFields || null,
         returnSources: ctx._returnSources || [],
           mutatedParams: ctx._mutatedParamsOut || new Set(),
           mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
@@ -3003,6 +3064,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     // only place that used to merge findings) at all.
     summaryCache.set(fn.qid, taintedEntry, {
       returnTainted: !!ctx._returnTainted,
+      returnFields: ctx._returnFields || null,
         returnSources: ctx._returnSources || [],
       mutatedParams: ctx._mutatedParamsOut || new Set(),
       mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
@@ -3081,6 +3143,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
           return {
             returnTainted: !!inner._returnTainted,
                 returnSources: inner._returnSources || [],
+                returnFields: inner._returnFields || null,
             mutatedParams: inner._mutatedParamsOut || new Set(),
             mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
             taintedGlobals: new Set(),

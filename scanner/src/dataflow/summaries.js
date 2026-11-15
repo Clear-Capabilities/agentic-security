@@ -306,6 +306,9 @@ export class SummaryCache {
 function _summaryEq(a, b) {
   if (!a || !b) return a === b;
   if (!!a.returnTainted !== !!b.returnTainted) return false;
+  // the per-field return map (round 7 of the Haskell real-code work) is part of the summary: two summaries that agree on the bit but not on which fields carry it are not equal
+  const fk = (x) => (x.returnFields && typeof x.returnFields === 'object' ? Object.entries(x.returnFields).map(([k, v]) => `${k}:${v && v.tainted ? 1 : 0}`).sort().join(',') : '');
+  if (fk(a) !== fk(b)) return false;
   const am = a.mutatedParams || new Set();
   const bm = b.mutatedParams || new Set();
   if (am.size !== bm.size) return false;
