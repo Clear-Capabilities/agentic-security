@@ -6,7 +6,7 @@
 // TP/FP/FN, and updates calibration-seed.json with expanded counts.
 //
 // Prerequisites:
-//   1. OWASP Benchmark v1.2 test cases in bench/owasp-benchmark-v1.2/src/
+//   1. OWASP Benchmark v1.2 test cases in bench/owasp-benchmark-v1.2/src/ (or under AGENTIC_SECURITY_OWASP_BENCHMARK_DIR)
 //      Download from: https://github.com/OWASP-Benchmark/BenchmarkJava/releases
 //   2. Expected results CSV at bench/owasp-benchmark-v1.2/expectedresults-1.2.csv
 //
@@ -49,10 +49,12 @@ async function loadOwaspExpectedResults(csvPath) {
   for (const line of lines.slice(1)) { // skip header
     const parts = line.split(',');
     if (parts.length < 4) continue;
+    // the 1.2 file's header: `# test name, category, real vulnerability, cwe, ...` (the two last columns were read the other way round before
+    // 2026-11-15, so no row ever matched a family and the script re-measured nothing)
     const testName = parts[0].trim();
     const category = parts[1].trim();
-    const cwe = parts[2].trim();
-    const real = parts[3].trim().toLowerCase() === 'true';
+    const real = parts[2].trim().toLowerCase() === 'true';
+    const cwe = parts[3].trim();
     entries.push({ testName, category, cwe: `CWE-${cwe}`, real });
   }
   return entries;
@@ -90,6 +92,7 @@ function computePerFamily(expectedResults, findings) {
 function mergeSeed(existingSeed, newCounts) {
   const merged = JSON.parse(JSON.stringify(existingSeed));
   for (const [family, counts] of Object.entries(newCounts)) {
+    if (counts.tp + counts.fp === 0) continue;   // a family the engine reported nothing for carries no rate (its misses are printed above, not stored)
     if (!merged.families[family]) {
       merged.families[family] = { tp: counts.tp, fp: counts.fp };
     } else {
@@ -117,8 +120,11 @@ async function main() {
   }
 
   if (doOwasp) {
-    const benchDir = path.join(ROOT, 'bench/owasp-benchmark-v1.2/src');
-    const csvPath = path.join(ROOT, 'bench/owasp-benchmark-v1.2/expectedresults-1.2.csv');
+    // AGENTIC_SECURITY_OWASP_BENCHMARK_DIR names a checkout of the benchmark (its `src/` and `expectedresults-1.2.csv`) kept outside the
+    // repository; the default is the gitignored bench directory as before.
+    const owaspRoot = process.env.AGENTIC_SECURITY_OWASP_BENCHMARK_DIR || path.join(ROOT, 'bench/owasp-benchmark-v1.2');
+    const benchDir = path.join(owaspRoot, 'src');
+    const csvPath = path.join(owaspRoot, 'expectedresults-1.2.csv');
 
     if (!fs.existsSync(benchDir)) {
       console.error(`\nOWASP Benchmark source dir not found: ${benchDir}`);
@@ -150,7 +156,12 @@ async function main() {
     if (allAbove30) console.log('  All families have n >= 30');
 
     if (!dryRun) {
-      merged._source = seed._source + ' + OWASP Benchmark v1.2 expansion (calibration-expand.mjs)';
+      const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'scanner/package.json'), 'utf8')).version;
+      const day = new Date().toISOString().slice(0, 10);
+      merged._source = seed._source.replace(/ \+ OWASP Benchmark v1\.2 (?:expansion|re-measured on [^(]*)\(calibration-expand\.mjs\)$/, '') + ` + OWASP Benchmark v1.2 re-measured on ${day} with the engine at ${version} (calibration-expand.mjs)`;
+      // FR-207: the freshness age is computed from this field; it is the time of the measurement that produced the counts
+      merged._generatedAt = new Date().toISOString();
+      merged._generatedAtNote = 'FR-207: the time of the measurement that produced the family counts (written by scripts/calibration-expand.mjs), read by posture/calibration.js calibrationFreshness(). It moves only when the counts are re-measured.';
       fs.writeFileSync(SEED_PATH, JSON.stringify(merged, null, 2) + '\n');
       console.log(`\nWritten updated seed to ${SEED_PATH}`);
     } else {
