@@ -10,8 +10,8 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.195.40 |
-| Bundle SHA-256 | `4e377e6b5bef655391766b869621999cc8339d0138dd6df77fb71ffcadacd177` |
-| Commit | `87b2e749013e369098660f3f0aa65f6e6a1abbac` |
+| Bundle SHA-256 | `db3cb7ddeadcf90988cbba29dee2ede1c0047a0453f0433fb43328842b09a5e5` |
+| Commit | `ffb8d9e3c3ccda6f3a23bd82fb1e1792b602b434` |
 | Worktree at measurement time | clean |
 | Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -20,7 +20,7 @@ that produced them.
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-15T03:57:58.534Z |
+| Generated (UTC) | 2026-11-15T04:20:50.224Z |
 
 ## What these numbers are, and what they are not
 

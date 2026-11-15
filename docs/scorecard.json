@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.195.40",
-    "bundleSha256": "4e377e6b5bef655391766b869621999cc8339d0138dd6df77fb71ffcadacd177",
-    "commit": "87b2e749013e369098660f3f0aa65f6e6a1abbac",
+    "bundleSha256": "db3cb7ddeadcf90988cbba29dee2ede1c0047a0453f0433fb43328842b09a5e5",
+    "commit": "ffb8d9e3c3ccda6f3a23bd82fb1e1792b602b434",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-15T03:57:58.534Z",
+    "generatedAt": "2026-11-15T04:20:50.224Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -2254,8 +2254,8 @@
   },
   "measurement": {
     "engineVersion": "0.195.40",
-    "commit": "87b2e749013e369098660f3f0aa65f6e6a1abbac",
-    "bundleSha256": "4e377e6b5bef655391766b869621999cc8339d0138dd6df77fb71ffcadacd177",
+    "commit": "ffb8d9e3c3ccda6f3a23bd82fb1e1792b602b434",
+    "bundleSha256": "db3cb7ddeadcf90988cbba29dee2ede1c0047a0453f0433fb43328842b09a5e5",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",
