@@ -104,7 +104,7 @@ fixtures. Where the boundary cannot run, every class reads `UNMEASURED`.
 npm run verification:conformance:static
 ```
 
-Exit 0 in well under a second: `verification conformance: 8 adapter(s) conform (static contract and pins only; execution was not requested)`.
+Exit 0 in well under a second: `verification conformance: 10 adapter(s) conform (static contract and pins only; execution was not requested)`.
 The execution half is `npm run verification:conformance:check` (about 20 seconds); it reports `not-run` rather than passing on a
 host that cannot execute.
 

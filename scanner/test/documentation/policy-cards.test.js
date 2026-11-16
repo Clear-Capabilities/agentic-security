@@ -121,8 +121,8 @@ describe('[DOC-002.AC02] a contributor can reproduce evaluation and routing repl
   test('[DOC-002.AC02] the oracle conformance pins verify statically, as documented', () => {
     const r = script('scripts/verification-conformance-check.mjs', ['--static']);
     assert.equal(r.status, 0, r.text);
-    assert.match(r.stdout, /8 adapter\(s\) conform \(static contract and pins only; execution was not requested\)/);
-    assert.match(REPRO, /8 adapter\(s\) conform \(static contract and pins only/);
+    assert.match(r.stdout, /10 adapter\(s\) conform \(static contract and pins only; execution was not requested\)/);
+    assert.match(REPRO, /10 adapter\(s\) conform \(static contract and pins only/);
   });
 
   test('[DOC-002.AC02] routing replay prints the documented denominators and controls, exits 0, makes no paid call, and is bounded', () => {
