@@ -135,6 +135,17 @@ Found and fixed on the way: a regular expression literal's `.exec(new URL(req.ur
 
 Self-scan baseline change, reviewed (694 to 698): `capabilities/proxy.js` 3 to 2 (the regex-literal false positive above, gone); `repair/cli.js` 3 to 5 (two more code-injection reports on stderr message templates, the class reviewed in M1); `repair/recipe-eval.js` 0 to 1 and `repair/recipes.js` 0 to 2 (synchronous reads on the CLI and verifier side, never in a request path). A check-then-read of the recipe ledger was real and was fixed, not baselined.
 
+## M4, first part: external finding intake
+
+Measured on 2026-11-16 on this checkout (macOS, userspace backend).
+
+| ID | Status | Changed paths | Verification | Evidence and limitation |
+| --- | --- | --- | --- | --- |
+| M4-01 SARIF and normalized intake, mapping, custody, deduplication, refutation | integration-tested (macOS) | `src/repair/import.js`, `src/repair/intake.js`, `src/repair/cli.js` (`repair import`, `repair plan --import`), artifact `imports`, fixtures `test/fixtures/repair/imports/` | `test/repair/repair-import.test.js`, `test/contracts/repair.contract.test.js` | SARIF 2.1.0 and `agentic-security/external-findings` 1.x, closed field sets. AC-13.5: an absolute path, a `..` escape, a file URI outside the project, another scheme, a link out of the project and reserved paths are rejected with reasons; message text is capped, inert `untrustedText`; no report field can set a family, policy, approval or execution. AC-13.4: mappings `exact`, `relocated` (snippet found once elsewhere), `renamed` (git rename since the reported revision) can be planned; `stale`, `ambiguous`, `missing`, `revision-mismatch`, `revision-unknown` cannot, and a moved HEAD refuses a stale import. Deduplication merges only the same file, line, CWE and snippet, keeping every source; the same CWE on another line stays separate. AC-13.2: the record is signed with the per-install key and a hand-edited one is refused; applying still needs the signed internal scan (an import never creates it), shown by a verified repair that is not applied until a real scan exists. AC-13.1: a request forgery the internal detector does not report is repaired and applied through the contract. AC-13.3: an imported SQL finding on code that already binds its parameters is `refuted-finding` and no candidate is judged. Accepted risk is an operator decision with a reason in the signed record. Not qualified against any particular tool's export: the test reports are hand-written SARIF in common shapes. |
+| M4-02 to M4-06 | open | | | Dependency, credential, infrastructure and artifact repair: the following parts of M4. |
+
+Self-scan: total unchanged at 698 (`repair/cli.js` 5 to 3, `repair/import.js` 0 to 2: a synchronous read on the CLI side, and a lifecycle heuristic reading the pure location-mapping function as an action on a resource).
+
 ## M3 and later
 
 | ID | Status | Note |

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-16T21:50:18.411Z",
-  "commit": "028f98ca579c7cfa7656db4e35646fa02014eb60",
+  "generatedAt": "2026-11-16T23:36:04.729Z",
+  "commit": "fcc7484590b5dfc22bf1718789d16d2a786ee2e7",
   "targets": {
     "hooks": {
       "total": 20,
@@ -344,9 +344,10 @@
         "posture/watch-mode.js": 1,
         "posture/workflow-installer.js": 2,
         "pr-comment.js": 1,
-        "repair/cli.js": 5,
+        "repair/cli.js": 3,
         "repair/contracts.js": 1,
         "repair/coordinator.js": 1,
+        "repair/import.js": 2,
         "repair/intake.js": 1,
         "repair/profile.js": 2,
         "repair/recipe-eval.js": 1,

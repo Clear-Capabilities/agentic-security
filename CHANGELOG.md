@@ -9,6 +9,20 @@
 > make the history less accurate, not more.
 
 
+## 0.200.0 - Verified remediation, milestone 4 (first part): external finding intake
+
+**Measured, 0.199.0:** `TIMINGS preflight=4s push=8s pr=4s checks=429s merge=5s verify=7s tag=2s release=255s npm=90s total=804s release-clock=269s`, 269 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.
+
+Findings from other tools can now be repaired through the same contract workflow, for the Labs capability `contract-repair`. Measured on macOS. Requirement-by-requirement record: `docs/verified-remediation/LEDGER.md`.
+
+- **Changed results, listed first.** No gate moved: repair challenge unchanged (41 cases, 0 of 33 unsafe accepted, 0 of 8 safe rejected), self-scan unchanged at 698.
+- **`agentic-security repair import --format sarif|normalized --file <report>`.** Reads a SARIF 2.1.0 log or the documented normalized format into a signed import record, then `repair plan --import <import-id> --finding <imported-id>` plans one finding. Executes nothing.
+- **A report is untrusted.** Locations outside the project (absolute paths, `..`, other schemes, links out, version control and verifier state) are rejected with reasons; message text is kept as inert, capped data; nothing in a report can set a family, a policy, an approval or execution.
+- **Mapped to the current source.** A finding is planned only when its location is exact, relocated by its snippet, or followed through a git rename since the reported revision. A stale, ambiguous or missing location, or a revision this repository does not have, blocks it with the reason.
+- **Merged with provenance.** Two tools reporting the same file, line, CWE and snippet become one finding with both sources; the same CWE on another line stays separate.
+- **Same custody.** Applying the repair of an imported finding still needs the signed internal scan; an import never creates it. A request forgery the internal detector does not report was repaired and applied this way; an imported SQL finding on code that already binds its parameters was refuted and left unchanged.
+- **Not in this release.** Dependency, credential, infrastructure and artifact repair (the rest of milestone 4); qualification against any particular tool's SARIF export.
+
 ## 0.199.0 - Verified remediation, milestone 3 (second part): repair recipes, password storage, per-profile support
 
 **Measured, 0.198.0:** `TIMINGS preflight=3s push=7s pr=4s checks=444s merge=5s verify=7s tag=2s release=314s npm=91s total=877s release-clock=328s`, 328 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.

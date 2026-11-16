@@ -33,7 +33,7 @@ Node applications, and Python WSGI applications (`"runtime": "python"` in the pr
    agentic-security repair plan --profile ../notes-profile.json --finding <finding-id>
    ```
 
-   The output lists every required obligation, the edit scope and what the contract does not observe. If the scanner did not report the finding, name it yourself with `--family sql-injection --file src/app.mjs`. Its custody is then `unresolved`.
+   The output lists every required obligation, the edit scope and what the contract does not observe. If the scanner did not report the finding, name it yourself with `--family sql-injection --file src/app.mjs`. Its custody is then `unresolved`. A finding from another tool can be imported instead: `repair import --format sarif --file report.sarif` maps each result to the current source and signs the record, and `repair plan --import <import-id> --finding <imported-id>` plans it. A report's paths and text are untrusted: locations outside the project are rejected and message text is never acted on.
 
 4. **Run.** Running executes the application and the candidates, so the operator enables it explicitly:
 
