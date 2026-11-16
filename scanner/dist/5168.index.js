@@ -20,7 +20,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(68962);
 /* harmony import */ var _intake_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(30356);
 /* harmony import */ var _contracts_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(20771);
-/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(86818);
+/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(89330);
 /* harmony import */ var _candidates_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4370);
 // `agentic-security repair plan|run|show|resume|cancel|verify|export` (verified-remediation PRD FR-18).
 //

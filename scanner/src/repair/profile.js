@@ -40,7 +40,8 @@ export function validateProfile(p) {
     if (typeof a.export !== 'string' || !IDENT.test(a.export)) errs.push('application.export must be an identifier');
     if (!Array.isArray(a.files) || !a.files.length || a.files.length > 60 || !a.files.every(isRelPath)) errs.push('application.files must list 1 to 60 relative paths');
     else if (!a.files.includes(a.entry)) errs.push('application.files must include the entry');
-    if (a.runtime !== undefined && a.runtime !== 'node') errs.push("application.runtime: only 'node' is supported");
+    if (a.runtime !== undefined && !['node', 'python'].includes(a.runtime)) errs.push("application.runtime must be 'node' or 'python'");
+    if (a.runtime === 'python' && !/\.py$/.test(String(a.entry))) errs.push('application.entry must be a .py file for the python runtime');
   }
   const d = p.database;
   if (!isPlainObject(d)) errs.push('database is required');
@@ -86,7 +87,20 @@ export function validateProfile(p) {
     const z = p.authorization;
     if (!isPlainObject(z)) errs.push('authorization must be an object');
     else {
-      keysOnly(errs, z, ['table', 'idColumn', 'contentColumn', 'objects', 'operations', 'policy'], 'authorization');
+      keysOnly(errs, z, ['table', 'idColumn', 'contentColumn', 'objects', 'operations', 'policy', 'controls'], 'authorization');
+      // Declared legitimate workflows outside the actor matrix (a public page, a health route): they must keep working after a repair.
+      if (z.controls !== undefined) {
+        if (!Array.isArray(z.controls) || z.controls.length > 32) errs.push('authorization.controls must be an array of at most 32');
+        else for (const [i, c] of z.controls.entries()) {
+          const w = `authorization.controls[${i}]`;
+          if (!isPlainObject(c)) { errs.push(`${w} must be an object`); continue; }
+          keysOnly(errs, c, ['id', 'actor', 'method', 'path', 'body', 'expectStatus', 'expectIncludes'], w);
+          if (typeof c.id !== 'string' || !SLUG.test(c.id)) errs.push(`${w}.id must be a slug`);
+          if (!actorIds.has(c.actor)) errs.push(`${w}.actor must name a declared actor`);
+          checkRequestShape(errs, c, w);
+          if (c.expectIncludes !== undefined && (!Array.isArray(c.expectIncludes) || !c.expectIncludes.every((x) => typeof x === 'string' && x))) errs.push(`${w}.expectIncludes must list strings`);
+        }
+      }
       for (const k of ['table', 'idColumn', 'contentColumn']) if (typeof z[k] !== 'string' || !IDENT.test(z[k])) errs.push(`authorization.${k} must be an identifier`);
       if (!Array.isArray(z.objects) || !z.objects.length) errs.push('authorization.objects must be a non-empty array');
       else for (const [i, o] of z.objects.entries()) {

@@ -229,14 +229,23 @@ export class FixAttemptBudgetExceededError extends Error {
   }
 }
 
-function _countPriorAttempts(log, stableId, findingId) {
+// One ATTEMPT is one patch application, not one file: a multi-file patch writes one ledger entry per file under the same
+// `attemptGroup` (the apply batch), and those entries count once. Entries of the group in progress do not count against it, so the
+// third file of a three-file patch is not refused as a third attempt. Entries written without a group (single-file callers, older
+// ledgers) count one each, as before.
+function _countPriorAttempts(log, stableId, findingId, currentGroup = null) {
+  const groups = new Set();
   let n = 0;
   for (const e of log) {
     if (e.reverted) continue;   // a clean revert resets the count
-    if (stableId && e.stableId === stableId) { n++; continue; }
-    if (findingId && e.findingId === findingId) { n++; }
+    const match = (stableId && e.stableId === stableId) || (findingId && e.findingId === findingId);
+    if (!match) continue;
+    if (e.attemptGroup) {
+      if (e.attemptGroup === currentGroup) continue;
+      groups.add(e.attemptGroup);
+    } else n++;
   }
-  return n;
+  return n + groups.size;
 }
 
 // FR-PROV §7.4 / M2 §2.2: how old was this finding, by which basis, at the
@@ -268,7 +277,7 @@ function _snapshotProvenanceAtFix(findingProvenance, appliedAt) {
 //   real-world meaning in this codebase's callers — writing '' back would
 //   leave a phantom empty file where none existed before, not a true
 //   rollback).
-export async function applyFix({ scanRoot, file, originalContent, newContent, findingId, ruleId, vuln, stableId, fileExisted = true, findingProvenance = null }) {
+export async function applyFix({ scanRoot, file, originalContent, newContent, findingId, ruleId, vuln, stableId, fileExisted = true, findingProvenance = null, attemptGroup = null }) {
   return _withLogLock(scanRoot, async () => {
     ensure(scanRoot);
     const absFile = path.resolve(scanRoot, file);
@@ -278,7 +287,7 @@ export async function applyFix({ scanRoot, file, originalContent, newContent, fi
     // Budget check BEFORE backup, so we don't accumulate dead .bak files
     // for refused attempts.
     const priorLog = readLog(scanRoot);
-    const priorAttempts = _countPriorAttempts(priorLog, resolvedStableId, findingId);
+    const priorAttempts = _countPriorAttempts(priorLog, resolvedStableId, findingId, attemptGroup);
     if (priorAttempts >= MAX_ATTEMPTS_PER_KEY) {
       throw new FixAttemptBudgetExceededError(
         resolvedStableId || findingId || '(unknown-key)',
@@ -306,6 +315,7 @@ export async function applyFix({ scanRoot, file, originalContent, newContent, fi
       status: 'pending',
       reverted: false,
       attemptOrdinal: priorAttempts + 1,
+      ...(attemptGroup ? { attemptGroup } : {}),
       provenanceAtFix: _snapshotProvenanceAtFix(findingProvenance, appliedAt),
     };
     // Phase 2: log entry marked pending + fsync.

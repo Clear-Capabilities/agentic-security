@@ -160,14 +160,23 @@ export function sqlParameterizeRecipe() {
   };
 }
 
-/** User-supplied candidates, in order. `items` are {files, strategy?, rationale?}. */
+/**
+ * User-supplied candidates, in order. `items` are {files, strategy?, rationale?, round?}. Items that name a `round` are offered together
+ * in that round (a portfolio of strategies); items without one are offered one per round, in order.
+ */
 export function queueProposer(items, identity = 'user-supplied') {
   const queue = [...items];
+  const toProposal = (it) => ({ generator: 'user-supplied', generatorIdentity: identity, files: it.files, strategy: it.strategy || null, rationale: it.rationale || null });
   return {
     id: identity,
-    async propose({ max }) {
-      const take = queue.splice(0, Math.max(1, max ? 1 : 1));
-      return { proposals: take.map((it) => ({ generator: 'user-supplied', generatorIdentity: identity, files: it.files, strategy: it.strategy || null, rationale: it.rationale || null })), notes: [] };
+    async propose({ round, max }) {
+      const grouped = queue.filter((it) => Number.isInteger(it.round));
+      let take;
+      if (grouped.length) {
+        take = grouped.filter((it) => it.round === round).slice(0, Math.max(1, max || 1));
+        for (const t of take) queue.splice(queue.indexOf(t), 1);
+      } else take = queue.splice(0, 1);
+      return { proposals: take.map(toProposal), notes: [] };
     },
     remaining: () => queue.length,
   };

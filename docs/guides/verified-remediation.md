@@ -11,7 +11,7 @@ This is a Labs capability. The shapes, outcomes and exit codes are in the [repai
 | `sql-injection` | The application's own request handler over a real SQLite file. Attack probes go into each declared untrusted value; a planted secret belonging to another user must not appear in any response. Declared legitimate values must still return their data, including values the original gets wrong, such as a title with a quote. |
 | `object-authorization` | Every declared actor (owner, another member, an admin, another tenant, anonymous) against every declared object and operation. A denied read must not disclose the object's planted secret. A denied update must leave the stored value unchanged, whatever status code the application returns. Allowed actors must keep working. |
 
-Node applications over SQLite only. Requests run one at a time in one process.
+Node applications, and Python WSGI applications (`"runtime": "python"` in the profile), over SQLite. Requests run one at a time in one process.
 
 ## The workflow
 
@@ -37,7 +37,7 @@ Node applications over SQLite only. Requests run one at a time in one process.
    agentic-security repair run --plan <plan.json> --allow-execution
    ```
 
-   For a SQL finding the deterministic recipe proposes a parameterized query. Supply your own candidates with `--candidates candidates.json` (`{"candidates":[{"files":{"src/app.mjs":"..."}}]}`); they are judged in order, one per round, and each failed candidate's counterexample is recorded.
+   For a SQL finding the deterministic recipe proposes a parameterized query. Supply your own candidates with `--candidates candidates.json` (`{"candidates":[{"files":{"src/app.mjs":"..."}}]}`); they are judged in order, one per round, and each failed candidate's counterexample is recorded. Give items a `round` number to offer several in the same round: every candidate of a round is judged, each one must also withstand the counterexamples its siblings produced (cross-execution), the survivors are ranked by fewer material-risk categories, fewer files, fewer edited lines and generator, and the sealed set runs on them in that order. A candidate that differs from an earlier one only in whitespace or comments is a duplicate and is not run.
 
 5. **Apply**, if you want the verified patch written:
 

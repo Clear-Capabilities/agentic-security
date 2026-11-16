@@ -512,14 +512,23 @@ function sqlParameterizeRecipe() {
   };
 }
 
-/** User-supplied candidates, in order. `items` are {files, strategy?, rationale?}. */
+/**
+ * User-supplied candidates, in order. `items` are {files, strategy?, rationale?, round?}. Items that name a `round` are offered together
+ * in that round (a portfolio of strategies); items without one are offered one per round, in order.
+ */
 function queueProposer(items, identity = 'user-supplied') {
   const queue = [...items];
+  const toProposal = (it) => ({ generator: 'user-supplied', generatorIdentity: identity, files: it.files, strategy: it.strategy || null, rationale: it.rationale || null });
   return {
     id: identity,
-    async propose({ max }) {
-      const take = queue.splice(0, Math.max(1, max ? 1 : 1));
-      return { proposals: take.map((it) => ({ generator: 'user-supplied', generatorIdentity: identity, files: it.files, strategy: it.strategy || null, rationale: it.rationale || null })), notes: [] };
+    async propose({ round, max }) {
+      const grouped = queue.filter((it) => Number.isInteger(it.round));
+      let take;
+      if (grouped.length) {
+        take = grouped.filter((it) => it.round === round).slice(0, Math.max(1, max || 1));
+        for (const t of take) queue.splice(queue.indexOf(t), 1);
+      } else take = queue.splice(0, 1);
+      return { proposals: take.map(toProposal), notes: [] };
     },
     remaining: () => queue.length,
   };
@@ -543,6 +552,8 @@ __webpack_require__.d(__webpack_exports__, {
 
 // EXTERNAL MODULE: external "node:fs"
 var external_node_fs_ = __webpack_require__(73024);
+// EXTERNAL MODULE: external "node:child_process"
+var external_node_child_process_ = __webpack_require__(31421);
 // EXTERNAL MODULE: external "node:path"
 var external_node_path_ = __webpack_require__(76760);
 // EXTERNAL MODULE: ./src/posture/assurance/identity.js
@@ -596,7 +607,8 @@ function validateProfile(p) {
     if (typeof a.export !== 'string' || !IDENT.test(a.export)) errs.push('application.export must be an identifier');
     if (!Array.isArray(a.files) || !a.files.length || a.files.length > 60 || !a.files.every(schemas/* isRelPath */.ji)) errs.push('application.files must list 1 to 60 relative paths');
     else if (!a.files.includes(a.entry)) errs.push('application.files must include the entry');
-    if (a.runtime !== undefined && a.runtime !== 'node') errs.push("application.runtime: only 'node' is supported");
+    if (a.runtime !== undefined && !['node', 'python'].includes(a.runtime)) errs.push("application.runtime must be 'node' or 'python'");
+    if (a.runtime === 'python' && !/\.py$/.test(String(a.entry))) errs.push('application.entry must be a .py file for the python runtime');
   }
   const d = p.database;
   if (!(0,schema_kit/* isPlainObject */.Qd)(d)) errs.push('database is required');
@@ -642,7 +654,20 @@ function validateProfile(p) {
     const z = p.authorization;
     if (!(0,schema_kit/* isPlainObject */.Qd)(z)) errs.push('authorization must be an object');
     else {
-      keysOnly(errs, z, ['table', 'idColumn', 'contentColumn', 'objects', 'operations', 'policy'], 'authorization');
+      keysOnly(errs, z, ['table', 'idColumn', 'contentColumn', 'objects', 'operations', 'policy', 'controls'], 'authorization');
+      // Declared legitimate workflows outside the actor matrix (a public page, a health route): they must keep working after a repair.
+      if (z.controls !== undefined) {
+        if (!Array.isArray(z.controls) || z.controls.length > 32) errs.push('authorization.controls must be an array of at most 32');
+        else for (const [i, c] of z.controls.entries()) {
+          const w = `authorization.controls[${i}]`;
+          if (!(0,schema_kit/* isPlainObject */.Qd)(c)) { errs.push(`${w} must be an object`); continue; }
+          keysOnly(errs, c, ['id', 'actor', 'method', 'path', 'body', 'expectStatus', 'expectIncludes'], w);
+          if (typeof c.id !== 'string' || !SLUG.test(c.id)) errs.push(`${w}.id must be a slug`);
+          if (!actorIds.has(c.actor)) errs.push(`${w}.actor must name a declared actor`);
+          checkRequestShape(errs, c, w);
+          if (c.expectIncludes !== undefined && (!Array.isArray(c.expectIncludes) || !c.expectIncludes.every((x) => typeof x === 'string' && x))) errs.push(`${w}.expectIncludes must list strings`);
+        }
+      }
       for (const k of ['table', 'idColumn', 'contentColumn']) if (typeof z[k] !== 'string' || !IDENT.test(z[k])) errs.push(`authorization.${k} must be an identifier`);
       if (!Array.isArray(z.objects) || !z.objects.length) errs.push('authorization.objects must be a non-empty array');
       else for (const [i, o] of z.objects.entries()) {
@@ -717,6 +742,7 @@ function policyAllows(policy, actor, object, actorsById) {
 
 
 
+
 const CONTRACT_BUILDER_VERSION = '1';
 
 // Attack probes for a value placed in a SQL string literal. Split once, statically: the development set feeds back to candidate
@@ -754,7 +780,13 @@ function snapshotSource(root, profile) {
   for (const rel of ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', '.nvmrc']) {
     try { configDigests[rel] = (0,identity/* digestOf */.ol)(external_node_fs_.readFileSync(external_node_path_.join(realRoot, rel), 'utf8')); } catch { /* absent */ }
   }
-  configDigests.runtime = (0,identity/* digestOf */.ol)({ node: process.versions.node, sqlite: process.versions.sqlite || null });
+  let python = null;
+  if (profile.application.runtime === 'python') {
+    for (const p of ['/usr/bin/python3', '/opt/homebrew/bin/python3', '/usr/local/bin/python3']) {
+      try { if (external_node_fs_.statSync(p).isFile()) { python = String((0,external_node_child_process_.spawnSync)(p, ['-I', '-c', 'import sys, sqlite3; print(sys.version.split()[0], sqlite3.sqlite_version)'], { encoding: 'utf8', timeout: 5000 }).stdout || '').trim() || null; break; } } catch { /* next */ }
+    }
+  }
+  configDigests.runtime = (0,identity/* digestOf */.ol)({ node: process.versions.node, sqlite: process.versions.sqlite || null, ...(profile.application.runtime === 'python' ? { python } : {}) });
   return { files, missing, sourceDigest: (0,identity/* digestOf */.ol)(files), configDigests };
 }
 
@@ -769,6 +801,7 @@ function obligation(kind, id, inputs, { required = true, origin = 'generated-fro
 }
 
 const appInputs = (profile, requests, stateChecks = []) => ({
+  ...(profile.application.runtime === 'python' ? { runtime: 'python' } : {}),
   export: profile.application.export, schemaSql: profile.database.schemaSql, seed: profile.database.seed, requests, stateChecks,
 });
 
@@ -831,6 +864,9 @@ function authzObligations(profile, actors, blocked) {
     if (deniedWriters.length) attackChecks.push({ id: `${obj.id.replace(/-/g, '_')}_unchanged`, role: 'attack', sql: `SELECT count(*) AS n FROM ${z.table} WHERE ${z.idColumn} = ? AND ${z.contentColumn} = ?`, params: [obj.rowId, `{{secret:${obj.secret}}}`], expect: [{ n: 1 }], guards: deniedWriters });
     if (lastWriter) controlChecks.push({ id: `${obj.id.replace(/-/g, '_')}_written`, role: 'control', sql: `SELECT count(*) AS n FROM ${z.table} WHERE ${z.idColumn} = ? AND ${z.contentColumn} = ?`, params: [obj.rowId, lastWriter], expect: [{ n: 1 }] });
   }
+  for (const c of z.controls || []) {
+    writeControls.push({ id: `control_${c.id.replace(/-/g, '_')}`, role: 'control', ...reqOf(c, actors[c.actor], {}), expect: { status: c.expectStatus || [200], ...(c.expectIncludes ? { bodyIncludes: c.expectIncludes } : {}) } });
+  }
   if (!readControls.length) blocked.push('authorization: no actor is allowed to read any declared object, so the application cannot be shown to work');
   if (!reads.length && !writeAttacks.length) blocked.push('authorization: the policy allows every actor everything, so there is nothing to deny');
   if (blocked.length) return { obligations: out, matrix };
@@ -886,7 +922,7 @@ function buildContract(o) {
     findingRefs: [o.finding.findingId || o.finding.stableId || o.finding.id],
     rootCauseGroup: (0,identity/* digestOf */.ol)({ family: o.family, file: findingFile }),
     sourceCommit: o.commit ?? null, sourceDigest: o.source.sourceDigest, configDigests: o.source.configDigests,
-    profile: { application: profile.application, database: { engine: profile.database.engine }, runtime: 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
+    profile: { application: profile.application, database: { engine: profile.database.engine }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
     obligations, policyFacts,
     editScope: { allowed: [...profile.application.files], prohibited: [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
     executionPolicy: { execution: 'trust-boundary', network: 'denied', model: 'none-unless-operator-configured' },
@@ -909,7 +945,7 @@ function obligationSummary(contract) {
 
 /***/ }),
 
-/***/ 86818:
+/***/ 89330:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -1138,6 +1174,75 @@ async function shrinkCounterexample(ob, inputs, files, violatingId, run, { maxRo
 
 // EXTERNAL MODULE: ./src/repair/candidates.js
 var candidates = __webpack_require__(4370);
+;// CONCATENATED MODULE: ./src/repair/portfolio.js
+// Candidate portfolios (verified-remediation PRD FR-09, M2-01, M2-02): structural deduplication, cross-execution and deterministic ranking.
+//
+//   structuralKey     Two candidates that differ only in whitespace and comments are the same strategy: the key is a digest of each
+//                     changed file with comments and whitespace removed. A structural duplicate consumes an attempt and is not run.
+//   crossInputs       Every counterexample any candidate of the round produced (a development attack that disclosed a secret or
+//                     broke a state check) becomes an extra attack request for every OTHER surviving candidate. A candidate that
+//                     passed its own run but fails a sibling's counterexample is rejected before ranking (T-26). Sealed failures are
+//                     never shared: their content does not leave the coordinator.
+//   rankSurvivors     Deterministic order over candidates that passed every development obligation and the cross-execution:
+//                     fewer material-risk categories, fewer files, fewer edited lines, generator preference (deterministic recipe,
+//                     then user-supplied, then model), then candidate id. No model-supplied score is read.
+
+
+const stripComments = (t) => String(t)
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1')
+  .replace(/(^|\n)\s*#[^\n]*/g, '$1');
+
+function structuralKey(files) {
+  const norm = {};
+  for (const [rel, t] of Object.entries(files || {}).sort(([a], [b]) => a.localeCompare(b))) norm[rel] = t === null ? null : stripComments(t).replace(/\s+/g, '');
+  return (0,identity/* digestOf */.ol)(norm);
+}
+
+const GENERATOR_ORDER = { 'deterministic-recipe': 0, 'user-supplied': 1, 'configured-model': 2 };
+
+function rankSurvivors(survivors) {
+  const key = (s) => [
+    s.candidate.scope?.material?.categories?.length ?? 0,
+    s.candidate.scope?.totals?.files ?? 99,
+    s.candidate.scope?.totals?.editedLines ?? 1e9,
+    GENERATOR_ORDER[s.candidate.generator] ?? 9,
+  ];
+  return [...survivors].sort((a, b) => {
+    const ka = key(a); const kb = key(b);
+    for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i];
+    return a.candidate.candidateId.localeCompare(b.candidate.candidateId);
+  });
+}
+
+/**
+ * The attack requests that disclosed a planted secret in a failed run, as shareable requests (`cross_<n>` ids). Only disclosure attacks are
+ * shared: a durable-state attack is judged by an object-level check the sibling runs anyway. Content stays inside the coordinator.
+ */
+function sharedAttacksFrom(inputs, details, extra = []) {
+  const byId = Object.fromEntries(inputs.requests.map((r) => [r.id, r]));
+  const out = [];
+  for (const v of details?.attackViolations || []) {
+    if (v.effect !== 'secret-disclosed') continue;
+    const r = byId[v.id];
+    if (r && r.role === 'attack') out.push(r);
+  }
+  for (const r of extra) if (r && r.role === 'attack' && r.forbid?.secrets?.length) out.push(r);
+  return out;
+}
+
+/** Inputs carrying ONLY the controls and the shared attacks (deduplicated by request shape), for the cross-execution run. */
+function crossInputs(inputs, shared) {
+  const seen = new Set(); const attacks = [];
+  for (const r of shared) {
+    const k = (0,identity/* digestOf */.ol)({ m: r.method, p: r.path, b: r.body ?? null, h: r.headers ?? {} });
+    if (seen.has(k)) continue;
+    seen.add(k);
+    attacks.push({ ...r, id: `cross_${attacks.length}` });
+  }
+  return { ...inputs, requests: [...inputs.requests.filter((r) => r.role === 'control'), ...attacks], stateChecks: [] };
+}
+
 ;// CONCATENATED MODULE: ./src/repair/coordinator.js
 // The repair coordinator (verified-remediation PRD section 5.2, FR-06, FR-07, FR-17): one state machine for every route (CLI, MCP,
 // headless callers, batch), calling the existing canonical services and adding none of its own.
@@ -1160,6 +1265,7 @@ var candidates = __webpack_require__(4370);
 //     deadline (an AbortSignal that reaches the oracle runner, which ends the process tree), and identical candidates consume an attempt
 //     without being re-run (AC-07.6). A budget stop is `partial`, never a proof.
 //   - Sealed obligations run only on a candidate that passed everything else; their outcome is recorded but never fed back.
+
 
 
 
@@ -1373,12 +1479,16 @@ async function runRepair(o) {
     }
     if (Object.keys(capped).length) record.reasons.push(`attack cases over the per-candidate budget were omitted: ${Object.entries(capped).map(([k, n]) => `${k} ${n}`).join(', ')}; the verification is partial for those cases`);
 
-    // 4. rounds
+    // 4. rounds. Each round is a portfolio (FR-09): every proposal is judged on the development obligations; counterexamples one
+    // candidate produced are run against every other survivor (cross-execution, T-26); the survivors are ranked deterministically and
+    // the sealed set runs in rank order on exactly one candidate at a time. Structural duplicates consume an attempt without running.
     const order = { 'app-behaviour-preserved': 0, 'app-behaviour-after': 1, 'app-attack-blocked': 2 };
     const devObs = plan.contract.obligations.filter((x) => x.oracleId && x.kind !== 'app-attack-sealed').sort((a, b) => order[a.kind] - order[b.kind]);
     const sealedObs = plan.contract.obligations.filter((x) => x.kind === 'app-attack-sealed');
-    const seen = new Set();
+    const attackOb = devObs.find((x) => x.kind === 'app-attack-blocked');
+    const seen = new Set(); const seenStructure = new Set();
     let feedback = null; let selected = null; let anyInconclusive = false; let anyProposal = false;
+    const resultOf = (ob, res, status, reason) => ({ obligation: ob.id, kind: ob.kind, observed: res.observed, status, reason: reason ?? res.reason, receiptDigest: res.receipt?.receiptDigest ?? null, filesDigest: res.filesDigest, inputsDigest: res.inputsDigest, live: res.receipt });
     for (let round = 1; round <= budgets.rounds && !selected; round++) {
       record.rounds = round; record.budget.used.rounds = round;
       const proposals = [];
@@ -1392,33 +1502,37 @@ async function runRepair(o) {
       }
       if (!proposals.length) break;
       anyProposal = true;
+      const survivors = []; const shared = []; const roundFeedback = [];
+      // 4a. development obligations, every proposal
       for (const prop of proposals) {
         if (stopped()) return stoppedResult();
         record.budget.used.proposals++;
         const chk = (0,candidates/* checkCandidate */.We)(plan.contract, original, prop.files);
         const summary = { round, generator: prop.generator, generatorIdentity: prop.generatorIdentity, strategy: prop.strategy || null };
-        if (!chk.ok) { record.candidates.push({ ...summary, status: 'refused', reasons: chk.reasons, scope: chk.scope.totals }); feedback = { refused: chk.reasons }; emit({ kind: 'candidate-refused', reasons: chk.reasons }); continue; }
+        if (!chk.ok) { record.candidates.push({ ...summary, status: 'refused', reasons: chk.reasons, scope: chk.scope.totals }); roundFeedback.push({ refused: chk.reasons }); emit({ kind: 'candidate-refused', reasons: chk.reasons }); continue; }
         const made = (0,candidates/* makeCandidate */.El)(plan.contract, original, prop, chk);
         if (!made.candidate) { record.candidates.push({ ...summary, status: 'refused', reasons: made.problems }); continue; }
         const cand = made.candidate;
         if (seen.has(cand.patchDigest)) { record.candidates.push({ ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, status: 'duplicate', reasons: ['an identical patch was already judged; it consumes an attempt and is not run again'] }); continue; }
-        seen.add(cand.patchDigest);
+        const skey = structuralKey(cand.files);
+        if (seenStructure.has(skey)) { seen.add(cand.patchDigest); record.candidates.push({ ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, status: 'duplicate', reasons: ['structurally identical to a patch already judged (differs only in whitespace or comments); it consumes an attempt and is not run again'] }); continue; }
+        seen.add(cand.patchDigest); seenStructure.add(skey);
         writeJson(external_node_path_.join(dir, 'candidates', `${cand.candidateId.replace(':', '-')}.json`), cand);
         const patched = { ...original };
         for (const [rel, t] of Object.entries(cand.files)) { if (t === null) delete patched[rel]; else patched[rel] = t; }
-        const cs = { ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, scope: cand.scope, status: 'pending', results: [] };
+        const cs = { ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, structuralKey: skey, scope: cand.scope, status: 'pending', results: [] };
         record.candidates.push(cs);
         emit({ kind: 'candidate', candidateId: cand.candidateId, round });
         const t0 = Date.now();
-        // Every development obligation runs, so the record attributes every failure (VerificationRun: full failure attribution); the
-        // counterexample fed back is the first security failure, else the first behaviour failure.
+        // Every development obligation runs, so the record attributes every failure; the counterexample fed back is the first security
+        // failure, else the first behaviour failure.
         let verdict = 'passed'; const failures = [];
         for (const ob of devObs) {
           const inputs = base.effectiveInputs[ob.id];
           const res = await run(ob, patched, inputs);
           if (stopped()) return stoppedResult();
           const status = judge(res.observed, ob.patchedExpectation);
-          cs.results.push({ obligation: ob.id, kind: ob.kind, observed: res.observed, status, reason: res.reason, receiptDigest: res.receipt?.receiptDigest ?? null, filesDigest: res.filesDigest, inputsDigest: res.inputsDigest, live: res.receipt });
+          cs.results.push(resultOf(ob, res, status));
           if (status === 'failed') failures.push({ ob, inputs, res });
           else if (status !== 'passed' && verdict === 'passed') verdict = status === 'cancelled' ? 'cancelled' : 'inconclusive';
         }
@@ -1427,34 +1541,63 @@ async function runRepair(o) {
           const { ob, inputs, res } = failures.find((f) => f.ob.kind === 'app-attack-blocked') || failures[0];
           let cx = counterexampleFrom(ob, inputs, res, actorLookup(plan.actors));
           const firstSecret = (res.details?.attackViolations || []).find((v) => v.effect === 'secret-disclosed');
+          let shrunk = null;
           if (firstSecret && ob.kind === 'app-attack-blocked') {
             const sh = await shrinkCounterexample(ob, inputs, patched, firstSecret.id, run, { maxRounds: 4 });
             if (stopped()) return stoppedResult();
+            shrunk = sh.request;
             cx = { ...cx, request: { method: sh.request.method, path: sh.request.path, body: sh.request.body ?? null }, shrunkFrom: { method: sh.original.method, path: sh.original.path, body: sh.original.body ?? null }, shrinkRuns: sh.runs, propertyPreserved: sh.preserved };
           }
           cx.alsoFailed = failures.filter((f) => f.ob.id !== ob.id).map((f) => f.ob.id);
           record.counterexamples.push({ candidateId: cand.candidateId, ...cx });
-          feedback = { candidateId: cand.candidateId, counterexample: cx };
+          roundFeedback.push({ candidateId: cand.candidateId, counterexample: cx });
+          for (const f of failures.filter((x) => x.ob.kind === 'app-attack-blocked')) shared.push(...sharedAttacksFrom(f.inputs, f.res.details, shrunk ? [shrunk] : []));
         }
-        if (verdict === 'passed') {
-          const central = await centralVerify(o, plan, cand, budgets);
-          cs.results.push(central);
-          if (central.status !== 'passed') { verdict = central.status === 'failed' ? 'failed' : 'inconclusive'; if (central.status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: 'central-verifier', property: 'central-verifier', message: central.reason }); feedback = { candidateId: cand.candidateId, counterexample: { obligation: 'central-verifier', message: central.reason } }; } }
+        cs.wallMs = Date.now() - t0;
+        if (verdict === 'inconclusive') anyInconclusive = true;
+        if (verdict === 'passed') survivors.push({ cand, cs, patched });
+        else cs.status = verdict === 'failed' ? 'rejected' : verdict;
+      }
+      // 4b. cross-execution: a survivor must also withstand every counterexample its siblings produced this round
+      if (shared.length && attackOb && survivors.length) {
+        const cin = crossInputs(base.effectiveInputs[attackOb.id], shared);
+        for (const s of [...survivors]) {
+          const res = await run(attackOb, s.patched, cin);
+          if (stopped()) return stoppedResult();
+          const status = judge(res.observed, attackOb.patchedExpectation);
+          s.cs.crossExecution = { attacks: cin.requests.filter((r) => r.role === 'attack').length, status, reason: res.reason };
+          if (status !== 'passed') {
+            s.cs.status = status === 'failed' ? 'rejected' : 'inconclusive';
+            if (status === 'failed') record.counterexamples.push({ candidateId: s.cand.candidateId, obligation: `${attackOb.id} (cross-execution)`, property: 'secret-disclosed', message: 'a counterexample found against a sibling candidate in this round also defeats this one' });
+            else anyInconclusive = true;
+            survivors.splice(survivors.indexOf(s), 1);
+          }
         }
+      }
+      // 4c. rank, then the central verifier and the sealed set in rank order
+      const ranked = rankSurvivors(survivors.map((s) => ({ ...s, candidate: s.cand })));
+      ranked.forEach((s, i) => { s.cs.rank = i + 1; });
+      for (const s of ranked) {
+        if (selected) { s.cs.status = 'passed-not-selected'; continue; }
+        const { cand, cs, patched } = s;
+        let verdict = 'passed';
+        const central = await centralVerify(o, plan, cand, budgets);
+        cs.results.push(central);
+        if (central.status !== 'passed') { verdict = central.status === 'failed' ? 'failed' : 'inconclusive'; if (central.status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: 'central-verifier', property: 'central-verifier', message: central.reason }); roundFeedback.push({ candidateId: cand.candidateId, counterexample: { obligation: 'central-verifier', message: central.reason } }); } }
         if (verdict === 'passed') {
           for (const ob of sealedObs) {
             const res = await run(ob, patched, base.effectiveInputs[ob.id]);
             if (stopped()) return stoppedResult();
             const status = judge(res.observed, ob.patchedExpectation);
-            cs.results.push({ obligation: ob.id, kind: ob.kind, observed: res.observed, status, reason: status === 'failed' ? 'a sealed held-out check failed' : res.reason, receiptDigest: res.receipt?.receiptDigest ?? null, filesDigest: res.filesDigest, inputsDigest: res.inputsDigest, live: res.receipt });
-            if (status !== 'passed') { verdict = status === 'failed' ? 'failed' : 'inconclusive'; if (status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: ob.id, sealed: true, message: 'a sealed held-out check failed; its content is not disclosed to candidate generation' }); feedback = { candidateId: cand.candidateId, counterexample: { obligation: ob.id, sealed: true, message: 'a sealed held-out check failed' } }; } break; }
+            cs.results.push(resultOf(ob, res, status, status === 'failed' ? 'a sealed held-out check failed' : undefined));
+            if (status !== 'passed') { verdict = status === 'failed' ? 'failed' : 'inconclusive'; if (status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: ob.id, sealed: true, message: 'a sealed held-out check failed; its content is not disclosed to candidate generation' }); roundFeedback.push({ candidateId: cand.candidateId, counterexample: { obligation: ob.id, sealed: true, message: 'a sealed held-out check failed' } }); } break; }
           }
         }
-        cs.wallMs = Date.now() - t0;
         if (verdict === 'inconclusive') anyInconclusive = true;
-        if (verdict === 'passed' && promotable(plan.contract, cs, patched)) { cs.status = 'verified-for-contract'; selected = { cand, cs }; break; }
+        if (verdict === 'passed' && promotable(plan.contract, cs, patched)) { cs.status = 'verified-for-contract'; selected = { cand, cs }; continue; }
         cs.status = verdict === 'passed' ? 'inconclusive' : verdict === 'failed' ? 'rejected' : verdict;
       }
+      feedback = roundFeedback.length ? { round, items: roundFeedback, ...roundFeedback[roundFeedback.length - 1] } : feedback;
     }
     cleanup();
     for (const c of record.candidates) for (const r of c.results || []) delete r.live;
@@ -1525,7 +1668,7 @@ async function centralVerify(o, plan, cand, budgets) {
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
 /* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(71130);
 /* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(68962);
-/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(86818);
+/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(89330);
 // Plan inputs, resolved ONE way for every route (verified-remediation PRD AC-04.5): the CLI's `repair plan` and the MCP tool
 // `repair_plan` both call `planFromInputs`, so the same finding, profile and source give the same contract and obligations.
 //

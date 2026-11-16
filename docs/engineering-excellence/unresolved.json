@@ -114,7 +114,7 @@
     },
     {
       "id": "U-12",
-      "title": "Fix verification: on the fix, apply_fix and verify_fix routes, authorization and IDOR patches are still judged by source-level tests and the footprint heuristic. Since 0.196.0 the separate `repair` workflow (Labs) judges them by authenticated requests against durable state, for Node applications over SQLite, on macOS only",
+      "title": "Fix verification: on the fix, apply_fix and verify_fix routes, authorization and IDOR patches are still judged by source-level tests and the footprint heuristic. Since 0.196.0 the separate `repair` workflow (Labs) judges them by authenticated requests against durable state, for Node and Python (WSGI) applications over SQLite, on macOS only",
       "priority": "P1",
       "blocksRelease": false,
       "task": "E3-08",

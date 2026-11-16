@@ -87,10 +87,26 @@ Measured on 2026-11-16 on this checkout (macOS, userspace confinement backend). 
 
 Self-scan baseline change, reviewed (685 to 693): `repair/cli.js` 3 (two code-injection reports on stderr message templates, one synchronous read: a CLI, not a server), `repair/contracts.js`, `repair/coordinator.js`, `repair/intake.js` 1 each (synchronous reads in CLI-side code), `repair/profile.js` 2 (inline role comparisons in `policyAllows`, which evaluates the operator's declared test policy to build the actor matrix and gates no request). One TOCTOU report in `coordinator.js` was real and was fixed, not baselined.
 
-## M2 and later
+## M2: candidate portfolios and causal multi-file repair
+
+Measured on 2026-11-16 on this checkout (macOS, userspace backend). Linux execution is still open (see M1).
+
+| ID | Status | Changed paths | Verification | Evidence and limitation |
+| --- | --- | --- | --- | --- |
+| M2-01 portfolios, structural deduplication, cross-execution | integration-tested | `src/repair/portfolio.js`, `src/repair/coordinator.js`, `src/repair/candidates.js` (`round` grouping) | `test/repair/repair-workflow.test.js` (portfolio describe) | Every proposal of a round is judged; counterexamples that disclosed a secret against one candidate are re-run against every survivor (T-26: an overfitted candidate that passed all its own obligations is rejected by a sibling's shrunk counterexample before ranking); a whitespace-or-comment variant is a structural duplicate and is not run. Only disclosure attacks are shared; durable-state attacks are judged by the object-level check every candidate runs. |
+| M2-02 structured feedback and deterministic ranking | integration-tested | `src/repair/portfolio.js` | same | Survivors ranked by material-risk categories, files, edited lines, generator, then candidate id, all coordinator-computed; the sealed set runs in rank order and the first passing candidate is selected, the rest recorded `passed-not-selected`. Feedback to the next round carries every counterexample of the round, sealed failures without content. No model consumes the feedback yet. |
+| M2-03 root-cause grouping and coordinated repair | integration-tested | fixture `test/fixtures/repair/authz-shared`, `src/repair/profile.js` (`authorization.controls`) | `test/repair/repair-workflow.test.js` (shared root cause describe) | A helper every route uses lacks the ownership check: fixing one caller is rejected (the sibling route is still exposed), putting the check inside the shared helper is rejected (the public page, a declared safe caller, breaks), and the coordinated three-file fix is verified. Findings are not yet grouped automatically: one contract covers the declared application, and its `rootCauseGroup` is the family and the finding's file. |
+| M2-04 atomic multi-file application | integration-tested | `src/posture/fix-history.js`, `src/fix/apply-fix-service.js` | `test/repair/repair-workflow.test.js` (M2-04), `test/repair/attempt-budget.test.js` | A crash between files of the three-file repair (the apply service's fault seam) is reverted whole on recovery, and the repair then applies. Defect found and fixed on the way: the per-finding attempt budget counted one attempt per FILE, so any patch of three or more files was refused on its own third file at the default budget of two; it now counts one attempt per apply batch (`attemptGroup`), and separate attempts are still limited. |
+| M2-05 PostgreSQL profile | blocked | | | No PostgreSQL server is installed on the measured host and none runs in the trust boundary; installing one is an operator decision. Not claimed. |
+| M2-06 Python profile | integration-tested (macOS) | `src/posture/oracles/app-adapters.js` (verifier-authored WSGI driver inside the digest-checked harness), `src/repair/contracts.js`, fixture `test/fixtures/repair/sql-notes-py` | `test/repair/repair-workflow.test.js` (Python describe), `node scripts/verification-conformance-check.mjs --require-execution` | A WSGI application's factory gets a real `sqlite3` connection; each declared request is a real WSGI environ (no HTTP server). Bound parameters are verified for the contract; backslash escaping still leaks and is rejected. The interpreter is resolved by the verifier from fixed paths and runs with `-I`; the Python and SQLite versions enter the contract identity. No Python recipe; frameworks beyond plain WSGI are not exercised. |
+| M2-07 real-model integration | blocked | | | No model endpoint is configured in this repository; no model proposer is wired. Not claimed. |
+
+Self-scan baseline change, reviewed (693 to 694): `posture/oracles/app-adapters.js` 1, a synchronous-I/O report on `findPython`'s `statSync` over three fixed interpreter paths, called once per oracle run on the verifier side, never in a request path.
+
+## M3 and later
 
 | ID | Status | Note |
 | --- | --- | --- |
-| FR-09 to FR-12 (P1) | open | |
-| FR-13 to FR-16 (P2) | open | |
+| FR-11, FR-12 and M3 (recipes, SSRF and filesystem families, crypto migrations) | open | |
+| FR-13 to FR-16 and M4 (SARIF intake, dependency, credential and infrastructure repair, artifact and staging) | open | |
 | Section 8 comparison | blocked | Needs configured real model endpoints, an independent adjudicated task population and protected grading; none exists in this repository. No comparative claim is made. |

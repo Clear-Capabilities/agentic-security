@@ -20,6 +20,7 @@
 // A missing prerequisite (no seed secret to protect, no read operation, an application file that does not exist) makes the contract
 // `blocked` with the reason: it is never weakened into a contract that could pass (AC-04.6).
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { digestOf } from '../posture/assurance/identity.js';
 import { getOracle } from '../posture/oracles/registry.js';
@@ -63,7 +64,13 @@ export function snapshotSource(root, profile) {
   for (const rel of ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', '.nvmrc']) {
     try { configDigests[rel] = digestOf(fs.readFileSync(path.join(realRoot, rel), 'utf8')); } catch { /* absent */ }
   }
-  configDigests.runtime = digestOf({ node: process.versions.node, sqlite: process.versions.sqlite || null });
+  let python = null;
+  if (profile.application.runtime === 'python') {
+    for (const p of ['/usr/bin/python3', '/opt/homebrew/bin/python3', '/usr/local/bin/python3']) {
+      try { if (fs.statSync(p).isFile()) { python = String(spawnSync(p, ['-I', '-c', 'import sys, sqlite3; print(sys.version.split()[0], sqlite3.sqlite_version)'], { encoding: 'utf8', timeout: 5000 }).stdout || '').trim() || null; break; } } catch { /* next */ }
+    }
+  }
+  configDigests.runtime = digestOf({ node: process.versions.node, sqlite: process.versions.sqlite || null, ...(profile.application.runtime === 'python' ? { python } : {}) });
   return { files, missing, sourceDigest: digestOf(files), configDigests };
 }
 
@@ -78,6 +85,7 @@ function obligation(kind, id, inputs, { required = true, origin = 'generated-fro
 }
 
 const appInputs = (profile, requests, stateChecks = []) => ({
+  ...(profile.application.runtime === 'python' ? { runtime: 'python' } : {}),
   export: profile.application.export, schemaSql: profile.database.schemaSql, seed: profile.database.seed, requests, stateChecks,
 });
 
@@ -140,6 +148,9 @@ function authzObligations(profile, actors, blocked) {
     if (deniedWriters.length) attackChecks.push({ id: `${obj.id.replace(/-/g, '_')}_unchanged`, role: 'attack', sql: `SELECT count(*) AS n FROM ${z.table} WHERE ${z.idColumn} = ? AND ${z.contentColumn} = ?`, params: [obj.rowId, `{{secret:${obj.secret}}}`], expect: [{ n: 1 }], guards: deniedWriters });
     if (lastWriter) controlChecks.push({ id: `${obj.id.replace(/-/g, '_')}_written`, role: 'control', sql: `SELECT count(*) AS n FROM ${z.table} WHERE ${z.idColumn} = ? AND ${z.contentColumn} = ?`, params: [obj.rowId, lastWriter], expect: [{ n: 1 }] });
   }
+  for (const c of z.controls || []) {
+    writeControls.push({ id: `control_${c.id.replace(/-/g, '_')}`, role: 'control', ...reqOf(c, actors[c.actor], {}), expect: { status: c.expectStatus || [200], ...(c.expectIncludes ? { bodyIncludes: c.expectIncludes } : {}) } });
+  }
   if (!readControls.length) blocked.push('authorization: no actor is allowed to read any declared object, so the application cannot be shown to work');
   if (!reads.length && !writeAttacks.length) blocked.push('authorization: the policy allows every actor everything, so there is nothing to deny');
   if (blocked.length) return { obligations: out, matrix };
@@ -195,7 +206,7 @@ export function buildContract(o) {
     findingRefs: [o.finding.findingId || o.finding.stableId || o.finding.id],
     rootCauseGroup: digestOf({ family: o.family, file: findingFile }),
     sourceCommit: o.commit ?? null, sourceDigest: o.source.sourceDigest, configDigests: o.source.configDigests,
-    profile: { application: profile.application, database: { engine: profile.database.engine }, runtime: 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
+    profile: { application: profile.application, database: { engine: profile.database.engine }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
     obligations, policyFacts,
     editScope: { allowed: [...profile.application.files], prohibited: [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
     executionPolicy: { execution: 'trust-boundary', network: 'denied', model: 'none-unless-operator-configured' },
