@@ -26,6 +26,7 @@
 // process, requests sent in the declared order (no concurrency is claimed); Express itself is not executed in this repository (an
 // Express application is a request listener with this same signature, but no Express fixture runs here).
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { defineOracle } from './oracle.js';
 
@@ -38,12 +39,16 @@ const secretValue = (token, name) => `S-${crypto.createHash('sha256').update(`${
 const subst = (v, token) => (typeof v === 'string' ? v.replace(SECRET_RE, (_, n) => secretValue(token, n)) : v);
 const deep = (v, token) => (Array.isArray(v) ? v.map((x) => deep(x, token)) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, deep(x, token)])) : subst(v, token));
 
+// The verifier-authored WSGI driver for the Python runtime. Part of the harness text, so the harness digest covers it.
+const PY_DRIVER_SRC = "import io, json, os, sqlite3, sys, urllib.parse, importlib.util\ncfg = json.loads(sys.stdin.read())\nout = {\"responses\": {}}\ndef done():\n    with open(\"__oracle_py_out.json\", \"w\") as f:\n        json.dump(out, f)\n    sys.exit(0)\ntry:\n    sys.path.insert(0, os.getcwd())\n    spec = importlib.util.spec_from_file_location(\"app_under_test\", os.path.join(os.getcwd(), cfg[\"entry\"]))\n    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n    factory = getattr(mod, cfg[\"export\"])\n    db = sqlite3.connect(\"__oracle_app.db\", isolation_level=None)\n    app = factory(db)\n    if not callable(app):\n        raise TypeError(\"the factory did not return a WSGI application\")\nexcept SystemExit:\n    raise\nexcept BaseException as e:\n    out[\"loadFailed\"] = True\n    out[\"loadError\"] = str(e)[:160]\n    done()\nfor r in cfg[\"requests\"]:\n    path, _, qs = r[\"path\"].partition(\"?\")\n    b = r.get(\"body\")\n    body = b\"\" if b is None else (b if isinstance(b, str) else json.dumps(b)).encode()\n    env = {\"REQUEST_METHOD\": r[\"method\"], \"PATH_INFO\": urllib.parse.unquote(path), \"QUERY_STRING\": qs, \"SERVER_NAME\": \"app.local\", \"SERVER_PORT\": \"80\",\n           \"SERVER_PROTOCOL\": \"HTTP/1.1\", \"SCRIPT_NAME\": \"\", \"CONTENT_LENGTH\": str(len(body)), \"wsgi.version\": (1, 0), \"wsgi.url_scheme\": \"http\",\n           \"wsgi.input\": io.BytesIO(body), \"wsgi.errors\": sys.stderr, \"wsgi.multithread\": False, \"wsgi.multiprocess\": False, \"wsgi.run_once\": False}\n    if body:\n        env[\"CONTENT_TYPE\"] = \"application/json\"\n    for k, v in (r.get(\"headers\") or {}).items():\n        key = k.upper().replace(\"-\", \"_\")\n        env[key if key in (\"CONTENT_TYPE\", \"CONTENT_LENGTH\") else \"HTTP_\" + key] = str(v)\n    st = {}\n    def start_response(status, headers, exc_info=None):\n        st[\"status\"] = int(str(status).split(\" \", 1)[0])\n        st[\"headers\"] = headers\n    try:\n        chunks = app(env, start_response)\n        data = b\"\".join(chunks)[:8192]\n        if hasattr(chunks, \"close\"):\n            chunks.close()\n        ct = {str(k).lower(): str(v) for k, v in st.get(\"headers\", [])}.get(\"content-type\", \"\")\n        out[\"responses\"][r[\"id\"]] = {\"status\": st.get(\"status\"), \"contentType\": ct, \"body\": data.decode(\"utf-8\", \"replace\")}\n    except BaseException as e:\n        out[\"responses\"][r[\"id\"]] = {\"error\": str(e)[:160]}\ntry:\n    db.close()\nexcept BaseException:\n    pass\nout[\"completed\"] = True\ndone()\n";
+
 const APP_HARNESS = `import fs from 'node:fs';
 import http from 'node:http';
 import { duplexPair } from 'node:stream';
 import { DatabaseSync } from 'node:sqlite';
 const INPUT = __INPUT__;
 const ENTRY = __ENTRY__;
+const PY_DRIVER = ${JSON.stringify(PY_DRIVER_SRC)};
 const out = { responses: {} };
 const text = (e) => String((e && e.message) || e).slice(0, 160);
 function finish(extra) { Object.assign(out, extra); try { fs.writeFileSync('__oracle_result.json', JSON.stringify(out)); } catch {} process.exit(0); }
@@ -53,6 +58,21 @@ try {
   db.exec(INPUT.schemaSql);
   for (const s of INPUT.seed) db.prepare(s.sql).run(...s.params);
 } catch (e) { finish({ setupFailed: true, setupError: text(e) }); }
+// Python runtime: the verifier-authored driver below runs the application's WSGI callable for every declared request (a real WSGI
+// environ, no HTTP server), over the same database file, under an isolated interpreter (-I: no user site, no PYTHONPATH).
+if (INPUT.runtime === 'python') {
+  try { db.close(); } catch {}
+  if (!INPUT.python) finish({ runtimeMissing: true, loadFailed: true, loadError: 'no python3 interpreter was found by the verifier' });
+  const { spawnSync } = await import('node:child_process');
+  fs.writeFileSync('__oracle_py_driver.py', PY_DRIVER);
+  const r = spawnSync(INPUT.python, ['-I', '__oracle_py_driver.py'], { input: JSON.stringify({ entry: ENTRY, export: INPUT.export, requests: INPUT.requests }), encoding: 'utf8', timeout: INPUT.requestTimeoutMs * (INPUT.requests.length + 2), maxBuffer: 1 << 20, env: {} });
+  let got = null;
+  try { got = JSON.parse(fs.readFileSync('__oracle_py_out.json', 'utf8')); } catch {}
+  if (!got) finish({ loadFailed: true, loadError: r.error ? text(r.error) : 'the python driver reported nothing (exit ' + r.status + ')' });
+  if (got.loadFailed) finish({ loadFailed: true, loadError: String(got.loadError || '').slice(0, 160) });
+  out.responses = got.responses && typeof got.responses === 'object' ? got.responses : {};
+  finish({ completed: got.completed === true });
+}
 let mod;
 try { mod = await import('./' + ENTRY); } catch (e) { finish({ loadFailed: true, loadError: text(e) }); }
 const factory = mod && (mod[INPUT.export] || (mod.default && mod.default[INPUT.export]));
@@ -91,6 +111,7 @@ finish({ completed: true });
 /** Validation shared by both adapters. Returns a problem string or null. */
 function validateAppInputs(i, { requireAttack }) {
   if (!isId(i.export)) return 'export must be an identifier';
+  if (i.runtime !== undefined && !['node', 'python'].includes(i.runtime)) return "runtime must be 'node' or 'python'";
   if (!isStr(i.schemaSql, 20000) || !i.schemaSql.trim()) return 'schemaSql must be a non-empty string';
   if (!Array.isArray(i.seed) || i.seed.length > 200) return 'seed must be an array of at most 200 statements';
   for (const s of i.seed) if (!s || !isStr(s.sql, 2000) || !/^\s*INSERT\b/i.test(s.sql) || !Array.isArray(s.params) || s.params.length > 32) return 'every seed entry is one INSERT with a params array';
@@ -132,9 +153,16 @@ function validateAppInputs(i, { requireAttack }) {
   return null;
 }
 
+// The interpreter is resolved by the VERIFIER from fixed locations; a request or a profile cannot name one.
+const PYTHONS = ['/usr/bin/python3', '/opt/homebrew/bin/python3', '/usr/local/bin/python3'];
+function findPython() {
+  for (const p of PYTHONS) { try { if (fs.statSync(p).isFile()) return p; } catch { /* next */ } }
+  return null;
+}
+
 function prepareAppInputs(i, token) {
   return {
-    export: i.export, schemaSql: i.schemaSql, requestTimeoutMs: Math.min(Number(i.requestTimeoutMs) || 2000, 5000),
+    export: i.export, schemaSql: i.schemaSql, runtime: i.runtime || 'node', python: i.runtime === 'python' ? findPython() : null, requestTimeoutMs: Math.min(Number(i.requestTimeoutMs) || 2000, 5000),
     seed: i.seed.map((s) => ({ sql: s.sql, params: deep(s.params, token) })),
     requests: i.requests.map((r) => ({ id: r.id, method: r.method, path: subst(r.path, token), headers: deep(r.headers || {}, token), ...(r.body !== undefined ? { body: deep(r.body, token) } : {}) })),
   };

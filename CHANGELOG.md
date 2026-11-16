@@ -9,6 +9,20 @@
 > make the history less accurate, not more.
 
 
+## 0.197.0 - Verified remediation, milestone 2: candidate portfolios, multi-file root-cause repair, a Python profile
+
+**Measured, 0.196.1:** `TIMINGS preflight=4s push=7s pr=5s checks=456s merge=7s verify=6s tag=2s release=288s npm=90s total=865s release-clock=303s`, 303 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a later check confirmed it.
+
+The second milestone of the verified-remediation work, for the Labs capability `contract-repair`. Measured on macOS; the trust boundary still refuses the Linux namespace backend, so a Linux run reports `blocked`. Requirement-by-requirement record: `docs/verified-remediation/LEDGER.md`.
+
+- **Changed results, listed first.** Repair challenge gate unchanged: unsafe patches accepted 0 of 18, caught by the declared obligation 18 of 18, legitimate repairs rejected 0 of 4. Oracle conformance: 10 adapters conform with execution (the application harness changed, so its fixtures were re-pinned).
+- **Fixed: a multi-file patch was refused by its own file count.** The per-finding fix attempt budget counted one attempt per written file, so any patch touching three or more files was refused on its third file at the default budget of two, on every apply route. It now counts one attempt per apply batch; separate attempts are still limited exactly as before (`test/repair/attempt-budget.test.js`, which fails on the old code).
+- **Candidate portfolios.** Candidates offered in one round are all judged. A candidate must also withstand the counterexamples its siblings produced: an overfitted patch that passed every one of its own checks is rejected when a sibling's shrunk counterexample leaks through it. Survivors are ranked by coordinator-computed scope (material-risk categories, files, edited lines, generator), and the sealed held-out set runs in rank order. A patch that differs from an earlier one only in whitespace or comments is a duplicate and is not run. Supply a portfolio with `round` numbers in `--candidates`.
+- **Root-cause repair across files.** A new fixture shares an unchecked note loader between a read route, an update route and a public page. Fixing one caller is rejected (the sibling route is still exposed); putting the check inside the shared loader is rejected (the public page, a declared safe caller, breaks); the coordinated three-file fix is verified. A crash between its files is reverted whole on recovery, and the repair then applies. Profiles can declare such workflows as `authorization.controls`.
+- **Python applications.** `"runtime": "python"` runs a WSGI application over the same SQLite oracles: a verifier-authored driver, inside the digest-checked harness, calls the WSGI callable with a real environ for every declared request (no HTTP server). The interpreter is found by the verifier and runs isolated; its version enters the contract identity.
+- **Not in this release.** PostgreSQL (no server on the measured host), a model proposer, automatic grouping of several findings into one contract.
+- **Housekeeping.** Self-scan baseline 693 to 694, reviewed: a synchronous `statSync` over three fixed interpreter paths, verifier-side.
+
 ## 0.196.1 - Documentation sweep after 0.196.0
 
 **Measured, 0.196.0:** `TIMINGS preflight=4s push=10s pr=5s checks=1043s merge=7s verify=6s tag=2s release=194s npm=91s total=1362s release-clock=209s`, 209 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a resumed run confirmed it a few minutes later.

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-16T13:10:34.829Z",
-  "commit": "7a49b3c7023a49e4186267afb4df7ddda08b761e",
+  "generatedAt": "2026-11-16T17:17:31.892Z",
+  "commit": "fb04d983e313df3fbcc14553353e4b265c58335f",
   "targets": {
     "hooks": {
       "total": 20,
@@ -61,7 +61,7 @@
       }
     },
     "scanner/src": {
-      "total": 693,
+      "total": 694,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -270,6 +270,7 @@
         "posture/mitigation-composite.js": 1,
         "posture/model-rescan.js": 1,
         "posture/network-policy-import.js": 3,
+        "posture/oracles/app-adapters.js": 1,
         "posture/oracles/conformance.js": 1,
         "posture/oracles/oracle.js": 1,
         "posture/poc-generator.js": 2,

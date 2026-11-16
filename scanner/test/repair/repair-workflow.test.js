@@ -234,3 +234,146 @@ describe('[FR-18] the CLI', () => {
     assert.equal(cli(['verify', out], root).status, 1, 'a changed patch byte is detected');
   }));
 });
+
+describe('[M2-01/M2-02/T-26] candidate portfolios: cross-execution, structural duplicates and deterministic ranking', () => {
+  test('a candidate that passes its own checks but fails a sibling\'s counterexample is rejected before ranking; the smallest survivor is selected', needs(async () => {
+    const s = setup('sql-notes', 'sql-injection');
+    const bound = edit(s.original, SQL_LINE, "        const rows = db.prepare('SELECT title, body FROM notes WHERE owner = ? AND title = ?').all(user, title);");
+    const boundCommented = edit(s.original, SQL_LINE, "        // bound parameters\n        const rows = db.prepare('SELECT title, body FROM notes WHERE owner = ? AND title = ?').all(user, title);");
+    const named = edit(s.original, SQL_LINE, "        const stmt = db.prepare('SELECT title, body FROM notes WHERE owner = :owner AND title = :title');\n        const rows = stmt.all({ owner: user, title });");
+    // overfitted: blocks exactly the two development probes, special-cases the known quoted title
+    const overfit = edit(s.original, SQL_LINE, "        if (title === \"x' OR '1'='1\" || title === \"x' OR 1=1 --\") return sendJson(res, 400, { error: 'bad title' });\n        const t = title.replace(\"O'Brien\", \"O''Brien\");\n        const p = db['prep' + 'are'].bind(db);\n        const rows = p(`SELECT title, body FROM notes WHERE owner = '${user}' AND title = '${t}'`).all();");
+    const half = edit(s.original, SQL_LINE, "        const rows = db.prepare(`SELECT title, body FROM notes WHERE owner = ? AND title = '${title}'`).all(user);");
+    const items = [
+      { round: 1, strategy: 'named', files: { 'src/app.mjs': named } },
+      { round: 1, strategy: 'overfit', files: { 'src/app.mjs': overfit } },
+      { round: 1, strategy: 'half-bound', files: { 'src/app.mjs': half } },
+      { round: 2, strategy: 'bound', files: { 'src/app.mjs': bound } },
+      { round: 2, strategy: 'bound-commented', files: { 'src/app.mjs': boundCommented } },
+    ];
+    const r = await runRepair({ root: s.root, plan: s.plan, config: ON, proposers: [queueProposer(items)], policy: { schema: 'agentic-security/repair-policy', budgets: { rounds: 3, strategiesPerRound: 3 } } });
+    const by = Object.fromEntries(r.record.candidates.map((c) => [c.strategy, c]));
+    assert.equal(by['half-bound'].status, 'rejected');
+    assert.equal(by.overfit.status, 'rejected', 'cross-execution rejected the overfitted candidate');
+    assert.equal(by.overfit.crossExecution.status, 'failed');
+    assert.ok(by.overfit.results.every((x) => x.status === 'passed'), 'it had passed every one of its own development obligations');
+    assert.equal(by.named.status, 'verified-for-contract', 'the only survivor of round 1 is selected');
+    assert.equal(r.record.rounds, 1, 'a selected candidate ends the search');
+    assert.equal(r.record.disposition, 'verified-for-contract');
+  }));
+
+  test('ranking is deterministic over coordinator-computed scope, and a whitespace-or-comment variant is a structural duplicate', needs(async () => {
+    const s = setup('sql-notes', 'sql-injection');
+    const bound = edit(s.original, SQL_LINE, "        const rows = db.prepare('SELECT title, body FROM notes WHERE owner = ? AND title = ?').all(user, title);");
+    const boundCommented = edit(s.original, SQL_LINE, "        const rows = db.prepare('SELECT title, body FROM notes WHERE owner = ? AND title = ?').all(user, title); // bound");
+    const named = edit(s.original, SQL_LINE, "        const stmt = db.prepare('SELECT title, body FROM notes WHERE owner = :owner AND title = :title');\n        const rows = stmt.all({ owner: user, title });");
+    const items = [
+      { round: 1, strategy: 'named', files: { 'src/app.mjs': named } },
+      { round: 1, strategy: 'bound', files: { 'src/app.mjs': bound } },
+      { round: 1, strategy: 'bound-commented', files: { 'src/app.mjs': boundCommented } },
+    ];
+    const r = await runRepair({ root: s.root, plan: s.plan, config: ON, proposers: [queueProposer(items)], policy: { schema: 'agentic-security/repair-policy', budgets: { rounds: 1, strategiesPerRound: 3 } } });
+    const by = Object.fromEntries(r.record.candidates.map((c) => [c.strategy, c]));
+    assert.equal(by['bound-commented'].status, 'duplicate');
+    assert.match(by['bound-commented'].reasons.join(), /structurally identical/);
+    assert.equal(by.bound.rank, 1, 'one edited line ranks before two');
+    assert.equal(by.named.rank, 2);
+    assert.equal(by.bound.status, 'verified-for-contract');
+    assert.equal(by.named.status, 'passed-not-selected');
+  }));
+});
+
+describe('[M2-03/M2-04/T-11] a shared root cause repaired across files without breaking a safe caller, applied atomically', () => {
+  const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const OWNED = "export function loadOwnedNote(db, id, user) {\n  const note = loadNote(db, id);\n  if (!note) return null;\n  return note.owner === user.id || (user.role === 'admin' && user.tenant === note.tenant) ? note : null;\n}\n";
+  const rootCause = (root) => ({
+    'src/access.mjs': read(root, 'src/access.mjs') + '\n' + OWNED,
+    'src/read.mjs': read(root, 'src/read.mjs').replace("import { loadNote } from './access.mjs';", "import { loadOwnedNote } from './access.mjs';").replace('const note = loadNote(db, id);', 'const note = loadOwnedNote(db, id, user);'),
+    'src/write.mjs': read(root, 'src/write.mjs').replace("import { loadNote } from './access.mjs';", "import { loadOwnedNote } from './access.mjs';").replace('const note = loadNote(db, id);', 'const note = loadOwnedNote(db, id, user);'),
+  });
+
+  test('one caller fixed is rejected; a check inside the shared helper breaks the public page; the coordinated three-file fix is verified', needs(async () => {
+    const s = setup('authz-shared', 'object-authorization');
+    const oneCaller = { 'src/read.mjs': read(s.root, 'src/read.mjs').replace('const note = loadNote(db, id);', "const note = loadNote(db, id);\n  if (note && note.owner !== user.id && !(user.role === 'admin' && user.tenant === note.tenant)) return sendJson(res, 404, { error: 'not found' });") };
+    const inHelper = { 'src/access.mjs': "export function loadNote(db, id, user) {\n  const note = db.prepare('SELECT id, owner, tenant, public, body FROM notes WHERE id = ?').get(id) || null;\n  if (!note || !user) return null;\n  return note.owner === user.id || (user.role === 'admin' && user.tenant === note.tenant) ? note : null;\n}\n",
+      'src/read.mjs': read(s.root, 'src/read.mjs').replace('const note = loadNote(db, id);', 'const note = loadNote(db, id, user);'),
+      'src/write.mjs': read(s.root, 'src/write.mjs').replace('const note = loadNote(db, id);', 'const note = loadNote(db, id, user);') };
+    const items = [
+      { round: 1, strategy: 'one-caller', files: oneCaller },
+      { round: 1, strategy: 'check-in-shared-helper', files: inHelper },
+      { round: 2, strategy: 'root-cause', files: rootCause(s.root) },
+    ];
+    const r = await runRepair({ root: s.root, plan: s.plan, config: ON, proposers: [queueProposer(items)], policy: { schema: 'agentic-security/repair-policy', budgets: { rounds: 2, strategiesPerRound: 3 } } });
+    const by = Object.fromEntries(r.record.candidates.map((c) => [c.strategy, c]));
+    assert.equal(by['one-caller'].status, 'rejected');
+    assert.equal(by['one-caller'].results.find((x) => x.obligation === 'authz-denied-actors').status, 'failed', 'the sibling route is still exposed');
+    assert.equal(by['check-in-shared-helper'].status, 'rejected');
+    assert.equal(by['check-in-shared-helper'].results.find((x) => x.obligation === 'authz-allowed-workflows').status, 'failed', 'the public page, a safe caller of the helper, broke');
+    assert.equal(by['root-cause'].status, 'verified-for-contract', r.record.reasons.join('; '));
+    assert.equal(by['root-cause'].scope.totals.files, 3);
+    assert.equal(r.record.disposition, 'verified-for-contract');
+  }));
+
+  test('[M2-04] a crash between files of the verified three-file repair is reverted whole on recovery', needs(async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rw-atomic-'));
+    fs.cpSync(path.join(FIX, 'authz-shared'), root, { recursive: true });
+    fs.writeFileSync(path.join(root, 'package.json'), '{"name":"notes","version":"1.0.0","type":"module"}\n');
+    const bin = path.join(SCANNER, 'bin', 'agentic-security.js');
+    const env = { ...process.env, AGENTIC_SECURITY_NO_ASSURANCE: '' };
+    assert.notEqual(spawnSync(process.execPath, [bin, 'scan', root], { cwd: root, env, encoding: 'utf8' }).status, null);
+    const before = Object.fromEntries(['src/access.mjs', 'src/read.mjs', 'src/write.mjs'].map((f) => [f, read(root, f)]));
+    const planFile = path.join(root, '..', `${path.basename(root)}-plan.json`);
+    const cands = path.join(root, '..', `${path.basename(root)}-cands.json`);
+    fs.writeFileSync(cands, JSON.stringify({ candidates: [{ files: rootCause(root) }] }));
+    const cli = (args, extraEnv = {}) => spawnSync(process.execPath, [bin, 'repair', ...args, '--root', root], { cwd: root, env: { ...env, ...extraEnv }, encoding: 'utf8' });
+    assert.equal(cli(['plan', '--profile', path.join(root, 'profile.json'), '--family', 'object-authorization', '--file', 'src/access.mjs', '--out', planFile]).status, 0);
+    const crash = cli(['run', '--plan', planFile, '--candidates', cands, '--allow-execution', '--apply', '--approved-by', 'reviewer', '--approval-reason', 'shared ownership check'], { AGENTIC_SECURITY_TEST_FAULTS: '1', AGENTIC_SECURITY_FAULT_AT: 'after-file-0' });
+    assert.equal(crash.signal, 'SIGKILL', `killed at the fault point (status ${crash.status}): ${crash.stdout.slice(-400)} ${crash.stderr.slice(-400)}`);
+    const changed = Object.keys(before).filter((f) => read(root, f) !== before[f]);
+    assert.equal(changed.length, 1, 'the crash left exactly one file of the three written');
+    const { recoverBatches } = await import('../../src/fix/batch-journal.js');
+    const settled = await recoverBatches(root);
+    assert.equal(settled.length, 1);
+    for (const f of Object.keys(before)) assert.equal(read(root, f), before[f], `${f} is back to its original content`);
+    // After recovery the same repair applies whole: the crashed attempt was reverted, and a three-file patch is one attempt, not three.
+    const again = cli(['run', '--plan', planFile, '--candidates', cands, '--allow-execution', '--apply', '--approved-by', 'reviewer', '--approval-reason', 'shared ownership check', '--json']);
+    assert.equal(again.status, 0, (() => { try { return JSON.parse(again.stdout).reasons.join(' | '); } catch { return again.stderr.slice(-300); } })());
+    assert.equal(JSON.parse(again.stdout).application, 'applied');
+    for (const f of Object.keys(before)) assert.notEqual(read(root, f), before[f], `${f} carries the repair`);
+
+    // On a fresh copy the same repair is applied whole: all three files.
+    const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'rw-atomic2-'));
+    fs.cpSync(path.join(FIX, 'authz-shared'), fresh, { recursive: true });
+    fs.writeFileSync(path.join(fresh, 'package.json'), '{"name":"notes","version":"1.0.0","type":"module"}\n');
+    spawnSync(process.execPath, [bin, 'scan', fresh], { cwd: fresh, env, encoding: 'utf8' });
+    const cli2 = (args) => spawnSync(process.execPath, [bin, 'repair', ...args, '--root', fresh], { cwd: fresh, env, encoding: 'utf8' });
+    const plan2 = path.join(fresh, '..', `${path.basename(fresh)}-plan.json`);
+    assert.equal(cli2(['plan', '--profile', path.join(fresh, 'profile.json'), '--family', 'object-authorization', '--file', 'src/access.mjs', '--out', plan2]).status, 0);
+    const applied = cli2(['run', '--plan', plan2, '--candidates', cands, '--allow-execution', '--apply', '--approved-by', 'reviewer', '--approval-reason', 'shared ownership check', '--json']);
+    assert.equal(applied.status, 0, `${applied.stderr.slice(-300)} ${applied.stdout.slice(0, 200)} ${(() => { try { return JSON.parse(applied.stdout).reasons.join(" | "); } catch { return ""; } })()}`);
+    assert.equal(JSON.parse(applied.stdout).application, 'applied');
+    for (const f of Object.keys(before)) assert.notEqual(read(fresh, f), before[f], `${f} carries the repair`);
+  }));
+});
+
+describe('[M2-06] the Python profile: a WSGI application over the same SQLite oracles', () => {
+  const PY_LINE = `db.execute(f"SELECT title, body FROM notes WHERE owner = '{user}' AND title = '{title}'")`;
+  test('bound parameters are verified for the contract; backslash escaping, which SQLite ignores, still leaks and is rejected', needs(async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rw-py-'));
+    fs.cpSync(path.join(FIX, 'sql-notes-py'), root, { recursive: true });
+    const profile = JSON.parse(fs.readFileSync(path.join(root, 'profile.json'), 'utf8'));
+    const p = planRepair({ root, finding: { findingId: 'test:py', file: 'app.py' }, family: 'sql-injection', profile, profileOrigin: 'repository-file' });
+    assert.ok(p.plan, [...p.problems, ...p.blocked].join('; '));
+    assert.equal(p.plan.contract.profile.runtime, 'python');
+    const src = fs.readFileSync(path.join(root, 'app.py'), 'utf8');
+    assert.ok(src.includes(PY_LINE));
+    const escaped = src.replace(PY_LINE, `db.execute(f"SELECT title, body FROM notes WHERE owner = '{user}' AND title = '{title.replace(chr(39), chr(92) + chr(39))}'")`);
+    const bound = src.replace(PY_LINE, 'db.execute("SELECT title, body FROM notes WHERE owner = ? AND title = ?", (user, title))');
+    const r = await runRepair({ root, plan: p.plan, config: ON, proposers: [queueProposer([{ files: { 'app.py': escaped }, strategy: 'escaped' }, { files: { 'app.py': bound }, strategy: 'bound' }])], ...quiet });
+    const by = Object.fromEntries(r.record.candidates.map((c) => [c.strategy, c]));
+    assert.equal(by.escaped.status, 'rejected');
+    assert.equal(by.escaped.results.find((x) => x.obligation === 'sql-attacks-development').status, 'failed');
+    assert.equal(by.bound.status, 'verified-for-contract', r.record.reasons.join('; '));
+    assert.equal(r.record.disposition, 'verified-for-contract');
+  }));
+});

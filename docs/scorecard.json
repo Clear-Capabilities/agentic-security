@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.196.1",
-    "bundleSha256": "b0b7984b5319804564ba19dc659f577f869d1c1fe10ac5cc9bf06fb426c0288b",
-    "commit": "45fec57466906fae01b135d60703e3054024e283",
+    "engineVersion": "0.197.0",
+    "bundleSha256": "648916448b33568d91188c548e15e99ca0ead505a67c2f618f74ae90e2e9178a",
+    "commit": "0e992bbcb18c0644cb4794c820f2dbb0b50d3d31",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-16T16:14:49.335Z",
+    "generatedAt": "2026-11-16T18:01:32.603Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -623,7 +623,7 @@
         }
       },
       "scanner/src": {
-        "total": 693,
+        "total": 694,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -832,6 +832,7 @@
           "posture/mitigation-composite.js": 1,
           "posture/model-rescan.js": 1,
           "posture/network-policy-import.js": 3,
+          "posture/oracles/app-adapters.js": 1,
           "posture/oracles/conformance.js": 1,
           "posture/oracles/oracle.js": 1,
           "posture/poc-generator.js": 2,
@@ -1004,8 +1005,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 376,
-    "d": 578
+    "n": 393,
+    "d": 579
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2258,9 +2259,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.196.1",
-    "commit": "45fec57466906fae01b135d60703e3054024e283",
-    "bundleSha256": "b0b7984b5319804564ba19dc659f577f869d1c1fe10ac5cc9bf06fb426c0288b",
+    "engineVersion": "0.197.0",
+    "commit": "0e992bbcb18c0644cb4794c820f2dbb0b50d3d31",
+    "bundleSha256": "648916448b33568d91188c548e15e99ca0ead505a67c2f618f74ae90e2e9178a",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",

@@ -416,6 +416,7 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
         ruleId: finding.ruleId || finding.cwe || finding.family || null,
         vuln: finding.vuln || finding.title || null,
         findingProvenance: finding.findingProvenance || null,
+        attemptGroup: batch.id,
       });
       written.push({ file: rel, historyId: entry.id, backupPath: entry.backupPath, attemptOrdinal: entry.attemptOrdinal });
       faultPoint(`after-file-${n}`);

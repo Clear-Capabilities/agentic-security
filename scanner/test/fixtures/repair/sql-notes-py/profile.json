@@ -1,0 +1,88 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": {
+    "entry": "app.py",
+    "export": "create_app",
+    "files": [
+      "app.py"
+    ],
+    "runtime": "python"
+  },
+  "database": {
+    "engine": "sqlite",
+    "schemaSql": "CREATE TABLE notes (id INTEGER PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL);",
+    "seed": [
+      {
+        "sql": "INSERT INTO notes (owner, title, body) VALUES (?, ?, ?)",
+        "params": [
+          "alice",
+          "groceries",
+          "milk and eggs"
+        ]
+      },
+      {
+        "sql": "INSERT INTO notes (owner, title, body) VALUES (?, ?, ?)",
+        "params": [
+          "alice",
+          "O'Brien visit",
+          "bring the map"
+        ]
+      },
+      {
+        "sql": "INSERT INTO notes (owner, title, body) VALUES (?, ?, ?)",
+        "params": [
+          "bob",
+          "diary",
+          "{{secret:bob-diary}}"
+        ]
+      }
+    ]
+  },
+  "actors": [
+    {
+      "id": "alice",
+      "tenant": "t1",
+      "role": "member",
+      "headers": {
+        "x-user": "alice"
+      }
+    },
+    {
+      "id": "bob",
+      "tenant": "t1",
+      "role": "member",
+      "headers": {
+        "x-user": "bob"
+      }
+    }
+  ],
+  "sql": {
+    "inputs": [
+      {
+        "id": "title-search",
+        "actor": "alice",
+        "method": "GET",
+        "path": "/notes?title={{value}}",
+        "benign": [
+          {
+            "value": "groceries",
+            "expectIncludes": [
+              "milk and eggs"
+            ]
+          },
+          {
+            "value": "O'Brien visit",
+            "expectIncludes": [
+              "bring the map"
+            ],
+            "originalMishandles": true
+          }
+        ],
+        "protectedSecrets": [
+          "bob-diary"
+        ]
+      }
+    ]
+  }
+}

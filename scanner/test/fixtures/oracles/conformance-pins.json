@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "adapters": {
     "application-behaviour": {
-      "logicDigest": "sha256:ecffe3c3c306d8adb899539d7005b4e043c7676d3edc658c3b497ae96906043a",
+      "logicDigest": "sha256:147b22f95b27282d3ff3853989a613ecc541987f1d9acf21c7a85177ba82ba93",
       "scenario": "sha256:92e534ba039ea4960307ef231e589cce53c2d6de8df76547bb7cfec1896a231f",
       "fixtures": {
         "positive": "sha256:15d28bbac3f0bfbf13ecaf11ed7519fd7b646160bb0d54a113ef1b7b5f139d97",
@@ -12,7 +12,7 @@
       }
     },
     "application-security": {
-      "logicDigest": "sha256:f76e9ea19f362a17012da4ef11e2ac450a43f1ec049951914d0dbf0db807b887",
+      "logicDigest": "sha256:4a17308c0e7e6f1bed47ab4b6c0e18140221a769d2153a1a0443e5fe27def88b",
       "scenario": "sha256:8431a61a9387c03ba92ccee76b259b603b14b3ed7af9e54748bd90a808eb3381",
       "fixtures": {
         "positive": "sha256:b86f3f14306f253436568cf0c6215ac766d5dde0f1e259412e7caac01f7500f1",

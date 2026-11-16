@@ -38,11 +38,11 @@ A profile is declared by the operator: how to start the application and what its
 | --- | --- |
 | `schema` | `agentic-security/repair-profile` |
 | `schemaVersion` | `1.x.y` |
-| `application` | `entry`, `export` (a factory that receives `{ db }` and returns a Node request listener), `files` (every application file), `runtime` (`node`) |
+| `application` | `entry`, `export`, `files` (every application file), `runtime`: `node` (a factory that receives `{ db }` and returns a Node request listener) or `python` (a factory that receives a `sqlite3` connection and returns a WSGI application) |
 | `database` | `engine` (`sqlite`), `schemaSql`, `seed` (INSERT statements; `{{secret:<name>}}` plants a per-run value the application cannot know in advance) |
 | `actors` | `id`, `tenant`, `role`, `headers` (how the actor authenticates), `anonymous` |
 | `sql` | `inputs`: the untrusted value (`{{value}}` in the path or body), the actor sending it, legitimate values with their expected response (`originalMishandles` for one the original gets wrong), and the planted secrets another actor's data holds |
-| `authorization` | `table`, `idColumn`, `contentColumn`, `objects` (owner, row id, planted secret), `operations` (`read` or `update`, with `{{id}}` and `{{value}}`), `policy.allow` (`owner`, `same-tenant-admin`, `any-admin`) |
+| `authorization` | `table`, `idColumn`, `contentColumn`, `objects` (owner, row id, planted secret), `operations` (`read` or `update`, with `{{id}}` and `{{value}}`), `policy.allow` (`owner`, `same-tenant-admin`, `any-admin`), and `controls`: legitimate workflows outside the actor matrix, such as a public page, that must keep working after a repair |
 | `tests` | `command`, `required`, `flaky`: the project test suite the central verifier runs on both trees |
 | `approval` | `approvedBy`, `reason`: counts only for a profile outside the repository |
 
@@ -118,7 +118,7 @@ A profile is declared by the operator: how to start the application and what its
 | `artifact` | Always `source-only` in this release: nothing is built. |
 | `environment` | Always `not-checked` in this release: nothing is deployed. |
 | `completion` | `complete`, `partial` (a budget stop), `cancelled`, `unavailable` or `invalid`. |
-| `candidates` | Every candidate: round, generator, status, the coordinator-computed scope, and each obligation result with its receipt digest. |
+| `candidates` | Every candidate: round, generator, status (`verified-for-contract`, `passed-not-selected`, `rejected`, `refused`, `duplicate`, `inconclusive`, `cancelled`), the coordinator-computed scope and structural key, its rank among the round's survivors, the cross-execution result, and each obligation result with its receipt digest. |
 | `selected` | The promoted candidate, or null. |
 | `rounds` | Rounds used. |
 | `obligationResults` | Original-revision results (recorded, not required) and the selected candidate's results. |
@@ -152,7 +152,8 @@ A profile is declared by the operator: how to start the application and what its
 
 - It verifies the declared contract only. Requests, actors, objects and state checks outside the profile are not observed.
 - It runs requests one at a time in one process. No concurrency is exercised, and none is claimed.
-- It supports Node applications over SQLite in this release. PostgreSQL, Python and other runtimes are not executed.
+- It supports Node applications and Python WSGI applications over SQLite in this release. A Python application's WSGI callable is called directly with a real WSGI environ; no HTTP server runs. PostgreSQL is not executed (no PostgreSQL server exists on the measured host).
+- Cross-execution shares only attacks that disclosed a planted secret; a durable-state attack is judged by the object-level check every candidate runs anyway.
 - The application oracles run in the trust boundary. On Linux the boundary currently refuses to run (the namespace backend lacks proved read denial), so repair execution there is `blocked`, never a downgraded pass. The execution tests were run on macOS with the userspace backend.
 - No model proposes candidates in this release. Candidates come from the deterministic SQL recipe or are supplied by a person (`--candidates`).
 - The challenge corpus (`bench/repair/`) is synthetic regression evidence written by the verifier's authors. It is not an independent accuracy measurement.

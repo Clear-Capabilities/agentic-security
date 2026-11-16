@@ -31,6 +31,7 @@ import { buildContract, snapshotSource } from './contracts.js';
 import { runObligation, judge } from './lab.js';
 import { validateAgainstOriginal, counterexampleFrom, shrinkCounterexample } from './counterexamples.js';
 import { checkCandidate, makeCandidate } from './candidates.js';
+import { structuralKey, rankSurvivors, crossInputs, sharedAttacksFrom } from './portfolio.js';
 
 export const PLAN_SCHEMA = 'agentic-security/repair-plan';
 export const POLICY_SCHEMA = 'agentic-security/repair-policy';
@@ -232,12 +233,16 @@ export async function runRepair(o) {
     }
     if (Object.keys(capped).length) record.reasons.push(`attack cases over the per-candidate budget were omitted: ${Object.entries(capped).map(([k, n]) => `${k} ${n}`).join(', ')}; the verification is partial for those cases`);
 
-    // 4. rounds
+    // 4. rounds. Each round is a portfolio (FR-09): every proposal is judged on the development obligations; counterexamples one
+    // candidate produced are run against every other survivor (cross-execution, T-26); the survivors are ranked deterministically and
+    // the sealed set runs in rank order on exactly one candidate at a time. Structural duplicates consume an attempt without running.
     const order = { 'app-behaviour-preserved': 0, 'app-behaviour-after': 1, 'app-attack-blocked': 2 };
     const devObs = plan.contract.obligations.filter((x) => x.oracleId && x.kind !== 'app-attack-sealed').sort((a, b) => order[a.kind] - order[b.kind]);
     const sealedObs = plan.contract.obligations.filter((x) => x.kind === 'app-attack-sealed');
-    const seen = new Set();
+    const attackOb = devObs.find((x) => x.kind === 'app-attack-blocked');
+    const seen = new Set(); const seenStructure = new Set();
     let feedback = null; let selected = null; let anyInconclusive = false; let anyProposal = false;
+    const resultOf = (ob, res, status, reason) => ({ obligation: ob.id, kind: ob.kind, observed: res.observed, status, reason: reason ?? res.reason, receiptDigest: res.receipt?.receiptDigest ?? null, filesDigest: res.filesDigest, inputsDigest: res.inputsDigest, live: res.receipt });
     for (let round = 1; round <= budgets.rounds && !selected; round++) {
       record.rounds = round; record.budget.used.rounds = round;
       const proposals = [];
@@ -251,33 +256,37 @@ export async function runRepair(o) {
       }
       if (!proposals.length) break;
       anyProposal = true;
+      const survivors = []; const shared = []; const roundFeedback = [];
+      // 4a. development obligations, every proposal
       for (const prop of proposals) {
         if (stopped()) return stoppedResult();
         record.budget.used.proposals++;
         const chk = checkCandidate(plan.contract, original, prop.files);
         const summary = { round, generator: prop.generator, generatorIdentity: prop.generatorIdentity, strategy: prop.strategy || null };
-        if (!chk.ok) { record.candidates.push({ ...summary, status: 'refused', reasons: chk.reasons, scope: chk.scope.totals }); feedback = { refused: chk.reasons }; emit({ kind: 'candidate-refused', reasons: chk.reasons }); continue; }
+        if (!chk.ok) { record.candidates.push({ ...summary, status: 'refused', reasons: chk.reasons, scope: chk.scope.totals }); roundFeedback.push({ refused: chk.reasons }); emit({ kind: 'candidate-refused', reasons: chk.reasons }); continue; }
         const made = makeCandidate(plan.contract, original, prop, chk);
         if (!made.candidate) { record.candidates.push({ ...summary, status: 'refused', reasons: made.problems }); continue; }
         const cand = made.candidate;
         if (seen.has(cand.patchDigest)) { record.candidates.push({ ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, status: 'duplicate', reasons: ['an identical patch was already judged; it consumes an attempt and is not run again'] }); continue; }
-        seen.add(cand.patchDigest);
+        const skey = structuralKey(cand.files);
+        if (seenStructure.has(skey)) { seen.add(cand.patchDigest); record.candidates.push({ ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, status: 'duplicate', reasons: ['structurally identical to a patch already judged (differs only in whitespace or comments); it consumes an attempt and is not run again'] }); continue; }
+        seen.add(cand.patchDigest); seenStructure.add(skey);
         writeJson(path.join(dir, 'candidates', `${cand.candidateId.replace(':', '-')}.json`), cand);
         const patched = { ...original };
         for (const [rel, t] of Object.entries(cand.files)) { if (t === null) delete patched[rel]; else patched[rel] = t; }
-        const cs = { ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, scope: cand.scope, status: 'pending', results: [] };
+        const cs = { ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, structuralKey: skey, scope: cand.scope, status: 'pending', results: [] };
         record.candidates.push(cs);
         emit({ kind: 'candidate', candidateId: cand.candidateId, round });
         const t0 = Date.now();
-        // Every development obligation runs, so the record attributes every failure (VerificationRun: full failure attribution); the
-        // counterexample fed back is the first security failure, else the first behaviour failure.
+        // Every development obligation runs, so the record attributes every failure; the counterexample fed back is the first security
+        // failure, else the first behaviour failure.
         let verdict = 'passed'; const failures = [];
         for (const ob of devObs) {
           const inputs = base.effectiveInputs[ob.id];
           const res = await run(ob, patched, inputs);
           if (stopped()) return stoppedResult();
           const status = judge(res.observed, ob.patchedExpectation);
-          cs.results.push({ obligation: ob.id, kind: ob.kind, observed: res.observed, status, reason: res.reason, receiptDigest: res.receipt?.receiptDigest ?? null, filesDigest: res.filesDigest, inputsDigest: res.inputsDigest, live: res.receipt });
+          cs.results.push(resultOf(ob, res, status));
           if (status === 'failed') failures.push({ ob, inputs, res });
           else if (status !== 'passed' && verdict === 'passed') verdict = status === 'cancelled' ? 'cancelled' : 'inconclusive';
         }
@@ -286,34 +295,63 @@ export async function runRepair(o) {
           const { ob, inputs, res } = failures.find((f) => f.ob.kind === 'app-attack-blocked') || failures[0];
           let cx = counterexampleFrom(ob, inputs, res, actorLookup(plan.actors));
           const firstSecret = (res.details?.attackViolations || []).find((v) => v.effect === 'secret-disclosed');
+          let shrunk = null;
           if (firstSecret && ob.kind === 'app-attack-blocked') {
             const sh = await shrinkCounterexample(ob, inputs, patched, firstSecret.id, run, { maxRounds: 4 });
             if (stopped()) return stoppedResult();
+            shrunk = sh.request;
             cx = { ...cx, request: { method: sh.request.method, path: sh.request.path, body: sh.request.body ?? null }, shrunkFrom: { method: sh.original.method, path: sh.original.path, body: sh.original.body ?? null }, shrinkRuns: sh.runs, propertyPreserved: sh.preserved };
           }
           cx.alsoFailed = failures.filter((f) => f.ob.id !== ob.id).map((f) => f.ob.id);
           record.counterexamples.push({ candidateId: cand.candidateId, ...cx });
-          feedback = { candidateId: cand.candidateId, counterexample: cx };
+          roundFeedback.push({ candidateId: cand.candidateId, counterexample: cx });
+          for (const f of failures.filter((x) => x.ob.kind === 'app-attack-blocked')) shared.push(...sharedAttacksFrom(f.inputs, f.res.details, shrunk ? [shrunk] : []));
         }
-        if (verdict === 'passed') {
-          const central = await centralVerify(o, plan, cand, budgets);
-          cs.results.push(central);
-          if (central.status !== 'passed') { verdict = central.status === 'failed' ? 'failed' : 'inconclusive'; if (central.status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: 'central-verifier', property: 'central-verifier', message: central.reason }); feedback = { candidateId: cand.candidateId, counterexample: { obligation: 'central-verifier', message: central.reason } }; } }
+        cs.wallMs = Date.now() - t0;
+        if (verdict === 'inconclusive') anyInconclusive = true;
+        if (verdict === 'passed') survivors.push({ cand, cs, patched });
+        else cs.status = verdict === 'failed' ? 'rejected' : verdict;
+      }
+      // 4b. cross-execution: a survivor must also withstand every counterexample its siblings produced this round
+      if (shared.length && attackOb && survivors.length) {
+        const cin = crossInputs(base.effectiveInputs[attackOb.id], shared);
+        for (const s of [...survivors]) {
+          const res = await run(attackOb, s.patched, cin);
+          if (stopped()) return stoppedResult();
+          const status = judge(res.observed, attackOb.patchedExpectation);
+          s.cs.crossExecution = { attacks: cin.requests.filter((r) => r.role === 'attack').length, status, reason: res.reason };
+          if (status !== 'passed') {
+            s.cs.status = status === 'failed' ? 'rejected' : 'inconclusive';
+            if (status === 'failed') record.counterexamples.push({ candidateId: s.cand.candidateId, obligation: `${attackOb.id} (cross-execution)`, property: 'secret-disclosed', message: 'a counterexample found against a sibling candidate in this round also defeats this one' });
+            else anyInconclusive = true;
+            survivors.splice(survivors.indexOf(s), 1);
+          }
         }
+      }
+      // 4c. rank, then the central verifier and the sealed set in rank order
+      const ranked = rankSurvivors(survivors.map((s) => ({ ...s, candidate: s.cand })));
+      ranked.forEach((s, i) => { s.cs.rank = i + 1; });
+      for (const s of ranked) {
+        if (selected) { s.cs.status = 'passed-not-selected'; continue; }
+        const { cand, cs, patched } = s;
+        let verdict = 'passed';
+        const central = await centralVerify(o, plan, cand, budgets);
+        cs.results.push(central);
+        if (central.status !== 'passed') { verdict = central.status === 'failed' ? 'failed' : 'inconclusive'; if (central.status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: 'central-verifier', property: 'central-verifier', message: central.reason }); roundFeedback.push({ candidateId: cand.candidateId, counterexample: { obligation: 'central-verifier', message: central.reason } }); } }
         if (verdict === 'passed') {
           for (const ob of sealedObs) {
             const res = await run(ob, patched, base.effectiveInputs[ob.id]);
             if (stopped()) return stoppedResult();
             const status = judge(res.observed, ob.patchedExpectation);
-            cs.results.push({ obligation: ob.id, kind: ob.kind, observed: res.observed, status, reason: status === 'failed' ? 'a sealed held-out check failed' : res.reason, receiptDigest: res.receipt?.receiptDigest ?? null, filesDigest: res.filesDigest, inputsDigest: res.inputsDigest, live: res.receipt });
-            if (status !== 'passed') { verdict = status === 'failed' ? 'failed' : 'inconclusive'; if (status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: ob.id, sealed: true, message: 'a sealed held-out check failed; its content is not disclosed to candidate generation' }); feedback = { candidateId: cand.candidateId, counterexample: { obligation: ob.id, sealed: true, message: 'a sealed held-out check failed' } }; } break; }
+            cs.results.push(resultOf(ob, res, status, status === 'failed' ? 'a sealed held-out check failed' : undefined));
+            if (status !== 'passed') { verdict = status === 'failed' ? 'failed' : 'inconclusive'; if (status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: ob.id, sealed: true, message: 'a sealed held-out check failed; its content is not disclosed to candidate generation' }); roundFeedback.push({ candidateId: cand.candidateId, counterexample: { obligation: ob.id, sealed: true, message: 'a sealed held-out check failed' } }); } break; }
           }
         }
-        cs.wallMs = Date.now() - t0;
         if (verdict === 'inconclusive') anyInconclusive = true;
-        if (verdict === 'passed' && promotable(plan.contract, cs, patched)) { cs.status = 'verified-for-contract'; selected = { cand, cs }; break; }
+        if (verdict === 'passed' && promotable(plan.contract, cs, patched)) { cs.status = 'verified-for-contract'; selected = { cand, cs }; continue; }
         cs.status = verdict === 'passed' ? 'inconclusive' : verdict === 'failed' ? 'rejected' : verdict;
       }
+      feedback = roundFeedback.length ? { round, items: roundFeedback, ...roundFeedback[roundFeedback.length - 1] } : feedback;
     }
     cleanup();
     for (const c of record.candidates) for (const r of c.results || []) delete r.live;

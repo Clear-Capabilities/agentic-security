@@ -2499,7 +2499,7 @@
       "modesJustification": "CLI-only command group (plan|run|show|resume|cancel|verify|export) with no named report modes.",
       "haskell": {
         "applicability": "not-applicable",
-        "justification": "repair contracts exist for Node applications over SQLite only; no requirement ID in the Haskell and Nix PRD covers repair, so a Haskell finding is refused with the reason (the family or the profile is unsupported), never reported as a pass."
+        "justification": "repair contracts exist for Node and Python (WSGI) applications over SQLite only; no requirement ID in the Haskell and Nix PRD covers repair, so a Haskell finding is refused with the reason (the family or the profile is unsupported), never reported as a pass."
       },
       "nix": {
         "applicability": "not-applicable",
