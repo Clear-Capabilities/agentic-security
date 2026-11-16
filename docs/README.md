@@ -29,7 +29,7 @@ The ten stages: [Discover](discover/README.md) · [Corroborate](corroborate/READ
 ## Trust
 
 - **[Trust and limitations](trust/trust-and-limitations.md)**: what a clean result does and does not mean
-- **[Scan health](trust/scan-health.md)** · **[Assurance modes](trust/assurance-modes.md)** · **[Verified remediation](trust/verified-remediation.md)**
+- **[Scan health](trust/scan-health.md)** · **[Assurance modes](trust/assurance-modes.md)** · **[Verified remediation](trust/verified-remediation.md)** · **[Contract-driven repair](guides/verified-remediation.md)** · **[Repair contract reference](reference/repair-contract.md)**
 - **[Agent threat model](trust/agent-threat-model.md)** · **[Model egress](trust/model-egress.md)** · **[Benchmarking methodology](trust/benchmarking-methodology.md)**
 
 ## Find your role

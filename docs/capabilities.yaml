@@ -484,6 +484,25 @@ capabilities:
       - scanner/src/posture/fix-verify.js
       - scanner/src/posture/fix-verify-loop.js
 
+  - id: contract-repair
+    name: Contract-driven repair
+    lifecycleStages: [verify]
+    maturity: Labs
+    contract: docs/reference/repair-contract.md
+    contractTest: scanner/test/contracts/repair.contract.test.js
+    contractNote: The contract, obligation and record fields, the obligation kinds, the dispositions and the exit codes are frozen at schema version 1; execution needs the operator's --allow-execution; reviewed 2026-11-16.
+    gate: contract-conformance
+    limits: docs/reference/repair-contract.md#what-this-does-not-do
+    since: 0.196.0
+    platforms: [linux:test-shard]
+    establishes: For one SQL injection or object-authorization finding in a Node application over SQLite, whether a candidate patch stops the declared attacks and keeps the declared legitimate behaviour, judged in the trust boundary against an executable contract. Source-only; the trust boundary does not yet run on Linux.
+    docs:
+      - docs/guides/verified-remediation.md
+      - docs/reference/repair-contract.md
+    evidence:
+      - scanner/src/repair
+      - bench/repair
+
   - id: proof-gated-fix
     name: Proof-gated fix
     lifecycleStages: [verify]

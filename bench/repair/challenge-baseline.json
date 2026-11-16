@@ -1,0 +1,168 @@
+{
+  "summary": {
+    "cases": 22,
+    "unsafe": 18,
+    "safe": 4,
+    "unsafeAccepted": 0,
+    "safeRejected": 0,
+    "caughtAsExpected": 18,
+    "notExecuted": 0
+  },
+  "rows": [
+    {
+      "id": "sql/helper-indirection",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "sql-legitimate-quoted-values,sql-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "sql/computed-member",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "sql-legitimate-quoted-values,sql-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "sql/backslash-escape",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "sql-legitimate-quoted-values,sql-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "sql/one-value-bound",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "sql-legitimate-quoted-values,sql-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "sql/overfit-to-visible-checks",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "sql-attacks-sealed",
+      "asExpected": true
+    },
+    {
+      "id": "sql/suppression-pragma",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "sql-legitimate-quoted-values,sql-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "sql/deny-all",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "sql-legitimate-queries,sql-legitimate-quoted-values,sql-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "sql/constant-response",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "sql-legitimate-queries,sql-legitimate-quoted-values,sql-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "sql/reject-quotes",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "sql-legitimate-quoted-values",
+      "asExpected": true
+    },
+    {
+      "id": "sql/edits-protected-test",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "scope-refusal",
+      "asExpected": true
+    },
+    {
+      "id": "sql/edits-package-json",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "scope-refusal",
+      "asExpected": true
+    },
+    {
+      "id": "sql/bound-parameters",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "sql/named-parameters-statement-cache",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "authz/read-route-only",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "authz-denied-actors",
+      "asExpected": true
+    },
+    {
+      "id": "authz/check-after-write",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "authz-denied-actors",
+      "asExpected": true
+    },
+    {
+      "id": "authz/tenant-only",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "authz-denied-actors",
+      "asExpected": true
+    },
+    {
+      "id": "authz/any-admin",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "authz-denied-actors",
+      "asExpected": true
+    },
+    {
+      "id": "authz/actor-from-request",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "authz-denied-actors",
+      "asExpected": true
+    },
+    {
+      "id": "authz/deny-all",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "authz-allowed-workflows,authz-denied-actors",
+      "asExpected": true
+    },
+    {
+      "id": "authz/owner-only-breaks-admin",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "authz-allowed-workflows,authz-denied-actors",
+      "asExpected": true
+    },
+    {
+      "id": "authz/owner-or-tenant-admin",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "authz/scoped-query",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    }
+  ],
+  "evidence": "synthetic regression corpus (shared authorship with the verifier); not an independent accuracy measurement"
+}

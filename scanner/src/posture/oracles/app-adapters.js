@@ -34,11 +34,11 @@ const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const isId = (s) => typeof s === 'string' && /^[A-Za-z_$][\w$-]{0,63}$/.test(s);
 const isStr = (s, max = 2000) => typeof s === 'string' && s.length <= max;
 
-export const secretValue = (token, name) => `S-${crypto.createHash('sha256').update(`${token}:${name}`).digest('hex').slice(0, 24)}`;
+const secretValue = (token, name) => `S-${crypto.createHash('sha256').update(`${token}:${name}`).digest('hex').slice(0, 24)}`;
 const subst = (v, token) => (typeof v === 'string' ? v.replace(SECRET_RE, (_, n) => secretValue(token, n)) : v);
 const deep = (v, token) => (Array.isArray(v) ? v.map((x) => deep(x, token)) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, deep(x, token)])) : subst(v, token));
 
-export const APP_HARNESS = `import fs from 'node:fs';
+const APP_HARNESS = `import fs from 'node:fs';
 import http from 'node:http';
 import { duplexPair } from 'node:stream';
 import { DatabaseSync } from 'node:sqlite';
@@ -89,7 +89,7 @@ finish({ completed: true });
 `;
 
 /** Validation shared by both adapters. Returns a problem string or null. */
-export function validateAppInputs(i, { requireAttack }) {
+function validateAppInputs(i, { requireAttack }) {
   if (!isId(i.export)) return 'export must be an identifier';
   if (!isStr(i.schemaSql, 20000) || !i.schemaSql.trim()) return 'schemaSql must be a non-empty string';
   if (!Array.isArray(i.seed) || i.seed.length > 200) return 'seed must be an array of at most 200 statements';
@@ -132,7 +132,7 @@ export function validateAppInputs(i, { requireAttack }) {
   return null;
 }
 
-export function prepareAppInputs(i, token) {
+function prepareAppInputs(i, token) {
   return {
     export: i.export, schemaSql: i.schemaSql, requestTimeoutMs: Math.min(Number(i.requestTimeoutMs) || 2000, 5000),
     seed: i.seed.map((s) => ({ sql: s.sql, params: deep(s.params, token) })),
@@ -143,7 +143,7 @@ export function prepareAppInputs(i, token) {
 const canon = (v) => JSON.stringify(v, (k, x) => (typeof x === 'bigint' ? Number(x) : x));
 
 /** The verifier's own read of the database the run left behind. Read-only connection; a missing or unreadable file is no evidence. */
-export function readState(dbPath, checks, token) {
+function readState(dbPath, checks, token) {
   if (!dbPath) return { ok: false, reason: 'the run left no database file', results: {} };
   let db;
   try {
@@ -163,7 +163,7 @@ export function readState(dbPath, checks, token) {
 }
 
 /** Did each control request meet its declared expectation? */
-export function judgeControls(inputs, responses, token) {
+function judgeControls(inputs, responses, token) {
   const failed = [];
   for (const r of inputs.requests.filter((x) => x.role === 'control')) {
     const got = responses?.[r.id];
@@ -180,7 +180,7 @@ export function judgeControls(inputs, responses, token) {
 }
 
 /** Which attack requests reached a forbidden effect: a planted secret in the response. */
-export function judgeAttacks(inputs, responses, token) {
+function judgeAttacks(inputs, responses, token) {
   const violated = [];
   for (const r of inputs.requests.filter((x) => x.role === 'attack')) {
     const got = responses?.[r.id];
@@ -193,12 +193,12 @@ export function judgeAttacks(inputs, responses, token) {
 
 // ---------------------------------------------------------------- the two adapter specs
 
-export const APP_PLATFORMS = Object.freeze({
+const APP_PLATFORMS = Object.freeze({
   darwin: { status: 'supported', note: 'executed by this repository\'s tests on the macOS development host (userspace confinement backend)' },
-  linux: { status: 'unverified', note: 'the namespace backend runs these tests in the hosted sandbox-linux job; no Linux outcome is claimed here until that job records them' },
+  linux: { status: 'unverified', note: 'no Linux outcome is claimed: the boundary refuses to run on the namespace backend until read denial and supervised tree termination are implemented and executed there; the run reports unsupported' },
   win32: { status: 'unsupported', note: 'no confinement backend exists for Windows' },
 });
-export const APP_BUDGETS = Object.freeze({ timeoutMs: 20000, graceMs: 1000, maxOutputBytes: 65536, maxFileBytes: 1048576, maxFiles: 64 });
+const APP_BUDGETS = Object.freeze({ timeoutMs: 20000, graceMs: 1000, maxOutputBytes: 65536, maxFileBytes: 1048576, maxFiles: 64 });
 const APP_LIMITS = [
   'the application must load from the workspace with Node\'s standard library only; its factory receives an open node:sqlite database',
   'requests run one at a time in the declared order over an in-memory HTTP connection: no concurrency and no network are exercised',
@@ -222,7 +222,7 @@ function stateOf(inputs, token, pathOf) {
   return { ok: true, controlFailed: failed('control'), attackFailed: failed('attack') };
 }
 
-export function interpretSecurity({ inputs, token, result, pathOf }) {
+function interpretSecurity({ inputs, token, result, pathOf }) {
   const open = loadedOrOpen(result); if (open) return open;
   const st = stateOf(inputs, token, pathOf);
   if (!st.ok) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: true, benignCompleted: false }, reason: st.reason };
@@ -234,7 +234,7 @@ export function interpretSecurity({ inputs, token, result, pathOf }) {
   return { satisfied: null, preconditionsHeld: false, observed, reason: `no attack reached a forbidden effect, but control request(s) failed, so the application was not shown to work: ${controlFailures.map((c) => c.id).join(', ')}` };
 }
 
-export function interpretBehaviour({ inputs, token, result, pathOf }) {
+function interpretBehaviour({ inputs, token, result, pathOf }) {
   const open = loadedOrOpen(result); if (open) return open;
   const st = stateOf(inputs, token, pathOf);
   if (!st.ok) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: true, benignCompleted: false }, reason: st.reason };

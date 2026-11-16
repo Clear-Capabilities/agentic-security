@@ -206,6 +206,13 @@ check never as a failure. Native vocabularies keep their own fields (`proofTier`
 side-effect-reachability, parser-resource), `registry.js` the frozen registry and `oracleManifest()`, the machine-readable
 description X-208 gates on (class, prerequisites, platforms with an honest per-platform status, budgets, negative controls,
 fixture locations, limitations, logic digest). Fixtures: `test/fixtures/oracles/<class>/{positive,negative,inconclusive}`.
+- `app-adapters.js` (verified remediation, FR-05/FR-06): `application-security` and `application-behaviour`. The harness imports
+  the application, calls its factory with a fresh `node:sqlite` database (`__oracle_app.db`, built from the declared schema and
+  seed), sends every declared request as real HTTP over an in-memory duplex pair (no socket, so the boundary's network denial
+  holds), and the verifier opens the database READ-ONLY after the tree is dead to evaluate the declared SELECT-only state checks
+  (`interpret` gets a `pathOf` accessor for that; it refuses links and paths outside the workspace). A status code never decides:
+  a 403 that still wrote is a violation. `application-security` refutes only when no attack violates AND every control held, so a
+  deny-all patch cannot refute it. Planted `{{secret:<name>}}` values derive from the per-run token. Consumed by `src/repair/`.
 - A run is: feature gate (`verification-oracles`, off by default, operator-only), request validation (closed-world: labels,
   verdicts and receipts are never accepted; reserved `__oracle_*` names and path escapes are refused), prerequisite check
   (an unmet one is `unsupported` with a typed reason and the target is never executed), a fresh workspace plus a verifier-owned

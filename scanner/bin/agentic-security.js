@@ -8038,6 +8038,7 @@ async function main() {
       case 'accept':   process.exit(await cmdAccept(args));
       case 'profile':  process.exit(await cmdProfile(args));
       case 'proof':    process.exit(await (await import('../src/posture/proof-fabric/cli.js')).cmdProof(args, path.resolve(args.flags.root || '.')));
+      case 'repair':   process.exit(await (await import('../src/repair/cli.js')).cmdRepair(args, path.resolve(args.flags.root || '.')));
       case 'labs': {
         // PRD 3 names `labs synthesize-rule FINDING-ID`. It is the rule compiler's synthesis step (`rules synthesize`). The older
         // slash-command mode `/labs --synthesize-rule` (LLM-assisted detector-spec extraction for a CWE) is a different feature

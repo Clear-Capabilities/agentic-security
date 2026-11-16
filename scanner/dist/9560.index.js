@@ -159,6 +159,7 @@ const TOOL_CAPABILITIES = Object.freeze({
   dataflow_get_edge: read('reads the signed graph artifact'),
   dataflow_get_flow: read('reads the signed graph artifact'),
   invariant_scenario_export: read('builds a read-only scenario export from a supplied contract, confined to the session root'),
+  repair_plan: read('builds a repair contract from a finding and an application profile, confined to the session root; executes nothing'),
   portfolio_progress: read('builds a read-only progress view from a portfolio store, ledger and optional inputs, confined to the session root'),
   apply_fix: mutating('writes verified patches into the project'),
   verify_fix: mutating('runs the project linter and tests and appends fix metrics'),
@@ -2109,339 +2110,6 @@ function createToolGate({ sessionRoot, policy = null, guard, env = process.env }
 
 /***/ }),
 
-/***/ 11106:
-/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
-
-
-// EXPORTS
-__webpack_require__.d(__webpack_exports__, {
-  oL: () => (/* binding */ computePatchScope),
-  wN: () => (/* binding */ heuristicSymbols),
-  fA: () => (/* binding */ jsSymbols),
-  ni: () => (/* binding */ legacyBounds),
-  nY: () => (/* binding */ pySymbols)
-});
-
-// UNUSED EXPORTS: DEFAULT_BOUNDS
-
-// EXTERNAL MODULE: external "node:crypto"
-var external_node_crypto_ = __webpack_require__(77598);
-// EXTERNAL MODULE: ./node_modules/@babel/parser/lib/index.js
-var lib = __webpack_require__(46411);
-;// CONCATENATED MODULE: ./src/fix/line-diff.js
-// Line diff for patch scope (verified-remediation PRD FR-03, GAP-03).
-//
-// The patch bound used to be |lines(after) - lines(before)|, so rewriting 150 lines into 150 different lines measured zero. This is a
-// real line diff: Myers' O(ND) shortest edit script over whole lines, returning hunks with exact before/after line ranges.
-//
-// Bounded: the edit distance search stops at MAX_EDIT_DISTANCE. Past that the diff is reported `approximate: true` and every line of both
-// sides that is not in the common prefix or suffix counts as changed. That fallback can only OVER-count, never under-count, so a policy
-// that reads it can be too strict but never too lenient.
-//
-// Pure: no fs, no clock.
-
-const MAX_EDIT_DISTANCE = 4000;
-
-const splitLines = (text) => {
-  if (text === null || text === undefined) return [];
-  const s = String(text);
-  if (s === '') return [];
-  const lines = s.split('\n');
-  if (lines[lines.length - 1] === '') lines.pop(); // a trailing newline does not add a line
-  return lines;
-};
-
-// Myers forward search, returning the edit script as a list of ops over the trimmed middle.
-function myers(a, b, maxD) {
-  const n = a.length; const m = b.length; const max = n + m;
-  const off = max + 1;
-  const v = new Int32Array(2 * max + 3);
-  const trace = [];
-  for (let d = 0; d <= Math.min(max, maxD); d++) {
-    trace.push(v.slice());
-    for (let k = -d; k <= d; k += 2) {
-      let x;
-      if (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) x = v[off + k + 1];
-      else x = v[off + k - 1] + 1;
-      let y = x - k;
-      while (x < n && y < m && a[x] === b[y]) { x++; y++; }
-      v[off + k] = x;
-      if (x >= n && y >= m) return backtrack(trace, a, b, off, d);
-    }
-  }
-  return null;
-}
-
-function backtrack(trace, a, b, off, dEnd) {
-  const ops = [];
-  let x = a.length; let y = b.length;
-  for (let d = dEnd; d > 0; d--) {
-    const v = trace[d];
-    const k = x - y;
-    const prevK = (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) ? k + 1 : k - 1;
-    const prevX = v[off + prevK]; const prevY = prevX - prevK;
-    while (x > prevX && y > prevY) { ops.push(['=', x - 1, y - 1]); x--; y--; }
-    if (x === prevX) ops.push(['+', x, y - 1]); else ops.push(['-', x - 1, y]);
-    x = prevX; y = prevY;
-  }
-  while (x > 0 && y > 0) { ops.push(['=', x - 1, y - 1]); x--; y--; }
-  return ops.reverse();
-}
-
-/**
- * @param {string|null} beforeText
- * @param {string|null} afterText
- * @returns {{additions:number, deletions:number, hunks:{beforeStart:number,beforeCount:number,afterStart:number,afterCount:number,added:string[],deleted:string[]}[], approximate:boolean}}
- *   Line numbers are 1-based. A hunk with beforeCount 0 is a pure insertion after line beforeStart-1.
- */
-function diffLines(beforeText, afterText, { maxEditDistance = MAX_EDIT_DISTANCE } = {}) {
-  const a = splitLines(beforeText); const b = splitLines(afterText);
-  let pre = 0;
-  while (pre < a.length && pre < b.length && a[pre] === b[pre]) pre++;
-  let suf = 0;
-  while (suf < a.length - pre && suf < b.length - pre && a[a.length - 1 - suf] === b[b.length - 1 - suf]) suf++;
-  const am = a.slice(pre, a.length - suf); const bm = b.slice(pre, b.length - suf);
-  if (!am.length && !bm.length) return { additions: 0, deletions: 0, hunks: [], approximate: false };
-  let ops = am.length && bm.length ? myers(am, bm, maxEditDistance) : null;
-  let approximate = false;
-  if (!ops) {
-    if (am.length && bm.length) approximate = true; // search bound hit: count the whole middle as replaced
-    ops = [...am.map((_, i) => ['-', i, 0]), ...bm.map((_, j) => ['+', 0, j])];
-  }
-  const hunks = [];
-  let cur = null; let ai = 0; let bi = 0;
-  const flush = () => { if (cur) { hunks.push(cur); cur = null; } };
-  for (const [op] of ops) {
-    if (op === '=') { flush(); ai++; bi++; continue; }
-    if (!cur) cur = { beforeStart: pre + ai + 1, beforeCount: 0, afterStart: pre + bi + 1, afterCount: 0, added: [], deleted: [] };
-    if (op === '-') { cur.deleted.push(am[ai]); cur.beforeCount++; ai++; } else { cur.added.push(bm[bi]); cur.afterCount++; bi++; }
-  }
-  flush();
-  const additions = hunks.reduce((s, h) => s + h.afterCount, 0);
-  const deletions = hunks.reduce((s, h) => s + h.beforeCount, 0);
-  return { additions, deletions, hunks, approximate };
-}
-
-// EXTERNAL MODULE: ./src/posture/material-change.js
-var material_change = __webpack_require__(74629);
-;// CONCATENATED MODULE: ./src/fix/patch-scope.js
-// Actual patch scope (verified-remediation PRD FR-03, GAP-03): the ONE implementation every route uses to say how big a patch is.
-//
-// Before this module, fix-plan.js and the MCP synthesize_fix handler each measured |lines(after) - lines(before)|, so a 150-line rewrite
-// into 150 different lines measured 0 and slipped under every size bound. computePatchScope measures what changed:
-//
-//   - additions and deletions from a real line diff (line-diff.js), changed ranges on both sides, and the file operation (add, modify,
-//     delete, rename);
-//   - `editedLines`, the size the bounds use: per hunk, max(added, deleted). A pure insertion or deletion counts its lines; a rewrite of
-//     N lines into N different lines counts N, never 0;
-//   - formatting-only versus semantic change (whitespace-normalized lines compared), reported separately and never made invisible: a
-//     formatting-only file still counts toward `editedLines`;
-//   - touched symbols: functions, methods, classes and route handlers whose span covers a changed line, from the Babel AST for JS/TS
-//     (`structural: 'ast'`), an indentation heuristic for Python and a declaration heuristic elsewhere (`structural: 'heuristic'`, a named
-//     fallback a policy can require review for);
-//   - material categories, from posture/material-change.js's classifier (fed this diff, not a line set) plus the equal-length cases the
-//     classifier does not see: a changed authorization condition, credentials, trust-boundary settings and TLS verification.
-//
-// Model-supplied counts are never an input. Pure: no fs, no clock.
-
-
-
-
-
-const DEFAULT_BOUNDS = Object.freeze({ maxFiles: 3, maxEditedLines: 100 });
-
-const JS_EXT = /\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/i;
-const PY_EXT = /\.py$/i;
-const sha256 = (t) => (t === null || t === undefined ? null : `sha256:${(0,external_node_crypto_.createHash)('sha256').update(String(t)).digest('hex')}`);
-const norm = (l) => l.replace(/\s+/g, '');
-
-// The equal-length changes the hunk classifier misses. Tested on BOTH sides of a hunk: a condition that was edited shows up as one
-// deleted and one added line of the same length, and either side carrying the vocabulary is enough.
-const SCOPE_MATERIAL = [
-  { category: 'authZ', kind: 'authz-condition-changed', re: /(?:\bif\b|\?|&&|\|\||\breturn\b|[!=]==?|\bwhere\b|\bfilter\b)[^\n]*\b(?:owner\w*|tenant\w*|role\w*|isAdmin|is_admin|admin|permission\w*|authori[sz]\w*|req\.user|request\.user|current_?user|userId|user_id|org(?:anization)?Id|scope\w*|acl)\b|\b(?:owner\w*|tenant\w*|role\w*|req\.user|userId|user_id)\b[^\n]*(?:[!=]==?|&&|\|\|)/i },
-  { category: 'auth', kind: 'authn-changed', re: /\b(?:authenticate|isAuthenticated|requireAuth|verifyToken|passport|session\s*\.|jwt\s*\.\s*verify|login|logout|password\w*\s*(?:===?|!==?))\b/i },
-  { category: 'crypto', kind: 'crypto-changed', re: /\b(?:createHash|createHmac|createCipheriv|createDecipheriv|randomBytes|pbkdf2|scrypt|bcrypt|argon2|hashlib\s*\.|MessageDigest|rejectUnauthorized|verify\s*=|checkServerIdentity|ca\s*:)\b/i },
-  { category: 'credentials', kind: 'credential-changed', re: /\b(?:secret|api[_-]?key|access[_-]?key|private[_-]?key|token|credential\w*|passwd|password)\b\s*[:=]/i },
-  { category: 'trust-boundary', kind: 'trust-boundary-changed', re: /\b(?:cors|origin|csrf|csurf|helmet|sameSite|httpOnly|allowlist|whitelist|denylist|blocklist|redirect)\b/i },
-];
-
-const range = (start, count) => (count > 0 ? [start, start + count - 1] : null);
-
-/** Symbols (name, kind, 1-based inclusive span) from a JS/TS source, or null when it does not parse. */
-function jsSymbols(text, file = 'x.js') {
-  let ast;
-  try {
-    ast = (0,lib/* parse */.qg)(String(text), { sourceType: 'unambiguous', errorRecovery: true, allowReturnOutsideFunction: true, plugins: [/\.tsx?$|\.[mc]?ts$/i.test(file) ? 'typescript' : 'flow', 'jsx', 'classProperties', 'decorators-legacy'] });
-  } catch { return null; }
-  const out = [];
-  const nameOf = (n) => {
-    if (!n) return null;
-    if (n.type === 'Identifier') return n.name;
-    if (n.type === 'StringLiteral') return n.value;
-    if (n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression') { const o = nameOf(n.object); const p = n.computed ? (n.property.type === 'StringLiteral' ? n.property.value : '[computed]') : nameOf(n.property); return o && p ? `${o}.${p}` : p || o; }
-    if (n.type === 'ThisExpression') return 'this';
-    return null;
-  };
-  const isFn = (n) => n && /^(?:FunctionExpression|ArrowFunctionExpression|ClassExpression)$/.test(n.type);
-  const add = (name, kind, node) => { if (name && node?.loc) out.push({ name, kind, start: node.loc.start.line, end: node.loc.end.line }); };
-  const walk = (node, parent) => {
-    if (!node || typeof node.type !== 'string') return;
-    switch (node.type) {
-      case 'FunctionDeclaration': add(nameOf(node.id), 'function', node); break;
-      case 'ClassDeclaration': add(nameOf(node.id), 'class', node); break;
-      case 'ClassMethod': case 'ClassPrivateMethod': case 'ObjectMethod': add(nameOf(node.key), 'method', node); break;
-      case 'VariableDeclarator': if (isFn(node.init)) add(nameOf(node.id), node.init.type === 'ClassExpression' ? 'class' : 'function', node); break;
-      case 'AssignmentExpression': if (isFn(node.right)) add(nameOf(node.left), 'function', node); break;
-      case 'ObjectProperty': case 'ClassProperty': if (isFn(node.value)) add(nameOf(node.key), 'method', node); break;
-      case 'CallExpression': {
-        // app.get('/path', handler): the handler is named after its route
-        const callee = node.callee;
-        const verb = callee?.type === 'MemberExpression' && !callee.computed ? callee.property?.name : null;
-        const first = node.arguments?.[0];
-        if (verb && /^(?:get|post|put|patch|delete|del|all|use|options|head)$/i.test(verb) && first?.type === 'StringLiteral' && node.arguments.slice(1).some(isFn)) add(`${verb.toUpperCase()} ${first.value}`, 'route-handler', node);
-        break;
-      }
-      default: break;
-    }
-    for (const key of Object.keys(node)) {
-      if (key === 'loc' || key === 'start' || key === 'end' || key === 'leadingComments' || key === 'trailingComments' || key === 'innerComments' || key === 'extra') continue;
-      const child = node[key];
-      if (Array.isArray(child)) { for (const c of child) if (c && typeof c.type === 'string') walk(c, node); } else if (child && typeof child.type === 'string') walk(child, node);
-    }
-  };
-  walk(ast.program, null);
-  return out;
-}
-
-/** Python def/class blocks by indentation. A heuristic: decorators and continuation lines are approximate. */
-function pySymbols(text) {
-  const lines = splitLines(text); const out = []; const stack = [];
-  const indent = (l) => l.match(/^[ \t]*/)[0].replace(/\t/g, '    ').length;
-  lines.forEach((l, i) => {
-    if (!l.trim() || /^\s*#/.test(l)) return;
-    const ind = indent(l);
-    while (stack.length && ind <= stack[stack.length - 1].indent) { const s = stack.pop(); s.sym.end = i; }
-    const m = l.match(/^\s*(?:async\s+)?(def|class)\s+([A-Za-z_]\w*)/);
-    if (m) { const sym = { name: stack.length ? `${stack.map((s) => s.sym.name).join('.')}.${m[2]}` : m[2], kind: m[1] === 'def' ? 'function' : 'class', start: i + 1, end: lines.length }; out.push(sym); stack.push({ indent: ind, sym }); }
-  });
-  for (const s of stack) s.sym.end = lines.length;
-  return out;
-}
-
-// Two linear patterns, no overlapping repetition (an earlier single pattern backtracked catastrophically on long whitespace runs):
-// a keyword declaration (function/def/class/...), and a C-family method header `mods type name(`.
-const KEYWORD_DECL_RE = /\b(?:function|func|fn|def|sub|class|struct|impl|interface|module|trait|enum)[ \t]+([A-Za-z_][\w:.]*)/;
-const MODIFIER_RE = /^(?:public|private|protected|internal|static|final|abstract|synchronized|override|virtual|async)[ \t]+/;
-const METHOD_DECL_RE = /^([\w<>\[\],.?]+)[ \t]+([A-Za-z_]\w*)[ \t]*\(/;
-const NOT_A_TYPE = new Set(['return', 'new', 'else', 'throw', 'await', 'yield', 'case', 'goto', 'delete', 'typeof', 'in', 'of']);
-const declOf = (l) => {
-  if (l.length > 400) return null;
-  const k = l.match(KEYWORD_DECL_RE); if (k) return k[1];
-  // modifiers are stripped one at a time (no nested quantifier), then `type name(` is matched once
-  let rest = l.replace(/^[ \t]+/, '');
-  for (let i = 0; i < 12; i++) { const mm = rest.match(MODIFIER_RE); if (!mm) break; rest = rest.slice(mm[0].length); }
-  const m = rest.match(METHOD_DECL_RE); if (m && !NOT_A_TYPE.has(m[1]) && !/;\s*$/.test(l)) return m[2];
-  return null;
-};
-
-/** Nearest preceding declaration line for each changed line. Used where no structural parser exists, and labelled as such. */
-function heuristicSymbols(text) {
-  const lines = splitLines(text); const decls = [];
-  lines.forEach((l, i) => { const name = declOf(l); if (name) decls.push({ name, kind: 'declaration', start: i + 1 }); });
-  decls.forEach((d, i) => { d.end = i + 1 < decls.length ? decls[i + 1].start - 1 : lines.length; });
-  return decls;
-}
-
-function symbolsFor(file, text) {
-  if (text === null || text === undefined) return { symbols: [], structural: 'none' };
-  if (JS_EXT.test(file)) { const s = jsSymbols(text, file); if (s) return { symbols: s, structural: 'ast' }; return { symbols: heuristicSymbols(text), structural: 'heuristic', fallbackReason: 'the file did not parse as JavaScript/TypeScript' }; }
-  if (PY_EXT.test(file)) return { symbols: pySymbols(text), structural: 'heuristic', fallbackReason: 'Python symbols come from an indentation heuristic, not a parser' };
-  return { symbols: heuristicSymbols(text), structural: 'heuristic', fallbackReason: 'no structural parser for this file type' };
-}
-
-const touching = (symbols, lines) => {
-  const hit = [];
-  for (const s of symbols) if (lines.some((ln) => ln >= s.start && ln <= s.end)) hit.push(s);
-  // keep the innermost symbol per changed line plus every enclosing one: the caller wants every scope whose behaviour moved
-  return hit;
-};
-
-/**
- * @param {{before:Record<string,string|null>, after:Record<string,string|null>, renames?:{from:string,to:string}[], bounds?:{maxFiles?:number,maxEditedLines?:number}}} o
- *   `before[f] === null` (or absent) with `after[f]` set is an added file; `after[f] === null` is a deleted file.
- */
-function computePatchScope({ before = {}, after = {}, renames = [], bounds = {} }) {
-  const b = { ...DEFAULT_BOUNDS, ...bounds };
-  const renameTo = new Map(renames.map((r) => [r.to, r.from]));
-  const renamedFrom = new Set(renames.map((r) => r.from));
-  const files = [];
-  const materialInput = {};
-  const scopeMaterial = [];
-  let approximate = false;
-  const names = [...new Set([...Object.keys(after), ...renames.map((r) => r.to)])].filter((f) => !renamedFrom.has(f) || f in after).sort();
-  for (const file of names) {
-    const src = renameTo.get(file) || file;
-    const pre = before[src] ?? null;
-    const post = after[file] ?? null;
-    const operation = renameTo.has(file) ? 'rename' : pre === null && post !== null ? 'add' : pre !== null && post === null ? 'delete' : pre === post ? 'unchanged' : 'modify';
-    const d = diffLines(pre, post);
-    approximate = approximate || d.approximate;
-    const editedLines = d.hunks.reduce((s, h) => s + Math.max(h.beforeCount, h.afterCount), 0);
-    // formatting-only: the whitespace-normalized, blank-free line sequences agree
-    const nb = splitLines(pre).map(norm).filter(Boolean); const na = splitLines(post).map(norm).filter(Boolean);
-    const sd = diffLines(nb.join('\n'), na.join('\n'));
-    const formattingOnly = operation === 'modify' && sd.additions === 0 && sd.deletions === 0 && editedLines > 0;
-    const beforeLines = d.hunks.flatMap((h) => Array.from({ length: h.beforeCount }, (_, i) => h.beforeStart + i));
-    const afterLines = d.hunks.flatMap((h) => Array.from({ length: h.afterCount }, (_, i) => h.afterStart + i));
-    const sb = symbolsFor(file, pre); const sa = symbolsFor(file, post);
-    // a pure insertion touches the symbol it was inserted into, found on the after side
-    const touched = new Map();
-    for (const s of touching(sb.symbols, beforeLines)) touched.set(`${s.kind}:${s.name}`, { name: s.name, kind: s.kind, side: 'before' });
-    for (const s of touching(sa.symbols, afterLines)) { const k = `${s.kind}:${s.name}`; touched.set(k, { name: s.name, kind: s.kind, side: touched.has(k) ? 'both' : 'after' }); }
-    const structural = [sb, sa].some((x) => x.structural === 'heuristic') ? 'heuristic' : [sb, sa].some((x) => x.structural === 'ast') ? 'ast' : 'none';
-    files.push({
-      file, ...(renameTo.has(file) ? { renamedFrom: src } : {}), operation,
-      additions: d.additions, deletions: d.deletions, editedLines,
-      changedRanges: d.hunks.map((h) => ({ before: range(h.beforeStart, h.beforeCount), after: range(h.afterStart, h.afterCount) })),
-      formattingOnly, semanticEditedLines: formattingOnly ? 0 : sd.hunks.reduce((s, h) => s + Math.max(h.beforeCount, h.afterCount), 0),
-      touchedSymbols: [...touched.values()].sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0)),
-      structural, ...(structural === 'heuristic' ? { structuralFallback: sb.fallbackReason || sa.fallbackReason } : {}),
-      beforeDigest: sha256(pre), afterDigest: sha256(post),
-    });
-    if (!formattingOnly && operation !== 'unchanged') {
-      materialInput[file] = { before: pre ?? '', after: post ?? '' };
-      for (const h of d.hunks) for (const [side, lines] of [['-', h.deleted], ['+', h.added]]) for (const line of lines) for (const p of SCOPE_MATERIAL) if (p.re.test(line)) scopeMaterial.push({ file, kind: p.kind, category: p.category, side, line: line.trim().slice(0, 200) });
-    }
-  }
-  const cls = (0,material_change/* classifyFixMaterialRisk */.kz)(materialInput);
-  const categories = [...new Set([...cls.highImpactCategories, ...scopeMaterial.map((m) => m.category)])].sort();
-  const live = files.filter((f) => f.operation !== 'unchanged');
-  const totals = {
-    files: live.length, additions: live.reduce((s, f) => s + f.additions, 0), deletions: live.reduce((s, f) => s + f.deletions, 0),
-    editedLines: live.reduce((s, f) => s + f.editedLines, 0), semanticEditedLines: live.reduce((s, f) => s + f.semanticEditedLines, 0),
-    touchedSymbols: live.reduce((s, f) => s + f.touchedSymbols.length, 0),
-    operations: Object.fromEntries(['add', 'modify', 'delete', 'rename'].map((op) => [op, live.filter((f) => f.operation === op).length])),
-  };
-  const exceeds = [];
-  if (totals.files > b.maxFiles) exceeds.push(`touches ${totals.files} files (limit ${b.maxFiles})`);
-  if (totals.editedLines > b.maxEditedLines) exceeds.push(`edits ${totals.editedLines} lines (limit ${b.maxEditedLines})`);
-  return {
-    schema: 'agentic-security/patch-scope', version: 1,
-    files, totals, approximate,
-    material: { categories, material: categories.length > 0, risk: cls.materialRisk, signals: [...cls.findings.filter((f) => f.kind !== 'routine').map((f) => ({ file: f.file, kind: f.kind, category: null, side: f.side, line: String(f.line || '').slice(0, 200) })), ...scopeMaterial] },
-    structuralFallback: files.filter((f) => f.structural === 'heuristic').map((f) => f.file),
-    bounds: b, exceedsBounds: exceeds.length > 0, exceedsReasons: exceeds,
-  };
-}
-
-/** The legacy bound triple ({files, loc, exceedsBounds}) from the one scope computation, for callers that read the old field names. */
-function legacyBounds(scope) {
-  return { files: scope.totals.files, loc: scope.totals.editedLines, exceedsBounds: scope.exceedsBounds };
-}
-
-
-/***/ }),
-
 /***/ 69390:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -3104,6 +2772,70 @@ __webpack_async_result__();
 
 /***/ }),
 
+/***/ 25058:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   V: () => (/* binding */ makeRepairTools)
+/* harmony export */ });
+/* harmony import */ var _repair_intake_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(30356);
+/* harmony import */ var _repair_contracts_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(20771);
+/* harmony import */ var _posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(41877);
+// repair-tools.js: the MCP surface for contract-driven repair (verified-remediation PRD AC-04.5, FR-18).
+//
+// One READ-ONLY tool, `repair_plan`: build the repair contract for a finding from the signed scan (or a declared family and file) and an
+// application profile, both inside the session root, and return its identity and obligations. It executes nothing and writes nothing.
+// The same function the CLI's `repair plan` calls (`repair/intake.js` `planFromInputs`) does the work, so the two surfaces derive the
+// same contract and the same obligations from the same inputs.
+//
+// Running a repair (which executes candidate code in the trust boundary) is not offered through MCP in this milestone: it stays an
+// operator command (`agentic-security repair run --allow-execution`), so no MCP client can enable execution or bypass the obligations.
+// Request header values in the returned obligations are replaced by digests (a profile's test credentials are not echoed).
+
+
+
+
+function makeRepairTools({ confine, META }) {
+  const repair_plan = {
+    name: 'repair_plan',
+    description: 'Build the repair contract for one finding: the required obligations (attack requests that must reach no forbidden effect, legitimate requests that must keep working, the central verifier), the edit scope and the known unknowns, from an application profile. Read-only: executes and writes nothing. Running the repair is an operator CLI command (repair run --allow-execution).',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        profile_file: { type: 'string', minLength: 1, maxLength: 512 },
+        finding_id: { type: 'string', minLength: 1, maxLength: 200 },
+        family: { type: 'string', enum: ['sql-injection', 'object-authorization'] },
+        file: { type: 'string', minLength: 1, maxLength: 512 },
+      },
+      required: ['profile_file'],
+    },
+    async handler(args, ctx) {
+      let profilePath;
+      try { profilePath = confine(ctx.sessionRoot, args.profile_file, 'profile_file'); } catch (e) {
+        return { _meta: META, ok: false, status: 'rejected', reason: `path refused: ${String(e.message).replace(ctx.sessionRoot, '<root>')}` };
+      }
+      if (!args.finding_id && !(args.family && args.file)) return { _meta: META, ok: false, status: 'rejected', reason: 'name finding_id, or family and file' };
+      const r = (0,_repair_intake_js__WEBPACK_IMPORTED_MODULE_0__/* .planFromInputs */ .Zn)({ root: ctx.sessionRoot, profilePath, findingId: args.finding_id, family: args.family, file: args.file });
+      if (!r.plan) return { _meta: META, ok: false, status: r.status, reason: [...r.problems, ...r.blocked].join('; ').replace(ctx.sessionRoot, '<root>').slice(0, 800) };
+      const c = r.plan.contract;
+      return {
+        _meta: META, ok: true, status: r.status,
+        contractId: c.contractId, contractDigest: c.contractDigest, family: c.family, findingRefs: c.findingRefs,
+        obligations: (0,_repair_contracts_js__WEBPACK_IMPORTED_MODULE_1__/* .obligationSummary */ .NL)(c), editScope: c.editScope, policyFacts: c.policyFacts.map((f) => ({ id: f.id, origin: f.origin, approval: f.approval })),
+        knownUnknowns: c.knownUnknowns, blocked: r.blocked,
+        actors: (c.profile.actorMatrix || []).length ? c.profile.actorMatrix : undefined,
+        headerDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_2__/* .digestOf */ .ol)(r.plan.actors),
+        note: 'a plan executes nothing; a repair is verified only by `agentic-security repair run`, for this contract only',
+      };
+    },
+  };
+  return { repair_plan };
+}
+
+
+/***/ }),
+
 /***/ 27438:
 /***/ ((__webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -3169,7 +2901,7 @@ const TOOLS_BY_NAME = Object.fromEntries(_tools_js__WEBPACK_IMPORTED_MODULE_4__/
 function _codeFingerprint() {
   try {
     const here = node_path__WEBPACK_IMPORTED_MODULE_2__.dirname((0,node_url__WEBPACK_IMPORTED_MODULE_3__.fileURLToPath)(import.meta.url));
-    const files = ['server.js', 'tools.js', 'dataflow-tools.js', 'invariant-tools.js', 'portfolio-tools.js', 'proof-tools.js', 'stdio.js', 'audit.js', 'validate.js', 'redact.js'];
+    const files = ['server.js', 'tools.js', 'dataflow-tools.js', 'invariant-tools.js', 'portfolio-tools.js', 'proof-tools.js', 'repair-tools.js', 'stdio.js', 'audit.js', 'validate.js', 'redact.js'];
     const h = node_crypto__WEBPACK_IMPORTED_MODULE_1__.createHash('sha256');
     for (const f of files) {
       try { h.update(f); h.update(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_2__.join(here, f))); } catch {}
@@ -3427,7 +3159,7 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(71130);
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(31174);
 /* harmony import */ var _posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(58752);
-/* harmony import */ var _redact_js__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(83468);
+/* harmony import */ var _redact_js__WEBPACK_IMPORTED_MODULE_23__ = __webpack_require__(83468);
 /* harmony import */ var _report_index_js__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(75917);
 /* harmony import */ var _posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(51864);
 /* harmony import */ var _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(2046);
@@ -3435,12 +3167,13 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony import */ var _posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(34594);
 /* harmony import */ var _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(20095);
 /* harmony import */ var _invariant_tools_js__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(82407);
-/* harmony import */ var _portfolio_tools_js__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(99027);
-/* harmony import */ var _proof_tools_js__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(52197);
-/* harmony import */ var _posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_23__ = __webpack_require__(79907);
-/* harmony import */ var _posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_24__ = __webpack_require__(71364);
-var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_13__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__, _proof_tools_js__WEBPACK_IMPORTED_MODULE_21__]);
-([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_13__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__, _proof_tools_js__WEBPACK_IMPORTED_MODULE_21__] = __webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__);
+/* harmony import */ var _repair_tools_js__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(25058);
+/* harmony import */ var _portfolio_tools_js__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(99027);
+/* harmony import */ var _proof_tools_js__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(52197);
+/* harmony import */ var _posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_24__ = __webpack_require__(79907);
+/* harmony import */ var _posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_25__ = __webpack_require__(71364);
+var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_13__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__, _proof_tools_js__WEBPACK_IMPORTED_MODULE_22__]);
+([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_13__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__, _proof_tools_js__WEBPACK_IMPORTED_MODULE_22__] = __webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__);
 // MCP tool implementations — PRD Feature 2, hardened against the OWASP MCP
 // Top 10 (see ./redact.js, ./audit.js, ./server.js for sibling controls).
 //
@@ -3477,6 +3210,7 @@ var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_fix
 // Git-origin provenance (Finding Provenance M0/M1). Distinct from
 // `finding.provenance` (AI-authorship) and from an SCA entry's `provenance`
 // (Sigstore/SLSA attestation) — see report/index.js's import comment.
+
 
 
 
@@ -3889,7 +3623,7 @@ const scan_diff = {
     // scanning), left as-is rather than silently claimed fixed here.
     const findings = (0,_report_index_js__WEBPACK_IMPORTED_MODULE_13__.normalizeFindings)(result.scan)
       .filter(f => wantSet.has(String(f.file || '').replace(/\\/g, '/')) && (sevRank[f.severity] ?? 0) >= min)
-      .map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactFinding */ .lE)({
+      .map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_23__/* .redactFinding */ .lE)({
         id: f.id, severity: f.severity, file: f.file, line: f.line,
         title: f.vuln, cwe: f.cwe,
         description: f.description, remediation: f.remediation,
@@ -3971,7 +3705,7 @@ const query_taint = {
       const hay = [f.description, f.title, f.vuln, f.snippet, JSON.stringify(_flowSteps(f) || ''), _flowEnds(f)].join(' ').toLowerCase();
       return hay.includes(srcL) && hay.includes(sinkL);
     });
-    const page = all.slice(off, off + lim).map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactFinding */ .lE)({
+    const page = all.slice(off, off + lim).map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_23__/* .redactFinding */ .lE)({
       id: f.id, severity: f.severity, file: f.file, line: f.line,
       title: f.title || f.vuln, description: f.description,
       trace: _flowSteps(f),
@@ -4009,7 +3743,7 @@ const explain_finding = {
     if (!scan) throw new Error(`No usable scan state (${status}).`);
     const f = _findById(scan, finding_id);
     if (!f) throw new Error(`Finding not found: ${finding_id}`);
-    const redacted = (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactFinding */ .lE)({
+    const redacted = (0,_redact_js__WEBPACK_IMPORTED_MODULE_23__/* .redactFinding */ .lE)({
       id: f.id, severity: f.severity, file: f.file, line: f.line,
       title: f.title || f.vuln, cwe: f.cwe,
       description: f.description, remediation: f.remediation,
@@ -4177,7 +3911,7 @@ const _scrubRoot = (sessionRoot, text) => {
   const roots = new Set([node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(sessionRoot)]);
   try { roots.add(node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(sessionRoot))); } catch { /* root vanished: the plain path is still scrubbed */ }
   for (const r of roots) out = out.split(r).join('<root>');
-  return (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd)(out);
+  return (0,_redact_js__WEBPACK_IMPORTED_MODULE_23__/* .redactString */ .rd)(out);
 };
 const _gateSummary = (g) => (g ? {
   path: g.path ? g.path.ok : undefined, syntax: g.syntax ? g.syntax.ok : undefined,
@@ -4372,7 +4106,7 @@ const apply_fix = {
         const _files = Object.fromEntries(Object.entries(confinedAbs).map(([rel, v]) => [rel, v.content]));
         // One verifier for every route (E3-03). AGENTIC_SECURITY_FIX_RUN_TESTS used to swap in a second test runner here; verifyFix
         // already carries the test leg, so the flag is now inert.
-        const central = await (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .verifyPatch */ .F)({ scanRoot: ctx.sessionRoot, finding: { id: f.id, stableId: f.stableId }, files: _files, fixMeta, route: 'mcp-apply-fix', mode: dry_run ? 'preview' : 'apply', verify: await getVerifyFixCore() });
+        const central = await (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__.verifyPatch)({ scanRoot: ctx.sessionRoot, finding: { id: f.id, stableId: f.stableId }, files: _files, fixMeta, route: 'mcp-apply-fix', mode: dry_run ? 'preview' : 'apply', verify: await getVerifyFixCore() });
         verdict = central.verdict;
         fixVerification = central.fixVerification;
       } catch (e) {
@@ -4386,7 +4120,7 @@ const apply_fix = {
           // X-201: the same version-1 verification record every surface emits (additive; null when none could be formed).
           verificationRecord: verdict.verificationRecord ?? null,
           ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(verdict.verificationRecord),
-          ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .additiveFields */ .Y)(fixVerification) : {}),
+          ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__.additiveFields)(fixVerification) : {}),
         };
       }
       // FR-307/FR-1002/D-0024: this caller-supplied-patch branch writes via
@@ -4407,7 +4141,7 @@ const apply_fix = {
       }
       const materialClassification = (0,_posture_material_change_js__WEBPACK_IMPORTED_MODULE_6__/* .classifyFixMaterialRisk */ .kz)(filesForMaterialClassification);
       if (dry_run) {
-        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(verdict.verificationRecord), materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .additiveFields */ .Y)(fixVerification) : {}) };
+        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(verdict.verificationRecord), materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__.additiveFields)(fixVerification) : {}) };
       }
       const changeDigest = _sha256(JSON.stringify(Object.entries(filesForMaterialClassification).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, _sha256(v.before), _sha256(v.after)])));
       const approvalRefusal = _highImpactApprovalRefusal(ctx, materialClassification, fixMeta, { tool: 'apply_fix', action: 'apply-patch', target: f.stableId || f.id, change: changeDigest });
@@ -4439,7 +4173,7 @@ const apply_fix = {
       }
       let acceptance = null;
       try { acceptance = (0,_posture_fix_history_js__WEBPACK_IMPORTED_MODULE_4__/* .fixAcceptanceRate */ .XR)(ctx.sessionRoot); } catch { /* best-effort */ }
-      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(verdict.verificationRecord) }, acceptance, materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .additiveFields */ .Y)(fixVerification) : {}) };
+      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(verdict.verificationRecord) }, acceptance, materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__.additiveFields)(fixVerification) : {}) };
     }
 
     if (typeof f.fix?.replacement !== 'string') {
@@ -4491,7 +4225,7 @@ const apply_fix = {
     if (!f.stableId) {
       return { _meta: META, applied: false, reason: 'finding has no stableId — cannot verify a stored fix against it' };
     }
-    const result = await (0,_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__/* .applyVerifiedFix */ .On)({
+    const result = await (0,_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__.applyVerifiedFix)({
       scanRoot: ctx.sessionRoot,
       finding: f,
       files: { [f.file]: f.fix.replacement },
@@ -4597,13 +4331,13 @@ const verify_fix = {
       // Best-effort: a missing/unsigned/tampered scan just means no PoC is
       // available to re-check, not a verify_fix failure — the rescan/lint/
       // tests legs below are independent of this and still apply.
-      const central = await (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .verifyPatch */ .F)({ scanRoot: ctx.sessionRoot, finding: { stableId: stable_id }, files: confined, fixMeta, route: 'mcp-verify-fix', mode: 'verify', verify: await getVerifyFixCore() });
+      const central = await (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__.verifyPatch)({ scanRoot: ctx.sessionRoot, finding: { stableId: stable_id }, files: confined, fixMeta, route: 'mcp-verify-fix', mode: 'verify', verify: await getVerifyFixCore() });
       const r = central.verdict;
       return {
         _meta: META,
         ok: r.ok,
         rescan: { ok: r.rescan.ok, reason: r.rescan.reason, introduced: r.rescan.introduced || [] },
-        lint: { runner: r.lint.runner, ok: r.lint.ok, skipped: r.lint.skipped || false, output: (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd)(r.lint.output || '').slice(0, 1500) },
+        lint: { runner: r.lint.runner, ok: r.lint.ok, skipped: r.lint.skipped || false, output: (0,_redact_js__WEBPACK_IMPORTED_MODULE_23__/* .redactString */ .rd)(r.lint.output || '').slice(0, 1500) },
         // verifyFix computes five legs, not two — tests/honesty/poc were
         // being silently dropped here, leaving an agent with no structured
         // way to see WHY verification failed when the failure was in one
@@ -4614,13 +4348,13 @@ const verify_fix = {
         // it can echo proof-harness detail derived from scanned source.
         tests: r.tests,
         honesty: r.honesty,
-        poc: r.poc ? { ...r.poc, reason: r.poc.reason ? (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd)(r.poc.reason) : r.poc.reason } : r.poc,
+        poc: r.poc ? { ...r.poc, reason: r.poc.reason ? (0,_redact_js__WEBPACK_IMPORTED_MODULE_23__/* .redactString */ .rd)(r.poc.reason) : r.poc.reason } : r.poc,
         summary: r.summary,
         // X-201: the one version-1 verification record (additive). It states what was actually established, e.g.
         // `not-run` when no exploit oracle executed against the patch, never a bare pass/fail.
         verificationRecord: r.verificationRecord ?? null,
         ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(r.verificationRecord),
-        ...(0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .additiveFields */ .Y)(central.fixVerification),
+        ...(0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__.additiveFields)(central.fixVerification),
       };
     } catch (e) {
       return { _meta: META, ok: false, reason: `verify_fix failed: ${e.message}` };
@@ -4975,7 +4709,7 @@ const append_agents_memory = {
     required: ['agent', 'body'],
   },
   async handler({ agent, body }, ctx) {
-    const r = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_23__/* .appendAgentsMemory */ .eu)(ctx.sessionRoot, { agent, body });
+    const r = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_24__/* .appendAgentsMemory */ .eu)(ctx.sessionRoot, { agent, body });
     return { _meta: META, ...r };
   },
 };
@@ -4991,7 +4725,7 @@ const read_agents_memory = {
     },
   },
   async handler({ full }, ctx) {
-    const body = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_23__/* .readAgentsMemory */ .ox)(ctx.sessionRoot);
+    const body = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_24__/* .readAgentsMemory */ .ox)(ctx.sessionRoot);
     if (!body) return { _meta: META, present: false };
     if (full) return { _meta: META, present: true, length: body.length, content: body };
     // Tail-only — same logic as summarizeForSession but inlined to avoid a
@@ -5035,7 +4769,7 @@ const query_triage_memory = {
     // they landed in, rather than hardcoding a field allowlist that could
     // miss one.
     let results;
-    try { results = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd)(JSON.stringify(raw))); }
+    try { results = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_23__/* .redactString */ .rd)(JSON.stringify(raw))); }
     catch { results = raw; }
     return {
       _meta: META,
@@ -5071,7 +4805,7 @@ const query_findings_memory = {
     // whole-structure redactString round-trip is applied rather than a
     // per-field allowlist that could miss one of the four shapes.
     let body;
-    try { body = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd)(JSON.stringify(raw))); }
+    try { body = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_23__/* .redactString */ .rd)(JSON.stringify(raw))); }
     catch { body = raw; }
     return { _meta: META, ...body };
   },
@@ -5093,7 +4827,7 @@ const lookup_cve = {
     required: ['cve'],
   },
   async handler({ cve }, _ctx) {
-    const r = (0,_posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_24__/* .lookupCve */ .x)(cve);
+    const r = (0,_posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_25__/* .lookupCve */ .x)(cve);
     return { _meta: META, ...r };
   },
 };
@@ -5230,10 +4964,11 @@ const apply_sca_upgrade = {
 // X-407: read-only scenario export; the factory takes this file's confinement so the two modules do not import each other.
 const { invariant_scenario_export } = (0,_invariant_tools_js__WEBPACK_IMPORTED_MODULE_19__/* .makeInvariantTools */ ._)({ confine: _confine, META });
 // X-707: read-only portfolio progress view, same factory shape.
-const { prove_finding, prove_fix } = (0,_proof_tools_js__WEBPACK_IMPORTED_MODULE_21__/* .makeProofTools */ .c)({ confine: _confine, META, readLastScanVerified: _readLastScanVerified, findById: _findById, isReservedWritePath: _isReservedWritePath, redactString: _redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd });
-const { portfolio_progress } = (0,_portfolio_tools_js__WEBPACK_IMPORTED_MODULE_20__/* .makePortfolioTools */ ._)({ confine: _confine, META });
+const { prove_finding, prove_fix } = (0,_proof_tools_js__WEBPACK_IMPORTED_MODULE_22__/* .makeProofTools */ .c)({ confine: _confine, META, readLastScanVerified: _readLastScanVerified, findById: _findById, isReservedWritePath: _isReservedWritePath, redactString: _redact_js__WEBPACK_IMPORTED_MODULE_23__/* .redactString */ .rd });
+const { repair_plan } = (0,_repair_tools_js__WEBPACK_IMPORTED_MODULE_20__/* .makeRepairTools */ .V)({ confine: _confine, META });
+const { portfolio_progress } = (0,_portfolio_tools_js__WEBPACK_IMPORTED_MODULE_21__/* .makePortfolioTools */ ._)({ confine: _confine, META });
 
-const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_graph */ .HX, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_node */ .HI, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_edge */ .gC, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_flow */ .ri, invariant_scenario_export, portfolio_progress, prove_finding, prove_fix];
+const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_graph */ .HX, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_node */ .HI, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_edge */ .gC, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_flow */ .ri, invariant_scenario_export, portfolio_progress, prove_finding, prove_fix, repair_plan];
 
 __webpack_async_result__();
 } catch(e) { __webpack_async_result__(e); } });

@@ -2,17 +2,17 @@
   "schema": "agentic-security/ga-program-status@1",
   "engineVersion": "0.195.47",
   "program": {
-    "baselineCapabilities": 36,
-    "capabilitiesInLedger": 36,
+    "baselineCapabilities": 37,
+    "capabilitiesInLedger": 37,
     "verifiedGa": 0,
     "registryGa": 19,
-    "promotionCandidatesRemaining": 17,
-    "ownersUnassigned": 36,
+    "promotionCandidatesRemaining": 18,
+    "ownersUnassigned": 37,
     "milestoneDeclared": false
   },
   "records": {
-    "required": 253,
-    "passed": 74
+    "required": 257,
+    "passed": 75
   },
   "realCodeAccuracy": {
     "label": "historical (not this engine)",
@@ -61,15 +61,15 @@
     "currentEngineIndependentAccuracy": "unmeasured"
   },
   "surfaces": {
-    "inventoried": 192,
-    "mapped": 192,
+    "inventoried": 194,
+    "mapped": 194,
     "orphans": []
   },
   "byWorkstream": {
     "GA-01": {
       "title": "Complete the inventory and bind release evidence",
       "accountableRole": "release/platform lead",
-      "required": 36,
+      "required": 37,
       "passed": 0,
       "blocked": 0
     },
@@ -146,7 +146,7 @@
     "GA-12": {
       "title": "Finish distribution, developer interfaces, privacy and operations",
       "accountableRole": "developer experience/release owner",
-      "required": 46,
+      "required": 47,
       "passed": 0,
       "blocked": 0
     }
@@ -3407,6 +3407,67 @@
         }
       ],
       "nextAction": "ci-gating:GA-01-001: owner unassigned"
+    },
+    {
+      "capabilityId": "contract-repair",
+      "registryMaturity": "Labs",
+      "baselineMaturity": "Labs",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "remediation engineer",
+        "person": null
+      },
+      "ownerAssigned": false,
+      "workstreams": [
+        "GA-01",
+        "GA-12"
+      ],
+      "status": "in-progress",
+      "passed": 1,
+      "required": 4,
+      "records": [
+        {
+          "id": "contract-repair:REG-BAR",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since).",
+          "check": "registry-ga-bar",
+          "status": "not-started",
+          "detail": "Labs row; the GA bar still needs nothing but the promotion itself",
+          "evidencePath": null
+        },
+        {
+          "id": "contract-repair:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "workstream": null,
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded.",
+          "check": "evidence-identity",
+          "status": "passed",
+          "detail": "clean measurement of 0.195.47 at 0a90bcd1323e, bundle f2ed5b3cdab9",
+          "evidencePath": "docs/scorecard.json"
+        },
+        {
+          "id": "contract-repair:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "detail": "owner unassigned",
+          "evidencePath": null,
+          "blocker": "owner unassigned"
+        },
+        {
+          "id": "contract-repair:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Repair execution proven on a hosted Linux runner (the trust boundary currently refuses the namespace backend), PostgreSQL and Python profiles, a model proposer with honest accounting, and an independent repair population graded under protected custody.",
+          "status": "not-started",
+          "detail": "Linux trust-boundary read denial not implemented; no independent adjudicated repair population exists",
+          "evidencePath": null,
+          "blocker": "Linux trust-boundary read denial not implemented; no independent adjudicated repair population exists"
+        }
+      ],
+      "nextAction": "contract-repair:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself"
     }
   ],
   "subcapabilities": [
@@ -3686,6 +3747,8 @@
       "mcp-server: owner unassigned (role platform security engineer)",
       "ci-gating: 2/5 acceptance records passed (in-progress); next: ci-gating:GA-01-001: owner unassigned",
       "ci-gating: owner unassigned (role assurance engineer)",
+      "contract-repair: 1/4 acceptance records passed (in-progress); next: contract-repair:REG-BAR: Labs row; the GA bar still needs nothing but the promotion itself",
+      "contract-repair: owner unassigned (role remediation engineer)",
       "subcapability distribution (deterministic-scan): 0/1 passed (not-started)",
       "subcapability harness-manifests (agent-guardrails): 0/1 passed (not-started)",
       "subcapability editor-plugins (deterministic-scan): 0/1 passed (not-started)",
