@@ -81,8 +81,14 @@ function _walkUp(dir, ext, out) {
  * example is `{ file, line, snippet }`. The agent can quote these as
  * "here's how this codebase already does it."
  */
+// Verified-remediation PRD FR-01 / AC-01.6: an example is a CANDIDATE pattern. Finding a familiar safe-looking call in the codebase
+// says what house style is, not that the call is safe where it sits or right for this finding, so every example says so, and a fix that
+// copies one is verified like any other. A fast hash is never offered as house style for a password finding (CWE-916/759/760).
+const CANDIDATE = Object.freeze({ status: 'candidate-pattern', establishesSafety: false, note: 'house style only: copying this does not make a fix verified; the fix still goes through the verifier' });
+
 export function findStyleExamples(scanRoot, finding) {
   if (!finding || !finding.family) return [];
+  if (/CWE-(?:916|759|760)\b/.test(String(finding.cwe || ''))) return [];
   const patterns = SAFE_PATTERNS[finding.family] ||
                    SAFE_PATTERNS[String(finding.family).toLowerCase()] || null;
   if (!patterns) return [];
@@ -108,6 +114,7 @@ export function findStyleExamples(scanRoot, finding) {
         file: path.relative(scanRoot, fp),
         line,
         snippet: snippet.slice(0, 240),
+        ...CANDIDATE,
       });
       break;
     }

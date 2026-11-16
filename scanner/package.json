@@ -1,6 +1,6 @@
 {
   "name": "@clear-capabilities/agentic-security-scanner",
-  "version": "0.195.46",
+  "version": "0.195.47",
   "description": "Scanner engine for the agentic-security Claude Code plugin: SAST, SCA with reachability and CISA KEV, secrets, IaC, Haskell and Nix/NixOS, prompt-injection, MCP/agent-tool audit, authZ analysis, SBOM, compliance attestation, and more.",
   "type": "module",
   "main": "src/index.js",
@@ -129,6 +129,7 @@
     "test:deployment": "node --test test/deployment/boundary-graph.test.js test/deployment/config-adapters.test.js test/deployment/trace-correlation.test.js test/deployment/cross-repo.test.js test/deployment/attack-paths.test.js test/deployment/iam-actions-and-limits.test.js test/deployment/proof-binding.test.js test/deployment/drift.test.js test/deployment/boundary-presentation.test.js test/deployment/differentiation-ablation.test.js test/deployment/boundaries-cli.test.js",
     "test:portfolio": "node --test test/portfolio/manifest.test.js test/portfolio/bundle.test.js test/portfolio/signing.test.js test/portfolio/work-units.test.js test/portfolio/resume.test.js test/portfolio/scheduler.test.js test/portfolio/progress.test.js test/portfolio/retention.test.js test/portfolio/backend.test.js",
     "test:invariants": "node --test test/invariants/invariant-schema.test.js test/invariants/invariant-lifecycle.test.js test/invariants/invariant-scenarios.test.js test/invariants/business-state-oracle.test.js test/invariants/scenario-shrinking.test.js test/invariants/invariant-repair.test.js test/invariants/approval-workflow.test.js test/invariants/business-coverage.test.js test/invariants/invariant-ablation.test.js",
+    "test:repair": "node --test test/repair/patch-scope.test.js test/repair/deterministic-purpose.test.js test/repair/tls-repair.test.js test/repair/test-results.test.js test/repair/escaper-recognition.test.js test/repair/preexisting-findings.test.js",
     "bench:invariant-ablation": "node ../scripts/invariant-ablation.mjs",
     "verification:conformance:check": "node ../scripts/verification-conformance-check.mjs",
     "verification:conformance:static": "node ../scripts/verification-conformance-check.mjs --static",

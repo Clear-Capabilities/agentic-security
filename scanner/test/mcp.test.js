@@ -682,7 +682,8 @@ test('synthesize_fix → apply_fix (#1+#3): deterministic autofix applied end-to
   const { handleRequest, root, cleanup } = await makeSession({
     findings: [{ id: 'F1', stableId: 'deadbeefcafe0011', severity: 'medium', file: 'h.js', line: 1, rule: 'crypto-weak-hash', cwe: 'CWE-328', family: 'crypto-weak-hash', vuln: 'Weak hash md5', description: 'md5' }],
   });
-  await fsp.writeFile(path.join(root, 'h.js'), "const c=require('crypto');module.exports=(s)=>c.createHash('md5').update(s).digest('hex');\n");
+  // FR-01: the md5 -> sha256 swap is chosen only for a digest whose purpose is visible as non-password integrity (here a checksum).
+  await fsp.writeFile(path.join(root, 'h.js'), "const c=require('crypto');module.exports=function checksum(s){return c.createHash('md5').update(s).digest('hex');};\n");
   // 1) synthesize_fix materializes a deterministic md5→sha256 patch (no stored replacement).
   const syn = payload(await call(handleRequest, 'synthesize_fix', { finding_id: 'F1' }));
   assert.ok(syn.autofix && syn.autofix.patch, `expected a deterministic autofix; got ${JSON.stringify(syn)}`);
@@ -691,6 +692,18 @@ test('synthesize_fix → apply_fix (#1+#3): deterministic autofix applied end-to
   const ap = payload(await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true, patch: syn.autofix.patch }));
   assert.equal(ap.applied, true, `expected applied; got ${JSON.stringify(ap)}`);
   assert.match(await fsp.readFile(path.join(root, 'h.js'), 'utf8'), /sha256/);
+  await cleanup();
+});
+
+test('synthesize_fix (FR-01 / AC-01.3): a weak hash with no visible purpose gets no autofix and names the missing facts', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'deadbeefcafe0012', severity: 'medium', file: 'h.js', line: 1, rule: 'crypto-weak-hash', cwe: 'CWE-328', family: 'crypto-weak-hash', vuln: 'Weak hash md5', description: 'md5' }],
+  });
+  await fsp.writeFile(path.join(root, 'h.js'), "const c=require('crypto');module.exports=(s)=>c.createHash('md5').update(s).digest('hex');\n");
+  const syn = payload(await call(handleRequest, 'synthesize_fix', { finding_id: 'F1' }));
+  assert.equal(syn.autofix, null);
+  assert.equal(syn.autofixDecision.disposition, 'needs-review');
+  assert.ok(syn.autofixDecision.missingFacts.length >= 1);
   await cleanup();
 });
 

@@ -84,7 +84,7 @@ Not run: the network-dependent publish checks (dependency currency, hosted CI) â
 | U-09 | no | P2 | Ruby send_file with a request-built path produces no finding | Add the sink with a safe twin, and update the pinned test |
 | U-10 | no | P1 | DCI corpus is synthetic and author-labelled; Flask cases cover only the SQLAlchemy data layer; router-mounted routes unresolved | Add independently labelled cases from upstream advisories; recognise an owner check performed in code before the write |
 | U-11 | no | P2 | Provenance attribution is below its 95 percent target for eligible findings | A project-scoped replay for whole-project detectors |
-| U-12 | no | P1 | Fix verification: 1 of 15 unsafe fixes accepted and 3 of 8 safe fixes refused (declared gaps) | Close the dodge-rule-by-indirection gap; stop the scanner objecting to the three safe fixes |
+| U-12 | no | P1 | Fix verification: authorization and IDOR patches are judged by source-level tests and the footprint heuristic, not by authenticated requests against durable state (the accept/refuse gaps of 0.195.44 are closed: 0 of 16 unsafe accepted, 0 of 8 safe refused) | Verified-remediation PRD M1: run authorization repairs as real requests against persistent state in the isolated application lab |
 | U-13 | no | P2 | Release package, verdict, perspectives, compliance truth model, fleet ranking and runtime explanation are libraries and scripts, not default scan behaviour | Add a package command and wire it into ci --assurance |
 | U-14 | no | P2 | The verdict policy is fixed and uncalibrated; a skipped oversize or dense file now makes a scan partial | Measure how many real repositories flip to partial; make thresholds configurable |
 | U-15 | no | P2 | Seven third-party targets were never attempted (no pinned commit) | Resolve and pin the commits, then run them |
@@ -109,7 +109,7 @@ Every command below was run in this programme. Each names the artifact it produc
 | `npm run ee:perf-budget` | `docs/engineering-excellence/data/perf-budget.json` | `sha256:951f433fa06ea2fd` |
 | `npm run ee:e2e-demo` | `docs/engineering-excellence/data/e2e-demo-outline.json` | `sha256:8f04806b6aaa5bd3` |
 | `npm run bench:dci-real-app` | `docs/engineering-excellence/data/dci-real-app.json` | `sha256:3d3796a2a85e71f0` |
-| `npm run ee:regression-report` | `docs/engineering-excellence/REGRESSION_REPORT.md` | `sha256:b7b669d01ad8a485` |
+| `npm run ee:regression-report` | `docs/engineering-excellence/REGRESSION_REPORT.md` | `sha256:b61bd82ae36adf81` |
 | `npm run ee:doc-captures` | `docs/engineering-excellence/README.md` | `sha256:efd7cf672b6392ff` |
 
 Resume from disk: `node scripts/engineering-excellence/status.mjs --resume` prints the next step, and `node scripts/engineering-excellence/status.mjs --markdown` regenerates `STATUS.md` (it carries a revision number and timestamp, so it has no digest here); `docs/engineering-excellence/STATUS.md` and `unresolved.json` hold the same state.

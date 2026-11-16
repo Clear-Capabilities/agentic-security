@@ -114,11 +114,11 @@
     },
     {
       "id": "U-12",
-      "title": "Fix verification: 1 of 15 unsafe fixes accepted and 3 of 8 safe fixes refused (declared gaps)",
+      "title": "Fix verification: authorization and IDOR patches are judged by source-level tests and the footprint heuristic, not by authenticated requests against durable state (the accept/refuse gaps of 0.195.44 are closed: 0 of 16 unsafe accepted, 0 of 8 safe refused)",
       "priority": "P1",
       "blocksRelease": false,
       "task": "E3-08",
-      "nextStep": "Close the dodge-rule-by-indirection gap; stop the scanner objecting to the three safe fixes",
+      "nextStep": "Verified-remediation PRD M1: run authorization repairs as real requests against persistent state in the isolated application lab",
       "blocking": false,
       "waived": false
     },

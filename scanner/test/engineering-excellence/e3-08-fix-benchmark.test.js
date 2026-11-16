@@ -36,8 +36,11 @@ test('the gate logic: a new unsafe acceptance, a new safe rejection, an unrecord
   assert.ok(decide(BASE, worse).some((p) => /not declared gaps/.test(p)));
   const rej = structuredClone(BASE); rej.safeRejected.push('sqli-query/parameterized');
   assert.ok(decide(BASE, rej).some((p) => /NEW safe fixes rejected/.test(p)));
-  const better = structuredClone(BASE); better.unsafeAccepted = [];
-  assert.ok(decide(BASE, better).some((p) => /gaps closed but not recorded/.test(p)), 'an improvement must be recorded too');
+  // an improvement must be recorded too: a baseline that still lists an accepted fake the run no longer accepts fails. Built explicitly,
+  // because the committed baseline may have no declared gap left to close (0.195.47 closed the last one).
+  const withGap = { ...structuredClone(BASE), unsafeAccepted: ['sqli-query/dodge-rule-by-indirection'], declaredGaps: ['sqli-query/dodge-rule-by-indirection'] };
+  const better = { ...structuredClone(withGap), unsafeAccepted: [] };
+  assert.ok(decide(withGap, better).some((p) => /gaps closed but not recorded/.test(p)), 'an improvement must be recorded too');
   const grown = structuredClone(BASE); grown.denominators.patches += 1;
   assert.ok(decide(BASE, grown).some((p) => /corpus size changed/.test(p)));
   const misread = structuredClone(BASE); misread.unavailableMisreadAsBlocked = 1;
@@ -64,7 +67,8 @@ test('--check exits 0 on the baseline and non-zero on a doctored one (both direc
   const file = path.join(bad, 'baseline.json');
   const run = () => spawnSync(process.execPath, [RUN, '--check'], { cwd: REPO, encoding: 'utf8', env: { ...process.env, FIXBENCH_BASELINE_PATH: file } });
   try {
-    const doctored = structuredClone(BASE); doctored.unsafeAccepted = []; doctored.declaredGaps = [];
+    // a baseline claiming an accepted fake (a declared gap) that the real run rejects: the closed gap is unrecorded, so --check fails
+    const doctored = structuredClone(BASE); doctored.unsafeAccepted = ['sqli-query/dodge-rule-by-indirection']; doctored.declaredGaps = ['sqli-query/dodge-rule-by-indirection'];
     fs.writeFileSync(file, JSON.stringify(doctored));
     const r = run();
     assert.notEqual(r.status, 0); assert.match(r.stderr, /FAIL/);

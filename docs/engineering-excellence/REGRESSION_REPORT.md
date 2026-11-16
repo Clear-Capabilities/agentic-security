@@ -53,11 +53,11 @@ Before: no classification existed. The pinned baseline is unchanged. One targete
 
 | Measure | Before | After |
 |---|---|---|
-| Unsafe fixes accepted | not measured at baseline | 1 of 15 (6.7%) |
-| Safe fixes rejected | not measured at baseline | 3 of 8 (37.5%) |
-| Accepted patches that were not fully verified | not measured at baseline | 0 of 6 (0.0%) |
+| Unsafe fixes accepted | not measured at baseline | 0 of 16 (0.0%) |
+| Safe fixes rejected | not measured at baseline | 0 of 8 (0.0%) |
+| Accepted patches that were not fully verified | not measured at baseline | 2 of 8 (25.0%) |
 
-Declared gaps that remain: sqli-query/dodge-rule-by-indirection. In the end-to-end demo a "fix" that denies every request passed the security re-analysis and the attack replay and was refused on behaviour.
+Declared gaps that remain: none. In the end-to-end demo a "fix" that denies every request passed the security re-analysis and the attack replay and was refused on behaviour.
 
 ## 5. Scan completion
 
@@ -92,7 +92,7 @@ Before: evidence existed as separate files with no shared contract. After: 16 re
 
 | Area | Change |
 |---|---|
-| Bundle size | 5.3 MB to 6.1 MB (under +15%; rounded so an ordinary rebuild does not make this page stale) |
+| Bundle size | 5.3 MB to 6.2 MB (under +20%; rounded so an ordinary rebuild does not make this page stale) |
 | Published package files | 2869 to 3095 (+226) |
 | Scan health | A scan that skipped a file for size or density is now `partial`, where it used to say `complete`. Strict assurance fails such scans. Repositories with minified bundles or large data files will see it. |
 | Large trees | The repository's own source (829 files) stops its deep analysis early on every run, so its scan is never `complete`. |

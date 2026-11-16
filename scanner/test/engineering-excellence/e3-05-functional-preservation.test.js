@@ -62,36 +62,36 @@ function tiny({ failBefore = false } = {}) {
   return root;
 }
 
-test('tests run on a copy with the patch applied: a breaking patch fails, a harmless one passes, and the real tree is never written', () => {
+test('tests run on a copy with the patch applied: a breaking patch fails, a harmless one passes, and the real tree is never written', async () => {
   const root = tiny();
   try {
-    const good = runTestsOnPatchedCopy({ scanRoot: root, files: { 'lib.js': "exports.f = () => 'ok'; // patched\n" } });
+    const good = await runTestsOnPatchedCopy({ scanRoot: root, files: { 'lib.js': "exports.f = () => 'ok'; // patched\n" } });
     assert.equal(good.status, 'passed'); assert.equal(good.onPatchedTree, true);
-    const bad = runTestsOnPatchedCopy({ scanRoot: root, files: { 'lib.js': "exports.f = () => { throw new Error('forbidden'); };\n" } });
+    const bad = await runTestsOnPatchedCopy({ scanRoot: root, files: { 'lib.js': "exports.f = () => { throw new Error('forbidden'); };\n" } });
     assert.equal(bad.status, 'failed'); assert.equal(bad.preExistingFailure, false);
     assert.equal(fs.readFileSync(path.join(root, 'lib.js'), 'utf8'), "exports.f = () => 'ok';\n");
   } finally { cleanup(root); }
 });
 
-test('a suite that was already failing is attributed to the project, not to the patch', () => {
+test('a suite that was already failing is attributed to the project, not to the patch', async () => {
   const root = tiny();
   fs.writeFileSync(path.join(root, 't.js'), "process.exit(1);\n");
   try {
-    const r = runTestsOnPatchedCopy({ scanRoot: root, files: { 'lib.js': "exports.f = () => 'ok';\n" } });
+    const r = await runTestsOnPatchedCopy({ scanRoot: root, files: { 'lib.js': "exports.f = () => 'ok';\n" } });
     assert.equal(r.status, 'failed'); assert.equal(r.preExistingFailure, true);
   } finally { cleanup(root); }
 });
 
-test('an explicit command wins over discovery, is an argv (no shell), and a patch path outside the copy is refused', () => {
+test('an explicit command wins over discovery, is an argv (no shell), and a patch path outside the copy is refused', async () => {
   const root = tiny();
   try {
     const marker = path.join(os.tmpdir(), `ee-e3e-shell-${process.pid}`);
-    const r = runTestsOnPatchedCopy({ scanRoot: root, files: {}, command: [process.execPath, '-e', `process.exit(require('fs').existsSync('lib.js') ? 0 : 3)`] });
+    const r = await runTestsOnPatchedCopy({ scanRoot: root, files: {}, command: [process.execPath, '-e', `process.exit(require('fs').existsSync('lib.js') ? 0 : 3)`] });
     assert.equal(r.status, 'passed'); assert.equal(r.runner, 'explicit');
-    const inj = runTestsOnPatchedCopy({ scanRoot: root, files: {}, command: ['echo', `x; touch ${marker}`] });
+    const inj = await runTestsOnPatchedCopy({ scanRoot: root, files: {}, command: ['echo', `x; touch ${marker}`] });
     assert.equal(fs.existsSync(marker), false, 'no shell interpreted the argument');
     assert.equal(inj.status, 'passed');
-    const esc = runTestsOnPatchedCopy({ scanRoot: root, files: { '../escape.js': 'x' } });
+    const esc = await runTestsOnPatchedCopy({ scanRoot: root, files: { '../escape.js': 'x' } });
     assert.equal(esc.skipped, true); assert.match(esc.reason, /escapes/);
     assert.equal(fs.existsSync(path.join(path.dirname(root), 'escape.js')), false);
   } finally { cleanup(root); }

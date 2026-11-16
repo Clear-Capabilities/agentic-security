@@ -13,6 +13,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { statePath } from './state-dir.js';
+import { computePatchScope, legacyBounds } from '../fix/patch-scope.js';
 const MAX_FILES = 3;
 const MAX_LOC   = 100;
 
@@ -21,24 +22,15 @@ const MAX_LOC   = 100;
 // form (what apply_fix uses).
 export function countPatchBounds(patch, originalContents = {}) {
   if (!patch) return { files: 0, loc: 0, exceedsBounds: false };
-  // Case 1: { [file]: newContent } map.
-  if (typeof patch === 'object' && !patch.replacement && !patch.code) {
-    const files = Object.keys(patch);
-    let loc = 0;
-    for (const f of files) {
-      const orig = originalContents[f] || '';
-      const nv = patch[f] || '';
-      loc += Math.abs(nv.split('\n').length - orig.split('\n').length);
-    }
-    return { files: files.length, loc, exceedsBounds: files.length > MAX_FILES || loc > MAX_LOC };
-  }
-  // Case 2: { file, replacement } single-file shape.
-  if (patch.replacement && patch.file) {
-    const orig = originalContents[patch.file] || '';
-    const loc = Math.abs(patch.replacement.split('\n').length - orig.split('\n').length);
-    return { files: 1, loc, exceedsBounds: loc > MAX_LOC };
-  }
-  return { files: 0, loc: 0, exceedsBounds: false };
+  // GAP-03: the size comes from the one patch-scope computation (a real line diff), never from |lines(after) - lines(before)|, which
+  // measured a 150-line rewrite as 0. `loc` is the edited-line count; `scope` carries additions, deletions, ranges and touched symbols.
+  let after = null;
+  if (typeof patch === 'object' && !patch.replacement && !patch.code) after = patch;
+  else if (patch.replacement && patch.file) after = { [patch.file]: patch.replacement };
+  if (!after) return { files: 0, loc: 0, exceedsBounds: false };
+  const before = Object.fromEntries(Object.keys(after).map((f) => [f, originalContents[f] ?? null]));
+  const scope = computePatchScope({ before, after, bounds: { maxFiles: MAX_FILES, maxEditedLines: MAX_LOC } });
+  return { ...legacyBounds(scope), scope };
 }
 
 // Render a markdown fix plan for a finding. The plan emits anchored steps

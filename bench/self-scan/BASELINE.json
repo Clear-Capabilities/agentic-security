@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-13T17:00:45.166Z",
-  "commit": "e66033a64ee8a4eb541bb21e9f00d984f852ac7c",
+  "generatedAt": "2026-11-16T04:35:51.121Z",
+  "commit": "e9fe5f711ead3a91da38a637c73715751e90f25c",
   "targets": {
     "hooks": {
       "total": 20,
@@ -61,7 +61,7 @@
       }
     },
     "scanner/src": {
-      "total": 684,
+      "total": 685,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -108,7 +108,7 @@
         "egress/policy.js": 1,
         "fix/apply-fix-service.js": 4,
         "fix/approver-registry.js": 1,
-        "fix/test-commands.js": 1,
+        "fix/test-commands.js": 2,
         "fix/verify-patch.js": 1,
         "history-scan.js": 1,
         "integrations/index.js": 10,
