@@ -128,7 +128,7 @@ async function _scanAtRef(root, ref) {
   // updateLifecycle see this partial, historical finding set as the current
   // one — it marks every open stableId NOT in the set as `remediated`, so one
   // per-ref scan would mass-remediate the whole project's real open findings.
-  const scan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_4__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
+  const scan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_4__.runFullScan)({ fileContents, scanRoot: root, provenance: false }, () => {});
   return {
     ref,
     fileCount: Object.keys(fileContents).length,
@@ -214,8 +214,8 @@ async function runWhatIf(root, { overlays = [], remove = [] } = {}) {
   // never the repo's current state — `provenance:false` for the same reason as
   // _scanAtRef above (no provenance to resolve, and updateLifecycle must not
   // treat either snapshot as "what is open right now").
-  const baseScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_4__/* .runFullScan */ .wW)({ fileContents: _baselineFor(fileContents, overlays, remove, root), scanRoot: root, provenance: false }, () => {});
-  const whatIfScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_4__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
+  const baseScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_4__.runFullScan)({ fileContents: _baselineFor(fileContents, overlays, remove, root), scanRoot: root, provenance: false }, () => {});
+  const whatIfScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_4__.runFullScan)({ fileContents, scanRoot: root, provenance: false }, () => {});
   const baseIds = new Set((baseScan.findings || []).map(f => f.stableId || f.id));
   const wIds = new Set((whatIfScan.findings || []).map(f => f.stableId || f.id));
   const introduced = (whatIfScan.findings || []).filter(f => !baseIds.has(f.stableId || f.id)).map(_compact);

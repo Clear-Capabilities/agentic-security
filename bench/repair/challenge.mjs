@@ -32,12 +32,22 @@ const known = new Set(['--check', '--update-baseline', '--require-execution', '-
 for (const a of argv) if (a.startsWith('--') && !known.has(a)) { console.error(`unknown flag ${a}`); process.exit(2); }
 const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null;
 
-function setupApp(name) {
+// An app that names `findingCwe` is planned from the scanner's own finding (its stable id lets the central verifier tell a finding the
+// original already had from one a candidate introduced); the others from a declared finding.
+async function setupApp(name) {
   const app = APPS[name];
   const root = fs.mkdtempSync(path.join(os.tmpdir(), `repair-challenge-${name}-`));
   fs.cpSync(path.join(REPO, app.fixture), root, { recursive: true });
   const profile = JSON.parse(fs.readFileSync(path.join(root, 'profile.json'), 'utf8'));
-  const p = planRepair({ root, finding: { findingId: `challenge:${name}`, file: profile.application.entry }, family: app.family, profile, profileOrigin: 'repository-file' });
+  let finding = { findingId: `challenge:${name}`, file: profile.application.entry };
+  if (app.findingCwe) {
+    const { runFullScan } = await import('../../scanner/src/engine.js');
+    const scan = await runFullScan({ fileContents: { [profile.application.entry]: fs.readFileSync(path.join(root, profile.application.entry), 'utf8') }, scanRoot: root, provenance: false }, () => {});
+    const f = (scan.findings || []).find((x) => x.cwe === app.findingCwe);
+    if (!f) throw new Error(`${name}: the scanner reported no ${app.findingCwe} finding on the fixture`);
+    finding = { findingId: f.id, id: f.id, stableId: f.stableId, file: profile.application.entry, cwe: f.cwe };
+  }
+  const p = planRepair({ root, finding, family: app.family, profile, profileOrigin: 'repository-file' });
   if (!p.plan) throw new Error(`${name}: the plan failed: ${[...p.problems, ...p.blocked].join('; ')}`);
   return { root, plan: p.plan, profile };
 }
@@ -48,7 +58,7 @@ export async function runChallenge() {
   try {
     for (const c of CASES) {
       if (only && c.id !== only) continue;
-      apps[c.app] ??= setupApp(c.app);
+      apps[c.app] ??= await setupApp(c.app);
       const { root, plan } = apps[c.app];
       const original = snapshotSource(root, { application: plan.contract.profile.application }).files;
       const files = c.edit({ ...original });

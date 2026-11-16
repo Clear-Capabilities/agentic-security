@@ -341,10 +341,10 @@ function legacyBounds(scope) {
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   El: () => (/* binding */ makeCandidate),
 /* harmony export */   We: () => (/* binding */ checkCandidate),
-/* harmony export */   uI: () => (/* binding */ queueProposer),
-/* harmony export */   uf: () => (/* binding */ sqlParameterizeRecipe)
+/* harmony export */   qW: () => (/* binding */ parameterizeTemplateSql),
+/* harmony export */   uI: () => (/* binding */ queueProposer)
 /* harmony export */ });
-/* unused harmony exports RECIPE_SQL_PARAMETERIZE, matchesAny, parameterizeTemplateSql */
+/* unused harmony exports RECIPE_SQL_PARAMETERIZE, matchesAny, sqlParameterizeRecipe */
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(76760);
 /* harmony import */ var _posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(41877);
 /* harmony import */ var _fix_patch_scope_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(11106);
@@ -561,11 +561,14 @@ function queueProposer(items, identity = 'user-supplied') {
 __webpack_require__.d(__webpack_exports__, {
   $B: () => (/* binding */ buildContract),
   NL: () => (/* binding */ obligationSummary),
-  snapshotSource: () => (/* binding */ snapshotSource)
+  snapshotSource: () => (/* binding */ snapshotSource),
+  l3: () => (/* binding */ supportFor)
 });
 
-// UNUSED EXPORTS: CONTRACT_BUILDER_VERSION, PROTECTED_PATTERNS, SQL_PROBES
+// UNUSED EXPORTS: CONTRACT_BUILDER_VERSION, PROFILE_SUPPORT, PROTECTED_PATTERNS, SQL_PROBES
 
+// EXTERNAL MODULE: external "node:crypto"
+var external_node_crypto_ = __webpack_require__(77598);
 // EXTERNAL MODULE: external "node:fs"
 var external_node_fs_ = __webpack_require__(73024);
 // EXTERNAL MODULE: external "node:child_process"
@@ -637,7 +640,7 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 function validateProfile(p) {
   const errs = [];
   if (!(0,schema_kit/* isPlainObject */.Qd)(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'tests', 'approval'], 'profile');
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
   if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
   const a = p.application;
@@ -668,7 +671,38 @@ function validateProfile(p) {
     actorIds.add(ac.id);
     if (!(0,schema_kit/* isPlainObject */.Qd)(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
   }
-  if (!['sql', 'authorization', 'ssrf', 'filesystem'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf or filesystem section');
+  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem or passwords section');
+  // Password storage: where the application stores a credential, how a user registers and logs in, the legacy format existing users
+  // carry (with known test passwords: the legacy rows are built from them), and the approved storage format and its minimum costs.
+  if (p.passwords !== undefined) {
+    const w = p.passwords;
+    if (!(0,schema_kit/* isPlainObject */.Qd)(w)) errs.push('passwords must be an object');
+    else {
+      keysOnly(errs, w, ['table', 'userColumn', 'hashColumn', 'legacy', 'register', 'login', 'approved', 'actor'], 'passwords');
+      for (const k of ['table', 'userColumn', 'hashColumn']) if (typeof w[k] !== 'string' || !IDENT.test(w[k])) errs.push(`passwords.${k} must be an identifier`);
+      if (!actorIds.has(w.actor)) errs.push('passwords.actor must name a declared actor (the one sending register and login requests)');
+      for (const op of ['register', 'login']) {
+        const r = w[op];
+        if (!(0,schema_kit/* isPlainObject */.Qd)(r)) { errs.push(`passwords.${op} is required`); continue; }
+        keysOnly(errs, r, ['method', 'path', 'body', 'expectStatus', 'denyStatus'], `passwords.${op}`);
+        checkRequestShape(errs, r, `passwords.${op}`);
+        const t = JSON.stringify([r.path, r.body ?? null]);
+        if (!t.includes('{{user}}') || !t.includes('{{password}}')) errs.push(`passwords.${op}: the path or body must carry {{user}} and {{password}}`);
+        if (r.expectStatus !== undefined && (!Array.isArray(r.expectStatus) || !r.expectStatus.every(Number.isInteger))) errs.push(`passwords.${op}.expectStatus must list status codes`);
+      }
+      if ((0,schema_kit/* isPlainObject */.Qd)(w.login) && (!Array.isArray(w.login.denyStatus) || !w.login.denyStatus.length || !w.login.denyStatus.every(Number.isInteger))) errs.push('passwords.login.denyStatus must list the status codes of a refused login');
+      const L = w.legacy;
+      if (!(0,schema_kit/* isPlainObject */.Qd)(L)) errs.push('passwords.legacy is required: the format existing users carry, and at least one user with a known test password');
+      else {
+        keysOnly(errs, L, ['digest', 'users'], 'passwords.legacy');
+        if (!['md5', 'sha1', 'sha256', 'sha512'].includes(L.digest)) errs.push("passwords.legacy.digest must be one of md5, sha1, sha256, sha512 (an unsalted hex digest)");
+        if (!Array.isArray(L.users) || !L.users.length || L.users.length > 8 || !L.users.every((u) => (0,schema_kit/* isPlainObject */.Qd)(u) && typeof u.name === 'string' && u.name && typeof u.password === 'string' && u.password.length >= 4)) errs.push('passwords.legacy.users must list 1 to 8 {name, password} test users');
+      }
+      const A = w.approved;
+      if (!(0,schema_kit/* isPlainObject */.Qd)(A) || A.format !== 'scrypt') errs.push("passwords.approved.format must be 'scrypt' (the only format the verifier recomputes in this release)");
+      else for (const k of ['minN', 'minR', 'minSaltBytes', 'minKeyBytes']) if (!Number.isInteger(A[k]) || A[k] < 1) errs.push(`passwords.approved.${k} must be a positive integer`);
+    }
+  }
   if ((p.ssrf !== undefined || p.filesystem !== undefined) && a?.runtime === 'python') errs.push('the ssrf and filesystem sections are supported for the node runtime only in this release');
   if (p.sql !== undefined) {
     if (!(0,schema_kit/* isPlainObject */.Qd)(p.sql)) errs.push('sql must be an object');
@@ -789,7 +823,28 @@ function policyAllows(policy, actor, object, actorsById) {
 
 
 
+
 const CONTRACT_BUILDER_VERSION = '1';
+
+/**
+ * Per-profile support (verified-remediation PRD FR-12, AC-12.5, M3-06): what has been executed, per family, runtime and platform, and
+ * the test that executes it. macOS and Linux are separate columns; one platform's execution never qualifies the other. `declared` means
+ * the profile validates and a contract builds, but no test executes that combination. Printed by `repair plan`; the reference page's
+ * "Profile support" table is held to this list by the contract test.
+ */
+const PROFILE_SUPPORT = Object.freeze([
+  { family: 'sql-injection', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'sql-parameterize-template', evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'sql-injection', runtime: 'python', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'object-authorization', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'object-authorization', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
+  { family: 'ssrf', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'path-traversal', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'path-realpath-containment', evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'password-storage', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'password-storage', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
+]);
+
+/** The support row for a contract's family and runtime, or null (an unsupported combination is refused when the profile validates). */
+const supportFor = (family, runtime) => PROFILE_SUPPORT.find((s) => s.family === family && s.runtime === (runtime || 'node')) || null;
 
 // Attack probes for a value placed in a SQL string literal. Split once, statically: the development set feeds back to candidate
 // generation; the sealed set is run only on a candidate that passed everything else, and its content never leaves the coordinator.
@@ -973,15 +1028,17 @@ function traversalProbes(f) {
     if (!names.length) continue;
     names.forEach((n) => secrets.add(n));
     const up = external_node_path_.posix.relative(root, rel);
-    development.push(up, `{{fs:abs}}/${rel}`);
+    // the file, its absolute path, and its directory (for an application that appends a file name to the request value)
+    development.push(up, `{{fs:abs}}/${rel}`, external_node_path_.posix.dirname(up));
     for (const [link, target] of Object.entries(f.links || {})) {
       if (!inside(link)) continue;
       const dest = external_node_path_.posix.normalize(external_node_path_.posix.join(external_node_path_.posix.dirname(link), target));
       if (inside(dest) || !(rel === dest || rel.startsWith(`${dest}/`))) continue;
       development.push(`${external_node_path_.posix.relative(root, link)}/${external_node_path_.posix.relative(dest, rel)}`);
     }
-    sealed.push(`./${up}`);
-    if (subdir) sealed.push(`${subdir}/../${up}`);
+    const dir = external_node_path_.posix.dirname(up);
+    sealed.push(`./${up}`, `./${dir}`);
+    if (subdir) sealed.push(`${subdir}/../${up}`, `${subdir}/../${dir}`);
   }
   return { development: [...new Set(development)], sealed: [...new Set(sealed)], secrets: [...secrets] };
 }
@@ -994,6 +1051,48 @@ function filesystemObligations(profile, actors, blocked) {
   return valueFamilyObligations('filesystem', profile, actors, blocked, {
     probes: p, forbid: () => ({ secrets: [...p.secrets] }), extra: { files }, scopeNoun: 'declared untrusted path inputs',
   });
+}
+
+/**
+ * Password storage: the stored credential is judged by the verifier, not by the application's own answers. New users register (two
+ * with the same password, to show salting) and their stored values must not be plaintext or a fast digest and must recompute under
+ * the approved format; legitimate logins (legacy users included, wrong passwords refused) must keep working; and a legacy user's
+ * stored value must be migrated to the approved format after a successful login.
+ */
+function passwordObligations(profile, actors, blocked) {
+  const w = profile.passwords;
+  const actor = actors[w.actor];
+  const T = `SELECT ${w.hashColumn} FROM ${w.table} WHERE ${w.userColumn} = ?`;
+  const fillCred = (tpl, user, password) => {
+    const f = (s) => s.replace(/\{\{user\}\}/g, user).replace(/\{\{password\}\}/g, password);
+    const enc = (s) => s.replace(/\{\{user\}\}/g, encodeURIComponent(user)).replace(/\{\{password\}\}/g, encodeURIComponent(password));
+    return { method: tpl.method, path: enc(tpl.path), headers: { ...(actor?.headers || {}) }, ...(tpl.body !== undefined ? { body: JSON.parse(JSON.stringify(tpl.body), (k, v) => (typeof v === 'string' ? f(v) : v)) } : {}) };
+  };
+  const reg = (id, user, pw) => ({ id, role: 'control', ...fillCred(w.register, user, pw), expect: { status: w.register.expectStatus || [200, 201] } });
+  const login = (id, user, pw, ok) => ({ id, role: 'control', ...fillCred(w.login, user, pw), expect: { status: ok ? (w.login.expectStatus || [200]) : w.login.denyStatus } });
+  const approved = { format: 'scrypt', minN: w.approved.minN, minR: w.approved.minR, minSaltBytes: w.approved.minSaltBytes, minKeyBytes: w.approved.minKeyBytes };
+  const NEW_PW = '{{secret:new-password}}';
+  const legacySeed = w.legacy.users.map((u) => ({ sql: `INSERT INTO ${w.table} (${w.userColumn}, ${w.hashColumn}) VALUES (?, ?)`, params: [u.name, external_node_crypto_.createHash(w.legacy.digest).update(u.password, 'utf8').digest('hex')] }));
+  const withSeed = (inputs) => ({ ...inputs, seed: [...inputs.seed, ...legacySeed] });
+  const out = [];
+  const storage = [
+    reg('register_new_a', 'new-user-a', NEW_PW), reg('register_new_b', 'new-user-b', NEW_PW),
+    login('login_new_a', 'new-user-a', NEW_PW, true), login('login_new_a_wrong', 'new-user-a', 'not-the-password', false),
+  ];
+  const storageChecks = [
+    { id: 'stored_new_a', role: 'attack', sql: T, params: ['new-user-a'], credential: { password: NEW_PW, properties: ['not-plaintext', 'not-fast-digest', 'approved-format'], approved } },
+    { id: 'stored_new_b', role: 'attack', sql: T, params: ['new-user-b'], credential: { password: NEW_PW, properties: ['not-plaintext', 'not-fast-digest', 'approved-format', 'distinct-from'], distinctFrom: 'stored_new_a', approved } },
+  ];
+  out.push(obligation('app-attack-blocked', 'password-storage', withSeed(appInputs(profile, storage, storageChecks)), { scope: 'stored credentials of newly registered users: not plaintext, not a fast digest, salted, recomputed under the approved format' }));
+  const legit = [];
+  w.legacy.users.forEach((u, i) => { legit.push(login(`login_legacy_${i}`, u.name, u.password, true), login(`login_legacy_${i}_wrong`, u.name, `${u.password}-wrong`, false)); });
+  legit.push(reg('register_new_c', 'new-user-c', 'another-pass-1'), login('login_new_c', 'new-user-c', 'another-pass-1', true));
+  out.push(obligation('app-behaviour-preserved', 'password-legitimate-logins', withSeed(appInputs(profile, legit)), { scope: 'legacy and new users log in with the right password and are refused with a wrong one' }));
+  const migrate = w.legacy.users.map((u, i) => login(`login_legacy_${i}_migrate`, u.name, u.password, true));
+  const migrated = w.legacy.users.map((u, i) => ({ id: `migrated_legacy_${i}`, role: 'control', sql: T, params: [u.name], credential: { password: u.password, properties: ['not-fast-digest', 'approved-format'], approved } }));
+  out.push(obligation('app-behaviour-after', 'password-legacy-migrated', withSeed(appInputs(profile, migrate, migrated)), { scope: 'a legacy user\'s stored value is in the approved format after a successful login' }));
+  void blocked;
+  return out;
 }
 
 function authzObligations(profile, actors, blocked) {
@@ -1061,6 +1160,9 @@ function buildContract(o) {
   } else if (o.family === 'ssrf') {
     if (!profile.ssrf) return { contract: null, blocked: ['the profile has no ssrf section for a server-side request forgery finding'], problems: [] };
     obligations = ssrfObligations(profile, actors, blocked);
+  } else if (o.family === 'password-storage') {
+    if (!profile.passwords) return { contract: null, blocked: ['the profile has no passwords section for a password storage finding'], problems: [] };
+    obligations = passwordObligations(profile, actors, blocked);
   } else if (o.family === 'path-traversal') {
     if (!profile.filesystem) return { contract: null, blocked: ['the profile has no filesystem section for a path traversal finding'], problems: [] };
     obligations = filesystemObligations(profile, actors, blocked);
@@ -1073,7 +1175,7 @@ function buildContract(o) {
   const approved = o.profileOrigin === 'operator-profile-outside-repository' && profile.approval;
   const policyFacts = [{
     id: 'application-profile', origin: o.profileOrigin, approval: approved ? 'approved' : 'declared',
-    digest: (0,identity/* digestOf */.ol)({ actors: profile.actors, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, database: profile.database }),
+    digest: (0,identity/* digestOf */.ol)({ actors: profile.actors, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, database: profile.database }),
     ...(approved ? { approvedBy: profile.approval.approvedBy } : {}),
   }];
   const knownUnknowns = [
@@ -1284,8 +1386,9 @@ function counterexampleFrom(ob, inputs, res, actorsByHeader) {
     const check = (inputs.stateChecks || []).find((c) => c.id === v.id) || null;
     const writer = check && Array.isArray(check.guards) ? check.guards.map((g) => byId[g]).find(Boolean) || null : null;
     return {
-      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : v.effect === 'forbidden-connection' ? 'forbidden-connection' : 'secret-disclosed',
+      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : v.effect === 'forbidden-connection' ? 'forbidden-connection' : v.effect === 'credential-storage' ? 'credential-storage' : 'secret-disclosed',
       ...(v.destinations ? { destinations: v.destinations } : {}),
+      ...(v.properties ? { failedProperties: v.properties } : {}),
       request: req ? { method: req.method, path: req.path, body: req.body ?? null } : writer ? { method: writer.method, path: writer.path, body: writer.body ?? null } : null,
       actor: actorOf(req || writer), secrets: v.secrets || [], stateCheck: check ? check.sql : null, guardedRequests: check?.guards?.length ?? 0,
       violations: (d.attackViolations || []).length, message: res.reason,
@@ -1840,9 +1943,10 @@ async function centralVerify(o, plan, cand, budgets) {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   Zn: () => (/* binding */ planFromInputs)
+/* harmony export */   Zn: () => (/* binding */ planFromInputs),
+/* harmony export */   lG: () => (/* binding */ familyForFinding)
 /* harmony export */ });
-/* unused harmony exports familyForFinding, FAMILIES_SUPPORTED, signedFinding, insideRoot */
+/* unused harmony exports FAMILIES_SUPPORTED, signedFinding, insideRoot */
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
@@ -1862,9 +1966,9 @@ async function centralVerify(o, plan, cand, budgets) {
 
 
 
-const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal' };
+const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal', 'CWE-916': 'password-storage', 'CWE-759': 'password-storage', 'CWE-760': 'password-storage', 'CWE-256': 'password-storage' };
 const familyForFinding = (f) => FAMILY_BY_CWE[String(f?.cwe || '').toUpperCase().replace(/^(\d)/, 'CWE-$1')] || null;
-const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal']);
+const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage']);
 
 function signedFinding(root, id) {
   const file = node_path__WEBPACK_IMPORTED_MODULE_1__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .stateDir */ .Pn)(root), 'last-scan.json');
@@ -1966,7 +2070,7 @@ const ENVIRONMENT_STATES = Object.freeze(['not-checked', 'staging-verified', 'de
 const COMPLETION_STATES = Object.freeze(['complete', 'partial', 'cancelled', 'unavailable', 'invalid']);
 const CUSTODY = Object.freeze(['internal-scan', 'imported', 'locally-corroborated', 'reproduced', 'refuted', 'unresolved']);
 const GENERATORS = Object.freeze(['deterministic-recipe', 'configured-model', 'user-supplied']);
-const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal']);
+const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage']);
 const EVIDENCE_ORIGINS = Object.freeze(['generated-from-profile', 'operator-declared', 'approved-invariant', 'counterexample', 'registered-family']);
 
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w@.\-/]{1,512}$/;

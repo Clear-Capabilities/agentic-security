@@ -15,6 +15,7 @@ How to use the workflow is in the [verified remediation guide](../guides/verifie
 | `repair cancel` | Asks a running repair, in any process, to stop. | a cancel marker |
 | `repair export` | Writes the contract, the record, the exact patch bytes and a manifest to a directory. Request header values and any credential they carry are replaced by digests. | the export directory |
 | `repair verify` | Checks an exported bundle: patch bytes against their digests, the contract against the manifest, and optionally whether the source under `--root` is the verified baseline or that baseline with the patch applied. Executes nothing. | nothing |
+| `repair recipes` | `list`, `evaluate <recipe>` (executes the recipe's examples; needs `--allow-execution`), `promote`, `retire`, `rollback` (each needs `--reason`), `draft --file <recipe.json>`. Every change is a signed ledger record. | the recipe ledger |
 
 **Exit codes**
 
@@ -44,6 +45,7 @@ A profile is declared by the operator: how to start the application and what its
 | `sql` | `inputs`: the untrusted value (`{{value}}` in the path or body), the actor sending it, legitimate values with their expected response (`originalMishandles` for one the original gets wrong), and the planted secrets another actor's data holds |
 | `authorization` | `table`, `idColumn`, `contentColumn`, `objects` (owner, row id, planted secret), `operations` (`read` or `update`, with `{{id}}` and `{{value}}`), `policy.allow` (`owner`, `same-tenant-admin`, `any-admin`), and `controls`: legitimate workflows outside the actor matrix, such as a public page, that must keep working after a repair |
 | `ssrf` | `policy` (`allowlist`: only the `approved` hosts; `public-only`: no loopback, private, link-local, carrier-grade NAT or unique-local address), `approved`, `hosts` (each with `name`, `addresses` answered one per resolution with the last repeating, so a host can rebind, an optional `port`, and `routes` the verifier serves: `path`, `status`, `headers`, `body`, where a body may plant `{{secret:<name>}}`), and `inputs` (the untrusted URL as `{{value}}`, the actor, and legitimate values with their expected response). Node runtime only. |
+| `passwords` | `actor` (who registers and logs in), `table`, `userColumn`, `hashColumn`, `register` and `login` (method, path, body carrying `{{user}}` and `{{password}}`, `expectStatus`; `login.denyStatus` for a refused login), `legacy` (`digest`: the unsalted hex digest existing users carry, one of `md5`, `sha1`, `sha256`, `sha512`, and `users` with known test passwords; their rows are built from them), `approved` (`format`: `scrypt`, the only format the verifier recomputes in this release, with `minN`, `minR`, `minSaltBytes`, `minKeyBytes`). |
 | `filesystem` | `root` (the allowed directory the factory receives as `filesRoot`), `tree` (relative path to content, inside and outside the root; a file outside it plants `{{secret:<name>}}`), `links` (real symbolic links, each resolving inside the tree), and `inputs` as for `ssrf`. Node runtime only. |
 | `tests` | `command`, `required`, `flaky`: the project test suite the central verifier runs on both trees |
 | `approval` | `approvedBy`, `reason`: counts only for a profile outside the repository |
@@ -58,7 +60,7 @@ A profile is declared by the operator: how to start the application and what its
 | `schemaVersion` | `1.0.0`. A reader accepts 1.x; a 2.0 contract is refused. |
 | `contractId` | `rcon:` and 16 hex characters over the allowlisted identity fields. Identical inputs give an identical id; no clock or random value enters it. |
 | `contractDigest` | SHA-256 over the same fields. |
-| `family` | `sql-injection`, `object-authorization`, `ssrf` or `path-traversal` in this release. |
+| `family` | `sql-injection`, `object-authorization`, `ssrf`, `path-traversal` or `password-storage` in this release. |
 | `findingRefs` | The finding the contract repairs. |
 | `rootCauseGroup` | Digest of the family and the finding's file. |
 | `sourceCommit` | The commit the signed scan recorded, or null. |
@@ -151,16 +153,53 @@ A profile is declared by the operator: how to start the application and what its
 | `proposed` | Written at the start of a run, before any result. |
 | `mitigation` | Reserved for a repair that reduces but does not remove the effect; not emitted in this release. |
 
+## Profile support
+
+What has been executed, per family, runtime and platform. macOS and Linux are separate: one platform's execution never qualifies the other. `declared` means the profile validates and a contract builds, but no test executes that combination. `repair plan` prints the row for its contract. This table is held to the code by the contract test.
+
+**Profile support**
+
+| Family | Runtime | macOS | Linux | Recipe |
+| --- | --- | --- | --- | --- |
+| `sql-injection` | `node` | integration-tested | blocked | `sql-parameterize-template` |
+| `sql-injection` | `python` | integration-tested | blocked | none |
+| `object-authorization` | `node` | integration-tested | blocked | none |
+| `object-authorization` | `python` | declared | blocked | none |
+| `ssrf` | `node` | integration-tested | blocked | none |
+| `path-traversal` | `node` | integration-tested | blocked | `path-realpath-containment` |
+| `password-storage` | `node` | integration-tested | blocked | none |
+| `password-storage` | `python` | declared | blocked | none |
+
+## Repair recipes
+
+A recipe is a registered, hand-written transformation (code shipped with the scanner) plus a document: the family, language, runtime and driver it supports, its preconditions, the obligations its candidates must pass, its examples and its contraindications. A document cannot carry code or a command, and can only narrow a transformation (fewer files, a higher runtime floor), never widen it. A recipe is a proposer: what it produces is judged by every obligation of the contract like any other candidate.
+
+The recipe's identity covers the document and the source of its transformation. An evaluation runs every example: positive and independent (held-out) examples must be `verified-for-contract` through the full coordinator, a safe-negative must be refused by the transformation, and an unsupported runtime version must be not applicable. The evaluation's digest covers the recipe identity, every example fixture and every obligation it was judged against; a promotion records it, and a recipe that changed after its promotion is not used.
+
+**Recipe states**
+
+| State | Used automatically | Meaning |
+| --- | --- | --- |
+| `shipped` | yes | A recipe shipped with the scanner, evaluated by this repository's recipe tests. |
+| `draft` | no | An operator's narrowed recipe document, not yet evaluated. |
+| `evaluated` | no | Every example met its expectation for this exact recipe. |
+| `promoted` | yes | An operator promoted an evaluated recipe, with a reason; used while the recipe is unchanged. |
+| `retired` | no | Never used again; the record and every past result are kept. Terminal. |
+| `rolled-back` | no | Withdrawn after use; may be evaluated again. |
+
+No recipe is learned from examples in this release: both shipped transformations were written by hand. "Independent" examples are held-out projects the transformation was not developed against, written by the same authors, so they are synthetic evidence of generalization, not an independent measurement.
+
 ## What this does not do
 
 - It verifies the declared contract only. Requests, actors, objects and state checks outside the profile are not observed.
 - It runs requests one at a time in one process. No concurrency is exercised, and none is claimed.
 - It supports Node applications and Python WSGI applications over SQLite in this release. A Python application's WSGI callable is called directly with a real WSGI environ; no HTTP server runs. PostgreSQL is not executed (no PostgreSQL server exists on the measured host).
 - Server-side request forgery and path traversal run on the Node runtime only. Outbound connections are observed at the Node connection layer (`net`, `tls`, the HTTP agents, raw sockets) and served by the declared hosts with the declared DNS answers; no socket is opened. An `https` destination is recorded and refused, never served. A connection opened below that layer (a child process, a raw binding, a native addon) is not observed, so the scope gate refuses a candidate that introduces one. A destination the declaration does not model (an undeclared name, connected to or looked up) makes the run inconclusive, never a pass.
+- Password storage judges the stored value by recomputation in one approved format (scrypt as `scrypt$N$r$p$<salt hex>$<key hex>`), with cost floors: a different sound format (bcrypt, Argon2) does not hold. Timing and memory hardness are not measured. Node runtime only.
 - Path traversal judges disclosure only: a planted file outside the root that reaches a response. Writes outside the root and time-of-check races are not exercised.
 - Cross-execution shares only attacks that disclosed a planted secret or reached a forbidden destination; a durable-state attack is judged by the object-level check every candidate runs anyway.
 - The application oracles run in the trust boundary. On Linux the boundary currently refuses to run (the namespace backend lacks proved read denial), so repair execution there is `blocked`, never a downgraded pass. The execution tests were run on macOS with the userspace backend.
-- No model proposes candidates in this release. Candidates come from the deterministic SQL recipe or are supplied by a person (`--candidates`). Server-side request forgery and path traversal have no recipe.
+- No model proposes candidates in this release. Candidates come from the shipped recipes (`sql-parameterize-template`, `path-realpath-containment`) or are supplied by a person (`--candidates`). Server-side request forgery, object authorization and password storage have no recipe.
 - The challenge corpus (`bench/repair/`) is synthetic regression evidence written by the verifier's authors. It is not an independent accuracy measurement.
 - A verified repair is source-only. Nothing is built, staged or deployed, and the record never says otherwise.
 - An exported bundle's integrity establishes custody, not semantic correctness. Re-run the plan to re-establish evidence.

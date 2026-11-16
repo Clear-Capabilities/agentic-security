@@ -2,7 +2,7 @@
 // failure (which obligation must catch it), next to legitimate repairs of the same application.
 //
 // Synthetic regression evidence, not an accuracy measurement: every case here was written by the people who wrote the verifier, against
-// five small applications (scanner/test/fixtures/repair/). A pass shows these known evasion shapes are caught; it says nothing about
+// six small applications (scanner/test/fixtures/repair/). A pass shows these known evasion shapes are caught; it says nothing about
 // independent repair populations.
 //
 // A case is a transformation of the fixture source. `edit` must change the file (the runner refuses a no-op edit), so a fixture change
@@ -45,7 +45,36 @@ export const APPS = Object.freeze({
   'ssrf-preview': { family: 'ssrf', fixture: 'scanner/test/fixtures/repair/ssrf-preview' },
   'ssrf-rebind': { family: 'ssrf', fixture: 'scanner/test/fixtures/repair/ssrf-rebind' },
   'files-download': { family: 'path-traversal', fixture: 'scanner/test/fixtures/repair/files-download' },
+  'password-login': { family: 'password-storage', fixture: 'scanner/test/fixtures/repair/password-login', findingCwe: 'CWE-916' },
 });
+
+// ---------------------------------------------------------------- password storage edits
+const PW_HASH = "function hashPassword(password) {\n  return crypto.createHash('md5').update(String(password)).digest('hex');\n}\n";
+const PW_CMP = 'row.pw !== hashPassword(b.password)';
+const PW_LOGIN_OK = "      return send(res, 200, { ok: true, user: row.name });\n";
+const D = '$';
+const pwKdf = (salt, N) => 'function hashPassword(password) {\n'
+  + `  const salt = ${salt};\n`
+  + `  const key = crypto.scryptSync(String(password), salt, 32, { N: ${N}, r: 8, p: 1 });\n`
+  + `  return 'scrypt${D}${N}${D}8${D}1${D}' + salt.toString('hex') + '${D}' + key.toString('hex');\n`
+  + '}\n';
+const pwVerify = (legacy) => 'function verifyPassword(password, stored) {\n'
+  + "  if (stored.startsWith('scrypt$')) {\n"
+  + "    const [, n, r, p, saltHex, keyHex] = stored.split('$');\n"
+  + "    const key = crypto.scryptSync(String(password), Buffer.from(saltHex, 'hex'), keyHex.length / 2, { N: Number(n), r: Number(r), p: Number(p) });\n"
+  + "    return crypto.timingSafeEqual(key, Buffer.from(keyHex, 'hex'));\n"
+  + '  }\n'
+  + (legacy
+    ? "  const legacy = crypto.createHash('md5').update(String(password)).digest('hex');\n  return legacy.length === stored.length && crypto.timingSafeEqual(Buffer.from(legacy), Buffer.from(stored));\n"
+    : '  return false;\n')
+  + '}\n';
+const PW_RANDOM = 'crypto.randomBytes(16)';
+const pwEdit = ({ salt = PW_RANDOM, N = 16384, legacy = true, rehash = false }) => (files) => {
+  let t = replaceOnce(files['src/app.mjs'], PW_HASH, pwKdf(salt, N) + pwVerify(legacy));
+  t = replaceOnce(t, PW_CMP, '!verifyPassword(b.password, row.pw)');
+  if (rehash) t = replaceOnce(t, PW_LOGIN_OK, "      if (!row.pw.startsWith('scrypt$')) db.prepare('UPDATE users SET pw = ? WHERE name = ?').run(hashPassword(b.password), row.name);\n" + PW_LOGIN_OK);
+  return { 'src/app.mjs': t };
+};
 
 export const CASES = Object.freeze([
   // ---------------------------------------------------------------- SQL: unsafe
@@ -131,4 +160,19 @@ export const CASES = Object.freeze([
   // ---------------------------------------------------------------- path traversal: safe
   { id: 'path/realpath-containment', app: 'files-download', label: 'safe', shape: 'both paths resolved through links, containment checked with a separator',
     edit: fsEdit(`    let file;\n    try {\n      const base = fs.realpathSync(filesRoot);\n      file = fs.realpathSync(path.resolve(base, name));\n      if (!file.startsWith(base + path.sep)) throw new Error('outside');\n    } catch {\n${NOT_FOUND}    }\n`) },
+
+  // ---------------------------------------------------------------- password storage: unsafe
+  { id: 'password/fast-digest-swap', app: 'password-login', label: 'unsafe', expect: { obligation: 'password-storage' }, shape: 'a stronger fast digest (sha256 for md5): still unsalted and fast',
+    edit: (files) => ({ 'src/app.mjs': files['src/app.mjs'].split("createHash('md5')").join("createHash('sha256')") }) },
+  { id: 'password/constant-salt', app: 'password-login', label: 'unsafe', expect: { obligation: 'password-storage' }, shape: 'scrypt with one salt for every user: equal passwords store equal values',
+    edit: pwEdit({ salt: "Buffer.from('0123456789abcdef0123456789abcdef', 'hex')", rehash: true }) },
+  { id: 'password/low-cost', app: 'password-login', label: 'unsafe', expect: { obligation: 'password-storage' }, shape: 'scrypt below the approved cost (N 1024)',
+    edit: pwEdit({ N: 1024, rehash: true }) },
+  { id: 'password/legacy-users-locked-out', app: 'password-login', label: 'unsafe', expect: { obligation: 'password-legitimate-logins' }, shape: 'new format only: every existing account can no longer log in',
+    edit: pwEdit({ legacy: false, rehash: true }) },
+  { id: 'password/no-migration', app: 'password-login', label: 'unsafe', expect: { obligation: 'password-legacy-migrated' }, shape: 'legacy accounts accepted but never upgraded: their stored values stay fast digests',
+    edit: pwEdit({}) },
+  // ---------------------------------------------------------------- password storage: safe
+  { id: 'password/scrypt-with-migration', app: 'password-login', label: 'safe', shape: 'salted scrypt, legacy digests accepted only to log in, upgraded on the next successful login',
+    edit: pwEdit({ rehash: true }) },
 ]);

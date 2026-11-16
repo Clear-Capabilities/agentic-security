@@ -1,0 +1,15 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": { "entry": "src/app.mjs", "export": "createApp", "files": ["src/app.mjs"], "runtime": "node" },
+  "database": { "engine": "sqlite", "schemaSql": "CREATE TABLE users (name TEXT PRIMARY KEY, pw TEXT NOT NULL);", "seed": [] },
+  "actors": [ { "id": "client", "tenant": "t1", "role": "member", "headers": {} } ],
+  "passwords": {
+    "actor": "client",
+    "table": "users", "userColumn": "name", "hashColumn": "pw",
+    "legacy": { "digest": "md5", "users": [ { "name": "olive", "password": "legacy-pass-1" } ] },
+    "register": { "method": "POST", "path": "/register", "body": { "user": "{{user}}", "password": "{{password}}" }, "expectStatus": [201] },
+    "login": { "method": "POST", "path": "/login", "body": { "user": "{{user}}", "password": "{{password}}" }, "expectStatus": [200], "denyStatus": [401] },
+    "approved": { "format": "scrypt", "minN": 16384, "minR": 8, "minSaltBytes": 16, "minKeyBytes": 32 }
+  }
+}

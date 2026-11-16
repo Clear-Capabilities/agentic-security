@@ -1,11 +1,11 @@
 {
   "summary": {
-    "cases": 35,
-    "unsafe": 28,
-    "safe": 7,
+    "cases": 41,
+    "unsafe": 33,
+    "safe": 8,
     "unsafeAccepted": 0,
     "safeRejected": 0,
-    "caughtAsExpected": 28,
+    "caughtAsExpected": 33,
     "notExecuted": 0
   },
   "rows": [
@@ -249,6 +249,48 @@
     },
     {
       "id": "path/realpath-containment",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "password/fast-digest-swap",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "password-legitimate-logins,password-legacy-migrated,password-storage",
+      "asExpected": true
+    },
+    {
+      "id": "password/constant-salt",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "password-storage",
+      "asExpected": true
+    },
+    {
+      "id": "password/low-cost",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "password-legacy-migrated,password-storage",
+      "asExpected": true
+    },
+    {
+      "id": "password/legacy-users-locked-out",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "password-legitimate-logins,password-legacy-migrated",
+      "asExpected": true
+    },
+    {
+      "id": "password/no-migration",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "password-legacy-migrated",
+      "asExpected": true
+    },
+    {
+      "id": "password/scrypt-with-migration",
       "label": "safe",
       "disposition": "verified-for-contract",
       "caughtBy": null,

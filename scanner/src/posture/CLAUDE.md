@@ -216,7 +216,8 @@ fixture locations, limitations, logic digest). Fixtures: `test/fixtures/oracles/
   Version 2 adds an optional `network` (outbound connections recorded at the Node connection layer, declared DNS answers, declared
   hosts served over in-memory duplexes, a policy; `forbid.connections`; an undeclared destination is inconclusive; patches are made
   before the application loads and `syncBuiltinESMExports` covers named imports) and an optional `files` (a real tree with links;
-  the factory receives `filesRoot`). Node runtime only for both.
+  the factory receives `filesRoot`). Node runtime only for both. Version 3 adds `credential` state checks: the verifier reads one stored
+  password value and judges it itself (not plaintext, no fast digest, recomputes under the approved scrypt format and cost, salted).
 - A run is: feature gate (`verification-oracles`, off by default, operator-only), request validation (closed-world: labels,
   verdicts and receipts are never accepted; reserved `__oracle_*` names and path escapes are refused), prerequisite check
   (an unmet one is `unsupported` with a typed reason and the target is never executed), a fresh workspace plus a verifier-owned

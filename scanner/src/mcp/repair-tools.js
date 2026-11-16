@@ -22,7 +22,7 @@ export function makeRepairTools({ confine, META }) {
       properties: {
         profile_file: { type: 'string', minLength: 1, maxLength: 512 },
         finding_id: { type: 'string', minLength: 1, maxLength: 200 },
-        family: { type: 'string', enum: ['sql-injection', 'object-authorization', 'ssrf', 'path-traversal'] },
+        family: { type: 'string', enum: ['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage'] },
         file: { type: 'string', minLength: 1, maxLength: 512 },
       },
       required: ['profile_file'],

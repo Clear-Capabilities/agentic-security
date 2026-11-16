@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-16T17:17:31.892Z",
-  "commit": "fb04d983e313df3fbcc14553353e4b265c58335f",
+  "generatedAt": "2026-11-16T21:50:18.411Z",
+  "commit": "028f98ca579c7cfa7656db4e35646fa02014eb60",
   "targets": {
     "hooks": {
       "total": 20,
@@ -61,7 +61,7 @@
       }
     },
     "scanner/src": {
-      "total": 694,
+      "total": 698,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -74,7 +74,7 @@
         "capabilities/decide.js": 1,
         "capabilities/outbound.js": 2,
         "capabilities/probes.js": 2,
-        "capabilities/proxy.js": 3,
+        "capabilities/proxy.js": 2,
         "capabilities/receipts.js": 3,
         "capabilities/recovery.js": 1,
         "context-intelligence/adapters/haskell-hie.js": 1,
@@ -344,11 +344,13 @@
         "posture/watch-mode.js": 1,
         "posture/workflow-installer.js": 2,
         "pr-comment.js": 1,
-        "repair/cli.js": 3,
+        "repair/cli.js": 5,
         "repair/contracts.js": 1,
         "repair/coordinator.js": 1,
         "repair/intake.js": 1,
         "repair/profile.js": 2,
+        "repair/recipe-eval.js": 1,
+        "repair/recipes.js": 2,
         "report/index.js": 2,
         "runScan.js": 2,
         "sandbox/backend-namespace.js": 1,

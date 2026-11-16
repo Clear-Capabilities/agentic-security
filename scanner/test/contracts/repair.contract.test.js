@@ -10,6 +10,8 @@ import { REPO, readPage, fieldsUnder, sameFields } from '../helpers/contract-pag
 import { planRepair, runRepair, EXIT } from '../../src/repair/coordinator.js';
 import { OBLIGATION_KINDS, DISPOSITIONS, CONTRACT_FIELDS, RECORD_FIELDS, OBLIGATION_FIELDS } from '../../src/repair/schemas.js';
 import { USAGE } from '../../src/repair/cli.js';
+import { PROFILE_SUPPORT } from '../../src/repair/contracts.js';
+import { RECIPE_STATES } from '../../src/repair/recipes.js';
 import { resolveAssuranceConfig } from '../../src/posture/assurance/config.js';
 
 const PAGE = readPage('docs/reference/repair-contract.md');
@@ -62,4 +64,26 @@ test('the exit codes and the subcommands are the documented ones', () => {
   const documented = [...PAGE.matchAll(/^\| `repair (\w+)` \|/gm)].map((m) => m[1]).sort();
   const usage = [...USAGE.matchAll(/^ {2}(\w+) /gm)].map((m) => m[1]).sort();
   assert.deepEqual(usage, documented);
+});
+
+const rowsUnder = (heading) => {
+  const lines = PAGE.split('\n');
+  const at = lines.findIndex((l) => l.startsWith(`**${heading}**`));
+  assert.ok(at >= 0, heading);
+  const out = [];
+  for (let i = at + 1; i < lines.length && !lines[i].startsWith('#') && !(lines[i].startsWith('**') && i > at); i++) {
+    if (!/^\| `/.test(lines[i])) continue;
+    out.push(lines[i].split('|').slice(1, -1).map((c) => c.trim().replace(/^`|`$/g, '')));
+  }
+  return out;
+};
+
+test('the profile support table is the code\'s, row for row, and Linux is never claimed', () => {
+  const doc = rowsUnder('Profile support').map(([family, runtime, macos, linux, recipe]) => ({ family, runtime, macos, linux, recipe: recipe === 'none' ? null : recipe }));
+  const code = PROFILE_SUPPORT.map(({ family, runtime, macos, linux, recipe }) => ({ family, runtime, macos, linux, recipe }));
+  assert.deepEqual(doc, code);
+});
+
+test('the recipe states are the documented ones', () => {
+  assert.deepEqual(rowsUnder('Recipe states').map((r) => r[0]).sort(), [...RECIPE_STATES].sort());
 });

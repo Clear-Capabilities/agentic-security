@@ -81,8 +81,9 @@ export function counterexampleFrom(ob, inputs, res, actorsByHeader) {
     const check = (inputs.stateChecks || []).find((c) => c.id === v.id) || null;
     const writer = check && Array.isArray(check.guards) ? check.guards.map((g) => byId[g]).find(Boolean) || null : null;
     return {
-      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : v.effect === 'forbidden-connection' ? 'forbidden-connection' : 'secret-disclosed',
+      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : v.effect === 'forbidden-connection' ? 'forbidden-connection' : v.effect === 'credential-storage' ? 'credential-storage' : 'secret-disclosed',
       ...(v.destinations ? { destinations: v.destinations } : {}),
+      ...(v.properties ? { failedProperties: v.properties } : {}),
       request: req ? { method: req.method, path: req.path, body: req.body ?? null } : writer ? { method: writer.method, path: writer.path, body: writer.body ?? null } : null,
       actor: actorOf(req || writer), secrets: v.secrets || [], stateCheck: check ? check.sql : null, guardedRequests: check?.guards?.length ?? 0,
       violations: (d.attackViolations || []).length, message: res.reason,

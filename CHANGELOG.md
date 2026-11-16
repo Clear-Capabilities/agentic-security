@@ -9,6 +9,20 @@
 > make the history less accurate, not more.
 
 
+## 0.199.0 - Verified remediation, milestone 3 (second part): repair recipes, password storage, per-profile support
+
+**Measured, 0.198.0:** `TIMINGS preflight=3s push=7s pr=4s checks=444s merge=5s verify=7s tag=2s release=314s npm=91s total=877s release-clock=328s`, 328 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.
+
+The rest of milestone 3 for the Labs capability `contract-repair`, except workflow state (below). Measured on macOS; the trust boundary still refuses the Linux namespace backend, so a Linux run reports `blocked`. Requirement-by-requirement record: `docs/verified-remediation/LEDGER.md`.
+
+- **Changed results, listed first.** Repair challenge gate: 41 cases, unsafe patches accepted 0 of 33, caught by the declared obligation 33 of 33, legitimate repairs rejected 0 of 8 (was 35). The application oracles are now version 3 and their conformance fixtures were re-pinned; 10 adapters conform with execution. Self-scan baseline 694 to 698, reviewed (see the ledger).
+- **Fixed: a password migration could never pass the central verifier.** Moving users off an unsalted digest needs one comparison against the old digest so existing accounts can still log in; the scanner reported that comparison as a new critical MD5 password hash. An MD5 or SHA-1 digest that is only compared, next to an approved KDF verification, is now reported at low severity. It is never suppressed, and a digest that is returned or stored keeps its full severity.
+- **Fixed: a regular expression's `.exec(...)` was reported as command injection** when its argument mentioned the request (`/^\/a\/(.+)$/.exec(new URL(req.url, base).pathname)`). It runs no command. A real `exec` of a request value is still reported.
+- **Password storage (`password-storage`).** The verifier reads the stored credential itself after the run: it must not contain the password or a fast digest of it, must recompute from the password under the approved scrypt format and cost, and must differ between two users with the same password. Existing users keep logging in, wrong passwords are refused, and a legacy value must be upgraded after a successful login. A SHA-256 swap, a constant salt, a low cost, locked-out users and a missing migration are each rejected by the obligation that covers them.
+- **Repair recipes.** Two shipped recipes, SQL parameterization and link-resolving path containment, now have a signed lifecycle: `agentic-security repair recipes list|evaluate|promote|retire|rollback|draft`. A recipe's identity covers its transformation's source; evaluation runs its examples through the full coordinator, including a held-out project in a different code shape (both held-out projects are verified); a changed recipe is not used until evaluated again; a retired one is never used again. A recipe is only a proposer: its candidate is judged by every obligation like any other. No recipe is learned from examples, and the held-out projects were written by the same authors.
+- **Per-profile support.** `repair plan` prints, for its family and runtime, what has been executed on macOS and on Linux, the shipped recipe and the executing test; the reference page's table is held to the code.
+- **Not in this release.** Workflow and concurrency checks on the application adapters (milestone 3, item 5), other password formats (bcrypt, Argon2), Python for the new families.
+
 ## 0.198.0 - Verified remediation, milestone 3 (first part): server-side request forgery and path traversal
 
 **Measured, 0.197.0:** `TIMINGS preflight=4s push=7s pr=5s checks=433s merge=5s verify=8s tag=2s release=163s npm=90s total=717s release-clock=178s`, 178 s from the merge to the published release.
