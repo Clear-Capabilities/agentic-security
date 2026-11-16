@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.198.0",
-    "bundleSha256": "ae425e1c26f4b90f11bf4f03637991f9a8dbb3474b7dfb36d551dd8a8782aa89",
-    "commit": "e3c2f0d12304af2a6fcaa4525a256f6adb9801b8",
+    "engineVersion": "0.199.0",
+    "bundleSha256": "f2bd3a62737d5d2782128d008bd7f33866070f589a9bbf3eb17c9a5c797eff64",
+    "commit": "c53c3a28a00b753b19634003fa27d9dcf06f105e",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-16T21:03:49.827Z",
+    "generatedAt": "2026-11-16T22:52:10.235Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -623,7 +623,7 @@
         }
       },
       "scanner/src": {
-        "total": 694,
+        "total": 698,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -636,7 +636,7 @@
           "capabilities/decide.js": 1,
           "capabilities/outbound.js": 2,
           "capabilities/probes.js": 2,
-          "capabilities/proxy.js": 3,
+          "capabilities/proxy.js": 2,
           "capabilities/receipts.js": 3,
           "capabilities/recovery.js": 1,
           "context-intelligence/adapters/haskell-hie.js": 1,
@@ -906,11 +906,13 @@
           "posture/watch-mode.js": 1,
           "posture/workflow-installer.js": 2,
           "pr-comment.js": 1,
-          "repair/cli.js": 3,
+          "repair/cli.js": 5,
           "repair/contracts.js": 1,
           "repair/coordinator.js": 1,
           "repair/intake.js": 1,
           "repair/profile.js": 2,
+          "repair/recipe-eval.js": 1,
+          "repair/recipes.js": 2,
           "report/index.js": 2,
           "runScan.js": 2,
           "sandbox/backend-namespace.js": 1,
@@ -1005,8 +1007,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 392,
-    "d": 579
+    "n": 396,
+    "d": 582
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2259,9 +2261,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.198.0",
-    "commit": "e3c2f0d12304af2a6fcaa4525a256f6adb9801b8",
-    "bundleSha256": "ae425e1c26f4b90f11bf4f03637991f9a8dbb3474b7dfb36d551dd8a8782aa89",
+    "engineVersion": "0.199.0",
+    "commit": "c53c3a28a00b753b19634003fa27d9dcf06f105e",
+    "bundleSha256": "f2bd3a62737d5d2782128d008bd7f33866070f589a9bbf3eb17c9a5c797eff64",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",
