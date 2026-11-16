@@ -11,9 +11,9 @@ import { verifyLastScan } from '../posture/integrity.js';
 import { normalizeFinding } from './schemas.js';
 import { planRepair } from './coordinator.js';
 
-const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization' };
+const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal' };
 export const familyForFinding = (f) => FAMILY_BY_CWE[String(f?.cwe || '').toUpperCase().replace(/^(\d)/, 'CWE-$1')] || null;
-export const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization']);
+export const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal']);
 
 export function signedFinding(root, id) {
   const file = path.join(stateDir(root), 'last-scan.json');
@@ -48,7 +48,7 @@ export function planFromInputs(o) {
   } else if (o.family && o.file) {
     finding = { ...normalizeFinding({ file: String(o.file), id: `declared:${o.family}:${o.file}` }, { custody: 'unresolved' }), declaredBy: 'operator' };
   } else return { plan: null, blocked: [], problems: ['name a finding id, or a family and a file for a finding the scanner did not report'], status: 'usage' };
-  if (!family) return { plan: null, blocked: ['the finding has no repair family in this milestone; name one of sql-injection, object-authorization'], problems: [], status: 'blocked' };
+  if (!family) return { plan: null, blocked: [`the finding has no repair family in this milestone; name one of ${FAMILIES_SUPPORTED.join(', ')}`], problems: [], status: 'blocked' };
   const origin = insideRoot(o.root, o.profilePath) ? 'repository-file' : 'operator-profile-outside-repository';
   const r = planRepair({ root: o.root, finding, family, profile, profileOrigin: origin, commit });
   if (!r.plan) return { plan: null, blocked: r.blocked, problems: r.problems, status: r.problems.length ? 'usage' : 'blocked' };

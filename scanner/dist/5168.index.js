@@ -47,7 +47,7 @@ const USAGE = `agentic-security repair <command>
   cancel  <run-id> [--root <path>]
   verify  <bundle-dir> [--root <path>] [--json]
   export  <run-id> --out <directory> [--root <path>]
-families: sql-injection, object-authorization
+families: sql-injection, object-authorization, ssrf, path-traversal
 exit: 0 completed (read the disposition), 1 rejected, 2 usage, 3 blocked or prerequisite missing, 4 cancelled or budget stop`;
 
 const out = (args, text, json) => { process.stdout.write(args.flags.json ? `${JSON.stringify(json, null, 2)}\n` : `${text}\n`); };
@@ -63,6 +63,7 @@ function textOfRecord(rec) {
   }
   for (const x of rec.counterexamples || []) lines.push(`  counterexample (${x.obligation}): ${x.sealed ? x.message : `${x.property} ${x.request ? `${x.request.method} ${x.request.path}${x.request.body ? ` ${JSON.stringify(x.request.body)}` : ''}` : ''}${x.actor ? ` as ${x.actor}` : ''}`}`);
   if (rec.quarantined?.length) lines.push(`  quarantined checks: ${rec.quarantined.length} (see --json for each reason)`);
+  if (rec.regressionGuards?.length) lines.push(`  regression guards: ${rec.regressionGuards.length} attacks the original already blocks, still required to stay blocked`);
   for (const r of rec.reasons || []) lines.push(`  note: ${r}`);
   if (rec.nextPrerequisite) lines.push(`next: ${rec.nextPrerequisite}`);
   if (rec.disposition === 'verified-for-contract') lines.push(`verified for contract ${rec.contractId} only: the declared obligations passed on this exact patch; nothing was built or deployed`);

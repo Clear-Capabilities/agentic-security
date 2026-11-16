@@ -213,6 +213,10 @@ fixture locations, limitations, logic digest). Fixtures: `test/fixtures/oracles/
   (`interpret` gets a `pathOf` accessor for that; it refuses links and paths outside the workspace). A status code never decides:
   a 403 that still wrote is a violation. `application-security` refutes only when no attack violates AND every control held, so a
   deny-all patch cannot refute it. Planted `{{secret:<name>}}` values derive from the per-run token. Consumed by `src/repair/`.
+  Version 2 adds an optional `network` (outbound connections recorded at the Node connection layer, declared DNS answers, declared
+  hosts served over in-memory duplexes, a policy; `forbid.connections`; an undeclared destination is inconclusive; patches are made
+  before the application loads and `syncBuiltinESMExports` covers named imports) and an optional `files` (a real tree with links;
+  the factory receives `filesRoot`). Node runtime only for both.
 - A run is: feature gate (`verification-oracles`, off by default, operator-only), request validation (closed-world: labels,
   verdicts and receipts are never accepted; reserved `__oracle_*` names and path escapes are refused), prerequisite check
   (an unmet one is `unsupported` with a typed reason and the target is never executed), a fresh workspace plus a verifier-owned

@@ -48,7 +48,7 @@ const CHECK = "    const allowed = note.owner === user.id || (user.role === 'adm
 const quiet = { policy: { schema: 'agentic-security/repair-policy', schemaVersion: '1.0.0', budgets: { rounds: 3 } } };
 
 describe('[M1-08] SQL injection repaired end to end, including legitimate behaviour', () => {
-  test('[AC-06.2/T-07] the deterministic recipe is verified for the contract; quarantined probes are recorded with reasons', needs(async () => {
+  test('[AC-06.2/T-07] the deterministic recipe is verified for the contract; probes the original already blocks are kept as regression guards with reasons', needs(async () => {
     const s = setup('sql-notes', 'sql-injection');
     const r = await runRepair({ root: s.root, plan: s.plan, config: ON, proposers: [sqlParameterizeRecipe()], ...quiet });
     assert.equal(r.record.disposition, 'verified-for-contract', r.record.reasons.join('; '));
@@ -58,7 +58,8 @@ describe('[M1-08] SQL injection repaired end to end, including legitimate behavi
     assert.equal(r.record.artifact, 'source-only');
     const passed = r.record.obligationResults.filter((o) => o.revision === 'patched').map((o) => `${o.obligation}:${o.status}`).sort();
     assert.deepEqual(passed, ['central-verifier:passed', 'sql-attacks-development:passed', 'sql-attacks-sealed:passed', 'sql-legitimate-queries:passed', 'sql-legitimate-quoted-values:passed']);
-    assert.ok(r.record.quarantined.length >= 1 && r.record.quarantined.every((q) => q.reason.length > 20), 'AC-07.3: each quarantined check carries its reason');
+    assert.ok(r.record.regressionGuards.length >= 1 && r.record.regressionGuards.every((q) => q.reason.includes('regression guard')), 'AC-07.3: each probe the original already blocks is recorded with its reason');
+    assert.ok(r.record.quarantined.every((q) => q.reason.length > 20), 'AC-07.3: each quarantined check carries its reason');
     assert.equal(fs.readFileSync(path.join(s.root, 'src', 'app.mjs'), 'utf8'), s.original, 'a run without --apply writes no project file');
   }));
 
@@ -375,5 +376,76 @@ describe('[M2-06] the Python profile: a WSGI application over the same SQLite or
     assert.equal(by.escaped.results.find((x) => x.obligation === 'sql-attacks-development').status, 'failed');
     assert.equal(by.bound.status, 'verified-for-contract', r.record.reasons.join('; '));
     assert.equal(r.record.disposition, 'verified-for-contract');
+  }));
+});
+
+describe('[M3-03/T-18] server-side request forgery and path traversal, executed', () => {
+  const PARTNERS = "      const ALLOWED = new Set(['api.partner.test', 'cdn.partner.test']);\n";
+  const FETCH = '      const r = await fetch(target);\n';
+  const RESOLVE = '    const file = path.resolve(filesRoot, name);\n';
+  const NOT_FOUND = "      res.writeHead(404); res.end('no such file'); return;\n";
+  const byId = (rec) => Object.fromEntries(rec.candidates.map((c) => [c.round, c]));
+
+  test('[T-18] a redirect off the approved host defeats a first-hop allowlist; a filter fitted to the visible probes fails the sealed set; the per-hop allowlist is verified', needs(async () => {
+    const s = setup('ssrf-preview', 'ssrf');
+    const firstHop = edit(s.original, FETCH, `${PARTNERS}      if (!ALLOWED.has(new URL(target).hostname)) { res.writeHead(403); res.end('destination not allowed'); return; }\n${FETCH}`);
+    const fitted = edit(s.original, FETCH, "      let next = target; let r;\n      for (let hop = 0; hop < 4; hop++) {\n        if (/169\\.254|10\\.0\\.0\\.7|internal|localhost|127\\./.test(next)) { res.writeHead(403); res.end('destination not allowed'); return; }\n        r = await fetch(next, { redirect: 'manual' });\n        if (r.status < 300 || r.status > 399) break;\n        next = new URL(r.headers.get('location'), next).href;\n      }\n");
+    const perHop = edit(s.original, FETCH, `${PARTNERS}      let next = new URL(target); let r;\n      for (let hop = 0; ; hop++) {\n        if (hop > 3 || next.protocol !== 'http:' || next.username || next.password || !ALLOWED.has(next.hostname)) { res.writeHead(403); res.end('destination not allowed'); return; }\n        r = await fetch(next, { redirect: 'manual' });\n        if (r.status < 300 || r.status > 399) break;\n        next = new URL(r.headers.get('location'), next);\n      }\n`);
+    const r = await runRepair({ root: s.root, plan: s.plan, config: ON, proposers: [queueProposer([firstHop, fitted, perHop].map((t) => ({ files: { 'src/app.mjs': t } })))], ...quiet });
+    assert.equal(r.record.disposition, 'verified-for-contract', r.record.reasons.join('; '));
+    const c = byId(r.record);
+    assert.equal(c[1].status, 'rejected');
+    const cx = r.record.counterexamples.find((x) => x.candidateId === c[1].candidateId);
+    assert.equal(cx.obligation, 'ssrf-attacks-development');
+    assert.ok(cx.destinations.some((d) => d.address === '169.254.169.254'), 'the forbidden destination the redirect reached is named');
+    assert.match(decodeURIComponent(cx.shrunkFrom.path), /api\.partner\.test\/r\/meta/, 'the counterexample is the redirect through the approved host');
+    assert.equal(c[2].status, 'rejected');
+    assert.equal(c[2].results.find((x) => x.obligation === 'ssrf-attacks-development').status, 'passed');
+    assert.equal(c[2].results.find((x) => x.obligation === 'ssrf-attacks-sealed').status, 'failed');
+    assert.equal(c[3].status, 'verified-for-contract');
+    assert.ok(r.record.regressionGuards.every((g) => g.reason.includes('regression guard')));
+  }));
+
+  test('DNS rebinding: a check of a first resolution followed by a second is the reproduced finding; deleting the check is caught by regression guards; connecting to the checked address is verified', needs(async () => {
+    const s = setup('ssrf-rebind', 'ssrf');
+    const removed = edit(edit(s.original, "      if (INTERNAL.test(address)) { res.writeHead(403); res.end('internal destination'); return; }\n", ''), '      const address = net.isIP(host) ? host : (await lookup(host)).address;\n', '');
+    const pinned = edit(edit(s.original, "import net from 'node:net';\n", "import net from 'node:net';\nimport http from 'node:http';\n"),
+      "      const r = await fetch(target, { redirect: 'manual' });\n      res.writeHead(200, { 'content-type': 'text/plain' });\n      res.end((await r.text()).slice(0, 500));\n",
+      "      if (target.protocol !== 'http:' || net.isIPv6(host)) { res.writeHead(403); res.end('unsupported destination'); return; }\n      const body = await new Promise((resolve, reject) => {\n        const rq = http.get({ host: address, port: Number(target.port) || 80, path: target.pathname + target.search, headers: { host: target.host } }, (r) => { let t = ''; r.setEncoding('utf8'); r.on('data', (d) => { t += d; }); r.on('end', () => resolve(t)); });\n        rq.on('error', reject);\n      });\n      res.writeHead(200, { 'content-type': 'text/plain' });\n      res.end(body.slice(0, 500));\n");
+    const r = await runRepair({ root: s.root, plan: s.plan, config: ON, proposers: [queueProposer([removed, pinned].map((t) => ({ files: { 'src/app.mjs': t } })))], ...quiet });
+    const orig = r.record.obligationResults.find((o) => o.revision === 'original' && o.obligation === 'ssrf-attacks-development');
+    assert.equal(orig.observed, 'confirmed', 'the original reaches the private address through the second resolution');
+    const guards = new Set(r.record.regressionGuards.map((g) => g.id));
+    assert.ok(guards.has('check_development_1') && guards.has('check_development_2'), 'the attacks the original already blocks are kept, not quarantined');
+    const c = byId(r.record);
+    assert.equal(c[1].status, 'rejected');
+    const cx = r.record.counterexamples.find((x) => x.candidateId === c[1].candidateId);
+    assert.ok(cx.destinations.some((d) => d.address === '10.0.0.9'));
+    assert.equal(c[2].status, 'verified-for-contract', r.record.reasons.join('; '));
+  }));
+
+  test('[T-18] a symbolic link inside the root defeats a lexical containment check; resolving links before checking is verified and the link that stays inside still works', needs(async () => {
+    const s = setup('files-download', 'path-traversal');
+    const lexical = edit(s.original, RESOLVE, `${RESOLVE}    if (!file.startsWith(filesRoot + path.sep)) {\n${NOT_FOUND}    }\n`);
+    const real = edit(s.original, RESOLVE, `    let file;\n    try {\n      const base = fs.realpathSync(filesRoot);\n      file = fs.realpathSync(path.resolve(base, name));\n      if (!file.startsWith(base + path.sep)) throw new Error('outside');\n    } catch {\n${NOT_FOUND}    }\n`);
+    const r = await runRepair({ root: s.root, plan: s.plan, config: ON, proposers: [queueProposer([lexical, real].map((t) => ({ files: { 'src/app.mjs': t } })))], ...quiet });
+    assert.equal(r.record.disposition, 'verified-for-contract', r.record.reasons.join('; '));
+    const c = byId(r.record);
+    const cx = r.record.counterexamples.find((x) => x.candidateId === c[1].candidateId);
+    assert.equal(cx.property, 'secret-disclosed');
+    assert.equal(decodeURIComponent(cx.request.path.split('=')[1]), 'latest/secret.txt');
+    assert.ok(!JSON.stringify(r.record).includes(os.tmpdir()), 'no workspace path reaches the record');
+    assert.equal(c[2].status, 'verified-for-contract');
+  }));
+
+  test('[AC-12.2] a connection to a host the declaration does not model is reported as a gap, neither a pass nor a violation', needs(async () => {
+    const s = setup('ssrf-rebind', 'ssrf');
+    const ob = s.plan.contract.obligations.find((o) => o.id === 'ssrf-attacks-development');
+    const inputs = { ...ob.inputs, requests: [...ob.inputs.requests.filter((x) => x.role === 'control'), { id: 'unmodelled', role: 'attack', method: 'GET', path: `/check?url=${encodeURIComponent('http://elsewhere.example/')}`, headers: {}, forbid: { connections: true } }] };
+    const files = Object.fromEntries(s.plan.contract.editScope.allowed.map((f) => [f, fs.readFileSync(path.join(s.root, f), 'utf8')]));
+    const res = await runObligation(ob, files, { config: ON, entry: 'src/app.mjs', hypothesisId: 'gap', inputs });
+    assert.equal(res.observed, 'inconclusive', res.reason);
+    assert.match(res.reason, /does not model/);
+    assert.deepEqual(res.details.unmodelledDestinations, ['elsewhere.example']);
   }));
 });

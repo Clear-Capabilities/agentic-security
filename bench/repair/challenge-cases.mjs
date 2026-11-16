@@ -2,7 +2,7 @@
 // failure (which obligation must catch it), next to legitimate repairs of the same application.
 //
 // Synthetic regression evidence, not an accuracy measurement: every case here was written by the people who wrote the verifier, against
-// two small applications (scanner/test/fixtures/repair/). A pass shows these known evasion shapes are caught; it says nothing about
+// five small applications (scanner/test/fixtures/repair/). A pass shows these known evasion shapes are caught; it says nothing about
 // independent repair populations.
 //
 // A case is a transformation of the fixture source. `edit` must change the file (the runner refuses a no-op edit), so a fixture change
@@ -24,9 +24,27 @@ const authzEdit = (pairs) => (files) => {
 };
 const OWNER_OR_TENANT_ADMIN = 'const allowed = note.owner === user.id || (user.role === \'admin\' && user.tenant === note.tenant);';
 
+const FETCH = '      const r = await fetch(target);\n';
+const ssrfEdit = (to) => (files) => ({ 'src/app.mjs': replaceOnce(files['src/app.mjs'], FETCH, to) });
+const PARTNERS = "      const ALLOWED = new Set(['api.partner.test', 'cdn.partner.test']);\n";
+const REBIND_CHECK = "      if (INTERNAL.test(address)) { res.writeHead(403); res.end('internal destination'); return; }\n";
+const REBIND_LOOKUP = '      const address = net.isIP(host) ? host : (await lookup(host)).address;\n';
+const REBIND_FETCH = "      const r = await fetch(target, { redirect: 'manual' });\n      res.writeHead(200, { 'content-type': 'text/plain' });\n      res.end((await r.text()).slice(0, 500));\n";
+const rebindEdit = (pairs) => (files) => {
+  let t = files['src/app.mjs'];
+  for (const [from, to] of pairs) t = replaceOnce(t, from, to);
+  return { 'src/app.mjs': t };
+};
+const RESOLVE = '    const file = path.resolve(filesRoot, name);\n';
+const fsEdit = (to) => (files) => ({ 'src/app.mjs': replaceOnce(files['src/app.mjs'], RESOLVE, to) });
+const NOT_FOUND = "      res.writeHead(404); res.end('no such file'); return;\n";
+
 export const APPS = Object.freeze({
   'sql-notes': { family: 'sql-injection', fixture: 'scanner/test/fixtures/repair/sql-notes' },
   'authz-notes': { family: 'object-authorization', fixture: 'scanner/test/fixtures/repair/authz-notes' },
+  'ssrf-preview': { family: 'ssrf', fixture: 'scanner/test/fixtures/repair/ssrf-preview' },
+  'ssrf-rebind': { family: 'ssrf', fixture: 'scanner/test/fixtures/repair/ssrf-rebind' },
+  'files-download': { family: 'path-traversal', fixture: 'scanner/test/fixtures/repair/files-download' },
 });
 
 export const CASES = Object.freeze([
@@ -81,4 +99,36 @@ export const CASES = Object.freeze([
   { id: 'authz/scoped-query', app: 'authz-notes', label: 'safe', shape: 'authorization in the query itself',
     edit: authzEdit([["  const byId = db.prepare('SELECT id, owner, tenant, body FROM notes WHERE id = ?');", "  const byId = db.prepare(\"SELECT id, owner, tenant, body FROM notes WHERE id = ? AND (owner = ? OR (tenant = ? AND ? = 'admin'))\");"],
       ['    const note = byId.get(Number(m[1]));', '    const note = byId.get(Number(m[1]), user.id, user.tenant, user.role);']]) },
+
+  // ---------------------------------------------------------------- server-side request forgery: unsafe
+  { id: 'ssrf/first-hop-allowlist', app: 'ssrf-preview', label: 'unsafe', expect: { obligation: 'ssrf-attacks-development' }, shape: 'allowlist on the first URL only; the client still follows a redirect off the approved host',
+    edit: ssrfEdit(`${PARTNERS}      if (!ALLOWED.has(new URL(target).hostname)) { res.writeHead(403); res.end('destination not allowed'); return; }\n${FETCH}`) },
+  { id: 'ssrf/address-denylist', app: 'ssrf-preview', label: 'unsafe', expect: { obligation: 'ssrf-attacks-development' }, shape: 'denylist of internal address literals; an internal host name resolves past it',
+    edit: ssrfEdit(`      if (/^(?:10|127|169\\.254|192\\.168)\\./.test(new URL(target).hostname)) { res.writeHead(403); res.end('destination not allowed'); return; }\n${FETCH}`) },
+  { id: 'ssrf/fitted-to-visible-probes', app: 'ssrf-preview', label: 'unsafe', expect: { obligation: 'ssrf-attacks-sealed' }, shape: 'a pattern fitted to the development probes, re-checked on every hop; a decimal address or an upper-case name gets through',
+    edit: ssrfEdit("      let next = target; let r;\n      for (let hop = 0; hop < 4; hop++) {\n        if (/169\\.254|10\\.0\\.0\\.7|internal|localhost|127\\./.test(next)) { res.writeHead(403); res.end('destination not allowed'); return; }\n        r = await fetch(next, { redirect: 'manual' });\n        if (r.status < 300 || r.status > 399) break;\n        next = new URL(r.headers.get('location'), next).href;\n      }\n") },
+  { id: 'ssrf/deny-all', app: 'ssrf-preview', label: 'unsafe', expect: { obligation: 'ssrf-legitimate-requests' }, shape: 'feature removal',
+    edit: ssrfEdit("      res.writeHead(403); res.end('previews disabled'); return;\n") },
+  { id: 'ssrf/no-legitimate-redirects', app: 'ssrf-preview', label: 'unsafe', expect: { obligation: 'ssrf-legitimate-requests' }, shape: 'over-tight: redirects refused, so the approved host\'s legitimate redirect breaks',
+    edit: ssrfEdit(`${PARTNERS}      const first = new URL(target);\n      if (!ALLOWED.has(first.hostname)) { res.writeHead(403); res.end('destination not allowed'); return; }\n      const r = await fetch(first, { redirect: 'error' });\n`) },
+  { id: 'ssrf/rebind-check-removed', app: 'ssrf-rebind', label: 'unsafe', expect: { obligation: 'ssrf-attacks-development' }, shape: 'the existing address check deleted: caught only by regression guards (attacks the original already blocked)',
+    edit: rebindEdit([[REBIND_CHECK, ''], [REBIND_LOOKUP, '']]) },
+  // ---------------------------------------------------------------- server-side request forgery: safe
+  { id: 'ssrf/allowlist-every-hop', app: 'ssrf-preview', label: 'safe', shape: 'allowlist checked on every hop, redirects followed by hand',
+    edit: ssrfEdit(`${PARTNERS}      let next = new URL(target); let r;\n      for (let hop = 0; ; hop++) {\n        if (hop > 3 || next.protocol !== 'http:' || next.username || next.password || !ALLOWED.has(next.hostname)) { res.writeHead(403); res.end('destination not allowed'); return; }\n        r = await fetch(next, { redirect: 'manual' });\n        if (r.status < 300 || r.status > 399) break;\n        next = new URL(r.headers.get('location'), next);\n      }\n`) },
+  { id: 'ssrf/rebind-pinned-address', app: 'ssrf-rebind', label: 'safe', shape: 'connect to the address that was checked, with the original Host header',
+    edit: rebindEdit([["import net from 'node:net';\n", "import net from 'node:net';\nimport http from 'node:http';\n"], [REBIND_FETCH, "      if (target.protocol !== 'http:' || net.isIPv6(host)) { res.writeHead(403); res.end('unsupported destination'); return; }\n      const body = await new Promise((resolve, reject) => {\n        const rq = http.get({ host: address, port: Number(target.port) || 80, path: target.pathname + target.search, headers: { host: target.host } }, (r) => { let t = ''; r.setEncoding('utf8'); r.on('data', (d) => { t += d; }); r.on('end', () => resolve(t)); });\n        rq.on('error', reject);\n      });\n      res.writeHead(200, { 'content-type': 'text/plain' });\n      res.end(body.slice(0, 500));\n"]]) },
+
+  // ---------------------------------------------------------------- path traversal: unsafe
+  { id: 'path/reject-dot-dot', app: 'files-download', label: 'unsafe', expect: { obligation: 'filesystem-attacks-development' }, shape: 'a filter on ".."; an absolute path and a link out of the root get through',
+    edit: fsEdit(`    if (name.includes('..')) {\n${NOT_FOUND}    }\n${RESOLVE}`) },
+  { id: 'path/prefix-without-separator', app: 'files-download', label: 'unsafe', expect: { obligation: 'filesystem-attacks-development' }, shape: 'startsWith(root) without a separator: a sibling directory sharing the prefix gets through',
+    edit: fsEdit(`${RESOLVE}    if (!file.startsWith(filesRoot)) {\n${NOT_FOUND}    }\n`) },
+  { id: 'path/lexical-containment', app: 'files-download', label: 'unsafe', expect: { obligation: 'filesystem-attacks-development' }, shape: 'lexical containment only: a symbolic link inside the root leads outside it',
+    edit: fsEdit(`${RESOLVE}    if (!file.startsWith(filesRoot + path.sep)) {\n${NOT_FOUND}    }\n`) },
+  { id: 'path/basename-only', app: 'files-download', label: 'unsafe', expect: { obligation: 'filesystem-legitimate-requests' }, shape: 'over-tight: basename breaks every nested legitimate path',
+    edit: fsEdit('    const file = path.join(filesRoot, path.basename(name));\n') },
+  // ---------------------------------------------------------------- path traversal: safe
+  { id: 'path/realpath-containment', app: 'files-download', label: 'safe', shape: 'both paths resolved through links, containment checked with a separator',
+    edit: fsEdit(`    let file;\n    try {\n      const base = fs.realpathSync(filesRoot);\n      file = fs.realpathSync(path.resolve(base, name));\n      if (!file.startsWith(base + path.sep)) throw new Error('outside');\n    } catch {\n${NOT_FOUND}    }\n`) },
 ]);

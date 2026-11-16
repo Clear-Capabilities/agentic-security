@@ -103,10 +103,24 @@ Measured on 2026-11-16 on this checkout (macOS, userspace backend). Linux execut
 
 Self-scan baseline change, reviewed (693 to 694): `posture/oracles/app-adapters.js` 1, a synchronous-I/O report on `findPython`'s `statSync` over three fixed interpreter paths, called once per oracle run on the verifier side, never in a request path.
 
+## M3, first part: server-side request forgery and path traversal
+
+Measured on 2026-11-16 on this checkout (macOS, userspace backend). Linux execution is still open (see M1).
+
+| ID | Status | Changed paths | Verification | Evidence and limitation |
+| --- | --- | --- | --- | --- |
+| M3-03 SSRF profile | integration-tested (macOS) | `src/posture/oracles/app-adapters.js` (version 2: `network`), `src/repair/{profile,contracts}.js`, fixtures `test/fixtures/repair/{ssrf-preview,ssrf-rebind}` | `test/repair/repair-workflow.test.js` (M3-03 describe), `test/repair/repair-contracts.test.js`, `npm run bench:repair:challenge:check` | Every outbound connection the application opens is recorded at the Node connection layer (`net`, `tls`, the HTTP agents, raw sockets, and named ESM imports of them) with the request that caused it, resolved by the declared DNS answers (one per resolution, so a host rebinds) and served by verifier-declared hosts or refused. No socket is opened. The forbidden effect is the connection itself; a planted secret in an internal host's response shows disclosure. T-18: a redirect off an approved host defeats a first-hop allowlist and its counterexample blocks the candidate; a filter fitted to the development probes fails the sealed respellings (decimal address, upper-case name); the per-hop allowlist is verified. DNS rebinding: an original that checks one resolution and connects on a second reproduces the finding; connecting to the checked address is verified. AC-12.2: an undeclared destination, connected to or looked up, makes the run inconclusive. `https` destinations are recorded and refused, never served; node runtime only; a connection below the observed layer is not seen, so the scope gate refuses a candidate that introduces a child process, a raw binding, another thread, a datagram socket or a native addon. |
+| M3-03 filesystem profile | integration-tested (macOS) | same oracle (`files`), `src/repair/{profile,contracts}.js`, fixture `test/fixtures/repair/files-download` | same | A real directory tree in the workspace: an allowed root (the factory receives `filesRoot`), files outside it planting secrets, real symbolic links. Attacks escape by relative path, absolute path and a link inside the root that points out of it; sealed: through a subdirectory and a `./` prefix. T-18: a lexical containment check is defeated by the link and rejected; a `..` filter, a separator-less prefix check and `basename` are rejected; resolving links before checking is verified, and a link that stays inside the root keeps working. Disclosure only: writes outside the root and time-of-check races are not exercised. |
+| AC-12.4 (these two families) | integration-tested | `bench/repair/` | `npm run bench:repair:challenge:check` | 35 cases: unsafe accepted 0/28, caught by the declared obligation 28/28, safe rejected 0/7. Synthetic, shared authorship. |
+| Regression guards (AC-07.3 corrected) | integration-tested | `src/repair/counterexamples.js`, `src/repair/coordinator.js`, record field `regressionGuards` | the `ssrf/rebind-check-removed` challenge case, the rebinding test | Defect found while building the rebinding case: an attack the original already blocked was quarantined, so a candidate that deleted an existing protection was judged only by the attacks the original failed. Such attacks now stay in the obligation as regression guards, recorded with reasons, and do not count toward an obligation being meaningful. Only a legitimate expectation the original does not meet is quarantined. |
+| M3-01, M3-02, M3-04, M3-05, M3-06 | open | | | Recipe lifecycle, independent generalization, password-hashing migration, workflow state, per-profile conformance reporting: the second part of M3. |
+
+Self-scan: unchanged at 694. A ReDoS report on a new host-name regex was real in shape and was rewritten as a per-label check, not baselined.
+
 ## M3 and later
 
 | ID | Status | Note |
 | --- | --- | --- |
-| FR-11, FR-12 and M3 (recipes, SSRF and filesystem families, crypto migrations) | open | |
+| FR-11 and the rest of M3 (recipes, crypto migrations, workflow state) | open | |
 | FR-13 to FR-16 and M4 (SARIF intake, dependency, credential and infrastructure repair, artifact and staging) | open | |
 | Section 8 comparison | blocked | Needs configured real model endpoints, an independent adjudicated task population and protected grading; none exists in this repository. No comparative claim is made. |

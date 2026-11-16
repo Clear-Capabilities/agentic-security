@@ -388,6 +388,19 @@ const matchesAny = (rel, patterns) => patterns.some((p) => globRe(p).test(rel));
 
 // ---------------------------------------------------------------- the scope gate
 
+// Primitives below the layer the application oracles observe: a raw binding, a child process, another thread, a datagram socket or a
+// native addon could open a connection or touch a file the oracle never sees, so a candidate that verified with one would have
+// verified nothing about it. A candidate may not INTRODUCE one (an original that already uses one is the operator's to declare).
+const UNOBSERVED_PRIMITIVES = [
+  [/\bprocess\.binding\s*\(|\binternalBinding\b|\bprocess\._linkedBinding\b/, 'a raw runtime binding'],
+  [/['"](?:node:)?child_process['"]/, 'a child process'],
+  [/['"](?:node:)?(?:worker_threads|cluster)['"]/, 'another thread or process'],
+  [/['"](?:node:)?dgram['"]/, 'a datagram socket'],
+  [/\bprocess\.dlopen\b|\.node['"]\s*\)/, 'a native addon'],
+  [/^\s*(?:import\s+(?:subprocess|socket|ctypes|multiprocessing)\b|from\s+(?:subprocess|socket|ctypes|multiprocessing)\s+import\b)/m, 'a process, socket or foreign-function module'],
+];
+const count = (re, t) => (String(t || '').match(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`)) || []).length;
+
 /**
  * May this candidate be judged at all? Checked before anything executes.
  * @returns {{ok:boolean, reasons:string[], scope:object, changed:Record<string,string|null>}}
@@ -403,6 +416,9 @@ function checkCandidate(contract, originalFiles, proposedFiles) {
   for (const rel of Object.keys(changed)) {
     if (matchesAny(rel, contract.editScope.prohibited)) reasons.push(`${rel}: a protected path (verifier state, tests, runner configuration, dependencies); a candidate cannot change what judges it`);
     else if (!contract.editScope.allowed.includes(rel)) reasons.push(`${rel}: outside the contract's allowed edit scope`);
+  }
+  for (const [rel, text] of Object.entries(changed)) {
+    for (const [re, what] of UNOBSERVED_PRIMITIVES) if (count(re, text) > count(re, originalFiles[rel])) reasons.push(`${rel}: introduces ${what}, which the application oracles cannot observe`);
   }
   const surface = (0,_fix_test_results_js__WEBPACK_IMPORTED_MODULE_3__/* .testSurfaceChanges */ .N)(changed, (rel) => originalFiles[rel] ?? null);
   for (const b of surface.blocked) reasons.push(`${b.file}: ${b.reason}`);
@@ -558,12 +574,14 @@ var external_node_child_process_ = __webpack_require__(31421);
 var external_node_path_ = __webpack_require__(76760);
 // EXTERNAL MODULE: ./src/posture/assurance/identity.js
 var identity = __webpack_require__(41877);
-// EXTERNAL MODULE: ./src/posture/oracles/registry.js + 3 modules
-var registry = __webpack_require__(25007);
+// EXTERNAL MODULE: ./src/posture/oracles/registry.js + 2 modules
+var registry = __webpack_require__(18357);
 // EXTERNAL MODULE: ./src/repair/schemas.js
 var schemas = __webpack_require__(68962);
 // EXTERNAL MODULE: ./src/posture/assurance/schema-kit.js
 var schema_kit = __webpack_require__(53353);
+// EXTERNAL MODULE: ./src/posture/oracles/app-adapters.js
+var app_adapters = __webpack_require__(50935);
 ;// CONCATENATED MODULE: ./src/repair/profile.js
 // The application profile (verified-remediation PRD FR-04, FR-05): how to start the application and what its legitimate behaviour is.
 //
@@ -574,6 +592,7 @@ var schema_kit = __webpack_require__(53353);
 //
 // Closed world: an unknown field is an error. Identifiers that reach SQL (table and column names in generated state checks) must be plain
 // identifiers. Validation never throws.
+
 
 
 
@@ -592,11 +611,33 @@ function checkRequestShape(errs, r, where) {
   if (r.body !== undefined && !(0,schema_kit/* isPlainObject */.Qd)(r.body)) errs.push(`${where}.body must be an object`);
 }
 
+/** One declared untrusted value input (sql, ssrf, filesystem): the request carrying {{value}} and its legitimate values. */
+function checkValueInput(errs, inp, w, actorIds, { secrets }) {
+  if (!(0,schema_kit/* isPlainObject */.Qd)(inp)) { errs.push(`${w} must be an object`); return; }
+  keysOnly(errs, inp, ['id', 'actor', 'method', 'path', 'body', 'benign', ...(secrets ? ['protectedSecrets'] : [])], w);
+  if (typeof inp.id !== 'string' || !SLUG.test(inp.id)) errs.push(`${w}.id must be a slug`);
+  if (!actorIds.has(inp.actor)) errs.push(`${w}.actor must name a declared actor`);
+  checkRequestShape(errs, inp, w);
+  if (!JSON.stringify([inp.path, inp.body ?? null]).includes('{{value}}')) errs.push(`${w}: the path or body must mark the untrusted value with {{value}}`);
+  if (!Array.isArray(inp.benign) || !inp.benign.length) errs.push(`${w}.benign must list at least one legitimate value with its expected response`);
+  else for (const [j, b] of inp.benign.entries()) {
+    if (!(0,schema_kit/* isPlainObject */.Qd)(b) || typeof b.value !== 'string') { errs.push(`${w}.benign[${j}].value must be a string`); continue; }
+    keysOnly(errs, b, ['value', 'expectIncludes', 'expectStatus', 'originalMishandles'], `${w}.benign[${j}]`);
+    if (!Array.isArray(b.expectIncludes) || !b.expectIncludes.length) errs.push(`${w}.benign[${j}].expectIncludes must list at least one expected value`);
+  }
+  if (secrets && (!Array.isArray(inp.protectedSecrets) || !inp.protectedSecrets.length || !inp.protectedSecrets.every((s) => SLUG.test(s)))) errs.push(`${w}.protectedSecrets must name the planted secrets another actor's data holds`);
+}
+
+function checkInputs(errs, sec, name, actorIds, opts) {
+  if (!Array.isArray(sec.inputs) || !sec.inputs.length || sec.inputs.length > 8) { errs.push(`${name}.inputs must hold 1 to 8 inputs`); return; }
+  for (const [i, inp] of sec.inputs.entries()) checkValueInput(errs, inp, `${name}.inputs[${i}]`, actorIds, opts);
+}
+
 /** Problems with a profile; an empty list means it can be used. */
 function validateProfile(p) {
   const errs = [];
   if (!(0,schema_kit/* isPlainObject */.Qd)(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'tests', 'approval'], 'profile');
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
   if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
   const a = p.application;
@@ -627,27 +668,31 @@ function validateProfile(p) {
     actorIds.add(ac.id);
     if (!(0,schema_kit/* isPlainObject */.Qd)(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
   }
-  if (p.sql === undefined && p.authorization === undefined) errs.push('the profile needs a sql or an authorization section');
+  if (!['sql', 'authorization', 'ssrf', 'filesystem'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf or filesystem section');
+  if ((p.ssrf !== undefined || p.filesystem !== undefined) && a?.runtime === 'python') errs.push('the ssrf and filesystem sections are supported for the node runtime only in this release');
   if (p.sql !== undefined) {
-    if (!(0,schema_kit/* isPlainObject */.Qd)(p.sql) || !Array.isArray(p.sql.inputs) || !p.sql.inputs.length) errs.push('sql.inputs must be a non-empty array');
+    if (!(0,schema_kit/* isPlainObject */.Qd)(p.sql)) errs.push('sql must be an object');
+    else { keysOnly(errs, p.sql, ['inputs', 'stateChecks'], 'sql'); checkInputs(errs, p.sql, 'sql', actorIds, { secrets: true }); }
+  }
+  // Server-side request forgery: the network the application can reach is declared (hosts, their DNS answers, what each serves), with a
+  // destination policy. Secrets planted in a forbidden host's responses show disclosure; the connection itself is the forbidden effect.
+  if (p.ssrf !== undefined) {
+    if (!(0,schema_kit/* isPlainObject */.Qd)(p.ssrf)) errs.push('ssrf must be an object');
     else {
-      keysOnly(errs, p.sql, ['inputs', 'stateChecks'], 'sql');
-      for (const [i, inp] of p.sql.inputs.entries()) {
-        const w = `sql.inputs[${i}]`;
-        if (!(0,schema_kit/* isPlainObject */.Qd)(inp)) { errs.push(`${w} must be an object`); continue; }
-        keysOnly(errs, inp, ['id', 'actor', 'method', 'path', 'body', 'benign', 'protectedSecrets'], w);
-        if (typeof inp.id !== 'string' || !SLUG.test(inp.id)) errs.push(`${w}.id must be a slug`);
-        if (!actorIds.has(inp.actor)) errs.push(`${w}.actor must name a declared actor`);
-        checkRequestShape(errs, inp, w);
-        if (!JSON.stringify([inp.path, inp.body ?? null]).includes('{{value}}')) errs.push(`${w}: the path or body must mark the untrusted value with {{value}}`);
-        if (!Array.isArray(inp.benign) || !inp.benign.length) errs.push(`${w}.benign must list at least one legitimate value with its expected response`);
-        else for (const [j, b] of inp.benign.entries()) {
-          if (!(0,schema_kit/* isPlainObject */.Qd)(b) || typeof b.value !== 'string') { errs.push(`${w}.benign[${j}].value must be a string`); continue; }
-          keysOnly(errs, b, ['value', 'expectIncludes', 'expectStatus', 'originalMishandles'], `${w}.benign[${j}]`);
-          if (!Array.isArray(b.expectIncludes) || !b.expectIncludes.length) errs.push(`${w}.benign[${j}].expectIncludes must list at least one expected value`);
-        }
-        if (!Array.isArray(inp.protectedSecrets) || !inp.protectedSecrets.length || !inp.protectedSecrets.every((s) => SLUG.test(s))) errs.push(`${w}.protectedSecrets must name the planted secrets another actor's data holds`);
-      }
+      keysOnly(errs, p.ssrf, ['policy', 'approved', 'hosts', 'inputs'], 'ssrf');
+      const n = (0,app_adapters/* validateNetwork */.jO)({ policy: p.ssrf.policy, approved: p.ssrf.approved, hosts: p.ssrf.hosts });
+      if (n) errs.push(`ssrf: ${n}`);
+      checkInputs(errs, p.ssrf, 'ssrf', actorIds, { secrets: false });
+    }
+  }
+  // Path traversal: a real file tree with an allowed root; files outside it plant secrets; declared links are real symbolic links.
+  if (p.filesystem !== undefined) {
+    if (!(0,schema_kit/* isPlainObject */.Qd)(p.filesystem)) errs.push('filesystem must be an object');
+    else {
+      keysOnly(errs, p.filesystem, ['root', 'tree', 'links', 'inputs'], 'filesystem');
+      const f = (0,app_adapters/* validateFiles */.kc)({ root: p.filesystem.root, tree: p.filesystem.tree, ...(p.filesystem.links !== undefined ? { links: p.filesystem.links } : {}) });
+      if (f) errs.push(`filesystem: ${f}`);
+      checkInputs(errs, p.filesystem, 'filesystem', actorIds, { secrets: false });
     }
   }
   if (p.authorization !== undefined) {
@@ -743,6 +788,7 @@ function policyAllows(policy, actor, object, actorsById) {
 
 
 
+
 const CONTRACT_BUILDER_VERSION = '1';
 
 // Attack probes for a value placed in a SQL string literal. Split once, statically: the development set feeds back to candidate
@@ -800,9 +846,9 @@ function obligation(kind, id, inputs, { required = true, origin = 'generated-fro
   };
 }
 
-const appInputs = (profile, requests, stateChecks = []) => ({
+const appInputs = (profile, requests, stateChecks = [], extra = {}) => ({
   ...(profile.application.runtime === 'python' ? { runtime: 'python' } : {}),
-  export: profile.application.export, schemaSql: profile.database.schemaSql, seed: profile.database.seed, requests, stateChecks,
+  export: profile.application.export, schemaSql: profile.database.schemaSql, seed: profile.database.seed, requests, stateChecks, ...extra,
 });
 
 function seedHasSecret(profile, name) {
@@ -832,6 +878,122 @@ function sqlObligations(profile, actors, blocked) {
   }
   if (after.length) out.push(obligation('app-behaviour-after', 'sql-legitimate-quoted-values', appInputs(profile, after), { scope: 'legitimate values the original mishandles' }));
   return out;
+}
+
+/** Controls (and the after-repair controls) from an input's declared legitimate values. Shared by every value-input family. */
+function benignRequests(inp, actor, controls, after) {
+  inp.benign.forEach((b, j) => {
+    const r = { id: `${inp.id.replace(/-/g, '_')}_benign_${j}`, role: 'control', ...reqOf(inp, actor, { value: b.value }), expect: { status: b.expectStatus || [200], bodyIncludes: b.expectIncludes } };
+    (b.originalMishandles ? after : controls).push(r);
+  });
+}
+
+/** The obligations of a value-input family from its development and sealed attack values. */
+function valueFamilyObligations(family, profile, actors, blocked, { probes, forbid, extra, scopeNoun }) {
+  const out = []; const controls = []; const after = []; const dev = []; const sealed = [];
+  for (const inp of profile[family].inputs) {
+    const actor = actors[inp.actor];
+    benignRequests(inp, actor, controls, after);
+    for (const set of ['development', 'sealed']) probes[set].forEach((v, j) => (set === 'sealed' ? sealed : dev).push({ id: `${inp.id.replace(/-/g, '_')}_${set}_${j}`, role: 'attack', ...reqOf(inp, actor, { value: v }), forbid: forbid(v) }));
+  }
+  if (!controls.length) blocked.push(`${family}: no legitimate value is declared that the original serves correctly`);
+  if (!dev.length) blocked.push(`${family}: the declaration yields no attack value, so no forbidden effect could be observed`);
+  if (blocked.length) return out;
+  out.push(obligation('app-attack-blocked', `${family}-attacks-development`, appInputs(profile, [...controls, ...dev], [], extra), { scope: `${scopeNoun}, development attack set` }));
+  if (sealed.length) out.push(obligation('app-attack-sealed', `${family}-attacks-sealed`, appInputs(profile, [...controls, ...sealed], [], extra), { scope: `${scopeNoun}, sealed attack set (never fed back)` }));
+  out.push(obligation('app-behaviour-preserved', `${family}-legitimate-requests`, appInputs(profile, controls, [], extra), { scope: 'declared legitimate values' }));
+  if (after.length) out.push(obligation('app-behaviour-after', `${family}-legitimate-after`, appInputs(profile, after, [], extra), { scope: 'legitimate values the original mishandles' }));
+  return out;
+}
+
+const SECRET_NAMES = (text) => [...String(text).matchAll(/\{\{secret:([a-z][a-z0-9-]{0,31})\}\}/g)].map((m) => m[1]);
+const ipv4Int = (a) => a.split('.').reduce((n, o) => n * 256 + Number(o), 0);
+
+/**
+ * SSRF attack values, generated from the declared network. A host is forbidden when the policy does not permit every address it can
+ * resolve to (an allowlist names the approved hosts; public-only forbids loopback, private, link-local and the other internal ranges,
+ * so a host that rebinds from a public to a private address is forbidden). Development: each forbidden host by name and by address,
+ * and every approved host's declared redirect that leaves the approved set. Sealed: the same destinations spelled differently
+ * (decimal and IPv4-mapped IPv6 addresses, upper case with a trailing dot, an approved host as user information).
+ */
+function ssrfProbes(s) {
+  const permittedAddr = (h, a) => (s.policy === 'public-only' ? !(0,app_adapters/* isPrivateAddress */.C0)(a) : s.approved.includes(h.name));
+  const forbidden = s.hosts.filter((h) => !h.addresses.every((a) => permittedAddr(h, a)));
+  const port = (h) => (h.port && h.port !== 80 ? `:${h.port}` : '');
+  const pathOf = (h) => h.routes?.[0]?.path || '/';
+  const development = []; const sealed = [];
+  for (const h of forbidden) {
+    development.push(`http://${h.name}${port(h)}${pathOf(h)}`);
+    const v4 = h.addresses.find((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a) && !permittedAddr(h, a));
+    if (v4) {
+      development.push(`http://${v4}${port(h)}${pathOf(h)}`);
+      sealed.push(`http://${ipv4Int(v4)}${port(h)}${pathOf(h)}`, `http://[::ffff:${v4}]${port(h)}${pathOf(h)}`);
+    }
+    sealed.push(`http://${h.name.toUpperCase()}.${port(h)}${pathOf(h)}`);
+    if (s.approved[0]) sealed.push(`http://${s.approved[0]}@${h.name}${port(h)}${pathOf(h)}`);
+  }
+  const forbiddenNames = new Set(forbidden.map((h) => h.name));
+  const forbiddenAddrs = new Set(forbidden.flatMap((h) => h.addresses));
+  for (const h of s.hosts.filter((x) => !forbiddenNames.has(x.name))) {
+    for (const r of h.routes || []) {
+      const loc = r.status >= 300 && r.status < 400 ? Object.entries(r.headers || {}).find(([k]) => k.toLowerCase() === 'location')?.[1] : null;
+      if (!loc) continue;
+      let target; try { target = new URL(loc, `http://${h.name}`); } catch { continue; }
+      const host = target.hostname.replace(/^\[|\]$/g, '');
+      if (forbiddenNames.has(host) || forbiddenAddrs.has(host)) development.push(`http://${h.name}${port(h)}${r.path}`);
+    }
+  }
+  const secrets = [...new Set(forbidden.flatMap((h) => (h.routes || []).flatMap((r) => SECRET_NAMES(r.body || ''))))];
+  return { development: [...new Set(development)], sealed: [...new Set(sealed)].filter((v) => !development.includes(v)), secrets, forbidden: forbidden.map((h) => h.name) };
+}
+
+function ssrfObligations(profile, actors, blocked) {
+  const s = profile.ssrf;
+  const p = ssrfProbes(s);
+  if (!p.forbidden.length) blocked.push('ssrf: every declared host is permitted by the policy, so there is no forbidden destination to test');
+  const network = { policy: s.policy, approved: s.approved, hosts: s.hosts };
+  return valueFamilyObligations('ssrf', profile, actors, blocked, {
+    probes: p, forbid: () => ({ ...(p.secrets.length ? { secrets: [...p.secrets] } : {}), connections: true }), extra: { network }, scopeNoun: 'declared untrusted URL inputs',
+  });
+}
+
+/**
+ * Path traversal attack values, generated from the declared tree. Every file outside the allowed root that plants a secret is a
+ * target. Development: the relative escape, the absolute path, and every declared link inside the root that points outside it.
+ * Sealed: an escape through a subdirectory and a `./` prefix (each must also disclose on the original, or it is quarantined).
+ */
+function traversalProbes(f) {
+  const root = f.root.replace(/\/$/, '');
+  const inside = (rel) => rel === root || rel.startsWith(`${root}/`);
+  const development = []; const sealed = []; const secrets = new Set();
+  const subdir = Object.keys(f.tree).filter(inside).map((r) => r.slice(root.length + 1).split('/')).find((parts) => parts.length > 1)?.[0] || null;
+  for (const [rel, content] of Object.entries(f.tree)) {
+    if (inside(rel)) continue;
+    const names = SECRET_NAMES(content);
+    if (!names.length) continue;
+    names.forEach((n) => secrets.add(n));
+    const up = external_node_path_.posix.relative(root, rel);
+    development.push(up, `{{fs:abs}}/${rel}`);
+    for (const [link, target] of Object.entries(f.links || {})) {
+      if (!inside(link)) continue;
+      const dest = external_node_path_.posix.normalize(external_node_path_.posix.join(external_node_path_.posix.dirname(link), target));
+      if (inside(dest) || !(rel === dest || rel.startsWith(`${dest}/`))) continue;
+      development.push(`${external_node_path_.posix.relative(root, link)}/${external_node_path_.posix.relative(dest, rel)}`);
+    }
+    sealed.push(`./${up}`);
+    if (subdir) sealed.push(`${subdir}/../${up}`);
+  }
+  return { development: [...new Set(development)], sealed: [...new Set(sealed)], secrets: [...secrets] };
+}
+
+function filesystemObligations(profile, actors, blocked) {
+  const f = profile.filesystem;
+  const p = traversalProbes(f);
+  if (!p.secrets.length) blocked.push('filesystem: no file outside the allowed root plants a {{secret:<name>}} value, so a disclosure could not be observed');
+  const files = { root: f.root, tree: f.tree, ...(f.links ? { links: f.links } : {}) };
+  return valueFamilyObligations('filesystem', profile, actors, blocked, {
+    probes: p, forbid: () => ({ secrets: [...p.secrets] }), extra: { files }, scopeNoun: 'declared untrusted path inputs',
+  });
 }
 
 function authzObligations(profile, actors, blocked) {
@@ -896,6 +1058,12 @@ function buildContract(o) {
   } else if (o.family === 'object-authorization') {
     if (!profile.authorization) return { contract: null, blocked: ['the profile has no authorization section for an authorization finding'], problems: [] };
     ({ obligations, matrix } = authzObligations(profile, actors, blocked));
+  } else if (o.family === 'ssrf') {
+    if (!profile.ssrf) return { contract: null, blocked: ['the profile has no ssrf section for a server-side request forgery finding'], problems: [] };
+    obligations = ssrfObligations(profile, actors, blocked);
+  } else if (o.family === 'path-traversal') {
+    if (!profile.filesystem) return { contract: null, blocked: ['the profile has no filesystem section for a path traversal finding'], problems: [] };
+    obligations = filesystemObligations(profile, actors, blocked);
   } else return { contract: null, blocked: [`family ${o.family} has no registered repair contract in this milestone`], problems: [] };
   obligations.push({
     id: 'central-verifier', kind: 'project-tests', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
@@ -905,7 +1073,7 @@ function buildContract(o) {
   const approved = o.profileOrigin === 'operator-profile-outside-repository' && profile.approval;
   const policyFacts = [{
     id: 'application-profile', origin: o.profileOrigin, approval: approved ? 'approved' : 'declared',
-    digest: (0,identity/* digestOf */.ol)({ actors: profile.actors, sql: profile.sql ?? null, authorization: profile.authorization ?? null, database: profile.database }),
+    digest: (0,identity/* digestOf */.ol)({ actors: profile.actors, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, database: profile.database }),
     ...(approved ? { approvedBy: profile.approval.approvedBy } : {}),
   }];
   const knownUnknowns = [
@@ -973,8 +1141,8 @@ var external_node_crypto_ = __webpack_require__(77598);
 var identity = __webpack_require__(41877);
 // EXTERNAL MODULE: ./src/posture/assurance/config.js
 var config = __webpack_require__(90385);
-// EXTERNAL MODULE: ./src/posture/oracles/registry.js + 3 modules
-var registry = __webpack_require__(25007);
+// EXTERNAL MODULE: ./src/posture/oracles/registry.js + 2 modules
+var registry = __webpack_require__(18357);
 // EXTERNAL MODULE: ./src/posture/state-dir.js
 var state_dir = __webpack_require__(31174);
 // EXTERNAL MODULE: ./src/repair/schemas.js
@@ -1036,10 +1204,13 @@ function judge(observed, expectation) {
 // Counterexamples (verified-remediation PRD FR-07): validate the generated checks against the original, turn a failed check into a
 // minimal, structured counterexample, and keep the sealed set out of the feedback loop.
 //
-//   validateAgainstOriginal  An attack request that reaches no forbidden effect on the ORIGINAL cannot show that a patch repaired
-//                            anything, and a control whose expectation the original does not meet is a wrong expectation: both are
-//                            QUARANTINED with the reason and removed from the obligation the candidates are judged by (AC-07.3). The
-//                            quarantine is recorded, never silent.
+//   validateAgainstOriginal  A control whose expectation the original does not meet is a wrong expectation: it is QUARANTINED with the
+//                            reason and removed from the obligation the candidates are judged by (AC-07.3). An attack (or a generated
+//                            state check) that reaches no forbidden effect on the ORIGINAL cannot show that a patch repaired anything,
+//                            but it can show that a patch removed a protection the original already had: it stays in the obligation as
+//                            a REGRESSION GUARD, recorded with its reason, and does not count toward the obligation being meaningful.
+//                            (Until 0.198.0 these were quarantined, so a candidate deleting an existing check was judged only by the
+//                            attacks the original failed.) Both lists are recorded, never silent.
 //   counterexampleFrom       A failed development obligation becomes {obligation, request, actor, preconditions, effect}: the request
 //                            the verifier saw violate, the actor's identity, and the authoritative assertion it broke. A failed SEALED
 //                            obligation yields only "a sealed check failed": no request, value or outcome detail reaches generation
@@ -1065,24 +1236,24 @@ function withoutQuarantined(inputs, quarantined) {
  * @returns {{baseline: object[], quarantined: object[], effectiveInputs: Record<string, object>}}
  */
 async function validateAgainstOriginal(contract, originalFiles, run) {
-  const baseline = []; const quarantined = []; const effectiveInputs = {};
+  const baseline = []; const quarantined = []; const regressionGuards = []; const effectiveInputs = {};
   for (const ob of contract.obligations.filter((x) => x.oracleId)) {
     const res = await run(ob, originalFiles, ob.inputs);
     const d = res.details || {};
-    const q = [];
+    const q = []; const g = [];
     if (ob.kind === 'app-attack-blocked' || ob.kind === 'app-attack-sealed') {
       const violated = new Set((d.attackViolations || []).map((v) => v.id));
       if (res.observed === 'confirmed' || res.observed === 'refuted') {
         const reqs = ob.inputs.requests;
-        for (const r of reqs.filter((x) => x.role === 'attack' && x.forbid?.secrets?.length)) {
-          if (!violated.has(r.id)) q.push({ id: r.id, obligation: ob.id, reason: 'this attack discloses no planted secret on the original revision, so it cannot show a repair' });
+        for (const r of reqs.filter((x) => x.role === 'attack' && (x.forbid?.secrets?.length || x.forbid?.connections))) {
+          if (!violated.has(r.id)) g.push({ id: r.id, obligation: ob.id, reason: r.forbid?.connections ? 'the original revision already blocks this attack (no forbidden destination, no planted secret): kept as a regression guard, it cannot show a repair' : 'the original revision already blocks this attack (no planted secret disclosed): kept as a regression guard, it cannot show a repair' });
         }
-        // A generated state check names the write attacks it guards: if the original does not break it, the check and those writes go.
-        // Profile-declared state checks (no `guards`) are regression guards and stay.
+        // A generated state check names the write attacks it guards: if the original does not break it, the check and those writes stay
+        // as regression guards. Profile-declared state checks (no `guards`) are regression guards by declaration.
         for (const c of (ob.inputs.stateChecks || []).filter((x) => Array.isArray(x.guards))) {
           if (violated.has(c.id)) continue;
-          q.push({ id: c.id, obligation: ob.id, reason: 'the original revision makes no unauthorized change this check can see, so it cannot show a repair' });
-          for (const g of c.guards) q.push({ id: g, obligation: ob.id, reason: 'this write attack does not change durable state on the original revision' });
+          g.push({ id: c.id, obligation: ob.id, reason: 'the original revision makes no unauthorized change this check can see: kept as a regression guard, it cannot show a repair' });
+          for (const w of c.guards) g.push({ id: w, obligation: ob.id, reason: 'this write attack does not change durable state on the original revision: kept as a regression guard' });
         }
         for (const c of (d.controlFailures || [])) q.push({ id: c.id, obligation: ob.id, reason: `the original revision does not meet this control's expectation (${c.reason}); the expectation is wrong or the application needs setup the profile lacks` });
       }
@@ -1092,10 +1263,12 @@ async function validateAgainstOriginal(contract, originalFiles, run) {
     const seen = new Set();
     const uniq = q.filter((x) => (seen.has(x.id) ? false : seen.add(x.id)));
     quarantined.push(...uniq);
+    const gseen = new Set();
+    regressionGuards.push(...g.filter((x) => !seen.has(x.id) && (gseen.has(x.id) ? false : gseen.add(x.id))));
     effectiveInputs[ob.id] = withoutQuarantined(ob.inputs, uniq);
     baseline.push({ obligation: ob.id, kind: ob.kind, observed: res.observed, expectation: ob.baselineExpectation, status: ob.baselineExpectation ? judge(res.observed, ob.baselineExpectation) : 'recorded', reason: res.reason });
   }
-  return { baseline, quarantined, effectiveInputs };
+  return { baseline, quarantined, regressionGuards, effectiveInputs };
 }
 
 /** Structured feedback for the next proposal from one failed obligation run. */
@@ -1111,7 +1284,8 @@ function counterexampleFrom(ob, inputs, res, actorsByHeader) {
     const check = (inputs.stateChecks || []).find((c) => c.id === v.id) || null;
     const writer = check && Array.isArray(check.guards) ? check.guards.map((g) => byId[g]).find(Boolean) || null : null;
     return {
-      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : 'secret-disclosed',
+      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : v.effect === 'forbidden-connection' ? 'forbidden-connection' : 'secret-disclosed',
+      ...(v.destinations ? { destinations: v.destinations } : {}),
       request: req ? { method: req.method, path: req.path, body: req.body ?? null } : writer ? { method: writer.method, path: writer.path, body: writer.body ?? null } : null,
       actor: actorOf(req || writer), secrets: v.secrets || [], stateCheck: check ? check.sql : null, guardedRequests: check?.guards?.length ?? 0,
       violations: (d.attackViolations || []).length, message: res.reason,
@@ -1150,19 +1324,22 @@ const sizeOf = (r) => {
  * Shrink one violating attack request while it still discloses the same secret(s). `run(ob, files, inputs)` is the lab runner.
  * @returns {Promise<{request:object, original:object, runs:number, preserved:boolean}>}
  */
-async function shrinkCounterexample(ob, inputs, files, violatingId, run, { maxRounds = 6 } = {}) {
+async function shrinkCounterexample(ob, inputs, files, violatingId, run, { maxRounds = 6, ...o } = {}) {
   const controls = inputs.requests.filter((r) => r.role === 'control');
   let best = inputs.requests.find((r) => r.id === violatingId);
   const original = best;
   const secrets = new Set(best?.forbid?.secrets || []);
+  const destinations = new Set((o.destinations || []).map((d) => d.address).filter(Boolean));
   let runs = 0;
-  if (!best || !secrets.size) return { request: best, original, runs, preserved: true };
+  if (!best || (!secrets.size && !destinations.size)) return { request: best, original, runs, preserved: true };
   for (let round = 0; round < maxRounds; round++) {
     const cands = reductions(best).slice(0, REQ_CAP - controls.length).map((r, i) => ({ ...r, id: `shrink_${round}_${i}` }));
     if (!cands.length) break;
     const res = await run(ob, files, { ...inputs, requests: [...controls, ...cands], stateChecks: [] });
     runs++;
-    const hits = new Set((res.details?.attackViolations || []).filter((v) => (v.secrets || []).some((s) => secrets.has(s))).map(idOf));
+    // The same property: the same planted secret, or (a forbidden connection) the same forbidden address.
+    const same = (v) => (secrets.size && o.effect !== 'forbidden-connection' ? (v.secrets || []).some((s) => secrets.has(s)) : (v.destinations || []).some((d) => destinations.has(d.address)));
+    const hits = new Set((res.details?.attackViolations || []).filter(same).map(idOf));
     const next = cands.filter((c) => hits.has(c.id)).sort((a, b) => sizeOf(a) - sizeOf(b))[0];
     if (!next || sizeOf(next) >= sizeOf(best)) break;
     best = { ...next, id: original.id };
@@ -1223,11 +1400,11 @@ function sharedAttacksFrom(inputs, details, extra = []) {
   const byId = Object.fromEntries(inputs.requests.map((r) => [r.id, r]));
   const out = [];
   for (const v of details?.attackViolations || []) {
-    if (v.effect !== 'secret-disclosed') continue;
+    if (v.effect !== 'secret-disclosed' && v.effect !== 'forbidden-connection') continue;
     const r = byId[v.id];
     if (r && r.role === 'attack') out.push(r);
   }
-  for (const r of extra) if (r && r.role === 'attack' && r.forbid?.secrets?.length) out.push(r);
+  for (const r of extra) if (r && r.role === 'attack' && (r.forbid?.secrets?.length || r.forbid?.connections)) out.push(r);
   return out;
 }
 
@@ -1373,7 +1550,7 @@ function baseRecord(runId, plan) {
     schema: schemas/* SCHEMAS */.H6.record, schemaVersion: schemas/* SCHEMA_VERSION */.f$, runId, contractId: c.contractId, contractDigest: c.contractDigest,
     findingRefs: c.findingRefs, sourceDigest: c.sourceDigest,
     disposition: 'proposed', application: 'not-applied', artifact: 'source-only', environment: 'not-checked', completion: 'partial',
-    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [],
+    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [],
     budget: null, accounting: { oracleRuns: 0, wallMs: 0, modelTokens: null, modelCalls: 0, usd: null }, reasons: [], nextPrerequisite: null,
     scope: `contract ${c.contractId} (${c.family}): ${c.obligations.length} obligations over ${c.editScope.allowed.length} application file(s); source-only, nothing built or deployed`,
     createdAt: new Date().toISOString(),
@@ -1448,6 +1625,7 @@ async function runRepair(o) {
     const base = await validateAgainstOriginal(plan.contract, original, run);
     if (stopped()) return stoppedResult();
     record.quarantined = base.quarantined;
+    record.regressionGuards = base.regressionGuards;
     record.obligationResults.push(...base.baseline.map((b) => ({ ...b, revision: 'original', required: false })));
     const unavailable = base.baseline.filter((b) => ['unavailable', 'invalid'].includes(b.observed));
     if (unavailable.length) { cleanup(); return finish('blocked', 'unavailable', EXIT.blocked, { reasons: unavailable.map((b) => `${b.obligation} on the original: ${b.reason}`), nextPrerequisite: 'a working confinement backend and node:sqlite on this host' }); }
@@ -1462,8 +1640,10 @@ async function runRepair(o) {
     }
     for (const ob of plan.contract.obligations.filter((x) => x.oracleId)) {
       const eff = base.effectiveInputs[ob.id];
-      const meaningful = ob.kind.startsWith('app-attack') ? eff.requests.some((r) => r.role === 'attack') || (eff.stateChecks || []).length : eff.requests.length;
-      if (!meaningful) { cleanup(); return finish('needs-review', 'partial', EXIT.blocked, { reasons: [`required obligation ${ob.id} has no check left that is meaningful on the original revision (all quarantined)`], nextPrerequisite: 'review the quarantined checks and the profile' }); }
+      // Regression guards stay in the obligation but cannot show a repair: an attack obligation needs at least one check the original fails.
+      const guard = new Set(base.regressionGuards.filter((x) => x.obligation === ob.id).map((x) => x.id));
+      const meaningful = ob.kind.startsWith('app-attack') ? eff.requests.some((r) => r.role === 'attack' && !guard.has(r.id)) || (eff.stateChecks || []).some((c) => !guard.has(c.id)) : eff.requests.length;
+      if (!meaningful) { cleanup(); return finish('needs-review', 'partial', EXIT.blocked, { reasons: [`required obligation ${ob.id} has no check left that is meaningful on the original revision (every attack is already blocked there, or quarantined)`], nextPrerequisite: 'review the quarantined checks, the regression guards and the profile' }); }
     }
 
     // attack-case budget per candidate
@@ -1540,10 +1720,10 @@ async function runRepair(o) {
           verdict = 'failed';
           const { ob, inputs, res } = failures.find((f) => f.ob.kind === 'app-attack-blocked') || failures[0];
           let cx = counterexampleFrom(ob, inputs, res, actorLookup(plan.actors));
-          const firstSecret = (res.details?.attackViolations || []).find((v) => v.effect === 'secret-disclosed');
+          const firstSecret = (res.details?.attackViolations || []).find((v) => v.effect === 'secret-disclosed' || v.effect === 'forbidden-connection');
           let shrunk = null;
           if (firstSecret && ob.kind === 'app-attack-blocked') {
-            const sh = await shrinkCounterexample(ob, inputs, patched, firstSecret.id, run, { maxRounds: 4 });
+            const sh = await shrinkCounterexample(ob, inputs, patched, firstSecret.id, run, { maxRounds: 4, effect: firstSecret.effect, destinations: firstSecret.destinations });
             if (stopped()) return stoppedResult();
             shrunk = sh.request;
             cx = { ...cx, request: { method: sh.request.method, path: sh.request.path, body: sh.request.body ?? null }, shrunkFrom: { method: sh.original.method, path: sh.original.path, body: sh.original.body ?? null }, shrinkRuns: sh.runs, propertyPreserved: sh.preserved };
@@ -1682,9 +1862,9 @@ async function centralVerify(o, plan, cand, budgets) {
 
 
 
-const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization' };
+const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal' };
 const familyForFinding = (f) => FAMILY_BY_CWE[String(f?.cwe || '').toUpperCase().replace(/^(\d)/, 'CWE-$1')] || null;
-const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization']);
+const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal']);
 
 function signedFinding(root, id) {
   const file = node_path__WEBPACK_IMPORTED_MODULE_1__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .stateDir */ .Pn)(root), 'last-scan.json');
@@ -1719,7 +1899,7 @@ function planFromInputs(o) {
   } else if (o.family && o.file) {
     finding = { ...(0,_schemas_js__WEBPACK_IMPORTED_MODULE_4__/* .normalizeFinding */ .vb)({ file: String(o.file), id: `declared:${o.family}:${o.file}` }, { custody: 'unresolved' }), declaredBy: 'operator' };
   } else return { plan: null, blocked: [], problems: ['name a finding id, or a family and a file for a finding the scanner did not report'], status: 'usage' };
-  if (!family) return { plan: null, blocked: ['the finding has no repair family in this milestone; name one of sql-injection, object-authorization'], problems: [], status: 'blocked' };
+  if (!family) return { plan: null, blocked: [`the finding has no repair family in this milestone; name one of ${FAMILIES_SUPPORTED.join(', ')}`], problems: [], status: 'blocked' };
   const origin = insideRoot(o.root, o.profilePath) ? 'repository-file' : 'operator-profile-outside-repository';
   const r = (0,_coordinator_js__WEBPACK_IMPORTED_MODULE_5__/* .planRepair */ .RZ)({ root: o.root, finding, family, profile, profileOrigin: origin, commit });
   if (!r.plan) return { plan: null, blocked: r.blocked, problems: r.problems, status: r.problems.length ? 'usage' : 'blocked' };
@@ -1786,7 +1966,7 @@ const ENVIRONMENT_STATES = Object.freeze(['not-checked', 'staging-verified', 'de
 const COMPLETION_STATES = Object.freeze(['complete', 'partial', 'cancelled', 'unavailable', 'invalid']);
 const CUSTODY = Object.freeze(['internal-scan', 'imported', 'locally-corroborated', 'reproduced', 'refuted', 'unresolved']);
 const GENERATORS = Object.freeze(['deterministic-recipe', 'configured-model', 'user-supplied']);
-const FAMILIES = Object.freeze(['sql-injection', 'object-authorization']);
+const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal']);
 const EVIDENCE_ORIGINS = Object.freeze(['generated-from-profile', 'operator-declared', 'approved-invariant', 'counterexample', 'registered-family']);
 
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w@.\-/]{1,512}$/;
@@ -1867,7 +2047,7 @@ function validateCandidate(rec) {
   return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(ctx);
 }
 
-const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
+const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
 
 function validateRepairRecord(rec) {
   const g = (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .guardObject */ .NW)(rec); if (!g.ok) return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(g.ctx);

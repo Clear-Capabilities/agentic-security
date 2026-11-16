@@ -12,7 +12,7 @@ export const modules = {
 /* harmony import */ var _assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(53353);
 /* harmony import */ var _assurance_config_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(90385);
 /* harmony import */ var _replay_replay_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(37098);
-/* harmony import */ var _oracles_registry_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(25007);
+/* harmony import */ var _oracles_registry_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(18357);
 /* harmony import */ var _patch_promotion_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(51487);
 /* harmony import */ var _repair_records_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(38899);
 // Patch-negative verification (X-204).

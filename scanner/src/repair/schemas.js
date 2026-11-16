@@ -35,7 +35,7 @@ export const ENVIRONMENT_STATES = Object.freeze(['not-checked', 'staging-verifie
 export const COMPLETION_STATES = Object.freeze(['complete', 'partial', 'cancelled', 'unavailable', 'invalid']);
 export const CUSTODY = Object.freeze(['internal-scan', 'imported', 'locally-corroborated', 'reproduced', 'refuted', 'unresolved']);
 export const GENERATORS = Object.freeze(['deterministic-recipe', 'configured-model', 'user-supplied']);
-export const FAMILIES = Object.freeze(['sql-injection', 'object-authorization']);
+export const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal']);
 export const EVIDENCE_ORIGINS = Object.freeze(['generated-from-profile', 'operator-declared', 'approved-invariant', 'counterexample', 'registered-family']);
 
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w@.\-/]{1,512}$/;
@@ -116,7 +116,7 @@ export function validateCandidate(rec) {
   return result(ctx);
 }
 
-export const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
+export const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
 
 export function validateRepairRecord(rec) {
   const g = guardObject(rec); if (!g.ok) return result(g.ctx);

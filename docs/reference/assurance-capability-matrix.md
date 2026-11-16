@@ -23,8 +23,8 @@ Oracle targets are small JavaScript modules run under Node (the `node-runtime` p
 
 | Oracle | Class | Version | Prerequisites | macOS | Linux | Windows | Feature | Fixtures |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `application-behaviour` | application-behaviour | 1 | `node-runtime`, `node-sqlite`, `confinement-backend` | supported | unverified | unsupported | verification-oracles | [oracles/application-behaviour](../../scanner/test/fixtures/oracles/application-behaviour) |
-| `application-security` | application-security | 1 | `node-runtime`, `node-sqlite`, `confinement-backend` | supported | unverified | unsupported | verification-oracles | [oracles/application-security](../../scanner/test/fixtures/oracles/application-security) |
+| `application-behaviour` | application-behaviour | 2 | `node-runtime`, `node-sqlite`, `confinement-backend` | supported | unverified | unsupported | verification-oracles | [oracles/application-behaviour](../../scanner/test/fixtures/oracles/application-behaviour) |
+| `application-security` | application-security | 2 | `node-runtime`, `node-sqlite`, `confinement-backend` | supported | unverified | unsupported | verification-oracles | [oracles/application-security](../../scanner/test/fixtures/oracles/application-security) |
 | `authorization-decision` | authorization-decision | 1 | `node-runtime`, `confinement-backend` | supported | unverified | unsupported | verification-oracles | [oracles/authorization-decision](../../scanner/test/fixtures/oracles/authorization-decision) |
 | `business-state` | business-state | 1 | `node-runtime`, `confinement-backend` | supported | unverified | unsupported | `invariant-scenarios` | [oracles/business-state](../../scanner/test/fixtures/oracles/business-state) |
 | `functional-regression` | functional-regression | 1 | `node-runtime`, `confinement-backend` | supported | unverified | unsupported | verification-oracles | [oracles/functional-regression](../../scanner/test/fixtures/oracles/functional-regression) |

@@ -1,10 +1,13 @@
 // Counterexamples (verified-remediation PRD FR-07): validate the generated checks against the original, turn a failed check into a
 // minimal, structured counterexample, and keep the sealed set out of the feedback loop.
 //
-//   validateAgainstOriginal  An attack request that reaches no forbidden effect on the ORIGINAL cannot show that a patch repaired
-//                            anything, and a control whose expectation the original does not meet is a wrong expectation: both are
-//                            QUARANTINED with the reason and removed from the obligation the candidates are judged by (AC-07.3). The
-//                            quarantine is recorded, never silent.
+//   validateAgainstOriginal  A control whose expectation the original does not meet is a wrong expectation: it is QUARANTINED with the
+//                            reason and removed from the obligation the candidates are judged by (AC-07.3). An attack (or a generated
+//                            state check) that reaches no forbidden effect on the ORIGINAL cannot show that a patch repaired anything,
+//                            but it can show that a patch removed a protection the original already had: it stays in the obligation as
+//                            a REGRESSION GUARD, recorded with its reason, and does not count toward the obligation being meaningful.
+//                            (Until 0.198.0 these were quarantined, so a candidate deleting an existing check was judged only by the
+//                            attacks the original failed.) Both lists are recorded, never silent.
 //   counterexampleFrom       A failed development obligation becomes {obligation, request, actor, preconditions, effect}: the request
 //                            the verifier saw violate, the actor's identity, and the authoritative assertion it broke. A failed SEALED
 //                            obligation yields only "a sealed check failed": no request, value or outcome detail reaches generation
@@ -30,24 +33,24 @@ export function withoutQuarantined(inputs, quarantined) {
  * @returns {{baseline: object[], quarantined: object[], effectiveInputs: Record<string, object>}}
  */
 export async function validateAgainstOriginal(contract, originalFiles, run) {
-  const baseline = []; const quarantined = []; const effectiveInputs = {};
+  const baseline = []; const quarantined = []; const regressionGuards = []; const effectiveInputs = {};
   for (const ob of contract.obligations.filter((x) => x.oracleId)) {
     const res = await run(ob, originalFiles, ob.inputs);
     const d = res.details || {};
-    const q = [];
+    const q = []; const g = [];
     if (ob.kind === 'app-attack-blocked' || ob.kind === 'app-attack-sealed') {
       const violated = new Set((d.attackViolations || []).map((v) => v.id));
       if (res.observed === 'confirmed' || res.observed === 'refuted') {
         const reqs = ob.inputs.requests;
-        for (const r of reqs.filter((x) => x.role === 'attack' && x.forbid?.secrets?.length)) {
-          if (!violated.has(r.id)) q.push({ id: r.id, obligation: ob.id, reason: 'this attack discloses no planted secret on the original revision, so it cannot show a repair' });
+        for (const r of reqs.filter((x) => x.role === 'attack' && (x.forbid?.secrets?.length || x.forbid?.connections))) {
+          if (!violated.has(r.id)) g.push({ id: r.id, obligation: ob.id, reason: r.forbid?.connections ? 'the original revision already blocks this attack (no forbidden destination, no planted secret): kept as a regression guard, it cannot show a repair' : 'the original revision already blocks this attack (no planted secret disclosed): kept as a regression guard, it cannot show a repair' });
         }
-        // A generated state check names the write attacks it guards: if the original does not break it, the check and those writes go.
-        // Profile-declared state checks (no `guards`) are regression guards and stay.
+        // A generated state check names the write attacks it guards: if the original does not break it, the check and those writes stay
+        // as regression guards. Profile-declared state checks (no `guards`) are regression guards by declaration.
         for (const c of (ob.inputs.stateChecks || []).filter((x) => Array.isArray(x.guards))) {
           if (violated.has(c.id)) continue;
-          q.push({ id: c.id, obligation: ob.id, reason: 'the original revision makes no unauthorized change this check can see, so it cannot show a repair' });
-          for (const g of c.guards) q.push({ id: g, obligation: ob.id, reason: 'this write attack does not change durable state on the original revision' });
+          g.push({ id: c.id, obligation: ob.id, reason: 'the original revision makes no unauthorized change this check can see: kept as a regression guard, it cannot show a repair' });
+          for (const w of c.guards) g.push({ id: w, obligation: ob.id, reason: 'this write attack does not change durable state on the original revision: kept as a regression guard' });
         }
         for (const c of (d.controlFailures || [])) q.push({ id: c.id, obligation: ob.id, reason: `the original revision does not meet this control's expectation (${c.reason}); the expectation is wrong or the application needs setup the profile lacks` });
       }
@@ -57,10 +60,12 @@ export async function validateAgainstOriginal(contract, originalFiles, run) {
     const seen = new Set();
     const uniq = q.filter((x) => (seen.has(x.id) ? false : seen.add(x.id)));
     quarantined.push(...uniq);
+    const gseen = new Set();
+    regressionGuards.push(...g.filter((x) => !seen.has(x.id) && (gseen.has(x.id) ? false : gseen.add(x.id))));
     effectiveInputs[ob.id] = withoutQuarantined(ob.inputs, uniq);
     baseline.push({ obligation: ob.id, kind: ob.kind, observed: res.observed, expectation: ob.baselineExpectation, status: ob.baselineExpectation ? judge(res.observed, ob.baselineExpectation) : 'recorded', reason: res.reason });
   }
-  return { baseline, quarantined, effectiveInputs };
+  return { baseline, quarantined, regressionGuards, effectiveInputs };
 }
 
 /** Structured feedback for the next proposal from one failed obligation run. */
@@ -76,7 +81,8 @@ export function counterexampleFrom(ob, inputs, res, actorsByHeader) {
     const check = (inputs.stateChecks || []).find((c) => c.id === v.id) || null;
     const writer = check && Array.isArray(check.guards) ? check.guards.map((g) => byId[g]).find(Boolean) || null : null;
     return {
-      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : 'secret-disclosed',
+      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : v.effect === 'forbidden-connection' ? 'forbidden-connection' : 'secret-disclosed',
+      ...(v.destinations ? { destinations: v.destinations } : {}),
       request: req ? { method: req.method, path: req.path, body: req.body ?? null } : writer ? { method: writer.method, path: writer.path, body: writer.body ?? null } : null,
       actor: actorOf(req || writer), secrets: v.secrets || [], stateCheck: check ? check.sql : null, guardedRequests: check?.guards?.length ?? 0,
       violations: (d.attackViolations || []).length, message: res.reason,
@@ -115,19 +121,22 @@ const sizeOf = (r) => {
  * Shrink one violating attack request while it still discloses the same secret(s). `run(ob, files, inputs)` is the lab runner.
  * @returns {Promise<{request:object, original:object, runs:number, preserved:boolean}>}
  */
-export async function shrinkCounterexample(ob, inputs, files, violatingId, run, { maxRounds = 6 } = {}) {
+export async function shrinkCounterexample(ob, inputs, files, violatingId, run, { maxRounds = 6, ...o } = {}) {
   const controls = inputs.requests.filter((r) => r.role === 'control');
   let best = inputs.requests.find((r) => r.id === violatingId);
   const original = best;
   const secrets = new Set(best?.forbid?.secrets || []);
+  const destinations = new Set((o.destinations || []).map((d) => d.address).filter(Boolean));
   let runs = 0;
-  if (!best || !secrets.size) return { request: best, original, runs, preserved: true };
+  if (!best || (!secrets.size && !destinations.size)) return { request: best, original, runs, preserved: true };
   for (let round = 0; round < maxRounds; round++) {
     const cands = reductions(best).slice(0, REQ_CAP - controls.length).map((r, i) => ({ ...r, id: `shrink_${round}_${i}` }));
     if (!cands.length) break;
     const res = await run(ob, files, { ...inputs, requests: [...controls, ...cands], stateChecks: [] });
     runs++;
-    const hits = new Set((res.details?.attackViolations || []).filter((v) => (v.secrets || []).some((s) => secrets.has(s))).map(idOf));
+    // The same property: the same planted secret, or (a forbidden connection) the same forbidden address.
+    const same = (v) => (secrets.size && o.effect !== 'forbidden-connection' ? (v.secrets || []).some((s) => secrets.has(s)) : (v.destinations || []).some((d) => destinations.has(d.address)));
+    const hits = new Set((res.details?.attackViolations || []).filter(same).map(idOf));
     const next = cands.filter((c) => hits.has(c.id)).sort((a, b) => sizeOf(a) - sizeOf(b))[0];
     if (!next || sizeOf(next) >= sizeOf(best)) break;
     best = { ...next, id: original.id };

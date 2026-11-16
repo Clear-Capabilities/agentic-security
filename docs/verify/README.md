@@ -10,7 +10,7 @@ Verification is where a fix earns the word. Re-scan, lint, tests, the honesty ga
 
 `fix --apply --require-proof` (GA) goes further: it refuses to write unless the original exploit reproduces beforehand and is blocked afterward.
 
-`agentic-security repair` (Labs) verifies against an executable contract instead: for one SQL injection or object-authorization finding it runs the application itself over a real SQLite file and accepts a candidate only when the declared attacks stop and the declared legitimate requests still work. See [Contract-driven repair](../guides/verified-remediation.md).
+`agentic-security repair` (Labs) verifies against an executable contract instead: for one SQL injection, object-authorization, server-side request forgery or path traversal finding it runs the application itself (over a real SQLite file, a declared network or a real file tree) and accepts a candidate only when the declared attacks stop and the declared legitimate requests still work. See [Contract-driven repair](../guides/verified-remediation.md).
 
 In CI, [assurance modes](../trust/assurance-modes.md) make an incomplete analysis fail the build in `strict` mode, and [CI gating](../workflows/ci-gating.md) wires both gates.
 
@@ -24,7 +24,7 @@ Do not confuse `agentic-security verify` (is this *finding* real, a verifier ver
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
 | [Verified remediation](../trust/verified-remediation.md) | Verify | **GA** | Whether a patch passed its rescan, lint and test legs, which legs were skipped, and a completeness tier of FULL, MITIGATION or WORKAROUND. |
-| [Contract-driven repair](../guides/verified-remediation.md) | Verify | **Labs** | For one SQL injection or object-authorization finding in a Node or Python (WSGI) application over SQLite, whether a candidate patch stops the declared attacks and keeps the declared legitimate behaviour, judged in the trust boundary against an executable contract. Source-only; the trust boundary does not yet run on Linux. |
+| [Contract-driven repair](../guides/verified-remediation.md) | Verify | **Labs** | For one SQL injection or object-authorization finding in a Node or Python (WSGI) application over SQLite, or one server-side request forgery or path traversal finding in a Node application (a declared network, a real file tree), whether a candidate patch stops the declared attacks and keeps the declared legitimate behaviour, judged in the trust boundary against an executable contract. Source-only; the trust boundary does not yet run on Linux. |
 | [Proof-gated fix](../guides/exploit-proof-fabric.md) | Verify | **GA** | With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it. |
 | [Assurance gate modes](../trust/assurance-modes.md) | Verify | **GA** | Whether CI fails on an incomplete analysis (strict) or only reports it (advisory, standard). |
 | [CI gating](../guides/ci-setup.md) | Verify | **GA** | A baseline-aware pull request scan that writes SARIF, JUnit and JSON and applies a severity gate and an assurance gate. |

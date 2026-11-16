@@ -11,7 +11,10 @@ This is a Labs capability. The shapes, outcomes and exit codes are in the [repai
 | `sql-injection` | The application's own request handler over a real SQLite file. Attack probes go into each declared untrusted value; a planted secret belonging to another user must not appear in any response. Declared legitimate values must still return their data, including values the original gets wrong, such as a title with a quote. |
 | `object-authorization` | Every declared actor (owner, another member, an admin, another tenant, anonymous) against every declared object and operation. A denied read must not disclose the object's planted secret. A denied update must leave the stored value unchanged, whatever status code the application returns. Allowed actors must keep working. |
 
-Node applications, and Python WSGI applications (`"runtime": "python"` in the profile), over SQLite. Requests run one at a time in one process.
+| `ssrf` | The application's own request handler, with every outbound connection observed at the Node connection layer. The profile declares the network: hosts, the DNS answers each gives (one per resolution, so a host can rebind from a public to a private address), what each serves, and a policy (an allowlist of approved hosts, or public addresses only). A connection to a forbidden destination is the violation, whatever comes back; a secret planted in an internal host's response shows disclosure. Attacks name each forbidden host by name and address, follow a declared redirect off an approved host, and (sealed) respell the destination as a decimal or IPv4-mapped address or an upper-case name. Legitimate requests to approved hosts, including their legitimate redirects, must still work. |
+| `path-traversal` | The application's own request handler over a real file tree: an allowed root, files outside it that plant secrets, and real symbolic links. Attacks escape by relative path, by absolute path and through a link inside the root that points out of it, and (sealed) through a subdirectory. Declared legitimate paths, including names with spaces and a link that stays inside the root, must still work. |
+
+Node applications, and Python WSGI applications (`"runtime": "python"` in the profile), over SQLite; `ssrf` and `path-traversal` on Node only. Requests run one at a time in one process.
 
 ## The workflow
 
@@ -53,7 +56,7 @@ Node applications, and Python WSGI applications (`"runtime": "python"` in the pr
 
 The disposition is the answer. `verified-for-contract` means a candidate passed every required obligation, including a sealed set of held-out attack variants that is never shown to candidate generation. `rejected` means every candidate failed one, and `counterexamples` names the request, the actor and the property each one broke. A `blocked` or `needs-review` run says what is missing in `nextPrerequisite`.
 
-Checks generated from the profile that cannot mean anything on the original are quarantined, each with its reason, rather than silently counted. An attack that discloses nothing on the original cannot show that a patch fixed it.
+A legitimate request the original does not serve as declared is quarantined, with its reason, rather than silently counted. An attack the original already blocks cannot show that a patch fixed it, but it stays in the run as a regression guard (`regressionGuards`, each with its reason): a candidate that deletes a protection the original already had is rejected by it.
 
 ## What a verified result does not mean
 
@@ -62,4 +65,4 @@ Checks generated from the profile that cannot mean anything on the original are 
 - It does not mean concurrency is safe: no concurrent execution is exercised.
 - On Linux the trust boundary does not run yet, so repair execution there is reported as `blocked`.
 
-The adversarial corpus that keeps the verifier honest is `bench/repair/`: deliberately ineffective patches (indirection, wrong escaping, one route of two fixed, a check after the write, deny-all, a filter fitted to the visible probes, edits to tests and runner configuration) next to legitimate repairs of the same applications. `npm run bench:repair:challenge:check` in `scanner/` fails if any of them is accepted or if any outcome moves from its reviewed baseline. It is synthetic regression evidence, not an accuracy figure.
+The adversarial corpus that keeps the verifier honest is `bench/repair/`: deliberately ineffective patches (indirection, wrong escaping, one route of two fixed, a check after the write, deny-all, a filter fitted to the visible probes, edits to tests and runner configuration, an allowlist checked on the first hop only, a lexical path check a symbolic link defeats, a deleted check that only regression guards catch) next to legitimate repairs of the same applications. `npm run bench:repair:challenge:check` in `scanner/` fails if any of them is accepted or if any outcome moves from its reviewed baseline. It is synthetic regression evidence, not an accuracy figure.

@@ -46,11 +46,11 @@ export function sharedAttacksFrom(inputs, details, extra = []) {
   const byId = Object.fromEntries(inputs.requests.map((r) => [r.id, r]));
   const out = [];
   for (const v of details?.attackViolations || []) {
-    if (v.effect !== 'secret-disclosed') continue;
+    if (v.effect !== 'secret-disclosed' && v.effect !== 'forbidden-connection') continue;
     const r = byId[v.id];
     if (r && r.role === 'attack') out.push(r);
   }
-  for (const r of extra) if (r && r.role === 'attack' && r.forbid?.secrets?.length) out.push(r);
+  for (const r of extra) if (r && r.role === 'attack' && (r.forbid?.secrets?.length || r.forbid?.connections)) out.push(r);
   return out;
 }
 

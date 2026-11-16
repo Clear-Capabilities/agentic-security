@@ -173,7 +173,7 @@ SAST fixes write source code via the `apply_fix` MCP tool. That tool refuses eve
 
 ### `agentic-security repair` (CLI-only, Labs)
 
-Contract-driven repair for one SQL injection or object-authorization finding in a Node or Python (WSGI) application over SQLite. `repair plan --profile <profile.json> --finding <id>` builds the contract (read-only; the MCP tool `repair_plan` does the same), `repair run --plan <plan.json> --allow-execution` judges candidates in the trust boundary, and `--apply` writes the verified one through the same apply service as `fix --apply`. A result holds for the named contract only. See [contract-driven repair](../docs/guides/verified-remediation.md).
+Contract-driven repair for one SQL injection or object-authorization finding in a Node or Python (WSGI) application over SQLite, or one server-side request forgery or path traversal finding in a Node application. `repair plan --profile <profile.json> --finding <id>` builds the contract (read-only; the MCP tool `repair_plan` does the same), `repair run --plan <plan.json> --allow-execution` judges candidates in the trust boundary, and `--apply` writes the verified one through the same apply service as `fix --apply`. A result holds for the named contract only. See [contract-driven repair](../docs/guides/verified-remediation.md).
 
 ### `fix --finding <id> --apply --require-proof`
 

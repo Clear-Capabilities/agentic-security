@@ -172,3 +172,84 @@ describe('[AC-04.5] CLI and MCP derive the same obligations', () => {
     assert.equal(fs.existsSync(path.join(root, '.agentic-security')), false, 'planning wrote nothing');
   });
 });
+
+describe('[M3-03] server-side request forgery and path traversal contracts (no execution)', () => {
+  const ssrfRoot = () => copy('ssrf-preview');
+  const fsRoot = () => copy('files-download');
+  const attacks = (c, id) => c.obligations.find((o) => o.id === id).inputs.requests.filter((r) => r.role === 'attack').map((r) => decodeURIComponent(r.path.split('=')[1]));
+
+  test('the SSRF contract attacks every forbidden host by name and address, follows a declared redirect off the approved set, and seals respellings', () => {
+    const b = build(ssrfRoot(), { family: 'ssrf' });
+    assert.deepEqual([...b.problems, ...b.blocked], []);
+    const dev = attacks(b.contract, 'ssrf-attacks-development');
+    for (const v of ['http://metadata.internal/latest/meta-data/', 'http://169.254.169.254/latest/meta-data/', 'http://admin.internal/', 'http://10.0.0.7/', 'http://api.partner.test/r/meta']) assert.ok(dev.includes(v), v);
+    assert.ok(!dev.some((v) => v.includes('cdn.partner.test')), 'an approved host is never an attack target');
+    const sealed = attacks(b.contract, 'ssrf-attacks-sealed');
+    assert.ok(sealed.includes('http://2852039166/latest/meta-data/') && sealed.includes('http://METADATA.INTERNAL./latest/meta-data/'));
+    assert.ok(sealed.every((v) => !dev.includes(v)), 'the sealed set never repeats a development value');
+    const dreq = b.contract.obligations.find((o) => o.id === 'ssrf-attacks-development').inputs.requests.find((r) => r.role === 'attack');
+    assert.deepEqual(dreq.forbid, { secrets: ['cloud-credential', 'admin-panel'], connections: true });
+    assert.equal(b.contract.obligations.find((o) => o.id === 'ssrf-attacks-development').inputs.network.policy, 'allowlist');
+  });
+
+  test('a public-only policy forbids a host that can rebind from a public to a private address', () => {
+    const b = build(copy('ssrf-rebind'), { family: 'ssrf' });
+    assert.deepEqual([...b.problems, ...b.blocked], []);
+    const dev = attacks(b.contract, 'ssrf-attacks-development');
+    assert.ok(dev.includes('http://rebind.example.test/'));
+    assert.ok(!dev.some((v) => v.includes('hooks.example.test')));
+  });
+
+  test('the traversal contract escapes by relative path, by absolute path and through a link out of the root; the link inside the root is legitimate', () => {
+    const b = build(fsRoot(), { family: 'path-traversal' });
+    assert.deepEqual([...b.problems, ...b.blocked], []);
+    const dev = attacks(b.contract, 'filesystem-attacks-development');
+    for (const v of ['../outside/secret.txt', '{{fs:abs}}/outside/secret.txt', 'latest/secret.txt', '../public-archive/old.txt']) assert.ok(dev.includes(v), v);
+    assert.ok(!dev.some((v) => v.startsWith('current/')), 'a link that stays inside the root is not an attack');
+    assert.ok(attacks(b.contract, 'filesystem-attacks-sealed').includes('docs/../../outside/secret.txt'));
+  });
+
+  test('a declaration with nothing forbidden, or no planted secret outside the root, is blocked, never a contract that could pass', () => {
+    const r = ssrfRoot(); const p = profileOf(r);
+    p.ssrf.approved = p.ssrf.hosts.map((h) => h.name);
+    assert.match(build(r, { family: 'ssrf', profile: p }).blocked.join(' '), /no forbidden destination/);
+    const f = fsRoot(); const q = profileOf(f);
+    q.filesystem.tree['outside/secret.txt'] = 'nothing planted';
+    q.filesystem.tree['public-archive/old.txt'] = 'nothing planted';
+    assert.match(build(f, { family: 'path-traversal', profile: q }).blocked.join(' '), /no file outside the allowed root plants/);
+  });
+
+  test('profiles: a link that escapes the tree, an unknown host field, an IP as a host name and the python runtime are refused', () => {
+    const q = profileOf(fsRoot());
+    q.filesystem.links = { 'public/up': '../../..' };
+    assert.match(validateProfile(q).join(' '), /must point inside the tree/);
+    const p = profileOf(ssrfRoot());
+    p.ssrf.hosts[0].weight = 1;
+    assert.match(validateProfile(p).join(' '), /unknown field 'weight'/);
+    const p2 = profileOf(ssrfRoot());
+    p2.ssrf.hosts[0].name = '10.0.0.1';
+    assert.match(validateProfile(p2).join(' '), /unique lower-case host name/);
+    const p3 = profileOf(ssrfRoot());
+    p3.application.runtime = 'python'; p3.application.entry = 'app.py'; p3.application.files = ['app.py'];
+    assert.match(validateProfile(p3).join(' '), /node runtime only/);
+  });
+
+  test('the network and the file tree are part of the contract identity', () => {
+    const r = ssrfRoot();
+    const base = build(r, { family: 'ssrf' }).contract.contractId;
+    const p = profileOf(r);
+    p.ssrf.hosts[2].addresses = ['169.254.169.253'];
+    assert.notEqual(build(r, { family: 'ssrf', profile: p }).contract.contractId, base);
+  });
+
+  test('[AC-12.2] a candidate may not introduce a primitive below the layer the oracles observe', () => {
+    const r = ssrfRoot();
+    const c = build(r, { family: 'ssrf' }).contract;
+    const original = fs.readFileSync(path.join(r, 'src', 'app.mjs'), 'utf8');
+    for (const [snippet, what] of [["import { execFile } from 'node:child_process';\n", 'a child process'], ["const tcp = process.binding('tcp_wrap');\n", 'a raw runtime binding'], ["import dgram from 'dgram';\n", 'a datagram socket']]) {
+      const chk = checkCandidate(c, { 'src/app.mjs': original }, { 'src/app.mjs': snippet + original });
+      assert.equal(chk.ok, false, what);
+      assert.match(chk.reasons.join(' '), new RegExp(`introduces ${what}`));
+    }
+  });
+});

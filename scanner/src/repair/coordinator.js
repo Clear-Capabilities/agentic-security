@@ -127,7 +127,7 @@ function baseRecord(runId, plan) {
     schema: SCHEMAS.record, schemaVersion: SCHEMA_VERSION, runId, contractId: c.contractId, contractDigest: c.contractDigest,
     findingRefs: c.findingRefs, sourceDigest: c.sourceDigest,
     disposition: 'proposed', application: 'not-applied', artifact: 'source-only', environment: 'not-checked', completion: 'partial',
-    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [],
+    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [],
     budget: null, accounting: { oracleRuns: 0, wallMs: 0, modelTokens: null, modelCalls: 0, usd: null }, reasons: [], nextPrerequisite: null,
     scope: `contract ${c.contractId} (${c.family}): ${c.obligations.length} obligations over ${c.editScope.allowed.length} application file(s); source-only, nothing built or deployed`,
     createdAt: new Date().toISOString(),
@@ -202,6 +202,7 @@ export async function runRepair(o) {
     const base = await validateAgainstOriginal(plan.contract, original, run);
     if (stopped()) return stoppedResult();
     record.quarantined = base.quarantined;
+    record.regressionGuards = base.regressionGuards;
     record.obligationResults.push(...base.baseline.map((b) => ({ ...b, revision: 'original', required: false })));
     const unavailable = base.baseline.filter((b) => ['unavailable', 'invalid'].includes(b.observed));
     if (unavailable.length) { cleanup(); return finish('blocked', 'unavailable', EXIT.blocked, { reasons: unavailable.map((b) => `${b.obligation} on the original: ${b.reason}`), nextPrerequisite: 'a working confinement backend and node:sqlite on this host' }); }
@@ -216,8 +217,10 @@ export async function runRepair(o) {
     }
     for (const ob of plan.contract.obligations.filter((x) => x.oracleId)) {
       const eff = base.effectiveInputs[ob.id];
-      const meaningful = ob.kind.startsWith('app-attack') ? eff.requests.some((r) => r.role === 'attack') || (eff.stateChecks || []).length : eff.requests.length;
-      if (!meaningful) { cleanup(); return finish('needs-review', 'partial', EXIT.blocked, { reasons: [`required obligation ${ob.id} has no check left that is meaningful on the original revision (all quarantined)`], nextPrerequisite: 'review the quarantined checks and the profile' }); }
+      // Regression guards stay in the obligation but cannot show a repair: an attack obligation needs at least one check the original fails.
+      const guard = new Set(base.regressionGuards.filter((x) => x.obligation === ob.id).map((x) => x.id));
+      const meaningful = ob.kind.startsWith('app-attack') ? eff.requests.some((r) => r.role === 'attack' && !guard.has(r.id)) || (eff.stateChecks || []).some((c) => !guard.has(c.id)) : eff.requests.length;
+      if (!meaningful) { cleanup(); return finish('needs-review', 'partial', EXIT.blocked, { reasons: [`required obligation ${ob.id} has no check left that is meaningful on the original revision (every attack is already blocked there, or quarantined)`], nextPrerequisite: 'review the quarantined checks, the regression guards and the profile' }); }
     }
 
     // attack-case budget per candidate
@@ -294,10 +297,10 @@ export async function runRepair(o) {
           verdict = 'failed';
           const { ob, inputs, res } = failures.find((f) => f.ob.kind === 'app-attack-blocked') || failures[0];
           let cx = counterexampleFrom(ob, inputs, res, actorLookup(plan.actors));
-          const firstSecret = (res.details?.attackViolations || []).find((v) => v.effect === 'secret-disclosed');
+          const firstSecret = (res.details?.attackViolations || []).find((v) => v.effect === 'secret-disclosed' || v.effect === 'forbidden-connection');
           let shrunk = null;
           if (firstSecret && ob.kind === 'app-attack-blocked') {
-            const sh = await shrinkCounterexample(ob, inputs, patched, firstSecret.id, run, { maxRounds: 4 });
+            const sh = await shrinkCounterexample(ob, inputs, patched, firstSecret.id, run, { maxRounds: 4, effect: firstSecret.effect, destinations: firstSecret.destinations });
             if (stopped()) return stoppedResult();
             shrunk = sh.request;
             cx = { ...cx, request: { method: sh.request.method, path: sh.request.path, body: sh.request.body ?? null }, shrunkFrom: { method: sh.original.method, path: sh.original.path, body: sh.original.body ?? null }, shrinkRuns: sh.runs, propertyPreserved: sh.preserved };

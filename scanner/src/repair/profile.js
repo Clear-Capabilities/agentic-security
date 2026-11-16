@@ -9,6 +9,7 @@
 // identifiers. Validation never throws.
 import { isPlainObject } from '../posture/assurance/schema-kit.js';
 import { isRelPath } from './schemas.js';
+import { validateNetwork, validateFiles } from '../posture/oracles/app-adapters.js';
 
 export const PROFILE_SCHEMA = 'agentic-security/repair-profile';
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -25,11 +26,33 @@ function checkRequestShape(errs, r, where) {
   if (r.body !== undefined && !isPlainObject(r.body)) errs.push(`${where}.body must be an object`);
 }
 
+/** One declared untrusted value input (sql, ssrf, filesystem): the request carrying {{value}} and its legitimate values. */
+function checkValueInput(errs, inp, w, actorIds, { secrets }) {
+  if (!isPlainObject(inp)) { errs.push(`${w} must be an object`); return; }
+  keysOnly(errs, inp, ['id', 'actor', 'method', 'path', 'body', 'benign', ...(secrets ? ['protectedSecrets'] : [])], w);
+  if (typeof inp.id !== 'string' || !SLUG.test(inp.id)) errs.push(`${w}.id must be a slug`);
+  if (!actorIds.has(inp.actor)) errs.push(`${w}.actor must name a declared actor`);
+  checkRequestShape(errs, inp, w);
+  if (!JSON.stringify([inp.path, inp.body ?? null]).includes('{{value}}')) errs.push(`${w}: the path or body must mark the untrusted value with {{value}}`);
+  if (!Array.isArray(inp.benign) || !inp.benign.length) errs.push(`${w}.benign must list at least one legitimate value with its expected response`);
+  else for (const [j, b] of inp.benign.entries()) {
+    if (!isPlainObject(b) || typeof b.value !== 'string') { errs.push(`${w}.benign[${j}].value must be a string`); continue; }
+    keysOnly(errs, b, ['value', 'expectIncludes', 'expectStatus', 'originalMishandles'], `${w}.benign[${j}]`);
+    if (!Array.isArray(b.expectIncludes) || !b.expectIncludes.length) errs.push(`${w}.benign[${j}].expectIncludes must list at least one expected value`);
+  }
+  if (secrets && (!Array.isArray(inp.protectedSecrets) || !inp.protectedSecrets.length || !inp.protectedSecrets.every((s) => SLUG.test(s)))) errs.push(`${w}.protectedSecrets must name the planted secrets another actor's data holds`);
+}
+
+function checkInputs(errs, sec, name, actorIds, opts) {
+  if (!Array.isArray(sec.inputs) || !sec.inputs.length || sec.inputs.length > 8) { errs.push(`${name}.inputs must hold 1 to 8 inputs`); return; }
+  for (const [i, inp] of sec.inputs.entries()) checkValueInput(errs, inp, `${name}.inputs[${i}]`, actorIds, opts);
+}
+
 /** Problems with a profile; an empty list means it can be used. */
 export function validateProfile(p) {
   const errs = [];
   if (!isPlainObject(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'tests', 'approval'], 'profile');
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
   if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
   const a = p.application;
@@ -60,27 +83,31 @@ export function validateProfile(p) {
     actorIds.add(ac.id);
     if (!isPlainObject(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
   }
-  if (p.sql === undefined && p.authorization === undefined) errs.push('the profile needs a sql or an authorization section');
+  if (!['sql', 'authorization', 'ssrf', 'filesystem'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf or filesystem section');
+  if ((p.ssrf !== undefined || p.filesystem !== undefined) && a?.runtime === 'python') errs.push('the ssrf and filesystem sections are supported for the node runtime only in this release');
   if (p.sql !== undefined) {
-    if (!isPlainObject(p.sql) || !Array.isArray(p.sql.inputs) || !p.sql.inputs.length) errs.push('sql.inputs must be a non-empty array');
+    if (!isPlainObject(p.sql)) errs.push('sql must be an object');
+    else { keysOnly(errs, p.sql, ['inputs', 'stateChecks'], 'sql'); checkInputs(errs, p.sql, 'sql', actorIds, { secrets: true }); }
+  }
+  // Server-side request forgery: the network the application can reach is declared (hosts, their DNS answers, what each serves), with a
+  // destination policy. Secrets planted in a forbidden host's responses show disclosure; the connection itself is the forbidden effect.
+  if (p.ssrf !== undefined) {
+    if (!isPlainObject(p.ssrf)) errs.push('ssrf must be an object');
     else {
-      keysOnly(errs, p.sql, ['inputs', 'stateChecks'], 'sql');
-      for (const [i, inp] of p.sql.inputs.entries()) {
-        const w = `sql.inputs[${i}]`;
-        if (!isPlainObject(inp)) { errs.push(`${w} must be an object`); continue; }
-        keysOnly(errs, inp, ['id', 'actor', 'method', 'path', 'body', 'benign', 'protectedSecrets'], w);
-        if (typeof inp.id !== 'string' || !SLUG.test(inp.id)) errs.push(`${w}.id must be a slug`);
-        if (!actorIds.has(inp.actor)) errs.push(`${w}.actor must name a declared actor`);
-        checkRequestShape(errs, inp, w);
-        if (!JSON.stringify([inp.path, inp.body ?? null]).includes('{{value}}')) errs.push(`${w}: the path or body must mark the untrusted value with {{value}}`);
-        if (!Array.isArray(inp.benign) || !inp.benign.length) errs.push(`${w}.benign must list at least one legitimate value with its expected response`);
-        else for (const [j, b] of inp.benign.entries()) {
-          if (!isPlainObject(b) || typeof b.value !== 'string') { errs.push(`${w}.benign[${j}].value must be a string`); continue; }
-          keysOnly(errs, b, ['value', 'expectIncludes', 'expectStatus', 'originalMishandles'], `${w}.benign[${j}]`);
-          if (!Array.isArray(b.expectIncludes) || !b.expectIncludes.length) errs.push(`${w}.benign[${j}].expectIncludes must list at least one expected value`);
-        }
-        if (!Array.isArray(inp.protectedSecrets) || !inp.protectedSecrets.length || !inp.protectedSecrets.every((s) => SLUG.test(s))) errs.push(`${w}.protectedSecrets must name the planted secrets another actor's data holds`);
-      }
+      keysOnly(errs, p.ssrf, ['policy', 'approved', 'hosts', 'inputs'], 'ssrf');
+      const n = validateNetwork({ policy: p.ssrf.policy, approved: p.ssrf.approved, hosts: p.ssrf.hosts });
+      if (n) errs.push(`ssrf: ${n}`);
+      checkInputs(errs, p.ssrf, 'ssrf', actorIds, { secrets: false });
+    }
+  }
+  // Path traversal: a real file tree with an allowed root; files outside it plant secrets; declared links are real symbolic links.
+  if (p.filesystem !== undefined) {
+    if (!isPlainObject(p.filesystem)) errs.push('filesystem must be an object');
+    else {
+      keysOnly(errs, p.filesystem, ['root', 'tree', 'links', 'inputs'], 'filesystem');
+      const f = validateFiles({ root: p.filesystem.root, tree: p.filesystem.tree, ...(p.filesystem.links !== undefined ? { links: p.filesystem.links } : {}) });
+      if (f) errs.push(`filesystem: ${f}`);
+      checkInputs(errs, p.filesystem, 'filesystem', actorIds, { secrets: false });
     }
   }
   if (p.authorization !== undefined) {
