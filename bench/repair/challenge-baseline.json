@@ -1,11 +1,11 @@
 {
   "summary": {
-    "cases": 22,
-    "unsafe": 18,
-    "safe": 4,
+    "cases": 35,
+    "unsafe": 28,
+    "safe": 7,
     "unsafeAccepted": 0,
     "safeRejected": 0,
-    "caughtAsExpected": 18,
+    "caughtAsExpected": 28,
     "notExecuted": 0
   },
   "rows": [
@@ -158,6 +158,97 @@
     },
     {
       "id": "authz/scoped-query",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "ssrf/first-hop-allowlist",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "ssrf-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "ssrf/address-denylist",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "ssrf-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "ssrf/fitted-to-visible-probes",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "ssrf-attacks-sealed",
+      "asExpected": true
+    },
+    {
+      "id": "ssrf/deny-all",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "ssrf-legitimate-requests,ssrf-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "ssrf/no-legitimate-redirects",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "ssrf-legitimate-requests,ssrf-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "ssrf/rebind-check-removed",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "ssrf-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "ssrf/allowlist-every-hop",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "ssrf/rebind-pinned-address",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "path/reject-dot-dot",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "filesystem-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "path/prefix-without-separator",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "filesystem-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "path/lexical-containment",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "filesystem-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "path/basename-only",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "filesystem-legitimate-requests,filesystem-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "path/realpath-containment",
       "label": "safe",
       "disposition": "verified-for-contract",
       "caughtBy": null,

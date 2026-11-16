@@ -1,0 +1,22 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": { "entry": "src/app.mjs", "export": "createApp", "files": ["src/app.mjs"], "runtime": "node" },
+  "database": { "engine": "sqlite", "schemaSql": "CREATE TABLE checks (id INTEGER PRIMARY KEY, url TEXT);", "seed": [] },
+  "actors": [ { "id": "tester", "tenant": "t1", "role": "member", "headers": { "x-user": "tester" } } ],
+  "ssrf": {
+    "policy": "public-only",
+    "approved": [],
+    "hosts": [
+      { "name": "hooks.example.test", "addresses": ["203.0.113.30"], "routes": [ { "path": "/ping", "body": "pong" } ] },
+      { "name": "rebind.example.test", "addresses": ["203.0.113.31", "10.0.0.9"] },
+      { "name": "intranet.internal", "addresses": ["10.0.0.9"], "routes": [ { "path": "/", "body": "{{secret:intranet-page}}" } ] }
+    ],
+    "inputs": [
+      {
+        "id": "check", "actor": "tester", "method": "GET", "path": "/check?url={{value}}",
+        "benign": [ { "value": "http://hooks.example.test/ping", "expectIncludes": ["pong"] } ]
+      }
+    ]
+  }
+}

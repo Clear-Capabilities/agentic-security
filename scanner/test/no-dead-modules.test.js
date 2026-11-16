@@ -221,7 +221,7 @@ function loadAllSources() {
   for (const e of fs.readdirSync(SRC_ROOT, { withFileTypes: true })) {
     if (e.isFile() && /\.js$/.test(e.name)) files.push(path.join(SRC_ROOT, e.name));
   }
-  for (const d of ['report', 'sast', 'sca', 'secrets', 'integrations', 'language']) {
+  for (const d of ['report', 'sast', 'sca', 'secrets', 'integrations', 'language', 'repair']) {
     files.push(...listJsFiles(path.join(SRC_ROOT, d)));
   }
   // Also include bin scripts (they're consumers).

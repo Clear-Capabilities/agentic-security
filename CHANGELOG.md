@@ -9,6 +9,19 @@
 > make the history less accurate, not more.
 
 
+## 0.198.0 - Verified remediation, milestone 3 (first part): server-side request forgery and path traversal
+
+**Measured, 0.197.0:** `TIMINGS preflight=4s push=7s pr=5s checks=433s merge=5s verify=8s tag=2s release=163s npm=90s total=717s release-clock=178s`, 178 s from the merge to the published release.
+
+Two new repair families for the Labs capability `contract-repair`, and one correction to how the original revision is used. Measured on macOS; the trust boundary still refuses the Linux namespace backend, so a Linux run reports `blocked`. Requirement-by-requirement record: `docs/verified-remediation/LEDGER.md`.
+
+- **Changed results, listed first.** Repair challenge gate: 35 cases, unsafe patches accepted 0 of 28, caught by the declared obligation 28 of 28, legitimate repairs rejected 0 of 7 (was 22 cases). The application oracles are now version 2 and their conformance fixtures were re-pinned; 10 adapters conform with execution.
+- **Fixed: a candidate that deleted an existing protection could be judged too leniently.** An attack the original revision already blocked was quarantined, so it no longer took part in judging candidates. Such attacks now stay in the run as regression guards (`regressionGuards` in the record, each with its reason); they cannot show that a repair worked, but a candidate that removes a check the original had is rejected by them. Only a legitimate expectation the original does not meet is still quarantined.
+- **Server-side request forgery (`ssrf`).** The profile declares the network the application can reach: hosts, the DNS answers each gives (one per resolution, so a host can rebind from a public to a private address), what each serves, and a policy (approved hosts, or public addresses only). Every outbound connection is observed at the Node connection layer with the request that caused it; no socket is opened. Reaching a forbidden destination is the violation, whatever comes back. A first-hop allowlist is rejected by a redirect off the approved host, a filter fitted to the visible attacks fails the sealed respellings, and a per-hop allowlist and a connection pinned to the checked address are verified. A destination the declaration does not model makes the run inconclusive.
+- **Path traversal (`path-traversal`).** A real file tree with an allowed root, planted files outside it and real symbolic links. A lexical containment check is rejected by a link inside the root that points out of it; resolving links before checking is verified.
+- **Scope gate.** A candidate may not introduce a child process, a raw runtime binding, another thread, a datagram socket or a native addon: the oracles cannot observe a connection or file access made that way.
+- **Not in this release.** Recipes for the new families, `https` destinations (recorded and refused, never served), writes outside the root, Python for the new families, the recipe lifecycle and the password-hashing migration (the second part of milestone 3).
+
 ## 0.197.0 - Verified remediation, milestone 2: candidate portfolios, multi-file root-cause repair, a Python profile
 
 **Measured, 0.196.1:** `TIMINGS preflight=4s push=7s pr=5s checks=456s merge=7s verify=6s tag=2s release=288s npm=90s total=865s release-clock=303s`, 303 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a later check confirmed it.

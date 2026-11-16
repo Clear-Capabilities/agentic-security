@@ -43,6 +43,8 @@ A profile is declared by the operator: how to start the application and what its
 | `actors` | `id`, `tenant`, `role`, `headers` (how the actor authenticates), `anonymous` |
 | `sql` | `inputs`: the untrusted value (`{{value}}` in the path or body), the actor sending it, legitimate values with their expected response (`originalMishandles` for one the original gets wrong), and the planted secrets another actor's data holds |
 | `authorization` | `table`, `idColumn`, `contentColumn`, `objects` (owner, row id, planted secret), `operations` (`read` or `update`, with `{{id}}` and `{{value}}`), `policy.allow` (`owner`, `same-tenant-admin`, `any-admin`), and `controls`: legitimate workflows outside the actor matrix, such as a public page, that must keep working after a repair |
+| `ssrf` | `policy` (`allowlist`: only the `approved` hosts; `public-only`: no loopback, private, link-local, carrier-grade NAT or unique-local address), `approved`, `hosts` (each with `name`, `addresses` answered one per resolution with the last repeating, so a host can rebind, an optional `port`, and `routes` the verifier serves: `path`, `status`, `headers`, `body`, where a body may plant `{{secret:<name>}}`), and `inputs` (the untrusted URL as `{{value}}`, the actor, and legitimate values with their expected response). Node runtime only. |
+| `filesystem` | `root` (the allowed directory the factory receives as `filesRoot`), `tree` (relative path to content, inside and outside the root; a file outside it plants `{{secret:<name>}}`), `links` (real symbolic links, each resolving inside the tree), and `inputs` as for `ssrf`. Node runtime only. |
 | `tests` | `command`, `required`, `flaky`: the project test suite the central verifier runs on both trees |
 | `approval` | `approvedBy`, `reason`: counts only for a profile outside the repository |
 
@@ -56,7 +58,7 @@ A profile is declared by the operator: how to start the application and what its
 | `schemaVersion` | `1.0.0`. A reader accepts 1.x; a 2.0 contract is refused. |
 | `contractId` | `rcon:` and 16 hex characters over the allowlisted identity fields. Identical inputs give an identical id; no clock or random value enters it. |
 | `contractDigest` | SHA-256 over the same fields. |
-| `family` | `sql-injection` or `object-authorization` in this release. |
+| `family` | `sql-injection`, `object-authorization`, `ssrf` or `path-traversal` in this release. |
 | `findingRefs` | The finding the contract repairs. |
 | `rootCauseGroup` | Digest of the family and the finding's file. |
 | `sourceCommit` | The commit the signed scan recorded, or null. |
@@ -123,7 +125,8 @@ A profile is declared by the operator: how to start the application and what its
 | `rounds` | Rounds used. |
 | `obligationResults` | Original-revision results (recorded, not required) and the selected candidate's results. |
 | `counterexamples` | Each failed obligation's shrunk request, actor and broken property. A sealed failure is recorded without its content. |
-| `quarantined` | Generated checks that cannot mean anything on the original revision, each with its reason. |
+| `quarantined` | Legitimate-request expectations the original revision does not meet, each with its reason: they are removed from the obligations. |
+| `regressionGuards` | Attacks (and generated state checks) the original revision already blocks, each with its reason. They stay in the obligations, so a candidate that removes an existing protection fails, but they cannot show a repair: an attack obligation still needs at least one check the original fails. |
 | `budget` | The budgets in force and what was used. |
 | `accounting` | Oracle runs, wall time, model tokens and calls, and cost. Unknown is null, never zero. |
 | `reasons` | Notes, refusals and why the run stopped. |
@@ -153,9 +156,11 @@ A profile is declared by the operator: how to start the application and what its
 - It verifies the declared contract only. Requests, actors, objects and state checks outside the profile are not observed.
 - It runs requests one at a time in one process. No concurrency is exercised, and none is claimed.
 - It supports Node applications and Python WSGI applications over SQLite in this release. A Python application's WSGI callable is called directly with a real WSGI environ; no HTTP server runs. PostgreSQL is not executed (no PostgreSQL server exists on the measured host).
-- Cross-execution shares only attacks that disclosed a planted secret; a durable-state attack is judged by the object-level check every candidate runs anyway.
+- Server-side request forgery and path traversal run on the Node runtime only. Outbound connections are observed at the Node connection layer (`net`, `tls`, the HTTP agents, raw sockets) and served by the declared hosts with the declared DNS answers; no socket is opened. An `https` destination is recorded and refused, never served. A connection opened below that layer (a child process, a raw binding, a native addon) is not observed, so the scope gate refuses a candidate that introduces one. A destination the declaration does not model (an undeclared name, connected to or looked up) makes the run inconclusive, never a pass.
+- Path traversal judges disclosure only: a planted file outside the root that reaches a response. Writes outside the root and time-of-check races are not exercised.
+- Cross-execution shares only attacks that disclosed a planted secret or reached a forbidden destination; a durable-state attack is judged by the object-level check every candidate runs anyway.
 - The application oracles run in the trust boundary. On Linux the boundary currently refuses to run (the namespace backend lacks proved read denial), so repair execution there is `blocked`, never a downgraded pass. The execution tests were run on macOS with the userspace backend.
-- No model proposes candidates in this release. Candidates come from the deterministic SQL recipe or are supplied by a person (`--candidates`).
+- No model proposes candidates in this release. Candidates come from the deterministic SQL recipe or are supplied by a person (`--candidates`). Server-side request forgery and path traversal have no recipe.
 - The challenge corpus (`bench/repair/`) is synthetic regression evidence written by the verifier's authors. It is not an independent accuracy measurement.
 - A verified repair is source-only. Nothing is built, staged or deployed, and the record never says otherwise.
 - An exported bundle's integrity establishes custody, not semantic correctness. Re-run the plan to re-establish evidence.

@@ -26,6 +26,7 @@ import { digestOf } from '../posture/assurance/identity.js';
 import { getOracle } from '../posture/oracles/registry.js';
 import { SCHEMAS, SCHEMA_VERSION, OBLIGATION_KINDS, contractIdOf, contractDigestOf, validateContract } from './schemas.js';
 import { validateProfile, policyAllows } from './profile.js';
+import { isPrivateAddress } from '../posture/oracles/app-adapters.js';
 
 export const CONTRACT_BUILDER_VERSION = '1';
 
@@ -84,9 +85,9 @@ function obligation(kind, id, inputs, { required = true, origin = 'generated-fro
   };
 }
 
-const appInputs = (profile, requests, stateChecks = []) => ({
+const appInputs = (profile, requests, stateChecks = [], extra = {}) => ({
   ...(profile.application.runtime === 'python' ? { runtime: 'python' } : {}),
-  export: profile.application.export, schemaSql: profile.database.schemaSql, seed: profile.database.seed, requests, stateChecks,
+  export: profile.application.export, schemaSql: profile.database.schemaSql, seed: profile.database.seed, requests, stateChecks, ...extra,
 });
 
 function seedHasSecret(profile, name) {
@@ -116,6 +117,122 @@ function sqlObligations(profile, actors, blocked) {
   }
   if (after.length) out.push(obligation('app-behaviour-after', 'sql-legitimate-quoted-values', appInputs(profile, after), { scope: 'legitimate values the original mishandles' }));
   return out;
+}
+
+/** Controls (and the after-repair controls) from an input's declared legitimate values. Shared by every value-input family. */
+function benignRequests(inp, actor, controls, after) {
+  inp.benign.forEach((b, j) => {
+    const r = { id: `${inp.id.replace(/-/g, '_')}_benign_${j}`, role: 'control', ...reqOf(inp, actor, { value: b.value }), expect: { status: b.expectStatus || [200], bodyIncludes: b.expectIncludes } };
+    (b.originalMishandles ? after : controls).push(r);
+  });
+}
+
+/** The obligations of a value-input family from its development and sealed attack values. */
+function valueFamilyObligations(family, profile, actors, blocked, { probes, forbid, extra, scopeNoun }) {
+  const out = []; const controls = []; const after = []; const dev = []; const sealed = [];
+  for (const inp of profile[family].inputs) {
+    const actor = actors[inp.actor];
+    benignRequests(inp, actor, controls, after);
+    for (const set of ['development', 'sealed']) probes[set].forEach((v, j) => (set === 'sealed' ? sealed : dev).push({ id: `${inp.id.replace(/-/g, '_')}_${set}_${j}`, role: 'attack', ...reqOf(inp, actor, { value: v }), forbid: forbid(v) }));
+  }
+  if (!controls.length) blocked.push(`${family}: no legitimate value is declared that the original serves correctly`);
+  if (!dev.length) blocked.push(`${family}: the declaration yields no attack value, so no forbidden effect could be observed`);
+  if (blocked.length) return out;
+  out.push(obligation('app-attack-blocked', `${family}-attacks-development`, appInputs(profile, [...controls, ...dev], [], extra), { scope: `${scopeNoun}, development attack set` }));
+  if (sealed.length) out.push(obligation('app-attack-sealed', `${family}-attacks-sealed`, appInputs(profile, [...controls, ...sealed], [], extra), { scope: `${scopeNoun}, sealed attack set (never fed back)` }));
+  out.push(obligation('app-behaviour-preserved', `${family}-legitimate-requests`, appInputs(profile, controls, [], extra), { scope: 'declared legitimate values' }));
+  if (after.length) out.push(obligation('app-behaviour-after', `${family}-legitimate-after`, appInputs(profile, after, [], extra), { scope: 'legitimate values the original mishandles' }));
+  return out;
+}
+
+const SECRET_NAMES = (text) => [...String(text).matchAll(/\{\{secret:([a-z][a-z0-9-]{0,31})\}\}/g)].map((m) => m[1]);
+const ipv4Int = (a) => a.split('.').reduce((n, o) => n * 256 + Number(o), 0);
+
+/**
+ * SSRF attack values, generated from the declared network. A host is forbidden when the policy does not permit every address it can
+ * resolve to (an allowlist names the approved hosts; public-only forbids loopback, private, link-local and the other internal ranges,
+ * so a host that rebinds from a public to a private address is forbidden). Development: each forbidden host by name and by address,
+ * and every approved host's declared redirect that leaves the approved set. Sealed: the same destinations spelled differently
+ * (decimal and IPv4-mapped IPv6 addresses, upper case with a trailing dot, an approved host as user information).
+ */
+function ssrfProbes(s) {
+  const permittedAddr = (h, a) => (s.policy === 'public-only' ? !isPrivateAddress(a) : s.approved.includes(h.name));
+  const forbidden = s.hosts.filter((h) => !h.addresses.every((a) => permittedAddr(h, a)));
+  const port = (h) => (h.port && h.port !== 80 ? `:${h.port}` : '');
+  const pathOf = (h) => h.routes?.[0]?.path || '/';
+  const development = []; const sealed = [];
+  for (const h of forbidden) {
+    development.push(`http://${h.name}${port(h)}${pathOf(h)}`);
+    const v4 = h.addresses.find((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a) && !permittedAddr(h, a));
+    if (v4) {
+      development.push(`http://${v4}${port(h)}${pathOf(h)}`);
+      sealed.push(`http://${ipv4Int(v4)}${port(h)}${pathOf(h)}`, `http://[::ffff:${v4}]${port(h)}${pathOf(h)}`);
+    }
+    sealed.push(`http://${h.name.toUpperCase()}.${port(h)}${pathOf(h)}`);
+    if (s.approved[0]) sealed.push(`http://${s.approved[0]}@${h.name}${port(h)}${pathOf(h)}`);
+  }
+  const forbiddenNames = new Set(forbidden.map((h) => h.name));
+  const forbiddenAddrs = new Set(forbidden.flatMap((h) => h.addresses));
+  for (const h of s.hosts.filter((x) => !forbiddenNames.has(x.name))) {
+    for (const r of h.routes || []) {
+      const loc = r.status >= 300 && r.status < 400 ? Object.entries(r.headers || {}).find(([k]) => k.toLowerCase() === 'location')?.[1] : null;
+      if (!loc) continue;
+      let target; try { target = new URL(loc, `http://${h.name}`); } catch { continue; }
+      const host = target.hostname.replace(/^\[|\]$/g, '');
+      if (forbiddenNames.has(host) || forbiddenAddrs.has(host)) development.push(`http://${h.name}${port(h)}${r.path}`);
+    }
+  }
+  const secrets = [...new Set(forbidden.flatMap((h) => (h.routes || []).flatMap((r) => SECRET_NAMES(r.body || ''))))];
+  return { development: [...new Set(development)], sealed: [...new Set(sealed)].filter((v) => !development.includes(v)), secrets, forbidden: forbidden.map((h) => h.name) };
+}
+
+function ssrfObligations(profile, actors, blocked) {
+  const s = profile.ssrf;
+  const p = ssrfProbes(s);
+  if (!p.forbidden.length) blocked.push('ssrf: every declared host is permitted by the policy, so there is no forbidden destination to test');
+  const network = { policy: s.policy, approved: s.approved, hosts: s.hosts };
+  return valueFamilyObligations('ssrf', profile, actors, blocked, {
+    probes: p, forbid: () => ({ ...(p.secrets.length ? { secrets: [...p.secrets] } : {}), connections: true }), extra: { network }, scopeNoun: 'declared untrusted URL inputs',
+  });
+}
+
+/**
+ * Path traversal attack values, generated from the declared tree. Every file outside the allowed root that plants a secret is a
+ * target. Development: the relative escape, the absolute path, and every declared link inside the root that points outside it.
+ * Sealed: an escape through a subdirectory and a `./` prefix (each must also disclose on the original, or it is quarantined).
+ */
+function traversalProbes(f) {
+  const root = f.root.replace(/\/$/, '');
+  const inside = (rel) => rel === root || rel.startsWith(`${root}/`);
+  const development = []; const sealed = []; const secrets = new Set();
+  const subdir = Object.keys(f.tree).filter(inside).map((r) => r.slice(root.length + 1).split('/')).find((parts) => parts.length > 1)?.[0] || null;
+  for (const [rel, content] of Object.entries(f.tree)) {
+    if (inside(rel)) continue;
+    const names = SECRET_NAMES(content);
+    if (!names.length) continue;
+    names.forEach((n) => secrets.add(n));
+    const up = path.posix.relative(root, rel);
+    development.push(up, `{{fs:abs}}/${rel}`);
+    for (const [link, target] of Object.entries(f.links || {})) {
+      if (!inside(link)) continue;
+      const dest = path.posix.normalize(path.posix.join(path.posix.dirname(link), target));
+      if (inside(dest) || !(rel === dest || rel.startsWith(`${dest}/`))) continue;
+      development.push(`${path.posix.relative(root, link)}/${path.posix.relative(dest, rel)}`);
+    }
+    sealed.push(`./${up}`);
+    if (subdir) sealed.push(`${subdir}/../${up}`);
+  }
+  return { development: [...new Set(development)], sealed: [...new Set(sealed)], secrets: [...secrets] };
+}
+
+function filesystemObligations(profile, actors, blocked) {
+  const f = profile.filesystem;
+  const p = traversalProbes(f);
+  if (!p.secrets.length) blocked.push('filesystem: no file outside the allowed root plants a {{secret:<name>}} value, so a disclosure could not be observed');
+  const files = { root: f.root, tree: f.tree, ...(f.links ? { links: f.links } : {}) };
+  return valueFamilyObligations('filesystem', profile, actors, blocked, {
+    probes: p, forbid: () => ({ secrets: [...p.secrets] }), extra: { files }, scopeNoun: 'declared untrusted path inputs',
+  });
 }
 
 function authzObligations(profile, actors, blocked) {
@@ -180,6 +297,12 @@ export function buildContract(o) {
   } else if (o.family === 'object-authorization') {
     if (!profile.authorization) return { contract: null, blocked: ['the profile has no authorization section for an authorization finding'], problems: [] };
     ({ obligations, matrix } = authzObligations(profile, actors, blocked));
+  } else if (o.family === 'ssrf') {
+    if (!profile.ssrf) return { contract: null, blocked: ['the profile has no ssrf section for a server-side request forgery finding'], problems: [] };
+    obligations = ssrfObligations(profile, actors, blocked);
+  } else if (o.family === 'path-traversal') {
+    if (!profile.filesystem) return { contract: null, blocked: ['the profile has no filesystem section for a path traversal finding'], problems: [] };
+    obligations = filesystemObligations(profile, actors, blocked);
   } else return { contract: null, blocked: [`family ${o.family} has no registered repair contract in this milestone`], problems: [] };
   obligations.push({
     id: 'central-verifier', kind: 'project-tests', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
@@ -189,7 +312,7 @@ export function buildContract(o) {
   const approved = o.profileOrigin === 'operator-profile-outside-repository' && profile.approval;
   const policyFacts = [{
     id: 'application-profile', origin: o.profileOrigin, approval: approved ? 'approved' : 'declared',
-    digest: digestOf({ actors: profile.actors, sql: profile.sql ?? null, authorization: profile.authorization ?? null, database: profile.database }),
+    digest: digestOf({ actors: profile.actors, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, database: profile.database }),
     ...(approved ? { approvedBy: profile.approval.approvedBy } : {}),
   }];
   const knownUnknowns = [

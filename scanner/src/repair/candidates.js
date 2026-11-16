@@ -36,6 +36,19 @@ export const matchesAny = (rel, patterns) => patterns.some((p) => globRe(p).test
 
 // ---------------------------------------------------------------- the scope gate
 
+// Primitives below the layer the application oracles observe: a raw binding, a child process, another thread, a datagram socket or a
+// native addon could open a connection or touch a file the oracle never sees, so a candidate that verified with one would have
+// verified nothing about it. A candidate may not INTRODUCE one (an original that already uses one is the operator's to declare).
+const UNOBSERVED_PRIMITIVES = [
+  [/\bprocess\.binding\s*\(|\binternalBinding\b|\bprocess\._linkedBinding\b/, 'a raw runtime binding'],
+  [/['"](?:node:)?child_process['"]/, 'a child process'],
+  [/['"](?:node:)?(?:worker_threads|cluster)['"]/, 'another thread or process'],
+  [/['"](?:node:)?dgram['"]/, 'a datagram socket'],
+  [/\bprocess\.dlopen\b|\.node['"]\s*\)/, 'a native addon'],
+  [/^\s*(?:import\s+(?:subprocess|socket|ctypes|multiprocessing)\b|from\s+(?:subprocess|socket|ctypes|multiprocessing)\s+import\b)/m, 'a process, socket or foreign-function module'],
+];
+const count = (re, t) => (String(t || '').match(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`)) || []).length;
+
 /**
  * May this candidate be judged at all? Checked before anything executes.
  * @returns {{ok:boolean, reasons:string[], scope:object, changed:Record<string,string|null>}}
@@ -51,6 +64,9 @@ export function checkCandidate(contract, originalFiles, proposedFiles) {
   for (const rel of Object.keys(changed)) {
     if (matchesAny(rel, contract.editScope.prohibited)) reasons.push(`${rel}: a protected path (verifier state, tests, runner configuration, dependencies); a candidate cannot change what judges it`);
     else if (!contract.editScope.allowed.includes(rel)) reasons.push(`${rel}: outside the contract's allowed edit scope`);
+  }
+  for (const [rel, text] of Object.entries(changed)) {
+    for (const [re, what] of UNOBSERVED_PRIMITIVES) if (count(re, text) > count(re, originalFiles[rel])) reasons.push(`${rel}: introduces ${what}, which the application oracles cannot observe`);
   }
   const surface = testSurfaceChanges(changed, (rel) => originalFiles[rel] ?? null);
   for (const b of surface.blocked) reasons.push(`${b.file}: ${b.reason}`);

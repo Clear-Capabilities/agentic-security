@@ -1,0 +1,31 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": { "entry": "src/app.mjs", "export": "createApp", "files": ["src/app.mjs"], "runtime": "node" },
+  "database": { "engine": "sqlite", "schemaSql": "CREATE TABLE previews (id INTEGER PRIMARY KEY, url TEXT);", "seed": [] },
+  "actors": [ { "id": "visitor", "tenant": "t1", "role": "member", "headers": { "x-user": "visitor" } } ],
+  "ssrf": {
+    "policy": "allowlist",
+    "approved": ["api.partner.test", "cdn.partner.test"],
+    "hosts": [
+      { "name": "api.partner.test", "addresses": ["203.0.113.10"], "routes": [
+        { "path": "/status", "body": "partner-ok" },
+        { "path": "/old", "status": 302, "headers": { "location": "http://api.partner.test/status" } },
+        { "path": "/r/meta", "status": 302, "headers": { "location": "http://169.254.169.254/latest/meta-data/" } }
+      ] },
+      { "name": "cdn.partner.test", "addresses": ["203.0.113.20"], "routes": [ { "path": "/logo.txt", "body": "cdn-logo" } ] },
+      { "name": "metadata.internal", "addresses": ["169.254.169.254"], "routes": [ { "path": "/latest/meta-data/", "body": "{{secret:cloud-credential}}" } ] },
+      { "name": "admin.internal", "addresses": ["10.0.0.7"], "routes": [ { "path": "/", "body": "{{secret:admin-panel}}" } ] }
+    ],
+    "inputs": [
+      {
+        "id": "preview", "actor": "visitor", "method": "GET", "path": "/preview?url={{value}}",
+        "benign": [
+          { "value": "http://api.partner.test/status", "expectIncludes": ["partner-ok"] },
+          { "value": "http://api.partner.test/old", "expectIncludes": ["partner-ok"] },
+          { "value": "http://cdn.partner.test/logo.txt", "expectIncludes": ["cdn-logo"] }
+        ]
+      }
+    ]
+  }
+}
