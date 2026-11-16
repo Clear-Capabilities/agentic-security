@@ -8,7 +8,9 @@
 
 Verification is where a fix earns the word. Re-scan, lint, tests, the honesty gate and the proof-of-concept leg each report pass, fail or skip. The record says whether verification was **full** (`verifiedFull`) or **degraded** (`degradedLegs[]`), and a completeness tier (`FULL`, `MITIGATION`, `WORKAROUND`) says how much of the fix landed.
 
-`fix --apply --require-proof` (Preview) goes further: it refuses to write unless the original exploit reproduces beforehand and is blocked afterward.
+`fix --apply --require-proof` (GA) goes further: it refuses to write unless the original exploit reproduces beforehand and is blocked afterward.
+
+`agentic-security repair` (Labs) verifies against an executable contract instead: for one SQL injection or object-authorization finding it runs the application itself over a real SQLite file and accepts a candidate only when the declared attacks stop and the declared legitimate requests still work. See [Contract-driven repair](../guides/verified-remediation.md).
 
 In CI, [assurance modes](../trust/assurance-modes.md) make an incomplete analysis fail the build in `strict` mode, and [CI gating](../workflows/ci-gating.md) wires both gates.
 
@@ -33,6 +35,7 @@ Do not confuse `agentic-security verify` (is this *finding* real, a verifier ver
 
 - [Verified remediation](../trust/verified-remediation.md)
 - [Verified remediation](../walkthroughs/verified-remediation.md)
+- [Contract-driven repair](../guides/verified-remediation.md) and its [contract reference](../reference/repair-contract.md)
 - [Assurance modes](../trust/assurance-modes.md)
 - [CI gating](../workflows/ci-gating.md)
 

@@ -171,6 +171,10 @@ Plan: N vulnerable dependencies, M upgrade candidates, K skipped (breaking)
 
 SAST fixes write source code via the `apply_fix` MCP tool. That tool refuses every manifest basename (`package.json`, `package-lock.json`, `poetry.lock`, `Cargo.lock`, …) by design. SCA upgrades need a separate write path because the canonical way to modify a manifest is to delegate to the package manager — that's what `apply_sca_upgrade` does.
 
+### `agentic-security repair` (CLI-only, Labs)
+
+Contract-driven repair for one SQL injection or object-authorization finding in a Node application over SQLite. `repair plan --profile <profile.json> --finding <id>` builds the contract (read-only; the MCP tool `repair_plan` does the same), `repair run --plan <plan.json> --allow-execution` judges candidates in the trust boundary, and `--apply` writes the verified one through the same apply service as `fix --apply`. A result holds for the named contract only. See [contract-driven repair](../docs/guides/verified-remediation.md).
+
 ### `fix --finding <id> --apply --require-proof`
 
 A real CLI flag (not an agent-orchestrated mode). Before writing the patch it requires `agentic-security triage exploit <id> --prove` to already have reached `EXPLOIT_CONFIRMED` against the unpatched code, then replays the SAME reproducer against the candidate patch overlaid in memory. The patch is written only if the replay completes in every attempt and the exploit does not succeed in any of them, in addition to the ordinary rescan/lint/test gate. A missing reproducer, an unavailable execution environment, or an incomplete replay all refuse to apply — never silently fall back to the ordinary (non-proof) gate. See [the exploit proof guide](../docs/guides/exploit-proof-fabric.md).
