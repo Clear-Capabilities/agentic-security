@@ -1,0 +1,15 @@
+{
+  "export": "createApp",
+  "schemaSql": "CREATE TABLE notes (id INTEGER PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL);",
+  "seed": [
+    { "sql": "INSERT INTO notes (owner, title, body) VALUES (?, ?, ?)", "params": ["alice", "groceries", "milk and eggs"] },
+    { "sql": "INSERT INTO notes (owner, title, body) VALUES (?, ?, ?)", "params": ["bob", "diary", "{{secret:bob-note}}"] }
+  ],
+  "requests": [
+    { "id": "ownerReadsNote", "role": "control", "method": "GET", "path": "/notes?title=groceries", "headers": { "x-user": "alice" }, "expect": { "status": [200], "bodyIncludes": ["milk and eggs"] } },
+    { "id": "quoteInTitle", "role": "attack", "method": "GET", "path": "/notes?title=x%27%20OR%20%271%27%3D%271", "headers": { "x-user": "alice" }, "forbid": { "secrets": ["bob-note"] } }
+  ],
+  "stateChecks": [
+    { "id": "notesUnchanged", "role": "attack", "sql": "SELECT count(*) AS n FROM notes", "params": [], "expect": [{ "n": 2 }] }
+  ]
+}

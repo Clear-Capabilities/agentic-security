@@ -26,6 +26,7 @@ import { defineOracle } from './oracle.js';
 import crypto from 'node:crypto';
 import { digestOf } from '../assurance/identity.js';
 import { expressionProblems } from '../invariants/expressions.js';
+import { applicationSecurity, applicationBehaviour } from './app-adapters.js';
 import { evaluateAssertions, sanitizeSnapshot, eventSequence, hasDurableEffect } from '../invariants/state-assertions.js';
 
 const PLATFORMS = Object.freeze({
@@ -528,4 +529,5 @@ finish({});
   },
 });
 
-export const ADAPTERS = Object.freeze([injection, authorization, stateTransition, sideEffect, parserResource, replayIdempotency, functionalRegression, businessState]);
+export const ADAPTERS = Object.freeze([injection, authorization, stateTransition, sideEffect, parserResource, replayIdempotency, functionalRegression, businessState,
+  applicationSecurity, applicationBehaviour]);
