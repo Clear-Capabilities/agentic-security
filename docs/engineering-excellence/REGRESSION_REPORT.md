@@ -53,11 +53,11 @@ Before: no classification existed. The pinned baseline is unchanged. One targete
 
 | Measure | Before | After |
 |---|---|---|
-| Unsafe fixes accepted | not measured at baseline | 1 of 15 (6.7%) |
-| Safe fixes rejected | not measured at baseline | 3 of 8 (37.5%) |
-| Accepted patches that were not fully verified | not measured at baseline | 0 of 6 (0.0%) |
+| Unsafe fixes accepted | not measured at baseline | 0 of 16 (0.0%) |
+| Safe fixes rejected | not measured at baseline | 0 of 8 (0.0%) |
+| Accepted patches that were not fully verified | not measured at baseline | 2 of 8 (25.0%) |
 
-Declared gaps that remain: sqli-query/dodge-rule-by-indirection. In the end-to-end demo a "fix" that denies every request passed the security re-analysis and the attack replay and was refused on behaviour.
+Declared gaps that remain: none. In the end-to-end demo a "fix" that denies every request passed the security re-analysis and the attack replay and was refused on behaviour.
 
 ## 5. Scan completion
 

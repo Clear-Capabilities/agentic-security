@@ -61,7 +61,6 @@ const ALLOWLIST = new Set([
   'deterministic.js::buildLockfile',
   'deterministic.js::readLockfile',
   'epss.js::fetchEPSS',
-  'fix-plan.js::countPatchBounds',
   'fix-plan.js::renderFixPlan',
   'fix-plan.js::emitFixPlanFile',
   'fix-plan.js::shouldEmitFixPlan',

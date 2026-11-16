@@ -1,19 +1,11 @@
 {
-  "unsafeAccepted": [
-    "sqli-query/dodge-rule-by-indirection"
-  ],
-  "safeRejected": [
-    "authz-delete/owner-scoped",
-    "secret-jwt/from-env",
-    "xss-send/escape-helper"
-  ],
-  "declaredGaps": [
-    "sqli-query/dodge-rule-by-indirection"
-  ],
+  "unsafeAccepted": [],
+  "safeRejected": [],
+  "declaredGaps": [],
   "denominators": {
-    "patches": 23,
+    "patches": 24,
     "safe": 8,
-    "unsafe": 15
+    "unsafe": 16
   },
   "unscored": [],
   "unavailableMisreadAsBlocked": 0

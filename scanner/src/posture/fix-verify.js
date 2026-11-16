@@ -61,6 +61,27 @@ export async function verifyPatch({
     return { ok: false, reason: 'rescan-failed', error: e.message };
   }
   const findings = (scan && scan.findings) || [];
+  // Verified-remediation PRD M0-06: a finding the original files already had (same stable id, which does not depend on the line) is not
+  // introduced by the patch. The original contents of the SAME files are rescanned in the same scope and mode, so the comparison is like
+  // for like; a file the patch adds has no original and everything in it counts. The target finding is judged separately below.
+  let preExisting = new Set();
+  let baselineScanned = false;
+  let targetReproduced = false;
+  try {
+    const orig = {};
+    for (const rel of Object.keys(files)) { try { orig[rel] = fs.readFileSync(path.join(scanRoot, rel), 'utf8'); } catch { /* added by the patch */ } }
+    if (Object.keys(orig).length) {
+      let bContents = orig; let bDeps = depFileContents;
+      if (deep) { const { withLanguageContext } = await import('../language/context.js'); const lc = withLanguageContext(scanRoot, orig, {}); bContents = lc.fileContents; bDeps = lc.depFileContents; }
+      const base = await runFullScan({ fileContents: bContents, depFileContents: bDeps, scanRoot, provenance: false, ...(deep ? { deep: true } : {}) }, () => {});
+      const ids = new Set(((base && base.findings) || []).map((f) => f.stableId).filter(Boolean));
+      baselineScanned = true;
+      // Anchored only when the baseline reproduces the finding being fixed. If it does not (a finding from another scan mode, a
+      // synthetic id), a weakness still present under a different id could be that very finding, so nothing is excused.
+      targetReproduced = !!originalFindingStableId && ids.has(originalFindingStableId);
+      if (targetReproduced) preExisting = ids;
+    }
+  } catch { preExisting = new Set(); baselineScanned = false; }
   const stillHasOriginal = !!originalFindingStableId &&
     findings.some(f => f.stableId === originalFindingStableId);
   if (stillHasOriginal) {
@@ -69,8 +90,10 @@ export async function verifyPatch({
   // With language context in play, files that were only read for context carry findings that predate the patch;
   // only findings in the PATCHED files can be introduced by it.
   const patchedSet = new Set(Object.keys(files));
-  const introducedHighOrAbove = findings.filter(f =>
+  const atOrAboveMedium = findings.filter(f =>
     (SEVERITY_RANK[f.severity] ?? 9) <= SEVERITY_RANK.medium && (!deep || patchedSet.has(f.file)));
+  const introducedHighOrAbove = atOrAboveMedium.filter((f) => !(f.stableId && preExisting.has(f.stableId)));
+  const preExistingRetained = atOrAboveMedium.filter((f) => f.stableId && preExisting.has(f.stableId));
   // Don't count findings on lines outside the patched files — but our
   // fileContents map IS the patched files, so every finding is in-scope.
   return {
@@ -80,6 +103,10 @@ export async function verifyPatch({
       vuln: f.vuln, file: f.file, line: f.line, severity: f.severity,
       stableId: f.stableId,
     })),
+    // findings the original files already had: kept visible, never counted as introduced
+    preExisting: preExistingRetained.map((f) => ({ vuln: f.vuln, file: f.file, line: f.line, severity: f.severity, stableId: f.stableId })),
+    baselineScanned,
+    targetReproduced,
   };
 }
 
@@ -205,7 +232,7 @@ export async function verifyFix({
   const lint = runProjectLinter(scanRoot, Object.keys(files || {}));
   _lap('lint');
   // `runTests` lets a caller supply a runner that tests the PATCHED tree (fix/test-commands.js); the default runs the tree as it is on disk.
-  const tests = runTests ? runTests() : runProjectTests(scanRoot, testTimeoutMs != null ? { timeoutMs: testTimeoutMs } : {});
+  const tests = runTests ? await runTests() : runProjectTests(scanRoot, testTimeoutMs != null ? { timeoutMs: testTimeoutMs } : {});
   _lap('tests');
   // True when a candidate patch was supplied but has not been written, so the
   // suite necessarily ran against the pre-patch tree. Surfaced in the summary

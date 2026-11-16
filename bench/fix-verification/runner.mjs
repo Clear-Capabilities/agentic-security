@@ -143,7 +143,8 @@ function doc(s, rows) {
   L.push('- The corpus is hand-written, synthetic and tiny (JavaScript only, one weakness per project). A 0% on this corpus is not a 0% in the wild; it says these patterns are handled and these specific ones are not.');
   L.push('- A fake fix is anything the author thought of. Fakes nobody thought of are not measured.');
   L.push('- IDOR and authorization cases are judged by the footprint heuristic and by source-level tests, not by running an authenticated request, so a fix that keeps the lookup but checks the wrong thing can pass (declared gaps).');
-  L.push('- The exploit replay is exercised for command injection only, in the lower-assurance local sandbox.');
+  L.push('- The exploit replay is exercised for command injection and SQL injection (the SQL replay runs the handler against a real in-memory SQLite engine, `node:sqlite`, with a planted row the request may not read), in the local sandbox. Where the host cannot confine a run, the replay does not run and the leg says so.');
+  L.push('- A finding the original files already had (same stable id) is not counted as introduced by a patch: the original contents of the patched files are rescanned in the same scope for that comparison.');
   L.push('- Dependency upgrades are verified by a different route and are not scored here.');
   L.push('- Timings are one machine and one run.', '');
   return L.join('\n');

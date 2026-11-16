@@ -50,9 +50,11 @@ export async function verifyPatch(o) {
   const poc = o.poc !== undefined ? o.poc : (stored?.poc?.code ? { ...stored.poc, finding: stored } : null);
   // An explicit local reproducer turns the replay on for every route alike; without one the leg is not_run and says so.
   const replay = o.reproducer ? await replayExploit({ scanRoot, reproducer: o.reproducer, files, attempts: o.replayAttempts, timeoutMs: o.replayTimeoutMs, attemptFn: o.attemptFn }) : null;
-  // The tests run on a copy WITH the patch applied. A suite that was already red says nothing about the patch, so it is reported as such.
-  const runTests = () => {
-    const t = runTestsOnPatchedCopy({ scanRoot, files, command: o.testCommand || fixMeta?.testCommand, timeoutMs: o.testTimeoutMs });
+  // The tests run on the original tree and on a copy WITH the patch applied, and the verdict is the per-test delta (FR-02): a newly failing,
+  // changed, removed or newly skipped test fails the leg. Only an exit-code-only suite that failed identically on both trees is reported as
+  // already failing, because nothing finer can be attributed.
+  const runTests = async () => {
+    const t = await runTestsOnPatchedCopy({ scanRoot, files, command: o.testCommand || fixMeta?.testCommand, timeoutMs: o.testTimeoutMs, required: o.requiredTests || [], flaky: o.flakyTests || [] });
     return t.preExistingFailure ? { ...t, status: 'skipped', passed: null, skipped: true, reason: 'suite-already-failing-before-the-patch' } : t;
   };
   const read = readOriginal(scanRoot);

@@ -6,7 +6,7 @@ Every candidate patch of every case goes through the one verifier (`scanner/src/
 
 ## Denominators
 
-- 23 patches scored across 7 cases: 8 safe (real fixes that keep the feature) and 15 unsafe (look fixed, are not).
+- 24 patches scored across 7 cases: 8 safe (real fixes that keep the feature) and 16 unsafe (look fixed, are not).
 - 0 patches or cases could not be scored.
 - Not covered by this pipeline: dependency-upgrade (dependency upgrades are verified by the SCA route (package-manager dry run and the project tests), not by verifyPatch, which verifies source patches).
 
@@ -14,31 +14,31 @@ Every candidate patch of every case goes through the one verifier (`scanner/src/
 
 | Measure | Count | Of | Rate |
 |---|---|---|---|
-| Unsafe fixes accepted | 1 | 15 | 6.7% |
-| Safe fixes rejected | 3 | 8 | 37.5% |
-| Accepted patches that were not fully verified | 0 | 6 | 0.0% |
+| Unsafe fixes accepted | 0 | 16 | 0.0% |
+| Safe fixes rejected | 0 | 8 | 0.0% |
+| Accepted patches that were not fully verified | 2 | 8 | 25.0% |
 
-Unsafe fixes accepted today (declared gaps, each a real hole): `sqli-query/dodge-rule-by-indirection`.
+Unsafe fixes accepted today (declared gaps, each a real hole): none.
 
-Real fixes refused today (the scanner or the new-finding check objected; each is a false rejection): `authz-delete/owner-scoped`, `secret-jwt/from-env`, `xss-send/escape-helper`.
+Real fixes refused today (the scanner or the new-finding check objected; each is a false rejection): none.
 
-Rejected by: leg:exploitProofAfter 1, verifier 16.
+Rejected by: leg:exploitProofAfter 2, secret-persists 1, verifier 13.
 
-Exploit replay: host can confine a run: true; patches with a reproducer 3; replay ran for 3; unavailable replays misread as a blocked exploit: 0.
+Exploit replay: host can confine a run: true; patches with a reproducer 7; replay ran for 7; unavailable replays misread as a blocked exploit: 0.
 
-New findings introduced by patches: 16. Cost is printed by the runner and not recorded here: it varies with the machine.
+New findings introduced by patches: 5. Cost is printed by the runner and not recorded here: it varies with the machine.
 
 ## By class
 
 | Class | Safe accepted | Unsafe accepted |
 |---|---|---|
-| sql-injection | 1/1 | 1/3 |
-| xss | 1/2 | 0/2 |
+| sql-injection | 1/1 | 0/3 |
+| xss | 2/2 | 0/3 |
 | path-traversal | 1/1 | 0/2 |
 | command-injection | 1/1 | 0/2 |
 | idor | 1/1 | 0/2 |
-| authorization | 0/1 | 0/1 |
-| secret-remediation | 0/1 | 0/3 |
+| authorization | 1/1 | 0/1 |
+| secret-remediation | 1/1 | 0/3 |
 
 ## Per patch
 
@@ -47,10 +47,11 @@ New findings introduced by patches: 16. Cost is printed by the runner and not re
 | sqli-query | parameterized | safe | accepted | FULL |  |
 | sqli-query | disable-feature | unsafe | rejected | unverified | verifier |
 | sqli-query | return-empty | unsafe | rejected | unverified | verifier |
-| sqli-query | dodge-rule-by-indirection | unsafe (gap) | accepted | FULL |  |
+| sqli-query | dodge-rule-by-indirection | unsafe | rejected | unverified | leg:exploitProofAfter |
 | xss-send | content-type-plain | safe | accepted | FULL |  |
-| xss-send | escape-helper | safe | rejected | unverified | verifier |
+| xss-send | escape-helper | safe | accepted | FULL |  |
 | xss-send | deny | unsafe | rejected | unverified | verifier |
+| xss-send | weak-escape-helper | unsafe | rejected | unverified | verifier |
 | xss-send | drop-the-input | unsafe | rejected | unverified | verifier |
 | traversal-readfile | basename | safe | accepted | FULL |  |
 | traversal-readfile | deny | unsafe | rejected | unverified | verifier |
@@ -61,10 +62,10 @@ New findings introduced by patches: 16. Cost is printed by the runner and not re
 | idor-get | owner-check | safe | accepted | FULL |  |
 | idor-get | blanket-deny | unsafe | rejected | unverified | verifier |
 | idor-get | ineffective-check | unsafe | rejected | unverified | verifier |
-| authz-delete | owner-scoped | safe | rejected | unverified | verifier |
+| authz-delete | owner-scoped | safe | accepted | MITIGATION |  |
 | authz-delete | blanket-deny | unsafe | rejected | unverified | verifier |
-| secret-jwt | from-env | safe | rejected | unverified | verifier |
-| secret-jwt | base64-obfuscation | unsafe | rejected | unverified | verifier |
+| secret-jwt | from-env | safe | accepted | MITIGATION |  |
+| secret-jwt | base64-obfuscation | unsafe | rejected | unverified | secret-persists |
 | secret-jwt | split-literal | unsafe | rejected | unverified | verifier |
 | secret-jwt | reversed | unsafe | rejected | unverified | verifier |
 
@@ -73,6 +74,7 @@ New findings introduced by patches: 16. Cost is printed by the runner and not re
 - The corpus is hand-written, synthetic and tiny (JavaScript only, one weakness per project). A 0% on this corpus is not a 0% in the wild; it says these patterns are handled and these specific ones are not.
 - A fake fix is anything the author thought of. Fakes nobody thought of are not measured.
 - IDOR and authorization cases are judged by the footprint heuristic and by source-level tests, not by running an authenticated request, so a fix that keeps the lookup but checks the wrong thing can pass (declared gaps).
-- The exploit replay is exercised for command injection only, in the lower-assurance local sandbox.
+- The exploit replay is exercised for command injection and SQL injection (the SQL replay runs the handler against a real in-memory SQLite engine, `node:sqlite`, with a planted row the request may not read), in the local sandbox. Where the host cannot confine a run, the replay does not run and the leg says so.
+- A finding the original files already had (same stable id) is not counted as introduced by a patch: the original contents of the patched files are rescanned in the same scope for that comparison.
 - Dependency upgrades are verified by a different route and are not scored here.
 - Timings are one machine and one run.

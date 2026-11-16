@@ -20,7 +20,8 @@ import { applyFix as applyFixHistory, fixAcceptanceRate, revertEntryById as reve
 import { applyVerifiedFix } from '../fix/apply-fix-service.js';
 import { classifyFixMaterialRisk } from '../posture/material-change.js';
 import { loadApproverRegistry, verifyApprover, requiredRolesFor, checkSeparationOfDuties } from '../fix/approver-registry.js';
-import { synthesizeDeterministicPatch } from '../posture/deterministic-fix.js';
+import { planDeterministicFix } from '../posture/deterministic-fix.js';
+import { countPatchBounds } from '../posture/fix-plan.js';
 import { verifyLastScan } from '../posture/integrity.js';
 import { withStateWritesDisabled } from '../posture/state-dir.js';
 import { analyzeTranscript, formatCacheReport, renderCacheStatusLine } from '../posture/cache-economics.js';
@@ -1209,18 +1210,22 @@ export const synthesize_fix = {
     if (f._shadow === true) return { _meta: META, ok: false, reason: 'shadow findings have no synthesized fix' };
     const fix = f.fix || {};
     const hasReplacement = typeof fix.replacement === 'string' && fix.replacement.length > 0;
-    // Patch bounds: count files touched + LoC delta.
+    // Patch bounds (GAP-03): the same scope computation fix-plan.js uses, over a real line diff. `locDelta` keeps its field name for
+    // existing callers but is the edited-line count: a rewrite of N lines into N different lines is N, never 0.
     let touchedFiles = 1;
     let locDelta = 0;
+    let scope = null;
     if (hasReplacement) {
-      let orig = '';
+      let orig = null;
       try {
         const abs = _confine(ctx.sessionRoot, f.file, 'finding.file');
         orig = fs.readFileSync(abs, 'utf8');
-      } catch { /* ignore — counts will reflect new-only LoC */ }
-      locDelta = Math.abs(fix.replacement.split('\n').length - orig.split('\n').length);
+      } catch { /* unreadable original: the whole replacement counts as added */ }
+      scope = countPatchBounds({ file: f.file, replacement: fix.replacement }, { [f.file]: orig }).scope;
+      touchedFiles = scope.totals.files;
+      locDelta = scope.totals.editedLines;
     }
-    const oversized = touchedFiles > 3 || locDelta > 100;
+    const oversized = scope ? scope.exceedsBounds : false;
     // #1 — deterministic autofix: for classes with a safe context-independent
     // swap (weak hash, TLS verify-off), materialize a full-file patch from the
     // live file. The agent passes `autofix.patch` straight to apply_fix, which
@@ -1228,12 +1233,15 @@ export const synthesize_fix = {
     // even a mis-attributed swap can't land a bad edit. No stored replacement,
     // no per-finding bloat in last-scan.json.
     let autofix = null;
+    let autofixDecision = null;
     let languageFix = null;
     if (!hasReplacement) {
       try {
         const abs = _confine(ctx.sessionRoot, f.file, 'finding.file');
-        const det = synthesizeDeterministicPatch(f, fs.readFileSync(abs, 'utf8'));
-        if (det) autofix = { deterministic: true, ruleId: det.ruleId, patch: det.patch };
+        const plan = planDeterministicFix(f, fs.readFileSync(abs, 'utf8'));
+        // FR-01: the decision is returned whatever it is, so a needs-review case names the facts a person must supply
+        if (plan.disposition !== 'not-applicable') autofixDecision = { disposition: plan.disposition, ruleId: plan.ruleId, purpose: plan.purpose || null, missingFacts: plan.missingFacts || [], requiredObligations: plan.requiredObligations || [], scope: plan.scope || null, compatibility: plan.compatibility || null };
+        if (plan.disposition === 'proposed' && plan.patch) autofix = { deterministic: true, ruleId: plan.ruleId, patch: plan.patch, purpose: plan.purpose, requiredObligations: plan.requiredObligations, ...(plan.recipe ? { recipe: plan.recipe } : {}) };
       } catch { /* best-effort — no file / no rule → no autofix */ }
       // Haskell and Nix: a read-only preview from the language fixer, with the verification gates' verdict and the
       // FULL / MITIGATION / WORKAROUND tier. It writes nothing; apply_fix re-verifies before anything lands.
@@ -1278,6 +1286,7 @@ export const synthesize_fix = {
       replacement: hasReplacement ? fix.replacement : null,
       template: fix.code || null,
       autofix,
+      autofixDecision,
       languageFix,
       // #15 — the regression test the scan annotator already generated for this
       // finding (present when a PoC was built). Surfaced here so the fix flow
@@ -1285,7 +1294,8 @@ export const synthesize_fix = {
       // applied fix ships with a test that fails pre-fix and passes post-fix.
       regression_test: f.regression_test || null,
       remediation: typeof fix.description === 'string' ? fix.description : (typeof fix === 'string' ? fix : null),
-      patchBounds: { touchedFiles, locDelta, oversized },
+      patchBounds: { touchedFiles, locDelta, oversized, ...(scope ? { additions: scope.totals.additions, deletions: scope.totals.deletions, touchedSymbols: scope.files.flatMap((x) => x.touchedSymbols.map((t) => `${x.file}:${t.name}`)), materialCategories: scope.material.categories, structuralFallback: scope.structuralFallback } : {}) },
+      patchScope: scope,
       // oversized can only be true when hasReplacement is true (locDelta is
       // only computed in that branch, and touchedFiles never varies) — a
       // `!hasReplacement` conjunct here was a structural contradiction that

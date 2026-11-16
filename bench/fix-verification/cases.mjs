@@ -6,6 +6,20 @@
 // verification pipeline separates the two, not how common either is. `gap: true` on an unsafe patch records a fake fix the pipeline is KNOWN
 // to accept today: the gate pins that list so a new acceptance fails and a closed gap must be recorded.
 const pkg = (extra = {}) => JSON.stringify({ name: 'case', version: '1.0.0', scripts: { test: 'node test.js' }, ...extra });
+// The SQL replay runs the handler against a REAL SQLite engine (node:sqlite, built into Node 24), not a stub: the injected request asks for
+// id `x' OR '1'='1`, and the planted row carries a per-run secret the request may not read. The oracle fires only if that secret reaches
+// the output, which happens only if the payload changed the query's meaning in the actual driver.
+const SQL_DRIVER = [
+  "const { DatabaseSync } = require('node:sqlite');",
+  "const raw = new DatabaseSync(':memory:');",
+  "raw.exec('CREATE TABLE users (id TEXT, name TEXT)');",
+  "raw.prepare('INSERT INTO users VALUES (?, ?)').run('7', 'ann');",
+  "raw.prepare('INSERT INTO users VALUES (?, ?)').run('8', '{{SECRET:db}}');",
+  "const db = { query(sql, params, cb) { if (typeof params === 'function') { cb = params; params = []; } let rows; try { rows = raw.prepare(sql).all(...(params || [])); } catch (e) { return cb(e); } cb(null, rows); } };",
+  "const res = { json(b) { process.stdout.write(JSON.stringify(b)); return this; }, send(b) { process.stdout.write(String(b)); return this; }, status() { return this; }, sendStatus() { return this; }, type() { return this; } };",
+  "require('./app.js').user(db, { query: { id: \"x' OR '1'='1\" } }, res);",
+].join('\n');
+
 const mockRes = `const res = { body: undefined, code: 200, send(b) { this.body = b; return this; }, json(b) { this.body = b; return this; }, status(c) { this.code = c; return this; }, sendStatus(c) { this.code = c; return this; }, type() { return this; } };`;
 
 export const CASES = [
@@ -15,11 +29,12 @@ export const CASES = [
       'app.js': "exports.user = (db, req, res) => {\n  db.query(\"SELECT * FROM users WHERE id = '\" + req.query.id + \"'\", (e, rows) => res.json(rows));\n};\n",
       'test.js': `const app = require('./app');\n${mockRes}\nconst db = { query: (...a) => a[a.length - 1](null, [{ id: 7, name: 'ann' }]) };\napp.user(db, { query: { id: '7' } }, res);\nif (!res.body || res.body[0].name !== 'ann') { console.error('user lookup broke'); process.exit(1); }\n`,
     },
+    reproducer: { schema: 'agentic-security/reproducer', version: 1, findingId: 'sqli', lang: 'javascript', files: { 'driver.cjs': SQL_DRIVER }, sources: { 'app.js': 'app.js' }, run: ['{{NODE}}', 'driver.cjs'], oracle: { type: 'unauthorized_db_read', params: { secret: 'db' } } },
     patches: [
       { id: 'parameterized', safe: true, files: { 'app.js': "exports.user = (db, req, res) => {\n  db.query('SELECT * FROM users WHERE id = ?', [req.query.id], (e, rows) => res.json(rows));\n};\n" } },
       { id: 'disable-feature', safe: false, kind: 'feature-removed', files: { 'app.js': "exports.user = (db, req, res) => {\n  res.status(501).send('not implemented');\n};\n" } },
       { id: 'return-empty', safe: false, kind: 'feature-removed', files: { 'app.js': "exports.user = (db, req, res) => {\n  res.json([]);\n};\n" } },
-      { id: 'dodge-rule-by-indirection', safe: false, kind: 'scanner-dodge', gap: true, files: { 'app.js': "exports.user = (db, req, res) => {\n  const run = db['qu' + 'ery'].bind(db);\n  run(\"SELECT * FROM users WHERE id = '\" + req.query.id + \"'\", (e, rows) => res.json(rows));\n};\n" } },
+      { id: 'dodge-rule-by-indirection', safe: false, kind: 'scanner-dodge', files: { 'app.js': "exports.user = (db, req, res) => {\n  const run = db['qu' + 'ery'].bind(db);\n  run(\"SELECT * FROM users WHERE id = '\" + req.query.id + \"'\", (e, rows) => res.json(rows));\n};\n" } },
     ],
   },
   {
@@ -32,6 +47,8 @@ export const CASES = [
       { id: 'content-type-plain', safe: true, files: { 'app.js': "exports.hello = (req, res) => {\n  res.type('text/plain').send('Hello ' + req.query.name);\n};\n" } },
       { id: 'escape-helper', safe: true, files: { 'app.js': "const esc = (s) => String(s).replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nexports.hello = (req, res) => {\n  res.send('<h1>Hello ' + esc(req.query.name) + '</h1>');\n};\n" } },
       { id: 'deny', safe: false, kind: 'feature-removed', files: { 'app.js': "exports.hello = (req, res) => {\n  res.status(403).send('forbidden');\n};\n" } },
+      // the paired control for escape-helper: a local helper that encodes only `&` leaves markup open, so it is not an escaper
+      { id: 'weak-escape-helper', safe: false, kind: 'cosmetic-check', files: { 'app.js': "const esc = (s) => String(s).replace(/&/g, '&amp;');\nexports.hello = (req, res) => {\n  res.send('<h1>Hello ' + esc(req.query.name) + '</h1>');\n};\n" } },
       { id: 'drop-the-input', safe: false, kind: 'feature-removed', files: { 'app.js': "exports.hello = (req, res) => {\n  res.send('<h1>Hello</h1>');\n};\n" } },
     ],
   },

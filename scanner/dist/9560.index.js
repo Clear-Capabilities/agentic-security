@@ -2109,6 +2109,339 @@ function createToolGate({ sessionRoot, policy = null, guard, env = process.env }
 
 /***/ }),
 
+/***/ 11106:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+
+// EXPORTS
+__webpack_require__.d(__webpack_exports__, {
+  oL: () => (/* binding */ computePatchScope),
+  wN: () => (/* binding */ heuristicSymbols),
+  fA: () => (/* binding */ jsSymbols),
+  ni: () => (/* binding */ legacyBounds),
+  nY: () => (/* binding */ pySymbols)
+});
+
+// UNUSED EXPORTS: DEFAULT_BOUNDS
+
+// EXTERNAL MODULE: external "node:crypto"
+var external_node_crypto_ = __webpack_require__(77598);
+// EXTERNAL MODULE: ./node_modules/@babel/parser/lib/index.js
+var lib = __webpack_require__(46411);
+;// CONCATENATED MODULE: ./src/fix/line-diff.js
+// Line diff for patch scope (verified-remediation PRD FR-03, GAP-03).
+//
+// The patch bound used to be |lines(after) - lines(before)|, so rewriting 150 lines into 150 different lines measured zero. This is a
+// real line diff: Myers' O(ND) shortest edit script over whole lines, returning hunks with exact before/after line ranges.
+//
+// Bounded: the edit distance search stops at MAX_EDIT_DISTANCE. Past that the diff is reported `approximate: true` and every line of both
+// sides that is not in the common prefix or suffix counts as changed. That fallback can only OVER-count, never under-count, so a policy
+// that reads it can be too strict but never too lenient.
+//
+// Pure: no fs, no clock.
+
+const MAX_EDIT_DISTANCE = 4000;
+
+const splitLines = (text) => {
+  if (text === null || text === undefined) return [];
+  const s = String(text);
+  if (s === '') return [];
+  const lines = s.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop(); // a trailing newline does not add a line
+  return lines;
+};
+
+// Myers forward search, returning the edit script as a list of ops over the trimmed middle.
+function myers(a, b, maxD) {
+  const n = a.length; const m = b.length; const max = n + m;
+  const off = max + 1;
+  const v = new Int32Array(2 * max + 3);
+  const trace = [];
+  for (let d = 0; d <= Math.min(max, maxD); d++) {
+    trace.push(v.slice());
+    for (let k = -d; k <= d; k += 2) {
+      let x;
+      if (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) x = v[off + k + 1];
+      else x = v[off + k - 1] + 1;
+      let y = x - k;
+      while (x < n && y < m && a[x] === b[y]) { x++; y++; }
+      v[off + k] = x;
+      if (x >= n && y >= m) return backtrack(trace, a, b, off, d);
+    }
+  }
+  return null;
+}
+
+function backtrack(trace, a, b, off, dEnd) {
+  const ops = [];
+  let x = a.length; let y = b.length;
+  for (let d = dEnd; d > 0; d--) {
+    const v = trace[d];
+    const k = x - y;
+    const prevK = (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) ? k + 1 : k - 1;
+    const prevX = v[off + prevK]; const prevY = prevX - prevK;
+    while (x > prevX && y > prevY) { ops.push(['=', x - 1, y - 1]); x--; y--; }
+    if (x === prevX) ops.push(['+', x, y - 1]); else ops.push(['-', x - 1, y]);
+    x = prevX; y = prevY;
+  }
+  while (x > 0 && y > 0) { ops.push(['=', x - 1, y - 1]); x--; y--; }
+  return ops.reverse();
+}
+
+/**
+ * @param {string|null} beforeText
+ * @param {string|null} afterText
+ * @returns {{additions:number, deletions:number, hunks:{beforeStart:number,beforeCount:number,afterStart:number,afterCount:number,added:string[],deleted:string[]}[], approximate:boolean}}
+ *   Line numbers are 1-based. A hunk with beforeCount 0 is a pure insertion after line beforeStart-1.
+ */
+function diffLines(beforeText, afterText, { maxEditDistance = MAX_EDIT_DISTANCE } = {}) {
+  const a = splitLines(beforeText); const b = splitLines(afterText);
+  let pre = 0;
+  while (pre < a.length && pre < b.length && a[pre] === b[pre]) pre++;
+  let suf = 0;
+  while (suf < a.length - pre && suf < b.length - pre && a[a.length - 1 - suf] === b[b.length - 1 - suf]) suf++;
+  const am = a.slice(pre, a.length - suf); const bm = b.slice(pre, b.length - suf);
+  if (!am.length && !bm.length) return { additions: 0, deletions: 0, hunks: [], approximate: false };
+  let ops = am.length && bm.length ? myers(am, bm, maxEditDistance) : null;
+  let approximate = false;
+  if (!ops) {
+    if (am.length && bm.length) approximate = true; // search bound hit: count the whole middle as replaced
+    ops = [...am.map((_, i) => ['-', i, 0]), ...bm.map((_, j) => ['+', 0, j])];
+  }
+  const hunks = [];
+  let cur = null; let ai = 0; let bi = 0;
+  const flush = () => { if (cur) { hunks.push(cur); cur = null; } };
+  for (const [op] of ops) {
+    if (op === '=') { flush(); ai++; bi++; continue; }
+    if (!cur) cur = { beforeStart: pre + ai + 1, beforeCount: 0, afterStart: pre + bi + 1, afterCount: 0, added: [], deleted: [] };
+    if (op === '-') { cur.deleted.push(am[ai]); cur.beforeCount++; ai++; } else { cur.added.push(bm[bi]); cur.afterCount++; bi++; }
+  }
+  flush();
+  const additions = hunks.reduce((s, h) => s + h.afterCount, 0);
+  const deletions = hunks.reduce((s, h) => s + h.beforeCount, 0);
+  return { additions, deletions, hunks, approximate };
+}
+
+// EXTERNAL MODULE: ./src/posture/material-change.js
+var material_change = __webpack_require__(74629);
+;// CONCATENATED MODULE: ./src/fix/patch-scope.js
+// Actual patch scope (verified-remediation PRD FR-03, GAP-03): the ONE implementation every route uses to say how big a patch is.
+//
+// Before this module, fix-plan.js and the MCP synthesize_fix handler each measured |lines(after) - lines(before)|, so a 150-line rewrite
+// into 150 different lines measured 0 and slipped under every size bound. computePatchScope measures what changed:
+//
+//   - additions and deletions from a real line diff (line-diff.js), changed ranges on both sides, and the file operation (add, modify,
+//     delete, rename);
+//   - `editedLines`, the size the bounds use: per hunk, max(added, deleted). A pure insertion or deletion counts its lines; a rewrite of
+//     N lines into N different lines counts N, never 0;
+//   - formatting-only versus semantic change (whitespace-normalized lines compared), reported separately and never made invisible: a
+//     formatting-only file still counts toward `editedLines`;
+//   - touched symbols: functions, methods, classes and route handlers whose span covers a changed line, from the Babel AST for JS/TS
+//     (`structural: 'ast'`), an indentation heuristic for Python and a declaration heuristic elsewhere (`structural: 'heuristic'`, a named
+//     fallback a policy can require review for);
+//   - material categories, from posture/material-change.js's classifier (fed this diff, not a line set) plus the equal-length cases the
+//     classifier does not see: a changed authorization condition, credentials, trust-boundary settings and TLS verification.
+//
+// Model-supplied counts are never an input. Pure: no fs, no clock.
+
+
+
+
+
+const DEFAULT_BOUNDS = Object.freeze({ maxFiles: 3, maxEditedLines: 100 });
+
+const JS_EXT = /\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/i;
+const PY_EXT = /\.py$/i;
+const sha256 = (t) => (t === null || t === undefined ? null : `sha256:${(0,external_node_crypto_.createHash)('sha256').update(String(t)).digest('hex')}`);
+const norm = (l) => l.replace(/\s+/g, '');
+
+// The equal-length changes the hunk classifier misses. Tested on BOTH sides of a hunk: a condition that was edited shows up as one
+// deleted and one added line of the same length, and either side carrying the vocabulary is enough.
+const SCOPE_MATERIAL = [
+  { category: 'authZ', kind: 'authz-condition-changed', re: /(?:\bif\b|\?|&&|\|\||\breturn\b|[!=]==?|\bwhere\b|\bfilter\b)[^\n]*\b(?:owner\w*|tenant\w*|role\w*|isAdmin|is_admin|admin|permission\w*|authori[sz]\w*|req\.user|request\.user|current_?user|userId|user_id|org(?:anization)?Id|scope\w*|acl)\b|\b(?:owner\w*|tenant\w*|role\w*|req\.user|userId|user_id)\b[^\n]*(?:[!=]==?|&&|\|\|)/i },
+  { category: 'auth', kind: 'authn-changed', re: /\b(?:authenticate|isAuthenticated|requireAuth|verifyToken|passport|session\s*\.|jwt\s*\.\s*verify|login|logout|password\w*\s*(?:===?|!==?))\b/i },
+  { category: 'crypto', kind: 'crypto-changed', re: /\b(?:createHash|createHmac|createCipheriv|createDecipheriv|randomBytes|pbkdf2|scrypt|bcrypt|argon2|hashlib\s*\.|MessageDigest|rejectUnauthorized|verify\s*=|checkServerIdentity|ca\s*:)\b/i },
+  { category: 'credentials', kind: 'credential-changed', re: /\b(?:secret|api[_-]?key|access[_-]?key|private[_-]?key|token|credential\w*|passwd|password)\b\s*[:=]/i },
+  { category: 'trust-boundary', kind: 'trust-boundary-changed', re: /\b(?:cors|origin|csrf|csurf|helmet|sameSite|httpOnly|allowlist|whitelist|denylist|blocklist|redirect)\b/i },
+];
+
+const range = (start, count) => (count > 0 ? [start, start + count - 1] : null);
+
+/** Symbols (name, kind, 1-based inclusive span) from a JS/TS source, or null when it does not parse. */
+function jsSymbols(text, file = 'x.js') {
+  let ast;
+  try {
+    ast = (0,lib/* parse */.qg)(String(text), { sourceType: 'unambiguous', errorRecovery: true, allowReturnOutsideFunction: true, plugins: [/\.tsx?$|\.[mc]?ts$/i.test(file) ? 'typescript' : 'flow', 'jsx', 'classProperties', 'decorators-legacy'] });
+  } catch { return null; }
+  const out = [];
+  const nameOf = (n) => {
+    if (!n) return null;
+    if (n.type === 'Identifier') return n.name;
+    if (n.type === 'StringLiteral') return n.value;
+    if (n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression') { const o = nameOf(n.object); const p = n.computed ? (n.property.type === 'StringLiteral' ? n.property.value : '[computed]') : nameOf(n.property); return o && p ? `${o}.${p}` : p || o; }
+    if (n.type === 'ThisExpression') return 'this';
+    return null;
+  };
+  const isFn = (n) => n && /^(?:FunctionExpression|ArrowFunctionExpression|ClassExpression)$/.test(n.type);
+  const add = (name, kind, node) => { if (name && node?.loc) out.push({ name, kind, start: node.loc.start.line, end: node.loc.end.line }); };
+  const walk = (node, parent) => {
+    if (!node || typeof node.type !== 'string') return;
+    switch (node.type) {
+      case 'FunctionDeclaration': add(nameOf(node.id), 'function', node); break;
+      case 'ClassDeclaration': add(nameOf(node.id), 'class', node); break;
+      case 'ClassMethod': case 'ClassPrivateMethod': case 'ObjectMethod': add(nameOf(node.key), 'method', node); break;
+      case 'VariableDeclarator': if (isFn(node.init)) add(nameOf(node.id), node.init.type === 'ClassExpression' ? 'class' : 'function', node); break;
+      case 'AssignmentExpression': if (isFn(node.right)) add(nameOf(node.left), 'function', node); break;
+      case 'ObjectProperty': case 'ClassProperty': if (isFn(node.value)) add(nameOf(node.key), 'method', node); break;
+      case 'CallExpression': {
+        // app.get('/path', handler): the handler is named after its route
+        const callee = node.callee;
+        const verb = callee?.type === 'MemberExpression' && !callee.computed ? callee.property?.name : null;
+        const first = node.arguments?.[0];
+        if (verb && /^(?:get|post|put|patch|delete|del|all|use|options|head)$/i.test(verb) && first?.type === 'StringLiteral' && node.arguments.slice(1).some(isFn)) add(`${verb.toUpperCase()} ${first.value}`, 'route-handler', node);
+        break;
+      }
+      default: break;
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'loc' || key === 'start' || key === 'end' || key === 'leadingComments' || key === 'trailingComments' || key === 'innerComments' || key === 'extra') continue;
+      const child = node[key];
+      if (Array.isArray(child)) { for (const c of child) if (c && typeof c.type === 'string') walk(c, node); } else if (child && typeof child.type === 'string') walk(child, node);
+    }
+  };
+  walk(ast.program, null);
+  return out;
+}
+
+/** Python def/class blocks by indentation. A heuristic: decorators and continuation lines are approximate. */
+function pySymbols(text) {
+  const lines = splitLines(text); const out = []; const stack = [];
+  const indent = (l) => l.match(/^[ \t]*/)[0].replace(/\t/g, '    ').length;
+  lines.forEach((l, i) => {
+    if (!l.trim() || /^\s*#/.test(l)) return;
+    const ind = indent(l);
+    while (stack.length && ind <= stack[stack.length - 1].indent) { const s = stack.pop(); s.sym.end = i; }
+    const m = l.match(/^\s*(?:async\s+)?(def|class)\s+([A-Za-z_]\w*)/);
+    if (m) { const sym = { name: stack.length ? `${stack.map((s) => s.sym.name).join('.')}.${m[2]}` : m[2], kind: m[1] === 'def' ? 'function' : 'class', start: i + 1, end: lines.length }; out.push(sym); stack.push({ indent: ind, sym }); }
+  });
+  for (const s of stack) s.sym.end = lines.length;
+  return out;
+}
+
+// Two linear patterns, no overlapping repetition (an earlier single pattern backtracked catastrophically on long whitespace runs):
+// a keyword declaration (function/def/class/...), and a C-family method header `mods type name(`.
+const KEYWORD_DECL_RE = /\b(?:function|func|fn|def|sub|class|struct|impl|interface|module|trait|enum)[ \t]+([A-Za-z_][\w:.]*)/;
+const MODIFIER_RE = /^(?:public|private|protected|internal|static|final|abstract|synchronized|override|virtual|async)[ \t]+/;
+const METHOD_DECL_RE = /^([\w<>\[\],.?]+)[ \t]+([A-Za-z_]\w*)[ \t]*\(/;
+const NOT_A_TYPE = new Set(['return', 'new', 'else', 'throw', 'await', 'yield', 'case', 'goto', 'delete', 'typeof', 'in', 'of']);
+const declOf = (l) => {
+  if (l.length > 400) return null;
+  const k = l.match(KEYWORD_DECL_RE); if (k) return k[1];
+  // modifiers are stripped one at a time (no nested quantifier), then `type name(` is matched once
+  let rest = l.replace(/^[ \t]+/, '');
+  for (let i = 0; i < 12; i++) { const mm = rest.match(MODIFIER_RE); if (!mm) break; rest = rest.slice(mm[0].length); }
+  const m = rest.match(METHOD_DECL_RE); if (m && !NOT_A_TYPE.has(m[1]) && !/;\s*$/.test(l)) return m[2];
+  return null;
+};
+
+/** Nearest preceding declaration line for each changed line. Used where no structural parser exists, and labelled as such. */
+function heuristicSymbols(text) {
+  const lines = splitLines(text); const decls = [];
+  lines.forEach((l, i) => { const name = declOf(l); if (name) decls.push({ name, kind: 'declaration', start: i + 1 }); });
+  decls.forEach((d, i) => { d.end = i + 1 < decls.length ? decls[i + 1].start - 1 : lines.length; });
+  return decls;
+}
+
+function symbolsFor(file, text) {
+  if (text === null || text === undefined) return { symbols: [], structural: 'none' };
+  if (JS_EXT.test(file)) { const s = jsSymbols(text, file); if (s) return { symbols: s, structural: 'ast' }; return { symbols: heuristicSymbols(text), structural: 'heuristic', fallbackReason: 'the file did not parse as JavaScript/TypeScript' }; }
+  if (PY_EXT.test(file)) return { symbols: pySymbols(text), structural: 'heuristic', fallbackReason: 'Python symbols come from an indentation heuristic, not a parser' };
+  return { symbols: heuristicSymbols(text), structural: 'heuristic', fallbackReason: 'no structural parser for this file type' };
+}
+
+const touching = (symbols, lines) => {
+  const hit = [];
+  for (const s of symbols) if (lines.some((ln) => ln >= s.start && ln <= s.end)) hit.push(s);
+  // keep the innermost symbol per changed line plus every enclosing one: the caller wants every scope whose behaviour moved
+  return hit;
+};
+
+/**
+ * @param {{before:Record<string,string|null>, after:Record<string,string|null>, renames?:{from:string,to:string}[], bounds?:{maxFiles?:number,maxEditedLines?:number}}} o
+ *   `before[f] === null` (or absent) with `after[f]` set is an added file; `after[f] === null` is a deleted file.
+ */
+function computePatchScope({ before = {}, after = {}, renames = [], bounds = {} }) {
+  const b = { ...DEFAULT_BOUNDS, ...bounds };
+  const renameTo = new Map(renames.map((r) => [r.to, r.from]));
+  const renamedFrom = new Set(renames.map((r) => r.from));
+  const files = [];
+  const materialInput = {};
+  const scopeMaterial = [];
+  let approximate = false;
+  const names = [...new Set([...Object.keys(after), ...renames.map((r) => r.to)])].filter((f) => !renamedFrom.has(f) || f in after).sort();
+  for (const file of names) {
+    const src = renameTo.get(file) || file;
+    const pre = before[src] ?? null;
+    const post = after[file] ?? null;
+    const operation = renameTo.has(file) ? 'rename' : pre === null && post !== null ? 'add' : pre !== null && post === null ? 'delete' : pre === post ? 'unchanged' : 'modify';
+    const d = diffLines(pre, post);
+    approximate = approximate || d.approximate;
+    const editedLines = d.hunks.reduce((s, h) => s + Math.max(h.beforeCount, h.afterCount), 0);
+    // formatting-only: the whitespace-normalized, blank-free line sequences agree
+    const nb = splitLines(pre).map(norm).filter(Boolean); const na = splitLines(post).map(norm).filter(Boolean);
+    const sd = diffLines(nb.join('\n'), na.join('\n'));
+    const formattingOnly = operation === 'modify' && sd.additions === 0 && sd.deletions === 0 && editedLines > 0;
+    const beforeLines = d.hunks.flatMap((h) => Array.from({ length: h.beforeCount }, (_, i) => h.beforeStart + i));
+    const afterLines = d.hunks.flatMap((h) => Array.from({ length: h.afterCount }, (_, i) => h.afterStart + i));
+    const sb = symbolsFor(file, pre); const sa = symbolsFor(file, post);
+    // a pure insertion touches the symbol it was inserted into, found on the after side
+    const touched = new Map();
+    for (const s of touching(sb.symbols, beforeLines)) touched.set(`${s.kind}:${s.name}`, { name: s.name, kind: s.kind, side: 'before' });
+    for (const s of touching(sa.symbols, afterLines)) { const k = `${s.kind}:${s.name}`; touched.set(k, { name: s.name, kind: s.kind, side: touched.has(k) ? 'both' : 'after' }); }
+    const structural = [sb, sa].some((x) => x.structural === 'heuristic') ? 'heuristic' : [sb, sa].some((x) => x.structural === 'ast') ? 'ast' : 'none';
+    files.push({
+      file, ...(renameTo.has(file) ? { renamedFrom: src } : {}), operation,
+      additions: d.additions, deletions: d.deletions, editedLines,
+      changedRanges: d.hunks.map((h) => ({ before: range(h.beforeStart, h.beforeCount), after: range(h.afterStart, h.afterCount) })),
+      formattingOnly, semanticEditedLines: formattingOnly ? 0 : sd.hunks.reduce((s, h) => s + Math.max(h.beforeCount, h.afterCount), 0),
+      touchedSymbols: [...touched.values()].sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0)),
+      structural, ...(structural === 'heuristic' ? { structuralFallback: sb.fallbackReason || sa.fallbackReason } : {}),
+      beforeDigest: sha256(pre), afterDigest: sha256(post),
+    });
+    if (!formattingOnly && operation !== 'unchanged') {
+      materialInput[file] = { before: pre ?? '', after: post ?? '' };
+      for (const h of d.hunks) for (const [side, lines] of [['-', h.deleted], ['+', h.added]]) for (const line of lines) for (const p of SCOPE_MATERIAL) if (p.re.test(line)) scopeMaterial.push({ file, kind: p.kind, category: p.category, side, line: line.trim().slice(0, 200) });
+    }
+  }
+  const cls = (0,material_change/* classifyFixMaterialRisk */.kz)(materialInput);
+  const categories = [...new Set([...cls.highImpactCategories, ...scopeMaterial.map((m) => m.category)])].sort();
+  const live = files.filter((f) => f.operation !== 'unchanged');
+  const totals = {
+    files: live.length, additions: live.reduce((s, f) => s + f.additions, 0), deletions: live.reduce((s, f) => s + f.deletions, 0),
+    editedLines: live.reduce((s, f) => s + f.editedLines, 0), semanticEditedLines: live.reduce((s, f) => s + f.semanticEditedLines, 0),
+    touchedSymbols: live.reduce((s, f) => s + f.touchedSymbols.length, 0),
+    operations: Object.fromEntries(['add', 'modify', 'delete', 'rename'].map((op) => [op, live.filter((f) => f.operation === op).length])),
+  };
+  const exceeds = [];
+  if (totals.files > b.maxFiles) exceeds.push(`touches ${totals.files} files (limit ${b.maxFiles})`);
+  if (totals.editedLines > b.maxEditedLines) exceeds.push(`edits ${totals.editedLines} lines (limit ${b.maxEditedLines})`);
+  return {
+    schema: 'agentic-security/patch-scope', version: 1,
+    files, totals, approximate,
+    material: { categories, material: categories.length > 0, risk: cls.materialRisk, signals: [...cls.findings.filter((f) => f.kind !== 'routine').map((f) => ({ file: f.file, kind: f.kind, category: null, side: f.side, line: String(f.line || '').slice(0, 200) })), ...scopeMaterial] },
+    structuralFallback: files.filter((f) => f.structural === 'heuristic').map((f) => f.file),
+    bounds: b, exceedsBounds: exceeds.length > 0, exceedsReasons: exceeds,
+  };
+}
+
+/** The legacy bound triple ({files, loc, exceedsBounds}) from the one scope computation, for callers that read the old field names. */
+function legacyBounds(scope) {
+  return { files: scope.totals.files, loc: scope.totals.editedLines, exceedsBounds: scope.exceedsBounds };
+}
+
+
+/***/ }),
+
 /***/ 69390:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -3090,23 +3423,24 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony import */ var _posture_material_change_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(74629);
 /* harmony import */ var _fix_approver_registry_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(10437);
 /* harmony import */ var _posture_deterministic_fix_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(30413);
-/* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(71130);
-/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(31174);
-/* harmony import */ var _posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(58752);
-/* harmony import */ var _redact_js__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(83468);
-/* harmony import */ var _report_index_js__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(75917);
-/* harmony import */ var _posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(51864);
-/* harmony import */ var _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(2046);
-/* harmony import */ var _lineage_deployment_projection_js__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(83929);
-/* harmony import */ var _posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(34594);
-/* harmony import */ var _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(20095);
-/* harmony import */ var _invariant_tools_js__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(82407);
-/* harmony import */ var _portfolio_tools_js__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(99027);
-/* harmony import */ var _proof_tools_js__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(52197);
-/* harmony import */ var _posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(79907);
-/* harmony import */ var _posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_23__ = __webpack_require__(71364);
-var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_12__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__, _proof_tools_js__WEBPACK_IMPORTED_MODULE_20__]);
-([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_12__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__, _proof_tools_js__WEBPACK_IMPORTED_MODULE_20__] = __webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__);
+/* harmony import */ var _posture_fix_plan_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(96768);
+/* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(71130);
+/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(31174);
+/* harmony import */ var _posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(58752);
+/* harmony import */ var _redact_js__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(83468);
+/* harmony import */ var _report_index_js__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(75917);
+/* harmony import */ var _posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(51864);
+/* harmony import */ var _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(2046);
+/* harmony import */ var _lineage_deployment_projection_js__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(83929);
+/* harmony import */ var _posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(34594);
+/* harmony import */ var _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(20095);
+/* harmony import */ var _invariant_tools_js__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(82407);
+/* harmony import */ var _portfolio_tools_js__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(99027);
+/* harmony import */ var _proof_tools_js__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(52197);
+/* harmony import */ var _posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_23__ = __webpack_require__(79907);
+/* harmony import */ var _posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_24__ = __webpack_require__(71364);
+var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_13__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__, _proof_tools_js__WEBPACK_IMPORTED_MODULE_21__]);
+([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_13__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__, _proof_tools_js__WEBPACK_IMPORTED_MODULE_21__] = __webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__);
 // MCP tool implementations — PRD Feature 2, hardened against the OWASP MCP
 // Top 10 (see ./redact.js, ./audit.js, ./server.js for sibling controls).
 //
@@ -3120,6 +3454,7 @@ var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_fix
 //   - Secret-shaped strings redacted on the way out (OWASP MCP01/MCP10).
 //   - `apply_fix` requires confirm:true, valid HMAC signature on
 //     last-scan.json, non-shadow finding, and confined file path.
+
 
 
 
@@ -3316,7 +3651,7 @@ function _scratchpadAbs(sessionRoot, relPath) {
 }
 
 function _scratchpadTotalBytes(sessionRoot) {
-  const base = (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_10__.statePath)(sessionRoot, 'agent-scratchpad');
+  const base = (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_11__.statePath)(sessionRoot, 'agent-scratchpad');
   if (!node_fs__WEBPACK_IMPORTED_MODULE_0__.existsSync(base)) return 0;
   let total = 0;
   const walk = (dir) => {
@@ -3381,12 +3716,12 @@ function _confine(sessionRoot, candidate, label) {
 }
 
 function _readLastScanVerified(sessionRoot, { allowUnsigned = false } = {}) {
-  const stateDirPath = (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_10__/* .stateDir */ .Pn)(sessionRoot);
+  const stateDirPath = (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_11__/* .stateDir */ .Pn)(sessionRoot);
   const scanFile = node_path__WEBPACK_IMPORTED_MODULE_2__.join(stateDirPath, 'last-scan.json');
   const sigFile = scanFile + '.sig';
   if (!node_fs__WEBPACK_IMPORTED_MODULE_0__.existsSync(scanFile)) return { scan: null, status: 'missing' };
   const body = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(scanFile, 'utf8');
-  const ok = (0,_posture_integrity_js__WEBPACK_IMPORTED_MODULE_9__/* .verifyLastScan */ .Ef)(body, sigFile);
+  const ok = (0,_posture_integrity_js__WEBPACK_IMPORTED_MODULE_10__/* .verifyLastScan */ .Ef)(body, sigFile);
   if (ok === false) return { scan: null, status: 'tampered' };
   if (ok === null && !allowUnsigned) return { scan: null, status: 'unsigned' };
   let parsed;
@@ -3528,7 +3863,7 @@ const scan_diff = {
     const wantSet = new Set(Object.keys(fileContents));
     const { withLanguageContext } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 52603));
     const lc = withLanguageContext(sessionRoot, fileContents, {});
-    const result = await (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_10__/* .withStateWritesDisabled */ .Ao)(() =>
+    const result = await (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_11__/* .withStateWritesDisabled */ .Ao)(() =>
       runScan(sessionRoot, { network: false, fileContents: lc.fileContents, depFileContents: lc.depFileContents, deep: true, deepInCi: true }));
     const sevRank = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
     const min = sevRank[severity] ?? 0;
@@ -3552,9 +3887,9 @@ const scan_diff = {
     // regardless of this fix. That is a separate, real limitation (scan_diff
     // was designed for pre-write code self-correction, not manifest
     // scanning), left as-is rather than silently claimed fixed here.
-    const findings = (0,_report_index_js__WEBPACK_IMPORTED_MODULE_12__.normalizeFindings)(result.scan)
+    const findings = (0,_report_index_js__WEBPACK_IMPORTED_MODULE_13__.normalizeFindings)(result.scan)
       .filter(f => wantSet.has(String(f.file || '').replace(/\\/g, '/')) && (sevRank[f.severity] ?? 0) >= min)
-      .map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactFinding */ .lE)({
+      .map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactFinding */ .lE)({
         id: f.id, severity: f.severity, file: f.file, line: f.line,
         title: f.vuln, cwe: f.cwe,
         description: f.description, remediation: f.remediation,
@@ -3636,7 +3971,7 @@ const query_taint = {
       const hay = [f.description, f.title, f.vuln, f.snippet, JSON.stringify(_flowSteps(f) || ''), _flowEnds(f)].join(' ').toLowerCase();
       return hay.includes(srcL) && hay.includes(sinkL);
     });
-    const page = all.slice(off, off + lim).map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactFinding */ .lE)({
+    const page = all.slice(off, off + lim).map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactFinding */ .lE)({
       id: f.id, severity: f.severity, file: f.file, line: f.line,
       title: f.title || f.vuln, description: f.description,
       trace: _flowSteps(f),
@@ -3674,7 +4009,7 @@ const explain_finding = {
     if (!scan) throw new Error(`No usable scan state (${status}).`);
     const f = _findById(scan, finding_id);
     if (!f) throw new Error(`Finding not found: ${finding_id}`);
-    const redacted = (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactFinding */ .lE)({
+    const redacted = (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactFinding */ .lE)({
       id: f.id, severity: f.severity, file: f.file, line: f.line,
       title: f.title || f.vuln, cwe: f.cwe,
       description: f.description, remediation: f.remediation,
@@ -3731,16 +4066,16 @@ const explain_finding = {
       // logins/CODEOWNERS lines) through this MCP surface because this call
       // passed no options object at all, silently defeating their policy at
       // this one output boundary while report/index.js honoured it.
-      findingProvenance: f.findingProvenance ? (0,_posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_16__/* .redactFindingProvenance */ .As)(f.findingProvenance, {
+      findingProvenance: f.findingProvenance ? (0,_posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_17__/* .redactFindingProvenance */ .As)(f.findingProvenance, {
         pseudonymize: process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS === '1',
       }) : null,
       // X-206: the same verification projection the JSON and text reports carry; absent when the finding has no record.
       ...(f.verificationRecord && typeof f.verificationRecord === 'object'
-        ? { verificationRecord: f.verificationRecord, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(f.verificationRecord, { replay: f.verificationReplay }) }
+        ? { verificationRecord: f.verificationRecord, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(f.verificationRecord, { replay: f.verificationReplay }) }
         : {}),
       // X-307: the same boundary projection the JSON and text reports carry; absent when the finding has no context.
       ...(f.boundaryContext && typeof f.boundaryContext === 'object'
-        ? (0,_lineage_deployment_projection_js__WEBPACK_IMPORTED_MODULE_15__/* .boundaryFields */ .Q)(f.boundaryContext)
+        ? (0,_lineage_deployment_projection_js__WEBPACK_IMPORTED_MODULE_16__/* .boundaryFields */ .Q)(f.boundaryContext)
         : {}),
     };
   },
@@ -3842,7 +4177,7 @@ const _scrubRoot = (sessionRoot, text) => {
   const roots = new Set([node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(sessionRoot)]);
   try { roots.add(node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(sessionRoot))); } catch { /* root vanished: the plain path is still scrubbed */ }
   for (const r of roots) out = out.split(r).join('<root>');
-  return (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd)(out);
+  return (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd)(out);
 };
 const _gateSummary = (g) => (g ? {
   path: g.path ? g.path.ok : undefined, syntax: g.syntax ? g.syntax.ok : undefined,
@@ -4037,7 +4372,7 @@ const apply_fix = {
         const _files = Object.fromEntries(Object.entries(confinedAbs).map(([rel, v]) => [rel, v.content]));
         // One verifier for every route (E3-03). AGENTIC_SECURITY_FIX_RUN_TESTS used to swap in a second test runner here; verifyFix
         // already carries the test leg, so the flag is now inert.
-        const central = await (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .verifyPatch */ .F)({ scanRoot: ctx.sessionRoot, finding: { id: f.id, stableId: f.stableId }, files: _files, fixMeta, route: 'mcp-apply-fix', mode: dry_run ? 'preview' : 'apply', verify: await getVerifyFixCore() });
+        const central = await (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .verifyPatch */ .F)({ scanRoot: ctx.sessionRoot, finding: { id: f.id, stableId: f.stableId }, files: _files, fixMeta, route: 'mcp-apply-fix', mode: dry_run ? 'preview' : 'apply', verify: await getVerifyFixCore() });
         verdict = central.verdict;
         fixVerification = central.fixVerification;
       } catch (e) {
@@ -4050,8 +4385,8 @@ const apply_fix = {
           verify: { rescan: verdict.rescan, lint: { runner: verdict.lint?.runner, ok: verdict.lint?.ok }, honesty: verdict.honesty || null },
           // X-201: the same version-1 verification record every surface emits (additive; null when none could be formed).
           verificationRecord: verdict.verificationRecord ?? null,
-          ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(verdict.verificationRecord),
-          ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .additiveFields */ .Y)(fixVerification) : {}),
+          ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(verdict.verificationRecord),
+          ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .additiveFields */ .Y)(fixVerification) : {}),
         };
       }
       // FR-307/FR-1002/D-0024: this caller-supplied-patch branch writes via
@@ -4072,7 +4407,7 @@ const apply_fix = {
       }
       const materialClassification = (0,_posture_material_change_js__WEBPACK_IMPORTED_MODULE_6__/* .classifyFixMaterialRisk */ .kz)(filesForMaterialClassification);
       if (dry_run) {
-        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(verdict.verificationRecord), materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .additiveFields */ .Y)(fixVerification) : {}) };
+        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(verdict.verificationRecord), materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .additiveFields */ .Y)(fixVerification) : {}) };
       }
       const changeDigest = _sha256(JSON.stringify(Object.entries(filesForMaterialClassification).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, _sha256(v.before), _sha256(v.after)])));
       const approvalRefusal = _highImpactApprovalRefusal(ctx, materialClassification, fixMeta, { tool: 'apply_fix', action: 'apply-patch', target: f.stableId || f.id, change: changeDigest });
@@ -4104,7 +4439,7 @@ const apply_fix = {
       }
       let acceptance = null;
       try { acceptance = (0,_posture_fix_history_js__WEBPACK_IMPORTED_MODULE_4__/* .fixAcceptanceRate */ .XR)(ctx.sessionRoot); } catch { /* best-effort */ }
-      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(verdict.verificationRecord) }, acceptance, materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .additiveFields */ .Y)(fixVerification) : {}) };
+      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(verdict.verificationRecord) }, acceptance, materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .additiveFields */ .Y)(fixVerification) : {}) };
     }
 
     if (typeof f.fix?.replacement !== 'string') {
@@ -4262,13 +4597,13 @@ const verify_fix = {
       // Best-effort: a missing/unsigned/tampered scan just means no PoC is
       // available to re-check, not a verify_fix failure — the rescan/lint/
       // tests legs below are independent of this and still apply.
-      const central = await (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .verifyPatch */ .F)({ scanRoot: ctx.sessionRoot, finding: { stableId: stable_id }, files: confined, fixMeta, route: 'mcp-verify-fix', mode: 'verify', verify: await getVerifyFixCore() });
+      const central = await (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .verifyPatch */ .F)({ scanRoot: ctx.sessionRoot, finding: { stableId: stable_id }, files: confined, fixMeta, route: 'mcp-verify-fix', mode: 'verify', verify: await getVerifyFixCore() });
       const r = central.verdict;
       return {
         _meta: META,
         ok: r.ok,
         rescan: { ok: r.rescan.ok, reason: r.rescan.reason, introduced: r.rescan.introduced || [] },
-        lint: { runner: r.lint.runner, ok: r.lint.ok, skipped: r.lint.skipped || false, output: (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd)(r.lint.output || '').slice(0, 1500) },
+        lint: { runner: r.lint.runner, ok: r.lint.ok, skipped: r.lint.skipped || false, output: (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd)(r.lint.output || '').slice(0, 1500) },
         // verifyFix computes five legs, not two — tests/honesty/poc were
         // being silently dropped here, leaving an agent with no structured
         // way to see WHY verification failed when the failure was in one
@@ -4279,13 +4614,13 @@ const verify_fix = {
         // it can echo proof-harness detail derived from scanned source.
         tests: r.tests,
         honesty: r.honesty,
-        poc: r.poc ? { ...r.poc, reason: r.poc.reason ? (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd)(r.poc.reason) : r.poc.reason } : r.poc,
+        poc: r.poc ? { ...r.poc, reason: r.poc.reason ? (0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd)(r.poc.reason) : r.poc.reason } : r.poc,
         summary: r.summary,
         // X-201: the one version-1 verification record (additive). It states what was actually established, e.g.
         // `not-run` when no exploit oracle executed against the patch, never a bare pass/fail.
         verificationRecord: r.verificationRecord ?? null,
-        ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(r.verificationRecord),
-        ...(0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .additiveFields */ .Y)(central.fixVerification),
+        ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .verificationFields */ .ze)(r.verificationRecord),
+        ...(0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_15__/* .additiveFields */ .Y)(central.fixVerification),
       };
     } catch (e) {
       return { _meta: META, ok: false, reason: `verify_fix failed: ${e.message}` };
@@ -4318,18 +4653,22 @@ const synthesize_fix = {
     if (f._shadow === true) return { _meta: META, ok: false, reason: 'shadow findings have no synthesized fix' };
     const fix = f.fix || {};
     const hasReplacement = typeof fix.replacement === 'string' && fix.replacement.length > 0;
-    // Patch bounds: count files touched + LoC delta.
+    // Patch bounds (GAP-03): the same scope computation fix-plan.js uses, over a real line diff. `locDelta` keeps its field name for
+    // existing callers but is the edited-line count: a rewrite of N lines into N different lines is N, never 0.
     let touchedFiles = 1;
     let locDelta = 0;
+    let scope = null;
     if (hasReplacement) {
-      let orig = '';
+      let orig = null;
       try {
         const abs = _confine(ctx.sessionRoot, f.file, 'finding.file');
         orig = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(abs, 'utf8');
-      } catch { /* ignore — counts will reflect new-only LoC */ }
-      locDelta = Math.abs(fix.replacement.split('\n').length - orig.split('\n').length);
+      } catch { /* unreadable original: the whole replacement counts as added */ }
+      scope = (0,_posture_fix_plan_js__WEBPACK_IMPORTED_MODULE_9__/* .countPatchBounds */ .hd)({ file: f.file, replacement: fix.replacement }, { [f.file]: orig }).scope;
+      touchedFiles = scope.totals.files;
+      locDelta = scope.totals.editedLines;
     }
-    const oversized = touchedFiles > 3 || locDelta > 100;
+    const oversized = scope ? scope.exceedsBounds : false;
     // #1 — deterministic autofix: for classes with a safe context-independent
     // swap (weak hash, TLS verify-off), materialize a full-file patch from the
     // live file. The agent passes `autofix.patch` straight to apply_fix, which
@@ -4337,12 +4676,15 @@ const synthesize_fix = {
     // even a mis-attributed swap can't land a bad edit. No stored replacement,
     // no per-finding bloat in last-scan.json.
     let autofix = null;
+    let autofixDecision = null;
     let languageFix = null;
     if (!hasReplacement) {
       try {
         const abs = _confine(ctx.sessionRoot, f.file, 'finding.file');
-        const det = (0,_posture_deterministic_fix_js__WEBPACK_IMPORTED_MODULE_8__/* .synthesizeDeterministicPatch */ .X)(f, node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(abs, 'utf8'));
-        if (det) autofix = { deterministic: true, ruleId: det.ruleId, patch: det.patch };
+        const plan = (0,_posture_deterministic_fix_js__WEBPACK_IMPORTED_MODULE_8__/* .planDeterministicFix */ .d5)(f, node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(abs, 'utf8'));
+        // FR-01: the decision is returned whatever it is, so a needs-review case names the facts a person must supply
+        if (plan.disposition !== 'not-applicable') autofixDecision = { disposition: plan.disposition, ruleId: plan.ruleId, purpose: plan.purpose || null, missingFacts: plan.missingFacts || [], requiredObligations: plan.requiredObligations || [], scope: plan.scope || null, compatibility: plan.compatibility || null };
+        if (plan.disposition === 'proposed' && plan.patch) autofix = { deterministic: true, ruleId: plan.ruleId, patch: plan.patch, purpose: plan.purpose, requiredObligations: plan.requiredObligations, ...(plan.recipe ? { recipe: plan.recipe } : {}) };
       } catch { /* best-effort — no file / no rule → no autofix */ }
       // Haskell and Nix: a read-only preview from the language fixer, with the verification gates' verdict and the
       // FULL / MITIGATION / WORKAROUND tier. It writes nothing; apply_fix re-verifies before anything lands.
@@ -4387,6 +4729,7 @@ const synthesize_fix = {
       replacement: hasReplacement ? fix.replacement : null,
       template: fix.code || null,
       autofix,
+      autofixDecision,
       languageFix,
       // #15 — the regression test the scan annotator already generated for this
       // finding (present when a PoC was built). Surfaced here so the fix flow
@@ -4394,7 +4737,8 @@ const synthesize_fix = {
       // applied fix ships with a test that fails pre-fix and passes post-fix.
       regression_test: f.regression_test || null,
       remediation: typeof fix.description === 'string' ? fix.description : (typeof fix === 'string' ? fix : null),
-      patchBounds: { touchedFiles, locDelta, oversized },
+      patchBounds: { touchedFiles, locDelta, oversized, ...(scope ? { additions: scope.totals.additions, deletions: scope.totals.deletions, touchedSymbols: scope.files.flatMap((x) => x.touchedSymbols.map((t) => `${x.file}:${t.name}`)), materialCategories: scope.material.categories, structuralFallback: scope.structuralFallback } : {}) },
+      patchScope: scope,
       // oversized can only be true when hasReplacement is true (locDelta is
       // only computed in that branch, and touchedFiles never varies) — a
       // `!hasReplacement` conjunct here was a structural contradiction that
@@ -4631,7 +4975,7 @@ const append_agents_memory = {
     required: ['agent', 'body'],
   },
   async handler({ agent, body }, ctx) {
-    const r = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_22__/* .appendAgentsMemory */ .eu)(ctx.sessionRoot, { agent, body });
+    const r = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_23__/* .appendAgentsMemory */ .eu)(ctx.sessionRoot, { agent, body });
     return { _meta: META, ...r };
   },
 };
@@ -4647,7 +4991,7 @@ const read_agents_memory = {
     },
   },
   async handler({ full }, ctx) {
-    const body = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_22__/* .readAgentsMemory */ .ox)(ctx.sessionRoot);
+    const body = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_23__/* .readAgentsMemory */ .ox)(ctx.sessionRoot);
     if (!body) return { _meta: META, present: false };
     if (full) return { _meta: META, present: true, length: body.length, content: body };
     // Tail-only — same logic as summarizeForSession but inlined to avoid a
@@ -4691,7 +5035,7 @@ const query_triage_memory = {
     // they landed in, rather than hardcoding a field allowlist that could
     // miss one.
     let results;
-    try { results = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd)(JSON.stringify(raw))); }
+    try { results = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd)(JSON.stringify(raw))); }
     catch { results = raw; }
     return {
       _meta: META,
@@ -4727,7 +5071,7 @@ const query_findings_memory = {
     // whole-structure redactString round-trip is applied rather than a
     // per-field allowlist that could miss one of the four shapes.
     let body;
-    try { body = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd)(JSON.stringify(raw))); }
+    try { body = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd)(JSON.stringify(raw))); }
     catch { body = raw; }
     return { _meta: META, ...body };
   },
@@ -4749,7 +5093,7 @@ const lookup_cve = {
     required: ['cve'],
   },
   async handler({ cve }, _ctx) {
-    const r = (0,_posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_23__/* .lookupCve */ .x)(cve);
+    const r = (0,_posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_24__/* .lookupCve */ .x)(cve);
     return { _meta: META, ...r };
   },
 };
@@ -4767,15 +5111,15 @@ const query_cache_telemetry = {
     required: [],
   },
   async handler({ transcript_path } = {}, ctx) {
-    const result = (0,_posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_11__.analyzeTranscript)({ transcriptPath: transcript_path, projectDir: ctx?.sessionRoot || process.cwd() });
+    const result = (0,_posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_12__.analyzeTranscript)({ transcriptPath: transcript_path, projectDir: ctx?.sessionRoot || process.cwd() });
     if (!result.ok) return { _meta: META, ok: false, reason: result.reason };
     return {
       _meta: META,
       ok: true,
       metrics: result.metrics,
       leaks: result.leaks,
-      report: (0,_posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_11__.formatCacheReport)(result),
-      statusline: (0,_posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_11__.renderCacheStatusLine)(result.metrics),
+      report: (0,_posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_12__.formatCacheReport)(result),
+      statusline: (0,_posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_12__.renderCacheStatusLine)(result.metrics),
     };
   },
 };
@@ -4884,12 +5228,12 @@ const apply_sca_upgrade = {
 };
 
 // X-407: read-only scenario export; the factory takes this file's confinement so the two modules do not import each other.
-const { invariant_scenario_export } = (0,_invariant_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .makeInvariantTools */ ._)({ confine: _confine, META });
+const { invariant_scenario_export } = (0,_invariant_tools_js__WEBPACK_IMPORTED_MODULE_19__/* .makeInvariantTools */ ._)({ confine: _confine, META });
 // X-707: read-only portfolio progress view, same factory shape.
-const { prove_finding, prove_fix } = (0,_proof_tools_js__WEBPACK_IMPORTED_MODULE_20__/* .makeProofTools */ .c)({ confine: _confine, META, readLastScanVerified: _readLastScanVerified, findById: _findById, isReservedWritePath: _isReservedWritePath, redactString: _redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd });
-const { portfolio_progress } = (0,_portfolio_tools_js__WEBPACK_IMPORTED_MODULE_19__/* .makePortfolioTools */ ._)({ confine: _confine, META });
+const { prove_finding, prove_fix } = (0,_proof_tools_js__WEBPACK_IMPORTED_MODULE_21__/* .makeProofTools */ .c)({ confine: _confine, META, readLastScanVerified: _readLastScanVerified, findById: _findById, isReservedWritePath: _isReservedWritePath, redactString: _redact_js__WEBPACK_IMPORTED_MODULE_22__/* .redactString */ .rd });
+const { portfolio_progress } = (0,_portfolio_tools_js__WEBPACK_IMPORTED_MODULE_20__/* .makePortfolioTools */ ._)({ confine: _confine, META });
 
-const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_graph */ .HX, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_node */ .HI, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_edge */ .gC, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_flow */ .ri, invariant_scenario_export, portfolio_progress, prove_finding, prove_fix];
+const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_graph */ .HX, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_node */ .HI, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_edge */ .gC, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .dataflow_get_flow */ .ri, invariant_scenario_export, portfolio_progress, prove_finding, prove_fix];
 
 __webpack_async_result__();
 } catch(e) { __webpack_async_result__(e); } });
@@ -5543,83 +5887,433 @@ const _internals = { CACHE_DIR, CVE_RE, _stalenessTier };
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   X: () => (/* binding */ synthesizeDeterministicPatch)
+/* harmony export */   d5: () => (/* binding */ planDeterministicFix)
 /* harmony export */ });
-// Deterministic fix synthesis (#1) — for the narrow set of vulnerability classes
-// where a context-INDEPENDENT literal swap is a safe, correct fix, produce a
-// full-file replacement from the current file content. No LLM, no guessing, no
-// per-finding bloat in last-scan.json (the patch is materialized on demand by
-// synthesize_fix from the live file, not stored on every finding).
+/* unused harmony exports classifyHashPurpose, synthesizeDeterministicPatch */
+/* harmony import */ var _fix_patch_scope_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(11106);
+// Deterministic fix synthesis: for the narrow set of cases where the right transformation is decidable from the code itself, produce a
+// full-file replacement from the current file content. No LLM, no guessing. Every patch is still gated by the central verifier before
+// anything writes it.
 //
-// Safety: every patch this produces is still gated by verify_fix before apply_fix
-// writes it (original finding gone + no new ≥medium + lint clean). So a swap that
-// a rule mis-attributed simply fails verification instead of landing a bad edit —
-// this module widens the deterministic-fix surface without weakening the gate.
+// Verified-remediation PRD FR-01 (GAP-01). The weak-hash rule used to accept CWE-916 and swap md5/sha1 for sha256 everywhere in the file.
+// For a password that is the wrong mechanism (a fast hash is not a password KDF), and for a checksum another system recomputes it breaks
+// compatibility. So the transformation is now chosen by the PURPOSE of the one operation the finding names:
 //
-// Returns { patch: { [relFile]: newContent }, ruleId } or null when no
-// deterministic fix applies to the finding.
+//   password-storage                 a salted password KDF (scrypt, which Node's crypto and Python's hashlib ship) PLUS a verify function
+//                                    that still accepts the legacy format and says when to rehash, and the file's comparisons of the old
+//                                    hash rewritten to call it. Only for a recognised shape; anything else is needs-review.
+//   non-password-integrity           a SHA-256 substitution at that one call site, and only when nothing marks the digest as persisted or
+//                                    compared with a stored value.
+//   signature, protocol-compatibility, externally-persisted-identifier, unknown
+//                                    no automatic transformation: needs-review, with the missing facts named.
+//
+// Purpose comes from the enclosing function (name, parameters, body) and the statement itself, never from the file name or the CWE.
+// A CWE-916 finding is a claim that the hash protects a password; it is checked against the code like any other signal and never by
+// itself selects a fast-hash swap.
+//
+// Edits are scoped to the operation at the finding's line. Every other similar token in the file is left alone.
+//
+// planDeterministicFix returns the decision (patch or needs-review, purpose, scope, required obligations); synthesizeDeterministicPatch is
+// the legacy entry point and returns { patch, ruleId, ... } or null, so a needs-review case is never mistaken for a fix.
+
 
 const JS_EXT = /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i;
 const PY_EXT = /\.py$/i;
 const JAVA_EXT = /\.java$/i;
 
-// Each rule gates on the finding's cwe/family, then rewrites the whole-file
-// content. transform() returns the new content, or null when nothing changed
-// (e.g. the vulnerable token isn't literally present — then we don't claim a fix).
-const RULES = [
-  {
-    id: 'weak-hash-sha256',
-    // md5 / sha1 → sha256. Every occurrence in the file is a weak hash, so
-    // swapping them all is safe; the verifier confirms the weak-hash finding is
-    // gone and nothing worse appeared.
-    applies: (f) => /CWE-(?:327|328|916)/.test(f.cwe || '') || /weak.?hash/i.test(f.family || ''),
-    // SARD_AGENTIC_SECURITY_PRD.md Phase 8 bench work found this rule's
-    // `applies()` gate matched Java findings (CWE-327/328) by cwe/family, but
-    // `transform()` had no Java branch at all — every Java weak-hash finding
-    // silently produced `null` (no fix), a coverage gap invisible from the
-    // gate alone. `MessageDigest.getInstance("MD5"|"SHA1"|"SHA-1")` ->
-    // `"SHA-256"` is the same class of context-independent literal swap as
-    // the existing JS/Python branches (the algorithm name is a string
-    // literal, not something requiring surrounding-code understanding).
-    transform: (content, file) => {
-      let out = content;
-      if (JS_EXT.test(file)) {
-        out = out.replace(/(\bcreateHash\s*\(\s*['"`])(?:md5|sha1)(['"`])/gi, '$1sha256$2');
-      } else if (PY_EXT.test(file)) {
-        out = out.replace(/\bhashlib\.(?:md5|sha1)\s*\(/g, 'hashlib.sha256(');
-      } else if (JAVA_EXT.test(file)) {
-        out = out.replace(/(\bMessageDigest\.getInstance\s*\(\s*")(?:MD5|SHA-?1)(")/gi, '$1SHA-256$2');
-      }
-      return out !== content ? out : null;
-    },
-  },
-  {
-    id: 'tls-verify-on',
-    // Disabled TLS verification → enabled. rejectUnauthorized:false → true (JS),
-    // verify=False → verify=True (Python requests).
-    applies: (f) => /CWE-295/.test(f.cwe || '') || /tls.?no.?verify|cert.?(?:none|verify)/i.test(f.family || ''),
-    transform: (content, file) => {
-      let out = content;
-      if (JS_EXT.test(file)) {
-        out = out.replace(/(\brejectUnauthorized\s*:\s*)false\b/g, '$1true');
-      } else if (PY_EXT.test(file)) {
-        out = out.replace(/(\bverify\s*=\s*)False\b/g, '$1True');
-      }
-      return out !== content ? out : null;
-    },
-  },
-];
+// One weak-hash call per language, with enough structure to locate exactly one operation.
+const WEAK_CALL = {
+  js: /\bcreateHash\s*\(\s*(['"`])(md5|sha1)\1\s*\)/gi,
+  py: /\bhashlib\s*\.\s*(md5|sha1)\s*\(/g,
+  java: /\bMessageDigest\s*\.\s*getInstance\s*\(\s*"(MD5|SHA-?1)"\s*\)/gi,
+};
+const langOf = (file) => (JS_EXT.test(file) ? 'js' : PY_EXT.test(file) ? 'py' : JAVA_EXT.test(file) ? 'java' : null);
 
-function synthesizeDeterministicPatch(finding, fileContent) {
-  if (!finding || typeof fileContent !== 'string' || !finding.file) return null;
-  for (const rule of RULES) {
-    try {
-      if (!rule.applies(finding)) continue;
-      const next = rule.transform(fileContent, finding.file);
-      if (next && next !== fileContent) return { patch: { [finding.file]: next }, ruleId: rule.id };
-    } catch { /* a single rule failing must never break synthesis */ }
+const PASSWORD = /\b(?:\w*_)?(?:pass(?:word|wd|phrase)?|pwd|pw|credential)s?(?:_\w*)?\b|(?:[a-z](?:Pass(?:word|wd|phrase)?|Pwd|Credential)s?\b)|\bhash_?pw\b/i;
+const SIGNATURE = /\b(?:hmac|createHmac|sign(?:ature)?|verify_?sig\w*|mac)\b/i;
+const PROTOCOL = /Content-MD5|\bETag\b|\betag\b|\bs3\b|webdav|\bgit\b|Sec-WebSocket|258EAFA5|oauth|HMAC-SHA1|\b[th]otp\b|WWW-Authenticate|\bdigest auth|\blegacy\b|\bcompat\w*|\binterop\w*|\bwire\b|\bprotocol\b|\brfc\s*\d+/i;
+const PERSIST = /\b(?:save|insert|update|upsert|store|persist|write\w*|db|database|redis|cache_?key|filename|file_?name|path|url|primary_?key|uuid|guid|\.set\s*\(|==|===|!=|!==|equals\s*\(|compare\w*)\b|==|!=/i;
+const INTEGRITY = /\b(?:checksum|integrity|fingerprint|dedup\w*|content_?hash|digest_?of|hash_?of|cache|memo\w*|bucket|shard|etag)\b/i;
+
+/** Text of the innermost symbol enclosing `line`, its name and parameters; the file when nothing encloses it. */
+function enclosing(content, file, line) {
+  const lang = langOf(file);
+  const syms = lang === 'js' ? ((0,_fix_patch_scope_js__WEBPACK_IMPORTED_MODULE_0__/* .jsSymbols */ .fA)(content, file) || []) : lang === 'py' ? (0,_fix_patch_scope_js__WEBPACK_IMPORTED_MODULE_0__/* .pySymbols */ .nY)(content) : (0,_fix_patch_scope_js__WEBPACK_IMPORTED_MODULE_0__/* .heuristicSymbols */ .wN)(content);
+  const fns = syms.filter((s) => line >= s.start && line <= s.end && s.kind !== 'class').sort((a, b) => (a.end - a.start) - (b.end - b.start));
+  const lines = content.split('\n');
+  if (!fns.length) return { name: null, text: lines[line - 1] || '', start: line, end: line, header: '' };
+  const s = fns[0];
+  return { name: s.name, text: lines.slice(s.start - 1, s.end).join('\n'), start: s.start, end: s.end, header: lines[s.start - 1] || '' };
+}
+
+/**
+ * Classify the purpose of the weak-hash operation at `line`.
+ * @returns {{purpose:string, signals:string[], missingFacts:string[]}}
+ */
+function classifyHashPurpose(content, file, line) {
+  const ctx = enclosing(content, file, line);
+  const stmt = content.split('\n')[line - 1] || '';
+  const signals = [];
+  const where = `${ctx.name || ''}\n${ctx.header}\n${stmt}`;
+  const password = PASSWORD.test(where) || (PASSWORD.test(ctx.text) && /\bhash\w*|digest/i.test(ctx.name || ''));
+  if (password) signals.push(`password vocabulary in ${ctx.name ? `the enclosing function ${ctx.name}` : 'the statement'}`);
+  if (SIGNATURE.test(where)) signals.push('signature or MAC vocabulary');
+  if (PROTOCOL.test(ctx.text)) signals.push('a protocol or compatibility marker in the enclosing code');
+  // persistence: the digest is compared with something or written somewhere in the same function
+  // the hash API's own chain (.update / .digest / .hexdigest) is not persistence
+  const chainless = (t) => t.replace(/\.\s*(?:update|digest|hexdigest)\s*\(/g, '.(');
+  const persisted = PERSIST.test(chainless(ctx.text.replace(stmt, ''))) || PERSIST.test(chainless(stmt.replace(WEAK_CALL[langOf(file)] || /$^/, '')));
+  if (persisted) signals.push('the digest is compared, stored or used as an identifier in the enclosing code');
+  const integrity = INTEGRITY.test(where) || INTEGRITY.test(ctx.text);
+  if (integrity) signals.push('integrity or cache vocabulary');
+  if (password) return { purpose: 'password-storage', signals, missingFacts: [] };
+  if (SIGNATURE.test(where)) return { purpose: 'signature', signals, missingFacts: ['which verifier checks this signature, and whether it can move to HMAC-SHA-256 or a modern signature scheme at the same time'] };
+  if (PROTOCOL.test(ctx.text)) return { purpose: 'protocol-compatibility', signals, missingFacts: ['whether the peer or protocol accepts a different digest algorithm', 'whether both sides can be changed together'] };
+  if (integrity && !persisted) return { purpose: 'non-password-integrity', signals, missingFacts: [] };
+  if (persisted) return { purpose: 'externally-persisted-identifier', signals, missingFacts: ['where the digest is stored or compared, and how existing stored values are migrated or recomputed'] };
+  return { purpose: 'unknown', signals, missingFacts: ['what the digest protects (password storage, integrity check, signature or identifier)', 'whether any stored value or external system depends on the current algorithm'] };
+}
+
+// Locate the weak call to edit: the one on the finding's line; without a line, the only one in the file.
+function locateWeakCall(content, file, line) {
+  const lang = langOf(file); if (!lang) return { error: 'no weak-hash transformation for this file type' };
+  const re = new RegExp(WEAK_CALL[lang].source, WEAK_CALL[lang].flags);
+  const hits = [];
+  for (const m of content.matchAll(re)) hits.push({ index: m.index, text: m[0], line: content.slice(0, m.index).split('\n').length, algo: (m[2] || m[1]).toLowerCase() });
+  if (!hits.length) return { error: 'the weak hash call is not literally present' };
+  const onLine = Number.isInteger(line) ? hits.filter((h) => h.line === line) : hits;
+  if (onLine.length === 1) return { hit: onLine[0], lang, others: hits.length - 1 };
+  if (!onLine.length) return { error: `no weak hash call on line ${line}`, ambiguous: false };
+  return { error: `${onLine.length} weak hash calls ${Number.isInteger(line) ? `on line ${line}` : 'in the file and no line to choose one'}`, ambiguous: true };
+}
+
+const swapAt = (content, hit, replacement) => content.slice(0, hit.index) + replacement + content.slice(hit.index + hit.text.length);
+function sha256Call(hit, lang) {
+  if (lang === 'js') return hit.text.replace(/(md5|sha1)/i, 'sha256');
+  if (lang === 'py') return hit.text.replace(/(md5|sha1)/, 'sha256');
+  return hit.text.replace(/"(?:MD5|SHA-?1)"/i, '"SHA-256"');
+}
+
+// ── Password-storage recipes ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// Recognised shape (Python): `def NAME(PARAM):` whose body is a single `return hashlib.md5(PARAM.encode(...)).hexdigest()`.
+// Recognised shape (JS): `function NAME(PARAM) { return crypto.createHash('md5').update(PARAM).digest('hex'); }`, or the arrow/assigned
+// equivalent. Anything else (a salt or pepper composed into the input, several statements, bytes output) is needs-review: the legacy
+// verifier must recompute the old value EXACTLY, and the recipe only does that for the shape it understands.
+const PY_SHAPE = /^([ \t]*)def\s+([A-Za-z_]\w*)\s*\(\s*([A-Za-z_]\w*)\s*\)\s*(?:->\s*\w+\s*)?:\s*\n\1[ \t]+return\s+hashlib\s*\.\s*(md5|sha1)\s*\(\s*\3\s*\.\s*encode\s*\(\s*(?:(['"])[\w-]+\5)?\s*\)\s*\)\s*\.\s*hexdigest\s*\(\s*\)[ \t]*\n/m;
+const JS_SHAPE = /^([ \t]*)(?:(?:export\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(\s*([A-Za-z_$][\w$]*)\s*\)\s*\{\s*return\s+|(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>\s*(?:\{\s*return\s+)?)([A-Za-z_$][\w$]*)\s*\.\s*createHash\s*\(\s*(['"`])(md5|sha1)\7\s*\)\s*\.\s*update\s*\(\s*([A-Za-z_$][\w$]*)\s*(?:,\s*(['"`])utf-?8\10\s*)?\)\s*\.\s*digest\s*\(\s*(['"`])hex\11\s*\)\s*;?\s*(\}\s*;?)?[ \t]*\n/m;
+
+function rewriteComparisons(content, name, verify, lang) {
+  // NAME(x) == y, y == NAME(x), and the negations; JS also === and !==. Arguments are simple expressions (no nested parentheses).
+  const arg = lang === 'py' ? '[A-Za-z_][\\w.\\[\\]\'"]*' : '[A-Za-z_$][\\w$.\\[\\]\'"]*';
+  const eq = lang === 'py' ? '(==|!=)' : '(===?|!==?)';
+  const notOf = (op, call) => (/!/.test(op) ? (lang === 'py' ? `not ${call}` : `!${call}`) : call);
+  let n = 0;
+  let out = content.replace(new RegExp(`\\b${name}\\s*\\(\\s*(${arg})\\s*\\)\\s*${eq}\\s*(${arg})`, 'g'), (_, a, op, b) => { n++; return notOf(op, `${verify}(${a}, ${b})`); });
+  out = out.replace(new RegExp(`(${arg})\\s*${eq}\\s*\\b${name}\\s*\\(\\s*(${arg})\\s*\\)`, 'g'), (_, b, op, a) => { n++; return notOf(op, `${verify}(${a}, ${b})`); });
+  return { out, n };
+}
+
+// Remaining uses of NAME( after the rewrite that are not a definition, an assignment or a return of a NEW hash.
+function unrecognisedUses(content, name, lang) {
+  const lines = content.split('\n'); const bad = [];
+  lines.forEach((l, i) => {
+    if (!new RegExp(`\\b${name}\\s*\\(`).test(l) || /^\s*(?:#|\/\/|\*)/.test(l)) return;
+    if (lang === 'py' ? new RegExp(`^\\s*def\\s+${name}\\b`).test(l) : new RegExp(`\\bfunction\\s+${name}\\b|\\b(?:const|let|var)\\s+${name}\\s*=`).test(l)) return;
+    if (new RegExp(`(?:(?:^|[\\s(,])(?:[\\w.\\[\\]'"]+\\s*=(?!=)|return)|:)\\s*(?:await\\s+)?${name}\\s*\\(`).test(l)) return; // stored or returned: writes the new format
+    if (new RegExp(`(?:exports\\.\\w+|module\\.exports)\\s*=|export\\s*\\{[^}]*\\b${name}\\b`).test(l)) return;
+    bad.push(i + 1);
+  });
+  return bad;
+}
+
+function passwordRecipe(content, file, finding) {
+  const lang = langOf(file);
+  const facts = [];
+  if (lang === 'py') {
+    const m = content.match(PY_SHAPE);
+    if (!m) return { missingFacts: ['the password hash is not the single-statement `return hashlib.<md5|sha1>(<param>.encode()).hexdigest()` shape the recipe can migrate exactly; the legacy format must be recomputed exactly to keep existing logins working'] };
+    const [whole, ind, name, param, algo, q] = m;
+    const enc = q ? `${param}.encode(${q}utf-8${q})` : `${param}.encode()`;
+    const body = `${ind}    `;
+    const repl = [
+      `${ind}def ${name}(${param}):`,
+      `${body}# Password storage uses a salted, memory-hard KDF (scrypt). Stored format: scrypt$N$r$p$<salt hex>$<key hex>.`,
+      `${body}salt = os.urandom(16)`,
+      `${body}key = hashlib.scrypt(${enc}, salt=salt, n=2 ** 14, r=8, p=1, dklen=32)`,
+      `${body}return 'scrypt$16384$8$1$' + salt.hex() + '$' + key.hex()`,
+      '',
+      '',
+      `${ind}def verify_password(${param}, stored):`,
+      `${body}# New format: recompute the scrypt key with the stored parameters. Legacy format: the previous unsalted ${algo} hex digest,`,
+      `${body}# still accepted so existing accounts can log in; password_needs_rehash tells the caller to store ${name}(${param}) afterwards.`,
+      `${body}if isinstance(stored, str) and stored.startswith('scrypt$'):`,
+      `${body}    try:`,
+      `${body}        _, n, r, p, salt_hex, key_hex = stored.split('$')`,
+      `${body}        key = hashlib.scrypt(${enc}, salt=bytes.fromhex(salt_hex), n=int(n), r=int(r), p=int(p), dklen=len(key_hex) // 2)`,
+      `${body}    except (ValueError, TypeError):`,
+      `${body}        return False`,
+      `${body}    return hmac.compare_digest(key.hex(), key_hex)`,
+      `${body}return isinstance(stored, str) and hmac.compare_digest(hashlib.${algo}(${enc}).hexdigest(), stored)`,
+      '',
+      '',
+      `${ind}def password_needs_rehash(stored):`,
+      `${body}return not (isinstance(stored, str) and stored.startswith('scrypt$'))`,
+      '',
+    ].join('\n');
+    if (/\bdef\s+verify_password\b|\bdef\s+password_needs_rehash\b/.test(content)) return { missingFacts: ['the file already defines verify_password or password_needs_rehash; merging two verifiers needs review'] };
+    const MARK = '\u0000AS_RECIPE\u0000';
+    const cmp = rewriteComparisons(content.replace(whole, MARK), name, 'verify_password', 'py');
+    const bad = unrecognisedUses(cmp.out, name, 'py');
+    let out = cmp.out.replace(MARK, () => repl + '\n');
+    if (bad.length) return { missingFacts: [`${name}() is used on line(s) ${bad.join(', ')} in a way the recipe cannot classify as storing a new hash or checking a password`] };
+    for (const mod of ['hmac', 'os']) if (!new RegExp(`^\\s*import\\s+(?:[\\w, ]*\\b)?${mod}\\b`, 'm').test(out)) out = out.replace(/^(\s*import\s+hashlib\b[^\n]*\n)/m, `$1import ${mod}\n`);
+    if (!/^\s*import\s+(?:[\w, ]*\b)?os\b/m.test(out) || !/^\s*import\s+(?:[\w, ]*\b)?hmac\b/m.test(out)) return { missingFacts: ['could not place the os/hmac imports next to `import hashlib`'] };
+    facts.push(`${cmp.n} comparison(s) of ${name}() rewritten to verify_password`);
+    return { patch: out, recipe: 'password-kdf-scrypt-python', notes: facts, entry: { hash: name, verify: 'verify_password', needsRehash: 'password_needs_rehash' } };
   }
-  return null;
+  if (lang === 'js') {
+    const m = content.match(JS_SHAPE);
+    if (!m) return { missingFacts: ['the password hash is not the single-statement `return crypto.createHash(<md5|sha1>).update(<param>).digest(\'hex\')` shape the recipe can migrate exactly'] };
+    const [whole, ind, fnName, fnParam, constName, constParam, cryptoId, , algo, updated] = m;
+    const name = fnName || constName; const param = fnParam || constParam;
+    if (updated !== param) return { missingFacts: [`the hash input (${updated}) is not the function parameter (${param}); the legacy value cannot be recomputed exactly`] };
+    if (/\bfunction\s+verifyPassword\b|\bverifyPassword\s*=|\bpasswordNeedsRehash\b/.test(content)) return { missingFacts: ['the file already defines verifyPassword or passwordNeedsRehash; merging two verifiers needs review'] };
+    const b = `${ind}  `;
+    const repl = [
+      `${ind}// Password storage uses a salted, memory-hard KDF (scrypt). Stored format: scrypt$N$r$p$<salt hex>$<key hex>.`,
+      `${ind}function ${name}(${param}) {`,
+      `${b}const salt = ${cryptoId}.randomBytes(16);`,
+      `${b}const key = ${cryptoId}.scryptSync(String(${param}), salt, 32, { N: 16384, r: 8, p: 1 });`,
+      `${b}return \`scrypt$16384$8$1$\${salt.toString('hex')}$\${key.toString('hex')}\`;`,
+      `${ind}}`,
+      '',
+      `${ind}// New format: recompute with the stored parameters. Legacy format: the previous unsalted ${algo} hex digest, still accepted so`,
+      `${ind}// existing accounts can log in; passwordNeedsRehash tells the caller to store ${name}(${param}) afterwards.`,
+      `${ind}function verifyPassword(${param}, stored) {`,
+      `${b}if (typeof stored !== 'string') return false;`,
+      `${b}if (stored.startsWith('scrypt$')) {`,
+      `${b}  const parts = stored.split('$');`,
+      `${b}  if (parts.length !== 6) return false;`,
+      `${b}  const [, n, r, p, saltHex, keyHex] = parts;`,
+      `${b}  let key;`,
+      `${b}  try { key = ${cryptoId}.scryptSync(String(${param}), Buffer.from(saltHex, 'hex'), keyHex.length / 2, { N: Number(n), r: Number(r), p: Number(p) }); } catch { return false; }`,
+      `${b}  const want = Buffer.from(keyHex, 'hex');`,
+      `${b}  return want.length === key.length && ${cryptoId}.timingSafeEqual(key, want);`,
+      `${b}}`,
+      `${b}const legacy = Buffer.from(${cryptoId}.createHash('${algo}').update(String(${param})).digest('hex'));`,
+      `${b}const want = Buffer.from(stored);`,
+      `${b}return legacy.length === want.length && ${cryptoId}.timingSafeEqual(legacy, want);`,
+      `${ind}}`,
+      '',
+      `${ind}function passwordNeedsRehash(stored) {`,
+      `${b}return !(typeof stored === 'string' && stored.startsWith('scrypt$'));`,
+      `${ind}}`,
+      '',
+    ].join('\n');
+    const MARK = '\u0000AS_RECIPE\u0000';
+    const cmp = rewriteComparisons(content.replace(whole, MARK), name, 'verifyPassword', 'js');
+    const bad = unrecognisedUses(cmp.out, name, 'js');
+    let out = cmp.out.replace(MARK, () => repl);
+    if (bad.length) return { missingFacts: [`${name}() is used on line(s) ${bad.join(', ')} in a way the recipe cannot classify as storing a new hash or checking a password`] };
+    // export the two new functions wherever the hash function is exported, CommonJS style
+    if (new RegExp(`module\\.exports\\s*=\\s*\\{[^}]*\\b${name}\\b`).test(out)) out = out.replace(new RegExp(`(module\\.exports\\s*=\\s*\\{[^}]*\\b${name}\\b)`), '$1, verifyPassword, passwordNeedsRehash');
+    else if (new RegExp(`exports\\.${name}\\s*=`).test(out)) out += '\nexports.verifyPassword = verifyPassword;\nexports.passwordNeedsRehash = passwordNeedsRehash;\n';
+    facts.push(`${cmp.n} comparison(s) of ${name}() rewritten to verifyPassword`);
+    return { patch: out, recipe: 'password-kdf-scrypt-js', notes: facts, entry: { hash: name, verify: 'verifyPassword', needsRehash: 'passwordNeedsRehash' } };
+  }
+  return { missingFacts: ['no password-KDF migration recipe for this language; a person must choose the framework password API and the legacy-verification path'] };
+}
+
+// The obligations a deterministic repair must pass before it is more than a proposal. Registered kinds only (see repair/contracts.js).
+const OBLIGATIONS = {
+  'password-storage': ['password-legacy-login-preserved', 'password-new-format-written', 'password-wrong-rejected', 'rescan-original-absent'],
+  'non-password-integrity': ['rescan-original-absent', 'project-tests'],
+  tls: ['tls-trusted-endpoint-accepted', 'tls-untrusted-endpoint-rejected', 'rescan-original-absent'],
+};
+
+/**
+ * @returns {{disposition:'proposed'|'needs-review'|'not-applicable', ruleId:string|null, patch?:Record<string,string>, purpose?:string,
+ *   signals?:string[], missingFacts?:string[], scope?:{line:number, otherOccurrencesLeftAlone:number}, recipe?:string,
+ *   requiredObligations?:string[], notes?:string[]}}
+ */
+function planDeterministicFix(finding, fileContent) {
+  if (!finding || typeof fileContent !== 'string' || !finding.file) return { disposition: 'not-applicable', ruleId: null };
+  const cwe = String(finding.cwe || '');
+  const fam = String(finding.family || '');
+  const weakHash = /CWE-(?:327|328|916|759|760)\b/.test(cwe) || /weak.?(?:hash|crypto)|password.?hash/i.test(fam);
+  if (weakHash) {
+    const loc = locateWeakCall(fileContent, finding.file, finding.line);
+    if (loc.error && !loc.ambiguous) return { disposition: 'not-applicable', ruleId: 'weak-hash', reason: loc.error };
+    if (loc.error) return { disposition: 'needs-review', ruleId: 'weak-hash', missingFacts: [`which weak hash call the finding names (${loc.error})`] };
+    const cls = classifyHashPurpose(fileContent, finding.file, loc.hit.line);
+    if (cls.purpose === 'password-storage') {
+      const r = passwordRecipe(fileContent, finding.file, finding);
+      if (!r.patch) return { disposition: 'needs-review', ruleId: 'weak-hash-password-kdf', purpose: cls.purpose, signals: cls.signals, missingFacts: r.missingFacts };
+      return { disposition: 'proposed', ruleId: 'weak-hash-password-kdf', recipe: r.recipe, purpose: cls.purpose, signals: cls.signals, patch: { [finding.file]: r.patch }, scope: { line: loc.hit.line, otherOccurrencesLeftAlone: loc.others }, requiredObligations: OBLIGATIONS['password-storage'], entry: r.entry, notes: r.notes };
+    }
+    // CWE-916 is a password claim: if the code does not bear it out, no fast-hash swap is a completed password repair.
+    if (/CWE-(?:916|759|760)\b/.test(cwe)) return { disposition: 'needs-review', ruleId: 'weak-hash', purpose: cls.purpose, signals: cls.signals, missingFacts: ['the finding says this hash stores a password (CWE-916) but the code does not show which value is the password; a fast hash is never a password repair', ...cls.missingFacts] };
+    if (cls.purpose === 'non-password-integrity') {
+      return { disposition: 'proposed', ruleId: 'weak-hash-sha256', purpose: cls.purpose, signals: cls.signals, patch: { [finding.file]: swapAt(fileContent, loc.hit, sha256Call(loc.hit, loc.lang)) }, scope: { line: loc.hit.line, otherOccurrencesLeftAlone: loc.others }, requiredObligations: OBLIGATIONS['non-password-integrity'] };
+    }
+    return { disposition: 'needs-review', ruleId: 'weak-hash', purpose: cls.purpose, signals: cls.signals, missingFacts: cls.missingFacts };
+  }
+  const tls = /CWE-295\b/.test(cwe) || /tls.?no.?verify|cert.?(?:none|verify)/i.test(fam);
+  if (tls) {
+    const lang = langOf(finding.file);
+    const re = lang === 'js' ? /(\brejectUnauthorized\s*:\s*)false\b/g : lang === 'py' ? /(\bverify\s*=\s*)False\b/g : null;
+    if (!re) return { disposition: 'not-applicable', ruleId: 'tls-verify-on', reason: 'no TLS transformation for this file type' };
+    const hits = [...fileContent.matchAll(re)].map((m) => ({ index: m.index, text: m[0], line: fileContent.slice(0, m.index).split('\n').length }));
+    if (!hits.length) return { disposition: 'not-applicable', ruleId: 'tls-verify-on', reason: 'verification is not literally disabled' };
+    const pick = Number.isInteger(finding.line) ? hits.filter((h) => h.line === finding.line) : (hits.length === 1 ? hits : []);
+    if (pick.length !== 1) return { disposition: 'needs-review', ruleId: 'tls-verify-on', missingFacts: [`which disabled-verification setting the finding names (${hits.length} in the file${Number.isInteger(finding.line) ? `, ${pick.length} on line ${finding.line}` : ''})`] };
+    const h = pick[0];
+    const on = h.text.replace(/false$/, 'true').replace(/False$/, 'True');
+    // A private CA the code already declares (ca / cafile / verify=<path>) is kept as-is; the repair only turns verification back on.
+    const lines = fileContent.split('\n');
+    const near = lines.slice(Math.max(0, h.line - 6), h.line + 5).join('\n');
+    const declaresCa = /\bca\s*:|\bcafile\b|\bcapath\b|NODE_EXTRA_CA_CERTS|REQUESTS_CA_BUNDLE|SSL_CERT_FILE/.test(near);
+    return { disposition: 'proposed', ruleId: 'tls-verify-on', purpose: 'transport-authentication', patch: { [finding.file]: fileContent.slice(0, h.index) + on + fileContent.slice(h.index + h.text.length) }, scope: { line: h.line, otherOccurrencesLeftAlone: hits.length - 1 }, requiredObligations: OBLIGATIONS.tls, compatibility: declaresCa ? 'the declared CA next to the setting is preserved' : 'no private CA is declared next to the setting: an endpoint that relied on an unverified private certificate needs its CA declared (ca / verify=<bundle>), or the handshake obligation fails' };
+  }
+  return { disposition: 'not-applicable', ruleId: null };
+}
+
+/** Legacy entry point: the patch when the plan is a proposal, else null. A needs-review plan never reads as a fix. */
+function synthesizeDeterministicPatch(finding, fileContent) {
+  try {
+    const plan = planDeterministicFix(finding, fileContent);
+    if (plan.disposition !== 'proposed' || !plan.patch) return null;
+    return { patch: plan.patch, ruleId: plan.ruleId, purpose: plan.purpose, scope: plan.scope, requiredObligations: plan.requiredObligations, ...(plan.recipe ? { recipe: plan.recipe } : {}) };
+  } catch { return null; }
+}
+
+
+/***/ }),
+
+/***/ 96768:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hd: () => (/* binding */ countPatchBounds)
+/* harmony export */ });
+/* unused harmony exports renderFixPlan, emitFixPlanFile, shouldEmitFixPlan */
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
+/* harmony import */ var _fix_patch_scope_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(11106);
+// Fix-plan emission for patches that exceed the safe-auto-apply bounds.
+//
+// PRD FR-FIX-1: a generated patch must touch ≤ 3 files and change ≤ 100 LoC.
+// FR-FIX-3: when those bounds are exceeded, emit a "fix plan" — a numbered
+// set of steps with file/line anchors — instead of an applyable patch.
+//
+// This module:
+//   - countPatchBounds(patch) → { files, loc, exceedsBounds }
+//   - renderFixPlan(finding, opts) → markdown string
+//   - emitFixPlanFile(scanRoot, finding, opts) → path to .agentic-security/fix-plans/<stableId>.md
+
+
+
+
+
+
+const MAX_FILES = 3;
+const MAX_LOC   = 100;
+
+// `patch` is a map { [file]: newContent } OR a unified-diff style string.
+// We accept the map form (what fix-verify uses) and the {file, replacement}
+// form (what apply_fix uses).
+function countPatchBounds(patch, originalContents = {}) {
+  if (!patch) return { files: 0, loc: 0, exceedsBounds: false };
+  // GAP-03: the size comes from the one patch-scope computation (a real line diff), never from |lines(after) - lines(before)|, which
+  // measured a 150-line rewrite as 0. `loc` is the edited-line count; `scope` carries additions, deletions, ranges and touched symbols.
+  let after = null;
+  if (typeof patch === 'object' && !patch.replacement && !patch.code) after = patch;
+  else if (patch.replacement && patch.file) after = { [patch.file]: patch.replacement };
+  if (!after) return { files: 0, loc: 0, exceedsBounds: false };
+  const before = Object.fromEntries(Object.keys(after).map((f) => [f, originalContents[f] ?? null]));
+  const scope = (0,_fix_patch_scope_js__WEBPACK_IMPORTED_MODULE_3__/* .computePatchScope */ .oL)({ before, after, bounds: { maxFiles: MAX_FILES, maxEditedLines: MAX_LOC } });
+  return { ...(0,_fix_patch_scope_js__WEBPACK_IMPORTED_MODULE_3__/* .legacyBounds */ .ni)(scope), scope };
+}
+
+// Render a markdown fix plan for a finding. The plan emits anchored steps
+// the engineer (or another Claude Code turn) can follow to implement the
+// architectural change manually.
+function renderFixPlan(finding, opts = {}) {
+  const { reason = 'patch-exceeds-bounds', bounds = null } = opts;
+  const head = `# Fix plan: ${finding.vuln || 'finding'}\n\n`;
+  const meta = [
+    `**Stable ID:**  \`${finding.stableId || '(none)'}\``,
+    `**Severity:**   ${finding.severity || '?'}`,
+    `**CWE:**        ${finding.cwe || '(unmapped)'}`,
+    `**File:**       \`${finding.file || '?'}:${finding.line || '?'}\``,
+    `**Confidence:** ${finding.confidence ?? '?'}`,
+    `**Reason:**     ${reason}${bounds ? ` (touches ${bounds.files} files, Δ ${bounds.loc} LoC)` : ''}`,
+  ].join('  \n') + '\n\n';
+
+  const why = `## What this finding is\n\n${finding.description || finding.snippet || '(no description)'}\n\n`;
+
+  const remediation = typeof finding.remediation === 'string'
+    ? finding.remediation
+    : (finding.fix?.description || '(no remediation text on the finding)');
+
+  // Anchored steps — for non-architectural findings, this is a 3-step skeleton.
+  // The caller can elaborate by passing opts.steps[].
+  const steps = Array.isArray(opts.steps) && opts.steps.length ? opts.steps : [
+    {
+      title: `Locate the affected code`,
+      anchor: `${finding.file || '?'}:${finding.line || '?'}`,
+      detail: 'Open the file at the cited line and read ±10 lines of surrounding code so you understand the data flow.',
+    },
+    {
+      title: `Apply the per-rule remediation`,
+      anchor: null,
+      detail: remediation,
+    },
+    {
+      title: `Re-scan to confirm the finding is gone`,
+      anchor: null,
+      detail: 'Run `/scan` then check that the finding with the stable ID above is no longer present. If it persists, the patch did not address the root cause.',
+    },
+    {
+      title: `Run the project linter on the touched files`,
+      anchor: null,
+      detail: 'eslint / ruff / golangci-lint / checkstyle as appropriate. The auto-fixer also runs this gate before applying.',
+    },
+  ];
+
+  let body = '## Steps\n\n';
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    body += `${i + 1}. **${s.title}**`;
+    if (s.anchor) body += `  \n   _Anchor:_ \`${s.anchor}\``;
+    if (s.detail) body += `  \n   ${s.detail.split('\n').join('\n   ')}`;
+    body += '\n\n';
+  }
+
+  const footer = `---\n_Generated by agentic-security. After implementing the steps, run \`/scan\` and (when clean) commit. To clear this plan, delete this file._\n`;
+  return head + meta + why + body + footer;
+}
+
+// Write a fix-plan markdown file to .agentic-security/fix-plans/.
+// Returns the absolute path of the written file, or null on error.
+function emitFixPlanFile(scanRoot, finding, opts = {}) {
+  if (!scanRoot || !finding) return null;
+  const dir = statePath(scanRoot, 'fix-plans');
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { return null; }
+  const id = finding.stableId || finding.id || `unknown-${Date.now().toString(36)}`;
+  const fp = path.join(dir, `${id}.md`);
+  try {
+    fs.writeFileSync(fp, renderFixPlan(finding, opts));
+    return fp;
+  } catch { return null; }
+}
+
+// Decide whether a finding warrants a fix-plan instead of an applyable patch.
+// Used by /fix-style flows. Returns the bounds so the caller can decide.
+function shouldEmitFixPlan(finding, patch, originalContents) {
+  const bounds = countPatchBounds(patch, originalContents);
+  return { ...bounds, recommendsFixPlan: bounds.exceedsBounds };
 }
 
 
