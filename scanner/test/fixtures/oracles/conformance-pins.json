@@ -2,6 +2,24 @@
   "schema": "agentic-security/oracle-conformance-pins",
   "schemaVersion": "1.0.0",
   "adapters": {
+    "application-behaviour": {
+      "logicDigest": "sha256:ecffe3c3c306d8adb899539d7005b4e043c7676d3edc658c3b497ae96906043a",
+      "scenario": "sha256:92e534ba039ea4960307ef231e589cce53c2d6de8df76547bb7cfec1896a231f",
+      "fixtures": {
+        "positive": "sha256:15d28bbac3f0bfbf13ecaf11ed7519fd7b646160bb0d54a113ef1b7b5f139d97",
+        "negative": "sha256:4e81e4cf3d6df3cab0650da78c642f8d2b4d66dcb60f433527d69e074cca212a",
+        "inconclusive": "sha256:0d6a42660d992652c6c82bb83e64c4a115da57426efb9df634acf52e86d9d621"
+      }
+    },
+    "application-security": {
+      "logicDigest": "sha256:f76e9ea19f362a17012da4ef11e2ac450a43f1ec049951914d0dbf0db807b887",
+      "scenario": "sha256:8431a61a9387c03ba92ccee76b259b603b14b3ed7af9e54748bd90a808eb3381",
+      "fixtures": {
+        "positive": "sha256:b86f3f14306f253436568cf0c6215ac766d5dde0f1e259412e7caac01f7500f1",
+        "negative": "sha256:cc1f41d90975d32f8abf4bad142712d98569173a2315232ef34a5c14c5c8b63c",
+        "inconclusive": "sha256:0d6a42660d992652c6c82bb83e64c4a115da57426efb9df634acf52e86d9d621"
+      }
+    },
     "authorization-decision": {
       "logicDigest": "sha256:35ce4ede2fc8516049547e4fca6c4e3cfc09833ca17ee0cc6f77bb11ea4625fb",
       "scenario": "sha256:8ddc83200e6c5185e2d4d9fbf992e09a9233b5b68d5a7129406f5d2b43cbc4d9",

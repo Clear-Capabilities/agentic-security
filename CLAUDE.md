@@ -2,7 +2,7 @@
 
 Autonomous Security Assurance Platform for the AI Software Era (a Claude Code plugin and CLI; also described as an agentic security harness). Full ASPM + LLMSecOps. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.195.47  
+**Version:** 0.196.0  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -25,7 +25,8 @@ Autonomous Security Assurance Platform for the AI Software Era (a Claude Code pl
 | `scanner/src/language/` | Haskell and Nix/NixOS: parsers, IRs, analyzers, fixers, support registry, resolved-pass wiring. Static by default; every limit disclosed; support status is measured per capability and generated into `docs/language-support.*`. | `scanner/src/language/CLAUDE.md` |
 | `scanner/src/discovery/` | LLM candidate discovery, gated by the deterministic engine. Propose → confirm → refute → judge. | `scanner/src/discovery/CLAUDE.md` |
 | `scanner/src/capabilities/` | Task capability manifests and runner-level enforcement of filesystem, structured commands and outbound network (loopback mediation proxy). Feature `capability-enforcement` is off by default and operator-only; enforced mode is advertised for Linux only and Linux is `partially-verified` (only the controls the hosted `sandbox-linux` job proves; mediated network is unsupported), macOS runs are `host-proved`, never `enforced`. | `scanner/src/capabilities/CLAUDE.md` |
-| `scanner/src/mcp/` | MCP server. 25 tools (2 write project files: `apply_fix`, `apply_sca_upgrade`; `scanner/src/mcp/CLAUDE.md` lists which others have side effects); OWASP MCP Top 10 hardened. The count is checked against `ALL_TOOLS` by the GA programme ledger check. | `scanner/src/mcp/CLAUDE.md` |
+| `scanner/src/repair/` | Contract-driven repair (Labs `contract-repair`; the verified-remediation requirement document is an untracked root file): schemas, application profiles, contracts, the lab runner over the `application-*` oracles, counterexamples (quarantine, shrink, sealed set), candidates (scope gate, SQL recipe), the coordinator (budgets, cancel, resume, apply through `applyVerifiedFix`), the `repair` CLI and the shared plan intake used by the MCP tool `repair_plan`. Challenge corpus: `bench/repair/` (`npm run bench:repair:challenge:check`). Ledger: `docs/verified-remediation/LEDGER.md`. | see `docs/reference/repair-contract.md` |
+| `scanner/src/mcp/` | MCP server. 26 tools (2 write project files: `apply_fix`, `apply_sca_upgrade`; `scanner/src/mcp/CLAUDE.md` lists which others have side effects); OWASP MCP Top 10 hardened. The count is checked against `ALL_TOOLS` by the GA programme ledger check. | `scanner/src/mcp/CLAUDE.md` |
 | `scanner/src/ir/` | Layer-1 IR: Babel-based JS/TS; Python via stdlib `ast` subprocess (default, when python3 available) with regex fallback; `java-parser`-based Java. | `scanner/src/ir/CLAUDE.md` |
 | `scanner/src/lsp/` | LSP server wrapping `runScan`. Ships with the JetBrains + Neovim plugins. |  |
 | `scanner/src/server/` | `agentic-security explore` — Milestone 3 Data Flow Explorer local server: read-only, loopback-only, hardened `node:http` API serving the already-scanned, already-signed `DataFlowGraph v1` artifact. First HTTP server anywhere in this codebase (MCP/LSP above are both stdio, not HTTP). | `scanner/src/server/CLAUDE.md` |

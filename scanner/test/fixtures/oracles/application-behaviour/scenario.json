@@ -1,0 +1,14 @@
+{
+  "export": "createApp",
+  "schemaSql": "CREATE TABLE notes (id INTEGER PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL);",
+  "seed": [
+    { "sql": "INSERT INTO notes (owner, title, body) VALUES (?, ?, ?)", "params": ["alice", "groceries", "milk and eggs"] }
+  ],
+  "requests": [
+    { "id": "ownerReadsNote", "role": "control", "method": "GET", "path": "/notes?title=groceries", "headers": { "x-user": "alice" }, "expect": { "status": [200], "bodyIncludes": ["milk and eggs"] } },
+    { "id": "ownerAddsNote", "role": "control", "method": "POST", "path": "/notes", "headers": { "x-user": "alice" }, "body": { "title": "todo", "body": "call home" }, "expect": { "status": [201] } }
+  ],
+  "stateChecks": [
+    { "id": "noteStored", "role": "control", "sql": "SELECT owner, body FROM notes WHERE title = ?", "params": ["todo"], "expect": [{ "owner": "alice", "body": "call home" }] }
+  ]
+}

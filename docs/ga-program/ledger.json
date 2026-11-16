@@ -2,7 +2,7 @@
   "schema": "agentic-security/ga-program-ledger@1",
   "note": "The acceptance ledger of the GA programme (AGENTIC_SECURITY_CURRENT_CAPABILITIES_GA_PLAN.PRD, sections 4, 5 and 8). Hand-maintained and machine-checked by scripts/ga-program/ledger.mjs: mechanical records get their status from committed artifacts at render time and are never typed; a manual record is passed only with its source commit, command and an evidence path that exists. docs/ga-program/STATUS.md is generated from this file. Owners are roles until a person is named: a null person is reported as unassigned, never invented.",
   "program": {
-    "baselineCapabilities": 36,
+    "baselineCapabilities": 37,
     "promotionCandidates": [
       "agentic-discovery",
       "context-intelligence",
@@ -3795,6 +3795,66 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ]
+    },
+    {
+      "capabilityId": "contract-repair",
+      "baselineMaturity": "Labs",
+      "targetMaturity": "GA",
+      "owner": {
+        "role": "remediation engineer",
+        "person": null
+      },
+      "workstreams": [
+        "GA-01",
+        "GA-12"
+      ],
+      "finalPromise": "Contract-bound repair verified by execution in a proven isolated lab; unsupported profiles and missing prerequisites are blocked, never passed.",
+      "acceptance": [
+        {
+          "id": "contract-repair:REG-BAR",
+          "kind": "mechanical",
+          "check": "registry-ga-bar",
+          "requirement": "The registry row meets the GA bar (contract, contract test run by a scanner test script, release gate, platforms with a linux job, dated limits, since)."
+        },
+        {
+          "id": "contract-repair:EVIDENCE-IDENTITY",
+          "kind": "mechanical",
+          "check": "evidence-identity",
+          "requirement": "The committed scorecard was measured on a clean worktree at the current engine version, with commit and bundle digest recorded."
+        },
+        {
+          "sourceCommit": null,
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": null,
+          "command": null,
+          "exitCode": null,
+          "evidencePath": null,
+          "recordedAt": null,
+          "id": "contract-repair:GA-01-001",
+          "kind": "manual",
+          "workstream": "GA-01",
+          "requirement": "Owner, evidence identity and expected hosted-job wiring recorded; registry promotion, contracts, tests and measured results change together.",
+          "status": "in-progress",
+          "blocker": "owner unassigned"
+        },
+        {
+          "sourceCommit": null,
+          "artifactDigest": null,
+          "protocolDigest": null,
+          "platform": null,
+          "command": null,
+          "exitCode": null,
+          "evidencePath": null,
+          "recordedAt": null,
+          "id": "contract-repair:GA-12-001",
+          "kind": "manual",
+          "workstream": "GA-12",
+          "requirement": "Repair execution proven on a hosted Linux runner (the trust boundary currently refuses the namespace backend), PostgreSQL and Python profiles, a model proposer with honest accounting, and an independent repair population graded under protected custody.",
+          "status": "not-started",
+          "blocker": "Linux trust-boundary read denial not implemented; no independent adjudicated repair population exists"
+        }
+      ]
     }
   ],
   "subcapabilities": [
@@ -4210,6 +4270,10 @@
     "cli-command:proof": {
       "to": "exploit-proof"
     },
+    "cli-command:repair": {
+      "to": "contract-repair",
+      "note": "contract-driven repair (plan, run, show, resume, cancel, verify, export); application stays with the apply service"
+    },
     "cli-command:provenance": {
       "to": "artifact-provenance"
     },
@@ -4478,6 +4542,9 @@
     },
     "mcp-tool:synthesize_sca_upgrade": {
       "to": "dependency-risk"
+    },
+    "mcp-tool:repair_plan": {
+      "to": "contract-repair"
     },
     "mcp-tool:verify_fix": {
       "to": "verified-remediation"

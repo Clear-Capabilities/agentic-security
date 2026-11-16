@@ -58,6 +58,9 @@ export const ORACLE_CLASSES = Object.freeze([
   'replay-idempotency', 'functional-regression',
   // X-404: durable business and tenant state judged over a bounded stateful scenario.
   'business-state',
+  // Verified remediation (FR-05, FR-06): a real HTTP application over a real SQLite file, attack and legitimate requests judged by the
+  // verifier from the responses and its own read-only read of the database the run left behind.
+  'application-security', 'application-behaviour',
 ]);
 const PLATFORM_STATUSES = Object.freeze(['supported', 'unverified', 'unsupported']);
 export const FEATURE_ID = 'verification-oracles';
@@ -86,6 +89,10 @@ export const PREREQUISITES = Object.freeze({
     description: 'a confinement backend that passes its functional probe on this host',
     check: (env) => (env.backend && env.backend !== 'disabled' ? { ok: true } : { ok: false, reason: 'no confinement backend works on this host' }),
   },
+  'node-sqlite': {
+    description: 'the node:sqlite module (a real SQLite engine built into Node 24)',
+    check: (env) => (env.hasNodeSqlite ? { ok: true } : { ok: false, reason: 'node:sqlite is not available in this Node build' }),
+  },
   'posix-shell': {
     description: 'a POSIX shell at /bin/sh (the injected command needs a shell to run)',
     check: (env) => (env.hasPosixShell ? { ok: true } : { ok: false, reason: '/bin/sh is not present' }),
@@ -98,6 +105,7 @@ function probeEnvironment() {
     nodeMajor: Number(String(process.versions.node).split('.')[0]),
     backend: detectBackend(),
     hasPosixShell: fs.existsSync('/bin/sh'),
+    hasNodeSqlite: typeof process.getBuiltinModule === 'function' && !!process.getBuiltinModule('node:sqlite'),
   };
 }
 
@@ -247,6 +255,19 @@ function makeReader(root) {
         fs.readSync(fd, buf, 0, buf.length, 0);
         return buf.toString('utf8');
       } finally { fs.closeSync(fd); }
+    } catch { return null; }
+  };
+}
+
+// The absolute path of a regular, non-linked file inside the workspace, for a verifier-side reader that needs a path (a database
+// opened read-only). Null for anything outside the workspace, a symbolic link, or a missing file. Read only after the tree is dead.
+function makePathOf(root) {
+  return (rel) => {
+    try {
+      const abs = path.resolve(root, rel);
+      if (!abs.startsWith(root + path.sep)) return null;
+      const st = fs.lstatSync(abs);
+      return st.isFile() && !st.isSymbolicLink() ? abs : null;
     } catch { return null; }
   };
 }
@@ -409,7 +430,7 @@ export async function runOracle(request, o = {}) {
     const rawResult = read(RESULT_FILE, 16 * 1024);
     if (rawResult !== null) { try { const j = JSON.parse(rawResult); if (isPlainObject(j)) resultDoc = j; } catch { /* untrusted data that does not parse is absent */ } }
     let judged;
-    try { judged = oracle.interpret({ inputs: req.inputs, token, result: resultDoc, run: runInfo, read }); } catch (e) { judged = { satisfied: null, preconditionsHeld: false, observed: {}, reason: `adapter interpretation failed: ${String(e?.message || e).slice(0, 100)}` }; }
+    try { judged = oracle.interpret({ inputs: req.inputs, token, result: resultDoc, run: runInfo, read, pathOf: makePathOf(root) }); } catch (e) { judged = { satisfied: null, preconditionsHeld: false, observed: {}, reason: `adapter interpretation failed: ${String(e?.message || e).slice(0, 100)}` }; }
     const evidenceIn = { observedBy: DOMAINS.VERIFIER, satisfied: judged.satisfied, preconditionsHeld: judged.preconditionsHeld === true };
     let outcome = settleVerification({ executed: boundary.executed, status: boundary.status }, evidenceIn);
     let reason = judged.reason;

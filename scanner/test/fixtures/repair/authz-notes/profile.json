@@ -1,0 +1,36 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": { "entry": "src/app.mjs", "export": "createApp", "files": ["src/app.mjs", "src/http.mjs"], "runtime": "node" },
+  "database": {
+    "engine": "sqlite",
+    "schemaSql": "CREATE TABLE users (id TEXT PRIMARY KEY, tenant TEXT NOT NULL, role TEXT NOT NULL, token TEXT NOT NULL); CREATE TABLE notes (id INTEGER PRIMARY KEY, owner TEXT NOT NULL, tenant TEXT NOT NULL, body TEXT NOT NULL);",
+    "seed": [
+      { "sql": "INSERT INTO users (id, tenant, role, token) VALUES (?, ?, ?, ?)", "params": ["alice", "t1", "member", "tokalice"] },
+      { "sql": "INSERT INTO users (id, tenant, role, token) VALUES (?, ?, ?, ?)", "params": ["carol", "t1", "member", "tokcarol"] },
+      { "sql": "INSERT INTO users (id, tenant, role, token) VALUES (?, ?, ?, ?)", "params": ["dave", "t1", "admin", "tokdave"] },
+      { "sql": "INSERT INTO users (id, tenant, role, token) VALUES (?, ?, ?, ?)", "params": ["mallory", "t2", "member", "tokmallory"] },
+      { "sql": "INSERT INTO notes (id, owner, tenant, body) VALUES (?, ?, ?, ?)", "params": [1, "alice", "t1", "{{secret:alice-note}}"] },
+      { "sql": "INSERT INTO notes (id, owner, tenant, body) VALUES (?, ?, ?, ?)", "params": [2, "mallory", "t2", "{{secret:mallory-note}}"] }
+    ]
+  },
+  "actors": [
+    { "id": "alice", "tenant": "t1", "role": "member", "headers": { "authorization": "Bearer tokalice" } },
+    { "id": "carol", "tenant": "t1", "role": "member", "headers": { "authorization": "Bearer tokcarol" } },
+    { "id": "dave", "tenant": "t1", "role": "admin", "headers": { "authorization": "Bearer tokdave" } },
+    { "id": "mallory", "tenant": "t2", "role": "member", "headers": { "authorization": "Bearer tokmallory" } },
+    { "id": "anonymous", "anonymous": true, "headers": {} }
+  ],
+  "authorization": {
+    "table": "notes", "idColumn": "id", "contentColumn": "body",
+    "objects": [
+      { "id": "alice-note", "owner": "alice", "rowId": 1, "secret": "alice-note" },
+      { "id": "mallory-note", "owner": "mallory", "rowId": 2, "secret": "mallory-note" }
+    ],
+    "operations": [
+      { "id": "read-note", "effect": "read", "method": "GET", "path": "/notes/{{id}}" },
+      { "id": "update-note", "effect": "update", "method": "PUT", "path": "/notes/{{id}}", "body": { "body": "{{value}}" } }
+    ],
+    "policy": { "allow": ["owner", "same-tenant-admin"] }
+  }
+}

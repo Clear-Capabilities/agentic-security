@@ -19,7 +19,7 @@ Two pages are generated from the code and checked by a test, so they cannot drif
 
 | Area | What is covered | What is not claimed | Evidence |
 |---|---|---|---|
-| Runtime oracles | Eight adapters: injection execution, authorization decision, state transition, side-effect reachability, parser resource, replay idempotency, functional regression, business state. Targets are JavaScript modules run under Node. | Any other language as an oracle target. A detector finding in another language is not made verifiable by this. | [oracle fixtures](../../scanner/test/fixtures/oracles), [conformance guide](verification-oracle-conformance.md) |
+| Runtime oracles | Ten adapters: injection execution, authorization decision, state transition, side-effect reachability, parser resource, replay idempotency, functional regression, business state, application security, application behaviour. Targets are JavaScript modules run under Node; the two application adapters start a whole Node application over a SQLite file and send it real HTTP requests. | Any other language as an oracle target. A detector finding in another language is not made verifiable by this. | [oracle fixtures](../../scanner/test/fixtures/oracles), [conformance guide](verification-oracle-conformance.md) |
 | Verified fix | A repair is a verified fix only when the original reproduces the exploit, the patched revision does not, and declared behaviour still holds, each in an executed, receipted run. | That the patch is correct anywhere outside the declared scenario and cases. | [patch-negative tests](../../scanner/test/verification/patch-negative.test.js) |
 | Non-taint classes | Tenant authorization, privileged action, workflow order, replay or idempotency, bounded resource exhaustion. | Concurrent races, cross-site request forgery and authentication throttling are named as unsupported. | [non-taint tests](../../scanner/test/verification/non-taint-classes.test.js) |
 | Deployment boundaries | Kubernetes and Compose adapters are validated against a frozen synthetic set. Terraform plan and IAM policy ingest, but carry no deployment-aware claim. | Runtime traffic coverage, gateway authentication semantics, network-policy denial by absence of an allow. | [deployment guide](deployment-aware-support.md), [ablation test](../../scanner/test/deployment/differentiation-ablation.test.js) |
@@ -38,6 +38,7 @@ An oracle declares what it needs. Each prerequisite is checked against the host 
 | `node-runtime` | Node.js 24 or later. |
 | `confinement-backend` | A confinement backend that passes its functional probe on this host. On a host where it does not, the boundary refuses to run. |
 | `posix-shell` | Needed by the injection-execution oracle only. |
+| `node-sqlite` | The `node:sqlite` module built into Node 24. Needed by the two application oracles only. |
 
 Platform status is per oracle and per platform and comes from the oracle manifest, not from this page: macOS is where the
 repository's tests were executed (`supported`), Linux is `unverified` (no Linux outcome is claimed and the run reports

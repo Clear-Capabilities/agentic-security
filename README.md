@@ -12,7 +12,7 @@ Agentic Security is an autonomous security assurance platform. It pairs **determ
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.195.47-blue)]()
+[![Version](https://img.shields.io/badge/version-0.196.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 > Built by **[Clear Capabilities](https://www.clearcapabilities.com/)**. Also known as an *agentic security harness* for Claude Code, Codex, Cursor and Gemini CLI.
@@ -104,7 +104,7 @@ Ten stages, one canonical order:
 | 6. Observe | What has actually occurred at runtime? | **GA**, **Roadmap** | [Observe](./docs/observe/README.md) |
 | 7. Trace | How does risk connect through code, data, architecture, provenance, and artifacts? | **GA**, **Preview** | [Trace](./docs/trace/README.md) |
 | 8. Fix | What is the safest remediation? | **GA** | [Fix](./docs/fix/README.md) |
-| 9. Verify | Did the fix work, and which verification legs actually ran? | **GA**, **Preview** | [Verify](./docs/verify/README.md) |
+| 9. Verify | Did the fix work, and which verification legs actually ran? | **GA**, **Preview**, **Labs** | [Verify](./docs/verify/README.md) |
 | 10. Detect | Was exploitation observed and can recurrence be detected? | **Preview**, **Roadmap** | [Detect](./docs/detect/README.md) |
 <!-- generated:lifecycle:end -->
 
@@ -143,6 +143,7 @@ Generated from [`docs/capabilities.yaml`](docs/capabilities.yaml). **GA** is pro
 | [Source-to-artifact provenance](./docs/guides/artifact-provenance.md) | Trace | **GA** | Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine, registry and signing paths are exercised by a hosted job against a real container engine, a real registry and a real signing tool. |
 | [Fix synthesis](./docs/guides/fixing-vulnerabilities.md) | Fix | **GA** | A candidate patch, deterministic or agent-composed, with a preview, a backup and a revert path. A patch is never written without passing verification. |
 | [Verified remediation](./docs/trust/verified-remediation.md) | Verify | **GA** | Whether a patch passed its rescan, lint and test legs, which legs were skipped, and a completeness tier of FULL, MITIGATION or WORKAROUND. |
+| [Contract-driven repair](./docs/guides/verified-remediation.md) | Verify | **Labs** | For one SQL injection or object-authorization finding in a Node application over SQLite, whether a candidate patch stops the declared attacks and keeps the declared legitimate behaviour, judged in the trust boundary against an executable contract. Source-only; the trust boundary does not yet run on Linux. |
 | [Proof-gated fix](./docs/guides/exploit-proof-fabric.md) | Verify | **GA** | With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it. |
 | [Detection and response (dnr)](./docs/guides/detection-and-response.md) | Detect | **Preview** | A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection. |
 | [Connected production detection](./docs/detect/README.md) | Detect | **Roadmap** | Detections deployed to and read back from a connected SIEM or EDR, and exploitation observed in live production telemetry. Not shipped; today's detections are generated and hunted locally. |

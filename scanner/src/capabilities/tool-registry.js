@@ -40,6 +40,7 @@ export const TOOL_CAPABILITIES = Object.freeze({
   dataflow_get_edge: read('reads the signed graph artifact'),
   dataflow_get_flow: read('reads the signed graph artifact'),
   invariant_scenario_export: read('builds a read-only scenario export from a supplied contract, confined to the session root'),
+  repair_plan: read('builds a repair contract from a finding and an application profile, confined to the session root; executes nothing'),
   portfolio_progress: read('builds a read-only progress view from a portfolio store, ledger and optional inputs, confined to the session root'),
   apply_fix: mutating('writes verified patches into the project'),
   verify_fix: mutating('runs the project linter and tests and appends fix metrics'),

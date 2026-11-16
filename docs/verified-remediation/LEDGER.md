@@ -66,11 +66,31 @@ Reviewed self-scan baseline change: `fix/test-commands.js` 1 to 2, a TOCTOU find
 
 Known effect elsewhere: `bench/sard/scripts/verify-fixes.mjs` (not a gate) will report fewer deterministic Java weak-hash fixes, because a digest with no visible purpose is no longer swapped.
 
-## M1 and later
+## M1: the first contract-driven repair workflow
+
+Measured on 2026-11-16 on this checkout (macOS, userspace confinement backend). Linux: the trust boundary refuses the namespace backend (read denial is not implemented there), so every execution row below is unverified on Linux and a Linux run reports `blocked`; AC-05.8's "Linux profile" is therefore open.
+
+| ID | Status | Changed paths | Verification | Evidence and limitation |
+| --- | --- | --- | --- | --- |
+| M1-01 schemas | implemented | `src/repair/schemas.js`, `src/repair/profile.js` | `test/repair/repair-contracts.test.js`, `test/contracts/repair.contract.test.js` | Closed, versioned contract, candidate and record schemas with allowlisted identities; the contract page is held to the code in both directions. NormalizedFinding is produced (`normalizeFinding`) but has no validator of its own yet; the VerificationRun is carried inside the record (`candidates[].results`), not as a separate schema. |
+| M1-02 coordinator and receipt binding | integration-tested | `src/repair/coordinator.js`, `src/repair/lab.js` | `test/repair/repair-workflow.test.js` | Promotion needs live receipts issued in-process for exactly the promoted files, the contract's inputs and the pinned oracle logic; a lookalike receipt is `invalid`; a doctored stored record does not validate and resume re-executes every leg. |
+| M1-03 application lab | partial | `src/posture/oracles/app-adapters.js`, `oracles/oracle.js` (`node-sqlite` prerequisite, `pathOf`) | `node scripts/verification-conformance-check.mjs --require-execution` (10 adapters conform), `npm run test:verification` | Real application module, real `node:sqlite` file, real HTTP over an in-memory duplex (no socket), verifier-side read-only state checks. Node and SQLite only; no Linux execution (see above); dependencies outside Node's standard library cannot be loaded in the workspace. |
+| M1-04 contracts | partial | `src/repair/contracts.js` | `test/repair/repair-contracts.test.js` | AC-04.1 to AC-04.4, AC-04.6 and AC-04.7 tested. Existing approved invariants are not yet read into contracts; no call-graph slice is computed (stated in every contract's `knownUnknowns`). |
+| M1-05 counterexamples and refinement | integration-tested | `src/repair/counterexamples.js`, coordinator | `test/repair/repair-workflow.test.js` | Baseline quarantine with reasons (AC-07.3), batched character-level shrinking that keeps the same disclosed secret (AC-07.4), sealed held-out probes never fed back (AC-07.5), duplicates consume an attempt (AC-07.6), a scripted two-round refinement promotes the corrected candidate (AC-07.1, AC-07.2). Attack variants are a fixed probe set plus the declared actor matrix, not generated per contract; no model proposer. |
+| M1-06 protected checks and adversarial corpus | integration-tested | `src/repair/candidates.js` (scope gate), `bench/repair/` | `npm run bench:repair:challenge:check` | 22 cases: unsafe accepted 0/18, caught by the independently declared obligation 18/18, safe rejected 0/4. Synthetic, shared authorship: not an accuracy figure (AC-08.5). |
+| M1-07 CLI, MCP, budgets, cancel, resume | integration-tested | `src/repair/cli.js`, `src/repair/intake.js`, `src/mcp/repair-tools.js`, `bin/agentic-security.js` | `test/repair/repair-workflow.test.js`, `test/repair/repair-contracts.test.js`, `npm run test:mcp` | Exit codes 0 to 4 as documented; `repair_plan` derives the same contract and obligations as the CLI (AC-04.5); cancellation by request leaves no harness process (AC-17.2); the wall budget stops a run as partial (AC-17.1). Running a repair is not offered over MCP. |
+| M1-08 SQL and authorization end to end | integration-tested (macOS) | fixtures `test/fixtures/repair/{sql-notes,authz-notes}` | `test/repair/repair-workflow.test.js`; real route: scan, `repair plan --finding`, `repair run --allow-execution --apply` | SQL: the deterministic recipe passes injection, legitimate, quoted-legitimate, central-verifier and sealed obligations and is applied through `applyVerifiedFix`. Authorization: owner, member, same-tenant admin, other tenant and anonymous; a read-only fix is rejected on durable state and the refinement is promoted. |
+| AC-03.4 | implemented | `src/repair/cli.js` | `repair run` text and JSON output | Each candidate's coordinator-computed scope (files, edited lines, symbols, material categories) is reported. |
+| AC-03.5 | implemented | coordinator (`apply`) | source drift test in `repair-workflow.test.js` | A source that drifted after planning is refused before execution and before application; the apply service's own concurrent-modification check still runs. |
+| AC-05.1, AC-05.2, AC-05.3, AC-05.5 | inherited | trust boundary | `npm run test:verification` | Provided by the existing boundary (workspace confinement, read denial, network denial, process-tree termination); not re-proved for the repair lab specifically. |
+| AC-05.8, AC-06.6 (batch and IDE routes) | open | | | No Linux execution; no batch or IDE route exists yet. |
+
+Self-scan baseline change, reviewed (685 to 693): `repair/cli.js` 3 (two code-injection reports on stderr message templates, one synchronous read: a CLI, not a server), `repair/contracts.js`, `repair/coordinator.js`, `repair/intake.js` 1 each (synchronous reads in CLI-side code), `repair/profile.js` 2 (inline role comparisons in `policyAllows`, which evaluates the operator's declared test policy to build the actor matrix and gates no request). One TOCTOU report in `coordinator.js` was real and was fixed, not baselined.
+
+## M2 and later
 
 | ID | Status | Note |
 | --- | --- | --- |
-| FR-04 to FR-08, FR-17, FR-18 (P0 workflow) | open | |
 | FR-09 to FR-12 (P1) | open | |
 | FR-13 to FR-16 (P2) | open | |
 | Section 8 comparison | blocked | Needs configured real model endpoints, an independent adjudicated task population and protected grading; none exists in this repository. No comparative claim is made. |

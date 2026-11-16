@@ -66,7 +66,7 @@ const harnessProcs = () => String(spawnSync('ps', ['-A', '-o', 'ppid=,command=']
 
 // ---------------------------------------------------------------- AC01
 
-describe('[X-202.AC01] the oracle classes (five original, plus replay-idempotency and functional-regression), with declared prerequisites and platforms', () => {
+describe('[X-202.AC01] the oracle classes (five original, plus replay-idempotency, functional-regression, business-state and the two application classes), with declared prerequisites and platforms', () => {
   test('[X-202.AC01] the manifest covers every class with prerequisites, platforms, budgets and negative controls', () => {
     const m = registry.oracleManifest();
     assert.deepEqual(m.classes, [...ORACLE_CLASSES]);
@@ -104,7 +104,7 @@ describe('[X-202.AC01] the oracle classes (five original, plus replay-idempotenc
     assert.match(without('platforms', { ...good.platforms, linux: { status: 'supported', note: 'works' } }).join(), /linux/);
     assert.match(without('harnessSource', 'no placeholder').join(), /harnessSource/);
     assert.throws(() => defineOracle({ ...good, negativeControls: [] }), /invalid oracle adapter/);
-    assert.equal(registry.listOracles().length, 8);
+    assert.equal(registry.listOracles().length, 10);
   });
 
   test('[X-202.AC01] a request over an adapter budget or with unsafe content is rejected before anything runs', async () => {
@@ -332,7 +332,7 @@ export function handler(input) { return execFileSync('echo', [input], { encoding
     assert.throws(() => { o.budgets.timeoutMs = 1; }, TypeError);
     const list = registry.listOracles();
     list.push({}); list.length = 0;
-    assert.equal(registry.listOracles().length, 8, 'mutating a returned list does not change the registry');
+    assert.equal(registry.listOracles().length, 10, 'mutating a returned list does not change the registry');
     assert.deepEqual(Object.keys(registry).sort(), ['MANIFEST_SCHEMA', 'getOracle', 'listOracles', 'manifestEntry', 'oracleManifest']);
     const spec = { ...o }; delete spec.logicDigest;
     assert.equal(oracleLogicDigest(spec), o.logicDigest);

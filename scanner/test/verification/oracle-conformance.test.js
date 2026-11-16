@@ -54,7 +54,7 @@ const withoutDigest = (a) => { const s = { ...a }; delete s.logicDigest; return 
 describe('[X-208.AC01] one suite tests all registered adapters, state mappings, tamper attempts, cancellation and replay against pinned fixtures', () => {
   test('[X-208.AC01] every registered adapter satisfies the static contract and its pinned fixtures', () => {
     const adapters = real();
-    assert.equal(adapters.length, 8);
+    assert.equal(adapters.length, 10);
     assert.deepEqual(adapters.map((a) => a.class).sort(), [...ORACLE_CLASSES].sort(), 'every advertised class is served');
     for (const a of adapters) {
       const r = checkAdapterContract(a, { scannerRoot: SCANNER });
@@ -123,7 +123,7 @@ describe('[X-208.AC01] one suite tests all registered adapters, state mappings, 
     const spy = { runInBoundary: async () => { throw new Error('must not run'); } };
     let ran = 0;
     const refusing = { runInBoundary: async () => { ran++; return { blocked: true, executed: false, reasons: ['control unproved'], backend: 'namespace' }; } };
-    const healthy = { platform: process.platform, nodeMajor: 24, backend: 'userspace', hasPosixShell: true };
+    const healthy = { platform: process.platform, nodeMajor: 24, backend: 'userspace', hasPosixShell: true, hasNodeSqlite: true };
     for (const a of real()) {
       const off = await runOracle(base(a.id), { deps: spy });
       assert.deepEqual([off.status, off.outcome, off.executed, off.receipt], ['disabled', 'not-run', false, null], `${a.id}: feature off`);
@@ -252,7 +252,7 @@ describe('[X-208.AC02] release gating rejects an adapter that lacks class scope,
     const run = (args) => spawnSync(process.execPath, [GATE, ...args], { encoding: 'utf8' });
     const ok = run(['--static']);
     assert.equal(ok.status, 0, ok.stdout + ok.stderr);
-    assert.match(ok.stdout, /8 adapter\(s\) conform/);
+    assert.match(ok.stdout, /10 adapter\(s\) conform/);
 
     const dir = mkTestTmp('x208-gate-');
     const variants = {

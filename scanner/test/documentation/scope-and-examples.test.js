@@ -28,8 +28,8 @@ function rowsWithoutEvidence(md) {
 describe('[DOC-001.AC01] the scope page lists coverage, prerequisites, adapters, invariant limits and enforced-backend capabilities with evidence', () => {
   test('[DOC-001.AC01] it names every oracle class that is registered, and the count matches the manifest', () => {
     const man = oracleManifest();
-    assert.equal(man.oracles.length, 8);
-    assert.match(SCOPE, /Eight adapters/);
+    assert.equal(man.oracles.length, 10);
+    assert.match(SCOPE, /Ten adapters/);
     assert.deepEqual(man.oracles.map((o) => o.class).sort(), [...ORACLE_CLASSES].sort());
     const flat = SCOPE.toLowerCase().replace(/[-\s]+/g, ' ');
     for (const c of ORACLE_CLASSES) assert.ok(flat.includes(c.replace(/-/g, ' ')), `the page does not name the ${c} oracle class`);

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-16T04:35:51.121Z",
-  "commit": "e9fe5f711ead3a91da38a637c73715751e90f25c",
+  "generatedAt": "2026-11-16T13:10:34.829Z",
+  "commit": "7a49b3c7023a49e4186267afb4df7ddda08b761e",
   "targets": {
     "hooks": {
       "total": 20,
@@ -61,7 +61,7 @@
       }
     },
     "scanner/src": {
-      "total": 685,
+      "total": 693,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -343,6 +343,11 @@
         "posture/watch-mode.js": 1,
         "posture/workflow-installer.js": 2,
         "pr-comment.js": 1,
+        "repair/cli.js": 3,
+        "repair/contracts.js": 1,
+        "repair/coordinator.js": 1,
+        "repair/intake.js": 1,
+        "repair/profile.js": 2,
         "report/index.js": 2,
         "runScan.js": 2,
         "sandbox/backend-namespace.js": 1,

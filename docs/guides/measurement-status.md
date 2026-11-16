@@ -72,7 +72,7 @@ They are not accuracy, and none of them is a claim about real code.
 | `npm run bench:invariant-ablation -- run` | 15 synthetic cases (8 defective, 7 valid) | source-only recall 0/8; inferred contract precision 4/4, recall 4/8; approved contract precision 8/8, recall 8/8; the figures exercise the comparison and are flagged synthetic |
 | `npm run reproduce:mini` | 3 authored files, 5 negative controls | every control behaved; 95% interval on F1 `unmeasured`; real-code gates `insufficient-population` |
 | `npm run reproduce:routing` | 240 generated tasks | verdict `unmeasured`; every control behaved; no advantage claimed (detail in the [routing policy card](routing-policy-card.md)) |
-| `npm run verification:conformance:static` | 8 oracle adapters | all 8 conform to the static contract and pins; execution not requested |
+| `npm run verification:conformance:static` | 10 oracle adapters | all 10 conform to the static contract and pins; execution not requested |
 
 Two cautions. First, a synthetic set that includes a case added because an earlier rule failed on it is not blind with respect to the
 rule; the deployment guide says so. Second, the generated routing population is built so that the arithmetic can pass or fail, which
@@ -111,7 +111,7 @@ a test recomputes them: if one of those files is refreshed, the page fails its c
 | [bench/independent/why-missed-summary.json](../../bench/independent/why-missed-summary.json) | `91facc5e7fc6e3a83a61cd64c0afc0ae0964ca3c1bc9691017e9443d41821c1c` |
 | [scanner/test/fixtures/deployment-ablation/frozen.json](../../scanner/test/fixtures/deployment-ablation/frozen.json) | `28a5a276b8ba3268df6c9e44d1da43c9f5333df0851183e6f7f3331300073d3a` |
 | [scanner/test/fixtures/invariant-benchmark/pin.json](../../scanner/test/fixtures/invariant-benchmark/pin.json) | `9122acf56c264e4123e2403a35e01123dd40c31e3c69bbf47929a97fe58715e2` |
-| [scanner/test/fixtures/oracles/conformance-pins.json](../../scanner/test/fixtures/oracles/conformance-pins.json) | `e63f1efb3f1cbc0d3048647eed9e45e345eae6e5a544f42be0d92ba14b4a8d99` |
+| [scanner/test/fixtures/oracles/conformance-pins.json](../../scanner/test/fixtures/oracles/conformance-pins.json) | `42f6f5cabaffce71df30b068721958e66fada3e2f4cdcf68435b0f977a696fbb` |
 
 Hashes printed by the reproduction commands, which a test recomputes by running them:
 

@@ -37,6 +37,7 @@ import { boundaryFields } from '../lineage/deployment/projection.js';
 import { redactFindingProvenance } from '../posture/provenance/schema.js';
 import { dataflow_get_graph, dataflow_get_node, dataflow_get_edge, dataflow_get_flow } from './dataflow-tools.js';
 import { makeInvariantTools } from './invariant-tools.js';
+import { makeRepairTools } from './repair-tools.js';
 import { makePortfolioTools } from './portfolio-tools.js';
 import { makeProofTools } from './proof-tools.js';
 
@@ -1788,6 +1789,7 @@ export const apply_sca_upgrade = {
 const { invariant_scenario_export } = makeInvariantTools({ confine: _confine, META });
 // X-707: read-only portfolio progress view, same factory shape.
 const { prove_finding, prove_fix } = makeProofTools({ confine: _confine, META, readLastScanVerified: _readLastScanVerified, findById: _findById, isReservedWritePath: _isReservedWritePath, redactString });
+const { repair_plan } = makeRepairTools({ confine: _confine, META });
 const { portfolio_progress } = makePortfolioTools({ confine: _confine, META });
 
-export const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, dataflow_get_graph, dataflow_get_node, dataflow_get_edge, dataflow_get_flow, invariant_scenario_export, portfolio_progress, prove_finding, prove_fix];
+export const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, dataflow_get_graph, dataflow_get_node, dataflow_get_edge, dataflow_get_flow, invariant_scenario_export, portfolio_progress, prove_finding, prove_fix, repair_plan];

@@ -81,7 +81,7 @@ test('tools/list exposes the PRD-named tools', async () => {
     'explain_finding', 'find_rule_module', 'invariant_scenario_export', 'lookup_cve',
     'portfolio_progress', 'prove_finding', 'prove_fix', 'query_cache_telemetry',
     'query_findings_memory', 'query_taint', 'query_triage_memory',
-    'read_agents_memory', 'read_scratchpad', 'scan_diff',
+    'read_agents_memory', 'read_scratchpad', 'repair_plan', 'scan_diff',
     'synthesize_fix', 'synthesize_sca_upgrade', 'verify_fix',
   ]);
   for (const t of r.result.tools) {
@@ -869,8 +869,8 @@ test('stdio: spawned bin handles initialize+tools/list over NDJSON', async () =>
   await new Promise(r => child.on('exit', r));
   const lines = stdout.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
   assert.equal(lines[0].result.serverInfo.name, SERVER_NAME);
-  // 25 tools: 17 + 4 dataflow-tools (M4 MCP tools change) + invariant_scenario_export (X-407) + portfolio_progress (X-707) + prove_finding and prove_fix (exploit proof).
-  assert.equal(lines[1].result.tools.length, 25);
+  // 26 tools: 17 + 4 dataflow-tools (M4 MCP tools change) + invariant_scenario_export (X-407) + portfolio_progress (X-707) + prove_finding and prove_fix (exploit proof) + repair_plan (verified remediation).
+  assert.equal(lines[1].result.tools.length, 26);
   await fsp.rm(tmpRoot, { recursive: true, force: true });
 });
 
