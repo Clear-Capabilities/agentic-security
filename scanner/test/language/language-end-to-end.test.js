@@ -699,6 +699,14 @@ MATRIX['CAP-126'] = {
   },
 };
 
+// CAP-128 (repair, 0.196.0): contract-driven repair has profiles for Node applications over SQLite only.
+MATRIX['CAP-128'] = {
+  na: {
+    reason: 'repair contracts are built only for Node applications over SQLite in this release; no Haskell or Nix PRD requirement ID covers repair, so there is no ecosystem-specific CLI behavior to execute.',
+    behavior: 'A Haskell or Nix finding has no repair family or application profile: `repair plan` refuses it with the reason (blocked, exit 3), never reports it as verified.',
+  },
+};
+
 // ── the matrix ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 for (const [cap, row] of Object.entries(MATRIX)) {
   for (const eco of ['haskell', 'nix']) {

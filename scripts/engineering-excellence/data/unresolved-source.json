@@ -91,11 +91,11 @@
     },
     {
       "id": "U-12",
-      "title": "Fix verification: authorization and IDOR patches are judged by source-level tests and the footprint heuristic, not by authenticated requests against durable state (the accept/refuse gaps of 0.195.44 are closed: 0 of 16 unsafe accepted, 0 of 8 safe refused)",
+      "title": "Fix verification: on the fix, apply_fix and verify_fix routes, authorization and IDOR patches are still judged by source-level tests and the footprint heuristic. Since 0.196.0 the separate `repair` workflow (Labs) judges them by authenticated requests against durable state, for Node applications over SQLite, on macOS only",
       "priority": "P1",
       "blocksRelease": false,
       "task": "E3-08",
-      "nextStep": "Verified-remediation PRD M1: run authorization repairs as real requests against persistent state in the isolated application lab"
+      "nextStep": "Route the existing fix paths through repair contracts where a profile exists, and run the application lab on a hosted Linux runner (the trust boundary refuses the namespace backend today)"
     },
     {
       "id": "U-13",

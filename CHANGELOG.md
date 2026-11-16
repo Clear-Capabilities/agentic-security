@@ -9,6 +9,16 @@
 > make the history less accurate, not more.
 
 
+## 0.196.1 - Documentation sweep after 0.196.0
+
+**Measured, 0.196.0:** `TIMINGS preflight=4s push=10s pr=5s checks=1043s merge=7s verify=6s tag=2s release=194s npm=91s total=1362s release-clock=209s`, 209 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a resumed run confirmed it a few minutes later.
+
+Documentation only; no engine behaviour changed.
+
+- **`repair` is documented where the other commands are.** The CLI reference lists `repair plan|run|show|resume|cancel|verify|export` and its own exit codes; the README command list, documentation list and the architecture overview name it; the Fix and Verify stage pages and the verified-remediation trust page say what it adds and that a result holds for the named contract only; the `/fix` command page points to it.
+- **Corrected stale text.** The Verify stage page called `fix --apply --require-proof` Preview; the registry has it at GA. Open item U-12 in the engineering-excellence record now says what 0.196.0 changed (authorization repairs are judged by authenticated requests against durable state in the `repair` workflow, macOS only) and what is still open (the existing fix routes, Linux).
+- **Ledgers.** The documentation capability ledger maps the `repair` command (CAP-128, not applicable to Haskell and Nix with the reason), with its row in the language end-to-end matrix.
+
 ## 0.196.0 - Verified remediation, milestone 1: contract-driven repair, executed against real applications
 
 **Measured, 0.195.47:** `TIMINGS preflight=4s push=0s pr=0s checks=0s merge=0s verify=5s tag=2s release=163s npm=361s total=535s release-clock=170s`, a release-only run (`ship.mjs --release-only`) after the change landed through its own pull requests, 170 s from the merged main to the published release; the registry listing took 361 s.

@@ -2489,6 +2489,39 @@
       ]
     },
     {
+      "id": "CAP-128",
+      "kind": "command",
+      "title": "repair (CLI only, Labs): contract-driven repair judged in the trust boundary",
+      "sources": [
+        "command:repair"
+      ],
+      "modes": [],
+      "modesJustification": "CLI-only command group (plan|run|show|resume|cancel|verify|export) with no named report modes.",
+      "haskell": {
+        "applicability": "not-applicable",
+        "justification": "repair contracts exist for Node applications over SQLite only; no requirement ID in the Haskell and Nix PRD covers repair, so a Haskell finding is refused with the reason (the family or the profile is unsupported), never reported as a pass."
+      },
+      "nix": {
+        "applicability": "not-applicable",
+        "justification": "repair has no Nix expression analysis and adds no NixOS configuration rule."
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "repair executes only the declared application inside the trust boundary on the build host, never on a NixOS host or a deployed system."
+      },
+      "entryPoints": [
+        "scanner/src/repair/cli.js",
+        "scanner/src/repair/coordinator.js"
+      ],
+      "suites": [
+        "language-discovery"
+      ],
+      "documents": [
+        "README.md",
+        "docs/guides/verified-remediation.md"
+      ]
+    },
+    {
       "id": "CAP-126",
       "kind": "command",
       "title": "rules (CLI only): rule compiler synthesize, evaluate, promote, status, rollback, cost and regress",

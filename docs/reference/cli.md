@@ -22,6 +22,7 @@ context. Run `agentic-security help` for the live, in-CLI flag listing.
 | `compliance` | Assess the last scan against a framework. `--list`, `--walkthrough <id>`, `--gap`, `--privacy`, `--format cli\|json\|md`, `--fail-on gap`. See [compliance guide](../guides/compliance.md). |
 | `supply [--check\|--sbom\|--cve-alerts\|--license\|--vex <image-archive>]` | Supply chain: SCA + SBOM + CVE alerts + license analysis. `--vex <image-archive>` emits a VEX statement (affected/not affected/fixed/under investigation) per advisory for a scanned image artifact — see [Source-to-artifact provenance](../guides/artifact-provenance.md). |
 | `triage exploit <id> --prove` | Execute a bounded, serialized reproducer for one finding inside the confined sandbox; requires 3/3 reproduction plus an independently re-run replay before reporting `EXPLOIT_CONFIRMED`. See [Exploit proof](../guides/exploit-proof-fabric.md). |
+| `repair plan\|run\|show\|resume\|cancel\|verify\|export` | Contract-driven repair (Labs): build an executable contract for one SQL injection or object-authorization finding from an application profile, then judge candidate patches against it in the trust boundary (`run --allow-execution`; `--apply` writes through the same apply service as `fix --apply`). See [Contract-driven repair](../guides/verified-remediation.md) and the [repair contract reference](repair-contract.md), which also lists its own exit codes (0 to 4). |
 | `proof [--id <finding>]` | Lower-level entry point into the same proof fabric `triage exploit --prove` calls — the evidence-state ladder from `CANDIDATE` to `FIX_VERIFIED`. See [Exploit proof](../guides/exploit-proof-fabric.md). |
 | `rules synthesize\|evaluate\|promote\|status\|rollback <finding-id>` | Turn one confirmed, proven finding into a reviewed, promoted deterministic detection rule: synthesize a candidate, score it on a mutated corpus, promote (or roll back) through an append-only, hash-chained lifecycle ledger. See [Rule compiler](../guides/rule-compiler.md). CLI-only, no slash-command equivalent. |
 | `setup [dir]` | Install the `/security-*` shortcut commands into a project. |
@@ -140,7 +141,10 @@ New environment variables and files are in [Configuration](configuration.md#hask
 | `4` | the scan errored |
 
 The `compliance` subcommand differs: `0` report produced, `2` no scan to
-assess, `1` only with `--fail-on gap` and a failing control.
+assess, `1` only with `--fail-on gap` and a failing control. The `repair`
+subcommands use their own codes: `0` completed (read the disposition), `1`
+rejected, `2` usage, `3` blocked or prerequisite missing, `4` cancelled or a
+budget stop ([repair contract reference](repair-contract.md#commands-and-exit-codes)).
 
 ---
 

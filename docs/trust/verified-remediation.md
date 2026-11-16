@@ -53,6 +53,8 @@ A fourth, unrelated surface exists: `agentic-security verify` re-runs the verifi
 
 ## Stronger: proof-gated fixes (Preview)
 
+`agentic-security repair` (Labs) judges a patch against an executable contract: the application runs over a real SQLite file, the declared attacks must reach no forbidden effect, and the declared legitimate requests must keep working. A result there is `verified-for-contract` and names the contract; it is not the `FULL` tier above. See [Contract-driven repair](../guides/verified-remediation.md).
+
 `fix --apply --require-proof` refuses to write unless the original exploit reproduces beforehand and is demonstrably blocked afterward. See [exploit proof](../guides/exploit-proof-fabric.md#verified-remediation-fix---require-proof).
 
 ## What verification does not establish

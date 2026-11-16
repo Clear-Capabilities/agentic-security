@@ -70,6 +70,10 @@
          mcp/        JSON-RPC 2.0 server — 26 tools any MCP-speaking agent
                      (Claude Code / Cursor / Cline / Aider / Codex) can call.
                      Hash-chained audit log; OWASP MCP top-10 hardened.
+         repair/     Contract-driven repair (Labs): an executable contract per
+                     finding, candidates judged by the application oracles in
+                     the trust boundary, applied through the apply service.
+                     `repair` CLI; read-only MCP tool `repair_plan`.
          lsp/        Language-Server-Protocol — powers JetBrains, Neovim, and
                      VS Code plugins via textDocument/publishDiagnostics.
          hooks/      5 Claude Code hook event types: SessionStart,
