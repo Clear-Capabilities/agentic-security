@@ -98,7 +98,7 @@ test('a model site that sends through a bare fetch fails the egress record even 
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('the headline is honest: verified GA is 0 of 36 while other records are open, and the milestone is not met', () => {
+test('the headline is honest: verified GA is 0 of 37 while other records are open, and the milestone is not met', () => {
   const model = evaluate(REPO);
   assert.equal(model.program.verifiedGa, 0);
   assert.equal(model.program.registryGa, 19);
@@ -106,7 +106,7 @@ test('the headline is honest: verified GA is 0 of 36 while other records are ope
   assert.equal(model.milestone.reasons.some((r) => /no current-engine independent accuracy record/.test(r)), !latestRun().current, 'the reason is listed exactly when the latest run measured another engine');
   assert.ok(model.milestone.reasons.some((r) => /owner unassigned/.test(r)));
   const md = readFileSync(path.join(REPO, STATUS_MD), 'utf8');
-  assert.match(md, /Verified GA \(every required acceptance record passed\) \| 0 of 36/);
+  assert.match(md, /Verified GA \(every required acceptance record passed\) \| 0 of 37/);
   assert.match(md, /never promotes anything/);
   assert.equal(render(model).md, md, 'the committed page is what the ledger renders');
 });

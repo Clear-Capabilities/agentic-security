@@ -133,8 +133,11 @@ describe('[FR-17] budgets, duplicates, cancellation and resume', () => {
     assert.equal(r.exitCode, EXIT.cancelled);
     assert.equal(r.record.nextPrerequisite, `repair resume ${runId}`);
     await new Promise((res) => setTimeout(res, 300));
-    const ps = spawnSync('ps', ['-axo', 'command'], { encoding: 'utf8' }).stdout || '';
-    assert.equal(ps.split('\n').filter((l) => l.includes('__oracle_harness.mjs')).length, 0, 'no harness process survives cancellation');
+    // Only this process's descendants count: other suites running in parallel start harnesses of their own.
+    const rows = (spawnSync('ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' }).stdout || '').split('\n').map((l) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(l)).filter(Boolean).map((m) => ({ pid: +m[1], ppid: +m[2], cmd: m[3] }));
+    const mine = new Set([process.pid]);
+    for (let grew = true; grew;) { grew = false; for (const r of rows) if (!mine.has(r.pid) && mine.has(r.ppid)) { mine.add(r.pid); grew = true; } }
+    assert.equal(rows.filter((r) => mine.has(r.pid) && r.cmd.includes('__oracle_harness.mjs')).length, 0, 'no harness process of this run survives cancellation');
     assert.equal(readRun(s.root, runId).record.disposition, 'cancelled');
   }));
 
