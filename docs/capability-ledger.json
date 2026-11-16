@@ -1235,6 +1235,7 @@
         "docs/implementation-status/ga-promotion.md",
         "docs/implementation-status/dag-improvements.md",
         "docs/implementation-status/threat-model-hardening.md",
+        "docs/verified-remediation/LEDGER.md",
         "docs/reference/root-cause-sweep.md",
         "docs/reference/federation.md",
         "docs/reference/fleet-contract.md",
@@ -1323,7 +1324,8 @@
         "docs/implementation-status/autonomous-assurance-docs-repositioning.md",
         "docs/implementation-status/ga-promotion.md",
         "docs/implementation-status/dag-improvements.md",
-        "docs/implementation-status/threat-model-hardening.md"
+        "docs/implementation-status/threat-model-hardening.md",
+        "docs/verified-remediation/LEDGER.md"
       ]
     },
     {
