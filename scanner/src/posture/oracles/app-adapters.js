@@ -15,6 +15,8 @@
 //     declaration does not model makes the run inconclusive. No socket is opened.
 //   - optional `files` (version 2): a real directory tree with planted files outside an allowed root and real symbolic links; the
 //     factory receives `{ db, filesRoot }`. A planted file's secret in a response is the violation.
+//   - optional `credential` on a state check (version 3): the verifier judges a stored password value itself (plaintext, fast digest,
+//     an approved KDF recomputed from the password, salting). See the section on stored credentials below.
 //
 //   application-security   hypothesis: an attack request reaches an effect it must not (a planted per-run secret appears in its
 //                          response, or a state check guarding it does not hold). Confirmed when any attack violates; refuted when
@@ -243,12 +245,14 @@ function validateAppInputs(i, { requireAttack }) {
     // one read-only SELECT, executed by the verifier on its own read-only connection
     if (!isStr(c.sql, 2000) || !/^\s*SELECT\b/i.test(c.sql) || /;\s*\S/.test(c.sql) || /\b(?:ATTACH|PRAGMA|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|REPLACE|VACUUM)\b/i.test(c.sql)) return `state check ${c.id}: sql must be one read-only SELECT`;
     if (!Array.isArray(c.params || []) || (c.params || []).length > 16) return `state check ${c.id}: params must be an array`;
-    if (!('expect' in c)) return `state check ${c.id}: expect is required`;
+    if (c.credential !== undefined) { const p = validateCredential(c.credential, c.id); if (p) return p; }
+    else if (!('expect' in c)) return `state check ${c.id}: expect is required`;
   }
+  for (const c of checks) if (c.credential?.distinctFrom !== undefined && !checks.some((x) => x.id === c.credential.distinctFrom && x.credential)) return `state check ${c.id}: credential.distinctFrom must name another credential check`;
   if ((i.network !== undefined || i.files !== undefined) && i.runtime === 'python') return 'network and files declarations are supported for the node runtime only';
   if (i.network !== undefined) { const p = validateNetwork(i.network); if (p) return p; }
   if (i.files !== undefined) { const p = validateFiles(i.files); if (p) return p; }
-  if (requireAttack && !i.requests.some((r) => r.role === 'attack')) return 'at least one attack request is required';
+  if (requireAttack && !i.requests.some((r) => r.role === 'attack') && !checks.some((c) => c.role === 'attack')) return 'at least one attack request or attack state check is required';
   if (!i.requests.some((r) => r.role === 'control')) return 'at least one control request is required (it shows the application worked)';
   if (!requireAttack && i.requests.some((r) => r.role === 'attack')) return 'the behaviour oracle takes control requests only';
   return null;
@@ -307,6 +311,62 @@ export function validateFiles(f) {
   return null;
 }
 
+// ---------------------------------------------------------------- stored credentials (version 3)
+//
+// A credential check reads one stored value (the first column of the first row of its SELECT) and judges it against the password the
+// run used, VERIFIER-SIDE: `not-plaintext` (the password does not appear in it), `not-fast-digest` (no MD5, SHA-1 or SHA-2 digest of
+// the password appears in it, hex or base64), `approved-format` (it parses as the approved format and RECOMPUTES from the password
+// with at least the approved parameters: a known-vector check, not a pattern match), `distinct-from` (it differs from another check's
+// stored value for the same password: salted). The only approved format in this release is scrypt as
+// `scrypt$N$r$p$<salt hex>$<key hex>`, the format the deterministic password repair writes. The verifier bounds its own work: a
+// stored value whose parameters exceed N 2^20, r 32 or p 16 cannot be recomputed here and does not hold.
+const CREDENTIAL_PROPERTIES = Object.freeze(['not-plaintext', 'not-fast-digest', 'approved-format', 'distinct-from']);
+const FAST_DIGESTS = ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512'];
+
+function validateCredential(k, id) {
+  if (!isPlain(k)) return `state check ${id}: credential must be an object`;
+  for (const f of Object.keys(k)) if (!['password', 'properties', 'distinctFrom', 'approved'].includes(f)) return `state check ${id}: unknown credential field '${f}'`;
+  if (!isStr(k.password, 200) || !k.password.length) return `state check ${id}: credential.password must be a string`;
+  if (!Array.isArray(k.properties) || !k.properties.length || !k.properties.every((p) => CREDENTIAL_PROPERTIES.includes(p))) return `state check ${id}: credential.properties must list ${CREDENTIAL_PROPERTIES.join(', ')}`;
+  if (k.properties.includes('distinct-from') !== (k.distinctFrom !== undefined)) return `state check ${id}: distinct-from and distinctFrom go together`;
+  if (k.properties.includes('approved-format')) {
+    const a = k.approved;
+    if (!isPlain(a) || a.format !== 'scrypt') return `state check ${id}: credential.approved.format must be 'scrypt'`;
+    for (const f of Object.keys(a)) if (!['format', 'minN', 'minR', 'minSaltBytes', 'minKeyBytes'].includes(f)) return `state check ${id}: unknown approved field '${f}'`;
+    for (const f of ['minN', 'minR', 'minSaltBytes', 'minKeyBytes']) if (!Number.isInteger(a[f]) || a[f] < 1) return `state check ${id}: credential.approved.${f} must be a positive integer`;
+  }
+  return null;
+}
+
+function judgeCredential(stored, k, others) {
+  const failed = [];
+  const value = typeof stored === 'string' ? stored : stored == null ? null : String(stored);
+  if (value === null) return ['no-stored-value'];
+  const pw = k.password;
+  if (k.properties.includes('not-plaintext') && value.includes(pw)) failed.push('not-plaintext');
+  if (k.properties.includes('not-fast-digest')) {
+    const low = value.toLowerCase();
+    const hit = FAST_DIGESTS.some((a) => { const d = crypto.createHash(a).update(pw, 'utf8').digest(); return low.includes(d.toString('hex')) || value.includes(d.toString('base64').replace(/=+$/, '')); });
+    if (hit) failed.push('not-fast-digest');
+  }
+  if (k.properties.includes('approved-format')) {
+    const a = k.approved;
+    const m = /^scrypt\$(\d{1,8})\$(\d{1,3})\$(\d{1,3})\$([0-9a-f]{2,256})\$([0-9a-f]{2,512})$/i.exec(value);
+    let ok = false;
+    if (m) {
+      const [N, r, p] = [Number(m[1]), Number(m[2]), Number(m[3])];
+      const salt = Buffer.from(m[4], 'hex'); const key = Buffer.from(m[5], 'hex');
+      const pow2 = N > 1 && (N & (N - 1)) === 0;
+      if (pow2 && N >= a.minN && r >= a.minR && p >= 1 && salt.length >= a.minSaltBytes && key.length >= a.minKeyBytes && N <= 1 << 20 && r <= 32 && p <= 16) {
+        try { ok = crypto.timingSafeEqual(crypto.scryptSync(pw, salt, key.length, { N, r, p, maxmem: 256 * N * r + (1 << 20) }), key); } catch { ok = false; }
+      }
+    }
+    if (!ok) failed.push('approved-format');
+  }
+  if (k.properties.includes('distinct-from') && (others[k.distinctFrom] === undefined || others[k.distinctFrom] === value)) failed.push('distinct-from');
+  return failed;
+}
+
 // The interpreter is resolved by the VERIFIER from fixed locations; a request or a profile cannot name one.
 const PYTHONS = ['/usr/bin/python3', '/opt/homebrew/bin/python3', '/usr/local/bin/python3'];
 function findPython() {
@@ -347,14 +407,25 @@ function readState(dbPath, checks, token) {
   try {
     db = new DatabaseSync(dbPath, { readOnly: true });
   } catch (e) { return { ok: false, reason: `the database could not be opened read-only: ${String(e.message).slice(0, 120)}`, results: {} }; }
-  const results = {};
+  const results = {}; const stored = {}; const pendingCredentials = [];
   try {
     for (const c of checks) {
       let rows;
       try { rows = db.prepare(c.sql).all(...deep(c.params || [], token)); } catch (e) { results[c.id] = { held: false, error: String(e.message).slice(0, 120) }; continue; }
+      if (c.credential) {
+        const first = rows[0] ? Object.values(rows[0])[0] : null;
+        stored[c.id] = first == null ? undefined : String(first);
+        pendingCredentials.push([c, first]);
+        continue;
+      }
       const want = deep(c.expect, token);
       const got = JSON.parse(canon(rows));
       results[c.id] = { held: canon(got) === canon(want), rows: got.slice(0, 20) };
+    }
+    // credential checks last: distinct-from needs every stored value read first. The stored value itself never enters the result.
+    for (const [c, first] of pendingCredentials) {
+      const failed = judgeCredential(first, deep(c.credential, token), stored);
+      results[c.id] = { held: failed.length === 0, failedProperties: failed };
     }
   } finally { try { db.close(); } catch { /* ignore */ } }
   return { ok: true, results };
@@ -408,6 +479,7 @@ const APP_LIMITS = [
   'Express itself is not executed in this repository; an Express application has this request-listener signature but no Express fixture runs',
   'outbound connections (a declared network) are observed at the Node connection layer (net, tls, the HTTP agents, raw sockets) and served by verifier-declared hosts with the declared DNS answers; https destinations are recorded and refused, never served; a connection opened below that layer is not observed (the repair scope gate refuses a candidate that introduces one); node runtime only',
   'a declared file tree is real (files and symbolic links in the workspace) and the factory receives its allowed root; only a planted file disclosed in a response is judged: writes outside the root and time-of-check races are not exercised; node runtime only',
+  'a stored credential is judged by recomputation for one approved format (scrypt, `scrypt$N$r$p$<salt hex>$<key hex>`); a different but sound format does not hold; KDF parameters above N 2^20, r 32 or p 16 are beyond the verifier bound and do not hold; timing and memory hardness are not measured',
 ];
 
 function loadedOrOpen(result) {
@@ -422,7 +494,7 @@ function stateOf(inputs, token, pathOf) {
   const checks = inputs.stateChecks || [];
   const st = readState(pathOf ? pathOf('__oracle_app.db') : null, checks, token);
   if (!st.ok) return { ok: false, reason: st.reason };
-  const failed = (role) => checks.filter((c) => c.role === role && !st.results[c.id]?.held).map((c) => ({ id: c.id, reason: st.results[c.id]?.error ? 'the check could not run' : 'the durable state differs from the declared expectation' }));
+  const failed = (role) => checks.filter((c) => c.role === role && !st.results[c.id]?.held).map((c) => ({ id: c.id, reason: st.results[c.id]?.error ? 'the check could not run' : c.credential ? `the stored credential fails: ${(st.results[c.id]?.failedProperties || []).join(', ')}` : 'the durable state differs from the declared expectation', ...(c.credential ? { failedProperties: st.results[c.id]?.failedProperties || [] } : {}) }));
   return { ok: true, controlFailed: failed('control'), attackFailed: failed('attack') };
 }
 
@@ -431,7 +503,7 @@ function interpretSecurity({ inputs, token, result, pathOf }) {
   const st = stateOf(inputs, token, pathOf);
   if (!st.ok) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: true, benignCompleted: false }, reason: st.reason };
   const controlFailures = [...judgeControls(inputs, result.responses, token), ...st.controlFailed];
-  const violations = [...judgeAttacks(inputs, result.responses, token, Array.isArray(result.connections) ? result.connections.slice(0, 200) : []), ...st.attackFailed.map((c) => ({ id: c.id, effect: 'durable-state' }))];
+  const violations = [...judgeAttacks(inputs, result.responses, token, Array.isArray(result.connections) ? result.connections.slice(0, 200) : []), ...st.attackFailed.map((c) => (c.failedProperties ? { id: c.id, effect: 'credential-storage', properties: c.failedProperties } : { id: c.id, effect: 'durable-state' }))];
   const observed = { targetLoaded: true, benignCompleted: controlFailures.length === 0, controlFailures, attackViolations: violations };
   let unmodelledAttacks = [];
   if (inputs.network) {
@@ -463,7 +535,7 @@ function interpretBehaviour({ inputs, token, result, pathOf }) {
 }
 
 const securitySpec = {
-  id: 'application-security', class: 'application-security', version: '2',
+  id: 'application-security', class: 'application-security', version: '3',
   description: 'Does an attack request reach a forbidden effect in a running application? The application is started over a fresh SQLite file, every declared request is sent as real HTTP, and the verifier judges the responses and its own read-only read of the database. Refuted only when no attack violates AND every legitimate control request met its expectation.',
   prerequisites: ['node-runtime', 'node-sqlite', 'confinement-backend'],
   platforms: APP_PLATFORMS, budgets: APP_BUDGETS,
@@ -477,7 +549,7 @@ const securitySpec = {
 };
 
 const behaviourSpec = {
-  id: 'application-behaviour', class: 'application-behaviour', version: '2',
+  id: 'application-behaviour', class: 'application-behaviour', version: '3',
   description: 'Does a revision of a running application still serve its legitimate requests? Control requests only; the hypothesis is that legitimate behaviour REGRESSED, so a revision is clean when this is refuted. A deny-everything or feature-removing patch confirms it.',
   prerequisites: ['node-runtime', 'node-sqlite', 'confinement-backend'],
   platforms: APP_PLATFORMS, budgets: APP_BUDGETS,

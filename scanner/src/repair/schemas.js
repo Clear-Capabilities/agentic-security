@@ -35,7 +35,7 @@ export const ENVIRONMENT_STATES = Object.freeze(['not-checked', 'staging-verifie
 export const COMPLETION_STATES = Object.freeze(['complete', 'partial', 'cancelled', 'unavailable', 'invalid']);
 export const CUSTODY = Object.freeze(['internal-scan', 'imported', 'locally-corroborated', 'reproduced', 'refuted', 'unresolved']);
 export const GENERATORS = Object.freeze(['deterministic-recipe', 'configured-model', 'user-supplied']);
-export const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal']);
+export const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage']);
 export const EVIDENCE_ORIGINS = Object.freeze(['generated-from-profile', 'operator-declared', 'approved-invariant', 'counterexample', 'registered-family']);
 
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w@.\-/]{1,512}$/;

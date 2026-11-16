@@ -19,6 +19,7 @@
 //
 // A missing prerequisite (no seed secret to protect, no read operation, an application file that does not exist) makes the contract
 // `blocked` with the reason: it is never weakened into a contract that could pass (AC-04.6).
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -29,6 +30,26 @@ import { validateProfile, policyAllows } from './profile.js';
 import { isPrivateAddress } from '../posture/oracles/app-adapters.js';
 
 export const CONTRACT_BUILDER_VERSION = '1';
+
+/**
+ * Per-profile support (verified-remediation PRD FR-12, AC-12.5, M3-06): what has been executed, per family, runtime and platform, and
+ * the test that executes it. macOS and Linux are separate columns; one platform's execution never qualifies the other. `declared` means
+ * the profile validates and a contract builds, but no test executes that combination. Printed by `repair plan`; the reference page's
+ * "Profile support" table is held to this list by the contract test.
+ */
+export const PROFILE_SUPPORT = Object.freeze([
+  { family: 'sql-injection', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'sql-parameterize-template', evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'sql-injection', runtime: 'python', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'object-authorization', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'object-authorization', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
+  { family: 'ssrf', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'path-traversal', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'path-realpath-containment', evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'password-storage', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'password-storage', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
+]);
+
+/** The support row for a contract's family and runtime, or null (an unsupported combination is refused when the profile validates). */
+export const supportFor = (family, runtime) => PROFILE_SUPPORT.find((s) => s.family === family && s.runtime === (runtime || 'node')) || null;
 
 // Attack probes for a value placed in a SQL string literal. Split once, statically: the development set feeds back to candidate
 // generation; the sealed set is run only on a candidate that passed everything else, and its content never leaves the coordinator.
@@ -212,15 +233,17 @@ function traversalProbes(f) {
     if (!names.length) continue;
     names.forEach((n) => secrets.add(n));
     const up = path.posix.relative(root, rel);
-    development.push(up, `{{fs:abs}}/${rel}`);
+    // the file, its absolute path, and its directory (for an application that appends a file name to the request value)
+    development.push(up, `{{fs:abs}}/${rel}`, path.posix.dirname(up));
     for (const [link, target] of Object.entries(f.links || {})) {
       if (!inside(link)) continue;
       const dest = path.posix.normalize(path.posix.join(path.posix.dirname(link), target));
       if (inside(dest) || !(rel === dest || rel.startsWith(`${dest}/`))) continue;
       development.push(`${path.posix.relative(root, link)}/${path.posix.relative(dest, rel)}`);
     }
-    sealed.push(`./${up}`);
-    if (subdir) sealed.push(`${subdir}/../${up}`);
+    const dir = path.posix.dirname(up);
+    sealed.push(`./${up}`, `./${dir}`);
+    if (subdir) sealed.push(`${subdir}/../${up}`, `${subdir}/../${dir}`);
   }
   return { development: [...new Set(development)], sealed: [...new Set(sealed)], secrets: [...secrets] };
 }
@@ -233,6 +256,48 @@ function filesystemObligations(profile, actors, blocked) {
   return valueFamilyObligations('filesystem', profile, actors, blocked, {
     probes: p, forbid: () => ({ secrets: [...p.secrets] }), extra: { files }, scopeNoun: 'declared untrusted path inputs',
   });
+}
+
+/**
+ * Password storage: the stored credential is judged by the verifier, not by the application's own answers. New users register (two
+ * with the same password, to show salting) and their stored values must not be plaintext or a fast digest and must recompute under
+ * the approved format; legitimate logins (legacy users included, wrong passwords refused) must keep working; and a legacy user's
+ * stored value must be migrated to the approved format after a successful login.
+ */
+function passwordObligations(profile, actors, blocked) {
+  const w = profile.passwords;
+  const actor = actors[w.actor];
+  const T = `SELECT ${w.hashColumn} FROM ${w.table} WHERE ${w.userColumn} = ?`;
+  const fillCred = (tpl, user, password) => {
+    const f = (s) => s.replace(/\{\{user\}\}/g, user).replace(/\{\{password\}\}/g, password);
+    const enc = (s) => s.replace(/\{\{user\}\}/g, encodeURIComponent(user)).replace(/\{\{password\}\}/g, encodeURIComponent(password));
+    return { method: tpl.method, path: enc(tpl.path), headers: { ...(actor?.headers || {}) }, ...(tpl.body !== undefined ? { body: JSON.parse(JSON.stringify(tpl.body), (k, v) => (typeof v === 'string' ? f(v) : v)) } : {}) };
+  };
+  const reg = (id, user, pw) => ({ id, role: 'control', ...fillCred(w.register, user, pw), expect: { status: w.register.expectStatus || [200, 201] } });
+  const login = (id, user, pw, ok) => ({ id, role: 'control', ...fillCred(w.login, user, pw), expect: { status: ok ? (w.login.expectStatus || [200]) : w.login.denyStatus } });
+  const approved = { format: 'scrypt', minN: w.approved.minN, minR: w.approved.minR, minSaltBytes: w.approved.minSaltBytes, minKeyBytes: w.approved.minKeyBytes };
+  const NEW_PW = '{{secret:new-password}}';
+  const legacySeed = w.legacy.users.map((u) => ({ sql: `INSERT INTO ${w.table} (${w.userColumn}, ${w.hashColumn}) VALUES (?, ?)`, params: [u.name, crypto.createHash(w.legacy.digest).update(u.password, 'utf8').digest('hex')] }));
+  const withSeed = (inputs) => ({ ...inputs, seed: [...inputs.seed, ...legacySeed] });
+  const out = [];
+  const storage = [
+    reg('register_new_a', 'new-user-a', NEW_PW), reg('register_new_b', 'new-user-b', NEW_PW),
+    login('login_new_a', 'new-user-a', NEW_PW, true), login('login_new_a_wrong', 'new-user-a', 'not-the-password', false),
+  ];
+  const storageChecks = [
+    { id: 'stored_new_a', role: 'attack', sql: T, params: ['new-user-a'], credential: { password: NEW_PW, properties: ['not-plaintext', 'not-fast-digest', 'approved-format'], approved } },
+    { id: 'stored_new_b', role: 'attack', sql: T, params: ['new-user-b'], credential: { password: NEW_PW, properties: ['not-plaintext', 'not-fast-digest', 'approved-format', 'distinct-from'], distinctFrom: 'stored_new_a', approved } },
+  ];
+  out.push(obligation('app-attack-blocked', 'password-storage', withSeed(appInputs(profile, storage, storageChecks)), { scope: 'stored credentials of newly registered users: not plaintext, not a fast digest, salted, recomputed under the approved format' }));
+  const legit = [];
+  w.legacy.users.forEach((u, i) => { legit.push(login(`login_legacy_${i}`, u.name, u.password, true), login(`login_legacy_${i}_wrong`, u.name, `${u.password}-wrong`, false)); });
+  legit.push(reg('register_new_c', 'new-user-c', 'another-pass-1'), login('login_new_c', 'new-user-c', 'another-pass-1', true));
+  out.push(obligation('app-behaviour-preserved', 'password-legitimate-logins', withSeed(appInputs(profile, legit)), { scope: 'legacy and new users log in with the right password and are refused with a wrong one' }));
+  const migrate = w.legacy.users.map((u, i) => login(`login_legacy_${i}_migrate`, u.name, u.password, true));
+  const migrated = w.legacy.users.map((u, i) => ({ id: `migrated_legacy_${i}`, role: 'control', sql: T, params: [u.name], credential: { password: u.password, properties: ['not-fast-digest', 'approved-format'], approved } }));
+  out.push(obligation('app-behaviour-after', 'password-legacy-migrated', withSeed(appInputs(profile, migrate, migrated)), { scope: 'a legacy user\'s stored value is in the approved format after a successful login' }));
+  void blocked;
+  return out;
 }
 
 function authzObligations(profile, actors, blocked) {
@@ -300,6 +365,9 @@ export function buildContract(o) {
   } else if (o.family === 'ssrf') {
     if (!profile.ssrf) return { contract: null, blocked: ['the profile has no ssrf section for a server-side request forgery finding'], problems: [] };
     obligations = ssrfObligations(profile, actors, blocked);
+  } else if (o.family === 'password-storage') {
+    if (!profile.passwords) return { contract: null, blocked: ['the profile has no passwords section for a password storage finding'], problems: [] };
+    obligations = passwordObligations(profile, actors, blocked);
   } else if (o.family === 'path-traversal') {
     if (!profile.filesystem) return { contract: null, blocked: ['the profile has no filesystem section for a path traversal finding'], problems: [] };
     obligations = filesystemObligations(profile, actors, blocked);
@@ -312,7 +380,7 @@ export function buildContract(o) {
   const approved = o.profileOrigin === 'operator-profile-outside-repository' && profile.approval;
   const policyFacts = [{
     id: 'application-profile', origin: o.profileOrigin, approval: approved ? 'approved' : 'declared',
-    digest: digestOf({ actors: profile.actors, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, database: profile.database }),
+    digest: digestOf({ actors: profile.actors, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, database: profile.database }),
     ...(approved ? { approvedBy: profile.approval.approvedBy } : {}),
   }];
   const knownUnknowns = [

@@ -194,3 +194,16 @@ test('Java weak PRNG: randomness used for a token IS still reported', async () =
   assert.ok(f.some(x => /Weak PRNG/.test(String(x.vuln || ''))),
     'a weak PRNG feeding a session token must still fire');
 });
+
+// Found by the verified-remediation held-out recipe example (0.199.0): a regular expression literal's `.exec(` over a value built
+// from `req.` was reported as critical command injection by the structural rule. It runs no command. Not addressed here: the
+// regex-taint path still reports a request value passed DIRECTLY to a regex literal's `.exec(` (`/a/.exec(req.query.q)`).
+test('Command Injection: a regex literal .exec(req.url) is not a command', async () => {
+  const f = await findings('route.js', "export function h(req, res) {\n  const m = /^\\/avatars\\/(.+)$/.exec(new URL(req.url, 'http://x').pathname);\n  res.end(String(m));\n}\n");
+  assert.equal(f.filter((x) => x.cwe === 'CWE-78').length, 0, JSON.stringify(f.map((x) => x.vuln)));
+});
+
+test('Command Injection: exec and execSync of a request value are STILL reported', async () => {
+  const f = await findings('run.js', "const { exec, execSync } = require('child_process');\nexports.h = (req, res) => {\n  exec(req.query.cmd, () => {});\n  execSync('ls ' + req.body.dir);\n  res.end();\n};\n");
+  assert.ok(f.some((x) => x.cwe === 'CWE-78' && x.line === 3), JSON.stringify(f.map((x) => `${x.line} ${x.vuln}`)));
+});

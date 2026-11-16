@@ -2147,7 +2147,9 @@ const STRUCTURAL_VULN_PATTERNS=[
   // and rated it critical, while its own remediation text read "Use execFile
   // with argument array": following the advice could not clear the finding.
   // Flagging the fix as the bug is how a team learns to ignore a scanner.
-  {regex:/(?:exec|execSync)\s*\([^;)]*(?:req\.|\.body\.|\.query\.|\.params\.)[^;)]{0,200}\)/g,
+  // A regular expression literal's `.exec(` (`/^\/a\/(.+)$/.exec(new URL(req.url, base).pathname)`) runs no command: excluded by the
+  // lookbehind on the literal's closing slash and flags (found by the verified-remediation held-out recipe example, 0.199.0).
+  {regex:/(?<!\/[dgimsuyv]{0,8}\.)\b(?:exec|execSync)\s*\([^;)]*(?:req\.|\.body\.|\.query\.|\.params\.)[^;)]{0,200}\)/g,
    type:"OS Command",vuln:"Command Injection (User-Controlled Input)",severity:"critical",cwe:"CWE-78",stride:"Elevation of Privilege",
    fix:"Use execFile with argument array; never interpolate user input into shell commands"},
   // The two ways an argv-form call IS still injectable:
@@ -2379,14 +2381,30 @@ function _classifyHashContext(_matchText, ctx){
   if (_HASH_FINGERPRINT_RE.test(surround)) return 'fingerprint';
   return 'unknown';
 }
+// A password-migration verify branch (verified-remediation M3-04): the legacy digest is only COMPARED with a stored value, in code that
+// also verifies an approved KDF. Existing accounts must keep logging in until their stored value is upgraded, so the branch is needed;
+// it stores nothing. Reported at low severity, never suppressed. A digest that is returned or stored, or that sits in code with no KDF
+// verification nearby, keeps its full severity.
+const _KDF_VERIFY_RE = /\b(?:scryptSync|scrypt|pbkdf2Sync|pbkdf2|checkpw)\s*\(|\b(?:argon2|bcrypt)\s*\.\s*(?:verify|compare|compareSync)\s*\(/;
+function _isLegacyVerifyBranch(ctx){
+  const lines = ctx.lines || [];
+  const line = ctx.line || 0;
+  const here = String(lines[line - 1] || '');
+  if (/^\s*return\b/.test(here) || /\b(?:insert|save|store|persist|write)\w*\s*\(|\.(?:run|execute|query)\s*\(/i.test(here)) return false;
+  const window = lines.slice(Math.max(0, line - 9), Math.min(lines.length, line + 8)).join('\n');
+  const after = lines.slice(Math.max(0, line - 1), Math.min(lines.length, line + 3)).join('\n');
+  return _KDF_VERIFY_RE.test(window) && /\btimingSafeEqual\s*\(|[!=]==/.test(after);
+}
 // Severity functions for the MD5/SHA1 patterns. Return null to suppress entirely.
 function _md5Sha1PasswordHashSeverity(matchText, ctx){
+  if (_isLegacyVerifyBranch(ctx)) return 'low';
   const cls = _classifyHashContext(matchText, ctx);
   if (cls === 'security')    return 'critical';
   if (cls === 'fingerprint') return null;        // not a security issue here
   return 'medium';                                // unknown context: still flag, just lower
 }
 function _md5Sha1WeakHashSeverity(matchText, ctx){
+  if (_isLegacyVerifyBranch(ctx)) return 'low';
   const cls = _classifyHashContext(matchText, ctx);
   if (cls === 'security')    return 'high';
   if (cls === 'fingerprint') return null;        // ETag / cache key / fingerprint — fine

@@ -1,0 +1,27 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": { "entry": "src/app.mjs", "export": "createApp", "files": ["src/app.mjs"], "runtime": "node" },
+  "database": {
+    "engine": "sqlite",
+    "schemaSql": "CREATE TABLE tasks (id INTEGER PRIMARY KEY, project TEXT NOT NULL, label TEXT NOT NULL, status TEXT NOT NULL);",
+    "seed": [
+      { "sql": "INSERT INTO tasks (project, label, status) VALUES (?, ?, ?)", "params": ["apollo", "write the plan", "open"] },
+      { "sql": "INSERT INTO tasks (project, label, status) VALUES (?, ?, ?)", "params": ["O'Hare", "book the gate", "open"] },
+      { "sql": "INSERT INTO tasks (project, label, status) VALUES (?, ?, ?)", "params": ["vault", "{{secret:vault-task}}", "open"] }
+    ]
+  },
+  "actors": [ { "id": "member", "tenant": "t1", "role": "member", "headers": {} } ],
+  "sql": {
+    "inputs": [
+      {
+        "id": "project-tasks", "actor": "member", "method": "GET", "path": "/projects/{{value}}/tasks?status=open",
+        "benign": [
+          { "value": "apollo", "expectIncludes": ["write the plan"] },
+          { "value": "O'Hare", "expectIncludes": ["book the gate"], "originalMishandles": true }
+        ],
+        "protectedSecrets": ["vault-task"]
+      }
+    ]
+  }
+}

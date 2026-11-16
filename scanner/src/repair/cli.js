@@ -1,4 +1,4 @@
-// `agentic-security repair plan|run|show|resume|cancel|verify|export` (verified-remediation PRD FR-18).
+// `agentic-security repair plan|run|show|resume|cancel|verify|export|recipes` (verified-remediation PRD FR-18, FR-11).
 //
 // Every subcommand delegates to the coordinator; none writes project files except `run --apply`, which goes through applyVerifiedFix.
 // Exit codes (stable): 0 the requested operation completed (read the disposition), 1 a failed obligation or rejected repair, 2 usage or
@@ -11,9 +11,10 @@ import { resolveAssuranceConfig } from '../posture/assurance/config.js';
 import { stateDir } from '../posture/state-dir.js';
 import { validateContract } from './schemas.js';
 import { planFromInputs } from './intake.js';
-import { obligationSummary } from './contracts.js';
+import { obligationSummary, supportFor } from './contracts.js';
 import { runRepair, readRun, requestCancel, runsDir, isRunId, EXIT, validatePolicy } from './coordinator.js';
-import { sqlParameterizeRecipe, queueProposer } from './candidates.js';
+import { queueProposer } from './candidates.js';
+import { usableRecipes, recipeProposer, loadRecipeLedger, allRecipes, stateOf, recipeDigest, transition, draftRecipe, evaluateRecipe } from './recipes.js';
 
 export const USAGE = `agentic-security repair <command>
   plan    --profile <profile.json> (--finding <id> | --family <family> --file <rel>) [--root <path>] [--out <plan.json>] [--json]
@@ -23,7 +24,8 @@ export const USAGE = `agentic-security repair <command>
   cancel  <run-id> [--root <path>]
   verify  <bundle-dir> [--root <path>] [--json]
   export  <run-id> --out <directory> [--root <path>]
-families: sql-injection, object-authorization, ssrf, path-traversal
+  recipes list|evaluate|promote|retire|rollback|draft [<recipe-id>[@<version>]] [--reason <why>] [--file <recipe.json>] [--allow-execution] [--root <path>] [--json]
+families: sql-injection, object-authorization, ssrf, path-traversal, password-storage
 exit: 0 completed (read the disposition), 1 rejected, 2 usage, 3 blocked or prerequisite missing, 4 cancelled or budget stop`;
 
 const out = (args, text, json) => { process.stdout.write(args.flags.json ? `${JSON.stringify(json, null, 2)}\n` : `${text}\n`); };
@@ -52,9 +54,20 @@ function configFor(args, root) {
   return resolveAssuranceConfig({ scanRoot: root, env: process.env, overrides: args.flags['allow-execution'] ? { features: { 'verification-oracles': true } } : {} });
 }
 
-function proposersFor(plan, candidatesFile) {
-  const ps = [];
-  if (plan.contract.family === 'sql-injection') ps.push(sqlParameterizeRecipe());
+function supportLine(contract) {
+  const s = supportFor(contract.family, contract.profile.runtime);
+  return s ? `support: ${s.family} on ${s.runtime}: macOS ${s.macos}, Linux ${s.linux}${s.recipe ? `, recipe ${s.recipe}` : ', no recipe'}` : `support: ${contract.family} on ${contract.profile.runtime} has no support record`;
+}
+
+/** The recipes a run uses automatically: shipped ones not retired or rolled back, and promoted ones whose evidence is current. */
+function recipeProposersFor(root, plan) {
+  const u = usableRecipes(root, plan.contract.family);
+  for (const n of u.notes) process.stderr.write(`agentic-security repair: ${n}\n`);
+  return u.recipes.map((r) => recipeProposer(r));
+}
+
+function proposersFor(plan, candidatesFile, root) {
+  const ps = [...recipeProposersFor(root, plan)];
   if (candidatesFile) {
     const c = readJsonFile(candidatesFile);
     if (!Array.isArray(c?.candidates)) throw new Error('--candidates must hold {"candidates":[{"files":{...}}]}');
@@ -72,8 +85,8 @@ async function cmdPlan(args, root) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.writeFileSync(dest, JSON.stringify(r.plan, null, 2) + '\n');
   const summary = obligationSummary(r.plan.contract);
-  out(args, [`plan ${dest}`, `contract ${r.plan.contract.contractId} (${r.plan.contract.family}), profile facts ${r.plan.contract.policyFacts[0].approval}`, ...summary.map((o) => `  ${o.required ? 'required' : 'optional'} ${o.kind.padEnd(24)} ${o.id}: ${o.scope}${o.requests !== null ? ` (${o.requests} requests, ${o.stateChecks} state checks)` : ''}`), ...(r.blocked.length ? [`blocked: ${r.blocked.join('; ')}`] : []), ...r.plan.contract.knownUnknowns.map((k) => `  unknown: ${k}`), 'nothing was executed or applied'].join('\n'),
-    { plan: dest, contractId: r.plan.contract.contractId, contractDigest: r.plan.contract.contractDigest, family: r.plan.contract.family, obligations: summary, blocked: r.blocked, knownUnknowns: r.plan.contract.knownUnknowns });
+  out(args, [`plan ${dest}`, `contract ${r.plan.contract.contractId} (${r.plan.contract.family}), profile facts ${r.plan.contract.policyFacts[0].approval}`, ...summary.map((o) => `  ${o.required ? 'required' : 'optional'} ${o.kind.padEnd(24)} ${o.id}: ${o.scope}${o.requests !== null ? ` (${o.requests} requests, ${o.stateChecks} state checks)` : ''}`), ...(r.blocked.length ? [`blocked: ${r.blocked.join('; ')}`] : []), ...r.plan.contract.knownUnknowns.map((k) => `  unknown: ${k}`), supportLine(r.plan.contract), 'nothing was executed or applied'].join('\n'),
+    { plan: dest, contractId: r.plan.contract.contractId, contractDigest: r.plan.contract.contractDigest, family: r.plan.contract.family, obligations: summary, blocked: r.blocked, knownUnknowns: r.plan.contract.knownUnknowns, support: supportFor(r.plan.contract.family, r.plan.contract.profile.runtime) });
   return r.blocked.length ? EXIT.blocked : EXIT.ok;
 }
 
@@ -99,7 +112,7 @@ async function cmdRun(args, root) {
     try { policy = readJsonFile(args.flags.policy); } catch (e) { err(`the policy could not be read: ${e.message}`); return EXIT.usage; }
     const v = validatePolicy(policy); if (!v.policy) { err(v.errors.join('; ')); return EXIT.usage; }
   }
-  try { proposers = proposersFor(plan, args.flags.candidates); } catch (e) { err(e.message); return EXIT.usage; }
+  try { proposers = proposersFor(plan, args.flags.candidates, root); } catch (e) { err(e.message); return EXIT.usage; }
   return execute(args, root, plan, policy, proposers);
 }
 
@@ -131,7 +144,7 @@ async function cmdResume(args, root) {
     }
   } catch (e) { err(`stored candidates could not be read: ${e.message}`); return EXIT.blocked; }
   try { fs.rmSync(path.join(r.dir, 'cancel'), { force: true }); } catch { /* ignore */ }
-  const proposers = [...(r.plan.contract.family === 'sql-injection' ? [sqlParameterizeRecipe()] : []), ...(stored.length ? [queueProposer(stored, 'resumed-user-supplied')] : [])];
+  const proposers = [...recipeProposersFor(root, r.plan), ...(stored.length ? [queueProposer(stored, 'resumed-user-supplied')] : [])];
   return execute(args, root, r.plan, policy, proposers, { runId: id, resumedFrom: id });
 }
 
@@ -217,9 +230,56 @@ async function cmdVerify(args, root) {
   return ok ? EXIT.ok : EXIT.failed;
 }
 
+// `repair recipes`: the lifecycle of repair recipes. Every change is a signed ledger record with a reason; evaluation executes the
+// recipe's examples (operator-enabled execution only) and promotion needs an evaluation of the recipe exactly as it is now.
+async function cmdRecipes(args, root) {
+  const action = args._[2] || 'list';
+  const ledger = loadRecipeLedger(root);
+  const find = (ref) => {
+    const [id, version] = String(ref || '').split('@');
+    const all = allRecipes(ledger).filter((r) => r.recipeId === id && (!version || r.version === version));
+    return all.length ? all[all.length - 1] : null;
+  };
+  if (action === 'list') {
+    const rows = allRecipes(ledger).map((r) => ({ recipe: `${r.recipeId}@${r.version}`, family: r.supports.family, state: stateOf(ledger, r).state, digest: recipeDigest(r), origin: r.provenance?.origin || null }));
+    out(args, [...(ledger.tampered ? [`the recipe ledger FAILED verification: ${ledger.tamperReason}; no recipe is used automatically`] : []), ...rows.map((x) => `${x.recipe.padEnd(34)} ${x.family.padEnd(18)} ${x.state.padEnd(12)} ${x.origin}`)].join('\n'), { recipes: rows, tampered: !!ledger.tampered, tamperReason: ledger.tamperReason || null });
+    return ledger.tampered ? EXIT.blocked : EXIT.ok;
+  }
+  if (action === 'draft') {
+    if (!args.flags.file) { err('recipes draft needs --file <recipe.json>'); return EXIT.usage; }
+    const r = draftRecipe(root, readJsonFile(args.flags.file), { reason: args.flags.reason || 'drafted', actor: args.flags['approved-by'] });
+    if (!r.ok) { err(r.reason); return EXIT.usage; }
+    out(args, 'drafted; a draft is never used automatically until it is evaluated and promoted', { ok: true });
+    return EXIT.ok;
+  }
+  const recipe = find(args._[3]);
+  if (!recipe) { err(`no recipe ${args._[3] || '(none named)'}; see repair recipes list`); return EXIT.usage; }
+  if (action === 'evaluate') {
+    if (!args.flags['allow-execution']) { err('evaluating a recipe executes its example applications: pass --allow-execution'); return EXIT.blocked; }
+    const { exampleRunner } = await import('./recipe-eval.js');
+    // the examples ship with the source checkout (scanner/test/fixtures), next to src/ or to the bundle's dist/
+    const here = path.dirname(new URL(import.meta.url).pathname);
+    const repoRoot = [path.resolve(here, '..', '..'), path.resolve(here, '..')].find((d) => fs.existsSync(path.join(d, 'test', 'fixtures', 'repair'))) || path.resolve(here, '..', '..');
+    const e = await evaluateRecipe(recipe, { repoRoot, run: exampleRunner({ config: configFor(args, root) }) });
+    if (e.problems) { err(e.problems.join('; ')); return EXIT.usage; }
+    if (e.results.some((x) => x.outcome === 'example-unavailable')) { out(args, 'the recipe\'s examples are not available in this installation (they ship with the source checkout); nothing was recorded', e); return EXIT.blocked; }
+    let recorded = null;
+    if (e.ok) recorded = transition(root, recipe, 'evaluated', { reason: args.flags.reason || 'every example met its expectation', evaluation: e, actor: args.flags['approved-by'] });
+    out(args, [...e.results.map((x) => `${x.ok ? 'ok  ' : 'FAIL'} ${x.kind.padEnd(19)} ${x.id}: expected ${x.expect}, got ${x.outcome}`), e.ok ? (recorded?.ok ? 'recorded: evaluated' : `not recorded: ${recorded?.reason}`) : 'not recorded: an example did not meet its expectation'].join('\n'), { evaluation: e, recorded });
+    return e.ok && recorded?.ok ? EXIT.ok : EXIT.failed;
+  }
+  const to = { promote: 'promoted', retire: 'retired', rollback: 'rolled-back' }[action];
+  if (!to) { err(`unknown recipes action ${action}`); return EXIT.usage; }
+  if (!args.flags.reason) { err(`recipes ${action} needs --reason <why>`); return EXIT.usage; }
+  const r = transition(root, recipe, to, { reason: args.flags.reason, actor: args.flags['approved-by'] });
+  if (!r.ok) { err(r.reason); return EXIT.blocked; }
+  out(args, `${recipe.recipeId}@${recipe.version}: ${r.from} -> ${r.to}`, r);
+  return EXIT.ok;
+}
+
 export async function cmdRepair(args, root) {
   const sub = args._[1];
-  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify };
+  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes };
   if (!handlers[sub] || args.flags.help) { (handlers[sub] ? process.stdout : process.stderr).write(`${USAGE}\n`); return args.flags.help ? EXIT.ok : EXIT.usage; }
   try { return await handlers[sub](args, root); } catch (e) { err(String(e?.message || e)); return EXIT.blocked; }
 }

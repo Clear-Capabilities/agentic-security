@@ -94,7 +94,7 @@ async function _scanAtRef(root, ref) {
   // absent from the finding set it is handed as `remediated`; running the PR
   // delta gate would silently rewrite the project's lifecycle store from the
   // base ref's findings.
-  return (0,_engine_js__WEBPACK_IMPORTED_MODULE_2__/* .runFullScan */ .wW)({ fileContents, depFileContents, scanRoot: root, provenance: false }, () => {});
+  return (0,_engine_js__WEBPACK_IMPORTED_MODULE_2__.runFullScan)({ fileContents, depFileContents, scanRoot: root, provenance: false }, () => {});
 }
 
 function _summary(findings) {

@@ -1,0 +1,26 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": { "entry": "src/app.mjs", "export": "createApp", "files": ["src/app.mjs"], "runtime": "node" },
+  "database": { "engine": "sqlite", "schemaSql": "CREATE TABLE avatars (id INTEGER PRIMARY KEY);", "seed": [] },
+  "actors": [ { "id": "visitor", "tenant": "t1", "role": "member", "headers": {} } ],
+  "filesystem": {
+    "root": "avatars",
+    "tree": {
+      "avatars/ada/avatar.txt": "ada-avatar",
+      "avatars/grace hopper/avatar.txt": "grace-avatar",
+      "private/avatar.txt": "{{secret:private-avatar}}"
+    },
+    "links": { "avatars/team": "ada" },
+    "inputs": [
+      {
+        "id": "avatar", "actor": "visitor", "method": "GET", "path": "/avatars/{{value}}",
+        "benign": [
+          { "value": "ada", "expectIncludes": ["ada-avatar"] },
+          { "value": "grace hopper", "expectIncludes": ["grace-avatar"] },
+          { "value": "team", "expectIncludes": ["ada-avatar"] }
+        ]
+      }
+    ]
+  }
+}

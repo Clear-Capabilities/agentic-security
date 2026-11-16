@@ -52,7 +52,7 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 export function validateProfile(p) {
   const errs = [];
   if (!isPlainObject(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'tests', 'approval'], 'profile');
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
   if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
   const a = p.application;
@@ -83,7 +83,38 @@ export function validateProfile(p) {
     actorIds.add(ac.id);
     if (!isPlainObject(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
   }
-  if (!['sql', 'authorization', 'ssrf', 'filesystem'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf or filesystem section');
+  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem or passwords section');
+  // Password storage: where the application stores a credential, how a user registers and logs in, the legacy format existing users
+  // carry (with known test passwords: the legacy rows are built from them), and the approved storage format and its minimum costs.
+  if (p.passwords !== undefined) {
+    const w = p.passwords;
+    if (!isPlainObject(w)) errs.push('passwords must be an object');
+    else {
+      keysOnly(errs, w, ['table', 'userColumn', 'hashColumn', 'legacy', 'register', 'login', 'approved', 'actor'], 'passwords');
+      for (const k of ['table', 'userColumn', 'hashColumn']) if (typeof w[k] !== 'string' || !IDENT.test(w[k])) errs.push(`passwords.${k} must be an identifier`);
+      if (!actorIds.has(w.actor)) errs.push('passwords.actor must name a declared actor (the one sending register and login requests)');
+      for (const op of ['register', 'login']) {
+        const r = w[op];
+        if (!isPlainObject(r)) { errs.push(`passwords.${op} is required`); continue; }
+        keysOnly(errs, r, ['method', 'path', 'body', 'expectStatus', 'denyStatus'], `passwords.${op}`);
+        checkRequestShape(errs, r, `passwords.${op}`);
+        const t = JSON.stringify([r.path, r.body ?? null]);
+        if (!t.includes('{{user}}') || !t.includes('{{password}}')) errs.push(`passwords.${op}: the path or body must carry {{user}} and {{password}}`);
+        if (r.expectStatus !== undefined && (!Array.isArray(r.expectStatus) || !r.expectStatus.every(Number.isInteger))) errs.push(`passwords.${op}.expectStatus must list status codes`);
+      }
+      if (isPlainObject(w.login) && (!Array.isArray(w.login.denyStatus) || !w.login.denyStatus.length || !w.login.denyStatus.every(Number.isInteger))) errs.push('passwords.login.denyStatus must list the status codes of a refused login');
+      const L = w.legacy;
+      if (!isPlainObject(L)) errs.push('passwords.legacy is required: the format existing users carry, and at least one user with a known test password');
+      else {
+        keysOnly(errs, L, ['digest', 'users'], 'passwords.legacy');
+        if (!['md5', 'sha1', 'sha256', 'sha512'].includes(L.digest)) errs.push("passwords.legacy.digest must be one of md5, sha1, sha256, sha512 (an unsalted hex digest)");
+        if (!Array.isArray(L.users) || !L.users.length || L.users.length > 8 || !L.users.every((u) => isPlainObject(u) && typeof u.name === 'string' && u.name && typeof u.password === 'string' && u.password.length >= 4)) errs.push('passwords.legacy.users must list 1 to 8 {name, password} test users');
+      }
+      const A = w.approved;
+      if (!isPlainObject(A) || A.format !== 'scrypt') errs.push("passwords.approved.format must be 'scrypt' (the only format the verifier recomputes in this release)");
+      else for (const k of ['minN', 'minR', 'minSaltBytes', 'minKeyBytes']) if (!Number.isInteger(A[k]) || A[k] < 1) errs.push(`passwords.approved.${k} must be a positive integer`);
+    }
+  }
   if ((p.ssrf !== undefined || p.filesystem !== undefined) && a?.runtime === 'python') errs.push('the ssrf and filesystem sections are supported for the node runtime only in this release');
   if (p.sql !== undefined) {
     if (!isPlainObject(p.sql)) errs.push('sql must be an object');
