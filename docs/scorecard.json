@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.199.0",
-    "bundleSha256": "f2bd3a62737d5d2782128d008bd7f33866070f589a9bbf3eb17c9a5c797eff64",
-    "commit": "c53c3a28a00b753b19634003fa27d9dcf06f105e",
+    "engineVersion": "0.200.0",
+    "bundleSha256": "5d276bc8ee6a1cacce15d517bb44fc614f3c40a5ddbd48cbf36cca6d066972ca",
+    "commit": "30ec027469fff360a1466093ab7f2ac6ab8f724c",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-16T22:52:10.235Z",
+    "generatedAt": "2026-11-17T00:29:21.114Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -906,9 +906,10 @@
           "posture/watch-mode.js": 1,
           "posture/workflow-installer.js": 2,
           "pr-comment.js": 1,
-          "repair/cli.js": 5,
+          "repair/cli.js": 3,
           "repair/contracts.js": 1,
           "repair/coordinator.js": 1,
+          "repair/import.js": 2,
           "repair/intake.js": 1,
           "repair/profile.js": 2,
           "repair/recipe-eval.js": 1,
@@ -1007,7 +1008,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 396,
+    "n": 274,
     "d": 582
   },
   "taintRecall": {
@@ -2261,9 +2262,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.199.0",
-    "commit": "c53c3a28a00b753b19634003fa27d9dcf06f105e",
-    "bundleSha256": "f2bd3a62737d5d2782128d008bd7f33866070f589a9bbf3eb17c9a5c797eff64",
+    "engineVersion": "0.200.0",
+    "commit": "30ec027469fff360a1466093ab7f2ac6ab8f724c",
+    "bundleSha256": "5d276bc8ee6a1cacce15d517bb44fc614f3c40a5ddbd48cbf36cca6d066972ca",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",

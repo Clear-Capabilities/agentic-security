@@ -1,0 +1,8 @@
+{
+  "schema": "agentic-security/external-findings",
+  "schemaVersion": "1.0.0",
+  "tool": { "name": "external-scanner-c", "version": "2.0" },
+  "findings": [
+    { "ruleId": "sql-string-building", "cwe": "CWE-89", "severity": "high", "file": "src/app.mjs", "startLine": 12, "snippet": "db.prepare(", "message": "Possible SQL injection in the notes search." }
+  ]
+}

@@ -42,13 +42,14 @@ __webpack_require__.r(__webpack_exports__);
 
 
 const USAGE = `agentic-security repair <command>
-  plan    --profile <profile.json> (--finding <id> | --family <family> --file <rel>) [--root <path>] [--out <plan.json>] [--json]
+  plan    --profile <profile.json> (--finding <id> [--import <import-id>] | --family <family> --file <rel>) [--root <path>] [--out <plan.json>] [--json]
   run     --plan <plan.json> [--policy <policy.json>] [--candidates <file.json>] [--allow-execution] [--apply [--approved-by <who> --approval-reason <why>]] [--root <path>] [--json]
   show    <run-id> [--root <path>] [--json]
   resume  <run-id> [--allow-execution] [--root <path>] [--json]
   cancel  <run-id> [--root <path>]
   verify  <bundle-dir> [--root <path>] [--json]
   export  <run-id> --out <directory> [--root <path>]
+  import  --format sarif|normalized --file <report.json> | --show <import-id> | --accept-risk <imported-id> --import <import-id> --reason <why> [--root <path>] [--json]
   recipes list|evaluate|promote|retire|rollback|draft [<recipe-id>[@<version>]] [--reason <why>] [--file <recipe.json>] [--allow-execution] [--root <path>] [--json]
 families: sql-injection, object-authorization, ssrf, path-traversal, password-storage
 exit: 0 completed (read the disposition), 1 rejected, 2 usage, 3 blocked or prerequisite missing, 4 cancelled or budget stop`;
@@ -104,7 +105,7 @@ function proposersFor(plan, candidatesFile, root) {
 async function cmdPlan(args, root) {
   if (!args.flags.profile) { err('plan needs --profile'); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
   if (!args.flags.finding && !(args.flags.family && args.flags.file)) { err('plan needs --finding <id>, or --family and --file for a finding the scanner did not report'); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
-  const r = (0,_intake_js__WEBPACK_IMPORTED_MODULE_6__/* .planFromInputs */ .Zn)({ root, profilePath: node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(String(args.flags.profile)), findingId: args.flags.finding ? String(args.flags.finding) : undefined, family: args.flags.family ? String(args.flags.family) : undefined, file: args.flags.file ? String(args.flags.file) : undefined });
+  const r = (0,_intake_js__WEBPACK_IMPORTED_MODULE_6__/* .planFromInputs */ .Zn)({ root, profilePath: node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(String(args.flags.profile)), importId: args.flags.import ? String(args.flags.import) : undefined, findingId: args.flags.finding ? String(args.flags.finding) : undefined, family: args.flags.family ? String(args.flags.family) : undefined, file: args.flags.file ? String(args.flags.file) : undefined });
   if (!r.plan) { err(r.problems.length ? `the profile or contract is invalid:\n  ${r.problems.join('\n  ')}` : `blocked: ${r.blocked.join('; ')}`); return r.status === 'usage' ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage : _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked; }
   const dest = args.flags.out ? node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(String(args.flags.out)) : node_path__WEBPACK_IMPORTED_MODULE_1__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_4__/* .stateDir */ .Pn)(root), 'repair', 'plans', `${r.plan.contract.contractId.replace(':', '-')}.json`);
   node_fs__WEBPACK_IMPORTED_MODULE_0__.mkdirSync(node_path__WEBPACK_IMPORTED_MODULE_1__.dirname(dest), { recursive: true });
@@ -302,9 +303,44 @@ async function cmdRecipes(args, root) {
   return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok;
 }
 
+// `repair import`: external findings (SARIF 2.1.0 or the normalized format) into a signed import record. Executes nothing and writes no
+// project file; an imported finding is planned with `repair plan --import <import-id> --finding <imported-id>`.
+async function cmdImport(args, root) {
+  const { importReport, saveImport, loadImport, decide } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 46777));
+  if (args.flags.show) {
+    const l = loadImport(root, String(args.flags.show));
+    if (!l.record) { err(l.reason); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked; }
+    out(args, importText(l.record), l.record);
+    return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok;
+  }
+  if (args.flags['accept-risk']) {
+    if (!args.flags.import) { err('--accept-risk needs --import <import-id>'); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+    const d = decide(root, String(args.flags.import), String(args.flags['accept-risk']), { disposition: 'accepted-risk', reason: args.flags.reason, actor: args.flags['approved-by'] });
+    if (!d.ok) { err(d.reason); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+    out(args, `${args.flags['accept-risk']}: accepted risk recorded; it will not be planned for repair`, d);
+    return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok;
+  }
+  if (!args.flags.file || !['sarif', 'normalized'].includes(args.flags.format)) { err('import needs --format sarif|normalized and --file <report.json>'); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+  let text;
+  try { text = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(String(args.flags.file)), 'utf8'); } catch (e) { err(`the report could not be read: ${e.message}`); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+  const r = importReport({ root, format: args.flags.format, text, reportName: node_path__WEBPACK_IMPORTED_MODULE_1__.basename(String(args.flags.file)) });
+  if (!r.ok) { err(r.problems.join('; ')); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+  const file = saveImport(root, r.record);
+  out(args, `${importText(r.record)}\nrecord ${node_path__WEBPACK_IMPORTED_MODULE_1__.relative(root, file)} (signed); nothing was executed or changed`, { ...r.record, problems: r.problems });
+  return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok;
+}
+
+function importText(rec) {
+  const c = rec.counts;
+  const lines = [`import ${rec.importId} (${rec.format}): ${c.results} result(s), ${c.findings} finding(s) after merging ${c.merged}, ${c.rejected} rejected, ${c.plannable} can be planned`];
+  for (const f of rec.findings) lines.push(`  ${f.importedId} ${f.file}:${f.line ?? '?'} ${f.cwe || 'no CWE'} ${f.family || 'unsupported'} mapping ${f.mapping}${f.mappingReason ? ` (${f.mappingReason})` : ''} custody ${f.custody} ${f.disposition}${f.sources.length > 1 ? ` [${f.sources.length} sources]` : ''}`);
+  for (const r of rec.rejected) lines.push(`  rejected ${r.tool?.name || '?'} ${r.ruleId || '?'}: ${r.reason}`);
+  return lines.join('\n');
+}
+
 async function cmdRepair(args, root) {
   const sub = args._[1];
-  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes };
+  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes, import: cmdImport };
   if (!handlers[sub] || args.flags.help) { (handlers[sub] ? process.stdout : process.stderr).write(`${USAGE}\n`); return args.flags.help ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok : _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
   try { return await handlers[sub](args, root); } catch (e) { err(String(e?.message || e)); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked; }
 }

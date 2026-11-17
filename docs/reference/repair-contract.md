@@ -15,6 +15,7 @@ How to use the workflow is in the [verified remediation guide](../guides/verifie
 | `repair cancel` | Asks a running repair, in any process, to stop. | a cancel marker |
 | `repair export` | Writes the contract, the record, the exact patch bytes and a manifest to a directory. Request header values and any credential they carry are replaced by digests. | the export directory |
 | `repair verify` | Checks an exported bundle: patch bytes against their digests, the contract against the manifest, and optionally whether the source under `--root` is the verified baseline or that baseline with the patch applied. Executes nothing. | nothing |
+| `repair import` | Reads an external report (`--format sarif` for SARIF 2.1.0, or `--format normalized`) into a signed import record: each location confined to the project and mapped to the current source, duplicates merged with every source kept. `--show <import-id>` prints a record; `--accept-risk <imported-id> --import <import-id> --reason <why>` records an accepted risk. Plan an imported finding with `repair plan --import <import-id> --finding <imported-id>`. Executes nothing. | the import record |
 | `repair recipes` | `list`, `evaluate <recipe>` (executes the recipe's examples; needs `--allow-execution`), `promote`, `retire`, `rollback` (each needs `--reason`), `draft --file <recipe.json>`. Every change is a signed ledger record. | the recipe ledger |
 
 **Exit codes**
@@ -169,6 +170,38 @@ What has been executed, per family, runtime and platform. macOS and Linux are se
 | `path-traversal` | `node` | integration-tested | blocked | `path-realpath-containment` |
 | `password-storage` | `node` | integration-tested | blocked | none |
 | `password-storage` | `python` | declared | blocked | none |
+
+## External findings
+
+A report from another tool is untrusted input. Only a closed set of fields is read (rule id, CWE, level, location, snippet, artifact hash, fingerprint, revision, tool name and version), and nothing in a report can set a family, a policy, an approval or execution. Message text is kept as capped, control-character-free data (`untrustedText`) and is never rendered or acted on.
+
+A location must be a project file: a relative path, or a `file:` URI under the source root. An absolute path elsewhere, a `..` escape, another scheme, a path through a link out of the project and a reserved path (version control, verifier state, dependencies) are rejected, each with its reason.
+
+**Normalized format**
+
+| Field | Meaning |
+| --- | --- |
+| `schema` | `agentic-security/external-findings` |
+| `schemaVersion` | `1.x.y` |
+| `tool` | `name`, `version` |
+| `revision` | Optional: the commit the report describes. |
+| `findings` | `ruleId`, `cwe`, `severity`, `file`, `startLine`, `startColumn`, `snippet`, `sha256` (of the file as reported), `fingerprint`, `message` |
+
+**Mappings**
+
+| Mapping | Can be planned | Meaning |
+| --- | --- | --- |
+| `exact` | yes | The location is in the current source as reported (or the file is unchanged since the reported revision). |
+| `relocated` | yes | The reported snippet is found exactly once, at another line. |
+| `renamed` | yes | The file was renamed since the reported revision; the new path is used. |
+| `stale` | no | The file changed and no snippet locates the finding, or the snippet is gone. |
+| `ambiguous` | no | No line was reported, or the snippet occurs more than once. |
+| `missing` | no | The file does not exist in the current source. |
+| `revision-mismatch` | no | The file changed since the reported revision and nothing relocates the finding. |
+| `revision-unknown` | no | This repository does not have the reported commit. |
+| `rejected` | no | The location is not a project file (listed under `rejected`). |
+
+Findings merge only at the same file and line, with the same CWE and the same snippet (or none); every source is kept. Two rules that share a CWE at different lines are never merged. An imported finding's custody is `imported`, or `locally-corroborated` when the signed internal scan reports the same family within two lines. It enters the same contract workflow as any other finding. Applying its repair still needs the signed internal scan: an import never creates scan state. A finding with no supported family is `unsupported`; an operator can record an `accepted-risk` with a reason, after which it is not planned.
 
 ## Repair recipes
 

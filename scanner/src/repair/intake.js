@@ -10,6 +10,7 @@ import { stateDir } from '../posture/state-dir.js';
 import { verifyLastScan } from '../posture/integrity.js';
 import { normalizeFinding } from './schemas.js';
 import { planRepair } from './coordinator.js';
+import { importedFinding } from './import.js';
 
 const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal', 'CWE-916': 'password-storage', 'CWE-759': 'password-storage', 'CWE-760': 'password-storage', 'CWE-256': 'password-storage' };
 export const familyForFinding = (f) => FAMILY_BY_CWE[String(f?.cwe || '').toUpperCase().replace(/^(\d)/, 'CWE-$1')] || null;
@@ -39,7 +40,12 @@ export function planFromInputs(o) {
   try { profile = JSON.parse(fs.readFileSync(o.profilePath, 'utf8')); } catch (e) { return { plan: null, blocked: [], problems: [`the profile could not be read: ${String(e.message).slice(0, 160)}`], status: 'usage' }; }
   if (o.family && !FAMILIES_SUPPORTED.includes(o.family)) return { plan: null, blocked: [], problems: [`family must be one of ${FAMILIES_SUPPORTED.join(', ')}`], status: 'usage' };
   let finding; let commit = null; let family = o.family || null;
-  if (o.findingId) {
+  if (o.importId) {
+    // An imported finding (FR-13): from the signed import record, only when it maps to the current source.
+    const s = importedFinding(o.root, String(o.importId), String(o.findingId || ''));
+    if (!s.finding) return { plan: null, blocked: [s.reason], problems: [], status: 'blocked' };
+    finding = s.finding; family = family || s.family; commit = s.commit;
+  } else if (o.findingId) {
     const s = signedFinding(o.root, String(o.findingId));
     if (!s.finding) return { plan: null, blocked: [s.reason], problems: [], status: 'blocked' };
     finding = { ...normalizeFinding(s.finding, { commit: s.commit }), stableId: s.finding.stableId, id: s.finding.id };

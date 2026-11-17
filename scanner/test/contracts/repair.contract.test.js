@@ -87,3 +87,10 @@ test('the profile support table is the code\'s, row for row, and Linux is never 
 test('the recipe states are the documented ones', () => {
   assert.deepEqual(rowsUnder('Recipe states').map((r) => r[0]).sort(), [...RECIPE_STATES].sort());
 });
+
+test('the import mappings are the documented ones, with the documented plannable set', async () => {
+  const { MAPPINGS } = await import('../../src/repair/import.js');
+  const rows = rowsUnder('Mappings');
+  assert.deepEqual(rows.map((r) => r[0]).sort(), [...MAPPINGS].sort());
+  assert.deepEqual(rows.filter((r) => r[1] === 'yes').map((r) => r[0]).sort(), ['exact', 'relocated', 'renamed']);
+});
