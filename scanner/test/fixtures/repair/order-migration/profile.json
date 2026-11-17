@@ -1,0 +1,138 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": {
+    "entry": "src/app.mjs",
+    "export": "createApp",
+    "files": [
+      "src/app.mjs"
+    ],
+    "runtime": "node"
+  },
+  "database": {
+    "engine": "sqlite",
+    "schemaSql": "CREATE TABLE orders (id INTEGER PRIMARY KEY, buyer TEXT NOT NULL, amount INTEGER NOT NULL, status TEXT NOT NULL); CREATE TABLE events (id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL, kind TEXT NOT NULL, amount INTEGER NOT NULL); CREATE TABLE provider_charges (id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL, amount INTEGER NOT NULL);",
+    "seed": [
+      {
+        "sql": "INSERT INTO orders (id, buyer, amount, status) VALUES (?, ?, ?, ?)",
+        "params": [
+          1,
+          "bea",
+          4200,
+          "new"
+        ]
+      }
+    ]
+  },
+  "actors": [
+    {
+      "id": "buyer",
+      "tenant": "t1",
+      "role": "member",
+      "headers": {
+        "x-user": "bea"
+      }
+    }
+  ],
+  "workflow": {
+    "operations": [
+      {
+        "id": "pay",
+        "actor": "buyer",
+        "method": "POST",
+        "path": "/orders/1/pay",
+        "mutating": true,
+        "expectStatus": [
+          200
+        ]
+      },
+      {
+        "id": "ship",
+        "actor": "buyer",
+        "method": "POST",
+        "path": "/orders/1/ship",
+        "mutating": true,
+        "expectStatus": [
+          200
+        ]
+      }
+    ],
+    "normal": [
+      {
+        "id": "checkout",
+        "steps": [
+          "pay",
+          "ship"
+        ],
+        "checks": [
+          {
+            "id": "shipped",
+            "sql": "SELECT status FROM orders WHERE id = 1",
+            "params": [],
+            "expect": [
+              {
+                "status": "shipped"
+              }
+            ]
+          },
+          {
+            "id": "charged-once",
+            "sql": "SELECT count(*) AS n, sum(amount) AS total FROM provider_charges WHERE order_id = 1",
+            "params": [],
+            "expect": [
+              {
+                "n": 1,
+                "total": 4200
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "invariants": [
+      {
+        "id": "at-most-one-charge",
+        "sql": "SELECT count(*) AS n FROM (SELECT order_id FROM provider_charges GROUP BY order_id HAVING count(*) > 1)",
+        "params": [],
+        "expect": [
+          {
+            "n": 0
+          }
+        ]
+      },
+      {
+        "id": "nothing-shipped-before-payment",
+        "sql": "SELECT count(*) AS n FROM events s WHERE s.kind = 'ship' AND NOT EXISTS (SELECT 1 FROM events c WHERE c.order_id = s.order_id AND c.kind = 'charge' AND c.id < s.id)",
+        "params": [],
+        "expect": [
+          {
+            "n": 0
+          }
+        ]
+      }
+    ]
+  },
+  "migration": {
+    "up": "migrations/002_one_charge.up.sql",
+    "down": "migrations/002_one_charge.down.sql",
+    "deployOrder": "migrate-then-deploy",
+    "interim": [
+      {
+        "sql": "INSERT INTO events (order_id, kind, amount) VALUES (?, ?, ?)",
+        "params": [
+          2,
+          "charge",
+          900
+        ]
+      },
+      {
+        "sql": "INSERT INTO events (order_id, kind, amount) VALUES (?, ?, ?)",
+        "params": [
+          2,
+          "charge",
+          900
+        ]
+      }
+    ]
+  }
+}

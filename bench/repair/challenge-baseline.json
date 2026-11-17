@@ -1,11 +1,11 @@
 {
   "summary": {
-    "cases": 58,
-    "unsafe": 46,
-    "safe": 12,
+    "cases": 62,
+    "unsafe": 49,
+    "safe": 13,
     "unsafeAccepted": 0,
     "safeRejected": 0,
-    "caughtAsExpected": 46,
+    "caughtAsExpected": 49,
     "notExecuted": 0
   },
   "rows": [
@@ -382,6 +382,34 @@
     },
     {
       "id": "workflow/atomic-claim",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "migration/missing",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "migration-window",
+      "asExpected": true
+    },
+    {
+      "id": "migration/not-reapplicable",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "migration-window",
+      "asExpected": true
+    },
+    {
+      "id": "migration/down-does-not-apply",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "migration-window",
+      "asExpected": true
+    },
+    {
+      "id": "migration/relabel-then-index",
       "label": "safe",
       "disposition": "verified-for-contract",
       "caughtBy": null,

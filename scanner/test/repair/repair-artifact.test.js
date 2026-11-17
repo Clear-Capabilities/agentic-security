@@ -113,3 +113,60 @@ describe('[FR-16] repair artifact, executed', () => {
     assert.match(other.json.problems.join(' '), /not the checked artifact/);
   }));
 });
+
+describe('[FR-16] staging and operational observations', () => {
+  const receiptFor = (digest, environment = 'staging') => ({ schema: 'agentic-security/deployment-receipt', schemaVersion: '1.0.0', environment, artifactDigest: digest, deployedAt: '2026-11-17T10:00:00Z', deployer: 'release-operator' });
+  const verifiedRecord = { disposition: 'verified-for-contract', artifact: 'artifact-verified', environment: 'not-checked', source: { artifactDigest: `sha256:${'a'.repeat(64)}` } };
+
+  test('[AC-16.3/16.6] the verdict needs the verified artifact, a statement naming it and checks executed on it; a failure keeps the source verification', async () => {
+    const { stagingVerdict, validateReceipt } = await import('../../src/repair/staging.js');
+    const D = verifiedRecord.source.artifactDigest;
+    const passed = [{ obligation: 'a', status: 'passed' }, { obligation: 'b', status: 'passed' }];
+    assert.equal(stagingVerdict({ record: { ...verifiedRecord, artifact: 'source-only', source: null }, receipt: receiptFor(D), imageDigest: D, checks: passed }).staging.status, 'blocked', 'a receipt cannot stand in for the artifact comparison');
+    assert.equal(stagingVerdict({ record: verifiedRecord, receipt: receiptFor(D) }).staging.status, 'not-executed', 'a receipt alone upgrades nothing');
+    assert.equal(stagingVerdict({ record: verifiedRecord, receipt: receiptFor(D) }).environment, 'not-checked');
+    const failed = stagingVerdict({ record: verifiedRecord, receipt: receiptFor(D), imageDigest: D, checks: [passed[0], { obligation: 'b', status: 'failed' }] });
+    assert.deepEqual([failed.staging.status, failed.environment], ['failed', 'unavailable']);
+    assert.deepEqual([stagingVerdict({ record: verifiedRecord, receipt: receiptFor(D), imageDigest: D, checks: passed }).environment], ['staging-verified']);
+    assert.equal(stagingVerdict({ record: verifiedRecord, receipt: receiptFor(D, 'production'), imageDigest: D, checks: passed }).staging.status, 'declared', 'a production receipt file is a declaration');
+    assert.equal(stagingVerdict({ record: verifiedRecord, readback: { environment: 'production', artifactDigest: D, connector: 'test-connector', observedAt: '2026-11-17T10:05:00Z' }, imageDigest: D, checks: passed }).environment, 'deployment-observed');
+    assert.equal(stagingVerdict({ record: verifiedRecord, receipt: receiptFor(`sha256:${'b'.repeat(64)}`), imageDigest: D, checks: passed }).staging.status, 'mismatch');
+    assert.match(validateReceipt({ ...receiptFor(D), verdict: 'verified' }).join(' '), /unknown receipt field 'verdict'/);
+  });
+
+  test('[AC-16.3/16.5/16.6] staging through the CLI: blocked before the artifact is verified, a mismatched receipt makes the environment unavailable without touching the disposition, the verified image in staging is staging-verified, and observations stay beside the record', needs(async () => {
+    const s = await verifiedRun();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stg-'));
+    const goodTar = path.join(dir, 'good.tar'); fs.writeFileSync(goodTar, image(s.root, s.dep, s.patched));
+    const D = readImage(fs.readFileSync(goodTar)).digest;
+    const write = (name, v) => { const f = path.join(dir, name); fs.writeFileSync(f, JSON.stringify(v)); return f; };
+    const early = cli(s.root, 'staging', s.record.runId, '--receipt', write('r0.json', receiptFor(D)), '--image', goodTar, '--app-dir', 'app', '--allow-execution');
+    assert.equal(early.status, 3, early.stderr);
+    assert.equal(early.json.staging.status, 'blocked');
+    assert.equal(cli(s.root, 'artifact', s.record.runId, '--image', goodTar, '--app-dir', 'app', '--allow-execution').status, 0);
+    const wrong = cli(s.root, 'staging', s.record.runId, '--receipt', write('r1.json', receiptFor(`sha256:${'c'.repeat(64)}`)), '--image', goodTar, '--app-dir', 'app', '--allow-execution');
+    assert.equal(wrong.status, 1);
+    assert.equal(wrong.json.environment, 'unavailable');
+    const rec1 = JSON.parse(fs.readFileSync(path.join(s.root, '.agentic-security', 'repair', 'runs', s.record.runId, 'record.json'), 'utf8'));
+    assert.deepEqual([rec1.disposition, rec1.artifact, rec1.environment], ['verified-for-contract', 'artifact-verified', 'unavailable']);
+    const ok = cli(s.root, 'staging', s.record.runId, '--receipt', write('r2.json', receiptFor(D)), '--image', goodTar, '--app-dir', 'app', '--allow-execution');
+    assert.equal(ok.status, 0, `${ok.stderr} ${JSON.stringify(ok.json?.staging?.problems)}`);
+    assert.equal(ok.json.environment, 'staging-verified');
+    assert.ok(ok.json.staging.checks.length >= 3 && ok.json.staging.checks.every((c) => c.status === 'passed'));
+    const out = path.join(dir, 'bundle');
+    assert.equal(cli(s.root, 'export', s.record.runId, '--out', out).status, 0);
+    const bundle = JSON.parse(fs.readFileSync(path.join(out, 'bundle.json'), 'utf8'));
+    assert.equal(bundle.staging.artifactDigest, D);
+    assert.match(bundle.claim, /places in staging .* live staging service was not exercised/);
+    const before = cli(s.root, 'observe', s.record.runId);
+    assert.equal(before.json.presence.state, 'not-applied');
+    for (const [rel, t] of Object.entries(s.patched)) fs.writeFileSync(path.join(s.root, rel), t);
+    assert.equal(cli(s.root, 'observe', s.record.runId).json.presence.state, 'present');
+    fs.writeFileSync(path.join(s.root, 'src', 'app.mjs'), s.original['src/app.mjs']);
+    const later = cli(s.root, 'observe', s.record.runId, '--report', 'regression', '--note', 'reported by a user after merge');
+    assert.equal(later.json.presence.state, 'changed');
+    assert.ok(later.json.history.some((h) => h.kind === 'regression' && h.source === 'operator-report'));
+    const rec2 = JSON.parse(fs.readFileSync(path.join(s.root, '.agentic-security', 'repair', 'runs', s.record.runId, 'record.json'), 'utf8'));
+    assert.equal(rec2.disposition, 'verified-for-contract', 'an observation never rewrites the verification');
+  }));
+});

@@ -29,6 +29,7 @@ import { stateDir } from '../posture/state-dir.js';
 import { SCHEMAS, SCHEMA_VERSION, validateContract, validateRepairRecord } from './schemas.js';
 import { buildContract, snapshotSource } from './contracts.js';
 import { runObligation, judge } from './lab.js';
+import { checkMigration, patchedSteps } from './migrations.js';
 import { validateAgainstOriginal, counterexampleFrom, shrinkCounterexample } from './counterexamples.js';
 import { checkCandidate, makeCandidate } from './candidates.js';
 import { structuralKey, rankSurvivors, crossInputs, sharedAttacksFrom } from './portfolio.js';
@@ -130,7 +131,7 @@ function baseRecord(runId, plan) {
     schema: SCHEMAS.record, schemaVersion: SCHEMA_VERSION, runId, contractId: c.contractId, contractDigest: c.contractDigest,
     findingRefs: c.findingRefs, sourceDigest: c.sourceDigest,
     disposition: 'proposed', application: 'not-applied', artifact: 'source-only', environment: 'not-checked', completion: 'partial',
-    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [], lifecycle: null,
+    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [], lifecycle: null, migration: null, staging: null,
     budget: null, accounting: { oracleRuns: 0, wallMs: 0, modelTokens: null, modelCalls: 0, usd: null }, reasons: [], nextPrerequisite: null,
     scope: `contract ${c.contractId} (${c.family}): ${c.obligations.length} obligations over ${c.editScope.allowed.length} application file(s); source-only, nothing built or deployed`,
     createdAt: new Date().toISOString(),
@@ -202,6 +203,8 @@ export async function runRepair(o) {
   // Verifier-side obligations with no oracle (dependency resolution, credential removal): computed here over a revision's exact files.
   const credDecl = plan.contract.obligations.find((x) => x.kind === 'credential-removed')?.inputs || null;
   const infraDecl = plan.contract.obligations.find((x) => x.kind === 'infrastructure-effective')?.inputs || null;
+  // A repair that ships a schema migration: every run of a revision holding the up file applies it (FR-16, AC-16.4).
+  const migDecl = plan.contract.obligations.find((x) => x.kind === 'migration-window')?.inputs || null;
   if (credDecl) leakedValue = extractCredential(original[credDecl.file], credDecl.line);
   const staticChecks = (files) => {
     const out = [];
@@ -222,6 +225,7 @@ export async function runRepair(o) {
   };
   const run = async (ob, files, inputs) => {
     record.budget.used.oracleRuns++; record.accounting.oracleRuns++;
+    if (migDecl) { const eff = inputs || ob.inputs; if (eff.migrations === undefined) { const st = patchedSteps(migDecl, files); inputs = st.length ? { ...eff, migrations: st } : eff; } }
     files = runFiles(files);
     return runObligation(ob, files, { config: o.config, signal: ctl.signal, entry, hypothesisId: `${plan.contract.contractId}:${ob.id}`, inputs, deps: o.deps?.runOracleDeps, probeEnv: o.deps?.probeEnv, runOracle: o.deps?.runOracle });
   };
@@ -332,6 +336,15 @@ export async function runRepair(o) {
           if (status === 'failed') failures.push({ ob, inputs, res });
           else if (status !== 'passed' && verdict === 'passed') verdict = status === 'cancelled' ? 'cancelled' : 'inconclusive';
         }
+        if (migDecl && !failures.length && !resolutionFailed && verdict === 'passed') {
+          const behaviour = devObs.find((x) => x.kind === 'app-behaviour-preserved') || devObs.find((x) => x.kind === 'app-behaviour-after');
+          const mg = await checkMigration({ decl: migDecl, original, patched, behaviour, attack: attackOb, inputsOf: (ob) => base.effectiveInputs[ob.id], run, stopped });
+          if (!mg || stopped()) return stoppedResult();
+          cs.results.push({ obligation: 'migration-window', kind: 'migration-window', observed: mg.status, status: mg.status, reason: mg.reason });
+          cs.migration = { deployOrder: migDecl.deployOrder, legs: mg.legs, exposure: mg.exposure, mitigations: mg.mitigations };
+          if (mg.status === 'failed') resolutionFailed = mg.counterexample;
+          else if (mg.status !== 'passed') verdict = 'inconclusive';
+        }
         if (resolutionFailed && !failures.length) {
           verdict = 'failed';
           record.counterexamples.push({ candidateId: cand.candidateId, ...resolutionFailed });
@@ -412,6 +425,10 @@ export async function runRepair(o) {
     record.patchDigest = selected.cand.patchDigest;
     record.exactPatch = { files: selected.cand.files, beforeDigests: selected.cand.beforeDigests, afterDigests: selected.cand.afterDigests };
     record.obligationResults.push(...selected.cs.results.map((r) => ({ obligation: r.obligation, kind: r.kind, revision: 'patched', required: true, status: r.status, observed: r.observed, receiptDigest: r.receiptDigest ?? null, reason: r.reason })));
+    if (selected.cs.migration) {
+      record.migration = selected.cs.migration;
+      if (record.migration.exposure.fullRollback === 'exposed') record.reasons.push(`rolling back this repair reinstates the exposure; mitigation: ${record.migration.mitigations.join('; ')}`);
+    }
     record.legacy = { ok: true, verified: true, fixCompleteness: selected.cs.results.find((r) => r.obligation === 'central-verifier')?.fixCompleteness ?? null, note: 'FULL in the legacy fields means the named contract passed, not universal correctness' };
     // A credential repair's lifecycle: the source half is what this run verified; distribution is external and not checked; revocation is
     // verified only by a connector the operator invoked (`o.revoke`), never because a project file asked for it (FR-15).

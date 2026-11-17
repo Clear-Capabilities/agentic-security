@@ -832,7 +832,7 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 function validateProfile(p) {
   const errs = [];
   if (!(0,schema_kit/* isPlainObject */.Qd)(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'infrastructure', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'infrastructure', 'migration', 'tests', 'approval'], 'profile');
   // A profile with only an infrastructure section runs no application: no factory, database or actors are needed.
   const infraOnly = p.infrastructure !== undefined && !['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow'].some((k) => p[k] !== undefined);
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
@@ -883,6 +883,23 @@ function validateProfile(p) {
   }
   // Workflow and idempotency: the operations, the normal workflows built from them (with the state each must leave) and the invariants
   // that must hold after ANY sequence. Repeated, reordered and concurrent variants are generated from these; nothing is inferred.
+  // A schema migration the repair needs (FR-16, M4-06): the up and down files the candidate writes (new files, outside the application
+  // files), the deployment order, and the rows an older revision may write while rolled back, inserted before the migration re-applies.
+  if (p.migration !== undefined) {
+    const m = p.migration;
+    if (!(0,schema_kit/* isPlainObject */.Qd)(m)) errs.push('migration must be an object');
+    else {
+      keysOnly(errs, m, ['up', 'down', 'deployOrder', 'interim'], 'migration');
+      for (const k of ['up', 'down']) {
+        if (!(0,schemas/* isRelPath */.ji)(m[k]) || !/\.sql$/.test(m[k])) errs.push(`migration.${k} must be a relative .sql path`);
+        else if ((0,schema_kit/* isPlainObject */.Qd)(a) && Array.isArray(a.files) && a.files.includes(m[k])) errs.push(`migration.${k} must not be an application file: the candidate writes it`);
+      }
+      if (m.up === m.down) errs.push('migration.up and migration.down must differ');
+      if (!['migrate-then-deploy', 'deploy-then-migrate'].includes(m.deployOrder)) errs.push("migration.deployOrder must be 'migrate-then-deploy' or 'deploy-then-migrate'");
+      if (m.interim !== undefined && (!Array.isArray(m.interim) || m.interim.length > 16 || !m.interim.every((x) => (0,schema_kit/* isPlainObject */.Qd)(x) && typeof x.sql === 'string' && /^\s*INSERT\b/i.test(x.sql) && !/;\s*\S/.test(x.sql) && Array.isArray(x.params)))) errs.push('migration.interim must list at most 16 INSERT statements with params arrays');
+      if (!p.database) errs.push('migration needs a database section');
+    }
+  }
   if (p.workflow !== undefined) {
     const w = p.workflow;
     if (!(0,schema_kit/* isPlainObject */.Qd)(w)) errs.push('workflow must be an object');
@@ -1545,6 +1562,16 @@ function buildContract(o) {
     if (!profile.filesystem) return { contract: null, blocked: ['the profile has no filesystem section for a path traversal finding'], problems: [] };
     obligations = filesystemObligations(profile, actors, blocked);
   } else return { contract: null, blocked: [`family ${o.family} has no registered repair contract in this milestone`], problems: [] };
+  if (profile.migration) {
+    if (!obligations.some((x) => x.kind === 'app-behaviour-preserved' || x.kind === 'app-behaviour-after')) blocked.push('migration: the family has no application behaviour obligation to run against the migrated schema');
+    const m = profile.migration;
+    const minputs = { up: m.up, down: m.down, deployOrder: m.deployOrder, interim: m.interim || [] };
+    obligations.push({
+      id: 'migration-window', kind: 'migration-window', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `${m.up} then ${m.down} on the declared schema and seed; deployment order ${m.deployOrder}; ${minputs.interim.length} row(s) written while rolled back`,
+      baselineExpectation: null, patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: minputs, inputsDigest: (0,identity/* digestOf */.ol)(minputs), description: schemas/* OBLIGATION_KINDS */.Xn['migration-window'].description,
+    });
+  }
   obligations.push({
     id: 'central-verifier', kind: 'project-tests', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
     scope: profile.tests ? `rescan, new-finding delta, footprint and the per-test delta of '${profile.tests.command}'` : 'rescan, new-finding delta and footprint; no project test command was declared, so the test leg is not run and the record says so',
@@ -1553,7 +1580,7 @@ function buildContract(o) {
   const approved = o.profileOrigin === 'operator-profile-outside-repository' && profile.approval;
   const policyFacts = [{
     id: 'application-profile', origin: o.profileOrigin, approval: approved ? 'approved' : 'declared',
-    digest: (0,identity/* digestOf */.ol)({ actors: profile.actors ?? null, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, workflow: profile.workflow ?? null, credential: profile.credential ?? null, dependency: profile.dependency ?? null, infrastructure: profile.infrastructure ?? null, database: profile.database ?? null }),
+    digest: (0,identity/* digestOf */.ol)({ actors: profile.actors ?? null, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, workflow: profile.workflow ?? null, credential: profile.credential ?? null, dependency: profile.dependency ?? null, infrastructure: profile.infrastructure ?? null, migration: profile.migration ?? null, database: profile.database ?? null }),
     ...(approved ? { approvedBy: profile.approval.approvedBy } : {}),
   }];
   const knownUnknowns = [
@@ -1573,7 +1600,7 @@ function buildContract(o) {
     profile: { application: profile.application, database: { engine: profile.database?.engine ?? null }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
     obligations, policyFacts,
     // a dependency repair edits the manifest and the lockfile; every other protected path stays protected
-    editScope: { allowed: [...profile.application.files], prohibited: o.family === 'dependency' ? PROTECTED_PATTERNS.filter((x) => x !== 'package.json' && x !== 'package-lock.json') : [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
+    editScope: { allowed: [...profile.application.files, ...(profile.migration ? [profile.migration.up, profile.migration.down] : [])], prohibited: o.family === 'dependency' ? PROTECTED_PATTERNS.filter((x) => x !== 'package.json' && x !== 'package-lock.json') : [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
     executionPolicy: { execution: 'trust-boundary', network: 'denied', model: 'none-unless-operator-configured' },
     knownUnknowns,
   };
@@ -1594,7 +1621,7 @@ function obligationSummary(contract) {
 
 /***/ }),
 
-/***/ 50382:
+/***/ 90460:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -1632,6 +1659,108 @@ var schemas = __webpack_require__(68962);
 var contracts = __webpack_require__(20771);
 // EXTERNAL MODULE: ./src/repair/lab.js
 var lab = __webpack_require__(73633);
+;// CONCATENATED MODULE: ./src/repair/migrations.js
+// Schema migrations in a repair (verified-remediation PRD FR-16, AC-16.4): does the migration the candidate ships keep the deployment
+// window, the rollback and the forward recovery working, and what does each rollback do to the exposure?
+//
+// The candidate writes the up and down files the profile names. Every application run of the PATCHED revision applies its up file after
+// the declared seed (oracle version 6 `migrations`), so the contract's attacks and controls judge the patched code on the schema it
+// needs. This module adds the `migration-window` legs, each an ordinary oracle run through the trust boundary on a fresh database:
+//
+//   window     the revision live while the other half of the deployment is pending: the ORIGINAL code on the migrated schema
+//              (migrate-then-deploy), or the PATCHED code on the old schema (deploy-then-migrate). Its legitimate workflows must work.
+//   rollback   up then down, then the ORIGINAL code: the down file must apply and the original must serve its legitimate workflows.
+//   recovery   up, down, the rows the profile says an older revision writes while rolled back, then up again, then the PATCHED code:
+//              the migration must re-apply over those rows, and the patched code must still block the attacks and serve the workflows.
+//
+// Exposure facts, stated and never a pass condition: whether the attacks reach their forbidden effect in the window, after a full
+// rollback (original code, old schema), with the code rolled back and the schema kept, and with the schema rolled back and the code
+// kept. A rollback that reinstates the exposure is reported with it; a combination that keeps it closed is reported as a mitigation.
+//
+// Limits, stated: only the declared rows stand in for data written between steps (what a running application writes is not carried
+// across runs); one SQLite file per run, no locking, long-running migration or replica behaviour; the deployment itself is not observed.
+
+
+/** The inputs of an obligation with the migration steps a revision's files call for. A revision without the up file gets none. */
+function withMigrations(inputs, steps) {
+  return { ...inputs, migrations: steps };
+}
+
+/** The steps for the patched revision's normal runs: its up file, when present. */
+function patchedSteps(decl, files) {
+  return typeof files[decl.up] === 'string' && files[decl.up].trim() ? [{ exec: files[decl.up] }] : [];
+}
+
+const exposureOf = (res, ob) => {
+  if (['unavailable', 'invalid'].includes(res.observed)) return 'unknown';
+  if (res.details?.setupFailed) return 'unknown';
+  const s = (0,lab/* judge */.S4)(res.observed, ob.patchedExpectation);
+  return s === 'passed' ? 'closed' : s === 'failed' ? 'exposed' : 'unknown';
+};
+
+/**
+ * Run the legs for one candidate. `run(ob, files, inputs)` is the coordinator's runner (budget accounting, trust boundary).
+ * @returns {Promise<{ok:boolean, status:'passed'|'failed'|'inconclusive', reason:string, legs:object[], exposure:object, mitigations:string[], counterexample:object|null}>}
+ */
+async function checkMigration({ decl, original, patched, behaviour, attack, inputsOf, run, stopped }) {
+  const up = patched[decl.up]; const down = patched[decl.down];
+  const missing = [decl.up, decl.down].filter((f) => typeof patched[f] !== 'string' || !patched[f].trim());
+  if (missing.length) return { ok: false, status: 'failed', reason: `the contract requires a migration and the candidate does not write ${missing.join(' and ')}`, legs: [], exposure: {}, mitigations: [], counterexample: { obligation: 'migration-window', property: 'migration-missing', message: `missing ${missing.join(', ')}` } };
+  const U = { exec: up }; const D = { exec: down };
+  const interim = (decl.interim || []).map((r) => ({ sql: r.sql, params: r.params }));
+  const legs = [];
+  const exec = async (leg, who, files, steps, ob, required) => {
+    const res = await run(ob, files, withMigrations(inputsOf(ob), steps));
+    const status = res.details?.setupFailed ? 'failed' : (0,lab/* judge */.S4)(res.observed, ob.patchedExpectation);
+    const reason = res.details?.migrationFailed ? `a migration step did not apply: ${res.details.migrationFailed}` : res.reason;
+    const r = { leg, code: who, steps: steps.map((s) => (s === U ? 'up' : s === D ? 'down' : 'interim-row')), obligation: ob.id, required, status, observed: res.observed, reason: String(reason || '').slice(0, 300), res };
+    legs.push(r);
+    return r;
+  };
+  // the window
+  const windowLeg = decl.deployOrder === 'migrate-then-deploy'
+    ? { code: 'original', files: original, steps: [U] }
+    : { code: 'patched', files: patched, steps: [] };
+  const w = await exec('window', windowLeg.code, windowLeg.files, windowLeg.steps, behaviour, true);
+  if (stopped()) return null;
+  const wx = attack ? await exec('window', windowLeg.code, windowLeg.files, windowLeg.steps, attack, false) : null;
+  if (stopped()) return null;
+  // the rollback
+  const rb = await exec('rollback', 'original', original, [U, D], behaviour, true);
+  if (stopped()) return null;
+  const rbx = attack ? await exec('rollback', 'original', original, [U, D], attack, false) : null;
+  if (stopped()) return null;
+  const schemaOnly = attack ? await exec('schema-rollback', 'patched', patched, [U, D], attack, false) : null;
+  if (stopped()) return null;
+  // the forward recovery
+  const rec = await exec('recovery', 'patched', patched, [U, D, ...interim, U], behaviour, true);
+  if (stopped()) return null;
+  const recx = attack ? await exec('recovery', 'patched', patched, [U, D, ...interim, U], attack, true) : null;
+  if (stopped()) return null;
+
+  const required = legs.filter((l) => l.required);
+  const failed = required.filter((l) => l.status === 'failed');
+  const open = required.filter((l) => l.status !== 'passed' && l.status !== 'failed');
+  const exposure = {
+    window: wx ? exposureOf(wx.res, attack) : 'unknown',
+    fullRollback: rbx ? exposureOf(rbx.res, attack) : 'unknown',
+    codeRollbackSchemaKept: decl.deployOrder === 'migrate-then-deploy' && wx ? exposureOf(wx.res, attack) : 'unknown',
+    schemaRollbackCodeKept: schemaOnly ? exposureOf(schemaOnly.res, attack) : 'unknown',
+  };
+  const mitigations = [];
+  if (exposure.codeRollbackSchemaKept === 'closed') mitigations.push('roll back the code and keep the migrated schema: the attacks stayed blocked');
+  if (exposure.schemaRollbackCodeKept === 'closed') mitigations.push('roll back the schema and keep the patched code: the attacks stayed blocked');
+  if (exposure.fullRollback === 'exposed' && !mitigations.length) mitigations.push('none observed: every rollback tested reinstates the exposure, so a rollback needs a control outside this contract');
+  const describe = (l) => `${l.leg} (${l.code} code, ${l.steps.join(' > ') || 'old schema'}) ${l.obligation}: ${l.reason}`;
+  const reason = failed.length ? failed.map(describe).join('; ') : open.length ? open.map(describe).join('; ') : `window, rollback and recovery passed (${decl.deployOrder}); full rollback ${exposure.fullRollback === 'exposed' ? 'reinstates the exposure' : exposure.fullRollback === 'closed' ? 'keeps it closed' : 'exposure unknown'}`;
+  const status = failed.length ? 'failed' : open.length ? 'inconclusive' : 'passed';
+  for (const l of legs) delete l.res;
+  return {
+    ok: status === 'passed', status, reason: reason.slice(0, 600), legs, exposure, mitigations,
+    counterexample: failed.length ? { obligation: 'migration-window', property: `migration-${failed[0].leg}`, leg: failed[0].leg, code: failed[0].code, steps: failed[0].steps, message: describe(failed[0]).slice(0, 300) } : null,
+  };
+}
+
 // EXTERNAL MODULE: ./src/repair/counterexamples.js
 var counterexamples = __webpack_require__(68941);
 // EXTERNAL MODULE: ./src/repair/candidates.js
@@ -1903,6 +2032,7 @@ function checkInfrastructure(decl, files) {
 
 
 
+
 const PLAN_SCHEMA = 'agentic-security/repair-plan';
 const POLICY_SCHEMA = 'agentic-security/repair-policy';
 const DEFAULT_BUDGETS = Object.freeze({ strategiesPerRound: 3, rounds: 3, attackCasesPerCandidate: 64, wallMs: 15 * 60_000, testCommandMs: 120_000, workers: 1 });
@@ -1997,7 +2127,7 @@ function baseRecord(runId, plan) {
     schema: schemas/* SCHEMAS */.H6.record, schemaVersion: schemas/* SCHEMA_VERSION */.f$, runId, contractId: c.contractId, contractDigest: c.contractDigest,
     findingRefs: c.findingRefs, sourceDigest: c.sourceDigest,
     disposition: 'proposed', application: 'not-applied', artifact: 'source-only', environment: 'not-checked', completion: 'partial',
-    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [], lifecycle: null,
+    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [], lifecycle: null, migration: null, staging: null,
     budget: null, accounting: { oracleRuns: 0, wallMs: 0, modelTokens: null, modelCalls: 0, usd: null }, reasons: [], nextPrerequisite: null,
     scope: `contract ${c.contractId} (${c.family}): ${c.obligations.length} obligations over ${c.editScope.allowed.length} application file(s); source-only, nothing built or deployed`,
     createdAt: new Date().toISOString(),
@@ -2069,6 +2199,8 @@ async function runRepair(o) {
   // Verifier-side obligations with no oracle (dependency resolution, credential removal): computed here over a revision's exact files.
   const credDecl = plan.contract.obligations.find((x) => x.kind === 'credential-removed')?.inputs || null;
   const infraDecl = plan.contract.obligations.find((x) => x.kind === 'infrastructure-effective')?.inputs || null;
+  // A repair that ships a schema migration: every run of a revision holding the up file applies it (FR-16, AC-16.4).
+  const migDecl = plan.contract.obligations.find((x) => x.kind === 'migration-window')?.inputs || null;
   if (credDecl) leakedValue = extractCredential(original[credDecl.file], credDecl.line);
   const staticChecks = (files) => {
     const out = [];
@@ -2089,6 +2221,7 @@ async function runRepair(o) {
   };
   const run = async (ob, files, inputs) => {
     record.budget.used.oracleRuns++; record.accounting.oracleRuns++;
+    if (migDecl) { const eff = inputs || ob.inputs; if (eff.migrations === undefined) { const st = patchedSteps(migDecl, files); inputs = st.length ? { ...eff, migrations: st } : eff; } }
     files = runFiles(files);
     return (0,lab/* runObligation */.SX)(ob, files, { config: o.config, signal: ctl.signal, entry, hypothesisId: `${plan.contract.contractId}:${ob.id}`, inputs, deps: o.deps?.runOracleDeps, probeEnv: o.deps?.probeEnv, runOracle: o.deps?.runOracle });
   };
@@ -2199,6 +2332,15 @@ async function runRepair(o) {
           if (status === 'failed') failures.push({ ob, inputs, res });
           else if (status !== 'passed' && verdict === 'passed') verdict = status === 'cancelled' ? 'cancelled' : 'inconclusive';
         }
+        if (migDecl && !failures.length && !resolutionFailed && verdict === 'passed') {
+          const behaviour = devObs.find((x) => x.kind === 'app-behaviour-preserved') || devObs.find((x) => x.kind === 'app-behaviour-after');
+          const mg = await checkMigration({ decl: migDecl, original, patched, behaviour, attack: attackOb, inputsOf: (ob) => base.effectiveInputs[ob.id], run, stopped });
+          if (!mg || stopped()) return stoppedResult();
+          cs.results.push({ obligation: 'migration-window', kind: 'migration-window', observed: mg.status, status: mg.status, reason: mg.reason });
+          cs.migration = { deployOrder: migDecl.deployOrder, legs: mg.legs, exposure: mg.exposure, mitigations: mg.mitigations };
+          if (mg.status === 'failed') resolutionFailed = mg.counterexample;
+          else if (mg.status !== 'passed') verdict = 'inconclusive';
+        }
         if (resolutionFailed && !failures.length) {
           verdict = 'failed';
           record.counterexamples.push({ candidateId: cand.candidateId, ...resolutionFailed });
@@ -2279,6 +2421,10 @@ async function runRepair(o) {
     record.patchDigest = selected.cand.patchDigest;
     record.exactPatch = { files: selected.cand.files, beforeDigests: selected.cand.beforeDigests, afterDigests: selected.cand.afterDigests };
     record.obligationResults.push(...selected.cs.results.map((r) => ({ obligation: r.obligation, kind: r.kind, revision: 'patched', required: true, status: r.status, observed: r.observed, receiptDigest: r.receiptDigest ?? null, reason: r.reason })));
+    if (selected.cs.migration) {
+      record.migration = selected.cs.migration;
+      if (record.migration.exposure.fullRollback === 'exposed') record.reasons.push(`rolling back this repair reinstates the exposure; mitigation: ${record.migration.mitigations.join('; ')}`);
+    }
     record.legacy = { ok: true, verified: true, fixCompleteness: selected.cs.results.find((r) => r.obligation === 'central-verifier')?.fixCompleteness ?? null, note: 'FULL in the legacy fields means the named contract passed, not universal correctness' };
     // A credential repair's lifecycle: the source half is what this run verified; distribution is external and not checked; revocation is
     // verified only by a connector the operator invoked (`o.revoke`), never because a project file asked for it (FR-15).
@@ -3007,7 +3153,7 @@ function importedFinding(root, id, importedId) {
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
 /* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(71130);
 /* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(68962);
-/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(50382);
+/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(90460);
 /* harmony import */ var _import_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(46777);
 // Plan inputs, resolved ONE way for every route (verified-remediation PRD AC-04.5): the CLI's `repair plan` and the MCP tool
 // `repair_plan` both call `planFromInputs`, so the same finding, profile and source give the same contract and obligations.
@@ -3186,6 +3332,7 @@ const OBLIGATION_KINDS = Object.freeze({
   'dependency-resolved': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the lockfile agrees with the manifest, every package comes from the declared sources with its recorded integrity, every dependency resolves, and no resolved instance of the advisory\'s package (direct or transitive) is in the vulnerable range' },
   'credential-removed': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the leaked credential is in no application file, plain or in any re-encoding the verifier recognises (base64, hex, reversed, percent-encoded, split into joined literals, character codes)' },
   'infrastructure-effective': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the effective configuration of every declared file, ingested together, gives no public route to a service that must not be exposed and keeps one to every approved exposed service; a file the adapters cannot read fails it' },
+  'migration-window': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the declared schema migration applies, the revision that is not yet deployed still serves its legitimate workflows in the declared deployment order, the down migration restores a schema the original revision serves, and the migration re-applies after a rollback over the rows the profile says an older revision writes; whether each rollback reinstates the exposure is stated, never hidden' },
   'project-tests': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the central verifier: rescan, new-finding delta, footprint and the per-test delta of the project suite' },
 });
 
@@ -3277,7 +3424,7 @@ function validateCandidate(rec) {
   return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(ctx);
 }
 
-const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'lifecycle', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
+const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'lifecycle', 'migration', 'staging', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
 
 function validateRepairRecord(rec) {
   const g = (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .guardObject */ .NW)(rec); if (!g.ok) return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(g.ctx);

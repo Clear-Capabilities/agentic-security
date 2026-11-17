@@ -52,7 +52,7 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 export function validateProfile(p) {
   const errs = [];
   if (!isPlainObject(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'infrastructure', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'infrastructure', 'migration', 'tests', 'approval'], 'profile');
   // A profile with only an infrastructure section runs no application: no factory, database or actors are needed.
   const infraOnly = p.infrastructure !== undefined && !['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow'].some((k) => p[k] !== undefined);
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
@@ -103,6 +103,23 @@ export function validateProfile(p) {
   }
   // Workflow and idempotency: the operations, the normal workflows built from them (with the state each must leave) and the invariants
   // that must hold after ANY sequence. Repeated, reordered and concurrent variants are generated from these; nothing is inferred.
+  // A schema migration the repair needs (FR-16, M4-06): the up and down files the candidate writes (new files, outside the application
+  // files), the deployment order, and the rows an older revision may write while rolled back, inserted before the migration re-applies.
+  if (p.migration !== undefined) {
+    const m = p.migration;
+    if (!isPlainObject(m)) errs.push('migration must be an object');
+    else {
+      keysOnly(errs, m, ['up', 'down', 'deployOrder', 'interim'], 'migration');
+      for (const k of ['up', 'down']) {
+        if (!isRelPath(m[k]) || !/\.sql$/.test(m[k])) errs.push(`migration.${k} must be a relative .sql path`);
+        else if (isPlainObject(a) && Array.isArray(a.files) && a.files.includes(m[k])) errs.push(`migration.${k} must not be an application file: the candidate writes it`);
+      }
+      if (m.up === m.down) errs.push('migration.up and migration.down must differ');
+      if (!['migrate-then-deploy', 'deploy-then-migrate'].includes(m.deployOrder)) errs.push("migration.deployOrder must be 'migrate-then-deploy' or 'deploy-then-migrate'");
+      if (m.interim !== undefined && (!Array.isArray(m.interim) || m.interim.length > 16 || !m.interim.every((x) => isPlainObject(x) && typeof x.sql === 'string' && /^\s*INSERT\b/i.test(x.sql) && !/;\s*\S/.test(x.sql) && Array.isArray(x.params)))) errs.push('migration.interim must list at most 16 INSERT statements with params arrays');
+      if (!p.database) errs.push('migration needs a database section');
+    }
+  }
   if (p.workflow !== undefined) {
     const w = p.workflow;
     if (!isPlainObject(w)) errs.push('workflow must be an object');

@@ -464,6 +464,16 @@ export function buildContract(o) {
     if (!profile.filesystem) return { contract: null, blocked: ['the profile has no filesystem section for a path traversal finding'], problems: [] };
     obligations = filesystemObligations(profile, actors, blocked);
   } else return { contract: null, blocked: [`family ${o.family} has no registered repair contract in this milestone`], problems: [] };
+  if (profile.migration) {
+    if (!obligations.some((x) => x.kind === 'app-behaviour-preserved' || x.kind === 'app-behaviour-after')) blocked.push('migration: the family has no application behaviour obligation to run against the migrated schema');
+    const m = profile.migration;
+    const minputs = { up: m.up, down: m.down, deployOrder: m.deployOrder, interim: m.interim || [] };
+    obligations.push({
+      id: 'migration-window', kind: 'migration-window', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `${m.up} then ${m.down} on the declared schema and seed; deployment order ${m.deployOrder}; ${minputs.interim.length} row(s) written while rolled back`,
+      baselineExpectation: null, patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: minputs, inputsDigest: digestOf(minputs), description: OBLIGATION_KINDS['migration-window'].description,
+    });
+  }
   obligations.push({
     id: 'central-verifier', kind: 'project-tests', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
     scope: profile.tests ? `rescan, new-finding delta, footprint and the per-test delta of '${profile.tests.command}'` : 'rescan, new-finding delta and footprint; no project test command was declared, so the test leg is not run and the record says so',
@@ -472,7 +482,7 @@ export function buildContract(o) {
   const approved = o.profileOrigin === 'operator-profile-outside-repository' && profile.approval;
   const policyFacts = [{
     id: 'application-profile', origin: o.profileOrigin, approval: approved ? 'approved' : 'declared',
-    digest: digestOf({ actors: profile.actors ?? null, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, workflow: profile.workflow ?? null, credential: profile.credential ?? null, dependency: profile.dependency ?? null, infrastructure: profile.infrastructure ?? null, database: profile.database ?? null }),
+    digest: digestOf({ actors: profile.actors ?? null, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, workflow: profile.workflow ?? null, credential: profile.credential ?? null, dependency: profile.dependency ?? null, infrastructure: profile.infrastructure ?? null, migration: profile.migration ?? null, database: profile.database ?? null }),
     ...(approved ? { approvedBy: profile.approval.approvedBy } : {}),
   }];
   const knownUnknowns = [
@@ -492,7 +502,7 @@ export function buildContract(o) {
     profile: { application: profile.application, database: { engine: profile.database?.engine ?? null }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
     obligations, policyFacts,
     // a dependency repair edits the manifest and the lockfile; every other protected path stays protected
-    editScope: { allowed: [...profile.application.files], prohibited: o.family === 'dependency' ? PROTECTED_PATTERNS.filter((x) => x !== 'package.json' && x !== 'package-lock.json') : [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
+    editScope: { allowed: [...profile.application.files, ...(profile.migration ? [profile.migration.up, profile.migration.down] : [])], prohibited: o.family === 'dependency' ? PROTECTED_PATTERNS.filter((x) => x !== 'package.json' && x !== 'package-lock.json') : [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
     executionPolicy: { execution: 'trust-boundary', network: 'denied', model: 'none-unless-operator-configured' },
     knownUnknowns,
   };

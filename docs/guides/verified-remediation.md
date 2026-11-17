@@ -56,6 +56,10 @@ Node applications, and Python WSGI applications (`"runtime": "python"` in the pr
    The write goes through the same apply service as `fix --apply`: signed scan state, path confinement, material-change approval and the concurrent-modification check. Source that changed after planning is refused.
 
 6. **Check the built image**, if you build one: `agentic-security repair artifact <run-id> --image app.tar --app-dir app --allow-execution` confirms the image holds the patched files and packages and still meets the contract on its own files. An image built from the old source is reported as such.
+7. **Record staging**, if you deploy the image to staging: write a deployment receipt naming the image digest and run `agentic-security repair staging <run-id> --receipt receipt.json --image app.tar --app-dir app --allow-execution`. The record says `staging-verified` only when the receipt names the verified image and the contract's checks pass on it again; a different image makes it `unavailable` and leaves the source verification as it was.
+8. **Watch it after the merge**: `agentic-security repair observe <run-id>` says whether the verified patch is still on disk, and `--report regression --note "..."` records a reported regression beside the run.
+
+If the repair changes the database schema, declare a `migration` section in the profile (the up and down files, the deployment order, and rows an older version writes while rolled back). The run then checks the deployment window, the rollback and re-applying the migration after a rollback, and the record states whether rolling back reopens the vulnerability.
 
 7. **Inspect, export, resume.** `repair show <run-id>`, `repair export <run-id> --out <dir>`, `repair verify <dir> --root .`, `repair cancel <run-id>`, `repair resume <run-id>`.
 
@@ -68,7 +72,7 @@ A legitimate request the original does not serve as declared is quarantined, wit
 ## What a verified result does not mean
 
 - It does not mean the application is free of the weakness outside the declared requests, actors and objects.
-- It does not mean the patch was built, staged or deployed: a record says `source-only` until `repair artifact` checks a built image, and nothing observes staging or deployment.
+- It does not mean the patch was built, staged or deployed: a record says `source-only` until `repair artifact` checks a built image, and `staging-verified` means the contract's checks passed again on the image a receipt places in staging, not that the live staging service was exercised. Nothing observes production in this release.
 - It does not mean concurrency is safe: no concurrent execution is exercised.
 - On Linux the trust boundary does not run yet, so repair execution there is reported as `blocked`.
 
