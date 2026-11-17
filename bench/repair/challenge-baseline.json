@@ -1,11 +1,11 @@
 {
   "summary": {
-    "cases": 54,
-    "unsafe": 43,
-    "safe": 11,
+    "cases": 58,
+    "unsafe": 46,
+    "safe": 12,
     "unsafeAccepted": 0,
     "safeRejected": 0,
-    "caughtAsExpected": 43,
+    "caughtAsExpected": 46,
     "notExecuted": 0
   },
   "rows": [
@@ -382,6 +382,34 @@
     },
     {
       "id": "workflow/atomic-claim",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "infrastructure/override-republishes",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "infrastructure-exposure",
+      "asExpected": true
+    },
+    {
+      "id": "infrastructure/close-everything",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "infrastructure-exposure",
+      "asExpected": true
+    },
+    {
+      "id": "infrastructure/unreadable-override",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "infrastructure-exposure",
+      "asExpected": true
+    },
+    {
+      "id": "infrastructure/loopback-binding",
       "label": "safe",
       "disposition": "verified-for-contract",
       "caughtBy": null,

@@ -47,6 +47,7 @@ A profile is declared by the operator: how to start the application and what its
 | `sql` | `inputs`: the untrusted value (`{{value}}` in the path or body), the actor sending it, legitimate values with their expected response (`originalMishandles` for one the original gets wrong), and the planted secrets another actor's data holds |
 | `authorization` | `table`, `idColumn`, `contentColumn`, `objects` (owner, row id, planted secret), `operations` (`read` or `update`, with `{{id}}` and `{{value}}`), `policy.allow` (`owner`, `same-tenant-admin`, `any-admin`), and `controls`: legitimate workflows outside the actor matrix, such as a public page, that must keep working after a repair |
 | `ssrf` | `policy` (`allowlist`: only the `approved` hosts; `public-only`: no loopback, private, link-local, carrier-grade NAT or unique-local address), `approved`, `hosts` (each with `name`, `addresses` answered one per resolution with the last repeating, so a host can rebind, an optional `port`, and `routes` the verifier serves: `path`, `status`, `headers`, `body`, where a body may plant `{{secret:<name>}}`), and `inputs` (the untrusted URL as `{{value}}`, the actor, and legitimate values with their expected response). Node runtime only. |
+| `infrastructure` | `files` (the configuration files judged together; they must be application files), `environment`, `mustNotExpose` (services no public route may reach), `mustStayExposed` (approved exposed services). A profile with only this section needs no `application.export`, `database` or `actors`. |
 | `workflow` | `operations` (`id`, `actor`, `method`, `path`, `body`, `mutating`, `expectStatus`), `normal` (the legitimate workflows: `id`, `steps` naming operations, `checks` the state each must leave), `invariants` (read-only SELECT checks with expectations that must hold after any sequence). Replayed, reordered and concurrent variants are generated from these. |
 | `dependency` | `ecosystem` (`npm`), `package`, `vulnerable` (an npm range), `advisory`, `sources` (the directory of package tarballs a lockfile may resolve to), `exploit` (the `filesystem`, `sql` or `ssrf` section whose attacks show the vulnerability). `application.files` must include `package.json` and `package-lock.json`: a repair edits them. |
 | `credential` | `location` (`file`, `line`: where the leaked value is, never the value), `env` (the environment name the replacement is read from), `revocation` (`required` or `not-required`), `provider`, `network` (declared hosts; a route's `requireHeaders` may require `{{secret:replacement-credential}}`), `controls` (requests that must work with the replacement). |
@@ -65,7 +66,7 @@ A profile is declared by the operator: how to start the application and what its
 | `schemaVersion` | `1.0.0`. A reader accepts 1.x; a 2.0 contract is refused. |
 | `contractId` | `rcon:` and 16 hex characters over the allowlisted identity fields. Identical inputs give an identical id; no clock or random value enters it. |
 | `contractDigest` | SHA-256 over the same fields. |
-| `family` | `sql-injection`, `object-authorization`, `ssrf`, `path-traversal`, `password-storage`, `dependency`, `credential` or `workflow` in this release. |
+| `family` | `sql-injection`, `object-authorization`, `ssrf`, `path-traversal`, `password-storage`, `dependency`, `credential`, `workflow` or `infrastructure` in this release. |
 | `findingRefs` | The finding the contract repairs. |
 | `rootCauseGroup` | Digest of the family and the finding's file. |
 | `sourceCommit` | The commit the signed scan recorded, or null. |
@@ -107,6 +108,7 @@ A profile is declared by the operator: how to start the application and what its
 | `app-behaviour-preserved` | `application-behaviour` | refuted | refuted | Legitimate requests and state checks hold on both revisions. |
 | `app-behaviour-after` | `application-behaviour` | not required | refuted | Legitimate requests the original mishandles hold after the repair. |
 | `dependency-resolved` | verifier, no oracle | failed | passed | The lockfile agrees with the manifest, every package comes from the declared sources with its recorded integrity (re-hashed), every dependency resolves, and no resolved instance of the advisory's package, direct or transitive, is in the vulnerable range. |
+| `infrastructure-effective` | verifier, no oracle | failed | passed | The effective configuration of every declared file, ingested together by the deployment boundary adapters, gives no public route to a service that must not be exposed and keeps one to every approved exposed service. A file the adapters cannot read fails it. |
 | `credential-removed` | verifier, no oracle | failed | passed | The leaked value is in no application file, plain or in a recognised re-encoding (base64, base64url, hex, reversed, percent-encoded, split into joined literals, character codes). The value is read from the original at the declared line and never stored. |
 | `project-tests` | central verifier | not required | passed | Rescan, new-finding delta, footprint and the per-test delta of the project suite, through the same verifier every patch route uses. |
 
@@ -163,7 +165,7 @@ A profile is declared by the operator: how to start the application and what its
 
 ## Profile support
 
-What has been executed, per family, runtime and platform. macOS and Linux are separate: one platform's execution never qualifies the other. `declared` means the profile validates and a contract builds, but no test executes that combination. `repair plan` prints the row for its contract. This table is held to the code by the contract test.
+What has been executed, per family, runtime and platform. macOS and Linux are separate: one platform's execution never qualifies the other. `blocked` means the trust boundary refuses to run there; `unverified` means nothing stops it running but no result from that platform is claimed. `declared` means the profile validates and a contract builds, but no test executes that combination. `repair plan` prints the row for its contract. This table is held to the code by the contract test.
 
 **Profile support**
 
@@ -180,6 +182,7 @@ What has been executed, per family, runtime and platform. macOS and Linux are se
 | `dependency` | `node` | integration-tested | blocked | none |
 | `credential` | `node` | integration-tested | blocked | none |
 | `workflow` | `node` | integration-tested | blocked | none |
+| `infrastructure` | `node` | integration-tested | unverified | none |
 
 ## External findings
 
@@ -241,6 +244,7 @@ No recipe is learned from examples in this release: both shipped transformations
 - Server-side request forgery and path traversal run on the Node runtime only. Outbound connections are observed at the Node connection layer (`net`, `tls`, the HTTP agents, raw sockets) and served by the declared hosts with the declared DNS answers; no socket is opened. An `https` destination is recorded and refused, never served. A connection opened below that layer (a child process, a raw binding, a native addon) is not observed, so the scope gate refuses a candidate that introduces one. A destination the declaration does not model (an undeclared name, connected to or looked up) makes the run inconclusive, never a pass.
 - Password storage judges the stored value by recomputation in one approved format (scrypt as `scrypt$N$r$p$<salt hex>$<key hex>`), with cost floors: a different sound format (bcrypt, Argon2) does not hold. Timing and memory hardness are not measured. Node runtime only.
 - Dependency repair supports npm lockfiles (versions 2 and 3) resolving to local package tarballs the profile declares. The package manager is not executed and no install script runs: the verifier checks the lockfile and builds `node_modules` from the verified tarballs itself. No registry is contacted; a package from elsewhere is a named problem, not a pass. Other ecosystems (Haskell, Nix, Python and the rest) are not covered. The test packages are synthetic, so AC-14.5 (pinned real packages) is not met. A verified dependency repair is not applied through the shared apply service, which never writes manifests or lockfiles; apply it with your package manager.
+- Infrastructure repair reads configuration only: container composition files, Kubernetes manifests and a Terraform plan in JSON, through the deployment boundary adapters. Exposure means a public route reaching the service over routing edges; reachability through another exposed service's dependencies is not judged. Host firewalls, service meshes, cloud policies outside the files, trust stores and privilege changes are not modelled, and nothing is applied or deployed: the shared apply service never writes composition or Terraform files.
 - Credential repair verifies the source half only: the value is gone (in the forms listed) and the application works with a replacement read from the environment. Distribution of the replacement is never checked, and revocation is verified only by a connector the operator invokes; no connector ships in this release. A re-encoding outside the recognised forms is not detected. Records redact every recognised form of the value; a stored candidate file holds the candidate's exact bytes, as the project source does.
 - Path traversal judges disclosure only: a planted file outside the root that reaches a response. Writes outside the root and time-of-check races are not exercised.
 - Cross-execution shares only attacks that disclosed a planted secret or reached a forbidden destination; a durable-state attack is judged by the object-level check every candidate runs anyway.

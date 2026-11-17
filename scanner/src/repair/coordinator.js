@@ -34,6 +34,7 @@ import { checkCandidate, makeCandidate } from './candidates.js';
 import { structuralKey, rankSurvivors, crossInputs, sharedAttacksFrom } from './portfolio.js';
 import { checkResolution, materialize } from './dependencies.js';
 import { checkRemoval, extractCredential, revoke, redactValue } from './credentials.js';
+import { checkInfrastructure } from './infrastructure.js';
 
 export const PLAN_SCHEMA = 'agentic-security/repair-plan';
 export const POLICY_SCHEMA = 'agentic-security/repair-policy';
@@ -82,7 +83,7 @@ export function planRepair(o) {
   const plan = {
     schema: PLAN_SCHEMA, schemaVersion: '1.0.0', contract: built.contract, finding: o.finding,
     blocked: built.blocked, entry: o.profile.application.entry, tests: o.profile.tests || null,
-    actors: o.profile.actors.map((a) => ({ id: a.id, headersDigest: digestOf(a.headers || {}) })),
+    actors: (o.profile.actors || []).map((a) => ({ id: a.id, headersDigest: digestOf(a.headers || {}) })),
   };
   return { plan, blocked: built.blocked, problems: [] };
 }
@@ -200,12 +201,17 @@ export async function runRepair(o) {
   const runFiles = (files) => { if (!depDecl) return files; try { return materialize(o.root, depDecl, files); } catch { return files; } };
   // Verifier-side obligations with no oracle (dependency resolution, credential removal): computed here over a revision's exact files.
   const credDecl = plan.contract.obligations.find((x) => x.kind === 'credential-removed')?.inputs || null;
+  const infraDecl = plan.contract.obligations.find((x) => x.kind === 'infrastructure-effective')?.inputs || null;
   if (credDecl) leakedValue = extractCredential(original[credDecl.file], credDecl.line);
   const staticChecks = (files) => {
     const out = [];
     if (depDecl) {
       const rs = checkResolution(o.root, depDecl, files);
       out.push({ obligation: 'dependency-resolution', kind: 'dependency-resolved', ok: rs.ok, reason: rs.ok ? `${depDecl.package} resolves outside ${depDecl.vulnerable} everywhere; the lockfile is consistent and every package verified` : rs.problems.slice(0, 6).join('; '), counterexample: { obligation: 'dependency-resolution', property: 'dependency-resolution', problems: rs.problems.slice(0, 10), vulnerable: rs.vulnerable, message: rs.problems[0] } });
+    }
+    if (infraDecl) {
+      const ix = checkInfrastructure(infraDecl, files);
+      out.push({ obligation: 'infrastructure-exposure', kind: 'infrastructure-effective', ok: ix.ok, reason: ix.ok ? `no public route reaches ${infraDecl.mustNotExpose.join(', ')}; approved services still exposed` : ix.problems.slice(0, 6).join('; '), counterexample: { obligation: 'infrastructure-exposure', property: 'effective-exposure', problems: ix.problems.slice(0, 10), exposed: ix.exposed, message: ix.problems[0] } });
     }
     if (credDecl) {
       // the value is read from the ORIGINAL snapshot at the declared line, held in memory only for this comparison

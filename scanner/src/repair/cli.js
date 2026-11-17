@@ -27,7 +27,7 @@ export const USAGE = `agentic-security repair <command>
   artifact <run-id> --image <archive.tar> --app-dir <dir> [--allow-execution] [--root <path>] [--json]
   import  --format sarif|normalized --file <report.json> | --show <import-id> | --accept-risk <imported-id> --import <import-id> --reason <why> [--root <path>] [--json]
   recipes list|evaluate|promote|retire|rollback|draft [<recipe-id>[@<version>]] [--reason <why>] [--file <recipe.json>] [--allow-execution] [--root <path>] [--json]
-families: sql-injection, object-authorization, ssrf, path-traversal, password-storage, dependency, credential, workflow
+families: sql-injection, object-authorization, ssrf, path-traversal, password-storage, dependency, credential, workflow, infrastructure
 exit: 0 completed (read the disposition), 1 rejected, 2 usage, 3 blocked or prerequisite missing, 4 cancelled or budget stop`;
 
 const out = (args, text, json) => { process.stdout.write(args.flags.json ? `${JSON.stringify(json, null, 2)}\n` : `${text}\n`); };

@@ -1,0 +1,4 @@
+services:
+  admin-api:
+    environment:
+      LOG_LEVEL: info

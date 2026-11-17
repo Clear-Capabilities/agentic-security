@@ -1,0 +1,11 @@
+services:
+  web:
+    image: shop/web:1.4
+    ports:
+      - "443:8443"
+    depends_on:
+      - admin-api
+  admin-api:
+    image: shop/admin:2.0
+    ports:
+      - "8081:8081"

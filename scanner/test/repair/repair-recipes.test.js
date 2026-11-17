@@ -155,7 +155,7 @@ describe('[M3-06] per-profile support', () => {
   test('every supported row names an existing executed test; macOS and Linux are separate and Linux is not claimed', () => {
     for (const s of PROFILE_SUPPORT) {
       if (s.macos === 'integration-tested') assert.ok(s.evidence && fs.existsSync(path.join(REPO, s.evidence)), `${s.family}/${s.runtime}`);
-      assert.equal(s.linux, 'blocked');
+      assert.ok(['blocked', 'unverified'].includes(s.linux), `${s.family}: Linux is never claimed`);
       if (s.recipe) assert.ok(SHIPPED_RECIPES.some((r) => r.recipeId === s.recipe));
     }
   });

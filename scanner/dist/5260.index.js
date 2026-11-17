@@ -832,7 +832,9 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 function validateProfile(p) {
   const errs = [];
   if (!(0,schema_kit/* isPlainObject */.Qd)(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'infrastructure', 'tests', 'approval'], 'profile');
+  // A profile with only an infrastructure section runs no application: no factory, database or actors are needed.
+  const infraOnly = p.infrastructure !== undefined && !['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow'].some((k) => p[k] !== undefined);
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
   if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
   const a = p.application;
@@ -840,14 +842,14 @@ function validateProfile(p) {
   else {
     keysOnly(errs, a, ['entry', 'export', 'files', 'runtime'], 'application');
     if (!(0,schemas/* isRelPath */.ji)(a.entry)) errs.push('application.entry must be a relative path');
-    if (typeof a.export !== 'string' || !IDENT.test(a.export)) errs.push('application.export must be an identifier');
+    if (!(infraOnly && a.export === undefined) && (typeof a.export !== 'string' || !IDENT.test(a.export))) errs.push('application.export must be an identifier');
     if (!Array.isArray(a.files) || !a.files.length || a.files.length > 60 || !a.files.every(schemas/* isRelPath */.ji)) errs.push('application.files must list 1 to 60 relative paths');
     else if (!a.files.includes(a.entry)) errs.push('application.files must include the entry');
     if (a.runtime !== undefined && !['node', 'python'].includes(a.runtime)) errs.push("application.runtime must be 'node' or 'python'");
     if (a.runtime === 'python' && !/\.py$/.test(String(a.entry))) errs.push('application.entry must be a .py file for the python runtime');
   }
   const d = p.database;
-  if (!(0,schema_kit/* isPlainObject */.Qd)(d)) errs.push('database is required');
+  if (infraOnly && d === undefined) { /* nothing runs */ } else if (!(0,schema_kit/* isPlainObject */.Qd)(d)) errs.push('database is required');
   else {
     keysOnly(errs, d, ['engine', 'schemaSql', 'seed'], 'database');
     if (d.engine !== 'sqlite') errs.push("database.engine: only 'sqlite' is supported in this milestone");
@@ -855,7 +857,7 @@ function validateProfile(p) {
     if (!Array.isArray(d.seed)) errs.push('database.seed must be an array');
   }
   const actorIds = new Set();
-  if (!Array.isArray(p.actors) || !p.actors.length) errs.push('actors must be a non-empty array');
+  if (infraOnly && p.actors === undefined) { /* nothing runs */ } else if (!Array.isArray(p.actors) || !p.actors.length) errs.push('actors must be a non-empty array');
   else for (const [i, ac] of p.actors.entries()) {
     if (!(0,schema_kit/* isPlainObject */.Qd)(ac)) { errs.push(`actors[${i}] must be an object`); continue; }
     keysOnly(errs, ac, ['id', 'tenant', 'role', 'headers', 'anonymous'], `actors[${i}]`);
@@ -863,7 +865,22 @@ function validateProfile(p) {
     actorIds.add(ac.id);
     if (!(0,schema_kit/* isPlainObject */.Qd)(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
   }
-  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential', 'workflow'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords, credential or workflow section');
+  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential', 'workflow', 'infrastructure'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords, credential, workflow or infrastructure section');
+  // Infrastructure: the configuration files whose EFFECTIVE result is judged together, the environment, the services that must not be
+  // exposed and the approved services that must stay exposed.
+  if (p.infrastructure !== undefined) {
+    const x = p.infrastructure;
+    if (!(0,schema_kit/* isPlainObject */.Qd)(x)) errs.push('infrastructure must be an object');
+    else {
+      keysOnly(errs, x, ['files', 'environment', 'mustNotExpose', 'mustStayExposed'], 'infrastructure');
+      if (!Array.isArray(x.files) || !x.files.length || x.files.length > 40 || !x.files.every(schemas/* isRelPath */.ji)) errs.push('infrastructure.files must list 1 to 40 configuration files');
+      else if ((0,schema_kit/* isPlainObject */.Qd)(a) && Array.isArray(a.files) && !x.files.every((f) => a.files.includes(f))) errs.push('infrastructure.files must be application files (a repair edits them)');
+      if (typeof x.environment !== 'string' || !SLUG.test(x.environment)) errs.push('infrastructure.environment must be a slug');
+      const names = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' && /^[A-Za-z0-9][\w.-]{0,62}$/.test(s));
+      if (!names(x.mustNotExpose) || !x.mustNotExpose.length) errs.push('infrastructure.mustNotExpose must name at least one service');
+      if (!names(x.mustStayExposed)) errs.push('infrastructure.mustStayExposed must list the approved exposed services (it may be empty)');
+    }
+  }
   // Workflow and idempotency: the operations, the normal workflows built from them (with the state each must leave) and the invariants
   // that must hold after ANY sequence. Repeated, reordered and concurrent variants are generated from these; nothing is inferred.
   if (p.workflow !== undefined) {
@@ -1113,6 +1130,7 @@ const PROFILE_SUPPORT = Object.freeze([
   { family: 'dependency', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-dependency.test.js' },
   { family: 'credential', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-credential.test.js' },
   { family: 'workflow', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow-state.test.js' },
+  { family: 'infrastructure', runtime: 'node', macos: 'integration-tested', linux: 'unverified', recipe: null, evidence: 'scanner/test/repair/repair-infrastructure.test.js' },
 ]);
 
 /** The support row for a contract's family and runtime, or null (an unsupported combination is refused when the profile validates). */
@@ -1469,7 +1487,7 @@ function buildContract(o) {
   const profile = o.profile;
   const blocked = [];
   for (const m of o.source.missing || []) blocked.push(`application file ${m} is missing or not a regular file`);
-  const actors = Object.fromEntries(profile.actors.map((a) => [a.id, a]));
+  const actors = Object.fromEntries((profile.actors || []).map((a) => [a.id, a]));
   let obligations; let matrix = null;
   if (o.family === 'sql-injection') {
     if (!profile.sql) return { contract: null, blocked: ['the profile has no sql section for a sql-injection finding'], problems: [] };
@@ -1493,6 +1511,15 @@ function buildContract(o) {
       scope: `${d.package} outside ${d.vulnerable} everywhere it resolves; lockfile consistent with the manifest; packages from ${d.sources} with their recorded integrity`,
       baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: dinputs, inputsDigest: (0,identity/* digestOf */.ol)(dinputs), description: schemas/* OBLIGATION_KINDS */.Xn['dependency-resolved'].description,
     });
+  } else if (o.family === 'infrastructure') {
+    if (!profile.infrastructure) return { contract: null, blocked: ['the profile has no infrastructure section for an infrastructure finding'], problems: [] };
+    const x = profile.infrastructure;
+    const xinputs = { files: x.files, environment: x.environment, mustNotExpose: x.mustNotExpose, mustStayExposed: x.mustStayExposed };
+    obligations = [{
+      id: 'infrastructure-exposure', kind: 'infrastructure-effective', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `the effective configuration of ${x.files.length} file(s) in ${x.environment}: ${x.mustNotExpose.join(', ')} not exposed${x.mustStayExposed.length ? `; ${x.mustStayExposed.join(', ')} still exposed` : ''}`,
+      baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: xinputs, inputsDigest: (0,identity/* digestOf */.ol)(xinputs), description: schemas/* OBLIGATION_KINDS */.Xn['infrastructure-effective'].description,
+    }];
   } else if (o.family === 'workflow') {
     if (!profile.workflow) return { contract: null, blocked: ['the profile has no workflow section for a workflow finding'], problems: [] };
     obligations = workflowObligations(profile, actors, blocked);
@@ -1526,7 +1553,7 @@ function buildContract(o) {
   const approved = o.profileOrigin === 'operator-profile-outside-repository' && profile.approval;
   const policyFacts = [{
     id: 'application-profile', origin: o.profileOrigin, approval: approved ? 'approved' : 'declared',
-    digest: (0,identity/* digestOf */.ol)({ actors: profile.actors, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, database: profile.database }),
+    digest: (0,identity/* digestOf */.ol)({ actors: profile.actors ?? null, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, workflow: profile.workflow ?? null, credential: profile.credential ?? null, dependency: profile.dependency ?? null, infrastructure: profile.infrastructure ?? null, database: profile.database ?? null }),
     ...(approved ? { approvedBy: profile.approval.approvedBy } : {}),
   }];
   const knownUnknowns = [
@@ -1543,7 +1570,7 @@ function buildContract(o) {
     findingRefs: [o.finding.findingId || o.finding.stableId || o.finding.id],
     rootCauseGroup: (0,identity/* digestOf */.ol)({ family: o.family, file: findingFile }),
     sourceCommit: o.commit ?? null, sourceDigest: o.source.sourceDigest, configDigests: o.source.configDigests,
-    profile: { application: profile.application, database: { engine: profile.database.engine }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
+    profile: { application: profile.application, database: { engine: profile.database?.engine ?? null }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
     obligations, policyFacts,
     // a dependency repair edits the manifest and the lockfile; every other protected path stays protected
     editScope: { allowed: [...profile.application.files], prohibited: o.family === 'dependency' ? PROTECTED_PATTERNS.filter((x) => x !== 'package.json' && x !== 'package-lock.json') : [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
@@ -1567,7 +1594,7 @@ function obligationSummary(contract) {
 
 /***/ }),
 
-/***/ 75897:
+/***/ 50382:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -1774,6 +1801,69 @@ function redactValue(obj, value) {
   return obj;
 }
 
+// EXTERNAL MODULE: ./src/lineage/deployment/ingest.js + 4 modules
+var ingest = __webpack_require__(18876);
+;// CONCATENATED MODULE: ./src/repair/infrastructure.js
+// Infrastructure repair (verified-remediation PRD FR-15, M4-05): judge the EFFECTIVE configuration, not the edited text.
+//
+// Every declared configuration file of a revision is ingested together by the deployment boundary adapters (`src/lineage/deployment/`:
+// container composition, Kubernetes manifests, a Terraform plan in JSON), so files merge the way the adapters model them: a
+// composition override that re-publishes a port is part of the graph whatever the main file says. Nothing is executed, deployed or
+// fetched; no cloud API is called.
+//
+//   checkInfrastructure  the `infrastructure-effective` obligation. A service is EXPOSED when a public route reaches it over routing
+//                        edges (`routes-to`) alone: its own published port, load balancer or ingress. Every service the profile says
+//                        must not be exposed must have no such route (the exposure is closed); every service it says must stay
+//                        exposed must still have one (an approved workflow still works, AC-15.4). A route, hop or service the adapters
+//                        could not resolve, and a file they could not parse, is a gap: the obligation fails rather than assume the
+//                        exposure closed.
+//
+// Limits, stated: only the formats the adapters read; reachability through a service's dependencies (another service that is itself
+// exposed) is not exposure here and is not judged; host firewalls, service meshes and cloud policies outside the files are not read;
+// nothing is applied (the shared apply service never writes composition or Terraform files) and nothing is deployed.
+
+
+/** Which services a public route reaches over routing edges only. Returns {exposed: Map(name -> route names), gaps: string[]}. */
+function directExposure(graph) {
+  const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
+  const routesTo = new Map();
+  for (const e of graph.edges) if (e.relation === 'routes-to') { if (!routesTo.has(e.from)) routesTo.set(e.from, []); routesTo.get(e.from).push(e); }
+  const exposed = new Map(); const gaps = [];
+  for (const start of graph.nodes.filter((n) => n.kind === 'route' && n.trustZone === 'public')) {
+    const seen = new Set([start.id]); const queue = [start.id];
+    while (queue.length) {
+      const id = queue.shift();
+      for (const e of routesTo.get(id) || []) {
+        if (e.effect === 'deny' || seen.has(e.to)) continue;
+        seen.add(e.to);
+        const to = nodes.get(e.to);
+        if (!to) { gaps.push(`${start.name}: routes to an unknown node`); continue; }
+        if (to.resolved === false) gaps.push(`${start.name}: routes to an unresolved ${to.kind} ${to.name}`);
+        if (to.kind === 'service') { if (!exposed.has(to.name)) exposed.set(to.name, []); exposed.get(to.name).push(start.name); }
+        queue.push(e.to);
+      }
+    }
+  }
+  return { exposed, gaps };
+}
+
+/** The `infrastructure-effective` check over one revision's files. */
+function checkInfrastructure(decl, files) {
+  const input = decl.files.filter((f) => typeof files[f] === 'string').map((f) => ({ path: f, text: files[f] }));
+  const problems = [];
+  for (const f of decl.files) if (typeof files[f] !== 'string') problems.push(`${f} is missing from the revision`);
+  const g = (0,ingest/* ingestDeploymentConfig */.In)({ files: input, environment: decl.environment });
+  if (!g || g.status !== 'ok' || !g.graph) return { ok: false, problems: [...problems, `the configuration could not be ingested: ${(g?.errors || []).map((e) => e.message).join('; ').slice(0, 200) || g?.status}`], exposed: {} };
+  // every declared file must be read by an adapter: a file nobody parsed could re-open what the others close
+  for (const f of g.files || []) if (f.status !== 'ingested') problems.push(`${f.file}: ${f.status}, so its effect on exposure is unknown`);
+  const { exposed, gaps } = directExposure(g.graph);
+  problems.push(...gaps);
+  for (const s of decl.mustNotExpose) if (exposed.has(s)) problems.push(`${s} is still exposed by ${exposed.get(s).join(', ')}`);
+  const services = new Set(g.graph.nodes.filter((n) => n.kind === 'service').map((n) => n.name));
+  for (const s of decl.mustStayExposed) if (!exposed.has(s)) problems.push(`${s} is no longer exposed${services.has(s) ? '' : ' (the service is gone)'}: an approved workflow is broken`);
+  return { ok: problems.length === 0, problems, exposed: Object.fromEntries([...exposed].map(([k, v]) => [k, v])) };
+}
+
 ;// CONCATENATED MODULE: ./src/repair/coordinator.js
 // The repair coordinator (verified-remediation PRD section 5.2, FR-06, FR-07, FR-17): one state machine for every route (CLI, MCP,
 // headless callers, batch), calling the existing canonical services and adding none of its own.
@@ -1796,6 +1886,7 @@ function redactValue(obj, value) {
 //     deadline (an AbortSignal that reaches the oracle runner, which ends the process tree), and identical candidates consume an attempt
 //     without being re-run (AC-07.6). A budget stop is `partial`, never a proof.
 //   - Sealed obligations run only on a candidate that passed everything else; their outcome is recorded but never fed back.
+
 
 
 
@@ -1859,7 +1950,7 @@ function planRepair(o) {
   const plan = {
     schema: PLAN_SCHEMA, schemaVersion: '1.0.0', contract: built.contract, finding: o.finding,
     blocked: built.blocked, entry: o.profile.application.entry, tests: o.profile.tests || null,
-    actors: o.profile.actors.map((a) => ({ id: a.id, headersDigest: (0,identity/* digestOf */.ol)(a.headers || {}) })),
+    actors: (o.profile.actors || []).map((a) => ({ id: a.id, headersDigest: (0,identity/* digestOf */.ol)(a.headers || {}) })),
   };
   return { plan, blocked: built.blocked, problems: [] };
 }
@@ -1977,12 +2068,17 @@ async function runRepair(o) {
   const runFiles = (files) => { if (!depDecl) return files; try { return (0,dependencies/* materialize */.O9)(o.root, depDecl, files); } catch { return files; } };
   // Verifier-side obligations with no oracle (dependency resolution, credential removal): computed here over a revision's exact files.
   const credDecl = plan.contract.obligations.find((x) => x.kind === 'credential-removed')?.inputs || null;
+  const infraDecl = plan.contract.obligations.find((x) => x.kind === 'infrastructure-effective')?.inputs || null;
   if (credDecl) leakedValue = extractCredential(original[credDecl.file], credDecl.line);
   const staticChecks = (files) => {
     const out = [];
     if (depDecl) {
       const rs = (0,dependencies/* checkResolution */.x0)(o.root, depDecl, files);
       out.push({ obligation: 'dependency-resolution', kind: 'dependency-resolved', ok: rs.ok, reason: rs.ok ? `${depDecl.package} resolves outside ${depDecl.vulnerable} everywhere; the lockfile is consistent and every package verified` : rs.problems.slice(0, 6).join('; '), counterexample: { obligation: 'dependency-resolution', property: 'dependency-resolution', problems: rs.problems.slice(0, 10), vulnerable: rs.vulnerable, message: rs.problems[0] } });
+    }
+    if (infraDecl) {
+      const ix = checkInfrastructure(infraDecl, files);
+      out.push({ obligation: 'infrastructure-exposure', kind: 'infrastructure-effective', ok: ix.ok, reason: ix.ok ? `no public route reaches ${infraDecl.mustNotExpose.join(', ')}; approved services still exposed` : ix.problems.slice(0, 6).join('; '), counterexample: { obligation: 'infrastructure-exposure', property: 'effective-exposure', problems: ix.problems.slice(0, 10), exposed: ix.exposed, message: ix.problems[0] } });
     }
     if (credDecl) {
       // the value is read from the ORIGINAL snapshot at the declared line, held in memory only for this comparison
@@ -2911,7 +3007,7 @@ function importedFinding(root, id, importedId) {
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
 /* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(71130);
 /* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(68962);
-/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(75897);
+/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(50382);
 /* harmony import */ var _import_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(46777);
 // Plan inputs, resolved ONE way for every route (verified-remediation PRD AC-04.5): the CLI's `repair plan` and the MCP tool
 // `repair_plan` both call `planFromInputs`, so the same finding, profile and source give the same contract and obligations.
@@ -2929,7 +3025,7 @@ function importedFinding(root, id, importedId) {
 
 const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal', 'CWE-916': 'password-storage', 'CWE-759': 'password-storage', 'CWE-760': 'password-storage', 'CWE-256': 'password-storage', 'CWE-798': 'credential', 'CWE-259': 'credential', 'CWE-321': 'credential', 'CWE-362': 'workflow', 'CWE-367': 'workflow', 'CWE-841': 'workflow', 'CWE-837': 'workflow' };
 const familyForFinding = (f) => FAMILY_BY_CWE[String(f?.cwe || '').toUpperCase().replace(/^(\d)/, 'CWE-$1')] || null;
-const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential', 'workflow']);
+const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential', 'workflow', 'infrastructure']);
 
 function signedFinding(root, id) {
   const file = node_path__WEBPACK_IMPORTED_MODULE_1__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .stateDir */ .Pn)(root), 'last-scan.json');
@@ -3089,6 +3185,7 @@ const OBLIGATION_KINDS = Object.freeze({
   'app-behaviour-after': { oracle: 'application-behaviour', expectBaseline: null, expectPatched: 'refuted', set: 'development', description: 'legitimate requests the original mishandles (for example a quoted value) hold on the patched revision' },
   'dependency-resolved': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the lockfile agrees with the manifest, every package comes from the declared sources with its recorded integrity, every dependency resolves, and no resolved instance of the advisory\'s package (direct or transitive) is in the vulnerable range' },
   'credential-removed': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the leaked credential is in no application file, plain or in any re-encoding the verifier recognises (base64, hex, reversed, percent-encoded, split into joined literals, character codes)' },
+  'infrastructure-effective': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the effective configuration of every declared file, ingested together, gives no public route to a service that must not be exposed and keeps one to every approved exposed service; a file the adapters cannot read fails it' },
   'project-tests': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the central verifier: rescan, new-finding delta, footprint and the per-test delta of the project suite' },
 });
 
@@ -3099,7 +3196,7 @@ const ENVIRONMENT_STATES = Object.freeze(['not-checked', 'staging-verified', 'de
 const COMPLETION_STATES = Object.freeze(['complete', 'partial', 'cancelled', 'unavailable', 'invalid']);
 const CUSTODY = Object.freeze(['internal-scan', 'imported', 'locally-corroborated', 'reproduced', 'refuted', 'unresolved']);
 const GENERATORS = Object.freeze(['deterministic-recipe', 'configured-model', 'user-supplied']);
-const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential', 'workflow']);
+const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential', 'workflow', 'infrastructure']);
 const EVIDENCE_ORIGINS = Object.freeze(['generated-from-profile', 'operator-declared', 'approved-invariant', 'counterexample', 'registered-family']);
 
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w@.\-/]{1,512}$/;
