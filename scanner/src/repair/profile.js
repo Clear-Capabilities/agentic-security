@@ -52,7 +52,7 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 export function validateProfile(p) {
   const errs = [];
   if (!isPlainObject(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'tests', 'approval'], 'profile');
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
   if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
   const a = p.application;
@@ -83,7 +83,49 @@ export function validateProfile(p) {
     actorIds.add(ac.id);
     if (!isPlainObject(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
   }
-  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem or passwords section');
+  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords or credential section');
+  // A leaked credential: where it is (never its value), the environment name the replacement is wired from, whether the old credential
+  // must be revoked, and the legitimate requests that must work with the replacement (against declared hosts that accept only it).
+  if (p.credential !== undefined) {
+    const c = p.credential;
+    if (!isPlainObject(c)) errs.push('credential must be an object');
+    else {
+      keysOnly(errs, c, ['location', 'env', 'revocation', 'provider', 'network', 'controls'], 'credential');
+      if (!isPlainObject(c.location) || !isRelPath(c.location.file) || !Number.isInteger(c.location.line) || c.location.line < 1) errs.push('credential.location must be {file, line}: where the leaked value is, never the value');
+      else if (isPlainObject(a) && Array.isArray(a.files) && !a.files.includes(c.location.file)) errs.push('credential.location.file must be one of the application files');
+      if (typeof c.env !== 'string' || !/^[A-Z_][A-Z0-9_]{0,63}$/.test(c.env)) errs.push('credential.env must be the upper-case environment name the replacement is read from');
+      if (!['required', 'not-required'].includes(c.revocation)) errs.push("credential.revocation must be 'required' or 'not-required'");
+      if (typeof c.provider !== 'string' || !SLUG.test(c.provider)) errs.push('credential.provider must be a slug naming the issuing service');
+      const n = validateNetwork(c.network);
+      if (n) errs.push(`credential.network: ${n}`);
+      if (!Array.isArray(c.controls) || !c.controls.length) errs.push('credential.controls must list the requests that must work with the replacement credential');
+      else for (const [i, r] of c.controls.entries()) {
+        const w = `credential.controls[${i}]`;
+        if (!isPlainObject(r)) { errs.push(`${w} must be an object`); continue; }
+        keysOnly(errs, r, ['id', 'actor', 'method', 'path', 'body', 'expectStatus', 'expectIncludes'], w);
+        if (typeof r.id !== 'string' || !SLUG.test(r.id)) errs.push(`${w}.id must be a slug`);
+        if (!actorIds.has(r.actor)) errs.push(`${w}.actor must name a declared actor`);
+        checkRequestShape(errs, r, w);
+      }
+      if (a?.runtime === 'python') errs.push('the credential section is supported for the node runtime only in this release');
+    }
+  }
+  // A vulnerable dependency (npm): the advisory's package and range, where the package tarballs live, and which section's attacks show
+  // the vulnerability in this application. The manifest and the lockfile must be application files: a repair edits them.
+  if (p.dependency !== undefined) {
+    const d = p.dependency;
+    if (!isPlainObject(d)) errs.push('dependency must be an object');
+    else {
+      keysOnly(errs, d, ['ecosystem', 'package', 'vulnerable', 'advisory', 'sources', 'exploit'], 'dependency');
+      if (d.ecosystem !== 'npm') errs.push("dependency.ecosystem: only 'npm' is supported in this release");
+      if (typeof d.package !== 'string' || !/^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]{0,213}$/.test(d.package)) errs.push('dependency.package must be an npm package name');
+      if (typeof d.vulnerable !== 'string' || !d.vulnerable.trim() || d.vulnerable.length > 200) errs.push('dependency.vulnerable must be a version range');
+      if (typeof d.advisory !== 'string' || !d.advisory.trim()) errs.push('dependency.advisory must name the advisory');
+      if (!isRelPath(d.sources)) errs.push('dependency.sources must be a relative directory holding the package tarballs');
+      if (!['filesystem', 'sql', 'ssrf'].includes(d.exploit) || p[d.exploit] === undefined) errs.push('dependency.exploit must name the profile section (filesystem, sql or ssrf) whose attacks show the vulnerability');
+      if (isPlainObject(a) && Array.isArray(a.files) && !['package.json', 'package-lock.json'].every((f) => a.files.includes(f))) errs.push('application.files must include package.json and package-lock.json for a dependency repair');
+    }
+  }
   // Password storage: where the application stores a credential, how a user registers and logs in, the legacy format existing users
   // carry (with known test passwords: the legacy rows are built from them), and the approved storage format and its minimum costs.
   if (p.passwords !== undefined) {

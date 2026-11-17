@@ -9,6 +9,18 @@
 > make the history less accurate, not more.
 
 
+## 0.201.0 - Verified remediation, milestone 4 (second part): dependency and credential repair
+
+**Measured, 0.200.0:** `TIMINGS preflight=4s push=7s pr=4s checks=396s merge=6s verify=11s tag=4s release=223s npm=90s total=745s release-clock=244s`, 244 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.
+
+Two more repair families for the Labs capability `contract-repair`. Measured on macOS. Requirement-by-requirement record: `docs/verified-remediation/LEDGER.md`.
+
+- **Changed results, listed first.** Repair challenge gate: 50 cases, unsafe patches accepted 0 of 40, caught by the declared obligation 40 of 40, legitimate repairs rejected 0 of 10 (was 41). The application oracles are now version 4 and their conformance fixtures were re-pinned; 10 adapters conform with execution. Self-scan baseline 698 to 701, reviewed.
+- **Fixed: a credential could reach a repair record.** The change-scope signals in a record copy source lines, so a removed hardcoded key appeared in the run record. A credential repair's record now redacts every recognised form of the value.
+- **Vulnerable npm dependencies (`dependency`).** A candidate edits `package.json` and `package-lock.json`, and the source when the fixed version changes its API. The verifier checks the lockfile against the manifest, re-hashes every package tarball against the lockfile's integrity, and refuses any direct or transitive copy of the package still in the vulnerable range; then it runs the application against the packages the lockfile resolves to. A manifest-only edit, a leftover transitive copy and a behaviour-breaking upgrade are rejected; an upgrade without its API adaptation does not load; the adapted upgrade is verified. Packages come from local tarballs the profile declares; the package manager is not executed.
+- **Leaked credentials (`credential`).** The value must be gone from every application file, including base64, hex, reversed, split and character-code forms, and the application must work with a replacement read from the declared environment name against a host that accepts only the replacement. The value is never stored in a contract or a record. Revocation is separate: it is verified only by a connector the operator invokes, so a source repair alone records `lifecycle incomplete` when revocation is required.
+- **Not in this release.** Package manager execution and ecosystems other than npm; any shipped revocation connector; infrastructure configuration, artifact and staging verification (the rest of milestone 4). A verified dependency repair is not written by the shared apply service, which never writes manifests or lockfiles.
+
 ## 0.200.0 - Verified remediation, milestone 4 (first part): external finding intake
 
 **Measured, 0.199.0:** `TIMINGS preflight=4s push=8s pr=4s checks=429s merge=5s verify=7s tag=2s release=255s npm=90s total=804s release-clock=269s`, 269 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.

@@ -17,6 +17,9 @@
 //     factory receives `{ db, filesRoot }`. A planted file's secret in a response is the violation.
 //   - optional `credential` on a state check (version 3): the verifier judges a stored password value itself (plaintext, fast digest,
 //     an approved KDF recomputed from the password, salting). See the section on stored credentials below.
+//   - optional `env` and route `requireHeaders` (version 4): declared environment values set before the application loads (a credential
+//     wired from the environment), and a declared host that serves a route only to a request presenting exact headers (401 otherwise),
+//     so a control can show the application uses the replacement credential and not a hardcoded one.
 //
 //   application-security   hypothesis: an attack request reaches an effect it must not (a planted per-run secret appears in its
 //                          response, or a state check guarding it does not hold). Confirmed when any attack violates; refuted when
@@ -122,6 +125,8 @@ if (INPUT.network) {
   const servers = N.hosts.filter((h) => h.routes && h.routes.length).map((h) => ({ h, addrs: h.addresses.map(mapped), port: h.port || 80, server: http.createServer((req, res) => {
     const route = h.routes.find((r) => r.path === req.url);
     if (!route) { res.writeHead(404); res.end('not found'); return; }
+    // a route may require exact request headers (a credential the application must present); anything else is refused with 401
+    if (route.requireHeaders && Object.entries(route.requireHeaders).some(([k, v]) => String(req.headers[k.toLowerCase()] || '') !== v)) { res.writeHead(401); res.end('unauthorized'); return; }
     res.writeHead(route.status || 200, route.headers || {}); res.end(route.body || '');
   }) }));
   const record = (host, port, isTls, given) => { const address = given !== undefined ? mapped(given) : resolveName(host); const e = { request: current, host: String(host || '').slice(0, 253), port: Number(port) || null, address, tls: !!isTls }; if (connections.length < 200) connections.push(e); return e; };
@@ -170,6 +175,8 @@ if (INPUT.network) {
   // Named ESM imports of built-in modules (import { lookup } from 'node:dns') are bindings, not property reads: sync them.
   syncBuiltinESMExports();
 }
+// Declared environment values (version 4): set before the application loads, so a credential wired from the environment is present.
+for (const [k, v] of Object.entries(INPUT.env || {})) process.env[k] = v;
 let mod;
 try { mod = await import('./' + ENTRY); } catch (e) { finish({ loadFailed: true, loadError: text(e) }); }
 const factory = mod && (mod[INPUT.export] || (mod.default && mod.default[INPUT.export]));
@@ -249,7 +256,8 @@ function validateAppInputs(i, { requireAttack }) {
     else if (!('expect' in c)) return `state check ${c.id}: expect is required`;
   }
   for (const c of checks) if (c.credential?.distinctFrom !== undefined && !checks.some((x) => x.id === c.credential.distinctFrom && x.credential)) return `state check ${c.id}: credential.distinctFrom must name another credential check`;
-  if ((i.network !== undefined || i.files !== undefined) && i.runtime === 'python') return 'network and files declarations are supported for the node runtime only';
+  if ((i.network !== undefined || i.files !== undefined || i.env !== undefined) && i.runtime === 'python') return 'network, files and env declarations are supported for the node runtime only';
+  if (i.env !== undefined && (!isPlain(i.env) || Object.keys(i.env).length > 16 || !Object.entries(i.env).every(([k, v]) => /^[A-Z_][A-Z0-9_]{0,63}$/.test(k) && !/^(?:NODE_|PATH$|HOME$|LD_|DYLD_)/.test(k) && isStr(v, 500)))) return 'env must map at most 16 upper-case names (not NODE_*, PATH, HOME, LD_*, DYLD_*) to strings';
   if (i.network !== undefined) { const p = validateNetwork(i.network); if (p) return p; }
   if (i.files !== undefined) { const p = validateFiles(i.files); if (p) return p; }
   if (requireAttack && !i.requests.some((r) => r.role === 'attack') && !checks.some((c) => c.role === 'attack')) return 'at least one attack request or attack state check is required';
@@ -280,7 +288,8 @@ export function validateNetwork(n) {
       if (!Array.isArray(h.routes) || h.routes.length > 16) return `network host ${h.name}: routes must be an array of at most 16`;
       for (const r of h.routes) {
         if (!isPlain(r) || !isStr(r.path, 500) || !r.path.startsWith('/')) return `network host ${h.name}: every route needs a path starting with /`;
-        for (const k of Object.keys(r)) if (!['path', 'status', 'headers', 'body'].includes(k)) return `network host ${h.name}: unknown route field '${k}'`;
+        for (const k of Object.keys(r)) if (!['path', 'status', 'headers', 'body', 'requireHeaders'].includes(k)) return `network host ${h.name}: unknown route field '${k}'`;
+        if (r.requireHeaders !== undefined && (!isPlain(r.requireHeaders) || Object.keys(r.requireHeaders).length > 4 || !Object.entries(r.requireHeaders).every(([k, v]) => /^[a-z][a-z0-9-]{0,63}$/.test(k) && isStr(v, 500)))) return `network host ${h.name}: route requireHeaders must map at most 4 lower-case header names to strings`;
         if (r.status !== undefined && !(Number.isInteger(r.status) && r.status >= 100 && r.status < 600)) return `network host ${h.name}: route status must be a status code`;
         if (r.headers !== undefined && (!isPlain(r.headers) || Object.keys(r.headers).length > 8 || !Object.values(r.headers).every((v) => isStr(v, 500)))) return `network host ${h.name}: route headers must be at most 8 strings`;
         if (r.body !== undefined && !isStr(r.body, 2000)) return `network host ${h.name}: route body must be a string`;
@@ -381,6 +390,7 @@ function prepareAppInputs(i, token) {
     requests: i.requests.map((r) => ({ id: r.id, method: r.method, path: subst(r.path, token), headers: deep(r.headers || {}, token), ...(r.body !== undefined ? { body: deep(r.body, token) } : {}) })),
     ...(i.network ? { network: deep(i.network, token) } : {}),
     ...(i.files ? { files: { root: i.files.root, tree: deep(i.files.tree, token), links: i.files.links || {} } } : {}),
+    ...(i.env ? { env: deep(i.env, token) } : {}),
   };
 }
 
@@ -535,7 +545,7 @@ function interpretBehaviour({ inputs, token, result, pathOf }) {
 }
 
 const securitySpec = {
-  id: 'application-security', class: 'application-security', version: '3',
+  id: 'application-security', class: 'application-security', version: '4',
   description: 'Does an attack request reach a forbidden effect in a running application? The application is started over a fresh SQLite file, every declared request is sent as real HTTP, and the verifier judges the responses and its own read-only read of the database. Refuted only when no attack violates AND every legitimate control request met its expectation.',
   prerequisites: ['node-runtime', 'node-sqlite', 'confinement-backend'],
   platforms: APP_PLATFORMS, budgets: APP_BUDGETS,
@@ -549,7 +559,7 @@ const securitySpec = {
 };
 
 const behaviourSpec = {
-  id: 'application-behaviour', class: 'application-behaviour', version: '3',
+  id: 'application-behaviour', class: 'application-behaviour', version: '4',
   description: 'Does a revision of a running application still serve its legitimate requests? Control requests only; the hypothesis is that legitimate behaviour REGRESSED, so a revision is clean when this is refuted. A deny-everything or feature-removing patch confirms it.',
   prerequisites: ['node-runtime', 'node-sqlite', 'confinement-backend'],
   platforms: APP_PLATFORMS, budgets: APP_BUDGETS,

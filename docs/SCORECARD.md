@@ -9,9 +9,9 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.200.0 |
-| Bundle SHA-256 | `5d276bc8ee6a1cacce15d517bb44fc614f3c40a5ddbd48cbf36cca6d066972ca` |
-| Commit | `30ec027469fff360a1466093ab7f2ac6ab8f724c` |
+| Engine version | 0.201.0 |
+| Bundle SHA-256 | `c545838761e7e66cb452273ee6a42078af7a4271ad5d14c38ea446dc87d4c3c1` |
+| Commit | `a692e7a36a96518b01ad6f25b839887bdf8a6b12` |
 | Worktree at measurement time | clean |
 | Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -20,7 +20,7 @@ that produced them.
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-17T00:29:21.114Z |
+| Generated (UTC) | 2026-11-17T02:12:13.139Z |
 
 ## What these numbers are, and what they are not
 
@@ -220,7 +220,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 698 |
+| `scanner/src` | 701 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -237,7 +237,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 274/582 (47.1%) |
+| 291/584 (49.8%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -379,7 +379,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.200.0), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.201.0), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both

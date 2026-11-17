@@ -46,6 +46,8 @@ A profile is declared by the operator: how to start the application and what its
 | `sql` | `inputs`: the untrusted value (`{{value}}` in the path or body), the actor sending it, legitimate values with their expected response (`originalMishandles` for one the original gets wrong), and the planted secrets another actor's data holds |
 | `authorization` | `table`, `idColumn`, `contentColumn`, `objects` (owner, row id, planted secret), `operations` (`read` or `update`, with `{{id}}` and `{{value}}`), `policy.allow` (`owner`, `same-tenant-admin`, `any-admin`), and `controls`: legitimate workflows outside the actor matrix, such as a public page, that must keep working after a repair |
 | `ssrf` | `policy` (`allowlist`: only the `approved` hosts; `public-only`: no loopback, private, link-local, carrier-grade NAT or unique-local address), `approved`, `hosts` (each with `name`, `addresses` answered one per resolution with the last repeating, so a host can rebind, an optional `port`, and `routes` the verifier serves: `path`, `status`, `headers`, `body`, where a body may plant `{{secret:<name>}}`), and `inputs` (the untrusted URL as `{{value}}`, the actor, and legitimate values with their expected response). Node runtime only. |
+| `dependency` | `ecosystem` (`npm`), `package`, `vulnerable` (an npm range), `advisory`, `sources` (the directory of package tarballs a lockfile may resolve to), `exploit` (the `filesystem`, `sql` or `ssrf` section whose attacks show the vulnerability). `application.files` must include `package.json` and `package-lock.json`: a repair edits them. |
+| `credential` | `location` (`file`, `line`: where the leaked value is, never the value), `env` (the environment name the replacement is read from), `revocation` (`required` or `not-required`), `provider`, `network` (declared hosts; a route's `requireHeaders` may require `{{secret:replacement-credential}}`), `controls` (requests that must work with the replacement). |
 | `passwords` | `actor` (who registers and logs in), `table`, `userColumn`, `hashColumn`, `register` and `login` (method, path, body carrying `{{user}}` and `{{password}}`, `expectStatus`; `login.denyStatus` for a refused login), `legacy` (`digest`: the unsalted hex digest existing users carry, one of `md5`, `sha1`, `sha256`, `sha512`, and `users` with known test passwords; their rows are built from them), `approved` (`format`: `scrypt`, the only format the verifier recomputes in this release, with `minN`, `minR`, `minSaltBytes`, `minKeyBytes`). |
 | `filesystem` | `root` (the allowed directory the factory receives as `filesRoot`), `tree` (relative path to content, inside and outside the root; a file outside it plants `{{secret:<name>}}`), `links` (real symbolic links, each resolving inside the tree), and `inputs` as for `ssrf`. Node runtime only. |
 | `tests` | `command`, `required`, `flaky`: the project test suite the central verifier runs on both trees |
@@ -61,7 +63,7 @@ A profile is declared by the operator: how to start the application and what its
 | `schemaVersion` | `1.0.0`. A reader accepts 1.x; a 2.0 contract is refused. |
 | `contractId` | `rcon:` and 16 hex characters over the allowlisted identity fields. Identical inputs give an identical id; no clock or random value enters it. |
 | `contractDigest` | SHA-256 over the same fields. |
-| `family` | `sql-injection`, `object-authorization`, `ssrf`, `path-traversal` or `password-storage` in this release. |
+| `family` | `sql-injection`, `object-authorization`, `ssrf`, `path-traversal`, `password-storage`, `dependency` or `credential` in this release. |
 | `findingRefs` | The finding the contract repairs. |
 | `rootCauseGroup` | Digest of the family and the finding's file. |
 | `sourceCommit` | The commit the signed scan recorded, or null. |
@@ -102,6 +104,8 @@ A profile is declared by the operator: how to start the application and what its
 | `app-attack-sealed` | `application-security` | confirmed | refuted | Held-out attack variants, run only on a candidate that passed everything else. Their content and outcome never reach candidate generation. |
 | `app-behaviour-preserved` | `application-behaviour` | refuted | refuted | Legitimate requests and state checks hold on both revisions. |
 | `app-behaviour-after` | `application-behaviour` | not required | refuted | Legitimate requests the original mishandles hold after the repair. |
+| `dependency-resolved` | verifier, no oracle | failed | passed | The lockfile agrees with the manifest, every package comes from the declared sources with its recorded integrity (re-hashed), every dependency resolves, and no resolved instance of the advisory's package, direct or transitive, is in the vulnerable range. |
+| `credential-removed` | verifier, no oracle | failed | passed | The leaked value is in no application file, plain or in a recognised re-encoding (base64, base64url, hex, reversed, percent-encoded, split into joined literals, character codes). The value is read from the original at the declared line and never stored. |
 | `project-tests` | central verifier | not required | passed | Rescan, new-finding delta, footprint and the per-test delta of the project suite, through the same verifier every patch route uses. |
 
 ## Run record
@@ -129,6 +133,7 @@ A profile is declared by the operator: how to start the application and what its
 | `obligationResults` | Original-revision results (recorded, not required) and the selected candidate's results. |
 | `counterexamples` | Each failed obligation's shrunk request, actor and broken property. A sealed failure is recorded without its content. |
 | `quarantined` | Legitimate-request expectations the original revision does not meet, each with its reason: they are removed from the obligations. |
+| `lifecycle` | For a credential repair: `sourceRemoved`, `replacementWired`, `distribution` (`not-checked`), `revocation` (`verified` only from an operator-invoked connector's receipt; `failed`, `unavailable`, `required-not-verified` or `not-required`), `complete`. Null for other families. |
 | `regressionGuards` | Attacks (and generated state checks) the original revision already blocks, each with its reason. They stay in the obligations, so a candidate that removes an existing protection fails, but they cannot show a repair: an attack obligation still needs at least one check the original fails. |
 | `budget` | The budgets in force and what was used. |
 | `accounting` | Oracle runs, wall time, model tokens and calls, and cost. Unknown is null, never zero. |
@@ -170,6 +175,8 @@ What has been executed, per family, runtime and platform. macOS and Linux are se
 | `path-traversal` | `node` | integration-tested | blocked | `path-realpath-containment` |
 | `password-storage` | `node` | integration-tested | blocked | none |
 | `password-storage` | `python` | declared | blocked | none |
+| `dependency` | `node` | integration-tested | blocked | none |
+| `credential` | `node` | integration-tested | blocked | none |
 
 ## External findings
 
@@ -229,6 +236,8 @@ No recipe is learned from examples in this release: both shipped transformations
 - It supports Node applications and Python WSGI applications over SQLite in this release. A Python application's WSGI callable is called directly with a real WSGI environ; no HTTP server runs. PostgreSQL is not executed (no PostgreSQL server exists on the measured host).
 - Server-side request forgery and path traversal run on the Node runtime only. Outbound connections are observed at the Node connection layer (`net`, `tls`, the HTTP agents, raw sockets) and served by the declared hosts with the declared DNS answers; no socket is opened. An `https` destination is recorded and refused, never served. A connection opened below that layer (a child process, a raw binding, a native addon) is not observed, so the scope gate refuses a candidate that introduces one. A destination the declaration does not model (an undeclared name, connected to or looked up) makes the run inconclusive, never a pass.
 - Password storage judges the stored value by recomputation in one approved format (scrypt as `scrypt$N$r$p$<salt hex>$<key hex>`), with cost floors: a different sound format (bcrypt, Argon2) does not hold. Timing and memory hardness are not measured. Node runtime only.
+- Dependency repair supports npm lockfiles (versions 2 and 3) resolving to local package tarballs the profile declares. The package manager is not executed and no install script runs: the verifier checks the lockfile and builds `node_modules` from the verified tarballs itself. No registry is contacted; a package from elsewhere is a named problem, not a pass. Other ecosystems (Haskell, Nix, Python and the rest) are not covered. The test packages are synthetic, so AC-14.5 (pinned real packages) is not met. A verified dependency repair is not applied through the shared apply service, which never writes manifests or lockfiles; apply it with your package manager.
+- Credential repair verifies the source half only: the value is gone (in the forms listed) and the application works with a replacement read from the environment. Distribution of the replacement is never checked, and revocation is verified only by a connector the operator invokes; no connector ships in this release. A re-encoding outside the recognised forms is not detected. Records redact every recognised form of the value; a stored candidate file holds the candidate's exact bytes, as the project source does.
 - Path traversal judges disclosure only: a planted file outside the root that reaches a response. Writes outside the root and time-of-check races are not exercised.
 - Cross-execution shares only attacks that disclosed a planted secret or reached a forbidden destination; a durable-state attack is judged by the object-level check every candidate runs anyway.
 - The application oracles run in the trust boundary. On Linux the boundary currently refuses to run (the namespace backend lacks proved read denial), so repair execution there is `blocked`, never a downgraded pass. The execution tests were run on macOS with the userspace backend.

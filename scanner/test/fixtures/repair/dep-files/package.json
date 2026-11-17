@@ -1,0 +1,9 @@
+{
+  "name": "dep-files",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "otherlib": "file:vendor/packages/otherlib-1.0.0.tgz",
+    "vulnlib": "file:vendor/packages/vulnlib-1.0.0.tgz"
+  }
+}

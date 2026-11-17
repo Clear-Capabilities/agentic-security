@@ -25,6 +25,8 @@ export const OBLIGATION_KINDS = Object.freeze({
   'app-attack-sealed': { oracle: 'application-security', expectBaseline: 'confirmed', expectPatched: 'refuted', set: 'sealed', description: 'held-out attack variants, run only on a candidate that passed every development obligation; their content and outcome never reach candidate generation' },
   'app-behaviour-preserved': { oracle: 'application-behaviour', expectBaseline: 'refuted', expectPatched: 'refuted', set: 'development', description: 'the declared legitimate requests and state checks hold on the original and on the patched revision' },
   'app-behaviour-after': { oracle: 'application-behaviour', expectBaseline: null, expectPatched: 'refuted', set: 'development', description: 'legitimate requests the original mishandles (for example a quoted value) hold on the patched revision' },
+  'dependency-resolved': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the lockfile agrees with the manifest, every package comes from the declared sources with its recorded integrity, every dependency resolves, and no resolved instance of the advisory\'s package (direct or transitive) is in the vulnerable range' },
+  'credential-removed': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the leaked credential is in no application file, plain or in any re-encoding the verifier recognises (base64, hex, reversed, percent-encoded, split into joined literals, character codes)' },
   'project-tests': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the central verifier: rescan, new-finding delta, footprint and the per-test delta of the project suite' },
 });
 
@@ -35,7 +37,7 @@ export const ENVIRONMENT_STATES = Object.freeze(['not-checked', 'staging-verifie
 export const COMPLETION_STATES = Object.freeze(['complete', 'partial', 'cancelled', 'unavailable', 'invalid']);
 export const CUSTODY = Object.freeze(['internal-scan', 'imported', 'locally-corroborated', 'reproduced', 'refuted', 'unresolved']);
 export const GENERATORS = Object.freeze(['deterministic-recipe', 'configured-model', 'user-supplied']);
-export const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage']);
+export const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential']);
 export const EVIDENCE_ORIGINS = Object.freeze(['generated-from-profile', 'operator-declared', 'approved-invariant', 'counterexample', 'registered-family']);
 
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w@.\-/]{1,512}$/;
@@ -116,7 +118,7 @@ export function validateCandidate(rec) {
   return result(ctx);
 }
 
-export const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
+export const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'lifecycle', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
 
 export function validateRepairRecord(rec) {
   const g = guardObject(rec); if (!g.ok) return result(g.ctx);
