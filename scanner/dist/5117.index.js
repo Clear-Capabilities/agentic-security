@@ -11,7 +11,7 @@ export const modules = {
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
 /* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(48161);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
-/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(89330);
+/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(13361);
 /* harmony import */ var _recipes_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(60681);
 /* harmony import */ var _intake_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(30356);
 // Running a recipe's examples (verified-remediation PRD FR-11, M3-02): each positive or independent example is a real repair run, on a

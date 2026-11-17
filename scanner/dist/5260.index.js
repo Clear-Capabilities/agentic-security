@@ -1,6 +1,198 @@
 export const id = 5260;
-export const ids = [5260];
+export const ids = [5260,642];
 export const modules = {
+
+/***/ 90642:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   ET: () => (/* binding */ readTarEntries),
+/* harmony export */   Jn: () => (/* binding */ whiteoutTarget),
+/* harmony export */   TarSafetyError: () => (/* binding */ TarSafetyError),
+/* harmony export */   dR: () => (/* binding */ DEFAULT_LIMITS),
+/* harmony export */   l0: () => (/* binding */ isWhiteoutName),
+/* harmony export */   zr: () => (/* binding */ decompressIfGzip)
+/* harmony export */ });
+/* unused harmony export isSafeEntryName */
+/* harmony import */ var node_zlib__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(38522);
+// Hand-rolled, hardened POSIX/GNU tar reader for OCI/Docker image archives.
+//
+// Why hand-rolled instead of a dependency: this repo has no tar library (see
+// `src/artifact/CLAUDE.md`), and PRD 5's own Safety Requirements ask for exact
+// control over the failure modes a generic tar library treats as implementation
+// detail: malicious entry paths, decompression bombs, giant layers, oversized
+// archives. Rolling it ourselves means every one of those limits is a named,
+// tested constant in this file rather than a library default we'd have to audit.
+//
+// Scope: ustar + GNU longname ('L' typeflag) + base-256 size fields. PAX extended
+// headers ('x'/'g') and GNU longlink ('K') are structurally skipped (their data
+// block is consumed so offsets stay correct, but their content is not applied) —
+// a disclosed limitation, not a silent one. Real docker-save/oci-archive output
+// from Go's archive/tar for images in this size/complexity class essentially
+// never needs them; synthetic fixtures in this codebase never emit them either.
+
+
+const BLOCK = 512;
+
+const DEFAULT_LIMITS = Object.freeze({
+  maxEntries: 200_000,
+  maxEntrySize: 512 * 1024 * 1024, // 512MB per tar entry
+  maxTotalSize: 4 * 1024 * 1024 * 1024, // 4GB per archive (sum of entry sizes)
+  maxGunzipOutput: 4 * 1024 * 1024 * 1024, // decompression-bomb guard
+});
+
+class TarSafetyError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.name = 'TarSafetyError';
+    this.code = code;
+  }
+}
+
+function parseSizeField(buf) {
+  if (buf[0] & 0x80) {
+    // GNU base-256 extension for sizes that don't fit in octal-ASCII.
+    let n = 0n;
+    for (let i = 1; i < buf.length; i++) n = (n << 8n) | BigInt(buf[i]);
+    return Number(n);
+  }
+  const s = buf.toString('ascii').replace(/\0.*$/, '').trim();
+  if (!s) return 0;
+  const n = parseInt(s, 8);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function cstr(buf) {
+  return buf.toString('utf8').replace(/\0.*$/, '');
+}
+
+// A tar entry name is unsafe when it would escape a virtual extraction root:
+// absolute paths, `..` segments, embedded NULs, or an unreasonable length.
+// Because this module never writes to a real filesystem path (every caller
+// keeps extracted content in an in-memory Map keyed by this string), the
+// classic zip-slip *write* vulnerability cannot occur here — but a hostile
+// name must still never be silently treated as an ordinary path by downstream
+// manifest/package-DB matching, so unsafe entries are flagged, never dropped
+// silently and never accepted as-is.
+function isSafeEntryName(name) {
+  if (typeof name !== 'string' || name.length === 0 || name.length > 4096) return false;
+  if (name.includes('\0')) return false;
+  const norm = name.replace(/\\/g, '/');
+  if (norm.startsWith('/')) return false;
+  if (norm.split('/').some((p) => p === '..')) return false;
+  return true;
+}
+
+function isWhiteoutName(name) {
+  return (name.split('/').pop() || '').startsWith('.wh.');
+}
+
+// Resolves a whiteout entry name to what it deletes. `.wh..wh..opq` marks a
+// directory as "opaque" (everything from earlier layers under it is hidden,
+// not individually deleted) — reported distinctly so callers don't conflate
+// it with a single-file deletion.
+function whiteoutTarget(name) {
+  const parts = name.split('/');
+  const base = parts.pop();
+  if (base === '.wh..wh..opq') return { opaque: true, dir: parts.join('/') };
+  return { opaque: false, path: [...parts, base.slice(4)].join('/') };
+}
+
+// Decompresses a gzip member with a hard output-size cap (Node's native
+// ERR_BUFFER_TOO_LARGE on overflow — no custom streaming counter needed).
+// Returns the input unchanged when it isn't gzip-magic (plain tar).
+function decompressIfGzip(buf, limits = DEFAULT_LIMITS) {
+  if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+    try {
+      return node_zlib__WEBPACK_IMPORTED_MODULE_0__.gunzipSync(buf, { maxOutputLength: limits.maxGunzipOutput });
+    } catch (err) {
+      if (err && err.code === 'ERR_BUFFER_TOO_LARGE') {
+        throw new TarSafetyError('decompressed layer exceeds the decompression-bomb guard', 'gunzip_too_large');
+      }
+      throw new TarSafetyError(`gzip stream is malformed: ${err.message}`, 'gunzip_malformed');
+    }
+  }
+  return buf;
+}
+
+/**
+ * Reads a decompressed tar buffer and yields one record per entry:
+ *   { name, size, typeflag, linkname, data, unsafe }
+ * `data` is a Buffer view into `buf` (never copied) for safe entries, `null`
+ * for unsafe ones. Throws TarSafetyError (never returns a partial result) the
+ * moment any configured limit is exceeded.
+ */
+function* readTarEntries(buf, limits = DEFAULT_LIMITS) {
+  if (!Buffer.isBuffer(buf)) throw new TarSafetyError('tar input must be a Buffer', 'bad_input');
+  let offset = 0;
+  let count = 0;
+  let totalSize = 0;
+  let pendingLongName = null;
+
+  while (offset + BLOCK <= buf.length) {
+    const header = buf.subarray(offset, offset + BLOCK);
+    if (header.every((b) => b === 0)) {
+      offset += BLOCK;
+      continue; // end-of-archive zero-fill padding
+    }
+
+    count += 1;
+    if (count > limits.maxEntries) {
+      throw new TarSafetyError(`tar archive has more than ${limits.maxEntries} entries`, 'too_many_entries');
+    }
+
+    let name = cstr(header.subarray(0, 100));
+    const typeflag = String.fromCharCode(header[156] || 0);
+    const linkname = cstr(header.subarray(157, 257));
+    const magic = header.subarray(257, 263).toString('ascii');
+    const prefix = magic.startsWith('ustar') ? cstr(header.subarray(345, 500)) : '';
+    if (prefix) name = `${prefix}/${name}`;
+    const size = parseSizeField(header.subarray(124, 136));
+
+    offset += BLOCK;
+
+    if (size < 0 || !Number.isFinite(size)) {
+      throw new TarSafetyError(`tar entry "${name}" has an invalid size field`, 'bad_size');
+    }
+    if (size > limits.maxEntrySize) {
+      throw new TarSafetyError(`tar entry "${name}" (${size} bytes) exceeds the per-entry size limit`, 'entry_too_large');
+    }
+    totalSize += size;
+    if (totalSize > limits.maxTotalSize) {
+      throw new TarSafetyError('tar archive exceeds the total-size limit', 'archive_too_large');
+    }
+
+    const dataBlocks = Math.ceil(size / BLOCK);
+    if (offset + size > buf.length) {
+      throw new TarSafetyError(`tar entry "${name}" claims more data than the archive contains`, 'truncated');
+    }
+    const data = size > 0 ? buf.subarray(offset, offset + size) : Buffer.alloc(0);
+    offset += dataBlocks * BLOCK;
+
+    const resolvedName = pendingLongName ? pendingLongName : name;
+    pendingLongName = null;
+
+    if (typeflag === 'L') {
+      // GNU longname: this entry's data IS the next entry's real name.
+      pendingLongName = cstr(data);
+      continue;
+    }
+    if (typeflag === 'K' || typeflag === 'x' || typeflag === 'g') {
+      // GNU longlink / PAX extended header — structurally skipped (see header comment).
+      continue;
+    }
+
+    if (!isSafeEntryName(resolvedName)) {
+      yield { name: resolvedName, size, typeflag, linkname, data: null, unsafe: true };
+      continue;
+    }
+
+    yield { name: resolvedName.replace(/\\/g, '/'), size, typeflag, linkname, data, unsafe: false };
+  }
+}
+
+
+/***/ }),
 
 /***/ 11106:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
@@ -640,7 +832,7 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 function validateProfile(p) {
   const errs = [];
   if (!(0,schema_kit/* isPlainObject */.Qd)(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'tests', 'approval'], 'profile');
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
   if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
   const a = p.application;
@@ -671,7 +863,49 @@ function validateProfile(p) {
     actorIds.add(ac.id);
     if (!(0,schema_kit/* isPlainObject */.Qd)(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
   }
-  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem or passwords section');
+  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords or credential section');
+  // A leaked credential: where it is (never its value), the environment name the replacement is wired from, whether the old credential
+  // must be revoked, and the legitimate requests that must work with the replacement (against declared hosts that accept only it).
+  if (p.credential !== undefined) {
+    const c = p.credential;
+    if (!(0,schema_kit/* isPlainObject */.Qd)(c)) errs.push('credential must be an object');
+    else {
+      keysOnly(errs, c, ['location', 'env', 'revocation', 'provider', 'network', 'controls'], 'credential');
+      if (!(0,schema_kit/* isPlainObject */.Qd)(c.location) || !(0,schemas/* isRelPath */.ji)(c.location.file) || !Number.isInteger(c.location.line) || c.location.line < 1) errs.push('credential.location must be {file, line}: where the leaked value is, never the value');
+      else if ((0,schema_kit/* isPlainObject */.Qd)(a) && Array.isArray(a.files) && !a.files.includes(c.location.file)) errs.push('credential.location.file must be one of the application files');
+      if (typeof c.env !== 'string' || !/^[A-Z_][A-Z0-9_]{0,63}$/.test(c.env)) errs.push('credential.env must be the upper-case environment name the replacement is read from');
+      if (!['required', 'not-required'].includes(c.revocation)) errs.push("credential.revocation must be 'required' or 'not-required'");
+      if (typeof c.provider !== 'string' || !SLUG.test(c.provider)) errs.push('credential.provider must be a slug naming the issuing service');
+      const n = (0,app_adapters/* validateNetwork */.jO)(c.network);
+      if (n) errs.push(`credential.network: ${n}`);
+      if (!Array.isArray(c.controls) || !c.controls.length) errs.push('credential.controls must list the requests that must work with the replacement credential');
+      else for (const [i, r] of c.controls.entries()) {
+        const w = `credential.controls[${i}]`;
+        if (!(0,schema_kit/* isPlainObject */.Qd)(r)) { errs.push(`${w} must be an object`); continue; }
+        keysOnly(errs, r, ['id', 'actor', 'method', 'path', 'body', 'expectStatus', 'expectIncludes'], w);
+        if (typeof r.id !== 'string' || !SLUG.test(r.id)) errs.push(`${w}.id must be a slug`);
+        if (!actorIds.has(r.actor)) errs.push(`${w}.actor must name a declared actor`);
+        checkRequestShape(errs, r, w);
+      }
+      if (a?.runtime === 'python') errs.push('the credential section is supported for the node runtime only in this release');
+    }
+  }
+  // A vulnerable dependency (npm): the advisory's package and range, where the package tarballs live, and which section's attacks show
+  // the vulnerability in this application. The manifest and the lockfile must be application files: a repair edits them.
+  if (p.dependency !== undefined) {
+    const d = p.dependency;
+    if (!(0,schema_kit/* isPlainObject */.Qd)(d)) errs.push('dependency must be an object');
+    else {
+      keysOnly(errs, d, ['ecosystem', 'package', 'vulnerable', 'advisory', 'sources', 'exploit'], 'dependency');
+      if (d.ecosystem !== 'npm') errs.push("dependency.ecosystem: only 'npm' is supported in this release");
+      if (typeof d.package !== 'string' || !/^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]{0,213}$/.test(d.package)) errs.push('dependency.package must be an npm package name');
+      if (typeof d.vulnerable !== 'string' || !d.vulnerable.trim() || d.vulnerable.length > 200) errs.push('dependency.vulnerable must be a version range');
+      if (typeof d.advisory !== 'string' || !d.advisory.trim()) errs.push('dependency.advisory must name the advisory');
+      if (!(0,schemas/* isRelPath */.ji)(d.sources)) errs.push('dependency.sources must be a relative directory holding the package tarballs');
+      if (!['filesystem', 'sql', 'ssrf'].includes(d.exploit) || p[d.exploit] === undefined) errs.push('dependency.exploit must name the profile section (filesystem, sql or ssrf) whose attacks show the vulnerability');
+      if ((0,schema_kit/* isPlainObject */.Qd)(a) && Array.isArray(a.files) && !['package.json', 'package-lock.json'].every((f) => a.files.includes(f))) errs.push('application.files must include package.json and package-lock.json for a dependency repair');
+    }
+  }
   // Password storage: where the application stores a credential, how a user registers and logs in, the legacy format existing users
   // carry (with known test passwords: the legacy rows are built from them), and the approved storage format and its minimum costs.
   if (p.passwords !== undefined) {
@@ -841,6 +1075,8 @@ const PROFILE_SUPPORT = Object.freeze([
   { family: 'path-traversal', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'path-realpath-containment', evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'password-storage', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'password-storage', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
+  { family: 'dependency', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-dependency.test.js' },
+  { family: 'credential', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-credential.test.js' },
 ]);
 
 /** The support row for a contract's family and runtime, or null (an unsupported combination is refused when the profile validates). */
@@ -886,6 +1122,12 @@ function snapshotSource(root, profile) {
     for (const p of ['/usr/bin/python3', '/opt/homebrew/bin/python3', '/usr/local/bin/python3']) {
       try { if (external_node_fs_.statSync(p).isFile()) { python = String((0,external_node_child_process_.spawnSync)(p, ['-I', '-c', 'import sys, sqlite3; print(sys.version.split()[0], sqlite3.sqlite_version)'], { encoding: 'utf8', timeout: 5000 }).stdout || '').trim() || null; break; } } catch { /* next */ }
     }
+  }
+  if (profile.dependency && typeof profile.dependency.sources === 'string') {
+    // the package tarballs a lockfile may resolve to are part of what the contract judges
+    const tarballs = {};
+    try { for (const f of external_node_fs_.readdirSync(external_node_path_.join(realRoot, profile.dependency.sources)).sort()) if (f.endsWith('.tgz')) tarballs[f] = (0,identity/* digestOf */.ol)(external_node_fs_.readFileSync(external_node_path_.join(realRoot, profile.dependency.sources, f)).toString('base64')); } catch { /* absent: the resolution obligation reports it */ }
+    configDigests.packageSources = (0,identity/* digestOf */.ol)(tarballs);
   }
   configDigests.runtime = (0,identity/* digestOf */.ol)({ node: process.versions.node, sqlite: process.versions.sqlite || null, ...(profile.application.runtime === 'python' ? { python } : {}) });
   return { files, missing, sourceDigest: (0,identity/* digestOf */.ol)(files), configDigests };
@@ -1160,6 +1402,34 @@ function buildContract(o) {
   } else if (o.family === 'ssrf') {
     if (!profile.ssrf) return { contract: null, blocked: ['the profile has no ssrf section for a server-side request forgery finding'], problems: [] };
     obligations = ssrfObligations(profile, actors, blocked);
+  } else if (o.family === 'dependency') {
+    // The advisory's attacks come from the declared exploit section; the resolution obligation judges the manifest, the lockfile and
+    // the resolved graph; the application runs against the packages each revision resolves to.
+    if (!profile.dependency) return { contract: null, blocked: ['the profile has no dependency section for a dependency finding'], problems: [] };
+    const via = { filesystem: filesystemObligations, sql: sqlObligations, ssrf: ssrfObligations }[profile.dependency.exploit];
+    obligations = via(profile, actors, blocked);
+    const d = profile.dependency;
+    const dinputs = { ecosystem: d.ecosystem, package: d.package, vulnerable: d.vulnerable, advisory: d.advisory, sources: d.sources };
+    obligations.unshift({
+      id: 'dependency-resolution', kind: 'dependency-resolved', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `${d.package} outside ${d.vulnerable} everywhere it resolves; lockfile consistent with the manifest; packages from ${d.sources} with their recorded integrity`,
+      baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: dinputs, inputsDigest: (0,identity/* digestOf */.ol)(dinputs), description: schemas/* OBLIGATION_KINDS */.Xn['dependency-resolved'].description,
+    });
+  } else if (o.family === 'credential') {
+    if (!profile.credential) return { contract: null, blocked: ['the profile has no credential section for a leaked credential finding'], problems: [] };
+    const c = profile.credential;
+    const loc = c.location;
+    const original = o.source.files[loc.file];
+    const len = original ? (String(original).split('\n')[loc.line - 1] || '').match(/(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g)?.reduce((m, s) => Math.max(m, s.length - 2), 0) ?? 0 : 0;
+    if (len < 12) blocked.push(`credential: no string literal of 12 characters or more is at ${loc.file}:${loc.line}, so the leaked value could not be located`);
+    const cinputs = { file: loc.file, line: loc.line, length: len, env: c.env, provider: c.provider, revocation: c.revocation };
+    obligations = [{
+      id: 'credential-removal', kind: 'credential-removed', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `the value leaked at ${loc.file}:${loc.line} is in no application file, plain or re-encoded`, baselineExpectation: 'failed', patchedExpectation: 'passed',
+      evidenceOrigin: 'registered-family', inputs: cinputs, inputsDigest: (0,identity/* digestOf */.ol)(cinputs), description: schemas/* OBLIGATION_KINDS */.Xn['credential-removed'].description,
+    }];
+    const controls = c.controls.map((r) => ({ id: `credential_${r.id.replace(/-/g, '_')}`, role: 'control', ...reqOf(r, actors[r.actor], {}), expect: { status: r.expectStatus || [200], ...(r.expectIncludes ? { bodyIncludes: r.expectIncludes } : {}) } }));
+    obligations.push(obligation('app-behaviour-after', 'credential-replacement-wired', appInputs(profile, controls, [], { network: c.network, env: { [c.env]: '{{secret:replacement-credential}}' } }), { scope: `the application works with a replacement credential read from ${c.env}, against hosts that accept only that replacement` }));
   } else if (o.family === 'password-storage') {
     if (!profile.passwords) return { contract: null, blocked: ['the profile has no passwords section for a password storage finding'], problems: [] };
     obligations = passwordObligations(profile, actors, blocked);
@@ -1194,7 +1464,8 @@ function buildContract(o) {
     sourceCommit: o.commit ?? null, sourceDigest: o.source.sourceDigest, configDigests: o.source.configDigests,
     profile: { application: profile.application, database: { engine: profile.database.engine }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
     obligations, policyFacts,
-    editScope: { allowed: [...profile.application.files], prohibited: [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
+    // a dependency repair edits the manifest and the lockfile; every other protected path stays protected
+    editScope: { allowed: [...profile.application.files], prohibited: o.family === 'dependency' ? PROTECTED_PATTERNS.filter((x) => x !== 'package.json' && x !== 'package-lock.json') : [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
     executionPolicy: { execution: 'trust-boundary', network: 'denied', model: 'none-unless-operator-configured' },
     knownUnknowns,
   };
@@ -1215,7 +1486,7 @@ function obligationSummary(contract) {
 
 /***/ }),
 
-/***/ 89330:
+/***/ 13361:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -1523,6 +1794,273 @@ function crossInputs(inputs, shared) {
   return { ...inputs, requests: [...inputs.requests.filter((r) => r.role === 'control'), ...attacks], stateChecks: [] };
 }
 
+// EXTERNAL MODULE: ./src/artifact/safe-tar.js
+var safe_tar = __webpack_require__(90642);
+;// CONCATENATED MODULE: ./src/repair/dependencies.js
+// Dependency repair (verified-remediation PRD FR-14, M4-02, M4-03), npm first.
+//
+// Two verifier-side halves, both over the EXACT files of a revision (the manifest and the lockfile are candidate files like any other):
+//
+//   checkResolution   the `dependency-resolved` obligation. The lockfile must agree with the manifest (every manifest dependency is in
+//                     the lockfile's root entry with the same range, and the installed version satisfies it: AC-14.2, a manifest-only
+//                     edit with a stale lockfile fails); every resolved package must come from the declared package sources with the
+//                     integrity the lockfile records, re-hashed here from the tarball bytes (provenance); every package's own
+//                     dependencies must resolve (Node's lookup, walking up) to a version satisfying their range; and NO resolved
+//                     instance of the advisory's package, direct or transitive, may be in the vulnerable range (AC-14.3).
+//   materialize       builds node_modules for the application oracles from the lockfile: each entry's tarball is read from the package
+//                     sources, its integrity checked, and its files extracted through the hardened tar reader. The application then
+//                     runs against the packages a candidate actually resolves to (AC-14.1, AC-14.4: an API change without the source
+//                     adaptation, or a behaviour-breaking upgrade, fails the behaviour obligations).
+//
+// Limits, stated: npm lockfile version 2 or 3 only; packages come from local tarballs declared by the profile (no registry, no network,
+// so a package source outside the project is a named limitation); the package manager itself is not executed and no install script
+// runs; ranges are the npm subset `x.y.z`, `^`, `~`, `>`, `>=`, `<`, `<=`, `=`, space for AND and `||` for OR (no prerelease logic,
+// no `x` wildcards beyond `*`).
+
+
+
+
+
+const parseV = (v) => { const m = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(v).trim()); return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null; };
+const cmp = (a, b) => { for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
+
+function comparators(part) {
+  const out = [];
+  for (const tok of part.trim().split(/\s+/).filter(Boolean)) {
+    if (tok === '*' || tok === 'x') continue;
+    const m = /^(\^|~|>=|<=|>|<|=)?(v?\d+\.\d+\.\d+)$/.exec(tok);
+    if (!m) return null;
+    const v = parseV(m[2]); const op = m[1] || '=';
+    if (op === '^') { out.push(['>=', v]); out.push(['<', v[0] > 0 ? [v[0] + 1, 0, 0] : v[1] > 0 ? [0, v[1] + 1, 0] : [0, 0, v[2] + 1]]); }
+    else if (op === '~') { out.push(['>=', v]); out.push(['<', [v[0], v[1] + 1, 0]]); }
+    else out.push([op, v]);
+  }
+  return out;
+}
+
+/** Does `version` satisfy `range`? null when the range is outside the supported subset (never guessed). */
+function satisfies(version, range) {
+  const v = parseV(version);
+  if (!v || typeof range !== 'string') return null;
+  let any = false;
+  for (const part of range.split('||')) {
+    const cs = comparators(part);
+    if (cs === null) return null;
+    if (cs.every(([op, w]) => { const c = cmp(v, w); return op === '=' ? c === 0 : op === '>' ? c > 0 : op === '>=' ? c >= 0 : op === '<' ? c < 0 : c <= 0; })) any = true;
+  }
+  return any;
+}
+
+const nameOf = (p) => { const i = p.lastIndexOf('node_modules/'); return i < 0 ? null : p.slice(i + 'node_modules/'.length); };
+
+/** Node's lookup from a package path: the nearest node_modules/<name> walking up. */
+function resolveFrom(pkgs, fromPath, name) {
+  let base = fromPath;
+  for (;;) {
+    const cand = `${base ? `${base}/` : ''}node_modules/${name}`;
+    if (pkgs[cand]) return cand;
+    if (!base) return null;
+    const i = base.lastIndexOf('/node_modules/');
+    base = i < 0 ? '' : base.slice(0, i);
+  }
+}
+
+function tarballFor(root, dep, entry) {
+  const r = String(entry.resolved || '');
+  if (!r.startsWith('file:')) return { problem: `${entry.name || '?'}: resolved from ${r.split(':')[0] || 'nowhere'}, not from the declared package sources` };
+  const rel = external_node_path_.posix.normalize(r.slice(5));
+  const sources = external_node_path_.posix.normalize(dep.sources).replace(/\/$/, '');
+  if (rel.startsWith('..') || external_node_path_.isAbsolute(rel) || !(rel === sources || rel.startsWith(`${sources}/`))) return { problem: `${rel}: outside the declared package sources ${sources}` };
+  let bytes;
+  try {
+    const abs = external_node_path_.join(root, rel);
+    const realRoot = external_node_fs_.realpathSync(root);
+    if (!external_node_fs_.realpathSync(abs).startsWith(realRoot + external_node_path_.sep)) return { problem: `${rel}: a link out of the project` };
+    bytes = external_node_fs_.readFileSync(abs);
+  } catch { return { problem: `${rel}: the tarball is missing` }; }
+  const m = /^sha512-([A-Za-z0-9+/=]+)$/.exec(String(entry.integrity || ''));
+  if (!m) return { problem: `${rel}: the lockfile records no sha512 integrity` };
+  if (external_node_crypto_.createHash('sha512').update(bytes).digest('base64') !== m[1]) return { problem: `${rel}: the tarball does not match the integrity the lockfile records` };
+  return { bytes, rel };
+}
+
+function readPackage(bytes) {
+  const files = {};
+  for (const e of (0,safe_tar/* readTarEntries */.ET)((0,safe_tar/* decompressIfGzip */.zr)(bytes))) {
+    if (e.unsafe || !['0', '\0', ''].includes(e.typeflag) || !e.name.startsWith('package/')) continue;
+    files[e.name.slice('package/'.length)] = e.data.toString('utf8');
+  }
+  return files;
+}
+
+/**
+ * The `dependency-resolved` check over one revision's files. Pure apart from reading the declared tarballs under `root`.
+ * @returns {{ok:boolean, problems:string[], vulnerable:object[], resolved:object[]}}
+ */
+function checkResolution(root, dep, files) {
+  const problems = []; const vulnerable = [];
+  let manifest; let lock;
+  try { manifest = JSON.parse(files['package.json']); } catch { return { ok: false, problems: ['package.json is missing or not JSON'], vulnerable, resolved: [] }; }
+  try { lock = JSON.parse(files['package-lock.json']); } catch { return { ok: false, problems: ['package-lock.json is missing or not JSON'], vulnerable, resolved: [] }; }
+  if (![2, 3].includes(lock.lockfileVersion) || !lock.packages || typeof lock.packages !== 'object') return { ok: false, problems: ['only npm lockfile versions 2 and 3 are supported'], vulnerable, resolved: [] };
+  const pkgs = lock.packages;
+  const rootDeps = manifest.dependencies || {};
+  const lockRoot = pkgs['']?.dependencies || {};
+  for (const [name, range] of Object.entries(rootDeps)) {
+    if (lockRoot[name] !== range) problems.push(`the lockfile is stale: package.json asks for ${name}@${range}, the lockfile root records ${lockRoot[name] ?? 'nothing'}`);
+    const at = pkgs[`node_modules/${name}`];
+    if (!at) { problems.push(`${name} is not installed by the lockfile`); continue; }
+    const s = /^file:/.test(range) ? null : satisfies(at.version, range);
+    if (s === false) problems.push(`the lockfile installs ${name}@${at.version}, which does not satisfy ${range}`);
+  }
+  for (const name of Object.keys(lockRoot)) if (!(name in rootDeps)) problems.push(`the lockfile root records ${name}, which package.json no longer asks for`);
+  const resolved = [];
+  for (const [p, entry] of Object.entries(pkgs)) {
+    if (!p) continue;
+    const name = nameOf(p);
+    if (!name || typeof entry?.version !== 'string') { problems.push(`${p}: not a package entry`); continue; }
+    const t = tarballFor(root, dep, { ...entry, name });
+    if (t.problem) problems.push(t.problem);
+    else {
+      try {
+        const meta = JSON.parse(readPackage(t.bytes)['package.json'] || '{}');
+        if (meta.name !== name || meta.version !== entry.version) problems.push(`${p}: the tarball holds ${meta.name}@${meta.version}, the lockfile says ${name}@${entry.version}`);
+      } catch (e) { problems.push(`${p}: the tarball could not be read (${String(e.message).slice(0, 80)})`); }
+    }
+    for (const [d, range] of Object.entries(entry.dependencies || {})) {
+      const at = resolveFrom(pkgs, p, d);
+      if (!at) problems.push(`${name}@${entry.version} needs ${d}@${range}, which nothing installs`);
+      else if (satisfies(pkgs[at].version, range) === false) problems.push(`${name}@${entry.version} needs ${d}@${range} and resolves ${pkgs[at].version}`);
+    }
+    resolved.push({ path: p, name, version: entry.version });
+    if (name === dep.package) {
+      const bad = satisfies(entry.version, dep.vulnerable);
+      if (bad === null) problems.push(`the vulnerable range ${dep.vulnerable} is outside the supported range syntax`);
+      if (bad) vulnerable.push({ path: p, version: entry.version, transitive: p !== `node_modules/${name}` });
+    }
+  }
+  for (const v of vulnerable) problems.push(`${v.transitive ? 'a transitive' : 'the direct'} ${dep.package}@${v.version} at ${v.path} is in the vulnerable range ${dep.vulnerable} (${dep.advisory})`);
+  return { ok: problems.length === 0, problems, vulnerable, resolved };
+}
+
+/**
+ * The files the application oracles run: the revision's application files plus node_modules built from its lockfile. Entries that do
+ * not verify are left out (the resolution obligation reports them); the application then fails to load what it needs.
+ */
+function materialize(root, dep, files, { maxFiles = 400, maxBytes = 4 << 20 } = {}) {
+  const out = { ...files };
+  let lock;
+  try { lock = JSON.parse(files['package-lock.json']); } catch { return out; }
+  let n = 0; let bytes = 0;
+  for (const [p, entry] of Object.entries(lock?.packages || {})) {
+    const name = nameOf(p);
+    if (!p || !name) continue;
+    const t = tarballFor(root, dep, { ...entry, name });
+    if (t.problem) continue;
+    for (const [rel, text] of Object.entries(readPackage(t.bytes))) {
+      const norm = external_node_path_.posix.normalize(rel);
+      if (norm.startsWith('..') || external_node_path_.posix.isAbsolute(norm)) continue;
+      if (++n > maxFiles || (bytes += text.length) > maxBytes) throw new Error('the resolved packages exceed the verifier\'s size bound');
+      out[`${p}/${norm}`] = text;
+    }
+  }
+  return out;
+}
+
+;// CONCATENATED MODULE: ./src/repair/credentials.js
+// Credential repair (verified-remediation PRD FR-15, M4-04): source removal, replacement wiring and the lifecycle a source change cannot
+// complete on its own.
+//
+// The leaked value is never stored. A contract records its LOCATION (file and line) and length; the verifier reads the value from the
+// original source snapshot when it checks a revision, and every message names only the form it found, never the value.
+//
+//   checkRemoval   the `credential-removed` obligation over a revision's files: the value must not appear in any application file, nor
+//                  any re-encoding of it this module can recognise: base64 and base64url (with or without padding), hex in either case,
+//                  the value reversed, the value percent-encoded, the value split into adjacent string literals joined with `+` or in a
+//                  template, and the value as character codes (`String.fromCharCode(...)`, a numeric array). Re-encoding is not
+//                  removal (AC-15.1). An encoding outside that list (a custom cipher, a value fetched at runtime from a file the
+//                  candidate adds) is not recognised: that is a stated limit, and the behaviour obligation still requires the
+//                  replacement credential from the environment.
+//   lifecycle      what the record states beyond the source: replacement distribution and old-credential revocation are external.
+//                  Revocation is `verified` only from a connector the OPERATOR invoked with its own credentials that returned a receipt;
+//                  a connector error is `failed` (AC-15.3), no connector is `unavailable`, and nothing in a project file can invoke one
+//                  (AC-15.5). A source repair with revocation required and not verified is `lifecycle incomplete` (AC-15.2).
+
+/** The longest string literal on the given line of the original text: the leaked value, read at check time and never stored. */
+function extractCredential(text, line) {
+  const l = String(text || '').split('\n')[line - 1] || '';
+  const lits = [...l.matchAll(/(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g)].map((m) => m[2]);
+  const best = lits.sort((a, b) => b.length - a.length)[0];
+  return best && best.length >= 12 ? best : null;
+}
+
+const joined = (t) => String(t)
+  .replace(/(['"`])\s*\+\s*(['"`])/g, '')
+  .replace(/\$\{\s*(['"])((?:\\.|(?!\1)[^\\\n])*)\1\s*\}/g, '$2');
+
+function charCodeRuns(t) {
+  const out = [];
+  for (const m of String(t).matchAll(/(?:fromCharCode\s*\(|\[)\s*((?:\d{1,5}\s*,\s*){7,}\d{1,5})\s*[\])]/g)) {
+    const codes = m[1].split(',').map((x) => Number(x.trim()));
+    if (codes.every((c) => c >= 0 && c < 0x110000)) out.push(String.fromCodePoint(...codes));
+  }
+  return out;
+}
+
+/** Which recognised forms of the value appear in which files. Messages name forms and files only. */
+function checkRemoval(value, files) {
+  if (!value) return { ok: false, found: [{ file: null, form: 'the leaked value could not be read from the original source at the declared line' }] };
+  const b64 = Buffer.from(value, 'utf8').toString('base64');
+  const forms = [
+    ['the value', value], ['base64', b64], ['base64 without padding', b64.replace(/=+$/, '')],
+    ['base64url', Buffer.from(value, 'utf8').toString('base64url')], ['hex', Buffer.from(value, 'utf8').toString('hex')],
+    ['upper-case hex', Buffer.from(value, 'utf8').toString('hex').toUpperCase()], ['the value reversed', [...value].reverse().join('')],
+    ...(encodeURIComponent(value) !== value ? [['the value percent-encoded', encodeURIComponent(value)]] : []),
+  ];
+  const found = [];
+  for (const [file, text] of Object.entries(files || {})) {
+    if (typeof text !== 'string') continue;
+    for (const [form, v] of forms) if (text.includes(v)) found.push({ file, form });
+    if (!found.some((f) => f.file === file) && joined(text).includes(value)) found.push({ file, form: 'the value split into joined string literals' });
+    if (charCodeRuns(text).some((s) => s.includes(value))) found.push({ file, form: 'the value as character codes' });
+  }
+  return { ok: found.length === 0, found };
+}
+
+/** Revocation through an operator-invoked connector. Never throws; only a returned receipt is `verified`. */
+async function revoke(connector, request) {
+  if (!connector || typeof connector.revoke !== 'function') return { status: 'unavailable', reason: 'no revocation connector was invoked by the operator' };
+  try {
+    const r = await connector.revoke(request);
+    if (r && r.ok === true && typeof r.receipt === 'string' && r.receipt.length) return { status: 'verified', receipt: r.receipt.slice(0, 200), connector: String(connector.id || 'connector').slice(0, 80) };
+    return { status: 'failed', reason: String(r?.reason || 'the connector did not return a receipt').slice(0, 200), connector: String(connector.id || 'connector').slice(0, 80) };
+  } catch (e) {
+    return { status: 'failed', reason: `the connector failed: ${String(e?.message || e).slice(0, 160)}`, connector: String(connector.id || 'connector').slice(0, 80) };
+  }
+}
+
+/** Every recognised form of the value, for redaction. */
+function formsOf(value) {
+  if (!value) return [];
+  const b64 = Buffer.from(value, 'utf8').toString('base64');
+  return [value, b64, b64.replace(/=+$/, ''), Buffer.from(value, 'utf8').toString('base64url'), Buffer.from(value, 'utf8').toString('hex'), Buffer.from(value, 'utf8').toString('hex').toUpperCase(), [...value].reverse().join(''), encodeURIComponent(value)];
+}
+
+/** Replace every recognised form of the value in every string of `obj`, in place. Records carry source lines (scope signals). */
+function redactValue(obj, value) {
+  const forms = formsOf(value).filter((f) => f.length >= 8);
+  if (!forms.length) return obj;
+  const walk = (o) => {
+    if (!o || typeof o !== 'object') return;
+    for (const [k, v] of Object.entries(o)) {
+      if (typeof v === 'string') { let s = v; for (const f of forms) s = s.split(f).join('[credential redacted]'); if (s !== v) o[k] = s; }
+      else walk(v);
+    }
+  };
+  walk(obj);
+  return obj;
+}
+
 ;// CONCATENATED MODULE: ./src/repair/coordinator.js
 // The repair coordinator (verified-remediation PRD section 5.2, FR-06, FR-07, FR-17): one state machine for every route (CLI, MCP,
 // headless callers, batch), calling the existing canonical services and adding none of its own.
@@ -1545,6 +2083,8 @@ function crossInputs(inputs, shared) {
 //     deadline (an AbortSignal that reaches the oracle runner, which ends the process tree), and identical candidates consume an attempt
 //     without being re-run (AC-07.6). A budget stop is `partial`, never a proof.
 //   - Sealed obligations run only on a candidate that passed everything else; their outcome is recorded but never fed back.
+
+
 
 
 
@@ -1653,7 +2193,7 @@ function baseRecord(runId, plan) {
     schema: schemas/* SCHEMAS */.H6.record, schemaVersion: schemas/* SCHEMA_VERSION */.f$, runId, contractId: c.contractId, contractDigest: c.contractDigest,
     findingRefs: c.findingRefs, sourceDigest: c.sourceDigest,
     disposition: 'proposed', application: 'not-applied', artifact: 'source-only', environment: 'not-checked', completion: 'partial',
-    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [],
+    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [], lifecycle: null,
     budget: null, accounting: { oracleRuns: 0, wallMs: 0, modelTokens: null, modelCalls: 0, usd: null }, reasons: [], nextPrerequisite: null,
     scope: `contract ${c.contractId} (${c.family}): ${c.obligations.length} obligations over ${c.editScope.allowed.length} application file(s); source-only, nothing built or deployed`,
     createdAt: new Date().toISOString(),
@@ -1676,8 +2216,10 @@ async function runRepair(o) {
   const { policy, errors: policyErrors } = validatePolicy(o.policy);
   if (o.resumedFrom) record.reasons.push(`resumed from ${o.resumedFrom}: every verification leg re-executed in this process`);
   writeJson(external_node_path_.join(dir, 'plan.json'), plan);
+  let leakedValue = null; // a credential repair's value, read from the original at check time: redacted from the record, never written
   const finish = (disposition, completion, exitCode, extra = {}) => {
     Object.assign(record, { disposition, completion, ...extra });
+    if (leakedValue) redactValue(record, leakedValue);
     record.accounting.wallMs = Date.now() - started;
     record.policyDigest = (0,identity/* digestOf */.ol)(policy || o.policy || null);
     const v = (0,schemas/* validateRepairRecord */.bY)(record);
@@ -1717,8 +2259,28 @@ async function runRepair(o) {
 
   const original = now.files;
   const entry = plan.entry;
+  // A dependency repair runs the application against the packages each revision's lockfile resolves to (FR-14).
+  const depDecl = plan.contract.family === 'dependency' ? plan.contract.obligations.find((x) => x.kind === 'dependency-resolved')?.inputs : null;
+  const runFiles = (files) => { if (!depDecl) return files; try { return materialize(o.root, depDecl, files); } catch { return files; } };
+  // Verifier-side obligations with no oracle (dependency resolution, credential removal): computed here over a revision's exact files.
+  const credDecl = plan.contract.obligations.find((x) => x.kind === 'credential-removed')?.inputs || null;
+  if (credDecl) leakedValue = extractCredential(original[credDecl.file], credDecl.line);
+  const staticChecks = (files) => {
+    const out = [];
+    if (depDecl) {
+      const rs = checkResolution(o.root, depDecl, files);
+      out.push({ obligation: 'dependency-resolution', kind: 'dependency-resolved', ok: rs.ok, reason: rs.ok ? `${depDecl.package} resolves outside ${depDecl.vulnerable} everywhere; the lockfile is consistent and every package verified` : rs.problems.slice(0, 6).join('; '), counterexample: { obligation: 'dependency-resolution', property: 'dependency-resolution', problems: rs.problems.slice(0, 10), vulnerable: rs.vulnerable, message: rs.problems[0] } });
+    }
+    if (credDecl) {
+      // the value is read from the ORIGINAL snapshot at the declared line, held in memory only for this comparison
+      const rm = checkRemoval(extractCredential(original[credDecl.file], credDecl.line), files);
+      out.push({ obligation: 'credential-removal', kind: 'credential-removed', ok: rm.ok, reason: rm.ok ? 'the leaked value is in no application file, plain or in a recognised re-encoding' : rm.found.slice(0, 6).map((f) => `${f.form} in ${f.file}`).join('; '), counterexample: { obligation: 'credential-removal', property: 'credential-present', found: rm.found.slice(0, 10), message: rm.found[0] ? `${rm.found[0].form} in ${rm.found[0].file}` : 'the credential is present' } });
+    }
+    return out;
+  };
   const run = async (ob, files, inputs) => {
     record.budget.used.oracleRuns++; record.accounting.oracleRuns++;
+    files = runFiles(files);
     return runObligation(ob, files, { config: o.config, signal: ctl.signal, entry, hypothesisId: `${plan.contract.contractId}:${ob.id}`, inputs, deps: o.deps?.runOracleDeps, probeEnv: o.deps?.probeEnv, runOracle: o.deps?.runOracle });
   };
 
@@ -1730,10 +2292,14 @@ async function runRepair(o) {
     record.quarantined = base.quarantined;
     record.regressionGuards = base.regressionGuards;
     record.obligationResults.push(...base.baseline.map((b) => ({ ...b, revision: 'original', required: false })));
+    const staticOriginal = staticChecks(original);
+    for (const s of staticOriginal) record.obligationResults.push({ obligation: s.obligation, kind: s.kind, revision: 'original', required: false, observed: s.ok ? 'passed' : 'failed', expectation: 'failed', status: 'recorded', reason: s.reason });
     const unavailable = base.baseline.filter((b) => ['unavailable', 'invalid'].includes(b.observed));
     if (unavailable.length) { cleanup(); return finish('blocked', 'unavailable', EXIT.blocked, { reasons: unavailable.map((b) => `${b.obligation} on the original: ${b.reason}`), nextPrerequisite: 'a working confinement backend and node:sqlite on this host' }); }
     const attackObs = plan.contract.obligations.filter((x) => x.kind === 'app-attack-blocked');
-    const reproduced = base.baseline.filter((b) => b.kind === 'app-attack-blocked' && b.observed === 'confirmed');
+    // A family with no attack obligation (a leaked credential) is reproduced by its verifier-side check failing on the original.
+    const reproduced = attackObs.length ? base.baseline.filter((b) => b.kind === 'app-attack-blocked' && b.observed === 'confirmed') : staticOriginal.filter((s) => !s.ok);
+    if (!attackObs.length && !reproduced.length) { cleanup(); return finish('refuted-finding', 'complete', EXIT.ok, { reasons: [`the original revision already passes ${staticOriginal.map((s) => s.obligation).join(', ')}: the finding is not reproduced, and no patch is proposed`] }); }
     const behaviourOk = base.baseline.filter((b) => b.kind === 'app-behaviour-preserved').every((b) => b.observed === 'refuted' || base.effectiveInputs[b.obligation].requests.length > 0);
     if (!reproduced.length) {
       cleanup();
@@ -1810,6 +2376,11 @@ async function runRepair(o) {
         // Every development obligation runs, so the record attributes every failure; the counterexample fed back is the first security
         // failure, else the first behaviour failure.
         let verdict = 'passed'; const failures = [];
+        let resolutionFailed = null;
+        for (const s of staticChecks(patched)) {
+          cs.results.push({ obligation: s.obligation, kind: s.kind, observed: s.ok ? 'passed' : 'failed', status: s.ok ? 'passed' : 'failed', reason: s.reason });
+          if (!s.ok && !resolutionFailed) resolutionFailed = s.counterexample;
+        }
         for (const ob of devObs) {
           const inputs = base.effectiveInputs[ob.id];
           const res = await run(ob, patched, inputs);
@@ -1819,8 +2390,14 @@ async function runRepair(o) {
           if (status === 'failed') failures.push({ ob, inputs, res });
           else if (status !== 'passed' && verdict === 'passed') verdict = status === 'cancelled' ? 'cancelled' : 'inconclusive';
         }
+        if (resolutionFailed && !failures.length) {
+          verdict = 'failed';
+          record.counterexamples.push({ candidateId: cand.candidateId, ...resolutionFailed });
+          roundFeedback.push({ candidateId: cand.candidateId, counterexample: resolutionFailed });
+        }
         if (failures.length) {
           verdict = 'failed';
+          if (resolutionFailed) record.counterexamples.push({ candidateId: cand.candidateId, ...resolutionFailed });
           const { ob, inputs, res } = failures.find((f) => f.ob.kind === 'app-attack-blocked') || failures[0];
           let cx = counterexampleFrom(ob, inputs, res, actorLookup(plan.actors));
           const firstSecret = (res.details?.attackViolations || []).find((v) => v.effect === 'secret-disclosed' || v.effect === 'forbidden-connection');
@@ -1877,7 +2454,7 @@ async function runRepair(o) {
           }
         }
         if (verdict === 'inconclusive') anyInconclusive = true;
-        if (verdict === 'passed' && promotable(plan.contract, cs, patched)) { cs.status = 'verified-for-contract'; selected = { cand, cs }; continue; }
+        if (verdict === 'passed' && promotable(plan.contract, cs, runFiles(patched))) { cs.status = 'verified-for-contract'; selected = { cand, cs }; continue; }
         cs.status = verdict === 'passed' ? 'inconclusive' : verdict === 'failed' ? 'rejected' : verdict;
       }
       feedback = roundFeedback.length ? { round, items: roundFeedback, ...roundFeedback[roundFeedback.length - 1] } : feedback;
@@ -1894,6 +2471,13 @@ async function runRepair(o) {
     record.exactPatch = { files: selected.cand.files, beforeDigests: selected.cand.beforeDigests, afterDigests: selected.cand.afterDigests };
     record.obligationResults.push(...selected.cs.results.map((r) => ({ obligation: r.obligation, kind: r.kind, revision: 'patched', required: true, status: r.status, observed: r.observed, receiptDigest: r.receiptDigest ?? null, reason: r.reason })));
     record.legacy = { ok: true, verified: true, fixCompleteness: selected.cs.results.find((r) => r.obligation === 'central-verifier')?.fixCompleteness ?? null, note: 'FULL in the legacy fields means the named contract passed, not universal correctness' };
+    // A credential repair's lifecycle: the source half is what this run verified; distribution is external and not checked; revocation is
+    // verified only by a connector the operator invoked (`o.revoke`), never because a project file asked for it (FR-15).
+    if (credDecl) {
+      const rv = credDecl.revocation === 'not-required' ? { status: 'not-required' } : o.revoke ? await revoke(o.deps?.revocationConnector || null, { provider: credDecl.provider, location: `${credDecl.file}:${credDecl.line}` }) : { status: 'required-not-verified', reason: 'revocation is required and no connector was invoked: removing the value from the source does not revoke it' };
+      record.lifecycle = { sourceRemoved: 'verified', replacementWired: 'verified', distribution: 'not-checked', revocation: rv.status, ...(rv.reason ? { revocationReason: rv.reason } : {}), ...(rv.receipt ? { revocationReceipt: rv.receipt } : {}), complete: rv.status === 'verified' || rv.status === 'not-required' };
+      if (!record.lifecycle.complete) record.reasons.push(`source repaired, lifecycle incomplete: revocation ${rv.status}`);
+    }
     // 5. application, only on request and only through the canonical service
     if (o.apply) {
       const drift = (0,contracts.snapshotSource)(o.root, profileStub);
@@ -2260,7 +2844,7 @@ function importedFinding(root, id, importedId) {
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
 /* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(71130);
 /* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(68962);
-/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(89330);
+/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(13361);
 /* harmony import */ var _import_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(46777);
 // Plan inputs, resolved ONE way for every route (verified-remediation PRD AC-04.5): the CLI's `repair plan` and the MCP tool
 // `repair_plan` both call `planFromInputs`, so the same finding, profile and source give the same contract and obligations.
@@ -2276,9 +2860,9 @@ function importedFinding(root, id, importedId) {
 
 
 
-const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal', 'CWE-916': 'password-storage', 'CWE-759': 'password-storage', 'CWE-760': 'password-storage', 'CWE-256': 'password-storage' };
+const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal', 'CWE-916': 'password-storage', 'CWE-759': 'password-storage', 'CWE-760': 'password-storage', 'CWE-256': 'password-storage', 'CWE-798': 'credential', 'CWE-259': 'credential', 'CWE-321': 'credential' };
 const familyForFinding = (f) => FAMILY_BY_CWE[String(f?.cwe || '').toUpperCase().replace(/^(\d)/, 'CWE-$1')] || null;
-const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage']);
+const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential']);
 
 function signedFinding(root, id) {
   const file = node_path__WEBPACK_IMPORTED_MODULE_1__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .stateDir */ .Pn)(root), 'last-scan.json');
@@ -2375,6 +2959,8 @@ const OBLIGATION_KINDS = Object.freeze({
   'app-attack-sealed': { oracle: 'application-security', expectBaseline: 'confirmed', expectPatched: 'refuted', set: 'sealed', description: 'held-out attack variants, run only on a candidate that passed every development obligation; their content and outcome never reach candidate generation' },
   'app-behaviour-preserved': { oracle: 'application-behaviour', expectBaseline: 'refuted', expectPatched: 'refuted', set: 'development', description: 'the declared legitimate requests and state checks hold on the original and on the patched revision' },
   'app-behaviour-after': { oracle: 'application-behaviour', expectBaseline: null, expectPatched: 'refuted', set: 'development', description: 'legitimate requests the original mishandles (for example a quoted value) hold on the patched revision' },
+  'dependency-resolved': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the lockfile agrees with the manifest, every package comes from the declared sources with its recorded integrity, every dependency resolves, and no resolved instance of the advisory\'s package (direct or transitive) is in the vulnerable range' },
+  'credential-removed': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the leaked credential is in no application file, plain or in any re-encoding the verifier recognises (base64, hex, reversed, percent-encoded, split into joined literals, character codes)' },
   'project-tests': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the central verifier: rescan, new-finding delta, footprint and the per-test delta of the project suite' },
 });
 
@@ -2385,7 +2971,7 @@ const ENVIRONMENT_STATES = Object.freeze(['not-checked', 'staging-verified', 'de
 const COMPLETION_STATES = Object.freeze(['complete', 'partial', 'cancelled', 'unavailable', 'invalid']);
 const CUSTODY = Object.freeze(['internal-scan', 'imported', 'locally-corroborated', 'reproduced', 'refuted', 'unresolved']);
 const GENERATORS = Object.freeze(['deterministic-recipe', 'configured-model', 'user-supplied']);
-const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage']);
+const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential']);
 const EVIDENCE_ORIGINS = Object.freeze(['generated-from-profile', 'operator-declared', 'approved-invariant', 'counterexample', 'registered-family']);
 
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w@.\-/]{1,512}$/;
@@ -2466,7 +3052,7 @@ function validateCandidate(rec) {
   return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(ctx);
 }
 
-const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
+const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'lifecycle', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
 
 function validateRepairRecord(rec) {
   const g = (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .guardObject */ .NW)(rec); if (!g.ok) return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(g.ctx);

@@ -20,7 +20,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(68962);
 /* harmony import */ var _intake_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(30356);
 /* harmony import */ var _contracts_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(20771);
-/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(89330);
+/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(13361);
 /* harmony import */ var _candidates_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4370);
 /* harmony import */ var _recipes_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(60681);
 // `agentic-security repair plan|run|show|resume|cancel|verify|export|recipes` (verified-remediation PRD FR-18, FR-11).
@@ -51,7 +51,7 @@ const USAGE = `agentic-security repair <command>
   export  <run-id> --out <directory> [--root <path>]
   import  --format sarif|normalized --file <report.json> | --show <import-id> | --accept-risk <imported-id> --import <import-id> --reason <why> [--root <path>] [--json]
   recipes list|evaluate|promote|retire|rollback|draft [<recipe-id>[@<version>]] [--reason <why>] [--file <recipe.json>] [--allow-execution] [--root <path>] [--json]
-families: sql-injection, object-authorization, ssrf, path-traversal, password-storage
+families: sql-injection, object-authorization, ssrf, path-traversal, password-storage, dependency, credential
 exit: 0 completed (read the disposition), 1 rejected, 2 usage, 3 blocked or prerequisite missing, 4 cancelled or budget stop`;
 
 const out = (args, text, json) => { process.stdout.write(args.flags.json ? `${JSON.stringify(json, null, 2)}\n` : `${text}\n`); };

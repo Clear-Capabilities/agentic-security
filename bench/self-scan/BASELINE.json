@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-16T23:36:04.729Z",
-  "commit": "fcc7484590b5dfc22bf1718789d16d2a786ee2e7",
+  "generatedAt": "2026-11-17T01:05:10.704Z",
+  "commit": "6d3a9da79243ecac3ef12bbbb759328c2a237cab",
   "targets": {
     "hooks": {
       "total": 20,
@@ -61,7 +61,7 @@
       }
     },
     "scanner/src": {
-      "total": 698,
+      "total": 701,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -345,8 +345,10 @@
         "posture/workflow-installer.js": 2,
         "pr-comment.js": 1,
         "repair/cli.js": 3,
-        "repair/contracts.js": 1,
+        "repair/contracts.js": 2,
         "repair/coordinator.js": 1,
+        "repair/credentials.js": 1,
+        "repair/dependencies.js": 1,
         "repair/import.js": 2,
         "repair/intake.js": 1,
         "repair/profile.js": 2,

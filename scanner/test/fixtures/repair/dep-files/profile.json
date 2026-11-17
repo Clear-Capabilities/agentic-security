@@ -1,0 +1,85 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": {
+    "entry": "src/app.mjs",
+    "export": "createApp",
+    "files": [
+      "src/app.mjs",
+      "package.json",
+      "package-lock.json"
+    ],
+    "runtime": "node"
+  },
+  "database": {
+    "engine": "sqlite",
+    "schemaSql": "CREATE TABLE downloads (id INTEGER PRIMARY KEY, name TEXT);",
+    "seed": []
+  },
+  "actors": [
+    {
+      "id": "visitor",
+      "tenant": "t1",
+      "role": "member",
+      "headers": {
+        "x-user": "visitor"
+      }
+    }
+  ],
+  "filesystem": {
+    "root": "public",
+    "tree": {
+      "public/index.txt": "index-content",
+      "public/docs/guide.txt": "guide-content",
+      "public/docs/release notes.txt": "notes-content",
+      "outside/secret.txt": "{{secret:host-file}}",
+      "public-archive/old.txt": "{{secret:archive-file}}"
+    },
+    "links": {
+      "public/latest": "../outside",
+      "public/current": "docs"
+    },
+    "inputs": [
+      {
+        "id": "download",
+        "actor": "visitor",
+        "method": "GET",
+        "path": "/files?name={{value}}",
+        "benign": [
+          {
+            "value": "index.txt",
+            "expectIncludes": [
+              "index-content"
+            ]
+          },
+          {
+            "value": "docs/guide.txt",
+            "expectIncludes": [
+              "guide-content"
+            ]
+          },
+          {
+            "value": "docs/release notes.txt",
+            "expectIncludes": [
+              "notes-content"
+            ]
+          },
+          {
+            "value": "current/guide.txt",
+            "expectIncludes": [
+              "guide-content"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dependency": {
+    "ecosystem": "npm",
+    "package": "vulnlib",
+    "vulnerable": "<2.0.0",
+    "advisory": "LOCAL-2026-0001 (synthetic: path traversal in safeJoin)",
+    "sources": "vendor/packages",
+    "exploit": "filesystem"
+  }
+}

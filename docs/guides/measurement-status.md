@@ -111,7 +111,7 @@ a test recomputes them: if one of those files is refreshed, the page fails its c
 | [bench/independent/why-missed-summary.json](../../bench/independent/why-missed-summary.json) | `91facc5e7fc6e3a83a61cd64c0afc0ae0964ca3c1bc9691017e9443d41821c1c` |
 | [scanner/test/fixtures/deployment-ablation/frozen.json](../../scanner/test/fixtures/deployment-ablation/frozen.json) | `28a5a276b8ba3268df6c9e44d1da43c9f5333df0851183e6f7f3331300073d3a` |
 | [scanner/test/fixtures/invariant-benchmark/pin.json](../../scanner/test/fixtures/invariant-benchmark/pin.json) | `9122acf56c264e4123e2403a35e01123dd40c31e3c69bbf47929a97fe58715e2` |
-| [scanner/test/fixtures/oracles/conformance-pins.json](../../scanner/test/fixtures/oracles/conformance-pins.json) | `beb6d8a2b898466bbbba1c3fd329f829423af914a171d2791f5256cefadb181b` |
+| [scanner/test/fixtures/oracles/conformance-pins.json](../../scanner/test/fixtures/oracles/conformance-pins.json) | `0f89b834adf3a44aab6efda68d8fac82e807d401e17cd2ef74c76c18268aa271` |
 
 Hashes printed by the reproduction commands, which a test recomputes by running them:
 

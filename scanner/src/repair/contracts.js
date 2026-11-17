@@ -46,6 +46,8 @@ export const PROFILE_SUPPORT = Object.freeze([
   { family: 'path-traversal', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'path-realpath-containment', evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'password-storage', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'password-storage', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
+  { family: 'dependency', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-dependency.test.js' },
+  { family: 'credential', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-credential.test.js' },
 ]);
 
 /** The support row for a contract's family and runtime, or null (an unsupported combination is refused when the profile validates). */
@@ -91,6 +93,12 @@ export function snapshotSource(root, profile) {
     for (const p of ['/usr/bin/python3', '/opt/homebrew/bin/python3', '/usr/local/bin/python3']) {
       try { if (fs.statSync(p).isFile()) { python = String(spawnSync(p, ['-I', '-c', 'import sys, sqlite3; print(sys.version.split()[0], sqlite3.sqlite_version)'], { encoding: 'utf8', timeout: 5000 }).stdout || '').trim() || null; break; } } catch { /* next */ }
     }
+  }
+  if (profile.dependency && typeof profile.dependency.sources === 'string') {
+    // the package tarballs a lockfile may resolve to are part of what the contract judges
+    const tarballs = {};
+    try { for (const f of fs.readdirSync(path.join(realRoot, profile.dependency.sources)).sort()) if (f.endsWith('.tgz')) tarballs[f] = digestOf(fs.readFileSync(path.join(realRoot, profile.dependency.sources, f)).toString('base64')); } catch { /* absent: the resolution obligation reports it */ }
+    configDigests.packageSources = digestOf(tarballs);
   }
   configDigests.runtime = digestOf({ node: process.versions.node, sqlite: process.versions.sqlite || null, ...(profile.application.runtime === 'python' ? { python } : {}) });
   return { files, missing, sourceDigest: digestOf(files), configDigests };
@@ -365,6 +373,34 @@ export function buildContract(o) {
   } else if (o.family === 'ssrf') {
     if (!profile.ssrf) return { contract: null, blocked: ['the profile has no ssrf section for a server-side request forgery finding'], problems: [] };
     obligations = ssrfObligations(profile, actors, blocked);
+  } else if (o.family === 'dependency') {
+    // The advisory's attacks come from the declared exploit section; the resolution obligation judges the manifest, the lockfile and
+    // the resolved graph; the application runs against the packages each revision resolves to.
+    if (!profile.dependency) return { contract: null, blocked: ['the profile has no dependency section for a dependency finding'], problems: [] };
+    const via = { filesystem: filesystemObligations, sql: sqlObligations, ssrf: ssrfObligations }[profile.dependency.exploit];
+    obligations = via(profile, actors, blocked);
+    const d = profile.dependency;
+    const dinputs = { ecosystem: d.ecosystem, package: d.package, vulnerable: d.vulnerable, advisory: d.advisory, sources: d.sources };
+    obligations.unshift({
+      id: 'dependency-resolution', kind: 'dependency-resolved', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `${d.package} outside ${d.vulnerable} everywhere it resolves; lockfile consistent with the manifest; packages from ${d.sources} with their recorded integrity`,
+      baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: dinputs, inputsDigest: digestOf(dinputs), description: OBLIGATION_KINDS['dependency-resolved'].description,
+    });
+  } else if (o.family === 'credential') {
+    if (!profile.credential) return { contract: null, blocked: ['the profile has no credential section for a leaked credential finding'], problems: [] };
+    const c = profile.credential;
+    const loc = c.location;
+    const original = o.source.files[loc.file];
+    const len = original ? (String(original).split('\n')[loc.line - 1] || '').match(/(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g)?.reduce((m, s) => Math.max(m, s.length - 2), 0) ?? 0 : 0;
+    if (len < 12) blocked.push(`credential: no string literal of 12 characters or more is at ${loc.file}:${loc.line}, so the leaked value could not be located`);
+    const cinputs = { file: loc.file, line: loc.line, length: len, env: c.env, provider: c.provider, revocation: c.revocation };
+    obligations = [{
+      id: 'credential-removal', kind: 'credential-removed', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `the value leaked at ${loc.file}:${loc.line} is in no application file, plain or re-encoded`, baselineExpectation: 'failed', patchedExpectation: 'passed',
+      evidenceOrigin: 'registered-family', inputs: cinputs, inputsDigest: digestOf(cinputs), description: OBLIGATION_KINDS['credential-removed'].description,
+    }];
+    const controls = c.controls.map((r) => ({ id: `credential_${r.id.replace(/-/g, '_')}`, role: 'control', ...reqOf(r, actors[r.actor], {}), expect: { status: r.expectStatus || [200], ...(r.expectIncludes ? { bodyIncludes: r.expectIncludes } : {}) } }));
+    obligations.push(obligation('app-behaviour-after', 'credential-replacement-wired', appInputs(profile, controls, [], { network: c.network, env: { [c.env]: '{{secret:replacement-credential}}' } }), { scope: `the application works with a replacement credential read from ${c.env}, against hosts that accept only that replacement` }));
   } else if (o.family === 'password-storage') {
     if (!profile.passwords) return { contract: null, blocked: ['the profile has no passwords section for a password storage finding'], problems: [] };
     obligations = passwordObligations(profile, actors, blocked);
@@ -399,7 +435,8 @@ export function buildContract(o) {
     sourceCommit: o.commit ?? null, sourceDigest: o.source.sourceDigest, configDigests: o.source.configDigests,
     profile: { application: profile.application, database: { engine: profile.database.engine }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
     obligations, policyFacts,
-    editScope: { allowed: [...profile.application.files], prohibited: [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
+    // a dependency repair edits the manifest and the lockfile; every other protected path stays protected
+    editScope: { allowed: [...profile.application.files], prohibited: o.family === 'dependency' ? PROTECTED_PATTERNS.filter((x) => x !== 'package.json' && x !== 'package-lock.json') : [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
     executionPolicy: { execution: 'trust-boundary', network: 'denied', model: 'none-unless-operator-configured' },
     knownUnknowns,
   };

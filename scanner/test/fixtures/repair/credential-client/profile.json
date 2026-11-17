@@ -1,0 +1,18 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": { "entry": "src/app.mjs", "export": "createApp", "files": ["src/app.mjs"], "runtime": "node" },
+  "database": { "engine": "sqlite", "schemaSql": "CREATE TABLE charges (id INTEGER PRIMARY KEY);", "seed": [] },
+  "actors": [ { "id": "shopper", "tenant": "t1", "role": "member", "headers": {} } ],
+  "credential": {
+    "location": { "file": "src/app.mjs", "line": 2 },
+    "env": "PAYMENTS_API_KEY",
+    "revocation": "required",
+    "provider": "payments",
+    "network": {
+      "policy": "allowlist", "approved": ["api.payments.test"],
+      "hosts": [ { "name": "api.payments.test", "addresses": ["203.0.113.40"], "routes": [ { "path": "/v1/charge", "body": "charged", "requireHeaders": { "authorization": "Bearer {{secret:replacement-credential}}" } } ] } ]
+    },
+    "controls": [ { "id": "charge", "actor": "shopper", "method": "POST", "path": "/charge", "expectIncludes": ["charged"] } ]
+  }
+}

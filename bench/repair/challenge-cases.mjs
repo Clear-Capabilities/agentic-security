@@ -2,11 +2,15 @@
 // failure (which obligation must catch it), next to legitimate repairs of the same application.
 //
 // Synthetic regression evidence, not an accuracy measurement: every case here was written by the people who wrote the verifier, against
-// six small applications (scanner/test/fixtures/repair/). A pass shows these known evasion shapes are caught; it says nothing about
+// eight small applications (scanner/test/fixtures/repair/). A pass shows these known evasion shapes are caught; it says nothing about
 // independent repair populations.
 //
 // A case is a transformation of the fixture source. `edit` must change the file (the runner refuses a no-op edit), so a fixture change
 // that silently disarms a case fails loudly instead.
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { npmLock } from '../../scanner/test/helpers/npm-lock.js';
+
 const replaceOnce = (text, from, to) => {
   if (!text.includes(from)) throw new Error(`challenge edit anchor not found: ${from.slice(0, 60)}`);
   return text.replace(from, () => to);
@@ -46,7 +50,28 @@ export const APPS = Object.freeze({
   'ssrf-rebind': { family: 'ssrf', fixture: 'scanner/test/fixtures/repair/ssrf-rebind' },
   'files-download': { family: 'path-traversal', fixture: 'scanner/test/fixtures/repair/files-download' },
   'password-login': { family: 'password-storage', fixture: 'scanner/test/fixtures/repair/password-login', findingCwe: 'CWE-916' },
+  'dep-files': { family: 'dependency', fixture: 'scanner/test/fixtures/repair/dep-files' },
+  'credential-client': { family: 'credential', fixture: 'scanner/test/fixtures/repair/credential-client' },
 });
+
+// ---------------------------------------------------------------- dependency edits (lockfiles with real integrities of the fixture tarballs)
+const DEP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'scanner', 'test', 'fixtures', 'repair', 'dep-files');
+const T = (n, v) => `vendor/packages/${n}-${v}.tgz`;
+const depPkg = (deps) => `${JSON.stringify({ name: 'dep-files', version: '1.0.0', type: 'module', dependencies: deps }, null, 2)}\n`;
+const depTree = (vuln, other, nested) => {
+  const deps = { otherlib: `file:${T('otherlib', other)}`, vulnlib: `file:${T('vulnlib', vuln)}` };
+  return { 'package.json': depPkg(deps), 'package-lock.json': npmLock(DEP_ROOT, { name: 'dep-files', version: '1.0.0' }, deps, {
+    'node_modules/otherlib': { version: other, tarball: T('otherlib', other), dependencies: { vulnlib: other === '1.0.0' ? '^1.0.0' : '^2.0.0' } },
+    'node_modules/vulnlib': { version: vuln, tarball: T('vulnlib', vuln) },
+    ...(nested ? { 'node_modules/otherlib/node_modules/vulnlib': { version: nested, tarball: T('vulnlib', nested) } } : {}),
+  }) };
+};
+const depAdapt = (files) => replaceOnce(replaceOnce(files['src/app.mjs'], "import { safeJoin } from 'vulnlib';", "import { resolveInside } from 'vulnlib';"),
+  '    const file = safeJoin(filesRoot, name);\n', "    const file = resolveInside(filesRoot, name);\n    if (!file) { res.writeHead(404); res.end('no such file'); return; }\n");
+// ---------------------------------------------------------------- credential edits
+const KEY = 'acmepay_merchant_7Hq2xV9Lr4TzP0aB9cD7eF';
+const KEY_LINE = `const API_KEY = '${KEY}';\n`;
+const credEdit = (to) => (files) => ({ 'src/app.mjs': replaceOnce(files['src/app.mjs'], KEY_LINE, to) });
 
 // ---------------------------------------------------------------- password storage edits
 const PW_HASH = "function hashPassword(password) {\n  return crypto.createHash('md5').update(String(password)).digest('hex');\n}\n";
@@ -175,4 +200,28 @@ export const CASES = Object.freeze([
   // ---------------------------------------------------------------- password storage: safe
   { id: 'password/scrypt-with-migration', app: 'password-login', label: 'safe', shape: 'salted scrypt, legacy digests accepted only to log in, upgraded on the next successful login',
     edit: pwEdit({ rehash: true }) },
+
+  // ---------------------------------------------------------------- dependency: unsafe
+  { id: 'dependency/manifest-only', app: 'dep-files', label: 'unsafe', expect: { obligation: 'dependency-resolution' }, shape: 'the manifest names the fixed version; the lockfile still installs the vulnerable one',
+    edit: () => ({ 'package.json': depPkg({ otherlib: `file:${T('otherlib', '1.0.0')}`, vulnlib: `file:${T('vulnlib', '2.0.0')}` }) }) },
+  { id: 'dependency/transitive-left', app: 'dep-files', label: 'unsafe', expect: { obligation: 'dependency-resolution' }, shape: 'the direct dependency upgraded; another package still pulls the vulnerable version in',
+    edit: (files) => ({ ...depTree('2.0.0', '1.0.0', '1.0.0'), 'src/app.mjs': depAdapt(files) }) },
+  { id: 'dependency/behaviour-break', app: 'dep-files', label: 'unsafe', expect: { obligation: 'filesystem-legitimate-requests' }, shape: 'an upgrade that resolves cleanly but refuses a legitimate file name',
+    edit: (files) => ({ ...depTree('3.0.0', '2.0.0', '2.0.0'), 'src/app.mjs': depAdapt(files) }) },
+  // ---------------------------------------------------------------- dependency: safe
+  { id: 'dependency/upgrade-with-adaptation', app: 'dep-files', label: 'safe', shape: 'both packages upgraded, the lockfile regenerated, the call site adapted to the new API',
+    edit: (files) => ({ ...depTree('2.0.0', '2.0.0'), 'src/app.mjs': depAdapt(files) }) },
+
+  // ---------------------------------------------------------------- credential: unsafe
+  { id: 'credential/base64', app: 'credential-client', label: 'unsafe', expect: { obligation: 'credential-removal' }, shape: 'the key re-encoded in base64, not removed',
+    edit: credEdit(`const API_KEY = Buffer.from('${Buffer.from(KEY).toString('base64')}', 'base64').toString();\n`) },
+  { id: 'credential/split-literal', app: 'credential-client', label: 'unsafe', expect: { obligation: 'credential-removal' }, shape: 'the key split into two joined literals',
+    edit: credEdit("const API_KEY = 'acmepay_merchant_7Hq2' + 'xV9Lr4TzP0aB9cD7eF';\n") },
+  { id: 'credential/env-with-fallback', app: 'credential-client', label: 'unsafe', expect: { obligation: 'credential-removal' }, shape: 'read from the environment, with the old key as the fallback',
+    edit: credEdit(`const API_KEY = process.env.PAYMENTS_API_KEY || '${KEY}';\n`) },
+  { id: 'credential/wrong-variable', app: 'credential-client', label: 'unsafe', expect: { obligation: 'credential-replacement-wired' }, shape: 'the literal removed, but read from a variable nothing sets',
+    edit: credEdit('const API_KEY = process.env.PAYMENT_KEY;\n') },
+  // ---------------------------------------------------------------- credential: safe
+  { id: 'credential/from-environment', app: 'credential-client', label: 'safe', shape: 'the key read from the declared environment name',
+    edit: credEdit('const API_KEY = process.env.PAYMENTS_API_KEY;\n') },
 ]);

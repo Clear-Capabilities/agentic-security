@@ -32,6 +32,8 @@ import { runObligation, judge } from './lab.js';
 import { validateAgainstOriginal, counterexampleFrom, shrinkCounterexample } from './counterexamples.js';
 import { checkCandidate, makeCandidate } from './candidates.js';
 import { structuralKey, rankSurvivors, crossInputs, sharedAttacksFrom } from './portfolio.js';
+import { checkResolution, materialize } from './dependencies.js';
+import { checkRemoval, extractCredential, revoke, redactValue } from './credentials.js';
 
 export const PLAN_SCHEMA = 'agentic-security/repair-plan';
 export const POLICY_SCHEMA = 'agentic-security/repair-policy';
@@ -127,7 +129,7 @@ function baseRecord(runId, plan) {
     schema: SCHEMAS.record, schemaVersion: SCHEMA_VERSION, runId, contractId: c.contractId, contractDigest: c.contractDigest,
     findingRefs: c.findingRefs, sourceDigest: c.sourceDigest,
     disposition: 'proposed', application: 'not-applied', artifact: 'source-only', environment: 'not-checked', completion: 'partial',
-    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [],
+    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [], lifecycle: null,
     budget: null, accounting: { oracleRuns: 0, wallMs: 0, modelTokens: null, modelCalls: 0, usd: null }, reasons: [], nextPrerequisite: null,
     scope: `contract ${c.contractId} (${c.family}): ${c.obligations.length} obligations over ${c.editScope.allowed.length} application file(s); source-only, nothing built or deployed`,
     createdAt: new Date().toISOString(),
@@ -150,8 +152,10 @@ export async function runRepair(o) {
   const { policy, errors: policyErrors } = validatePolicy(o.policy);
   if (o.resumedFrom) record.reasons.push(`resumed from ${o.resumedFrom}: every verification leg re-executed in this process`);
   writeJson(path.join(dir, 'plan.json'), plan);
+  let leakedValue = null; // a credential repair's value, read from the original at check time: redacted from the record, never written
   const finish = (disposition, completion, exitCode, extra = {}) => {
     Object.assign(record, { disposition, completion, ...extra });
+    if (leakedValue) redactValue(record, leakedValue);
     record.accounting.wallMs = Date.now() - started;
     record.policyDigest = digestOf(policy || o.policy || null);
     const v = validateRepairRecord(record);
@@ -191,8 +195,28 @@ export async function runRepair(o) {
 
   const original = now.files;
   const entry = plan.entry;
+  // A dependency repair runs the application against the packages each revision's lockfile resolves to (FR-14).
+  const depDecl = plan.contract.family === 'dependency' ? plan.contract.obligations.find((x) => x.kind === 'dependency-resolved')?.inputs : null;
+  const runFiles = (files) => { if (!depDecl) return files; try { return materialize(o.root, depDecl, files); } catch { return files; } };
+  // Verifier-side obligations with no oracle (dependency resolution, credential removal): computed here over a revision's exact files.
+  const credDecl = plan.contract.obligations.find((x) => x.kind === 'credential-removed')?.inputs || null;
+  if (credDecl) leakedValue = extractCredential(original[credDecl.file], credDecl.line);
+  const staticChecks = (files) => {
+    const out = [];
+    if (depDecl) {
+      const rs = checkResolution(o.root, depDecl, files);
+      out.push({ obligation: 'dependency-resolution', kind: 'dependency-resolved', ok: rs.ok, reason: rs.ok ? `${depDecl.package} resolves outside ${depDecl.vulnerable} everywhere; the lockfile is consistent and every package verified` : rs.problems.slice(0, 6).join('; '), counterexample: { obligation: 'dependency-resolution', property: 'dependency-resolution', problems: rs.problems.slice(0, 10), vulnerable: rs.vulnerable, message: rs.problems[0] } });
+    }
+    if (credDecl) {
+      // the value is read from the ORIGINAL snapshot at the declared line, held in memory only for this comparison
+      const rm = checkRemoval(extractCredential(original[credDecl.file], credDecl.line), files);
+      out.push({ obligation: 'credential-removal', kind: 'credential-removed', ok: rm.ok, reason: rm.ok ? 'the leaked value is in no application file, plain or in a recognised re-encoding' : rm.found.slice(0, 6).map((f) => `${f.form} in ${f.file}`).join('; '), counterexample: { obligation: 'credential-removal', property: 'credential-present', found: rm.found.slice(0, 10), message: rm.found[0] ? `${rm.found[0].form} in ${rm.found[0].file}` : 'the credential is present' } });
+    }
+    return out;
+  };
   const run = async (ob, files, inputs) => {
     record.budget.used.oracleRuns++; record.accounting.oracleRuns++;
+    files = runFiles(files);
     return runObligation(ob, files, { config: o.config, signal: ctl.signal, entry, hypothesisId: `${plan.contract.contractId}:${ob.id}`, inputs, deps: o.deps?.runOracleDeps, probeEnv: o.deps?.probeEnv, runOracle: o.deps?.runOracle });
   };
 
@@ -204,10 +228,14 @@ export async function runRepair(o) {
     record.quarantined = base.quarantined;
     record.regressionGuards = base.regressionGuards;
     record.obligationResults.push(...base.baseline.map((b) => ({ ...b, revision: 'original', required: false })));
+    const staticOriginal = staticChecks(original);
+    for (const s of staticOriginal) record.obligationResults.push({ obligation: s.obligation, kind: s.kind, revision: 'original', required: false, observed: s.ok ? 'passed' : 'failed', expectation: 'failed', status: 'recorded', reason: s.reason });
     const unavailable = base.baseline.filter((b) => ['unavailable', 'invalid'].includes(b.observed));
     if (unavailable.length) { cleanup(); return finish('blocked', 'unavailable', EXIT.blocked, { reasons: unavailable.map((b) => `${b.obligation} on the original: ${b.reason}`), nextPrerequisite: 'a working confinement backend and node:sqlite on this host' }); }
     const attackObs = plan.contract.obligations.filter((x) => x.kind === 'app-attack-blocked');
-    const reproduced = base.baseline.filter((b) => b.kind === 'app-attack-blocked' && b.observed === 'confirmed');
+    // A family with no attack obligation (a leaked credential) is reproduced by its verifier-side check failing on the original.
+    const reproduced = attackObs.length ? base.baseline.filter((b) => b.kind === 'app-attack-blocked' && b.observed === 'confirmed') : staticOriginal.filter((s) => !s.ok);
+    if (!attackObs.length && !reproduced.length) { cleanup(); return finish('refuted-finding', 'complete', EXIT.ok, { reasons: [`the original revision already passes ${staticOriginal.map((s) => s.obligation).join(', ')}: the finding is not reproduced, and no patch is proposed`] }); }
     const behaviourOk = base.baseline.filter((b) => b.kind === 'app-behaviour-preserved').every((b) => b.observed === 'refuted' || base.effectiveInputs[b.obligation].requests.length > 0);
     if (!reproduced.length) {
       cleanup();
@@ -284,6 +312,11 @@ export async function runRepair(o) {
         // Every development obligation runs, so the record attributes every failure; the counterexample fed back is the first security
         // failure, else the first behaviour failure.
         let verdict = 'passed'; const failures = [];
+        let resolutionFailed = null;
+        for (const s of staticChecks(patched)) {
+          cs.results.push({ obligation: s.obligation, kind: s.kind, observed: s.ok ? 'passed' : 'failed', status: s.ok ? 'passed' : 'failed', reason: s.reason });
+          if (!s.ok && !resolutionFailed) resolutionFailed = s.counterexample;
+        }
         for (const ob of devObs) {
           const inputs = base.effectiveInputs[ob.id];
           const res = await run(ob, patched, inputs);
@@ -293,8 +326,14 @@ export async function runRepair(o) {
           if (status === 'failed') failures.push({ ob, inputs, res });
           else if (status !== 'passed' && verdict === 'passed') verdict = status === 'cancelled' ? 'cancelled' : 'inconclusive';
         }
+        if (resolutionFailed && !failures.length) {
+          verdict = 'failed';
+          record.counterexamples.push({ candidateId: cand.candidateId, ...resolutionFailed });
+          roundFeedback.push({ candidateId: cand.candidateId, counterexample: resolutionFailed });
+        }
         if (failures.length) {
           verdict = 'failed';
+          if (resolutionFailed) record.counterexamples.push({ candidateId: cand.candidateId, ...resolutionFailed });
           const { ob, inputs, res } = failures.find((f) => f.ob.kind === 'app-attack-blocked') || failures[0];
           let cx = counterexampleFrom(ob, inputs, res, actorLookup(plan.actors));
           const firstSecret = (res.details?.attackViolations || []).find((v) => v.effect === 'secret-disclosed' || v.effect === 'forbidden-connection');
@@ -351,7 +390,7 @@ export async function runRepair(o) {
           }
         }
         if (verdict === 'inconclusive') anyInconclusive = true;
-        if (verdict === 'passed' && promotable(plan.contract, cs, patched)) { cs.status = 'verified-for-contract'; selected = { cand, cs }; continue; }
+        if (verdict === 'passed' && promotable(plan.contract, cs, runFiles(patched))) { cs.status = 'verified-for-contract'; selected = { cand, cs }; continue; }
         cs.status = verdict === 'passed' ? 'inconclusive' : verdict === 'failed' ? 'rejected' : verdict;
       }
       feedback = roundFeedback.length ? { round, items: roundFeedback, ...roundFeedback[roundFeedback.length - 1] } : feedback;
@@ -368,6 +407,13 @@ export async function runRepair(o) {
     record.exactPatch = { files: selected.cand.files, beforeDigests: selected.cand.beforeDigests, afterDigests: selected.cand.afterDigests };
     record.obligationResults.push(...selected.cs.results.map((r) => ({ obligation: r.obligation, kind: r.kind, revision: 'patched', required: true, status: r.status, observed: r.observed, receiptDigest: r.receiptDigest ?? null, reason: r.reason })));
     record.legacy = { ok: true, verified: true, fixCompleteness: selected.cs.results.find((r) => r.obligation === 'central-verifier')?.fixCompleteness ?? null, note: 'FULL in the legacy fields means the named contract passed, not universal correctness' };
+    // A credential repair's lifecycle: the source half is what this run verified; distribution is external and not checked; revocation is
+    // verified only by a connector the operator invoked (`o.revoke`), never because a project file asked for it (FR-15).
+    if (credDecl) {
+      const rv = credDecl.revocation === 'not-required' ? { status: 'not-required' } : o.revoke ? await revoke(o.deps?.revocationConnector || null, { provider: credDecl.provider, location: `${credDecl.file}:${credDecl.line}` }) : { status: 'required-not-verified', reason: 'revocation is required and no connector was invoked: removing the value from the source does not revoke it' };
+      record.lifecycle = { sourceRemoved: 'verified', replacementWired: 'verified', distribution: 'not-checked', revocation: rv.status, ...(rv.reason ? { revocationReason: rv.reason } : {}), ...(rv.receipt ? { revocationReceipt: rv.receipt } : {}), complete: rv.status === 'verified' || rv.status === 'not-required' };
+      if (!record.lifecycle.complete) record.reasons.push(`source repaired, lifecycle incomplete: revocation ${rv.status}`);
+    }
     // 5. application, only on request and only through the canonical service
     if (o.apply) {
       const drift = snapshotSource(o.root, profileStub);

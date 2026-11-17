@@ -1,11 +1,11 @@
 {
   "summary": {
-    "cases": 41,
-    "unsafe": 33,
-    "safe": 8,
+    "cases": 50,
+    "unsafe": 40,
+    "safe": 10,
     "unsafeAccepted": 0,
     "safeRejected": 0,
-    "caughtAsExpected": 33,
+    "caughtAsExpected": 40,
     "notExecuted": 0
   },
   "rows": [
@@ -291,6 +291,69 @@
     },
     {
       "id": "password/scrypt-with-migration",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "dependency/manifest-only",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "dependency-resolution,filesystem-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "dependency/transitive-left",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "dependency-resolution",
+      "asExpected": true
+    },
+    {
+      "id": "dependency/behaviour-break",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "filesystem-legitimate-requests,filesystem-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "dependency/upgrade-with-adaptation",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "credential/base64",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "credential-removal,credential-replacement-wired",
+      "asExpected": true
+    },
+    {
+      "id": "credential/split-literal",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "credential-removal,credential-replacement-wired",
+      "asExpected": true
+    },
+    {
+      "id": "credential/env-with-fallback",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "credential-removal",
+      "asExpected": true
+    },
+    {
+      "id": "credential/wrong-variable",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "credential-replacement-wired",
+      "asExpected": true
+    },
+    {
+      "id": "credential/from-environment",
       "label": "safe",
       "disposition": "verified-for-contract",
       "caughtBy": null,
