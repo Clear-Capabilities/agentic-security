@@ -47,6 +47,7 @@ A profile is declared by the operator: how to start the application and what its
 | `sql` | `inputs`: the untrusted value (`{{value}}` in the path or body), the actor sending it, legitimate values with their expected response (`originalMishandles` for one the original gets wrong), and the planted secrets another actor's data holds |
 | `authorization` | `table`, `idColumn`, `contentColumn`, `objects` (owner, row id, planted secret), `operations` (`read` or `update`, with `{{id}}` and `{{value}}`), `policy.allow` (`owner`, `same-tenant-admin`, `any-admin`), and `controls`: legitimate workflows outside the actor matrix, such as a public page, that must keep working after a repair |
 | `ssrf` | `policy` (`allowlist`: only the `approved` hosts; `public-only`: no loopback, private, link-local, carrier-grade NAT or unique-local address), `approved`, `hosts` (each with `name`, `addresses` answered one per resolution with the last repeating, so a host can rebind, an optional `port`, and `routes` the verifier serves: `path`, `status`, `headers`, `body`, where a body may plant `{{secret:<name>}}`), and `inputs` (the untrusted URL as `{{value}}`, the actor, and legitimate values with their expected response). Node runtime only. |
+| `workflow` | `operations` (`id`, `actor`, `method`, `path`, `body`, `mutating`, `expectStatus`), `normal` (the legitimate workflows: `id`, `steps` naming operations, `checks` the state each must leave), `invariants` (read-only SELECT checks with expectations that must hold after any sequence). Replayed, reordered and concurrent variants are generated from these. |
 | `dependency` | `ecosystem` (`npm`), `package`, `vulnerable` (an npm range), `advisory`, `sources` (the directory of package tarballs a lockfile may resolve to), `exploit` (the `filesystem`, `sql` or `ssrf` section whose attacks show the vulnerability). `application.files` must include `package.json` and `package-lock.json`: a repair edits them. |
 | `credential` | `location` (`file`, `line`: where the leaked value is, never the value), `env` (the environment name the replacement is read from), `revocation` (`required` or `not-required`), `provider`, `network` (declared hosts; a route's `requireHeaders` may require `{{secret:replacement-credential}}`), `controls` (requests that must work with the replacement). |
 | `passwords` | `actor` (who registers and logs in), `table`, `userColumn`, `hashColumn`, `register` and `login` (method, path, body carrying `{{user}}` and `{{password}}`, `expectStatus`; `login.denyStatus` for a refused login), `legacy` (`digest`: the unsalted hex digest existing users carry, one of `md5`, `sha1`, `sha256`, `sha512`, and `users` with known test passwords; their rows are built from them), `approved` (`format`: `scrypt`, the only format the verifier recomputes in this release, with `minN`, `minR`, `minSaltBytes`, `minKeyBytes`). |
@@ -64,7 +65,7 @@ A profile is declared by the operator: how to start the application and what its
 | `schemaVersion` | `1.0.0`. A reader accepts 1.x; a 2.0 contract is refused. |
 | `contractId` | `rcon:` and 16 hex characters over the allowlisted identity fields. Identical inputs give an identical id; no clock or random value enters it. |
 | `contractDigest` | SHA-256 over the same fields. |
-| `family` | `sql-injection`, `object-authorization`, `ssrf`, `path-traversal`, `password-storage`, `dependency` or `credential` in this release. |
+| `family` | `sql-injection`, `object-authorization`, `ssrf`, `path-traversal`, `password-storage`, `dependency`, `credential` or `workflow` in this release. |
 | `findingRefs` | The finding the contract repairs. |
 | `rootCauseGroup` | Digest of the family and the finding's file. |
 | `sourceCommit` | The commit the signed scan recorded, or null. |
@@ -178,6 +179,7 @@ What has been executed, per family, runtime and platform. macOS and Linux are se
 | `password-storage` | `python` | declared | blocked | none |
 | `dependency` | `node` | integration-tested | blocked | none |
 | `credential` | `node` | integration-tested | blocked | none |
+| `workflow` | `node` | integration-tested | blocked | none |
 
 ## External findings
 
@@ -233,7 +235,8 @@ No recipe is learned from examples in this release: both shipped transformations
 ## What this does not do
 
 - It verifies the declared contract only. Requests, actors, objects and state checks outside the profile are not observed.
-- It runs requests one at a time in one process. No concurrency is exercised, and none is claimed.
+- It runs requests one at a time in one process, except a workflow sequence's concurrent steps, which are sent together and interleave only at the application's await points (cooperative scheduling in one process). That exercises a check separated from its write by an await; it is not a proof against real database races, parallel processes or multiple instances, and none is claimed.
+- A workflow sequence runs on a fresh database and a fresh application instance; its invariants are read from that sequence's own file at the end of the sequence, so a forbidden state that a later step undoes is seen only if the application records it (an event table, for example).
 - It supports Node applications and Python WSGI applications over SQLite in this release. A Python application's WSGI callable is called directly with a real WSGI environ; no HTTP server runs. PostgreSQL is not executed (no PostgreSQL server exists on the measured host).
 - Server-side request forgery and path traversal run on the Node runtime only. Outbound connections are observed at the Node connection layer (`net`, `tls`, the HTTP agents, raw sockets) and served by the declared hosts with the declared DNS answers; no socket is opened. An `https` destination is recorded and refused, never served. A connection opened below that layer (a child process, a raw binding, a native addon) is not observed, so the scope gate refuses a candidate that introduces one. A destination the declaration does not model (an undeclared name, connected to or looked up) makes the run inconclusive, never a pass.
 - Password storage judges the stored value by recomputation in one approved format (scrypt as `scrypt$N$r$p$<salt hex>$<key hex>`), with cost floors: a different sound format (bcrypt, Argon2) does not hold. Timing and memory hardness are not measured. Node runtime only.

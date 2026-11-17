@@ -48,6 +48,7 @@ export const PROFILE_SUPPORT = Object.freeze([
   { family: 'password-storage', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
   { family: 'dependency', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-dependency.test.js' },
   { family: 'credential', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-credential.test.js' },
+  { family: 'workflow', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow-state.test.js' },
 ]);
 
 /** The support row for a contract's family and runtime, or null (an unsupported combination is refused when the profile validates). */
@@ -308,6 +309,48 @@ function passwordObligations(profile, actors, blocked) {
   return out;
 }
 
+/**
+ * Workflow and idempotency (FR-12, M3-05). Every sequence runs on a fresh database and a fresh application instance. Controls: each
+ * declared normal workflow, with its own checks and every invariant. Development attacks: each mutating step replayed, each adjacent
+ * pair swapped, the workflow reversed. Sealed attacks: each mutating step submitted twice at once (cooperative interleaving in one
+ * process). An attack is judged by the invariants alone: a status code never decides.
+ */
+function workflowObligations(profile, actors, blocked) {
+  const w = profile.workflow;
+  const opsById = Object.fromEntries(w.operations.map((op) => [op.id, op]));
+  const step = (id, extra = {}) => { const op = opsById[id]; return { ...reqOf(op, actors[op.actor], {}), ...extra }; };
+  const inv = w.invariants.map((c) => ({ id: `inv_${c.id.replace(/-/g, '_')}`, sql: c.sql, params: c.params || [], expect: c.expect }));
+  const controls = w.normal.map((n) => ({
+    id: `normal_${n.id.replace(/-/g, '_')}`, role: 'control',
+    steps: n.steps.map((s) => step(s, opsById[s].expectStatus ? { expectStatus: opsById[s].expectStatus } : {})),
+    checks: [...(n.checks || []).map((c) => ({ id: `chk_${c.id.replace(/-/g, '_')}`, sql: c.sql, params: c.params || [], expect: c.expect })), ...inv],
+  }));
+  const dev = []; const sealed = []; const seen = new Set();
+  const add = (list, id, steps) => { const k = JSON.stringify(steps); if (seen.has(k)) return; seen.add(k); list.push({ id, role: 'attack', steps, checks: inv }); };
+  for (const n of w.normal) {
+    const nid = n.id.replace(/-/g, '_');
+    n.steps.forEach((s, k) => {
+      if (!opsById[s].mutating) return;
+      const ids = [...n.steps.slice(0, k + 1), s, ...n.steps.slice(k + 1)];
+      add(dev, `replay_${nid}_${k}`, ids.map((x) => step(x)));
+      add(sealed, `concurrent_${nid}_${k}`, [...n.steps.slice(0, k).map((x) => step(x)), step(s, { concurrentGroup: 1 }), step(s, { concurrentGroup: 1 }), ...n.steps.slice(k + 1).map((x) => step(x))]);
+    });
+    for (let k = 0; k + 1 < n.steps.length; k++) {
+      if (n.steps[k] === n.steps[k + 1]) continue;
+      const ids = [...n.steps]; [ids[k], ids[k + 1]] = [ids[k + 1], ids[k]];
+      add(dev, `reorder_${nid}_${k}`, ids.map((x) => step(x)));
+    }
+    if (n.steps.length > 2) add(dev, `reverse_${nid}`, [...n.steps].reverse().map((x) => step(x)));
+  }
+  if (!dev.length) blocked.push('workflow: no declared normal workflow has a mutating step or two distinct steps, so no replay or reorder can be generated');
+  if (blocked.length) return [];
+  return [
+    obligation('app-attack-blocked', 'workflow-attacks-development', appInputs(profile, [], [], { sequences: [...controls, ...dev] }), { scope: 'replayed and reordered variants of the declared workflows, each on a fresh database' }),
+    ...(sealed.length ? [obligation('app-attack-sealed', 'workflow-attacks-sealed', appInputs(profile, [], [], { sequences: [...controls, ...sealed] }), { scope: 'concurrent double submissions of each mutating step (cooperative interleaving in one process; held out)' })] : []),
+    obligation('app-behaviour-preserved', 'workflow-normal', appInputs(profile, [], [], { sequences: controls }), { scope: 'the declared normal workflows, their checks and every invariant' }),
+  ];
+}
+
 function authzObligations(profile, actors, blocked) {
   const z = profile.authorization;
   const out = [];
@@ -386,6 +429,9 @@ export function buildContract(o) {
       scope: `${d.package} outside ${d.vulnerable} everywhere it resolves; lockfile consistent with the manifest; packages from ${d.sources} with their recorded integrity`,
       baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: dinputs, inputsDigest: digestOf(dinputs), description: OBLIGATION_KINDS['dependency-resolved'].description,
     });
+  } else if (o.family === 'workflow') {
+    if (!profile.workflow) return { contract: null, blocked: ['the profile has no workflow section for a workflow finding'], problems: [] };
+    obligations = workflowObligations(profile, actors, blocked);
   } else if (o.family === 'credential') {
     if (!profile.credential) return { contract: null, blocked: ['the profile has no credential section for a leaked credential finding'], problems: [] };
     const c = profile.credential;

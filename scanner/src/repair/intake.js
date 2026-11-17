@@ -12,9 +12,9 @@ import { normalizeFinding } from './schemas.js';
 import { planRepair } from './coordinator.js';
 import { importedFinding } from './import.js';
 
-const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal', 'CWE-916': 'password-storage', 'CWE-759': 'password-storage', 'CWE-760': 'password-storage', 'CWE-256': 'password-storage', 'CWE-798': 'credential', 'CWE-259': 'credential', 'CWE-321': 'credential' };
+const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal', 'CWE-916': 'password-storage', 'CWE-759': 'password-storage', 'CWE-760': 'password-storage', 'CWE-256': 'password-storage', 'CWE-798': 'credential', 'CWE-259': 'credential', 'CWE-321': 'credential', 'CWE-362': 'workflow', 'CWE-367': 'workflow', 'CWE-841': 'workflow', 'CWE-837': 'workflow' };
 export const familyForFinding = (f) => FAMILY_BY_CWE[String(f?.cwe || '').toUpperCase().replace(/^(\d)/, 'CWE-$1')] || null;
-export const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential']);
+export const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential', 'workflow']);
 
 export function signedFinding(root, id) {
   const file = path.join(stateDir(root), 'last-scan.json');

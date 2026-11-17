@@ -247,7 +247,7 @@ export async function runRepair(o) {
       const eff = base.effectiveInputs[ob.id];
       // Regression guards stay in the obligation but cannot show a repair: an attack obligation needs at least one check the original fails.
       const guard = new Set(base.regressionGuards.filter((x) => x.obligation === ob.id).map((x) => x.id));
-      const meaningful = ob.kind.startsWith('app-attack') ? eff.requests.some((r) => r.role === 'attack' && !guard.has(r.id)) || (eff.stateChecks || []).some((c) => !guard.has(c.id)) : eff.requests.length;
+      const meaningful = ob.kind.startsWith('app-attack') ? eff.requests.some((r) => r.role === 'attack' && !guard.has(r.id)) || (eff.stateChecks || []).some((c) => !guard.has(c.id)) || (eff.sequences || []).some((s) => s.role === 'attack' && !guard.has(s.id)) : eff.requests.length || (eff.sequences || []).length;
       if (!meaningful) { cleanup(); return finish('needs-review', 'partial', EXIT.blocked, { reasons: [`required obligation ${ob.id} has no check left that is meaningful on the original revision (every attack is already blocked there, or quarantined)`], nextPrerequisite: 'review the quarantined checks, the regression guards and the profile' }); }
     }
 

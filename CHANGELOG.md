@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.203.0 - Verified remediation, milestone 3 completed: workflow, replay and concurrent submission
+
+**Measured, 0.202.0:** `TIMINGS preflight=4s push=7s pr=4s checks=356s merge=6s verify=6s tag=2s release=162s npm=90s total=637s release-clock=176s`, 176 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.
+
+The last open item of milestone 3, for the Labs capability `contract-repair`. Measured on macOS. Requirement-by-requirement record: `docs/verified-remediation/LEDGER.md`.
+
+- **Changed results, listed first.** Repair challenge gate: 54 cases, unsafe patches accepted 0 of 43, caught by the declared obligation 43 of 43, legitimate repairs rejected 0 of 11 (was 50). The application oracles are now version 5 and their conformance fixtures were re-pinned; 10 adapters conform with execution. Self-scan unchanged at 704.
+- **Workflow repair (`workflow`).** The profile declares the operations, the normal workflows and invariants over the real database. Every mutating step is replayed and adjacent steps are swapped; as a held-out set, each mutating step is submitted twice at once. Each sequence runs on a fresh database and a fresh application instance, and the invariants alone decide. On an order service, a payment check alone is rejected (shipping first still ships an unpaid order), checks without atomicity are caught only by the concurrent double payment, disabling payment breaks checkout, and an atomic claim before the payment call is verified.
+- **What concurrency means here.** Steps sent together interleave at the application's await points in one process. That catches a check separated from its write by an await; it is not a proof against real database races, parallel processes or several instances, and the reference says so.
+- **Not in this release.** Infrastructure configuration repair; staging, migrations and rollback.
+
 ## 0.202.0 - Verified remediation, milestone 4 (third part): is the repair in the built image?
 
 **Measured, 0.201.0:** the first push was refused by GitHub push protection: a synthetic credential fixture used a payment-provider key format. The value was replaced with one matching no provider format and the unpushed commits were rewritten; nothing was bypassed. The successful run: `TIMINGS preflight=4s push=7s pr=4s checks=394s merge=5s verify=8s tag=2s release=254s npm=90s total=768s release-clock=269s`; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.
