@@ -872,12 +872,25 @@ function validateProfile(p) {
     const x = p.infrastructure;
     if (!(0,schema_kit/* isPlainObject */.Qd)(x)) errs.push('infrastructure must be an object');
     else {
-      keysOnly(errs, x, ['files', 'environment', 'mustNotExpose', 'mustStayExposed'], 'infrastructure');
+      keysOnly(errs, x, ['files', 'environment', 'mustNotExpose', 'mustStayExposed', 'privileges'], 'infrastructure');
       if (!Array.isArray(x.files) || !x.files.length || x.files.length > 40 || !x.files.every(schemas/* isRelPath */.ji)) errs.push('infrastructure.files must list 1 to 40 configuration files');
       else if ((0,schema_kit/* isPlainObject */.Qd)(a) && Array.isArray(a.files) && !x.files.every((f) => a.files.includes(f))) errs.push('infrastructure.files must be application files (a repair edits them)');
       if (typeof x.environment !== 'string' || !SLUG.test(x.environment)) errs.push('infrastructure.environment must be a slug');
       const names = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' && /^[A-Za-z0-9][\w.-]{0,62}$/.test(s));
-      if (!names(x.mustNotExpose) || !x.mustNotExpose.length) errs.push('infrastructure.mustNotExpose must name at least one service');
+      // privilege: actions an identity must not be able to perform, and the ones it must keep (IAM policies in a Terraform plan)
+      const pv = x.privileges;
+      const grantList = (v) => Array.isArray(v) && v.length <= 32 && v.every((g) => (0,schema_kit/* isPlainObject */.Qd)(g) && Object.keys(g).every((k) => ['identity', 'action', 'resource'].includes(k))
+        && typeof g.identity === 'string' && /^[A-Za-z0-9][\w./:-]{0,120}$/.test(g.identity) && typeof g.action === 'string' && /^[A-Za-z0-9-]{1,40}:[A-Za-z0-9]{1,80}$/.test(g.action)
+        && typeof g.resource === 'string' && /^[\w:./*-]{1,200}$/.test(g.resource) && !/[*?]/.test(g.resource));
+      if (pv !== undefined) {
+        if (!(0,schema_kit/* isPlainObject */.Qd)(pv)) errs.push('infrastructure.privileges must be an object');
+        else {
+          keysOnly(errs, pv, ['mustNotAllow', 'mustAllow'], 'infrastructure.privileges');
+          if (!grantList(pv.mustNotAllow) || !pv.mustNotAllow.length) errs.push('infrastructure.privileges.mustNotAllow must list 1 to 32 {identity, action, resource} entries with an exact resource (no wildcard)');
+          if (!grantList(pv.mustAllow || [])) errs.push('infrastructure.privileges.mustAllow must list at most 32 {identity, action, resource} entries with an exact resource');
+        }
+      }
+      if (!names(x.mustNotExpose) || (!x.mustNotExpose.length && !(0,schema_kit/* isPlainObject */.Qd)(pv))) errs.push('infrastructure.mustNotExpose must name at least one service (it may be empty when privileges are declared)');
       if (!names(x.mustStayExposed)) errs.push('infrastructure.mustStayExposed must list the approved exposed services (it may be empty)');
     }
   }
@@ -1531,10 +1544,10 @@ function buildContract(o) {
   } else if (o.family === 'infrastructure') {
     if (!profile.infrastructure) return { contract: null, blocked: ['the profile has no infrastructure section for an infrastructure finding'], problems: [] };
     const x = profile.infrastructure;
-    const xinputs = { files: x.files, environment: x.environment, mustNotExpose: x.mustNotExpose, mustStayExposed: x.mustStayExposed };
+    const xinputs = { files: x.files, environment: x.environment, mustNotExpose: x.mustNotExpose, mustStayExposed: x.mustStayExposed, ...(x.privileges ? { privileges: { mustNotAllow: x.privileges.mustNotAllow, mustAllow: x.privileges.mustAllow || [] } } : {}) };
     obligations = [{
       id: 'infrastructure-exposure', kind: 'infrastructure-effective', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
-      scope: `the effective configuration of ${x.files.length} file(s) in ${x.environment}: ${x.mustNotExpose.join(', ')} not exposed${x.mustStayExposed.length ? `; ${x.mustStayExposed.join(', ')} still exposed` : ''}`,
+      scope: `the effective configuration of ${x.files.length} file(s) in ${x.environment}: ${x.mustNotExpose.length ? `${x.mustNotExpose.join(', ')} not exposed` : 'no exposure requirement'}${x.mustStayExposed.length ? `; ${x.mustStayExposed.join(', ')} still exposed` : ''}${x.privileges ? `; ${x.privileges.mustNotAllow.length} action(s) denied and ${(x.privileges.mustAllow || []).length} kept for named identities` : ''}`,
       baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: xinputs, inputsDigest: (0,identity/* digestOf */.ol)(xinputs), description: schemas/* OBLIGATION_KINDS */.Xn['infrastructure-effective'].description,
     }];
   } else if (o.family === 'workflow') {
@@ -1932,6 +1945,8 @@ function redactValue(obj, value) {
 
 // EXTERNAL MODULE: ./src/lineage/deployment/ingest.js + 4 modules
 var ingest = __webpack_require__(18876);
+// EXTERNAL MODULE: ./src/lineage/deployment/iam-eval.js
+var iam_eval = __webpack_require__(1086);
 ;// CONCATENATED MODULE: ./src/repair/infrastructure.js
 // Infrastructure repair (verified-remediation PRD FR-15, M4-05): judge the EFFECTIVE configuration, not the edited text.
 //
@@ -1947,9 +1962,17 @@ var ingest = __webpack_require__(18876);
 //                        could not resolve, and a file they could not parse, is a gap: the obligation fails rather than assume the
 //                        exposure closed.
 //
+//   checkPrivileges      the privilege half (FR-15, M4-06 follow-up): for each declared (identity, action, exact resource), the grants
+//                        the adapters read for that identity (IAM policies in a Terraform plan or a policy document) are decided by the
+//                        existing action-level evaluator (`iam-eval.js`): a matching allow, then any matching deny whose condition holds.
+//                        A forbidden action must be `not-granted` or `blocked`; a kept action must be `possible`. `unresolved` (an
+//                        unsupported condition, a clipped action list, an opaque grant) fails both ways: unknown is never a pass. An
+//                        identity the adapters could not resolve, or one with no node at all, is a gap.
+//
 // Limits, stated: only the formats the adapters read; reachability through a service's dependencies (another service that is itself
 // exposed) is not exposure here and is not judged; host firewalls, service meshes and cloud policies outside the files are not read;
 // nothing is applied (the shared apply service never writes composition or Terraform files) and nothing is deployed.
+
 
 
 /** Which services a public route reaches over routing edges only. Returns {exposed: Map(name -> route names), gaps: string[]}. */
@@ -1976,6 +1999,35 @@ function directExposure(graph) {
   return { exposed, gaps };
 }
 
+const resourceName = (n) => String(n.name).replace(/^aws\//, '');
+
+/** Decide each declared privilege over one ingested graph. Returns problems. */
+function checkPrivileges(graph, privileges) {
+  const problems = [];
+  const byName = new Map(graph.nodes.filter((n) => n.kind === 'identity').map((n) => [n.name, n]));
+  const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
+  const decide = (g) => {
+    const ident = byName.get(g.identity);
+    if (!ident) return { outcome: 'no-identity' };
+    if (ident.resolved === false) return { outcome: 'unresolved', why: [`the identity is not resolved (${ident.unresolvedReason || 'unknown'})`] };
+    const edges = graph.edges.filter((e) => e.relation === 'grants' && e.from === ident.id && nodes.get(e.to) && (0,iam_eval/* resourceMatches */.uH)(resourceName(nodes.get(e.to)), g.resource));
+    const d = (0,iam_eval/* decideAction */.jO)(edges.filter((e) => e.effect === 'allow'), edges.filter((e) => e.effect === 'deny'), g.action, {});
+    return { outcome: d.outcome, why: d.unresolvedBy };
+  };
+  for (const g of privileges.mustNotAllow) {
+    const d = decide(g);
+    if (d.outcome === 'possible') problems.push(`${g.identity} can still ${g.action} on ${g.resource}`);
+    else if (d.outcome === 'unresolved') problems.push(`whether ${g.identity} can ${g.action} on ${g.resource} is unresolved: ${(d.why || []).join('; ').slice(0, 200)}`);
+    else if (d.outcome === 'no-identity') problems.push(`${g.identity} is not an identity the configuration declares, so its grants are unknown`);
+  }
+  for (const g of privileges.mustAllow || []) {
+    const d = decide(g);
+    if (d.outcome === 'possible') continue;
+    problems.push(d.outcome === 'unresolved' ? `whether ${g.identity} can still ${g.action} on ${g.resource} is unresolved: ${(d.why || []).join('; ').slice(0, 200)}` : d.outcome === 'no-identity' ? `${g.identity} is gone: an approved workflow is broken` : `${g.identity} can no longer ${g.action} on ${g.resource}: an approved workflow is broken`);
+  }
+  return problems;
+}
+
 /** The `infrastructure-effective` check over one revision's files. */
 function checkInfrastructure(decl, files) {
   const input = decl.files.filter((f) => typeof files[f] === 'string').map((f) => ({ path: f, text: files[f] }));
@@ -1990,6 +2042,7 @@ function checkInfrastructure(decl, files) {
   for (const s of decl.mustNotExpose) if (exposed.has(s)) problems.push(`${s} is still exposed by ${exposed.get(s).join(', ')}`);
   const services = new Set(g.graph.nodes.filter((n) => n.kind === 'service').map((n) => n.name));
   for (const s of decl.mustStayExposed) if (!exposed.has(s)) problems.push(`${s} is no longer exposed${services.has(s) ? '' : ' (the service is gone)'}: an approved workflow is broken`);
+  if (decl.privileges) problems.push(...checkPrivileges(g.graph, decl.privileges));
   return { ok: problems.length === 0, problems, exposed: Object.fromEntries([...exposed].map(([k, v]) => [k, v])) };
 }
 
@@ -3331,7 +3384,7 @@ const OBLIGATION_KINDS = Object.freeze({
   'app-behaviour-after': { oracle: 'application-behaviour', expectBaseline: null, expectPatched: 'refuted', set: 'development', description: 'legitimate requests the original mishandles (for example a quoted value) hold on the patched revision' },
   'dependency-resolved': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the lockfile agrees with the manifest, every package comes from the declared sources with its recorded integrity, every dependency resolves, and no resolved instance of the advisory\'s package (direct or transitive) is in the vulnerable range' },
   'credential-removed': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the leaked credential is in no application file, plain or in any re-encoding the verifier recognises (base64, hex, reversed, percent-encoded, split into joined literals, character codes)' },
-  'infrastructure-effective': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the effective configuration of every declared file, ingested together, gives no public route to a service that must not be exposed and keeps one to every approved exposed service; a file the adapters cannot read fails it' },
+  'infrastructure-effective': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the effective configuration of every declared file, ingested together, gives no public route to a service that must not be exposed and keeps one to every approved exposed service; with declared privileges, each forbidden action of a named identity on an exact resource is not granted or denied and each kept action stays possible, and an unresolved decision fails; a file the adapters cannot read fails it' },
   'migration-window': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the declared schema migration applies, the revision that is not yet deployed still serves its legitimate workflows in the declared deployment order, the down migration restores a schema the original revision serves, and the migration re-applies after a rollback over the rows the profile says an older revision writes; whether each rollback reinstates the exposure is stated, never hidden' },
   'project-tests': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the central verifier: rescan, new-finding delta, footprint and the per-test delta of the project suite' },
 });

@@ -1,11 +1,11 @@
 {
   "summary": {
-    "cases": 62,
-    "unsafe": 49,
-    "safe": 13,
+    "cases": 68,
+    "unsafe": 53,
+    "safe": 15,
     "unsafeAccepted": 0,
     "safeRejected": 0,
-    "caughtAsExpected": 49,
+    "caughtAsExpected": 53,
     "notExecuted": 0
   },
   "rows": [
@@ -410,6 +410,48 @@
     },
     {
       "id": "migration/relabel-then-index",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "privilege/read-everywhere",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "infrastructure-exposure",
+      "asExpected": true
+    },
+    {
+      "id": "privilege/unsupported-condition",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "infrastructure-exposure",
+      "asExpected": true
+    },
+    {
+      "id": "privilege/deny-wrong-action",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "infrastructure-exposure",
+      "asExpected": true
+    },
+    {
+      "id": "privilege/policy-removed",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "infrastructure-exposure",
+      "asExpected": true
+    },
+    {
+      "id": "privilege/explicit-deny",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "privilege/narrowed-resource",
       "label": "safe",
       "disposition": "verified-for-contract",
       "caughtBy": null,

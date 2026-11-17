@@ -55,7 +55,14 @@ export const APPS = Object.freeze({
   'order-workflow': { family: 'workflow', fixture: 'scanner/test/fixtures/repair/order-workflow' },
   'compose-exposure': { family: 'infrastructure', fixture: 'scanner/test/fixtures/repair/compose-exposure' },
   'order-migration': { family: 'workflow', fixture: 'scanner/test/fixtures/repair/order-migration' },
+  'iam-plan': { family: 'infrastructure', fixture: 'scanner/test/fixtures/repair/iam-plan' },
 });
+
+// ---------------------------------------------------------------- privilege edits (the role policy inside a Terraform plan)
+const IAM_PLAN = 'deploy/plan.json';
+const iamPolicy = (statements) => (files) => { const c = JSON.parse(files[IAM_PLAN]); c.resource_changes[1].change.after.policy = JSON.stringify({ Version: '2012-10-17', Statement: statements }); return { [IAM_PLAN]: `${JSON.stringify(c, null, 2)}\n` }; };
+const IAM_RW = ['s3:GetObject', 's3:PutObject'];
+const IAM_PAYROLL_DENY = { Effect: 'Deny', Action: ['s3:*'], Resource: ['arn:aws:s3:::payroll-exports/*'] };
 
 // ---------------------------------------------------------------- infrastructure edits
 const CM = 'deploy/docker-compose.yml'; const CO = 'deploy/docker-compose.override.yml';
@@ -270,6 +277,21 @@ export const CASES = Object.freeze([
   // ---------------------------------------------------------------- migration: safe
   { id: 'migration/relabel-then-index', app: 'order-migration', label: 'safe', shape: 'duplicates relabelled before the unique index is created; the down migration removes the index',
     edit: mgEdit(MG_RELABEL + MG_INDEX, MG_REMOVE) },
+
+  // ---------------------------------------------------------------- privileges: unsafe
+  { id: 'privilege/read-everywhere', app: 'iam-plan', label: 'unsafe', expect: { obligation: 'infrastructure-exposure' }, shape: 'write access removed, read access to every bucket kept',
+    edit: iamPolicy([{ Effect: 'Allow', Action: ['s3:GetObject'], Resource: ['*'] }]) },
+  { id: 'privilege/unsupported-condition', app: 'iam-plan', label: 'unsafe', expect: { obligation: 'infrastructure-exposure' }, shape: 'a deny whose condition operator the evaluator does not support: the decision is unresolved',
+    edit: iamPolicy([{ Effect: 'Allow', Action: IAM_RW, Resource: ['*'] }, { ...IAM_PAYROLL_DENY, Condition: { StringLike: { 'aws:PrincipalTag/team': 'orders*' } } }]) },
+  { id: 'privilege/deny-wrong-action', app: 'iam-plan', label: 'unsafe', expect: { obligation: 'infrastructure-exposure' }, shape: 'a deny on the payroll bucket that names only DeleteObject',
+    edit: iamPolicy([{ Effect: 'Allow', Action: IAM_RW, Resource: ['*'] }, { ...IAM_PAYROLL_DENY, Action: ['s3:DeleteObject'] }]) },
+  { id: 'privilege/policy-removed', app: 'iam-plan', label: 'unsafe', expect: { obligation: 'infrastructure-exposure' }, shape: 'every grant removed: the approved asset workflow is broken',
+    edit: (files) => { const c = JSON.parse(files[IAM_PLAN]); c.resource_changes.splice(1, 1); return { [IAM_PLAN]: `${JSON.stringify(c, null, 2)}\n` }; } },
+  // ---------------------------------------------------------------- privileges: safe
+  { id: 'privilege/explicit-deny', app: 'iam-plan', label: 'safe', shape: 'an unconditional deny on the payroll bucket beside the existing allow',
+    edit: iamPolicy([{ Effect: 'Allow', Action: IAM_RW, Resource: ['*'] }, IAM_PAYROLL_DENY]) },
+  { id: 'privilege/narrowed-resource', app: 'iam-plan', label: 'safe', shape: 'the allow narrowed to the orders asset bucket',
+    edit: iamPolicy([{ Effect: 'Allow', Action: IAM_RW, Resource: ['arn:aws:s3:::orders-assets/*'] }]) },
 
   // ---------------------------------------------------------------- infrastructure: unsafe
   { id: 'infrastructure/override-republishes', app: 'compose-exposure', label: 'unsafe', expect: { obligation: 'infrastructure-exposure' }, shape: 'the port removed from the main file, published again by the override file',

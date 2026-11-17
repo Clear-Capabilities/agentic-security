@@ -1,0 +1,57 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.9.0",
+  "resource_changes": [
+    {
+      "address": "aws_iam_role.orders",
+      "type": "aws_iam_role",
+      "name": "orders",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "after": {
+          "name": "orders-api"
+        },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_iam_role_policy.orders_s3",
+      "type": "aws_iam_role_policy",
+      "name": "orders_s3",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "after": {
+          "name": "orders-s3",
+          "role": "orders-api",
+          "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:PutObject\"],\"Resource\":[\"*\"]}]}"
+        },
+        "after_unknown": {}
+      }
+    }
+  ],
+  "configuration": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_iam_role.orders",
+          "expressions": {}
+        },
+        {
+          "address": "aws_iam_role_policy.orders_s3",
+          "expressions": {
+            "role": {
+              "references": [
+                "aws_iam_role.orders.name",
+                "aws_iam_role.orders"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
