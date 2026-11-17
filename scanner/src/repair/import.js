@@ -139,7 +139,7 @@ function mapLocation(root, r, ctx) {
     if (git(root, ['cat-file', '-e', `${r.revision}^{commit}`]) === null) return { mapping: 'revision-unknown', reason: `this repository has no commit ${r.revision.slice(0, 12)}`, file };
     const renamed = ctx.renames(r.revision)[file];
     if (renamed) { note = `renamed from ${file}`; file = renamed; }
-    const changed = git(root, ['diff', '--name-only', r.revision, 'HEAD', '--', file]);
+    const changed = git(root, ['diff', '--no-ext-diff', '--no-textconv', '--name-only', r.revision, 'HEAD', '--', file]);
     if (changed === null) return { mapping: 'revision-mismatch', reason: 'git could not compare the reported revision with HEAD', file };
     if (changed.trim() && !r.snippet) return { mapping: 'revision-mismatch', reason: `${file} changed since the reported revision and the report gives no snippet to relocate it`, file };
     if (!changed.trim() && !note) note = 'reported for another revision; the file is unchanged since';
@@ -194,7 +194,7 @@ export function importReport(o) {
   const renameCache = {};
   const ctx = {
     head,
-    renames: (rev) => (renameCache[rev] ??= Object.fromEntries((git(o.root, ['diff', '-M', '--name-status', rev, 'HEAD']) || '').split('\n').filter((l) => /^R\d*\t/.test(l)).map((l) => { const [, from, to] = l.split('\t'); return [from, to]; }))),
+    renames: (rev) => (renameCache[rev] ??= Object.fromEntries((git(o.root, ['diff', '--no-ext-diff', '--no-textconv', '-M', '--name-status', rev, 'HEAD']) || '').split('\n').filter((l) => /^R\d*\t/.test(l)).map((l) => { const [, from, to] = l.split('\t'); return [from, to]; }))),
   };
   const byKey = new Map(); const rejected = [];
   for (const r of parsed.results) {
