@@ -433,10 +433,10 @@ export function buildContract(o) {
   } else if (o.family === 'infrastructure') {
     if (!profile.infrastructure) return { contract: null, blocked: ['the profile has no infrastructure section for an infrastructure finding'], problems: [] };
     const x = profile.infrastructure;
-    const xinputs = { files: x.files, environment: x.environment, mustNotExpose: x.mustNotExpose, mustStayExposed: x.mustStayExposed };
+    const xinputs = { files: x.files, environment: x.environment, mustNotExpose: x.mustNotExpose, mustStayExposed: x.mustStayExposed, ...(x.privileges ? { privileges: { mustNotAllow: x.privileges.mustNotAllow, mustAllow: x.privileges.mustAllow || [] } } : {}) };
     obligations = [{
       id: 'infrastructure-exposure', kind: 'infrastructure-effective', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
-      scope: `the effective configuration of ${x.files.length} file(s) in ${x.environment}: ${x.mustNotExpose.join(', ')} not exposed${x.mustStayExposed.length ? `; ${x.mustStayExposed.join(', ')} still exposed` : ''}`,
+      scope: `the effective configuration of ${x.files.length} file(s) in ${x.environment}: ${x.mustNotExpose.length ? `${x.mustNotExpose.join(', ')} not exposed` : 'no exposure requirement'}${x.mustStayExposed.length ? `; ${x.mustStayExposed.join(', ')} still exposed` : ''}${x.privileges ? `; ${x.privileges.mustNotAllow.length} action(s) denied and ${(x.privileges.mustAllow || []).length} kept for named identities` : ''}`,
       baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: xinputs, inputsDigest: digestOf(xinputs), description: OBLIGATION_KINDS['infrastructure-effective'].description,
     }];
   } else if (o.family === 'workflow') {

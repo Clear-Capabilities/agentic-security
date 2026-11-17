@@ -9,6 +9,14 @@
 > make the history less accurate, not more.
 
 
+## 0.206.0 - Verified remediation: infrastructure privileges
+
+**Measured, 0.205.0:** `TIMINGS preflight=4s push=0s pr=5s checks=398s merge=6s verify=5s tag=2s release=226s npm=91s total=737s release-clock=239s` (the branch was pushed through the local pre-push gate before `ship` ran, so `push` is 0 s); the registry listing was not visible within the 90 s wait and a resumed run confirmed it.
+
+- **Changed results, listed first.** Repair challenge gate: 68 cases, unsafe patches accepted 0 of 53, caught by the declared obligation 53 of 53, legitimate repairs rejected 0 of 15 (was 62). Self-scan unchanged at 703.
+- **Privilege in infrastructure repair.** An infrastructure profile may declare `privileges`: actions a named identity must not be able to perform on an exact resource, and actions it must keep. The grants the deployment adapters read from a Terraform plan are decided by the existing IAM evaluator (allows, then denies whose condition holds). On a role that can read and write every bucket, keeping read access everywhere, a deny whose condition operator the evaluator does not support, a deny naming the wrong action, and removing the policy (the approved asset workflow breaks) are each rejected; an explicit deny and a narrowed resource are verified. An unresolved decision never passes.
+- **Not in this release.** Trust stores, resource policies, permission boundaries, organization policies and Kubernetes RBAC; dependency ecosystems beyond npm; PostgreSQL; real models.
+
 ## 0.205.0 - Verified remediation, milestone 4 (fifth part): migrations, rollback and staging
 
 **Measured, 0.204.0:** `TIMINGS preflight=3s push=6s pr=4s checks=354s merge=5s verify=5s tag=2s release=222s npm=90s total=691s release-clock=234s`; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.

@@ -92,12 +92,25 @@ export function validateProfile(p) {
     const x = p.infrastructure;
     if (!isPlainObject(x)) errs.push('infrastructure must be an object');
     else {
-      keysOnly(errs, x, ['files', 'environment', 'mustNotExpose', 'mustStayExposed'], 'infrastructure');
+      keysOnly(errs, x, ['files', 'environment', 'mustNotExpose', 'mustStayExposed', 'privileges'], 'infrastructure');
       if (!Array.isArray(x.files) || !x.files.length || x.files.length > 40 || !x.files.every(isRelPath)) errs.push('infrastructure.files must list 1 to 40 configuration files');
       else if (isPlainObject(a) && Array.isArray(a.files) && !x.files.every((f) => a.files.includes(f))) errs.push('infrastructure.files must be application files (a repair edits them)');
       if (typeof x.environment !== 'string' || !SLUG.test(x.environment)) errs.push('infrastructure.environment must be a slug');
       const names = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' && /^[A-Za-z0-9][\w.-]{0,62}$/.test(s));
-      if (!names(x.mustNotExpose) || !x.mustNotExpose.length) errs.push('infrastructure.mustNotExpose must name at least one service');
+      // privilege: actions an identity must not be able to perform, and the ones it must keep (IAM policies in a Terraform plan)
+      const pv = x.privileges;
+      const grantList = (v) => Array.isArray(v) && v.length <= 32 && v.every((g) => isPlainObject(g) && Object.keys(g).every((k) => ['identity', 'action', 'resource'].includes(k))
+        && typeof g.identity === 'string' && /^[A-Za-z0-9][\w./:-]{0,120}$/.test(g.identity) && typeof g.action === 'string' && /^[A-Za-z0-9-]{1,40}:[A-Za-z0-9]{1,80}$/.test(g.action)
+        && typeof g.resource === 'string' && /^[\w:./*-]{1,200}$/.test(g.resource) && !/[*?]/.test(g.resource));
+      if (pv !== undefined) {
+        if (!isPlainObject(pv)) errs.push('infrastructure.privileges must be an object');
+        else {
+          keysOnly(errs, pv, ['mustNotAllow', 'mustAllow'], 'infrastructure.privileges');
+          if (!grantList(pv.mustNotAllow) || !pv.mustNotAllow.length) errs.push('infrastructure.privileges.mustNotAllow must list 1 to 32 {identity, action, resource} entries with an exact resource (no wildcard)');
+          if (!grantList(pv.mustAllow || [])) errs.push('infrastructure.privileges.mustAllow must list at most 32 {identity, action, resource} entries with an exact resource');
+        }
+      }
+      if (!names(x.mustNotExpose) || (!x.mustNotExpose.length && !isPlainObject(pv))) errs.push('infrastructure.mustNotExpose must name at least one service (it may be empty when privileges are declared)');
       if (!names(x.mustStayExposed)) errs.push('infrastructure.mustStayExposed must list the approved exposed services (it may be empty)');
     }
   }

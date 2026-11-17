@@ -12,10 +12,18 @@
 //                        could not resolve, and a file they could not parse, is a gap: the obligation fails rather than assume the
 //                        exposure closed.
 //
+//   checkPrivileges      the privilege half (FR-15, M4-06 follow-up): for each declared (identity, action, exact resource), the grants
+//                        the adapters read for that identity (IAM policies in a Terraform plan or a policy document) are decided by the
+//                        existing action-level evaluator (`iam-eval.js`): a matching allow, then any matching deny whose condition holds.
+//                        A forbidden action must be `not-granted` or `blocked`; a kept action must be `possible`. `unresolved` (an
+//                        unsupported condition, a clipped action list, an opaque grant) fails both ways: unknown is never a pass. An
+//                        identity the adapters could not resolve, or one with no node at all, is a gap.
+//
 // Limits, stated: only the formats the adapters read; reachability through a service's dependencies (another service that is itself
 // exposed) is not exposure here and is not judged; host firewalls, service meshes and cloud policies outside the files are not read;
 // nothing is applied (the shared apply service never writes composition or Terraform files) and nothing is deployed.
 import { ingestDeploymentConfig } from '../lineage/deployment/ingest.js';
+import { decideAction, resourceMatches } from '../lineage/deployment/iam-eval.js';
 
 /** Which services a public route reaches over routing edges only. Returns {exposed: Map(name -> route names), gaps: string[]}. */
 export function directExposure(graph) {
@@ -41,6 +49,35 @@ export function directExposure(graph) {
   return { exposed, gaps };
 }
 
+const resourceName = (n) => String(n.name).replace(/^aws\//, '');
+
+/** Decide each declared privilege over one ingested graph. Returns problems. */
+export function checkPrivileges(graph, privileges) {
+  const problems = [];
+  const byName = new Map(graph.nodes.filter((n) => n.kind === 'identity').map((n) => [n.name, n]));
+  const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
+  const decide = (g) => {
+    const ident = byName.get(g.identity);
+    if (!ident) return { outcome: 'no-identity' };
+    if (ident.resolved === false) return { outcome: 'unresolved', why: [`the identity is not resolved (${ident.unresolvedReason || 'unknown'})`] };
+    const edges = graph.edges.filter((e) => e.relation === 'grants' && e.from === ident.id && nodes.get(e.to) && resourceMatches(resourceName(nodes.get(e.to)), g.resource));
+    const d = decideAction(edges.filter((e) => e.effect === 'allow'), edges.filter((e) => e.effect === 'deny'), g.action, {});
+    return { outcome: d.outcome, why: d.unresolvedBy };
+  };
+  for (const g of privileges.mustNotAllow) {
+    const d = decide(g);
+    if (d.outcome === 'possible') problems.push(`${g.identity} can still ${g.action} on ${g.resource}`);
+    else if (d.outcome === 'unresolved') problems.push(`whether ${g.identity} can ${g.action} on ${g.resource} is unresolved: ${(d.why || []).join('; ').slice(0, 200)}`);
+    else if (d.outcome === 'no-identity') problems.push(`${g.identity} is not an identity the configuration declares, so its grants are unknown`);
+  }
+  for (const g of privileges.mustAllow || []) {
+    const d = decide(g);
+    if (d.outcome === 'possible') continue;
+    problems.push(d.outcome === 'unresolved' ? `whether ${g.identity} can still ${g.action} on ${g.resource} is unresolved: ${(d.why || []).join('; ').slice(0, 200)}` : d.outcome === 'no-identity' ? `${g.identity} is gone: an approved workflow is broken` : `${g.identity} can no longer ${g.action} on ${g.resource}: an approved workflow is broken`);
+  }
+  return problems;
+}
+
 /** The `infrastructure-effective` check over one revision's files. */
 export function checkInfrastructure(decl, files) {
   const input = decl.files.filter((f) => typeof files[f] === 'string').map((f) => ({ path: f, text: files[f] }));
@@ -55,5 +92,6 @@ export function checkInfrastructure(decl, files) {
   for (const s of decl.mustNotExpose) if (exposed.has(s)) problems.push(`${s} is still exposed by ${exposed.get(s).join(', ')}`);
   const services = new Set(g.graph.nodes.filter((n) => n.kind === 'service').map((n) => n.name));
   for (const s of decl.mustStayExposed) if (!exposed.has(s)) problems.push(`${s} is no longer exposed${services.has(s) ? '' : ' (the service is gone)'}: an approved workflow is broken`);
+  if (decl.privileges) problems.push(...checkPrivileges(g.graph, decl.privileges));
   return { ok: problems.length === 0, problems, exposed: Object.fromEntries([...exposed].map(([k, v]) => [k, v])) };
 }

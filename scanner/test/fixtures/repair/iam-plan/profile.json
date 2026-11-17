@@ -1,0 +1,44 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": {
+    "entry": "deploy/plan.json",
+    "files": [
+      "deploy/plan.json"
+    ]
+  },
+  "infrastructure": {
+    "files": [
+      "deploy/plan.json"
+    ],
+    "environment": "prod",
+    "mustNotExpose": [],
+    "mustStayExposed": [],
+    "privileges": {
+      "mustNotAllow": [
+        {
+          "identity": "iam-role/orders-api",
+          "action": "s3:GetObject",
+          "resource": "arn:aws:s3:::payroll-exports/2026-11.csv"
+        },
+        {
+          "identity": "iam-role/orders-api",
+          "action": "s3:PutObject",
+          "resource": "arn:aws:s3:::payroll-exports/2026-11.csv"
+        }
+      ],
+      "mustAllow": [
+        {
+          "identity": "iam-role/orders-api",
+          "action": "s3:GetObject",
+          "resource": "arn:aws:s3:::orders-assets/logo.png"
+        },
+        {
+          "identity": "iam-role/orders-api",
+          "action": "s3:PutObject",
+          "resource": "arn:aws:s3:::orders-assets/receipts/1.pdf"
+        }
+      ]
+    }
+  }
+}
