@@ -49,6 +49,7 @@ export const PROFILE_SUPPORT = Object.freeze([
   { family: 'dependency', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-dependency.test.js' },
   { family: 'credential', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-credential.test.js' },
   { family: 'workflow', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow-state.test.js' },
+  { family: 'infrastructure', runtime: 'node', macos: 'integration-tested', linux: 'unverified', recipe: null, evidence: 'scanner/test/repair/repair-infrastructure.test.js' },
 ]);
 
 /** The support row for a contract's family and runtime, or null (an unsupported combination is refused when the profile validates). */
@@ -405,7 +406,7 @@ export function buildContract(o) {
   const profile = o.profile;
   const blocked = [];
   for (const m of o.source.missing || []) blocked.push(`application file ${m} is missing or not a regular file`);
-  const actors = Object.fromEntries(profile.actors.map((a) => [a.id, a]));
+  const actors = Object.fromEntries((profile.actors || []).map((a) => [a.id, a]));
   let obligations; let matrix = null;
   if (o.family === 'sql-injection') {
     if (!profile.sql) return { contract: null, blocked: ['the profile has no sql section for a sql-injection finding'], problems: [] };
@@ -429,6 +430,15 @@ export function buildContract(o) {
       scope: `${d.package} outside ${d.vulnerable} everywhere it resolves; lockfile consistent with the manifest; packages from ${d.sources} with their recorded integrity`,
       baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: dinputs, inputsDigest: digestOf(dinputs), description: OBLIGATION_KINDS['dependency-resolved'].description,
     });
+  } else if (o.family === 'infrastructure') {
+    if (!profile.infrastructure) return { contract: null, blocked: ['the profile has no infrastructure section for an infrastructure finding'], problems: [] };
+    const x = profile.infrastructure;
+    const xinputs = { files: x.files, environment: x.environment, mustNotExpose: x.mustNotExpose, mustStayExposed: x.mustStayExposed };
+    obligations = [{
+      id: 'infrastructure-exposure', kind: 'infrastructure-effective', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `the effective configuration of ${x.files.length} file(s) in ${x.environment}: ${x.mustNotExpose.join(', ')} not exposed${x.mustStayExposed.length ? `; ${x.mustStayExposed.join(', ')} still exposed` : ''}`,
+      baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: xinputs, inputsDigest: digestOf(xinputs), description: OBLIGATION_KINDS['infrastructure-effective'].description,
+    }];
   } else if (o.family === 'workflow') {
     if (!profile.workflow) return { contract: null, blocked: ['the profile has no workflow section for a workflow finding'], problems: [] };
     obligations = workflowObligations(profile, actors, blocked);
@@ -462,7 +472,7 @@ export function buildContract(o) {
   const approved = o.profileOrigin === 'operator-profile-outside-repository' && profile.approval;
   const policyFacts = [{
     id: 'application-profile', origin: o.profileOrigin, approval: approved ? 'approved' : 'declared',
-    digest: digestOf({ actors: profile.actors, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, database: profile.database }),
+    digest: digestOf({ actors: profile.actors ?? null, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, workflow: profile.workflow ?? null, credential: profile.credential ?? null, dependency: profile.dependency ?? null, infrastructure: profile.infrastructure ?? null, database: profile.database ?? null }),
     ...(approved ? { approvedBy: profile.approval.approvedBy } : {}),
   }];
   const knownUnknowns = [
@@ -479,7 +489,7 @@ export function buildContract(o) {
     findingRefs: [o.finding.findingId || o.finding.stableId || o.finding.id],
     rootCauseGroup: digestOf({ family: o.family, file: findingFile }),
     sourceCommit: o.commit ?? null, sourceDigest: o.source.sourceDigest, configDigests: o.source.configDigests,
-    profile: { application: profile.application, database: { engine: profile.database.engine }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
+    profile: { application: profile.application, database: { engine: profile.database?.engine ?? null }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
     obligations, policyFacts,
     // a dependency repair edits the manifest and the lockfile; every other protected path stays protected
     editScope: { allowed: [...profile.application.files], prohibited: o.family === 'dependency' ? PROTECTED_PATTERNS.filter((x) => x !== 'package.json' && x !== 'package-lock.json') : [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },

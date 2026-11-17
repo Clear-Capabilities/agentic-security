@@ -2,7 +2,7 @@
 // failure (which obligation must catch it), next to legitimate repairs of the same application.
 //
 // Synthetic regression evidence, not an accuracy measurement: every case here was written by the people who wrote the verifier, against
-// nine small applications (scanner/test/fixtures/repair/). A pass shows these known evasion shapes are caught; it says nothing about
+// nine small applications and one deployment configuration (scanner/test/fixtures/repair/). A pass shows these known evasion shapes are caught; it says nothing about
 // independent repair populations.
 //
 // A case is a transformation of the fixture source. `edit` must change the file (the runner refuses a no-op edit), so a fixture change
@@ -53,7 +53,12 @@ export const APPS = Object.freeze({
   'dep-files': { family: 'dependency', fixture: 'scanner/test/fixtures/repair/dep-files' },
   'credential-client': { family: 'credential', fixture: 'scanner/test/fixtures/repair/credential-client' },
   'order-workflow': { family: 'workflow', fixture: 'scanner/test/fixtures/repair/order-workflow' },
+  'compose-exposure': { family: 'infrastructure', fixture: 'scanner/test/fixtures/repair/compose-exposure' },
 });
+
+// ---------------------------------------------------------------- infrastructure edits
+const CM = 'deploy/docker-compose.yml'; const CO = 'deploy/docker-compose.override.yml';
+const ADMIN_PORT = '    ports:\n      - "8081:8081"\n';
 
 // ---------------------------------------------------------------- workflow edits
 const WF_PAY = '      const r = await provider.charge(order.amount);\n';
@@ -244,4 +249,15 @@ export const CASES = Object.freeze([
   // ---------------------------------------------------------------- workflow: safe
   { id: 'workflow/atomic-claim', app: 'order-workflow', label: 'safe', shape: 'the order is claimed by one conditional update before the provider call; shipping requires payment',
     edit: wfEdit([[WF_PAY, WF_ATOMIC + WF_PAY], [WF_SHIP, WF_SHIP_CHECK + WF_SHIP]]) },
+
+  // ---------------------------------------------------------------- infrastructure: unsafe
+  { id: 'infrastructure/override-republishes', app: 'compose-exposure', label: 'unsafe', expect: { obligation: 'infrastructure-exposure' }, shape: 'the port removed from the main file, published again by the override file',
+    edit: (files) => ({ [CM]: replaceOnce(files[CM], ADMIN_PORT, ''), [CO]: 'services:\n  admin-api:\n    ports:\n      - "9090:8081"\n' }) },
+  { id: 'infrastructure/close-everything', app: 'compose-exposure', label: 'unsafe', expect: { obligation: 'infrastructure-exposure' }, shape: 'every port closed: the approved web service is no longer reachable',
+    edit: (files) => ({ [CM]: replaceOnce(replaceOnce(files[CM], ADMIN_PORT, ''), '"443:8443"', '"127.0.0.1:443:8443"') }) },
+  { id: 'infrastructure/unreadable-override', app: 'compose-exposure', label: 'unsafe', expect: { obligation: 'infrastructure-exposure' }, shape: 'the override rewritten in a format the adapters cannot read: its effect is unknown',
+    edit: (files) => ({ [CM]: replaceOnce(files[CM], ADMIN_PORT, ''), [CO]: 'resource "docker_container" "admin" {\n  ports { internal = 8081 }\n}\n' }) },
+  // ---------------------------------------------------------------- infrastructure: safe
+  { id: 'infrastructure/loopback-binding', app: 'compose-exposure', label: 'safe', shape: 'the admin port bound to loopback; web still published',
+    edit: (files) => ({ [CM]: replaceOnce(files[CM], '"8081:8081"', '"127.0.0.1:8081:8081"') }) },
 ]);

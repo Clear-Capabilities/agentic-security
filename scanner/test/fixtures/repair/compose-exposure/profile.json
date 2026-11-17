@@ -1,0 +1,11 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": { "entry": "deploy/docker-compose.yml", "files": ["deploy/docker-compose.yml", "deploy/docker-compose.override.yml"] },
+  "infrastructure": {
+    "files": ["deploy/docker-compose.yml", "deploy/docker-compose.override.yml"],
+    "environment": "prod",
+    "mustNotExpose": ["admin-api"],
+    "mustStayExposed": ["web"]
+  }
+}

@@ -9,6 +9,15 @@
 > make the history less accurate, not more.
 
 
+## 0.204.0 - Verified remediation, milestone 4 (fourth part): infrastructure exposure
+
+**Measured, 0.203.0:** `TIMINGS preflight=4s push=7s pr=5s checks=426s merge=5s verify=7s tag=2s release=224s npm=91s total=771s release-clock=238s`; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.
+
+- **Changed results, listed first.** Repair challenge gate: 58 cases, unsafe patches accepted 0 of 46, caught by the declared obligation 46 of 46, legitimate repairs rejected 0 of 12 (was 54). Self-scan unchanged at 704.
+- **Infrastructure repair (`infrastructure`).** For a service exposed by deployment configuration, every declared file (container composition, Kubernetes manifests, a Terraform plan in JSON) is read together by the existing deployment boundary adapters, so the effective result is judged, not the edited text. A service that must not be exposed must have no public route; the approved services must keep theirs. A port removed from the main file but published again by an override is still exposed; closing every port breaks the approved service; an override the adapters cannot read is a gap; binding the admin port to loopback is verified. Nothing runs, is applied or is deployed.
+- **Support table.** A new `unverified` value for Linux: nothing stops infrastructure repair running there, but no Linux result is claimed.
+- **Not in this release.** Trust stores, privilege grants and policies outside the files; staging, migrations and rollback.
+
 ## 0.203.0 - Verified remediation, milestone 3 completed: workflow, replay and concurrent submission
 
 **Measured, 0.202.0:** `TIMINGS preflight=4s push=7s pr=4s checks=356s merge=6s verify=6s tag=2s release=162s npm=90s total=637s release-clock=176s`, 176 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.

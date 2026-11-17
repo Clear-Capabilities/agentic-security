@@ -52,7 +52,9 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 export function validateProfile(p) {
   const errs = [];
   if (!isPlainObject(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'infrastructure', 'tests', 'approval'], 'profile');
+  // A profile with only an infrastructure section runs no application: no factory, database or actors are needed.
+  const infraOnly = p.infrastructure !== undefined && !['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow'].some((k) => p[k] !== undefined);
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
   if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
   const a = p.application;
@@ -60,14 +62,14 @@ export function validateProfile(p) {
   else {
     keysOnly(errs, a, ['entry', 'export', 'files', 'runtime'], 'application');
     if (!isRelPath(a.entry)) errs.push('application.entry must be a relative path');
-    if (typeof a.export !== 'string' || !IDENT.test(a.export)) errs.push('application.export must be an identifier');
+    if (!(infraOnly && a.export === undefined) && (typeof a.export !== 'string' || !IDENT.test(a.export))) errs.push('application.export must be an identifier');
     if (!Array.isArray(a.files) || !a.files.length || a.files.length > 60 || !a.files.every(isRelPath)) errs.push('application.files must list 1 to 60 relative paths');
     else if (!a.files.includes(a.entry)) errs.push('application.files must include the entry');
     if (a.runtime !== undefined && !['node', 'python'].includes(a.runtime)) errs.push("application.runtime must be 'node' or 'python'");
     if (a.runtime === 'python' && !/\.py$/.test(String(a.entry))) errs.push('application.entry must be a .py file for the python runtime');
   }
   const d = p.database;
-  if (!isPlainObject(d)) errs.push('database is required');
+  if (infraOnly && d === undefined) { /* nothing runs */ } else if (!isPlainObject(d)) errs.push('database is required');
   else {
     keysOnly(errs, d, ['engine', 'schemaSql', 'seed'], 'database');
     if (d.engine !== 'sqlite') errs.push("database.engine: only 'sqlite' is supported in this milestone");
@@ -75,7 +77,7 @@ export function validateProfile(p) {
     if (!Array.isArray(d.seed)) errs.push('database.seed must be an array');
   }
   const actorIds = new Set();
-  if (!Array.isArray(p.actors) || !p.actors.length) errs.push('actors must be a non-empty array');
+  if (infraOnly && p.actors === undefined) { /* nothing runs */ } else if (!Array.isArray(p.actors) || !p.actors.length) errs.push('actors must be a non-empty array');
   else for (const [i, ac] of p.actors.entries()) {
     if (!isPlainObject(ac)) { errs.push(`actors[${i}] must be an object`); continue; }
     keysOnly(errs, ac, ['id', 'tenant', 'role', 'headers', 'anonymous'], `actors[${i}]`);
@@ -83,7 +85,22 @@ export function validateProfile(p) {
     actorIds.add(ac.id);
     if (!isPlainObject(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
   }
-  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential', 'workflow'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords, credential or workflow section');
+  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential', 'workflow', 'infrastructure'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords, credential, workflow or infrastructure section');
+  // Infrastructure: the configuration files whose EFFECTIVE result is judged together, the environment, the services that must not be
+  // exposed and the approved services that must stay exposed.
+  if (p.infrastructure !== undefined) {
+    const x = p.infrastructure;
+    if (!isPlainObject(x)) errs.push('infrastructure must be an object');
+    else {
+      keysOnly(errs, x, ['files', 'environment', 'mustNotExpose', 'mustStayExposed'], 'infrastructure');
+      if (!Array.isArray(x.files) || !x.files.length || x.files.length > 40 || !x.files.every(isRelPath)) errs.push('infrastructure.files must list 1 to 40 configuration files');
+      else if (isPlainObject(a) && Array.isArray(a.files) && !x.files.every((f) => a.files.includes(f))) errs.push('infrastructure.files must be application files (a repair edits them)');
+      if (typeof x.environment !== 'string' || !SLUG.test(x.environment)) errs.push('infrastructure.environment must be a slug');
+      const names = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' && /^[A-Za-z0-9][\w.-]{0,62}$/.test(s));
+      if (!names(x.mustNotExpose) || !x.mustNotExpose.length) errs.push('infrastructure.mustNotExpose must name at least one service');
+      if (!names(x.mustStayExposed)) errs.push('infrastructure.mustStayExposed must list the approved exposed services (it may be empty)');
+    }
+  }
   // Workflow and idempotency: the operations, the normal workflows built from them (with the state each must leave) and the invariants
   // that must hold after ANY sequence. Repeated, reordered and concurrent variants are generated from these; nothing is inferred.
   if (p.workflow !== undefined) {
