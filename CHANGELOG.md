@@ -9,6 +9,15 @@
 > make the history less accurate, not more.
 
 
+## 0.202.0 - Verified remediation, milestone 4 (third part): is the repair in the built image?
+
+**Measured, 0.201.0:** the first push was refused by GitHub push protection: a synthetic credential fixture used a payment-provider key format. The value was replaced with one matching no provider format and the unpushed commits were rewritten; nothing was bypassed. The successful run: `TIMINGS preflight=4s push=7s pr=4s checks=394s merge=5s verify=8s tag=2s release=254s npm=90s total=768s release-clock=269s`; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.
+
+- **Changed results, listed first.** No gate moved: repair challenge unchanged (50 cases, 0 of 40 unsafe accepted, 0 of 10 safe rejected). Self-scan baseline 701 to 704, reviewed.
+- **`agentic-security repair artifact <run-id> --image <archive.tar> --app-dir <dir>`.** Looks for a verified repair in a built image (`docker save` or OCI-layout tar): every patched file by its patched digest, every package the verified lockfile resolves by version, and, with `--allow-execution`, the contract's checks re-run on the image's own files. An image built from unpatched source is reported as such; a vulnerable package left in the image is a mismatch; a signature or a revision label changes nothing. `artifact-verified` needs all three checks.
+- **Exports name the image.** A repair export records the checked image's digest, and `repair verify <bundle> --image <archive.tar>` refuses a different image.
+- **Not in this release.** Staging and deployment observation, migrations and rollback windows, infrastructure configuration repair. The record's `environment` stays `not-checked`.
+
 ## 0.201.0 - Verified remediation, milestone 4 (second part): dependency and credential repair
 
 **Measured, 0.200.0:** `TIMINGS preflight=4s push=7s pr=4s checks=396s merge=6s verify=11s tag=4s release=223s npm=90s total=745s release-clock=244s`, 244 s from the merge to the published release; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.
