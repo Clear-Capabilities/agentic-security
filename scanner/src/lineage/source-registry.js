@@ -68,6 +68,8 @@ export const PROVENANCE_MAP = Object.freeze({
   // `partial` (see CPP_DESCRIPTOR_GENERIC_PROVENANCE below).
   'network':      Object.freeze({ category: 'external-api-response', status: 'modeled', why: 'reads an outbound response body (fetch/axios/requests/urlopen)' }),
   'file-read':    Object.freeze({ category: 'storage-read',          status: 'modeled', why: "FR-101 groups 'files and object storage reads'; storage-read is its only encoding" }),
+  // a parameter of a function a JS/TS module exports: the library's caller supplies it; whether that caller passes user input is not known
+  'caller-argument': Object.freeze({ category: 'user-input',          status: 'candidate', why: 'a library caller supplies it; whether the caller passes user input is not known' }),
   'url-fragment': Object.freeze({ category: 'http-query',            status: 'partial', why: 'LOSSY: a fragment is URL-borne but never transmitted to the server; SOURCE_CATEGORIES has no http-fragment value' }),
   'stdin':        Object.freeze({ category: 'user-input',            status: 'partial', why: 'LOSSY: broadens to the generic category; no stdin/console value exists' }),
   // `agent-tool` is the one provenance value that does NOT resolve on the

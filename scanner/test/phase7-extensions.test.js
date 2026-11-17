@@ -62,7 +62,7 @@ test('catalog: provenance values come from a known set', () => {
   // and the one docs/AGENT_THREAT_MODEL.md is entirely about.
   // 'upload' (0.195.8) — a field of an uploaded file the client wrote into the multipart body (its name, content type or content):
   // request input, kept distinct from 'http-body' because the browser, not the user, writes the file name.
-  const KNOWN = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie', 'env', 'cli', 'file-read', 'stdin', 'url-fragment', 'network', 'agent-tool', 'upload']);
+  const KNOWN = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie', 'env', 'cli', 'file-read', 'stdin', 'url-fragment', 'network', 'agent-tool', 'upload', 'caller-argument']);
   for (const e of CATALOG) {
     if (e.kind !== 'source' || !e.provenance) continue;
     assert.ok(KNOWN.has(e.provenance), `unknown provenance '${e.provenance}' on ${e.id}`);

@@ -280,12 +280,15 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // amqp's `msgBody`, each as a call form and a lineage twin, every provenance modeled (header, url-param, cookie, network). Re-measured against the live catalog.
   // 728 -> 730 and 570 -> 572 modeled (0.195.46, round 10): Spock's route capture `var`, the source `haskell-ir.js` seeds a route handler lambda's
   // parameters with (`get ("a" <//> var) $ \x -> ..`), as a call form and a lineage twin, provenance url-param. Re-measured against the live catalog.
-  assert.equal(SOURCES.length, 730);
+  // 730 -> 731 and 117 -> 118 candidate (0.207.0): `js-src-caller-controlled-param`, a parameter of an exported JS/TS function, provenance
+  // `caller-argument` (user-input, candidate: the library's caller supplies it, whether that caller passes user input is not known). Opt-in in
+  // the taint engine; the lineage registry classifies every catalog source regardless. Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 731);
   assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 572);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 41);
-  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 117);
+  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 118);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(572 + 41 + 117, SOURCES.length);
+  assert.equal(572 + 41 + 118, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

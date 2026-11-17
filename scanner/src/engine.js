@@ -143,6 +143,7 @@ import { runStackPlaybook } from './posture/stack-playbook.js';
 // Phase 1 (Sentinel-parity PRD) — new detection modules.
 import { scanMassAssignment } from './sast/mass-assignment.js';
 import { scanPrototypePollution } from './sast/prototype-pollution.js';
+import { scanPrototypePollutionStructural } from './sast/prototype-pollution-structural.js';
 import { scanCSRF } from './sast/csrf.js';
 import { scanTOCTOU } from './sast/toctou.js';
 import { scanNoSQLInjection } from './sast/nosql-injection.js';
@@ -8934,6 +8935,7 @@ async function queryRegistries(components){
       // Phase 1: new detectors.
       _aF.push(...(runDetector(_detectorErrors,p,'scanMassAssignment',()=>scanMassAssignment(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanPrototypePollution',()=>scanPrototypePollution(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPrototypePollutionStructural',()=>scanPrototypePollutionStructural(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanCSRF',()=>scanCSRF(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanTOCTOU',()=>scanTOCTOU(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanNoSQLInjection',()=>scanNoSQLInjection(p,cc))||[]));

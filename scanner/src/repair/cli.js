@@ -25,6 +25,7 @@ export const USAGE = `agentic-security repair <command>
   verify  <bundle-dir> [--root <path>] [--image <archive.tar>] [--json]
   export  <run-id> --out <directory> [--root <path>]
   artifact <run-id> --image <archive.tar> --app-dir <dir> [--allow-execution] [--root <path>] [--json]
+  profile-draft (--finding <id> | --family <family> --file <rel>) [--out <profile.json>] [--root <path>] [--json]
   staging <run-id> (--receipt <deployment-receipt.json>) --image <archive.tar> --app-dir <dir> [--allow-execution] [--root <path>] [--json]
   observe <run-id> [--report reopen|reversion|regression --note <text>] [--root <path>] [--json]
   import  --format sarif|normalized --file <report.json> | --show <import-id> | --accept-risk <imported-id> --import <import-id> --reason <why> [--root <path>] [--json]
@@ -354,6 +355,31 @@ async function cmdArtifact(args, root) {
   return v.artifact === 'artifact-verified' ? EXIT.ok : v.artifact === 'artifact-mismatch' ? EXIT.failed : EXIT.blocked;
 }
 
+// `repair profile-draft`: a starting profile read from the code, every fact it could not read left as a TODO that `repair plan` refuses.
+// Reads the signed scan for --finding; writes only the --out file (never over an existing one), or prints.
+async function cmdProfileDraft(args, root) {
+  const { draftProfile } = await import('./profile-draft.js');
+  const { signedFinding, familyForFinding, FAMILIES_SUPPORTED } = await import('./intake.js');
+  let finding; let family = args.flags.family ? String(args.flags.family) : null;
+  if (args.flags.finding) {
+    const s = signedFinding(root, String(args.flags.finding));
+    if (!s.finding) { err(s.reason); return EXIT.blocked; }
+    finding = { file: s.finding.file, line: s.finding.line, cwe: s.finding.cwe };
+    family = family || familyForFinding(s.finding);
+  } else if (family && args.flags.file) finding = { file: String(args.flags.file), line: Number(args.flags.line) || 1 };
+  else { err('profile-draft needs --finding <id>, or --family <family> --file <rel> [--line <n>]'); return EXIT.usage; }
+  if (!family || !FAMILIES_SUPPORTED.includes(family)) { err(`the finding has no repair family; name one of ${FAMILIES_SUPPORTED.join(', ')}`); return EXIT.blocked; }
+  const d = draftProfile({ root, finding, family });
+  if (args.flags.out) {
+    const target = path.resolve(String(args.flags.out));
+    // 'wx' creates the file or fails if it exists, in one step: the draft is never written over a file
+    try { fs.writeFileSync(target, `${JSON.stringify(d.profile, null, 2)}\n`, { flag: 'wx' }); }
+    catch (e) { if (e.code === 'EEXIST') { err(`${target} exists; the draft is never written over a file`); return EXIT.usage; } throw e; }
+  }
+  out(args, [args.flags.out ? `draft written to ${args.flags.out}` : JSON.stringify(d.profile, null, 2), 'read from the code:', ...d.detected.map((x) => `  ${x.field}: ${Array.isArray(x.value) ? x.value.join(', ') : x.value} (${x.basis})`), `to complete (${d.todo.length}); repair plan refuses the draft until every one is filled in:`, ...d.todo.map((t) => `  ${t}`)].join('\n'), d);
+  return EXIT.ok;
+}
+
 // `repair staging`: bind the verified artifact to where it runs. The receipt says which artifact a staging (or production) environment
 // runs; the contract checks are re-executed on that image here. Neither alone changes the environment state (AC-16.6), and a failure on
 // the staged artifact leaves the source verification as it was (AC-16.3).
@@ -399,7 +425,7 @@ async function cmdObserve(args, root) {
 
 export async function cmdRepair(args, root) {
   const sub = args._[1];
-  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes, import: cmdImport, artifact: cmdArtifact, staging: cmdStaging, observe: cmdObserve };
+  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes, import: cmdImport, artifact: cmdArtifact, staging: cmdStaging, observe: cmdObserve, 'profile-draft': cmdProfileDraft };
   if (!handlers[sub] || args.flags.help) { (handlers[sub] ? process.stdout : process.stderr).write(`${USAGE}\n`); return args.flags.help ? EXIT.ok : EXIT.usage; }
   try { return await handlers[sub](args, root); } catch (e) { err(String(e?.message || e)); return EXIT.blocked; }
 }

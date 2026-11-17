@@ -309,6 +309,58 @@ function lhsPath(n) {
   return null;
 }
 
+// ── What a module exports (caller-controlled parameters) ─────────────────────
+// A library's input arrives as the arguments of the functions it exports, not as `req.body`. collectExports reads the Program body once: ES
+// exports (`export function`, `export const f = () =>`, `export default`, `export { a, b }`, exported classes) and CommonJS (`module.exports =
+// f | { a, b, c: function () {} }`, `module.exports.a = ...`, `exports.a = ...`). Only the module's own top level is read; a name exported by
+// reference marks the top-level function or class of that name. Nothing is inferred from a file name or a package manifest.
+const FN_TYPES = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
+const isModuleExports = (n) => n?.type === 'MemberExpression' && n.object?.type === 'Identifier' && n.object.name === 'module' && !n.computed && n.property?.name === 'exports';
+const isExportsTarget = (n) => n?.type === 'MemberExpression' && !n.computed && (isModuleExports(n.object) || (n.object?.type === 'Identifier' && n.object.name === 'exports'));
+function collectExports(program, out) {
+  const markValue = (v) => {
+    if (!v) return;
+    if (FN_TYPES.has(v.type)) out.nodes.add(v);
+    else if (v.type === 'ClassExpression' || v.type === 'ClassDeclaration') out.classes.add(v);
+    else if (v.type === 'Identifier') out.names.add(v.name);
+    else if (v.type === 'ObjectExpression') {
+      for (const pr of v.properties || []) {
+        if (pr.type === 'ObjectMethod') out.nodes.add(pr);
+        else if (pr.type === 'ObjectProperty') markValue(pr.value);
+      }
+    }
+  };
+  const body = program?.body || [];
+  for (const st of body) {
+    if (st.type === 'ExportNamedDeclaration') {
+      const d = st.declaration;
+      if (d?.type === 'FunctionDeclaration') out.nodes.add(d);
+      else if (d?.type === 'ClassDeclaration') out.classes.add(d);
+      else if (d?.type === 'VariableDeclaration') for (const dc of d.declarations || []) markValue(dc.init);
+      if (!st.source) for (const sp of st.specifiers || []) if (sp.local?.type === 'Identifier') out.names.add(sp.local.name);
+    } else if (st.type === 'ExportDefaultDeclaration') {
+      markValue(st.declaration);
+    } else if (st.type === 'ExpressionStatement' && st.expression?.type === 'AssignmentExpression' && st.expression.operator === '=') {
+      const { left, right } = st.expression;
+      if (isModuleExports(left) || isExportsTarget(left)) markValue(right);
+    }
+  }
+  // names exported by reference resolve to the module's own top-level declarations of that name
+  for (const st of body) {
+    if (st.type === 'FunctionDeclaration' && st.id && out.names.has(st.id.name)) { st._topLevel = true; out.nodes.add(st); }
+    else if (st.type === 'ClassDeclaration' && st.id && out.names.has(st.id.name)) out.classes.add(st);
+    else if (st.type === 'VariableDeclaration') {
+      for (const dc of st.declarations || []) if (dc.id?.type === 'Identifier' && out.names.has(dc.id.name)) markValue(dc.init?.type === 'Identifier' ? null : dc.init);
+    }
+  }
+}
+// A parameter whose declared type cannot carry text (a TypeScript number, boolean, or a function type) is not an injection carrier.
+const NON_TEXT_TS = new Set(['TSNumberKeyword', 'TSBooleanKeyword', 'TSFunctionType', 'TSBigIntKeyword', 'TSSymbolKeyword', 'TSVoidKeyword', 'TSNeverKeyword']);
+function callerControllable(ident) {
+  const t = ident.typeAnnotation?.typeAnnotation;
+  return !(t && NON_TEXT_TS.has(t.type));
+}
+
 function fnQid(file, scopeName, name, line) {
   // The qualified ID is stable across re-runs of the parser as long as the file
   // path + function scope/name + line don't change.
@@ -323,8 +375,22 @@ export function parseJsFile(file, code) {
 
   // Scope stack: each entry is a function being built.
   const stack = [];
+  // What the module exports, collected once from the Program body (see collectExports): function and class nodes exported directly, and
+  // names exported by reference (`module.exports = { a, b }`, `export { a }`, `exports.a = a`).
+  const exportsOf = { nodes: new WeakSet(), names: new Set(), classes: new WeakSet() };
+  const isExportedFunction = (node, name) => {
+    if (!node || node.type === 'Program') return false;
+    if (exportsOf.nodes.has(node)) return true;
+    if (node.type === 'ClassMethod') {
+      if (node.kind === 'get' || node.kind === 'set' || node.key?.type === 'PrivateName' || node.accessibility === 'private' || node.accessibility === 'protected') return false;
+      if (/^_/.test(String(node.key?.name || ''))) return false;
+      return exportsOf.classes.has(node._ownerClass);
+    }
+    return !!name && exportsOf.names.has(name) && node._topLevel === true;
+  };
   const enterFn = (name, scopeName, node, params) => {
     const line = node.loc?.start?.line || 1;
+    const exported = isExportedFunction(node, name);
     const qid = fnQid(file, scopeName, name, line);
     const entryId = nextNodeId();
     const exitId  = nextNodeId();
@@ -368,6 +434,11 @@ export function parseJsFile(file, code) {
           if (decoratorName && resolvedIdent?.type === 'Identifier') {
             paramAnnotations.push({ index: idx, name: resolvedIdent.name, decorator: decoratorName });
           }
+        }
+        // A parameter of a function the module EXPORTS is supplied by whoever calls the library: the weak caller-controlled source (the same
+        // fact the Haskell IR states as `hs:caller-controlled`). The IR states the fact; the catalog decides whether it is a source.
+        if (exported && resolvedIdent?.type === 'Identifier' && callerControllable(resolvedIdent)) {
+          paramAnnotations.push({ index: idx, name: resolvedIdent.name, decorator: 'js:caller-controlled' });
         }
         if (p.type === 'Identifier') return p.name;
         if (p.type === 'ObjectPattern') return '<obj>';
@@ -466,7 +537,7 @@ export function parseJsFile(file, code) {
     return {
       visitor: {
         Program: {
-          enter(path) { enterFn('<module>', '', path.node, []); },
+          enter(path) { collectExports(path.node, exportsOf); enterFn('<module>', '', path.node, []); },
           exit() { exitFn(); },
         },
         FunctionDeclaration: {
@@ -520,6 +591,7 @@ export function parseJsFile(file, code) {
         ClassMethod: {
           enter(path) {
             const cls = path.findParent(p => p.isClassDeclaration() || p.isClassExpression())?.node;
+            path.node._ownerClass = cls;
             const className = cls?.id?.name || 'anon';
             const methodName = path.node.key?.name || 'anon';
             enterFn(methodName, className, path.node, path.node.params || []);

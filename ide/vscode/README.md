@@ -31,9 +31,11 @@ npm run build
 ## Deployment (out of scope for this repo)
 
 ```bash
-npm run package        # → agentic-security-0.1.0.vsix
-vsce publish           # requires Marketplace publisher credentials (clearcapabilities)
+npm run package                       # → agentic-security-0.1.0.vsix
+npx --yes @vscode/vsce@4.1.1 publish  # requires Marketplace publisher credentials (clearcapabilities)
 ```
+
+`vsce` is run on demand at a pinned version instead of being a dev dependency: every published `picomatch` release (which it pulls in through `tinyglobby` and `secretlint`) carries a high-severity ReDoS advisory with no fixed version, and the release gate allows no vulnerable package in this tree. The packaging tool is only ever run by hand, never in CI.
 
 The Marketplace token + publish step requires Clear Capabilities Inc. credentials and is not run from the open-source repo.
 

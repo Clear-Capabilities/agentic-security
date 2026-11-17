@@ -52,6 +52,16 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 export function validateProfile(p) {
   const errs = [];
   if (!isPlainObject(p)) return ['the profile must be a JSON object'];
+  // a draft from `repair profile-draft` marks what the code could not state with `TODO: ...`; such a profile is not finished
+  const unfinished = [];
+  const scanTodo = (v, at) => {
+    if (unfinished.length >= 5) return;
+    if (typeof v === 'string' && /^TODO:/.test(v)) unfinished.push(at);
+    else if (Array.isArray(v)) v.forEach((x, i) => scanTodo(x, `${at}[${i}]`));
+    else if (isPlainObject(v)) for (const [k, x] of Object.entries(v)) { if (/^TODO:/.test(k)) unfinished.push(`${at}.<key>`); scanTodo(x, at ? `${at}.${k}` : k); }
+  };
+  scanTodo(p, '');
+  if (unfinished.length) errs.push(`the profile is an unfinished draft: complete the TODO values at ${unfinished.join(', ')}${unfinished.length >= 5 ? ' (and more)' : ''}`);
   keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'infrastructure', 'migration', 'tests', 'approval'], 'profile');
   // A profile with only an infrastructure section runs no application: no factory, database or actors are needed.
   const infraOnly = p.infrastructure !== undefined && !['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow'].some((k) => p[k] !== undefined);
