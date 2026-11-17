@@ -25,7 +25,7 @@ const idOf = (r) => r.id;
 /** The obligation's inputs with quarantined requests and checks removed. Pure. */
 export function withoutQuarantined(inputs, quarantined) {
   const q = new Set(quarantined.map((x) => x.id));
-  return { ...inputs, requests: inputs.requests.filter((r) => !q.has(r.id)), stateChecks: (inputs.stateChecks || []).filter((c) => !q.has(c.id)) };
+  return { ...inputs, requests: inputs.requests.filter((r) => !q.has(r.id)), stateChecks: (inputs.stateChecks || []).filter((c) => !q.has(c.id)), ...(inputs.sequences ? { sequences: inputs.sequences.filter((s) => !q.has(s.id)) } : {}) };
 }
 
 /**
@@ -52,6 +52,9 @@ export async function validateAgainstOriginal(contract, originalFiles, run) {
           g.push({ id: c.id, obligation: ob.id, reason: 'the original revision makes no unauthorized change this check can see: kept as a regression guard, it cannot show a repair' });
           for (const w of c.guards) g.push({ id: w, obligation: ob.id, reason: 'this write attack does not change durable state on the original revision: kept as a regression guard' });
         }
+        for (const s of (ob.inputs.sequences || []).filter((x) => x.role === 'attack')) {
+          if (!violated.has(s.id)) g.push({ id: s.id, obligation: ob.id, reason: 'the original revision keeps every invariant through this sequence: kept as a regression guard, it cannot show a repair' });
+        }
         for (const c of (d.controlFailures || [])) q.push({ id: c.id, obligation: ob.id, reason: `the original revision does not meet this control's expectation (${c.reason}); the expectation is wrong or the application needs setup the profile lacks` });
       }
     } else if (ob.kind === 'app-behaviour-preserved') {
@@ -77,6 +80,10 @@ export function counterexampleFrom(ob, inputs, res, actorsByHeader) {
   if (ob.kind === 'app-attack-blocked') {
     const v = (d.attackViolations || [])[0];
     if (!v) return { obligation: ob.id, message: res.reason };
+    if (v.sequence) {
+      const seq = (inputs.sequences || []).find((s) => s.id === v.id);
+      return { obligation: ob.id, property: 'workflow-invariant', sequence: seq ? { id: seq.id, steps: seq.steps.map((r) => `${r.method} ${r.path}${r.concurrentGroup ? ' (concurrent)' : ''}`) } : { id: v.id }, brokenInvariants: v.checks || [], violations: (d.attackViolations || []).length, message: res.reason };
+    }
     const req = byId[v.id] || null;
     const check = (inputs.stateChecks || []).find((c) => c.id === v.id) || null;
     const writer = check && Array.isArray(check.guards) ? check.guards.map((g) => byId[g]).find(Boolean) || null : null;

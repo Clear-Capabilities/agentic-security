@@ -1,11 +1,11 @@
 {
   "summary": {
-    "cases": 50,
-    "unsafe": 40,
-    "safe": 10,
+    "cases": 54,
+    "unsafe": 43,
+    "safe": 11,
     "unsafeAccepted": 0,
     "safeRejected": 0,
-    "caughtAsExpected": 40,
+    "caughtAsExpected": 43,
     "notExecuted": 0
   },
   "rows": [
@@ -354,6 +354,34 @@
     },
     {
       "id": "credential/from-environment",
+      "label": "safe",
+      "disposition": "verified-for-contract",
+      "caughtBy": null,
+      "asExpected": true
+    },
+    {
+      "id": "workflow/pay-check-only",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "workflow-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "workflow/check-then-act",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "workflow-attacks-sealed",
+      "asExpected": true
+    },
+    {
+      "id": "workflow/payments-disabled",
+      "label": "unsafe",
+      "disposition": "rejected",
+      "caughtBy": "workflow-normal,workflow-attacks-development",
+      "asExpected": true
+    },
+    {
+      "id": "workflow/atomic-claim",
       "label": "safe",
       "disposition": "verified-for-contract",
       "caughtBy": null,

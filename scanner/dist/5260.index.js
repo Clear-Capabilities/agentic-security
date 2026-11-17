@@ -832,7 +832,7 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 function validateProfile(p) {
   const errs = [];
   if (!(0,schema_kit/* isPlainObject */.Qd)(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'tests', 'approval'], 'profile');
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
   if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
   const a = p.application;
@@ -863,7 +863,42 @@ function validateProfile(p) {
     actorIds.add(ac.id);
     if (!(0,schema_kit/* isPlainObject */.Qd)(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
   }
-  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords or credential section');
+  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential', 'workflow'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords, credential or workflow section');
+  // Workflow and idempotency: the operations, the normal workflows built from them (with the state each must leave) and the invariants
+  // that must hold after ANY sequence. Repeated, reordered and concurrent variants are generated from these; nothing is inferred.
+  if (p.workflow !== undefined) {
+    const w = p.workflow;
+    if (!(0,schema_kit/* isPlainObject */.Qd)(w)) errs.push('workflow must be an object');
+    else {
+      keysOnly(errs, w, ['operations', 'normal', 'invariants'], 'workflow');
+      const ops = new Set();
+      if (!Array.isArray(w.operations) || !w.operations.length || w.operations.length > 16) errs.push('workflow.operations must hold 1 to 16 operations');
+      else for (const [i, o] of w.operations.entries()) {
+        const at = `workflow.operations[${i}]`;
+        if (!(0,schema_kit/* isPlainObject */.Qd)(o)) { errs.push(`${at} must be an object`); continue; }
+        keysOnly(errs, o, ['id', 'actor', 'method', 'path', 'body', 'mutating', 'expectStatus'], at);
+        if (typeof o.id !== 'string' || !SLUG.test(o.id) || ops.has(o.id)) errs.push(`${at}.id must be a unique slug`);
+        ops.add(o.id);
+        if (!actorIds.has(o.actor)) errs.push(`${at}.actor must name a declared actor`);
+        checkRequestShape(errs, o, at);
+        if (typeof o.mutating !== 'boolean') errs.push(`${at}.mutating must say whether the operation changes durable state`);
+      }
+      const check = (c, at) => {
+        if (!(0,schema_kit/* isPlainObject */.Qd)(c) || typeof c.id !== 'string' || !SLUG.test(c.id) || typeof c.sql !== 'string' || !/^\s*SELECT\b/i.test(c.sql) || !('expect' in c)) errs.push(`${at} must be {id, sql (one SELECT), params, expect}`);
+      };
+      if (!Array.isArray(w.normal) || !w.normal.length || w.normal.length > 8) errs.push('workflow.normal must hold 1 to 8 legitimate workflows');
+      else for (const [i, n] of w.normal.entries()) {
+        const at = `workflow.normal[${i}]`;
+        if (!(0,schema_kit/* isPlainObject */.Qd)(n)) { errs.push(`${at} must be an object`); continue; }
+        keysOnly(errs, n, ['id', 'steps', 'checks'], at);
+        if (typeof n.id !== 'string' || !SLUG.test(n.id)) errs.push(`${at}.id must be a slug`);
+        if (!Array.isArray(n.steps) || !n.steps.length || n.steps.length > 8 || !n.steps.every((s) => ops.has(s))) errs.push(`${at}.steps must list 1 to 8 declared operation ids`);
+        (n.checks || []).forEach((c, j) => check(c, `${at}.checks[${j}]`));
+      }
+      if (!Array.isArray(w.invariants) || !w.invariants.length || w.invariants.length > 12) errs.push('workflow.invariants must hold 1 to 12 state invariants that hold after any sequence');
+      else w.invariants.forEach((c, j) => check(c, `workflow.invariants[${j}]`));
+    }
+  }
   // A leaked credential: where it is (never its value), the environment name the replacement is wired from, whether the old credential
   // must be revoked, and the legitimate requests that must work with the replacement (against declared hosts that accept only it).
   if (p.credential !== undefined) {
@@ -1077,6 +1112,7 @@ const PROFILE_SUPPORT = Object.freeze([
   { family: 'password-storage', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
   { family: 'dependency', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-dependency.test.js' },
   { family: 'credential', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-credential.test.js' },
+  { family: 'workflow', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow-state.test.js' },
 ]);
 
 /** The support row for a contract's family and runtime, or null (an unsupported combination is refused when the profile validates). */
@@ -1337,6 +1373,48 @@ function passwordObligations(profile, actors, blocked) {
   return out;
 }
 
+/**
+ * Workflow and idempotency (FR-12, M3-05). Every sequence runs on a fresh database and a fresh application instance. Controls: each
+ * declared normal workflow, with its own checks and every invariant. Development attacks: each mutating step replayed, each adjacent
+ * pair swapped, the workflow reversed. Sealed attacks: each mutating step submitted twice at once (cooperative interleaving in one
+ * process). An attack is judged by the invariants alone: a status code never decides.
+ */
+function workflowObligations(profile, actors, blocked) {
+  const w = profile.workflow;
+  const opsById = Object.fromEntries(w.operations.map((op) => [op.id, op]));
+  const step = (id, extra = {}) => { const op = opsById[id]; return { ...reqOf(op, actors[op.actor], {}), ...extra }; };
+  const inv = w.invariants.map((c) => ({ id: `inv_${c.id.replace(/-/g, '_')}`, sql: c.sql, params: c.params || [], expect: c.expect }));
+  const controls = w.normal.map((n) => ({
+    id: `normal_${n.id.replace(/-/g, '_')}`, role: 'control',
+    steps: n.steps.map((s) => step(s, opsById[s].expectStatus ? { expectStatus: opsById[s].expectStatus } : {})),
+    checks: [...(n.checks || []).map((c) => ({ id: `chk_${c.id.replace(/-/g, '_')}`, sql: c.sql, params: c.params || [], expect: c.expect })), ...inv],
+  }));
+  const dev = []; const sealed = []; const seen = new Set();
+  const add = (list, id, steps) => { const k = JSON.stringify(steps); if (seen.has(k)) return; seen.add(k); list.push({ id, role: 'attack', steps, checks: inv }); };
+  for (const n of w.normal) {
+    const nid = n.id.replace(/-/g, '_');
+    n.steps.forEach((s, k) => {
+      if (!opsById[s].mutating) return;
+      const ids = [...n.steps.slice(0, k + 1), s, ...n.steps.slice(k + 1)];
+      add(dev, `replay_${nid}_${k}`, ids.map((x) => step(x)));
+      add(sealed, `concurrent_${nid}_${k}`, [...n.steps.slice(0, k).map((x) => step(x)), step(s, { concurrentGroup: 1 }), step(s, { concurrentGroup: 1 }), ...n.steps.slice(k + 1).map((x) => step(x))]);
+    });
+    for (let k = 0; k + 1 < n.steps.length; k++) {
+      if (n.steps[k] === n.steps[k + 1]) continue;
+      const ids = [...n.steps]; [ids[k], ids[k + 1]] = [ids[k + 1], ids[k]];
+      add(dev, `reorder_${nid}_${k}`, ids.map((x) => step(x)));
+    }
+    if (n.steps.length > 2) add(dev, `reverse_${nid}`, [...n.steps].reverse().map((x) => step(x)));
+  }
+  if (!dev.length) blocked.push('workflow: no declared normal workflow has a mutating step or two distinct steps, so no replay or reorder can be generated');
+  if (blocked.length) return [];
+  return [
+    obligation('app-attack-blocked', 'workflow-attacks-development', appInputs(profile, [], [], { sequences: [...controls, ...dev] }), { scope: 'replayed and reordered variants of the declared workflows, each on a fresh database' }),
+    ...(sealed.length ? [obligation('app-attack-sealed', 'workflow-attacks-sealed', appInputs(profile, [], [], { sequences: [...controls, ...sealed] }), { scope: 'concurrent double submissions of each mutating step (cooperative interleaving in one process; held out)' })] : []),
+    obligation('app-behaviour-preserved', 'workflow-normal', appInputs(profile, [], [], { sequences: controls }), { scope: 'the declared normal workflows, their checks and every invariant' }),
+  ];
+}
+
 function authzObligations(profile, actors, blocked) {
   const z = profile.authorization;
   const out = [];
@@ -1415,6 +1493,9 @@ function buildContract(o) {
       scope: `${d.package} outside ${d.vulnerable} everywhere it resolves; lockfile consistent with the manifest; packages from ${d.sources} with their recorded integrity`,
       baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: dinputs, inputsDigest: (0,identity/* digestOf */.ol)(dinputs), description: schemas/* OBLIGATION_KINDS */.Xn['dependency-resolved'].description,
     });
+  } else if (o.family === 'workflow') {
+    if (!profile.workflow) return { contract: null, blocked: ['the profile has no workflow section for a workflow finding'], problems: [] };
+    obligations = workflowObligations(profile, actors, blocked);
   } else if (o.family === 'credential') {
     if (!profile.credential) return { contract: null, blocked: ['the profile has no credential section for a leaked credential finding'], problems: [] };
     const c = profile.credential;
@@ -1943,7 +2024,7 @@ async function runRepair(o) {
       const eff = base.effectiveInputs[ob.id];
       // Regression guards stay in the obligation but cannot show a repair: an attack obligation needs at least one check the original fails.
       const guard = new Set(base.regressionGuards.filter((x) => x.obligation === ob.id).map((x) => x.id));
-      const meaningful = ob.kind.startsWith('app-attack') ? eff.requests.some((r) => r.role === 'attack' && !guard.has(r.id)) || (eff.stateChecks || []).some((c) => !guard.has(c.id)) : eff.requests.length;
+      const meaningful = ob.kind.startsWith('app-attack') ? eff.requests.some((r) => r.role === 'attack' && !guard.has(r.id)) || (eff.stateChecks || []).some((c) => !guard.has(c.id)) || (eff.sequences || []).some((s) => s.role === 'attack' && !guard.has(s.id)) : eff.requests.length || (eff.sequences || []).length;
       if (!meaningful) { cleanup(); return finish('needs-review', 'partial', EXIT.blocked, { reasons: [`required obligation ${ob.id} has no check left that is meaningful on the original revision (every attack is already blocked there, or quarantined)`], nextPrerequisite: 'review the quarantined checks, the regression guards and the profile' }); }
     }
 
@@ -2192,7 +2273,7 @@ const idOf = (r) => r.id;
 /** The obligation's inputs with quarantined requests and checks removed. Pure. */
 function withoutQuarantined(inputs, quarantined) {
   const q = new Set(quarantined.map((x) => x.id));
-  return { ...inputs, requests: inputs.requests.filter((r) => !q.has(r.id)), stateChecks: (inputs.stateChecks || []).filter((c) => !q.has(c.id)) };
+  return { ...inputs, requests: inputs.requests.filter((r) => !q.has(r.id)), stateChecks: (inputs.stateChecks || []).filter((c) => !q.has(c.id)), ...(inputs.sequences ? { sequences: inputs.sequences.filter((s) => !q.has(s.id)) } : {}) };
 }
 
 /**
@@ -2219,6 +2300,9 @@ async function validateAgainstOriginal(contract, originalFiles, run) {
           g.push({ id: c.id, obligation: ob.id, reason: 'the original revision makes no unauthorized change this check can see: kept as a regression guard, it cannot show a repair' });
           for (const w of c.guards) g.push({ id: w, obligation: ob.id, reason: 'this write attack does not change durable state on the original revision: kept as a regression guard' });
         }
+        for (const s of (ob.inputs.sequences || []).filter((x) => x.role === 'attack')) {
+          if (!violated.has(s.id)) g.push({ id: s.id, obligation: ob.id, reason: 'the original revision keeps every invariant through this sequence: kept as a regression guard, it cannot show a repair' });
+        }
         for (const c of (d.controlFailures || [])) q.push({ id: c.id, obligation: ob.id, reason: `the original revision does not meet this control's expectation (${c.reason}); the expectation is wrong or the application needs setup the profile lacks` });
       }
     } else if (ob.kind === 'app-behaviour-preserved') {
@@ -2244,6 +2328,10 @@ function counterexampleFrom(ob, inputs, res, actorsByHeader) {
   if (ob.kind === 'app-attack-blocked') {
     const v = (d.attackViolations || [])[0];
     if (!v) return { obligation: ob.id, message: res.reason };
+    if (v.sequence) {
+      const seq = (inputs.sequences || []).find((s) => s.id === v.id);
+      return { obligation: ob.id, property: 'workflow-invariant', sequence: seq ? { id: seq.id, steps: seq.steps.map((r) => `${r.method} ${r.path}${r.concurrentGroup ? ' (concurrent)' : ''}`) } : { id: v.id }, brokenInvariants: v.checks || [], violations: (d.attackViolations || []).length, message: res.reason };
+    }
     const req = byId[v.id] || null;
     const check = (inputs.stateChecks || []).find((c) => c.id === v.id) || null;
     const writer = check && Array.isArray(check.guards) ? check.guards.map((g) => byId[g]).find(Boolean) || null : null;
@@ -2839,9 +2927,9 @@ function importedFinding(root, id, importedId) {
 
 
 
-const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal', 'CWE-916': 'password-storage', 'CWE-759': 'password-storage', 'CWE-760': 'password-storage', 'CWE-256': 'password-storage', 'CWE-798': 'credential', 'CWE-259': 'credential', 'CWE-321': 'credential' };
+const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal', 'CWE-916': 'password-storage', 'CWE-759': 'password-storage', 'CWE-760': 'password-storage', 'CWE-256': 'password-storage', 'CWE-798': 'credential', 'CWE-259': 'credential', 'CWE-321': 'credential', 'CWE-362': 'workflow', 'CWE-367': 'workflow', 'CWE-841': 'workflow', 'CWE-837': 'workflow' };
 const familyForFinding = (f) => FAMILY_BY_CWE[String(f?.cwe || '').toUpperCase().replace(/^(\d)/, 'CWE-$1')] || null;
-const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential']);
+const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential', 'workflow']);
 
 function signedFinding(root, id) {
   const file = node_path__WEBPACK_IMPORTED_MODULE_1__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .stateDir */ .Pn)(root), 'last-scan.json');
@@ -3011,7 +3099,7 @@ const ENVIRONMENT_STATES = Object.freeze(['not-checked', 'staging-verified', 'de
 const COMPLETION_STATES = Object.freeze(['complete', 'partial', 'cancelled', 'unavailable', 'invalid']);
 const CUSTODY = Object.freeze(['internal-scan', 'imported', 'locally-corroborated', 'reproduced', 'refuted', 'unresolved']);
 const GENERATORS = Object.freeze(['deterministic-recipe', 'configured-model', 'user-supplied']);
-const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential']);
+const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential', 'workflow']);
 const EVIDENCE_ORIGINS = Object.freeze(['generated-from-profile', 'operator-declared', 'approved-invariant', 'counterexample', 'registered-family']);
 
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w@.\-/]{1,512}$/;

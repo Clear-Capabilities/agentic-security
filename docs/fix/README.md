@@ -25,7 +25,7 @@ When no mechanical fix exists, the CLI says so instead of inventing one. On the 
 No mechanical fix is available for this finding. Use the security-fixer subagent (default `fix` mode), or configure AGENTIC_SECURITY_LLM_PRESET=ollama for an AI-assisted proposal, then apply with `--apply`.
 ```
 
-For a SQL injection or object-authorization finding in a Node or Python (WSGI) application over SQLite, or a server-side request forgery, path traversal, password-storage, vulnerable npm dependency or leaked-credential finding in a Node application, `agentic-security repair` (Labs) can propose and judge candidates against an executable contract, and apply the verified one through the same apply service. See [Contract-driven repair](../guides/verified-remediation.md).
+For a SQL injection or object-authorization finding in a Node or Python (WSGI) application over SQLite, or a server-side request forgery, path traversal, password-storage, vulnerable npm dependency, leaked-credential or workflow finding in a Node application, `agentic-security repair` (Labs) can propose and judge candidates against an executable contract, and apply the verified one through the same apply service. See [Contract-driven repair](../guides/verified-remediation.md).
 
 In Claude Code, the `security-fixer` agent composes the patch through the deterministic toolchain (`synthesize_fix`, `verify_fix`, `apply_fix`); it does not edit files directly.
 

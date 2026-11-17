@@ -2,7 +2,7 @@
 // failure (which obligation must catch it), next to legitimate repairs of the same application.
 //
 // Synthetic regression evidence, not an accuracy measurement: every case here was written by the people who wrote the verifier, against
-// eight small applications (scanner/test/fixtures/repair/). A pass shows these known evasion shapes are caught; it says nothing about
+// nine small applications (scanner/test/fixtures/repair/). A pass shows these known evasion shapes are caught; it says nothing about
 // independent repair populations.
 //
 // A case is a transformation of the fixture source. `edit` must change the file (the runner refuses a no-op edit), so a fixture change
@@ -52,7 +52,16 @@ export const APPS = Object.freeze({
   'password-login': { family: 'password-storage', fixture: 'scanner/test/fixtures/repair/password-login', findingCwe: 'CWE-916' },
   'dep-files': { family: 'dependency', fixture: 'scanner/test/fixtures/repair/dep-files' },
   'credential-client': { family: 'credential', fixture: 'scanner/test/fixtures/repair/credential-client' },
+  'order-workflow': { family: 'workflow', fixture: 'scanner/test/fixtures/repair/order-workflow' },
 });
+
+// ---------------------------------------------------------------- workflow edits
+const WF_PAY = '      const r = await provider.charge(order.amount);\n';
+const WF_SHIP = '    db.prepare("INSERT INTO events (order_id, kind, amount) VALUES (?, \'ship\', 0)").run(order.id);\n';
+const WF_PAY_CHECK = "      if (order.status !== 'new') return send(res, 409, { error: 'already paid' });\n";
+const WF_SHIP_CHECK = "    if (order.status !== 'paid') return send(res, 409, { error: 'not paid' });\n";
+const WF_ATOMIC = "      const claim = db.prepare(\"UPDATE orders SET status = 'paying' WHERE id = ? AND status = 'new'\").run(order.id);\n      if (claim.changes !== 1) return send(res, 409, { error: 'already paid' });\n";
+const wfEdit = (pairs) => (files) => { let t = files['src/app.mjs']; for (const [a, b] of pairs) t = replaceOnce(t, a, b); return { 'src/app.mjs': t }; };
 
 // ---------------------------------------------------------------- dependency edits (lockfiles with real integrities of the fixture tarballs)
 const DEP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'scanner', 'test', 'fixtures', 'repair', 'dep-files');
@@ -224,4 +233,15 @@ export const CASES = Object.freeze([
   // ---------------------------------------------------------------- credential: safe
   { id: 'credential/from-environment', app: 'credential-client', label: 'safe', shape: 'the key read from the declared environment name',
     edit: credEdit('const API_KEY = process.env.PAYMENTS_API_KEY;\n') },
+
+  // ---------------------------------------------------------------- workflow: unsafe
+  { id: 'workflow/pay-check-only', app: 'order-workflow', label: 'unsafe', expect: { obligation: 'workflow-attacks-development' }, shape: 'payment made idempotent, shipping still allowed before payment',
+    edit: wfEdit([[WF_PAY, WF_PAY_CHECK + WF_PAY]]) },
+  { id: 'workflow/check-then-act', app: 'order-workflow', label: 'unsafe', expect: { obligation: 'workflow-attacks-sealed' }, shape: 'both checks added, but the payment check and the charge are separated by the provider call: a concurrent double payment charges twice',
+    edit: wfEdit([[WF_PAY, WF_PAY_CHECK + WF_PAY], [WF_SHIP, WF_SHIP_CHECK + WF_SHIP]]) },
+  { id: 'workflow/payments-disabled', app: 'order-workflow', label: 'unsafe', expect: { obligation: 'workflow-normal' }, shape: 'feature removal',
+    edit: wfEdit([[WF_PAY, "      return send(res, 409, { error: 'payments disabled' });\n" + WF_PAY]]) },
+  // ---------------------------------------------------------------- workflow: safe
+  { id: 'workflow/atomic-claim', app: 'order-workflow', label: 'safe', shape: 'the order is claimed by one conditional update before the provider call; shipping requires payment',
+    edit: wfEdit([[WF_PAY, WF_ATOMIC + WF_PAY], [WF_SHIP, WF_SHIP_CHECK + WF_SHIP]]) },
 ]);

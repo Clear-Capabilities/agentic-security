@@ -20,6 +20,9 @@
 //   - optional `env` and route `requireHeaders` (version 4): declared environment values set before the application loads (a credential
 //     wired from the environment), and a declared host that serves a route only to a request presenting exact headers (401 otherwise),
 //     so a control can show the application uses the replacement credential and not a hardcoded one.
+//   - optional `sequences` (version 5): each sequence runs on a fresh database file and a fresh application instance; its steps run in
+//     order, and steps sharing a concurrentGroup are sent together (cooperative interleaving in one process, not parallel execution);
+//     the verifier reads that sequence's own file and judges its checks. An attack sequence is judged by its checks alone.
 //
 //   application-security   hypothesis: an attack request reaches an effect it must not (a planted per-run secret appears in its
 //                          response, or a state check guarding it does not hold). Confirmed when any attack violates; refuted when
@@ -184,7 +187,7 @@ if (typeof factory !== 'function') finish({ loadFailed: true, loadError: 'the fa
 let handler;
 try { handler = await factory(filesRoot ? { db, filesRoot } : { db }); } catch (e) { finish({ loadFailed: true, loadError: text(e) }); }
 if (typeof handler !== 'function') finish({ loadFailed: true, loadError: 'the factory did not return a request listener' });
-const server = http.createServer(handler);
+let server = http.createServer(handler);
 function send(r) {
   return new Promise((resolve) => {
     const [client, srv] = duplexPair();
@@ -211,6 +214,35 @@ function send(r) {
 }
 for (const r of INPUT.requests) { current = r.id; out.responses[r.id] = await send(r); }
 try { db.close(); } catch {}
+// Sequences (version 5): each runs on a FRESH database file and a FRESH application instance, so one sequence's writes never reach
+// another. Steps run in order; consecutive steps sharing a concurrentGroup are sent together and interleave at the application's await
+// points (cooperative scheduling in one process, never parallel execution). The verifier reads each sequence's file afterwards.
+if (INPUT.sequences) {
+  out.sequences = {};
+  for (const [si, seq] of INPUT.sequences.entries()) {
+    let sdb;
+    try {
+      sdb = new DatabaseSync('__oracle_seq_' + si + '.db');
+      sdb.exec(INPUT.schemaSql);
+      for (const s of INPUT.seed) sdb.prepare(s.sql).run(...s.params);
+      const h = await factory(filesRoot ? { db: sdb, filesRoot } : { db: sdb });
+      if (typeof h !== 'function') throw new Error('the factory did not return a request listener');
+      server = http.createServer(h);
+    } catch (e) { out.sequences[seq.id] = { error: text(e) }; try { sdb.close(); } catch {} continue; }
+    const results = [];
+    for (let i = 0; i < seq.steps.length;) {
+      const g = seq.steps[i].concurrentGroup;
+      let j = i + 1;
+      if (g) while (j < seq.steps.length && seq.steps[j].concurrentGroup === g) j++;
+      current = seq.id + ':' + i;
+      const batch = await Promise.all(seq.steps.slice(i, j).map((r) => send(r)));
+      results.push(...batch);
+      i = j;
+    }
+    out.sequences[seq.id] = { steps: results };
+    try { sdb.close(); } catch {}
+  }
+}
 finish({ completed: true, ...(INPUT.network ? { connections, lookups } : {}) });
 `;
 
@@ -221,7 +253,8 @@ function validateAppInputs(i, { requireAttack }) {
   if (!isStr(i.schemaSql, 20000) || !i.schemaSql.trim()) return 'schemaSql must be a non-empty string';
   if (!Array.isArray(i.seed) || i.seed.length > 200) return 'seed must be an array of at most 200 statements';
   for (const s of i.seed) if (!s || !isStr(s.sql, 2000) || !/^\s*INSERT\b/i.test(s.sql) || !Array.isArray(s.params) || s.params.length > 32) return 'every seed entry is one INSERT with a params array';
-  if (!Array.isArray(i.requests) || i.requests.length < 1 || i.requests.length > 128) return 'requests must hold 1 to 128 entries';
+  if (!Array.isArray(i.requests) || i.requests.length > 128 || (i.requests.length < 1 && !Array.isArray(i.sequences))) return 'requests must hold 1 to 128 entries (or be empty when sequences are declared)';
+  if (i.sequences !== undefined) { const p = validateSequences(i); if (p) return p; }
   const ids = new Set();
   for (const r of i.requests) {
     if (!r || !isId(r.id) || ids.has(r.id)) return 'every request needs a unique identifier id';
@@ -260,8 +293,10 @@ function validateAppInputs(i, { requireAttack }) {
   if (i.env !== undefined && (!isPlain(i.env) || Object.keys(i.env).length > 16 || !Object.entries(i.env).every(([k, v]) => /^[A-Z_][A-Z0-9_]{0,63}$/.test(k) && !/^(?:NODE_|PATH$|HOME$|LD_|DYLD_)/.test(k) && isStr(v, 500)))) return 'env must map at most 16 upper-case names (not NODE_*, PATH, HOME, LD_*, DYLD_*) to strings';
   if (i.network !== undefined) { const p = validateNetwork(i.network); if (p) return p; }
   if (i.files !== undefined) { const p = validateFiles(i.files); if (p) return p; }
-  if (requireAttack && !i.requests.some((r) => r.role === 'attack') && !checks.some((c) => c.role === 'attack')) return 'at least one attack request or attack state check is required';
-  if (!i.requests.some((r) => r.role === 'control')) return 'at least one control request is required (it shows the application worked)';
+  const seqs = i.sequences || [];
+  if (requireAttack && !i.requests.some((r) => r.role === 'attack') && !checks.some((c) => c.role === 'attack') && !seqs.some((s) => s.role === 'attack')) return 'at least one attack request, attack state check or attack sequence is required';
+  if (!i.requests.some((r) => r.role === 'control') && !seqs.some((s) => s.role === 'control')) return 'at least one control request or control sequence is required (it shows the application worked)';
+  if (!requireAttack && seqs.some((s) => s.role === 'attack')) return 'the behaviour oracle takes control sequences only';
   if (!requireAttack && i.requests.some((r) => r.role === 'attack')) return 'the behaviour oracle takes control requests only';
   return null;
 }
@@ -318,6 +353,53 @@ export function validateFiles(f) {
     if (resolved.startsWith('..') || resolved.startsWith('/')) return `files.links: '${rel}' must point inside the tree`;
   }
   return null;
+}
+
+// ---------------------------------------------------------------- sequences (version 5)
+
+const READ_ONLY_SELECT = (sql) => isStr(sql, 2000) && /^\s*SELECT\b/i.test(sql) && !/;\s*\S/.test(sql) && !/\b(?:ATTACH|PRAGMA|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|REPLACE|VACUUM)\b/i.test(sql);
+
+function validateSequences(i) {
+  if (!Array.isArray(i.sequences) || !i.sequences.length || i.sequences.length > 32) return 'sequences must hold 1 to 32 entries';
+  const ids = new Set();
+  for (const s of i.sequences) {
+    if (!isPlain(s) || !isId(s.id) || ids.has(s.id)) return 'every sequence needs a unique identifier id';
+    ids.add(s.id);
+    for (const k of Object.keys(s)) if (!['id', 'role', 'steps', 'checks'].includes(k)) return `sequence ${s.id}: unknown field '${k}'`;
+    if (!['control', 'attack'].includes(s.role)) return `sequence ${s.id}: role must be control or attack`;
+    if (!Array.isArray(s.steps) || !s.steps.length || s.steps.length > 12) return `sequence ${s.id}: steps must hold 1 to 12 requests`;
+    for (const r of s.steps) {
+      if (!isPlain(r)) return `sequence ${s.id}: every step must be an object`;
+      for (const k of Object.keys(r)) if (!['method', 'path', 'headers', 'body', 'expectStatus', 'concurrentGroup'].includes(k)) return `sequence ${s.id}: unknown step field '${k}'`;
+      if (!METHODS.has(r.method) || !isStr(r.path, 2000) || !r.path.startsWith('/')) return `sequence ${s.id}: every step needs a method and a path starting with /`;
+      if (r.expectStatus !== undefined && (!Array.isArray(r.expectStatus) || !r.expectStatus.every((n) => Number.isInteger(n) && n >= 100 && n < 600))) return `sequence ${s.id}: expectStatus must list status codes`;
+      if (r.concurrentGroup !== undefined && !(Number.isInteger(r.concurrentGroup) && r.concurrentGroup > 0)) return `sequence ${s.id}: concurrentGroup must be a positive integer`;
+      if (r.headers !== undefined && (!isPlain(r.headers) || Object.keys(r.headers).length > 16)) return `sequence ${s.id}: headers must be an object of at most 16 entries`;
+    }
+    if (!Array.isArray(s.checks) || !s.checks.length || s.checks.length > 16) return `sequence ${s.id}: checks must hold 1 to 16 read-only state checks`;
+    for (const c of s.checks) {
+      if (!isPlain(c) || !isId(c.id) || !READ_ONLY_SELECT(c.sql) || !('expect' in c) || !Array.isArray(c.params || [])) return `sequence ${s.id}: every check needs an id, one read-only SELECT and an expectation`;
+    }
+  }
+  return null;
+}
+
+/** Judge every sequence against its own database file, read by the verifier after the tree is dead. */
+function judgeSequences(inputs, result, token, pathOf) {
+  const controlFailures = []; const violations = []; const gaps = [];
+  for (const [si, s] of (inputs.sequences || []).entries()) {
+    const got = result.sequences?.[s.id];
+    if (!got || got.error || !Array.isArray(got.steps)) { (s.role === 'control' ? controlFailures : gaps).push({ id: s.id, reason: `the sequence did not run${got?.error ? ` (${String(got.error).slice(0, 80)})` : ''}` }); continue; }
+    const st = readState(pathOf ? pathOf(`__oracle_seq_${si}.db`) : null, s.checks, token);
+    if (!st.ok) { (s.role === 'control' ? controlFailures : gaps).push({ id: s.id, reason: st.reason }); continue; }
+    const broken = s.checks.filter((c) => !st.results[c.id]?.held).map((c) => c.id);
+    if (s.role === 'control') {
+      const badStep = s.steps.findIndex((r, k) => r.expectStatus && !r.expectStatus.includes(got.steps[k]?.status));
+      if (badStep >= 0) controlFailures.push({ id: s.id, reason: `step ${badStep + 1} returned ${got.steps[badStep]?.status ?? 'no response'}, expected ${s.steps[badStep].expectStatus.join('/')}` });
+      else if (broken.length) controlFailures.push({ id: s.id, reason: `the durable state after the sequence breaks ${broken.join(', ')}` });
+    } else if (broken.length) violations.push({ id: s.id, effect: 'durable-state', sequence: true, checks: broken });
+  }
+  return { controlFailures, violations, gaps };
 }
 
 // ---------------------------------------------------------------- stored credentials (version 3)
@@ -391,6 +473,7 @@ function prepareAppInputs(i, token) {
     ...(i.network ? { network: deep(i.network, token) } : {}),
     ...(i.files ? { files: { root: i.files.root, tree: deep(i.files.tree, token), links: i.files.links || {} } } : {}),
     ...(i.env ? { env: deep(i.env, token) } : {}),
+    ...(i.sequences ? { sequences: i.sequences.map((s) => ({ id: s.id, steps: s.steps.map((r) => ({ method: r.method, path: subst(r.path, token), headers: deep(r.headers || {}, token), ...(r.body !== undefined ? { body: deep(r.body, token) } : {}), ...(r.concurrentGroup ? { concurrentGroup: r.concurrentGroup } : {}) })) })) } : {}),
   };
 }
 
@@ -512,8 +595,10 @@ function interpretSecurity({ inputs, token, result, pathOf }) {
   const open = loadedOrOpen(result); if (open) return open;
   const st = stateOf(inputs, token, pathOf);
   if (!st.ok) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: true, benignCompleted: false }, reason: st.reason };
-  const controlFailures = [...judgeControls(inputs, result.responses, token), ...st.controlFailed];
-  const violations = [...judgeAttacks(inputs, result.responses, token, Array.isArray(result.connections) ? result.connections.slice(0, 200) : []), ...st.attackFailed.map((c) => (c.failedProperties ? { id: c.id, effect: 'credential-storage', properties: c.failedProperties } : { id: c.id, effect: 'durable-state' }))];
+  const sq = judgeSequences(inputs, result, token, pathOf);
+  const controlFailures = [...judgeControls(inputs, result.responses, token), ...st.controlFailed, ...sq.controlFailures];
+  const violations = [...judgeAttacks(inputs, result.responses, token, Array.isArray(result.connections) ? result.connections.slice(0, 200) : []), ...st.attackFailed.map((c) => (c.failedProperties ? { id: c.id, effect: 'credential-storage', properties: c.failedProperties } : { id: c.id, effect: 'durable-state' })), ...sq.violations];
+  if (sq.gaps.length && !violations.length) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: true, benignCompleted: controlFailures.length === 0, controlFailures, attackViolations: violations, sequenceGaps: sq.gaps }, reason: `attack sequence(s) could not be judged: ${sq.gaps.map((g) => `${g.id} (${g.reason})`).join('; ')}` };
   const observed = { targetLoaded: true, benignCompleted: controlFailures.length === 0, controlFailures, attackViolations: violations };
   let unmodelledAttacks = [];
   if (inputs.network) {
@@ -538,14 +623,14 @@ function interpretBehaviour({ inputs, token, result, pathOf }) {
   const open = loadedOrOpen(result); if (open) return open;
   const st = stateOf(inputs, token, pathOf);
   if (!st.ok) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: true, benignCompleted: false }, reason: st.reason };
-  const controlFailures = [...judgeControls(inputs, result.responses, token), ...st.controlFailed];
-  const observed = { targetLoaded: true, benignCompleted: true, controlFailures, casesChecked: inputs.requests.length + (inputs.stateChecks || []).length };
+  const controlFailures = [...judgeControls(inputs, result.responses, token), ...st.controlFailed, ...judgeSequences(inputs, result, token, pathOf).controlFailures];
+  const observed = { targetLoaded: true, benignCompleted: true, controlFailures, casesChecked: inputs.requests.length + (inputs.stateChecks || []).length + (inputs.sequences || []).length };
   if (controlFailures.length) return { satisfied: true, preconditionsHeld: true, observed, reason: `legitimate behaviour regressed: ${controlFailures.map((c) => `${c.id} (${c.reason})`).join('; ')}` };
   return { satisfied: false, preconditionsHeld: true, observed, reason: 'every declared legitimate request and state check held' };
 }
 
 const securitySpec = {
-  id: 'application-security', class: 'application-security', version: '4',
+  id: 'application-security', class: 'application-security', version: '5',
   description: 'Does an attack request reach a forbidden effect in a running application? The application is started over a fresh SQLite file, every declared request is sent as real HTTP, and the verifier judges the responses and its own read-only read of the database. Refuted only when no attack violates AND every legitimate control request met its expectation.',
   prerequisites: ['node-runtime', 'node-sqlite', 'confinement-backend'],
   platforms: APP_PLATFORMS, budgets: APP_BUDGETS,
@@ -559,7 +644,7 @@ const securitySpec = {
 };
 
 const behaviourSpec = {
-  id: 'application-behaviour', class: 'application-behaviour', version: '4',
+  id: 'application-behaviour', class: 'application-behaviour', version: '5',
   description: 'Does a revision of a running application still serve its legitimate requests? Control requests only; the hypothesis is that legitimate behaviour REGRESSED, so a revision is clean when this is refuted. A deny-everything or feature-removing patch confirms it.',
   prerequisites: ['node-runtime', 'node-sqlite', 'confinement-backend'],
   platforms: APP_PLATFORMS, budgets: APP_BUDGETS,

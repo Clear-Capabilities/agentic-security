@@ -52,7 +52,7 @@ function checkInputs(errs, sec, name, actorIds, opts) {
 export function validateProfile(p) {
   const errs = [];
   if (!isPlainObject(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'tests', 'approval'], 'profile');
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'tests', 'approval'], 'profile');
   if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
   if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
   const a = p.application;
@@ -83,7 +83,42 @@ export function validateProfile(p) {
     actorIds.add(ac.id);
     if (!isPlainObject(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
   }
-  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords or credential section');
+  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential', 'workflow'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords, credential or workflow section');
+  // Workflow and idempotency: the operations, the normal workflows built from them (with the state each must leave) and the invariants
+  // that must hold after ANY sequence. Repeated, reordered and concurrent variants are generated from these; nothing is inferred.
+  if (p.workflow !== undefined) {
+    const w = p.workflow;
+    if (!isPlainObject(w)) errs.push('workflow must be an object');
+    else {
+      keysOnly(errs, w, ['operations', 'normal', 'invariants'], 'workflow');
+      const ops = new Set();
+      if (!Array.isArray(w.operations) || !w.operations.length || w.operations.length > 16) errs.push('workflow.operations must hold 1 to 16 operations');
+      else for (const [i, o] of w.operations.entries()) {
+        const at = `workflow.operations[${i}]`;
+        if (!isPlainObject(o)) { errs.push(`${at} must be an object`); continue; }
+        keysOnly(errs, o, ['id', 'actor', 'method', 'path', 'body', 'mutating', 'expectStatus'], at);
+        if (typeof o.id !== 'string' || !SLUG.test(o.id) || ops.has(o.id)) errs.push(`${at}.id must be a unique slug`);
+        ops.add(o.id);
+        if (!actorIds.has(o.actor)) errs.push(`${at}.actor must name a declared actor`);
+        checkRequestShape(errs, o, at);
+        if (typeof o.mutating !== 'boolean') errs.push(`${at}.mutating must say whether the operation changes durable state`);
+      }
+      const check = (c, at) => {
+        if (!isPlainObject(c) || typeof c.id !== 'string' || !SLUG.test(c.id) || typeof c.sql !== 'string' || !/^\s*SELECT\b/i.test(c.sql) || !('expect' in c)) errs.push(`${at} must be {id, sql (one SELECT), params, expect}`);
+      };
+      if (!Array.isArray(w.normal) || !w.normal.length || w.normal.length > 8) errs.push('workflow.normal must hold 1 to 8 legitimate workflows');
+      else for (const [i, n] of w.normal.entries()) {
+        const at = `workflow.normal[${i}]`;
+        if (!isPlainObject(n)) { errs.push(`${at} must be an object`); continue; }
+        keysOnly(errs, n, ['id', 'steps', 'checks'], at);
+        if (typeof n.id !== 'string' || !SLUG.test(n.id)) errs.push(`${at}.id must be a slug`);
+        if (!Array.isArray(n.steps) || !n.steps.length || n.steps.length > 8 || !n.steps.every((s) => ops.has(s))) errs.push(`${at}.steps must list 1 to 8 declared operation ids`);
+        (n.checks || []).forEach((c, j) => check(c, `${at}.checks[${j}]`));
+      }
+      if (!Array.isArray(w.invariants) || !w.invariants.length || w.invariants.length > 12) errs.push('workflow.invariants must hold 1 to 12 state invariants that hold after any sequence');
+      else w.invariants.forEach((c, j) => check(c, `workflow.invariants[${j}]`));
+    }
+  }
   // A leaked credential: where it is (never its value), the environment name the replacement is wired from, whether the old credential
   // must be revoked, and the legitimate requests that must work with the replacement (against declared hosts that accept only it).
   if (p.credential !== undefined) {
