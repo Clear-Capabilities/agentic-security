@@ -9,9 +9,9 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.206.0 |
-| Bundle SHA-256 | `43153320858eee1e4bc0739921a4d1cde2c4c0a48dec3e9f2553591d5e5d6899` |
-| Commit | `5073e136ff67c9c9473ab166ac17a51d8cfe3fbc` |
+| Engine version | 0.207.0 |
+| Bundle SHA-256 | `e74dce31cb6ad86b19dfe64f17101aeae89e3536aaf4b5d8cdbca6b5e296360e` |
+| Commit | `9df470f5f514703442854240e739b2d92ab294b2` |
 | Worktree at measurement time | clean |
 | Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -20,7 +20,7 @@ that produced them.
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-17T15:04:20.919Z |
+| Generated (UTC) | 2026-11-17T20:06:35.479Z |
 
 ## What these numbers are, and what they are not
 
@@ -220,7 +220,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 703 |
+| `scanner/src` | 704 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -237,7 +237,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 320/586 (54.6%) |
+| 216/587 (36.8%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -250,7 +250,7 @@ Counted on a scan of examples/assurance-demo (network off). These describe one r
 
 | Metric | Figure | Basis |
 | --- | --- | --- |
-| Assurance Coverage | 100% (files 3/3 (100%), analyzers 121/121 (100%)) | the lower of files completed and analyzers completed |
+| Assurance Coverage | 100% (files 3/3 (100%), analyzers 122/122 (100%)) | the lower of files completed and analyzers completed |
 | Evidence Conversion | 2/11 (18.2%) | findings corroborated or stronger, over all findings |
 | Verified Remediation Rate | 2/3 (66.7%) | the three patches the committed end-to-end demo verified; a lower bound where a class has no attack replay |
 | Security Learning Rate | not measured | nothing measures it independently of the rule compiler's own corpus |
@@ -379,7 +379,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.206.0), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.207.0), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both
