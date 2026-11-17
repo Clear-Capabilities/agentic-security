@@ -32,6 +32,7 @@ const EXCLUDED_FILES = new Map([
   ['src/egress/policy.js', 'the policy module itself — evaluateEgress is defined here, not a caller of itself'],
   ['src/egress/transport.js', 'the shared model transport (0.195.23): the one place a model request leaves the process, invoked only after its caller evaluated the policy; it bounds the call (no redirect, capped reply, deadline) and decides nothing'],
   ['src/engine.js', 'OSV/KEV/npm/PyPI/registry fetches, not LLM egress'],
+  ['src/repair/recipes.js', 'the ssrf-host-allowlist recipe writes an approvedFetch helper INTO the patched application as text; the scanner never runs that fetch'],
   ['src/posture/epss.js', 'FIRST.org EPSS score fetches, not LLM egress'],
   ['src/posture/federated-learning.js', 'calibration/telemetry sink, not an LLM provider'],
   ['src/posture/realtime-cve-monitor.js', 'CVE feed polling, not LLM egress'],
