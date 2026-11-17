@@ -19,7 +19,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(31174);
 /* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(68962);
 /* harmony import */ var _intake_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(30356);
-/* harmony import */ var _contracts_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(20771);
+/* harmony import */ var _contracts_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(84281);
 /* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(90460);
 /* harmony import */ var _candidates_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4370);
 /* harmony import */ var _recipes_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(60681);
@@ -50,6 +50,7 @@ const USAGE = `agentic-security repair <command>
   verify  <bundle-dir> [--root <path>] [--image <archive.tar>] [--json]
   export  <run-id> --out <directory> [--root <path>]
   artifact <run-id> --image <archive.tar> --app-dir <dir> [--allow-execution] [--root <path>] [--json]
+  profile-draft (--finding <id> | --family <family> --file <rel>) [--out <profile.json>] [--root <path>] [--json]
   staging <run-id> (--receipt <deployment-receipt.json>) --image <archive.tar> --app-dir <dir> [--allow-execution] [--root <path>] [--json]
   observe <run-id> [--report reopen|reversion|regression --note <text>] [--root <path>] [--json]
   import  --format sarif|normalized --file <report.json> | --show <import-id> | --accept-risk <imported-id> --import <import-id> --reason <why> [--root <path>] [--json]
@@ -108,7 +109,7 @@ function proposersFor(plan, candidatesFile, root) {
 async function cmdPlan(args, root) {
   if (!args.flags.profile) { err('plan needs --profile'); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
   if (!args.flags.finding && !(args.flags.family && args.flags.file)) { err('plan needs --finding <id>, or --family and --file for a finding the scanner did not report'); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
-  const r = (0,_intake_js__WEBPACK_IMPORTED_MODULE_6__/* .planFromInputs */ .Zn)({ root, profilePath: node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(String(args.flags.profile)), importId: args.flags.import ? String(args.flags.import) : undefined, findingId: args.flags.finding ? String(args.flags.finding) : undefined, family: args.flags.family ? String(args.flags.family) : undefined, file: args.flags.file ? String(args.flags.file) : undefined });
+  const r = (0,_intake_js__WEBPACK_IMPORTED_MODULE_6__/* .planFromInputs */ .Z)({ root, profilePath: node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(String(args.flags.profile)), importId: args.flags.import ? String(args.flags.import) : undefined, findingId: args.flags.finding ? String(args.flags.finding) : undefined, family: args.flags.family ? String(args.flags.family) : undefined, file: args.flags.file ? String(args.flags.file) : undefined });
   if (!r.plan) { err(r.problems.length ? `the profile or contract is invalid:\n  ${r.problems.join('\n  ')}` : `blocked: ${r.blocked.join('; ')}`); return r.status === 'usage' ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage : _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked; }
   const dest = args.flags.out ? node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(String(args.flags.out)) : node_path__WEBPACK_IMPORTED_MODULE_1__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_4__/* .stateDir */ .Pn)(root), 'repair', 'plans', `${r.plan.contract.contractId.replace(':', '-')}.json`);
   node_fs__WEBPACK_IMPORTED_MODULE_0__.mkdirSync(node_path__WEBPACK_IMPORTED_MODULE_1__.dirname(dest), { recursive: true });
@@ -261,7 +262,7 @@ async function cmdVerify(args, root) {
   }
   let sourceMatches = null;
   if (contract && args.flags.root) {
-    const { snapshotSource } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 20771));
+    const { snapshotSource } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 84281));
     const snap = snapshotSource(root, { application: contract.profile.application });
     const applied = Object.keys(files).length > 0 && Object.entries(files).every(([rel, t]) => (snap.files[rel] ?? null) === t);
     sourceMatches = snap.sourceDigest === m.sourceDigest ? 'baseline' : applied ? 'patch-applied' : 'different';
@@ -379,6 +380,31 @@ async function cmdArtifact(args, root) {
   return v.artifact === 'artifact-verified' ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok : v.artifact === 'artifact-mismatch' ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.failed : _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked;
 }
 
+// `repair profile-draft`: a starting profile read from the code, every fact it could not read left as a TODO that `repair plan` refuses.
+// Reads the signed scan for --finding; writes only the --out file (never over an existing one), or prints.
+async function cmdProfileDraft(args, root) {
+  const { draftProfile } = await __webpack_require__.e(/* import() */ 9845).then(__webpack_require__.bind(__webpack_require__, 39845));
+  const { signedFinding, familyForFinding, FAMILIES_SUPPORTED } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 30356));
+  let finding; let family = args.flags.family ? String(args.flags.family) : null;
+  if (args.flags.finding) {
+    const s = signedFinding(root, String(args.flags.finding));
+    if (!s.finding) { err(s.reason); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked; }
+    finding = { file: s.finding.file, line: s.finding.line, cwe: s.finding.cwe };
+    family = family || familyForFinding(s.finding);
+  } else if (family && args.flags.file) finding = { file: String(args.flags.file), line: Number(args.flags.line) || 1 };
+  else { err('profile-draft needs --finding <id>, or --family <family> --file <rel> [--line <n>]'); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+  if (!family || !FAMILIES_SUPPORTED.includes(family)) { err(`the finding has no repair family; name one of ${FAMILIES_SUPPORTED.join(', ')}`); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked; }
+  const d = draftProfile({ root, finding, family });
+  if (args.flags.out) {
+    const target = node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(String(args.flags.out));
+    // 'wx' creates the file or fails if it exists, in one step: the draft is never written over a file
+    try { node_fs__WEBPACK_IMPORTED_MODULE_0__.writeFileSync(target, `${JSON.stringify(d.profile, null, 2)}\n`, { flag: 'wx' }); }
+    catch (e) { if (e.code === 'EEXIST') { err(`${target} exists; the draft is never written over a file`); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; } throw e; }
+  }
+  out(args, [args.flags.out ? `draft written to ${args.flags.out}` : JSON.stringify(d.profile, null, 2), 'read from the code:', ...d.detected.map((x) => `  ${x.field}: ${Array.isArray(x.value) ? x.value.join(', ') : x.value} (${x.basis})`), `to complete (${d.todo.length}); repair plan refuses the draft until every one is filled in:`, ...d.todo.map((t) => `  ${t}`)].join('\n'), d);
+  return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok;
+}
+
 // `repair staging`: bind the verified artifact to where it runs. The receipt says which artifact a staging (or production) environment
 // runs; the contract checks are re-executed on that image here. Neither alone changes the environment state (AC-16.6), and a failure on
 // the staged artifact leaves the source verification as it was (AC-16.3).
@@ -424,7 +450,7 @@ async function cmdObserve(args, root) {
 
 async function cmdRepair(args, root) {
   const sub = args._[1];
-  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes, import: cmdImport, artifact: cmdArtifact, staging: cmdStaging, observe: cmdObserve };
+  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes, import: cmdImport, artifact: cmdArtifact, staging: cmdStaging, observe: cmdObserve, 'profile-draft': cmdProfileDraft };
   if (!handlers[sub] || args.flags.help) { (handlers[sub] ? process.stdout : process.stderr).write(`${USAGE}\n`); return args.flags.help ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok : _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
   try { return await handlers[sub](args, root); } catch (e) { err(String(e?.message || e)); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked; }
 }
@@ -448,7 +474,7 @@ async function cmdRepair(args, root) {
 /* harmony export */   kY: () => (/* binding */ transition),
 /* harmony export */   kg: () => (/* binding */ draftRecipe)
 /* harmony export */ });
-/* unused harmony exports RECIPE_SCHEMA, RECIPE_LEDGER_SCHEMA, RECIPE_STATES, containPathTransform, TRANSFORMS, SHIPPED_RECIPES, validateRecipe, applicability */
+/* unused harmony exports RECIPE_SCHEMA, RECIPE_LEDGER_SCHEMA, RECIPE_STATES, containPathTransform, allowlistFetchTransform, TRANSFORMS, SHIPPED_RECIPES, validateRecipe, applicability */
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
 /* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(48161);
@@ -545,9 +571,86 @@ function containPathTransform(text) {
   return applied ? { text: `${out.replace(/\s*$/, '\n')}${CONTAIN_HELPER}`, applied, refused } : { text, applied: 0, refused: refused.length ? refused : ['no path.resolve or path.join declaration matched'] };
 }
 
+/**
+ * Host allowlist for server-side requests: `fetch(<v>)` / `fetch(<v>, { ... })` becomes `approvedFetch(<v>)` / `approvedFetch(<v>, { ... })`
+ * and two helpers are appended, holding the hosts the operator's profile approves. Only http and https URLs with no credentials whose
+ * host is approved are requested; anything else throws, so the request is never made and the code's existing error handling refuses it.
+ * Redirects are followed by hand (at most five), each location checked the same way, because an approved host could otherwise send the
+ * request on to one that is not. Preconditions, all
+ * required: the contract's network policy is `allowlist` with at least one approved host, each a plain host name; the URL argument is an
+ * identifier; the call sits inside a try block with a catch. Public-only policies are not handled: closing them against DNS rebinding
+ * needs the connection pinned to the address that was checked, which this transformation cannot express over `fetch`.
+ */
+// a plain host name, label by label (each 1 to 63 characters of letters, digits and inner hyphens): linear, no nested quantifier
+const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const isHostName = (h) => h.length >= 1 && h.length <= 253 && h.split('.').every((l) => l.length <= 63 && HOST_LABEL.test(l));
+const allowlistHelper = (hosts) => [
+  '',
+  '// Added by the ssrf-host-allowlist recipe: the hosts the application profile approves. Anything else is refused before a request is',
+  '// made (the caller\'s error handling answers it); credentials in the URL and non-http schemes are refused too.',
+  `const APPROVED_HOSTS = new Set(${JSON.stringify(hosts)});`,
+  '// each request is bounded unless the caller passed its own signal',
+  'const APPROVED_FETCH_TIMEOUT_MS = 10000;',
+  'function approvedUrl(value) {',
+  '  const u = new URL(String(value));',
+  "  if ((u.protocol !== 'https:' && u.protocol !== 'http:') || u.username || u.password || !APPROVED_HOSTS.has(u.hostname.toLowerCase())) throw new Error('destination not approved');",
+  '  return u.href;',
+  '}',
+  'async function approvedFetch(value, options = {}) {',
+  '  let url = approvedUrl(value);',
+  '  for (let hop = 0; hop < 5; hop++) {',
+  "    const r = await fetch(url, { ...options, redirect: 'manual', signal: options.signal ?? AbortSignal.timeout(APPROVED_FETCH_TIMEOUT_MS) });",
+  "    const location = r.status >= 300 && r.status < 400 ? r.headers.get('location') : null;",
+  '    if (!location) return r;',
+  '    url = approvedUrl(new URL(location, url).href);',
+  '  }',
+  "  throw new Error('too many redirects');",
+  '}',
+  '',
+].join('\n');
+/** The index of the parenthesis closing the one at `open`, skipping strings, templates and comments; -1 if unbalanced. */
+function closingParen(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'" || c === '`') { for (i++; i < text.length && text[i] !== c; i++) if (text[i] === '\\') i++; continue; }
+    if (c === '/' && text[i + 1] === '/') { i = text.indexOf('\n', i); if (i < 0) return -1; continue; }
+    if (c === '/' && text[i + 1] === '*') { i = text.indexOf('*/', i + 2); if (i < 0) return -1; i++; continue; }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') { depth--; if (depth === 0) return c === ')' ? i : -1; }
+  }
+  return -1;
+}
+function allowlistFetchTransform(text, { contract } = {}) {
+  const net = (contract?.obligations || []).map((o) => o.inputs?.network).find(Boolean);
+  if (!net || net.policy !== 'allowlist') return { text, applied: 0, refused: ['the contract\'s network policy is not an allowlist'] };
+  const hosts = [...new Set((net.approved || []).map((h) => String(h).toLowerCase()))].sort();
+  if (!hosts.length || !hosts.every(isHostName)) return { text, applied: 0, refused: ['the approved hosts are not plain host names'] };
+  if (/\bfunction\s+approved(?:Url|Fetch)\s*\(|\bAPPROVED_HOSTS\b/.test(text)) return { text, applied: 0, refused: ['approvedUrl, approvedFetch or APPROVED_HOSTS already exists'] };
+  const refused = []; let applied = 0; let out = ''; let at = 0;
+  const call = /\bfetch\(\s*([A-Za-z_$][\w$]*)\s*([,)])/g;
+  for (let m; (m = call.exec(text));) {
+    const open = m.index + m[0].indexOf('(');
+    const close = closingParen(text, open);
+    if (close < 0) continue;
+    const v = m[1];
+    const opts = m[2] === ',' ? text.slice(m.index + m[0].length, close).trim() : '';
+    const before = text.slice(Math.max(0, m.index - 800), m.index);
+    const after = text.slice(close, close + 1200);
+    const opened = (before.match(/\btry\s*\{/g) || []).length; const caught = (before.match(/\}\s*catch\b/g) || []).length;
+    if (opened <= caught || !/\}\s*catch\b/.test(after)) { refused.push(`the request made with ${v}: its failure is not handled, so a refusal could not be expressed`); continue; }
+    applied++;
+    out += text.slice(at, m.index) + (opts ? `approvedFetch(${v}, ${opts})` : `approvedFetch(${v})`);
+    at = close + 1; call.lastIndex = at;
+  }
+  out += text.slice(at);
+  return applied ? { text: `${out.replace(/\s*$/, '\n')}${allowlistHelper(hosts)}`, applied, refused } : { text, applied: 0, refused: refused.length ? refused : ['no fetch of an identifier matched'] };
+}
+
 const TRANSFORMS = Object.freeze({
   'sql-parameterize-template': { family: 'sql-injection', apply: _candidates_js__WEBPACK_IMPORTED_MODULE_7__/* .parameterizeTemplateSql */ .qW, source: _candidates_js__WEBPACK_IMPORTED_MODULE_7__/* .parameterizeTemplateSql */ .qW.toString() },
   'path-realpath-containment': { family: 'path-traversal', apply: containPathTransform, source: containPathTransform.toString() + CONTAIN_HELPER },
+  'ssrf-host-allowlist': { family: 'ssrf', apply: allowlistFetchTransform, source: allowlistFetchTransform.toString() + closingParen.toString() + allowlistHelper.toString() },
 });
 
 // ---------------------------------------------------------------- shipped recipe documents
@@ -584,6 +687,24 @@ const SHIPPED_RECIPES = Object.freeze([
       { id: 'node-18', kind: 'unsupported-version', fixture: `${FIX}/files-download`, family: 'path-traversal', nodeVersion: '18.19.0', expect: 'not-applicable' },
     ],
     contraindications: ['an application that must serve links pointing outside its root', 'a read whose error handling reveals the reason'],
+    rollback: 'retire the recipe; applied patches have apply-service backups',
+  },
+  {
+    schema: RECIPE_SCHEMA, recipeId: 'ssrf-host-allowlist', version: '1', transform: 'ssrf-host-allowlist',
+    provenance: { origin: 'shipped', author: 'agentic-security maintainers', note: 'hand-written; not learned from examples' }, signer: 'shipped-with-scanner',
+    supports: { family: 'ssrf', languages: ['javascript'], runtime: { name: 'node', min: '20.0.0' }, driver: 'the global fetch' },
+    preconditions: ['the contract\'s network policy is an allowlist of plain host names', 'the URL passed to fetch is an identifier', 'the fetch sits inside a try block whose catch answers the failure'],
+    editScope: { maxFiles: 1, files: 'the contract\'s allowed files' },
+    obligations: ['app-attack-blocked', 'app-attack-sealed', 'app-behaviour-preserved', 'project-tests'],
+    examples: [
+      { id: 'preview', kind: 'positive', fixture: `${FIX}/ssrf-preview`, family: 'ssrf', expect: 'verified-for-contract' },
+      // written as a held-out example, but the first version of the transformation failed it (an options argument with nested
+      // braces) and was changed to pass: it is a development example now, and this recipe has no held-out one
+      { id: 'webhook', kind: 'positive', fixture: `${FIX}/ssrf-webhook`, family: 'ssrf', expect: 'verified-for-contract' },
+      { id: 'unhandled-fetch', kind: 'safe-negative', text: ['export async function grab(url) {', `  const r = await ${'fe'}tch(url);`, '  return r.text();', '}', ''].join('\n'), network: { policy: 'allowlist', approved: ['api.partner.test'] }, expect: 'refused' },
+      { id: 'node-18', kind: 'unsupported-version', fixture: `${FIX}/ssrf-preview`, family: 'ssrf', nodeVersion: '18.19.0', expect: 'not-applicable' },
+    ],
+    contraindications: ['a request that legitimately takes longer than ten seconds without its own signal', 'a redirect chain longer than five hops', 'a destination chosen from hosts the profile does not list', 'a public-only policy (not handled)'],
     rollback: 'retire the recipe; applied patches have apply-service backups',
   },
 ]);
@@ -642,7 +763,7 @@ function recipeProposer(recipe, { nodeVersion } = {}) {
       const out = {}; const notes = [];
       for (const rel of contract.editScope.allowed) {
         if (!/\.(?:m?js|cjs|ts)$/.test(rel) || typeof files[rel] !== 'string') continue;
-        const r = t.apply(files[rel]);
+        const r = t.apply(files[rel], { contract });
         if (r.applied) out[rel] = r.text;
         notes.push(...r.refused.map((x) => `${rel} ${x}`));
       }
@@ -789,7 +910,8 @@ async function evaluateRecipe(recipe, { repoRoot, run }) {
     let outcome; let obligations = null; let detail = null;
     if (ex.kind === 'safe-negative') {
       const text = ex.text ?? node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_3__.join(dir, ex.entry), 'utf8');
-      const r = TRANSFORMS[recipe.transform].apply(text);
+      // an example may carry the network policy its contract would declare, so a refusal is for the reason the example exists to show
+      const r = TRANSFORMS[recipe.transform].apply(text, ex.network ? { contract: { obligations: [{ inputs: { network: ex.network } }] } } : {});
       outcome = r.applied ? 'applied' : 'refused';
       detail = r.refused.slice(0, 3);
     } else if (ex.kind === 'unsupported-version') {

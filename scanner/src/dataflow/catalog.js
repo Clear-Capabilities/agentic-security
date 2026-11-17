@@ -256,6 +256,10 @@ export const CATALOG = [
   // ASP.NET Core [FromQuery], NestJS @Query()). These are indexed and matched via
   // matchAnnotationParams, which is called once per function against the IR's
   // paramAnnotations side-channel.
+  // A parameter of a function a JavaScript/TypeScript module exports (parser-js.js states it as `js:caller-controlled`): the library's caller
+  // supplies it. Weaker than request input, and OFF unless AGENTIC_SECURITY_LIBRARY_SOURCES=1 (`optIn`): measured on the independent population's
+  // development split before it is turned on by default.
+  { kind: 'source', id: 'js-src-caller-controlled-param', language: 'js', framework: 'library', match: { type: 'annotation', name: 'js:caller-controlled' }, label: 'parameter of an exported function (caller-controlled)', provenance: 'caller-argument', optIn: 'AGENTIC_SECURITY_LIBRARY_SOURCES' },
   { kind: 'source', id: 'java-spring-requestparam',  language: 'java', framework: 'spring', match: { type: 'annotation', name: 'RequestParam' },  label: '@RequestParam (Spring)' },
   { kind: 'source', id: 'java-spring-pathvariable',  language: 'java', framework: 'spring', match: { type: 'annotation', name: 'PathVariable' },  label: '@PathVariable (Spring)' },
   { kind: 'source', id: 'java-spring-requestbody',   language: 'java', framework: 'spring', match: { type: 'annotation', name: 'RequestBody' },   label: '@RequestBody (Spring)' },
@@ -2733,6 +2737,9 @@ export function matchMemberWriteSink(targetPath, file, receiverType) {
 // there is no CFG node for "this function's own declared parameter list." It is
 // consulted once per function, against the IR's paramAnnotations side-channel,
 // by engine.js's _unionAnnotationTaint before each analyzeFunction call.
+// An entry carrying `optIn` matches only while that environment variable is exactly '1' (read per call, so a scan can turn it on or off).
+const _optedIn = (h) => !h.optIn || process.env[h.optIn] === '1';
+
 export function matchAnnotationParams(paramAnnotations, file) {
   const tainted = new Set();
   if (!paramAnnotations || !paramAnnotations.length) return tainted;
@@ -2740,7 +2747,7 @@ export function matchAnnotationParams(paramAnnotations, file) {
     const raw = ANNOTATION_INDEX.get(pa.decorator);
     if (!raw) continue;
     const hits = filterByProvenance(raw)
-      .filter(h => _languageAllowed(h, file))
+      .filter(h => _languageAllowed(h, file) && _optedIn(h))
       .filter(h => h.kind === 'source');
     if (hits.length) {
       tainted.add(pa.name);
@@ -2757,7 +2764,7 @@ export function matchAnnotationParamSources(paramAnnotations, file) {
   for (const pa of paramAnnotations) {
     const raw = ANNOTATION_INDEX.get(pa.decorator);
     if (!raw) continue;
-    const hit = filterByProvenance(raw).filter(h => _languageAllowed(h, file)).find(h => h.kind === 'source');
+    const hit = filterByProvenance(raw).filter(h => _languageAllowed(h, file) && _optedIn(h)).find(h => h.kind === 'source');
     if (hit) out.push({ name: pa.name, id: hit.id, label: hit.label || pa.decorator, provenance: hit.provenance || null });
   }
   return out;

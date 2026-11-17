@@ -1,0 +1,30 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": { "entry": "src/app.mjs", "export": "createApp", "files": ["src/app.mjs"], "runtime": "node" },
+  "database": { "engine": "sqlite", "schemaSql": "CREATE TABLE deliveries (id INTEGER PRIMARY KEY, target TEXT);", "seed": [] },
+  "actors": [ { "id": "integrator", "tenant": "t1", "role": "member", "headers": { "x-user": "integrator" } } ],
+  "ssrf": {
+    "policy": "allowlist",
+    "approved": ["hooks.partner.test", "relay.partner.test"],
+    "hosts": [
+      { "name": "hooks.partner.test", "addresses": ["203.0.113.40"], "routes": [
+        { "path": "/events", "body": "hook-accepted" },
+        { "path": "/moved", "status": 307, "headers": { "location": "http://relay.partner.test/events" } },
+        { "path": "/leak", "status": 307, "headers": { "location": "http://10.0.0.8/" } }
+      ] },
+      { "name": "relay.partner.test", "addresses": ["203.0.113.41"], "routes": [ { "path": "/events", "body": "relay-accepted" } ] },
+      { "name": "metadata.internal", "addresses": ["169.254.169.254"], "routes": [ { "path": "/latest/meta-data/", "body": "{{secret:instance-role}}" } ] },
+      { "name": "billing.internal", "addresses": ["10.0.0.8"], "routes": [ { "path": "/", "body": "{{secret:billing-db}}" } ] }
+    ],
+    "inputs": [
+      {
+        "id": "notify", "actor": "integrator", "method": "POST", "path": "/notify", "body": { "target": "{{value}}", "event": "order.created" },
+        "benign": [
+          { "value": "http://hooks.partner.test/events", "expectIncludes": ["hook-accepted"] },
+          { "value": "http://hooks.partner.test/moved", "expectIncludes": ["relay-accepted"] }
+        ]
+      }
+    ]
+  }
+}

@@ -86,9 +86,86 @@ export function containPathTransform(text) {
   return applied ? { text: `${out.replace(/\s*$/, '\n')}${CONTAIN_HELPER}`, applied, refused } : { text, applied: 0, refused: refused.length ? refused : ['no path.resolve or path.join declaration matched'] };
 }
 
+/**
+ * Host allowlist for server-side requests: `fetch(<v>)` / `fetch(<v>, { ... })` becomes `approvedFetch(<v>)` / `approvedFetch(<v>, { ... })`
+ * and two helpers are appended, holding the hosts the operator's profile approves. Only http and https URLs with no credentials whose
+ * host is approved are requested; anything else throws, so the request is never made and the code's existing error handling refuses it.
+ * Redirects are followed by hand (at most five), each location checked the same way, because an approved host could otherwise send the
+ * request on to one that is not. Preconditions, all
+ * required: the contract's network policy is `allowlist` with at least one approved host, each a plain host name; the URL argument is an
+ * identifier; the call sits inside a try block with a catch. Public-only policies are not handled: closing them against DNS rebinding
+ * needs the connection pinned to the address that was checked, which this transformation cannot express over `fetch`.
+ */
+// a plain host name, label by label (each 1 to 63 characters of letters, digits and inner hyphens): linear, no nested quantifier
+const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const isHostName = (h) => h.length >= 1 && h.length <= 253 && h.split('.').every((l) => l.length <= 63 && HOST_LABEL.test(l));
+const allowlistHelper = (hosts) => [
+  '',
+  '// Added by the ssrf-host-allowlist recipe: the hosts the application profile approves. Anything else is refused before a request is',
+  '// made (the caller\'s error handling answers it); credentials in the URL and non-http schemes are refused too.',
+  `const APPROVED_HOSTS = new Set(${JSON.stringify(hosts)});`,
+  '// each request is bounded unless the caller passed its own signal',
+  'const APPROVED_FETCH_TIMEOUT_MS = 10000;',
+  'function approvedUrl(value) {',
+  '  const u = new URL(String(value));',
+  "  if ((u.protocol !== 'https:' && u.protocol !== 'http:') || u.username || u.password || !APPROVED_HOSTS.has(u.hostname.toLowerCase())) throw new Error('destination not approved');",
+  '  return u.href;',
+  '}',
+  'async function approvedFetch(value, options = {}) {',
+  '  let url = approvedUrl(value);',
+  '  for (let hop = 0; hop < 5; hop++) {',
+  "    const r = await fetch(url, { ...options, redirect: 'manual', signal: options.signal ?? AbortSignal.timeout(APPROVED_FETCH_TIMEOUT_MS) });",
+  "    const location = r.status >= 300 && r.status < 400 ? r.headers.get('location') : null;",
+  '    if (!location) return r;',
+  '    url = approvedUrl(new URL(location, url).href);',
+  '  }',
+  "  throw new Error('too many redirects');",
+  '}',
+  '',
+].join('\n');
+/** The index of the parenthesis closing the one at `open`, skipping strings, templates and comments; -1 if unbalanced. */
+function closingParen(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'" || c === '`') { for (i++; i < text.length && text[i] !== c; i++) if (text[i] === '\\') i++; continue; }
+    if (c === '/' && text[i + 1] === '/') { i = text.indexOf('\n', i); if (i < 0) return -1; continue; }
+    if (c === '/' && text[i + 1] === '*') { i = text.indexOf('*/', i + 2); if (i < 0) return -1; i++; continue; }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') { depth--; if (depth === 0) return c === ')' ? i : -1; }
+  }
+  return -1;
+}
+export function allowlistFetchTransform(text, { contract } = {}) {
+  const net = (contract?.obligations || []).map((o) => o.inputs?.network).find(Boolean);
+  if (!net || net.policy !== 'allowlist') return { text, applied: 0, refused: ['the contract\'s network policy is not an allowlist'] };
+  const hosts = [...new Set((net.approved || []).map((h) => String(h).toLowerCase()))].sort();
+  if (!hosts.length || !hosts.every(isHostName)) return { text, applied: 0, refused: ['the approved hosts are not plain host names'] };
+  if (/\bfunction\s+approved(?:Url|Fetch)\s*\(|\bAPPROVED_HOSTS\b/.test(text)) return { text, applied: 0, refused: ['approvedUrl, approvedFetch or APPROVED_HOSTS already exists'] };
+  const refused = []; let applied = 0; let out = ''; let at = 0;
+  const call = /\bfetch\(\s*([A-Za-z_$][\w$]*)\s*([,)])/g;
+  for (let m; (m = call.exec(text));) {
+    const open = m.index + m[0].indexOf('(');
+    const close = closingParen(text, open);
+    if (close < 0) continue;
+    const v = m[1];
+    const opts = m[2] === ',' ? text.slice(m.index + m[0].length, close).trim() : '';
+    const before = text.slice(Math.max(0, m.index - 800), m.index);
+    const after = text.slice(close, close + 1200);
+    const opened = (before.match(/\btry\s*\{/g) || []).length; const caught = (before.match(/\}\s*catch\b/g) || []).length;
+    if (opened <= caught || !/\}\s*catch\b/.test(after)) { refused.push(`the request made with ${v}: its failure is not handled, so a refusal could not be expressed`); continue; }
+    applied++;
+    out += text.slice(at, m.index) + (opts ? `approvedFetch(${v}, ${opts})` : `approvedFetch(${v})`);
+    at = close + 1; call.lastIndex = at;
+  }
+  out += text.slice(at);
+  return applied ? { text: `${out.replace(/\s*$/, '\n')}${allowlistHelper(hosts)}`, applied, refused } : { text, applied: 0, refused: refused.length ? refused : ['no fetch of an identifier matched'] };
+}
+
 export const TRANSFORMS = Object.freeze({
   'sql-parameterize-template': { family: 'sql-injection', apply: parameterizeTemplateSql, source: parameterizeTemplateSql.toString() },
   'path-realpath-containment': { family: 'path-traversal', apply: containPathTransform, source: containPathTransform.toString() + CONTAIN_HELPER },
+  'ssrf-host-allowlist': { family: 'ssrf', apply: allowlistFetchTransform, source: allowlistFetchTransform.toString() + closingParen.toString() + allowlistHelper.toString() },
 });
 
 // ---------------------------------------------------------------- shipped recipe documents
@@ -125,6 +202,24 @@ export const SHIPPED_RECIPES = Object.freeze([
       { id: 'node-18', kind: 'unsupported-version', fixture: `${FIX}/files-download`, family: 'path-traversal', nodeVersion: '18.19.0', expect: 'not-applicable' },
     ],
     contraindications: ['an application that must serve links pointing outside its root', 'a read whose error handling reveals the reason'],
+    rollback: 'retire the recipe; applied patches have apply-service backups',
+  },
+  {
+    schema: RECIPE_SCHEMA, recipeId: 'ssrf-host-allowlist', version: '1', transform: 'ssrf-host-allowlist',
+    provenance: { origin: 'shipped', author: 'agentic-security maintainers', note: 'hand-written; not learned from examples' }, signer: 'shipped-with-scanner',
+    supports: { family: 'ssrf', languages: ['javascript'], runtime: { name: 'node', min: '20.0.0' }, driver: 'the global fetch' },
+    preconditions: ['the contract\'s network policy is an allowlist of plain host names', 'the URL passed to fetch is an identifier', 'the fetch sits inside a try block whose catch answers the failure'],
+    editScope: { maxFiles: 1, files: 'the contract\'s allowed files' },
+    obligations: ['app-attack-blocked', 'app-attack-sealed', 'app-behaviour-preserved', 'project-tests'],
+    examples: [
+      { id: 'preview', kind: 'positive', fixture: `${FIX}/ssrf-preview`, family: 'ssrf', expect: 'verified-for-contract' },
+      // written as a held-out example, but the first version of the transformation failed it (an options argument with nested
+      // braces) and was changed to pass: it is a development example now, and this recipe has no held-out one
+      { id: 'webhook', kind: 'positive', fixture: `${FIX}/ssrf-webhook`, family: 'ssrf', expect: 'verified-for-contract' },
+      { id: 'unhandled-fetch', kind: 'safe-negative', text: ['export async function grab(url) {', `  const r = await ${'fe'}tch(url);`, '  return r.text();', '}', ''].join('\n'), network: { policy: 'allowlist', approved: ['api.partner.test'] }, expect: 'refused' },
+      { id: 'node-18', kind: 'unsupported-version', fixture: `${FIX}/ssrf-preview`, family: 'ssrf', nodeVersion: '18.19.0', expect: 'not-applicable' },
+    ],
+    contraindications: ['a request that legitimately takes longer than ten seconds without its own signal', 'a redirect chain longer than five hops', 'a destination chosen from hosts the profile does not list', 'a public-only policy (not handled)'],
     rollback: 'retire the recipe; applied patches have apply-service backups',
   },
 ]);
@@ -183,7 +278,7 @@ export function recipeProposer(recipe, { nodeVersion } = {}) {
       const out = {}; const notes = [];
       for (const rel of contract.editScope.allowed) {
         if (!/\.(?:m?js|cjs|ts)$/.test(rel) || typeof files[rel] !== 'string') continue;
-        const r = t.apply(files[rel]);
+        const r = t.apply(files[rel], { contract });
         if (r.applied) out[rel] = r.text;
         notes.push(...r.refused.map((x) => `${rel} ${x}`));
       }
@@ -330,7 +425,8 @@ export async function evaluateRecipe(recipe, { repoRoot, run }) {
     let outcome; let obligations = null; let detail = null;
     if (ex.kind === 'safe-negative') {
       const text = ex.text ?? fs.readFileSync(path.join(dir, ex.entry), 'utf8');
-      const r = TRANSFORMS[recipe.transform].apply(text);
+      // an example may carry the network policy its contract would declare, so a refusal is for the reason the example exists to show
+      const r = TRANSFORMS[recipe.transform].apply(text, ex.network ? { contract: { obligations: [{ inputs: { network: ex.network } }] } } : {});
       outcome = r.applied ? 'applied' : 'refused';
       detail = r.refused.slice(0, 3);
     } else if (ex.kind === 'unsupported-version') {

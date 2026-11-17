@@ -2779,7 +2779,7 @@ __webpack_async_result__();
 /* harmony export */   V: () => (/* binding */ makeRepairTools)
 /* harmony export */ });
 /* harmony import */ var _repair_intake_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(30356);
-/* harmony import */ var _repair_contracts_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(20771);
+/* harmony import */ var _repair_contracts_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(84281);
 /* harmony import */ var _posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(41877);
 // repair-tools.js: the MCP surface for contract-driven repair (verified-remediation PRD AC-04.5, FR-18).
 //
@@ -2816,7 +2816,7 @@ function makeRepairTools({ confine, META }) {
         return { _meta: META, ok: false, status: 'rejected', reason: `path refused: ${String(e.message).replace(ctx.sessionRoot, '<root>')}` };
       }
       if (!args.finding_id && !(args.family && args.file)) return { _meta: META, ok: false, status: 'rejected', reason: 'name finding_id, or family and file' };
-      const r = (0,_repair_intake_js__WEBPACK_IMPORTED_MODULE_0__/* .planFromInputs */ .Zn)({ root: ctx.sessionRoot, profilePath, findingId: args.finding_id, family: args.family, file: args.file });
+      const r = (0,_repair_intake_js__WEBPACK_IMPORTED_MODULE_0__/* .planFromInputs */ .Z)({ root: ctx.sessionRoot, profilePath, findingId: args.finding_id, family: args.family, file: args.file });
       if (!r.plan) return { _meta: META, ok: false, status: r.status, reason: [...r.problems, ...r.blocked].join('; ').replace(ctx.sessionRoot, '<root>').slice(0, 800) };
       const c = r.plan.contract;
       return {

@@ -745,370 +745,25 @@ function queueProposer(items, identity = 'user-supplied') {
 
 /***/ }),
 
-/***/ 20771:
+/***/ 84281:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
-
-// EXPORTS
-__webpack_require__.d(__webpack_exports__, {
-  $B: () => (/* binding */ buildContract),
-  NL: () => (/* binding */ obligationSummary),
-  snapshotSource: () => (/* binding */ snapshotSource),
-  l3: () => (/* binding */ supportFor)
-});
-
-// UNUSED EXPORTS: CONTRACT_BUILDER_VERSION, PROFILE_SUPPORT, PROTECTED_PATTERNS, SQL_PROBES
-
-// EXTERNAL MODULE: external "node:crypto"
-var external_node_crypto_ = __webpack_require__(77598);
-// EXTERNAL MODULE: external "node:fs"
-var external_node_fs_ = __webpack_require__(73024);
-// EXTERNAL MODULE: external "node:child_process"
-var external_node_child_process_ = __webpack_require__(31421);
-// EXTERNAL MODULE: external "node:path"
-var external_node_path_ = __webpack_require__(76760);
-// EXTERNAL MODULE: ./src/posture/assurance/identity.js
-var identity = __webpack_require__(41877);
-// EXTERNAL MODULE: ./src/posture/oracles/registry.js + 2 modules
-var registry = __webpack_require__(18357);
-// EXTERNAL MODULE: ./src/repair/schemas.js
-var schemas = __webpack_require__(68962);
-// EXTERNAL MODULE: ./src/posture/assurance/schema-kit.js
-var schema_kit = __webpack_require__(53353);
-// EXTERNAL MODULE: ./src/posture/oracles/app-adapters.js
-var app_adapters = __webpack_require__(50935);
-;// CONCATENATED MODULE: ./src/repair/profile.js
-// The application profile (verified-remediation PRD FR-04, FR-05): how to start the application and what its legitimate behaviour is.
-//
-// A profile is DECLARED by the operator; nothing here is inferred from code and presented as approved intent. It names the entry module
-// and factory, the database schema and seed, the actors (with the request headers that authenticate each), and per family the inputs or
-// objects the contract is built from. A profile file inside the repository is repository-supplied input: its facts are recorded as
-// `declared`, never `approved`, and it cannot widen execution (it has no field that could: execution is enabled only by the operator).
-//
-// Closed world: an unknown field is an error. Identifiers that reach SQL (table and column names in generated state checks) must be plain
-// identifiers. Validation never throws.
-
-
-
-
-const PROFILE_SCHEMA = 'agentic-security/repair-profile';
-const IDENT = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
-const SLUG = /^[a-z][a-z0-9-]{0,39}$/;
-const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-const POLICY_RULES = ['owner', 'same-tenant-admin', 'any-admin'];
-const EFFECTS = ['read', 'update'];
-
-const keysOnly = (errs, obj, allowed, where) => { for (const k of Object.keys(obj)) if (!allowed.includes(k)) errs.push(`${where}: unknown field '${k}'`); };
-
-function checkRequestShape(errs, r, where) {
-  if (!METHODS.includes(r.method)) errs.push(`${where}.method must be one of ${METHODS.join(', ')}`);
-  if (typeof r.path !== 'string' || !r.path.startsWith('/') || r.path.length > 500) errs.push(`${where}.path must start with /`);
-  if (r.body !== undefined && !(0,schema_kit/* isPlainObject */.Qd)(r.body)) errs.push(`${where}.body must be an object`);
-}
-
-/** One declared untrusted value input (sql, ssrf, filesystem): the request carrying {{value}} and its legitimate values. */
-function checkValueInput(errs, inp, w, actorIds, { secrets }) {
-  if (!(0,schema_kit/* isPlainObject */.Qd)(inp)) { errs.push(`${w} must be an object`); return; }
-  keysOnly(errs, inp, ['id', 'actor', 'method', 'path', 'body', 'benign', ...(secrets ? ['protectedSecrets'] : [])], w);
-  if (typeof inp.id !== 'string' || !SLUG.test(inp.id)) errs.push(`${w}.id must be a slug`);
-  if (!actorIds.has(inp.actor)) errs.push(`${w}.actor must name a declared actor`);
-  checkRequestShape(errs, inp, w);
-  if (!JSON.stringify([inp.path, inp.body ?? null]).includes('{{value}}')) errs.push(`${w}: the path or body must mark the untrusted value with {{value}}`);
-  if (!Array.isArray(inp.benign) || !inp.benign.length) errs.push(`${w}.benign must list at least one legitimate value with its expected response`);
-  else for (const [j, b] of inp.benign.entries()) {
-    if (!(0,schema_kit/* isPlainObject */.Qd)(b) || typeof b.value !== 'string') { errs.push(`${w}.benign[${j}].value must be a string`); continue; }
-    keysOnly(errs, b, ['value', 'expectIncludes', 'expectStatus', 'originalMishandles'], `${w}.benign[${j}]`);
-    if (!Array.isArray(b.expectIncludes) || !b.expectIncludes.length) errs.push(`${w}.benign[${j}].expectIncludes must list at least one expected value`);
-  }
-  if (secrets && (!Array.isArray(inp.protectedSecrets) || !inp.protectedSecrets.length || !inp.protectedSecrets.every((s) => SLUG.test(s)))) errs.push(`${w}.protectedSecrets must name the planted secrets another actor's data holds`);
-}
-
-function checkInputs(errs, sec, name, actorIds, opts) {
-  if (!Array.isArray(sec.inputs) || !sec.inputs.length || sec.inputs.length > 8) { errs.push(`${name}.inputs must hold 1 to 8 inputs`); return; }
-  for (const [i, inp] of sec.inputs.entries()) checkValueInput(errs, inp, `${name}.inputs[${i}]`, actorIds, opts);
-}
-
-/** Problems with a profile; an empty list means it can be used. */
-function validateProfile(p) {
-  const errs = [];
-  if (!(0,schema_kit/* isPlainObject */.Qd)(p)) return ['the profile must be a JSON object'];
-  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'infrastructure', 'migration', 'tests', 'approval'], 'profile');
-  // A profile with only an infrastructure section runs no application: no factory, database or actors are needed.
-  const infraOnly = p.infrastructure !== undefined && !['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow'].some((k) => p[k] !== undefined);
-  if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
-  if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
-  const a = p.application;
-  if (!(0,schema_kit/* isPlainObject */.Qd)(a)) errs.push('application is required');
-  else {
-    keysOnly(errs, a, ['entry', 'export', 'files', 'runtime'], 'application');
-    if (!(0,schemas/* isRelPath */.ji)(a.entry)) errs.push('application.entry must be a relative path');
-    if (!(infraOnly && a.export === undefined) && (typeof a.export !== 'string' || !IDENT.test(a.export))) errs.push('application.export must be an identifier');
-    if (!Array.isArray(a.files) || !a.files.length || a.files.length > 60 || !a.files.every(schemas/* isRelPath */.ji)) errs.push('application.files must list 1 to 60 relative paths');
-    else if (!a.files.includes(a.entry)) errs.push('application.files must include the entry');
-    if (a.runtime !== undefined && !['node', 'python'].includes(a.runtime)) errs.push("application.runtime must be 'node' or 'python'");
-    if (a.runtime === 'python' && !/\.py$/.test(String(a.entry))) errs.push('application.entry must be a .py file for the python runtime');
-  }
-  const d = p.database;
-  if (infraOnly && d === undefined) { /* nothing runs */ } else if (!(0,schema_kit/* isPlainObject */.Qd)(d)) errs.push('database is required');
-  else {
-    keysOnly(errs, d, ['engine', 'schemaSql', 'seed'], 'database');
-    if (d.engine !== 'sqlite') errs.push("database.engine: only 'sqlite' is supported in this milestone");
-    if (typeof d.schemaSql !== 'string' || !d.schemaSql.trim()) errs.push('database.schemaSql is required');
-    if (!Array.isArray(d.seed)) errs.push('database.seed must be an array');
-  }
-  const actorIds = new Set();
-  if (infraOnly && p.actors === undefined) { /* nothing runs */ } else if (!Array.isArray(p.actors) || !p.actors.length) errs.push('actors must be a non-empty array');
-  else for (const [i, ac] of p.actors.entries()) {
-    if (!(0,schema_kit/* isPlainObject */.Qd)(ac)) { errs.push(`actors[${i}] must be an object`); continue; }
-    keysOnly(errs, ac, ['id', 'tenant', 'role', 'headers', 'anonymous'], `actors[${i}]`);
-    if (typeof ac.id !== 'string' || !SLUG.test(ac.id) || actorIds.has(ac.id)) errs.push(`actors[${i}].id must be a unique slug`);
-    actorIds.add(ac.id);
-    if (!(0,schema_kit/* isPlainObject */.Qd)(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
-  }
-  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential', 'workflow', 'infrastructure'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords, credential, workflow or infrastructure section');
-  // Infrastructure: the configuration files whose EFFECTIVE result is judged together, the environment, the services that must not be
-  // exposed and the approved services that must stay exposed.
-  if (p.infrastructure !== undefined) {
-    const x = p.infrastructure;
-    if (!(0,schema_kit/* isPlainObject */.Qd)(x)) errs.push('infrastructure must be an object');
-    else {
-      keysOnly(errs, x, ['files', 'environment', 'mustNotExpose', 'mustStayExposed', 'privileges'], 'infrastructure');
-      if (!Array.isArray(x.files) || !x.files.length || x.files.length > 40 || !x.files.every(schemas/* isRelPath */.ji)) errs.push('infrastructure.files must list 1 to 40 configuration files');
-      else if ((0,schema_kit/* isPlainObject */.Qd)(a) && Array.isArray(a.files) && !x.files.every((f) => a.files.includes(f))) errs.push('infrastructure.files must be application files (a repair edits them)');
-      if (typeof x.environment !== 'string' || !SLUG.test(x.environment)) errs.push('infrastructure.environment must be a slug');
-      const names = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' && /^[A-Za-z0-9][\w.-]{0,62}$/.test(s));
-      // privilege: actions an identity must not be able to perform, and the ones it must keep (IAM policies in a Terraform plan)
-      const pv = x.privileges;
-      const grantList = (v) => Array.isArray(v) && v.length <= 32 && v.every((g) => (0,schema_kit/* isPlainObject */.Qd)(g) && Object.keys(g).every((k) => ['identity', 'action', 'resource'].includes(k))
-        && typeof g.identity === 'string' && /^[A-Za-z0-9][\w./:-]{0,120}$/.test(g.identity) && typeof g.action === 'string' && /^[A-Za-z0-9-]{1,40}:[A-Za-z0-9]{1,80}$/.test(g.action)
-        && typeof g.resource === 'string' && /^[\w:./*-]{1,200}$/.test(g.resource) && !/[*?]/.test(g.resource));
-      if (pv !== undefined) {
-        if (!(0,schema_kit/* isPlainObject */.Qd)(pv)) errs.push('infrastructure.privileges must be an object');
-        else {
-          keysOnly(errs, pv, ['mustNotAllow', 'mustAllow'], 'infrastructure.privileges');
-          if (!grantList(pv.mustNotAllow) || !pv.mustNotAllow.length) errs.push('infrastructure.privileges.mustNotAllow must list 1 to 32 {identity, action, resource} entries with an exact resource (no wildcard)');
-          if (!grantList(pv.mustAllow || [])) errs.push('infrastructure.privileges.mustAllow must list at most 32 {identity, action, resource} entries with an exact resource');
-        }
-      }
-      if (!names(x.mustNotExpose) || (!x.mustNotExpose.length && !(0,schema_kit/* isPlainObject */.Qd)(pv))) errs.push('infrastructure.mustNotExpose must name at least one service (it may be empty when privileges are declared)');
-      if (!names(x.mustStayExposed)) errs.push('infrastructure.mustStayExposed must list the approved exposed services (it may be empty)');
-    }
-  }
-  // Workflow and idempotency: the operations, the normal workflows built from them (with the state each must leave) and the invariants
-  // that must hold after ANY sequence. Repeated, reordered and concurrent variants are generated from these; nothing is inferred.
-  // A schema migration the repair needs (FR-16, M4-06): the up and down files the candidate writes (new files, outside the application
-  // files), the deployment order, and the rows an older revision may write while rolled back, inserted before the migration re-applies.
-  if (p.migration !== undefined) {
-    const m = p.migration;
-    if (!(0,schema_kit/* isPlainObject */.Qd)(m)) errs.push('migration must be an object');
-    else {
-      keysOnly(errs, m, ['up', 'down', 'deployOrder', 'interim'], 'migration');
-      for (const k of ['up', 'down']) {
-        if (!(0,schemas/* isRelPath */.ji)(m[k]) || !/\.sql$/.test(m[k])) errs.push(`migration.${k} must be a relative .sql path`);
-        else if ((0,schema_kit/* isPlainObject */.Qd)(a) && Array.isArray(a.files) && a.files.includes(m[k])) errs.push(`migration.${k} must not be an application file: the candidate writes it`);
-      }
-      if (m.up === m.down) errs.push('migration.up and migration.down must differ');
-      if (!['migrate-then-deploy', 'deploy-then-migrate'].includes(m.deployOrder)) errs.push("migration.deployOrder must be 'migrate-then-deploy' or 'deploy-then-migrate'");
-      if (m.interim !== undefined && (!Array.isArray(m.interim) || m.interim.length > 16 || !m.interim.every((x) => (0,schema_kit/* isPlainObject */.Qd)(x) && typeof x.sql === 'string' && /^\s*INSERT\b/i.test(x.sql) && !/;\s*\S/.test(x.sql) && Array.isArray(x.params)))) errs.push('migration.interim must list at most 16 INSERT statements with params arrays');
-      if (!p.database) errs.push('migration needs a database section');
-    }
-  }
-  if (p.workflow !== undefined) {
-    const w = p.workflow;
-    if (!(0,schema_kit/* isPlainObject */.Qd)(w)) errs.push('workflow must be an object');
-    else {
-      keysOnly(errs, w, ['operations', 'normal', 'invariants'], 'workflow');
-      const ops = new Set();
-      if (!Array.isArray(w.operations) || !w.operations.length || w.operations.length > 16) errs.push('workflow.operations must hold 1 to 16 operations');
-      else for (const [i, o] of w.operations.entries()) {
-        const at = `workflow.operations[${i}]`;
-        if (!(0,schema_kit/* isPlainObject */.Qd)(o)) { errs.push(`${at} must be an object`); continue; }
-        keysOnly(errs, o, ['id', 'actor', 'method', 'path', 'body', 'mutating', 'expectStatus'], at);
-        if (typeof o.id !== 'string' || !SLUG.test(o.id) || ops.has(o.id)) errs.push(`${at}.id must be a unique slug`);
-        ops.add(o.id);
-        if (!actorIds.has(o.actor)) errs.push(`${at}.actor must name a declared actor`);
-        checkRequestShape(errs, o, at);
-        if (typeof o.mutating !== 'boolean') errs.push(`${at}.mutating must say whether the operation changes durable state`);
-      }
-      const check = (c, at) => {
-        if (!(0,schema_kit/* isPlainObject */.Qd)(c) || typeof c.id !== 'string' || !SLUG.test(c.id) || typeof c.sql !== 'string' || !/^\s*SELECT\b/i.test(c.sql) || !('expect' in c)) errs.push(`${at} must be {id, sql (one SELECT), params, expect}`);
-      };
-      if (!Array.isArray(w.normal) || !w.normal.length || w.normal.length > 8) errs.push('workflow.normal must hold 1 to 8 legitimate workflows');
-      else for (const [i, n] of w.normal.entries()) {
-        const at = `workflow.normal[${i}]`;
-        if (!(0,schema_kit/* isPlainObject */.Qd)(n)) { errs.push(`${at} must be an object`); continue; }
-        keysOnly(errs, n, ['id', 'steps', 'checks'], at);
-        if (typeof n.id !== 'string' || !SLUG.test(n.id)) errs.push(`${at}.id must be a slug`);
-        if (!Array.isArray(n.steps) || !n.steps.length || n.steps.length > 8 || !n.steps.every((s) => ops.has(s))) errs.push(`${at}.steps must list 1 to 8 declared operation ids`);
-        (n.checks || []).forEach((c, j) => check(c, `${at}.checks[${j}]`));
-      }
-      if (!Array.isArray(w.invariants) || !w.invariants.length || w.invariants.length > 12) errs.push('workflow.invariants must hold 1 to 12 state invariants that hold after any sequence');
-      else w.invariants.forEach((c, j) => check(c, `workflow.invariants[${j}]`));
-    }
-  }
-  // A leaked credential: where it is (never its value), the environment name the replacement is wired from, whether the old credential
-  // must be revoked, and the legitimate requests that must work with the replacement (against declared hosts that accept only it).
-  if (p.credential !== undefined) {
-    const c = p.credential;
-    if (!(0,schema_kit/* isPlainObject */.Qd)(c)) errs.push('credential must be an object');
-    else {
-      keysOnly(errs, c, ['location', 'env', 'revocation', 'provider', 'network', 'controls'], 'credential');
-      if (!(0,schema_kit/* isPlainObject */.Qd)(c.location) || !(0,schemas/* isRelPath */.ji)(c.location.file) || !Number.isInteger(c.location.line) || c.location.line < 1) errs.push('credential.location must be {file, line}: where the leaked value is, never the value');
-      else if ((0,schema_kit/* isPlainObject */.Qd)(a) && Array.isArray(a.files) && !a.files.includes(c.location.file)) errs.push('credential.location.file must be one of the application files');
-      if (typeof c.env !== 'string' || !/^[A-Z_][A-Z0-9_]{0,63}$/.test(c.env)) errs.push('credential.env must be the upper-case environment name the replacement is read from');
-      if (!['required', 'not-required'].includes(c.revocation)) errs.push("credential.revocation must be 'required' or 'not-required'");
-      if (typeof c.provider !== 'string' || !SLUG.test(c.provider)) errs.push('credential.provider must be a slug naming the issuing service');
-      const n = (0,app_adapters/* validateNetwork */.jO)(c.network);
-      if (n) errs.push(`credential.network: ${n}`);
-      if (!Array.isArray(c.controls) || !c.controls.length) errs.push('credential.controls must list the requests that must work with the replacement credential');
-      else for (const [i, r] of c.controls.entries()) {
-        const w = `credential.controls[${i}]`;
-        if (!(0,schema_kit/* isPlainObject */.Qd)(r)) { errs.push(`${w} must be an object`); continue; }
-        keysOnly(errs, r, ['id', 'actor', 'method', 'path', 'body', 'expectStatus', 'expectIncludes'], w);
-        if (typeof r.id !== 'string' || !SLUG.test(r.id)) errs.push(`${w}.id must be a slug`);
-        if (!actorIds.has(r.actor)) errs.push(`${w}.actor must name a declared actor`);
-        checkRequestShape(errs, r, w);
-      }
-      if (a?.runtime === 'python') errs.push('the credential section is supported for the node runtime only in this release');
-    }
-  }
-  // A vulnerable dependency (npm): the advisory's package and range, where the package tarballs live, and which section's attacks show
-  // the vulnerability in this application. The manifest and the lockfile must be application files: a repair edits them.
-  if (p.dependency !== undefined) {
-    const d = p.dependency;
-    if (!(0,schema_kit/* isPlainObject */.Qd)(d)) errs.push('dependency must be an object');
-    else {
-      keysOnly(errs, d, ['ecosystem', 'package', 'vulnerable', 'advisory', 'sources', 'exploit'], 'dependency');
-      if (d.ecosystem !== 'npm') errs.push("dependency.ecosystem: only 'npm' is supported in this release");
-      if (typeof d.package !== 'string' || !/^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]{0,213}$/.test(d.package)) errs.push('dependency.package must be an npm package name');
-      if (typeof d.vulnerable !== 'string' || !d.vulnerable.trim() || d.vulnerable.length > 200) errs.push('dependency.vulnerable must be a version range');
-      if (typeof d.advisory !== 'string' || !d.advisory.trim()) errs.push('dependency.advisory must name the advisory');
-      if (!(0,schemas/* isRelPath */.ji)(d.sources)) errs.push('dependency.sources must be a relative directory holding the package tarballs');
-      if (!['filesystem', 'sql', 'ssrf'].includes(d.exploit) || p[d.exploit] === undefined) errs.push('dependency.exploit must name the profile section (filesystem, sql or ssrf) whose attacks show the vulnerability');
-      if ((0,schema_kit/* isPlainObject */.Qd)(a) && Array.isArray(a.files) && !['package.json', 'package-lock.json'].every((f) => a.files.includes(f))) errs.push('application.files must include package.json and package-lock.json for a dependency repair');
-    }
-  }
-  // Password storage: where the application stores a credential, how a user registers and logs in, the legacy format existing users
-  // carry (with known test passwords: the legacy rows are built from them), and the approved storage format and its minimum costs.
-  if (p.passwords !== undefined) {
-    const w = p.passwords;
-    if (!(0,schema_kit/* isPlainObject */.Qd)(w)) errs.push('passwords must be an object');
-    else {
-      keysOnly(errs, w, ['table', 'userColumn', 'hashColumn', 'legacy', 'register', 'login', 'approved', 'actor'], 'passwords');
-      for (const k of ['table', 'userColumn', 'hashColumn']) if (typeof w[k] !== 'string' || !IDENT.test(w[k])) errs.push(`passwords.${k} must be an identifier`);
-      if (!actorIds.has(w.actor)) errs.push('passwords.actor must name a declared actor (the one sending register and login requests)');
-      for (const op of ['register', 'login']) {
-        const r = w[op];
-        if (!(0,schema_kit/* isPlainObject */.Qd)(r)) { errs.push(`passwords.${op} is required`); continue; }
-        keysOnly(errs, r, ['method', 'path', 'body', 'expectStatus', 'denyStatus'], `passwords.${op}`);
-        checkRequestShape(errs, r, `passwords.${op}`);
-        const t = JSON.stringify([r.path, r.body ?? null]);
-        if (!t.includes('{{user}}') || !t.includes('{{password}}')) errs.push(`passwords.${op}: the path or body must carry {{user}} and {{password}}`);
-        if (r.expectStatus !== undefined && (!Array.isArray(r.expectStatus) || !r.expectStatus.every(Number.isInteger))) errs.push(`passwords.${op}.expectStatus must list status codes`);
-      }
-      if ((0,schema_kit/* isPlainObject */.Qd)(w.login) && (!Array.isArray(w.login.denyStatus) || !w.login.denyStatus.length || !w.login.denyStatus.every(Number.isInteger))) errs.push('passwords.login.denyStatus must list the status codes of a refused login');
-      const L = w.legacy;
-      if (!(0,schema_kit/* isPlainObject */.Qd)(L)) errs.push('passwords.legacy is required: the format existing users carry, and at least one user with a known test password');
-      else {
-        keysOnly(errs, L, ['digest', 'users'], 'passwords.legacy');
-        if (!['md5', 'sha1', 'sha256', 'sha512'].includes(L.digest)) errs.push("passwords.legacy.digest must be one of md5, sha1, sha256, sha512 (an unsalted hex digest)");
-        if (!Array.isArray(L.users) || !L.users.length || L.users.length > 8 || !L.users.every((u) => (0,schema_kit/* isPlainObject */.Qd)(u) && typeof u.name === 'string' && u.name && typeof u.password === 'string' && u.password.length >= 4)) errs.push('passwords.legacy.users must list 1 to 8 {name, password} test users');
-      }
-      const A = w.approved;
-      if (!(0,schema_kit/* isPlainObject */.Qd)(A) || A.format !== 'scrypt') errs.push("passwords.approved.format must be 'scrypt' (the only format the verifier recomputes in this release)");
-      else for (const k of ['minN', 'minR', 'minSaltBytes', 'minKeyBytes']) if (!Number.isInteger(A[k]) || A[k] < 1) errs.push(`passwords.approved.${k} must be a positive integer`);
-    }
-  }
-  if ((p.ssrf !== undefined || p.filesystem !== undefined) && a?.runtime === 'python') errs.push('the ssrf and filesystem sections are supported for the node runtime only in this release');
-  if (p.sql !== undefined) {
-    if (!(0,schema_kit/* isPlainObject */.Qd)(p.sql)) errs.push('sql must be an object');
-    else { keysOnly(errs, p.sql, ['inputs', 'stateChecks'], 'sql'); checkInputs(errs, p.sql, 'sql', actorIds, { secrets: true }); }
-  }
-  // Server-side request forgery: the network the application can reach is declared (hosts, their DNS answers, what each serves), with a
-  // destination policy. Secrets planted in a forbidden host's responses show disclosure; the connection itself is the forbidden effect.
-  if (p.ssrf !== undefined) {
-    if (!(0,schema_kit/* isPlainObject */.Qd)(p.ssrf)) errs.push('ssrf must be an object');
-    else {
-      keysOnly(errs, p.ssrf, ['policy', 'approved', 'hosts', 'inputs'], 'ssrf');
-      const n = (0,app_adapters/* validateNetwork */.jO)({ policy: p.ssrf.policy, approved: p.ssrf.approved, hosts: p.ssrf.hosts });
-      if (n) errs.push(`ssrf: ${n}`);
-      checkInputs(errs, p.ssrf, 'ssrf', actorIds, { secrets: false });
-    }
-  }
-  // Path traversal: a real file tree with an allowed root; files outside it plant secrets; declared links are real symbolic links.
-  if (p.filesystem !== undefined) {
-    if (!(0,schema_kit/* isPlainObject */.Qd)(p.filesystem)) errs.push('filesystem must be an object');
-    else {
-      keysOnly(errs, p.filesystem, ['root', 'tree', 'links', 'inputs'], 'filesystem');
-      const f = (0,app_adapters/* validateFiles */.kc)({ root: p.filesystem.root, tree: p.filesystem.tree, ...(p.filesystem.links !== undefined ? { links: p.filesystem.links } : {}) });
-      if (f) errs.push(`filesystem: ${f}`);
-      checkInputs(errs, p.filesystem, 'filesystem', actorIds, { secrets: false });
-    }
-  }
-  if (p.authorization !== undefined) {
-    const z = p.authorization;
-    if (!(0,schema_kit/* isPlainObject */.Qd)(z)) errs.push('authorization must be an object');
-    else {
-      keysOnly(errs, z, ['table', 'idColumn', 'contentColumn', 'objects', 'operations', 'policy', 'controls'], 'authorization');
-      // Declared legitimate workflows outside the actor matrix (a public page, a health route): they must keep working after a repair.
-      if (z.controls !== undefined) {
-        if (!Array.isArray(z.controls) || z.controls.length > 32) errs.push('authorization.controls must be an array of at most 32');
-        else for (const [i, c] of z.controls.entries()) {
-          const w = `authorization.controls[${i}]`;
-          if (!(0,schema_kit/* isPlainObject */.Qd)(c)) { errs.push(`${w} must be an object`); continue; }
-          keysOnly(errs, c, ['id', 'actor', 'method', 'path', 'body', 'expectStatus', 'expectIncludes'], w);
-          if (typeof c.id !== 'string' || !SLUG.test(c.id)) errs.push(`${w}.id must be a slug`);
-          if (!actorIds.has(c.actor)) errs.push(`${w}.actor must name a declared actor`);
-          checkRequestShape(errs, c, w);
-          if (c.expectIncludes !== undefined && (!Array.isArray(c.expectIncludes) || !c.expectIncludes.every((x) => typeof x === 'string' && x))) errs.push(`${w}.expectIncludes must list strings`);
-        }
-      }
-      for (const k of ['table', 'idColumn', 'contentColumn']) if (typeof z[k] !== 'string' || !IDENT.test(z[k])) errs.push(`authorization.${k} must be an identifier`);
-      if (!Array.isArray(z.objects) || !z.objects.length) errs.push('authorization.objects must be a non-empty array');
-      else for (const [i, o] of z.objects.entries()) {
-        if (!(0,schema_kit/* isPlainObject */.Qd)(o)) { errs.push(`authorization.objects[${i}] must be an object`); continue; }
-        keysOnly(errs, o, ['id', 'owner', 'rowId', 'secret'], `authorization.objects[${i}]`);
-        if (!actorIds.has(o.owner)) errs.push(`authorization.objects[${i}].owner must name a declared actor`);
-        if (!(Number.isInteger(o.rowId) || (typeof o.rowId === 'string' && o.rowId.length <= 64))) errs.push(`authorization.objects[${i}].rowId must be an integer or short string`);
-        if (typeof o.secret !== 'string' || !SLUG.test(o.secret)) errs.push(`authorization.objects[${i}].secret must name the planted secret the object holds`);
-      }
-      if (!Array.isArray(z.operations) || !z.operations.length) errs.push('authorization.operations must be a non-empty array');
-      else {
-        for (const [i, op] of z.operations.entries()) {
-          if (!(0,schema_kit/* isPlainObject */.Qd)(op)) { errs.push(`authorization.operations[${i}] must be an object`); continue; }
-          keysOnly(errs, op, ['id', 'effect', 'method', 'path', 'body', 'expectStatus'], `authorization.operations[${i}]`);
-          if (!EFFECTS.includes(op.effect)) errs.push(`authorization.operations[${i}].effect must be one of ${EFFECTS.join(', ')} (other effects are not supported in this milestone)`);
-          checkRequestShape(errs, op, `authorization.operations[${i}]`);
-          if (!String(op.path).includes('{{id}}')) errs.push(`authorization.operations[${i}].path must mark the object id with {{id}}`);
-          if (op.effect === 'update' && !JSON.stringify(op.body ?? null).includes('{{value}}')) errs.push(`authorization.operations[${i}]: an update body must mark the written value with {{value}}`);
-        }
-        if (!z.operations.some((op) => op?.effect === 'read')) errs.push('authorization.operations needs at least one read operation (the security run uses it to show the application works)');
-      }
-      const pol = z.policy;
-      if (!(0,schema_kit/* isPlainObject */.Qd)(pol) || !Array.isArray(pol.allow) || !pol.allow.length || !pol.allow.every((r) => POLICY_RULES.includes(r))) errs.push(`authorization.policy.allow must list rules from ${POLICY_RULES.join(', ')}`);
-    }
-  }
-  if (p.tests !== undefined) {
-    if (!(0,schema_kit/* isPlainObject */.Qd)(p.tests) || typeof p.tests.command !== 'string' || !p.tests.command.trim()) errs.push('tests.command must be a string');
-    else keysOnly(errs, p.tests, ['command', 'required', 'flaky'], 'tests');
-  }
-  if (p.approval !== undefined && !((0,schema_kit/* isPlainObject */.Qd)(p.approval) && typeof p.approval.approvedBy === 'string' && p.approval.approvedBy.trim() && typeof p.approval.reason === 'string' && p.approval.reason.trim())) errs.push('approval must be {approvedBy, reason}');
-  return errs;
-}
-
-/** Which actors a policy allows to act on an object. Pure. */
-function policyAllows(policy, actor, object, actorsById) {
-  if (!actor || actor.anonymous) return false;
-  const owner = actorsById[object.owner];
-  for (const rule of policy.allow) {
-    if (rule === 'owner' && actor.id === object.owner) return true;
-    if (rule === 'same-tenant-admin' && actor.role === 'admin' && owner && actor.tenant === owner.tenant) return true;
-    if (rule === 'any-admin' && actor.role === 'admin') return true;
-  }
-  return false;
-}
-
-;// CONCATENATED MODULE: ./src/repair/contracts.js
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   $B: () => (/* binding */ buildContract),
+/* harmony export */   NL: () => (/* binding */ obligationSummary),
+/* harmony export */   l3: () => (/* binding */ supportFor),
+/* harmony export */   snapshotSource: () => (/* binding */ snapshotSource)
+/* harmony export */ });
+/* unused harmony exports CONTRACT_BUILDER_VERSION, PROFILE_SUPPORT, PROTECTED_PATTERNS, SQL_PROBES */
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
+/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31421);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(76760);
+/* harmony import */ var _posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(41877);
+/* harmony import */ var _posture_oracles_registry_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(18357);
+/* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(68962);
+/* harmony import */ var _profile_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(46831);
+/* harmony import */ var _posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(50935);
 // Repair contracts (verified-remediation PRD FR-04, section 6.2): what a repair must establish, as declarative obligations over
 // registered verifier operations.
 //
@@ -1153,7 +808,7 @@ const PROFILE_SUPPORT = Object.freeze([
   { family: 'sql-injection', runtime: 'python', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'object-authorization', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'object-authorization', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
-  { family: 'ssrf', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'ssrf', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'ssrf-host-allowlist', evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'path-traversal', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'path-realpath-containment', evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'password-storage', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'password-storage', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
@@ -1188,42 +843,42 @@ const reqOf = (r, actor, map) => ({ method: r.method, path: fill(r.path, map, { 
 /** Read the application files and the configuration that can change behaviour. Never follows a link out of the root. */
 function snapshotSource(root, profile) {
   const files = {}; const missing = [];
-  const realRoot = external_node_fs_.realpathSync(root);
+  const realRoot = node_fs__WEBPACK_IMPORTED_MODULE_1__.realpathSync(root);
   for (const rel of profile.application.files) {
-    const abs = external_node_path_.resolve(realRoot, rel);
+    const abs = node_path__WEBPACK_IMPORTED_MODULE_3__.resolve(realRoot, rel);
     try {
-      const st = external_node_fs_.lstatSync(abs);
-      if (!st.isFile() || st.isSymbolicLink() || !abs.startsWith(realRoot + external_node_path_.sep)) { missing.push(rel); continue; }
-      files[rel] = external_node_fs_.readFileSync(abs, 'utf8');
+      const st = node_fs__WEBPACK_IMPORTED_MODULE_1__.lstatSync(abs);
+      if (!st.isFile() || st.isSymbolicLink() || !abs.startsWith(realRoot + node_path__WEBPACK_IMPORTED_MODULE_3__.sep)) { missing.push(rel); continue; }
+      files[rel] = node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(abs, 'utf8');
     } catch { missing.push(rel); }
   }
   const configDigests = {};
   for (const rel of ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', '.nvmrc']) {
-    try { configDigests[rel] = (0,identity/* digestOf */.ol)(external_node_fs_.readFileSync(external_node_path_.join(realRoot, rel), 'utf8')); } catch { /* absent */ }
+    try { configDigests[rel] = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_3__.join(realRoot, rel), 'utf8')); } catch { /* absent */ }
   }
   let python = null;
   if (profile.application.runtime === 'python') {
     for (const p of ['/usr/bin/python3', '/opt/homebrew/bin/python3', '/usr/local/bin/python3']) {
-      try { if (external_node_fs_.statSync(p).isFile()) { python = String((0,external_node_child_process_.spawnSync)(p, ['-I', '-c', 'import sys, sqlite3; print(sys.version.split()[0], sqlite3.sqlite_version)'], { encoding: 'utf8', timeout: 5000 }).stdout || '').trim() || null; break; } } catch { /* next */ }
+      try { if (node_fs__WEBPACK_IMPORTED_MODULE_1__.statSync(p).isFile()) { python = String((0,node_child_process__WEBPACK_IMPORTED_MODULE_2__.spawnSync)(p, ['-I', '-c', 'import sys, sqlite3; print(sys.version.split()[0], sqlite3.sqlite_version)'], { encoding: 'utf8', timeout: 5000 }).stdout || '').trim() || null; break; } } catch { /* next */ }
     }
   }
   if (profile.dependency && typeof profile.dependency.sources === 'string') {
     // the package tarballs a lockfile may resolve to are part of what the contract judges
     const tarballs = {};
-    try { for (const f of external_node_fs_.readdirSync(external_node_path_.join(realRoot, profile.dependency.sources)).sort()) if (f.endsWith('.tgz')) tarballs[f] = (0,identity/* digestOf */.ol)(external_node_fs_.readFileSync(external_node_path_.join(realRoot, profile.dependency.sources, f)).toString('base64')); } catch { /* absent: the resolution obligation reports it */ }
-    configDigests.packageSources = (0,identity/* digestOf */.ol)(tarballs);
+    try { for (const f of node_fs__WEBPACK_IMPORTED_MODULE_1__.readdirSync(node_path__WEBPACK_IMPORTED_MODULE_3__.join(realRoot, profile.dependency.sources)).sort()) if (f.endsWith('.tgz')) tarballs[f] = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_3__.join(realRoot, profile.dependency.sources, f)).toString('base64')); } catch { /* absent: the resolution obligation reports it */ }
+    configDigests.packageSources = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(tarballs);
   }
-  configDigests.runtime = (0,identity/* digestOf */.ol)({ node: process.versions.node, sqlite: process.versions.sqlite || null, ...(profile.application.runtime === 'python' ? { python } : {}) });
-  return { files, missing, sourceDigest: (0,identity/* digestOf */.ol)(files), configDigests };
+  configDigests.runtime = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)({ node: process.versions.node, sqlite: process.versions.sqlite || null, ...(profile.application.runtime === 'python' ? { python } : {}) });
+  return { files, missing, sourceDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(files), configDigests };
 }
 
 function obligation(kind, id, inputs, { required = true, origin = 'generated-from-profile', scope }) {
-  const k = schemas/* OBLIGATION_KINDS */.Xn[kind];
-  const o = (0,registry.getOracle)(k.oracle);
+  const k = _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn[kind];
+  const o = (0,_posture_oracles_registry_js__WEBPACK_IMPORTED_MODULE_5__.getOracle)(k.oracle);
   return {
     id, kind, required, oracleId: k.oracle, oracleVersion: o.version, oracleLogicDigest: o.logicDigest,
     scope, baselineExpectation: k.expectBaseline, patchedExpectation: k.expectPatched, evidenceOrigin: origin,
-    inputs, inputsDigest: (0,identity/* digestOf */.ol)(inputs), description: k.description,
+    inputs, inputsDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(inputs), description: k.description,
   };
 }
 
@@ -1298,7 +953,7 @@ const ipv4Int = (a) => a.split('.').reduce((n, o) => n * 256 + Number(o), 0);
  * (decimal and IPv4-mapped IPv6 addresses, upper case with a trailing dot, an approved host as user information).
  */
 function ssrfProbes(s) {
-  const permittedAddr = (h, a) => (s.policy === 'public-only' ? !(0,app_adapters/* isPrivateAddress */.C0)(a) : s.approved.includes(h.name));
+  const permittedAddr = (h, a) => (s.policy === 'public-only' ? !(0,_posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_8__/* .isPrivateAddress */ .C0)(a) : s.approved.includes(h.name));
   const forbidden = s.hosts.filter((h) => !h.addresses.every((a) => permittedAddr(h, a)));
   const port = (h) => (h.port && h.port !== 80 ? `:${h.port}` : '');
   const pathOf = (h) => h.routes?.[0]?.path || '/';
@@ -1353,16 +1008,16 @@ function traversalProbes(f) {
     const names = SECRET_NAMES(content);
     if (!names.length) continue;
     names.forEach((n) => secrets.add(n));
-    const up = external_node_path_.posix.relative(root, rel);
+    const up = node_path__WEBPACK_IMPORTED_MODULE_3__.posix.relative(root, rel);
     // the file, its absolute path, and its directory (for an application that appends a file name to the request value)
-    development.push(up, `{{fs:abs}}/${rel}`, external_node_path_.posix.dirname(up));
+    development.push(up, `{{fs:abs}}/${rel}`, node_path__WEBPACK_IMPORTED_MODULE_3__.posix.dirname(up));
     for (const [link, target] of Object.entries(f.links || {})) {
       if (!inside(link)) continue;
-      const dest = external_node_path_.posix.normalize(external_node_path_.posix.join(external_node_path_.posix.dirname(link), target));
+      const dest = node_path__WEBPACK_IMPORTED_MODULE_3__.posix.normalize(node_path__WEBPACK_IMPORTED_MODULE_3__.posix.join(node_path__WEBPACK_IMPORTED_MODULE_3__.posix.dirname(link), target));
       if (inside(dest) || !(rel === dest || rel.startsWith(`${dest}/`))) continue;
-      development.push(`${external_node_path_.posix.relative(root, link)}/${external_node_path_.posix.relative(dest, rel)}`);
+      development.push(`${node_path__WEBPACK_IMPORTED_MODULE_3__.posix.relative(root, link)}/${node_path__WEBPACK_IMPORTED_MODULE_3__.posix.relative(dest, rel)}`);
     }
-    const dir = external_node_path_.posix.dirname(up);
+    const dir = node_path__WEBPACK_IMPORTED_MODULE_3__.posix.dirname(up);
     sealed.push(`./${up}`, `./${dir}`);
     if (subdir) sealed.push(`${subdir}/../${up}`, `${subdir}/../${dir}`);
   }
@@ -1398,7 +1053,7 @@ function passwordObligations(profile, actors, blocked) {
   const login = (id, user, pw, ok) => ({ id, role: 'control', ...fillCred(w.login, user, pw), expect: { status: ok ? (w.login.expectStatus || [200]) : w.login.denyStatus } });
   const approved = { format: 'scrypt', minN: w.approved.minN, minR: w.approved.minR, minSaltBytes: w.approved.minSaltBytes, minKeyBytes: w.approved.minKeyBytes };
   const NEW_PW = '{{secret:new-password}}';
-  const legacySeed = w.legacy.users.map((u) => ({ sql: `INSERT INTO ${w.table} (${w.userColumn}, ${w.hashColumn}) VALUES (?, ?)`, params: [u.name, external_node_crypto_.createHash(w.legacy.digest).update(u.password, 'utf8').digest('hex')] }));
+  const legacySeed = w.legacy.users.map((u) => ({ sql: `INSERT INTO ${w.table} (${w.userColumn}, ${w.hashColumn}) VALUES (?, ?)`, params: [u.name, node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash(w.legacy.digest).update(u.password, 'utf8').digest('hex')] }));
   const withSeed = (inputs) => ({ ...inputs, seed: [...inputs.seed, ...legacySeed] });
   const out = [];
   const storage = [
@@ -1473,7 +1128,7 @@ function authzObligations(profile, actors, blocked) {
     let lastWriter = null; const deniedWriters = [];
     for (const op of z.operations) {
       for (const actor of Object.values(actors)) {
-        const allowed = policyAllows(z.policy, actor, obj, actors);
+        const allowed = (0,_profile_js__WEBPACK_IMPORTED_MODULE_7__/* .policyAllows */ .Jy)(z.policy, actor, obj, actors);
         const rid = `${op.id}_${obj.id}_${actor.id}`.replace(/-/g, '_');
         matrix.push({ object: obj.id, operation: op.id, effect: op.effect, actor: actor.id, role: actor.role ?? null, tenant: actor.tenant ?? null, owner: obj.owner, allowed });
         if (op.effect === 'read') {
@@ -1512,7 +1167,7 @@ function authzObligations(profile, actors, blocked) {
  * @returns {{contract:object|null, blocked:string[], problems:string[], matrix?:object[]}}
  */
 function buildContract(o) {
-  const problems = validateProfile(o.profile);
+  const problems = (0,_profile_js__WEBPACK_IMPORTED_MODULE_7__/* .validateProfile */ .UT)(o.profile);
   if (problems.length) return { contract: null, blocked: [], problems };
   const profile = o.profile;
   const blocked = [];
@@ -1539,7 +1194,7 @@ function buildContract(o) {
     obligations.unshift({
       id: 'dependency-resolution', kind: 'dependency-resolved', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
       scope: `${d.package} outside ${d.vulnerable} everywhere it resolves; lockfile consistent with the manifest; packages from ${d.sources} with their recorded integrity`,
-      baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: dinputs, inputsDigest: (0,identity/* digestOf */.ol)(dinputs), description: schemas/* OBLIGATION_KINDS */.Xn['dependency-resolved'].description,
+      baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: dinputs, inputsDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(dinputs), description: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn['dependency-resolved'].description,
     });
   } else if (o.family === 'infrastructure') {
     if (!profile.infrastructure) return { contract: null, blocked: ['the profile has no infrastructure section for an infrastructure finding'], problems: [] };
@@ -1548,7 +1203,7 @@ function buildContract(o) {
     obligations = [{
       id: 'infrastructure-exposure', kind: 'infrastructure-effective', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
       scope: `the effective configuration of ${x.files.length} file(s) in ${x.environment}: ${x.mustNotExpose.length ? `${x.mustNotExpose.join(', ')} not exposed` : 'no exposure requirement'}${x.mustStayExposed.length ? `; ${x.mustStayExposed.join(', ')} still exposed` : ''}${x.privileges ? `; ${x.privileges.mustNotAllow.length} action(s) denied and ${(x.privileges.mustAllow || []).length} kept for named identities` : ''}`,
-      baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: xinputs, inputsDigest: (0,identity/* digestOf */.ol)(xinputs), description: schemas/* OBLIGATION_KINDS */.Xn['infrastructure-effective'].description,
+      baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: xinputs, inputsDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(xinputs), description: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn['infrastructure-effective'].description,
     }];
   } else if (o.family === 'workflow') {
     if (!profile.workflow) return { contract: null, blocked: ['the profile has no workflow section for a workflow finding'], problems: [] };
@@ -1564,7 +1219,7 @@ function buildContract(o) {
     obligations = [{
       id: 'credential-removal', kind: 'credential-removed', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
       scope: `the value leaked at ${loc.file}:${loc.line} is in no application file, plain or re-encoded`, baselineExpectation: 'failed', patchedExpectation: 'passed',
-      evidenceOrigin: 'registered-family', inputs: cinputs, inputsDigest: (0,identity/* digestOf */.ol)(cinputs), description: schemas/* OBLIGATION_KINDS */.Xn['credential-removed'].description,
+      evidenceOrigin: 'registered-family', inputs: cinputs, inputsDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(cinputs), description: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn['credential-removed'].description,
     }];
     const controls = c.controls.map((r) => ({ id: `credential_${r.id.replace(/-/g, '_')}`, role: 'control', ...reqOf(r, actors[r.actor], {}), expect: { status: r.expectStatus || [200], ...(r.expectIncludes ? { bodyIncludes: r.expectIncludes } : {}) } }));
     obligations.push(obligation('app-behaviour-after', 'credential-replacement-wired', appInputs(profile, controls, [], { network: c.network, env: { [c.env]: '{{secret:replacement-credential}}' } }), { scope: `the application works with a replacement credential read from ${c.env}, against hosts that accept only that replacement` }));
@@ -1582,18 +1237,18 @@ function buildContract(o) {
     obligations.push({
       id: 'migration-window', kind: 'migration-window', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
       scope: `${m.up} then ${m.down} on the declared schema and seed; deployment order ${m.deployOrder}; ${minputs.interim.length} row(s) written while rolled back`,
-      baselineExpectation: null, patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: minputs, inputsDigest: (0,identity/* digestOf */.ol)(minputs), description: schemas/* OBLIGATION_KINDS */.Xn['migration-window'].description,
+      baselineExpectation: null, patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: minputs, inputsDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(minputs), description: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn['migration-window'].description,
     });
   }
   obligations.push({
     id: 'central-verifier', kind: 'project-tests', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
     scope: profile.tests ? `rescan, new-finding delta, footprint and the per-test delta of '${profile.tests.command}'` : 'rescan, new-finding delta and footprint; no project test command was declared, so the test leg is not run and the record says so',
-    baselineExpectation: null, patchedExpectation: 'passed', evidenceOrigin: 'registered-family', description: schemas/* OBLIGATION_KINDS */.Xn['project-tests'].description,
+    baselineExpectation: null, patchedExpectation: 'passed', evidenceOrigin: 'registered-family', description: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn['project-tests'].description,
   });
   const approved = o.profileOrigin === 'operator-profile-outside-repository' && profile.approval;
   const policyFacts = [{
     id: 'application-profile', origin: o.profileOrigin, approval: approved ? 'approved' : 'declared',
-    digest: (0,identity/* digestOf */.ol)({ actors: profile.actors ?? null, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, workflow: profile.workflow ?? null, credential: profile.credential ?? null, dependency: profile.dependency ?? null, infrastructure: profile.infrastructure ?? null, migration: profile.migration ?? null, database: profile.database ?? null }),
+    digest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)({ actors: profile.actors ?? null, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, workflow: profile.workflow ?? null, credential: profile.credential ?? null, dependency: profile.dependency ?? null, infrastructure: profile.infrastructure ?? null, migration: profile.migration ?? null, database: profile.database ?? null }),
     ...(approved ? { approvedBy: profile.approval.approvedBy } : {}),
   }];
   const knownUnknowns = [
@@ -1605,10 +1260,10 @@ function buildContract(o) {
   if (!profile.tests) knownUnknowns.push('no project test command was declared');
   const findingFile = o.finding?.locations?.[0]?.file || o.finding?.file || null;
   const contract = {
-    schema: schemas/* SCHEMAS */.H6.contract, schemaVersion: schemas/* SCHEMA_VERSION */.f$,
+    schema: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .SCHEMAS */ .H6.contract, schemaVersion: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .SCHEMA_VERSION */ .f$,
     family: o.family,
     findingRefs: [o.finding.findingId || o.finding.stableId || o.finding.id],
-    rootCauseGroup: (0,identity/* digestOf */.ol)({ family: o.family, file: findingFile }),
+    rootCauseGroup: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)({ family: o.family, file: findingFile }),
     sourceCommit: o.commit ?? null, sourceDigest: o.source.sourceDigest, configDigests: o.source.configDigests,
     profile: { application: profile.application, database: { engine: profile.database?.engine ?? null }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
     obligations, policyFacts,
@@ -1617,9 +1272,9 @@ function buildContract(o) {
     executionPolicy: { execution: 'trust-boundary', network: 'denied', model: 'none-unless-operator-configured' },
     knownUnknowns,
   };
-  contract.contractId = (0,schemas/* contractIdOf */.JF)(contract);
-  contract.contractDigest = (0,schemas/* contractDigestOf */.U_)(contract);
-  const v = (0,schemas/* validateContract */.T7)(contract);
+  contract.contractId = (0,_schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .contractIdOf */ .JF)(contract);
+  contract.contractDigest = (0,_schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .contractDigestOf */ .U_)(contract);
+  const v = (0,_schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .validateContract */ .T7)(contract);
   if (!v.ok) return { contract: null, blocked, problems: v.errors.map((e) => `${e.path}: ${e.message}`) };
   return { contract, blocked, problems: [], ...(matrix ? { matrix } : {}) };
 }
@@ -1668,8 +1323,8 @@ var registry = __webpack_require__(18357);
 var state_dir = __webpack_require__(31174);
 // EXTERNAL MODULE: ./src/repair/schemas.js
 var schemas = __webpack_require__(68962);
-// EXTERNAL MODULE: ./src/repair/contracts.js + 1 modules
-var contracts = __webpack_require__(20771);
+// EXTERNAL MODULE: ./src/repair/contracts.js
+var contracts = __webpack_require__(84281);
 // EXTERNAL MODULE: ./src/repair/lab.js
 var lab = __webpack_require__(73633);
 ;// CONCATENATED MODULE: ./src/repair/migrations.js
@@ -3079,9 +2734,9 @@ function corroborated(root, f) {
     const body = node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_2__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_5__/* .stateDir */ .Pn)(root), 'last-scan.json'), 'utf8');
     if ((0,_posture_integrity_js__WEBPACK_IMPORTED_MODULE_6__/* .verifyLastScan */ .Ef)(body, node_path__WEBPACK_IMPORTED_MODULE_2__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_5__/* .stateDir */ .Pn)(root), 'last-scan.json.sig')) !== true) return null;
     const scan = JSON.parse(body);
-    const fam = (0,_intake_js__WEBPACK_IMPORTED_MODULE_8__/* .familyForFinding */ .lG)(f);
+    const fam = (0,_intake_js__WEBPACK_IMPORTED_MODULE_8__.familyForFinding)(f);
     if (!fam) return null;
-    const m = (scan.findings || []).find((x) => x.file === f.file && Number.isInteger(x.line) && Math.abs(x.line - f.line) <= 2 && (0,_intake_js__WEBPACK_IMPORTED_MODULE_8__/* .familyForFinding */ .lG)(x) === fam);
+    const m = (scan.findings || []).find((x) => x.file === f.file && Number.isInteger(x.line) && Math.abs(x.line - f.line) <= 2 && (0,_intake_js__WEBPACK_IMPORTED_MODULE_8__.familyForFinding)(x) === fam);
     return m ? { stableId: m.stableId || m.id, line: m.line } : null;
   } catch { return null; }
 }
@@ -3113,7 +2768,7 @@ function importReport(o) {
     const prev = byKey.get(key);
     if (prev) { prev.sources.push(source); continue; }
     const base = { file: m.file, line: m.line ?? r.startLine ?? null, column: r.startColumn, cwe: r.cwe, ruleId: r.ruleId };
-    const family = (0,_intake_js__WEBPACK_IMPORTED_MODULE_8__/* .familyForFinding */ .lG)(base);
+    const family = (0,_intake_js__WEBPACK_IMPORTED_MODULE_8__.familyForFinding)(base);
     byKey.set(key, {
       importedId: `imp-${key.slice(7, 23)}`, file: m.file, line: base.line, column: r.startColumn, cwe: r.cwe, family,
       mapping: m.mapping, mappingReason: m.reason || m.note || null, plannable: PLANNABLE.has(m.mapping) && !!family,
@@ -3197,10 +2852,12 @@ function importedFinding(root, id, importedId) {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   Zn: () => (/* binding */ planFromInputs),
-/* harmony export */   lG: () => (/* binding */ familyForFinding)
+/* harmony export */   FAMILIES_SUPPORTED: () => (/* binding */ FAMILIES_SUPPORTED),
+/* harmony export */   Z: () => (/* binding */ planFromInputs),
+/* harmony export */   familyForFinding: () => (/* binding */ familyForFinding),
+/* harmony export */   signedFinding: () => (/* binding */ signedFinding)
 /* harmony export */ });
-/* unused harmony exports FAMILIES_SUPPORTED, signedFinding, insideRoot */
+/* unused harmony export insideRoot */
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
@@ -3330,6 +2987,360 @@ function judge(observed, expectation) {
   if (['unavailable', 'invalid', 'error', 'cancelled'].includes(observed)) return observed === 'error' ? 'inconclusive' : observed;
   if (observed === 'inconclusive') return 'inconclusive';
   return observed === expectation ? 'passed' : 'failed';
+}
+
+
+/***/ }),
+
+/***/ 46831:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Jy: () => (/* binding */ policyAllows),
+/* harmony export */   Ow: () => (/* binding */ PROFILE_SCHEMA),
+/* harmony export */   UT: () => (/* binding */ validateProfile)
+/* harmony export */ });
+/* harmony import */ var _posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(53353);
+/* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(68962);
+/* harmony import */ var _posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(50935);
+// The application profile (verified-remediation PRD FR-04, FR-05): how to start the application and what its legitimate behaviour is.
+//
+// A profile is DECLARED by the operator; nothing here is inferred from code and presented as approved intent. It names the entry module
+// and factory, the database schema and seed, the actors (with the request headers that authenticate each), and per family the inputs or
+// objects the contract is built from. A profile file inside the repository is repository-supplied input: its facts are recorded as
+// `declared`, never `approved`, and it cannot widen execution (it has no field that could: execution is enabled only by the operator).
+//
+// Closed world: an unknown field is an error. Identifiers that reach SQL (table and column names in generated state checks) must be plain
+// identifiers. Validation never throws.
+
+
+
+
+const PROFILE_SCHEMA = 'agentic-security/repair-profile';
+const IDENT = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const SLUG = /^[a-z][a-z0-9-]{0,39}$/;
+const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+const POLICY_RULES = ['owner', 'same-tenant-admin', 'any-admin'];
+const EFFECTS = ['read', 'update'];
+
+const keysOnly = (errs, obj, allowed, where) => { for (const k of Object.keys(obj)) if (!allowed.includes(k)) errs.push(`${where}: unknown field '${k}'`); };
+
+function checkRequestShape(errs, r, where) {
+  if (!METHODS.includes(r.method)) errs.push(`${where}.method must be one of ${METHODS.join(', ')}`);
+  if (typeof r.path !== 'string' || !r.path.startsWith('/') || r.path.length > 500) errs.push(`${where}.path must start with /`);
+  if (r.body !== undefined && !(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(r.body)) errs.push(`${where}.body must be an object`);
+}
+
+/** One declared untrusted value input (sql, ssrf, filesystem): the request carrying {{value}} and its legitimate values. */
+function checkValueInput(errs, inp, w, actorIds, { secrets }) {
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(inp)) { errs.push(`${w} must be an object`); return; }
+  keysOnly(errs, inp, ['id', 'actor', 'method', 'path', 'body', 'benign', ...(secrets ? ['protectedSecrets'] : [])], w);
+  if (typeof inp.id !== 'string' || !SLUG.test(inp.id)) errs.push(`${w}.id must be a slug`);
+  if (!actorIds.has(inp.actor)) errs.push(`${w}.actor must name a declared actor`);
+  checkRequestShape(errs, inp, w);
+  if (!JSON.stringify([inp.path, inp.body ?? null]).includes('{{value}}')) errs.push(`${w}: the path or body must mark the untrusted value with {{value}}`);
+  if (!Array.isArray(inp.benign) || !inp.benign.length) errs.push(`${w}.benign must list at least one legitimate value with its expected response`);
+  else for (const [j, b] of inp.benign.entries()) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(b) || typeof b.value !== 'string') { errs.push(`${w}.benign[${j}].value must be a string`); continue; }
+    keysOnly(errs, b, ['value', 'expectIncludes', 'expectStatus', 'originalMishandles'], `${w}.benign[${j}]`);
+    if (!Array.isArray(b.expectIncludes) || !b.expectIncludes.length) errs.push(`${w}.benign[${j}].expectIncludes must list at least one expected value`);
+  }
+  if (secrets && (!Array.isArray(inp.protectedSecrets) || !inp.protectedSecrets.length || !inp.protectedSecrets.every((s) => SLUG.test(s)))) errs.push(`${w}.protectedSecrets must name the planted secrets another actor's data holds`);
+}
+
+function checkInputs(errs, sec, name, actorIds, opts) {
+  if (!Array.isArray(sec.inputs) || !sec.inputs.length || sec.inputs.length > 8) { errs.push(`${name}.inputs must hold 1 to 8 inputs`); return; }
+  for (const [i, inp] of sec.inputs.entries()) checkValueInput(errs, inp, `${name}.inputs[${i}]`, actorIds, opts);
+}
+
+/** Problems with a profile; an empty list means it can be used. */
+function validateProfile(p) {
+  const errs = [];
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p)) return ['the profile must be a JSON object'];
+  // a draft from `repair profile-draft` marks what the code could not state with `TODO: ...`; such a profile is not finished
+  const unfinished = [];
+  const scanTodo = (v, at) => {
+    if (unfinished.length >= 5) return;
+    if (typeof v === 'string' && /^TODO:/.test(v)) unfinished.push(at);
+    else if (Array.isArray(v)) v.forEach((x, i) => scanTodo(x, `${at}[${i}]`));
+    else if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(v)) for (const [k, x] of Object.entries(v)) { if (/^TODO:/.test(k)) unfinished.push(`${at}.<key>`); scanTodo(x, at ? `${at}.${k}` : k); }
+  };
+  scanTodo(p, '');
+  if (unfinished.length) errs.push(`the profile is an unfinished draft: complete the TODO values at ${unfinished.join(', ')}${unfinished.length >= 5 ? ' (and more)' : ''}`);
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'infrastructure', 'migration', 'tests', 'approval'], 'profile');
+  // A profile with only an infrastructure section runs no application: no factory, database or actors are needed.
+  const infraOnly = p.infrastructure !== undefined && !['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow'].some((k) => p[k] !== undefined);
+  if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
+  if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
+  const a = p.application;
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(a)) errs.push('application is required');
+  else {
+    keysOnly(errs, a, ['entry', 'export', 'files', 'runtime'], 'application');
+    if (!(0,_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)(a.entry)) errs.push('application.entry must be a relative path');
+    if (!(infraOnly && a.export === undefined) && (typeof a.export !== 'string' || !IDENT.test(a.export))) errs.push('application.export must be an identifier');
+    if (!Array.isArray(a.files) || !a.files.length || a.files.length > 60 || !a.files.every(_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)) errs.push('application.files must list 1 to 60 relative paths');
+    else if (!a.files.includes(a.entry)) errs.push('application.files must include the entry');
+    if (a.runtime !== undefined && !['node', 'python'].includes(a.runtime)) errs.push("application.runtime must be 'node' or 'python'");
+    if (a.runtime === 'python' && !/\.py$/.test(String(a.entry))) errs.push('application.entry must be a .py file for the python runtime');
+  }
+  const d = p.database;
+  if (infraOnly && d === undefined) { /* nothing runs */ } else if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(d)) errs.push('database is required');
+  else {
+    keysOnly(errs, d, ['engine', 'schemaSql', 'seed'], 'database');
+    if (d.engine !== 'sqlite') errs.push("database.engine: only 'sqlite' is supported in this milestone");
+    if (typeof d.schemaSql !== 'string' || !d.schemaSql.trim()) errs.push('database.schemaSql is required');
+    if (!Array.isArray(d.seed)) errs.push('database.seed must be an array');
+  }
+  const actorIds = new Set();
+  if (infraOnly && p.actors === undefined) { /* nothing runs */ } else if (!Array.isArray(p.actors) || !p.actors.length) errs.push('actors must be a non-empty array');
+  else for (const [i, ac] of p.actors.entries()) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(ac)) { errs.push(`actors[${i}] must be an object`); continue; }
+    keysOnly(errs, ac, ['id', 'tenant', 'role', 'headers', 'anonymous'], `actors[${i}]`);
+    if (typeof ac.id !== 'string' || !SLUG.test(ac.id) || actorIds.has(ac.id)) errs.push(`actors[${i}].id must be a unique slug`);
+    actorIds.add(ac.id);
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
+  }
+  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential', 'workflow', 'infrastructure'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords, credential, workflow or infrastructure section');
+  // Infrastructure: the configuration files whose EFFECTIVE result is judged together, the environment, the services that must not be
+  // exposed and the approved services that must stay exposed.
+  if (p.infrastructure !== undefined) {
+    const x = p.infrastructure;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(x)) errs.push('infrastructure must be an object');
+    else {
+      keysOnly(errs, x, ['files', 'environment', 'mustNotExpose', 'mustStayExposed', 'privileges'], 'infrastructure');
+      if (!Array.isArray(x.files) || !x.files.length || x.files.length > 40 || !x.files.every(_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)) errs.push('infrastructure.files must list 1 to 40 configuration files');
+      else if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(a) && Array.isArray(a.files) && !x.files.every((f) => a.files.includes(f))) errs.push('infrastructure.files must be application files (a repair edits them)');
+      if (typeof x.environment !== 'string' || !SLUG.test(x.environment)) errs.push('infrastructure.environment must be a slug');
+      const names = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' && /^[A-Za-z0-9][\w.-]{0,62}$/.test(s));
+      // privilege: actions an identity must not be able to perform, and the ones it must keep (IAM policies in a Terraform plan)
+      const pv = x.privileges;
+      const grantList = (v) => Array.isArray(v) && v.length <= 32 && v.every((g) => (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(g) && Object.keys(g).every((k) => ['identity', 'action', 'resource'].includes(k))
+        && typeof g.identity === 'string' && /^[A-Za-z0-9][\w./:-]{0,120}$/.test(g.identity) && typeof g.action === 'string' && /^[A-Za-z0-9-]{1,40}:[A-Za-z0-9]{1,80}$/.test(g.action)
+        && typeof g.resource === 'string' && /^[\w:./*-]{1,200}$/.test(g.resource) && !/[*?]/.test(g.resource));
+      if (pv !== undefined) {
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(pv)) errs.push('infrastructure.privileges must be an object');
+        else {
+          keysOnly(errs, pv, ['mustNotAllow', 'mustAllow'], 'infrastructure.privileges');
+          if (!grantList(pv.mustNotAllow) || !pv.mustNotAllow.length) errs.push('infrastructure.privileges.mustNotAllow must list 1 to 32 {identity, action, resource} entries with an exact resource (no wildcard)');
+          if (!grantList(pv.mustAllow || [])) errs.push('infrastructure.privileges.mustAllow must list at most 32 {identity, action, resource} entries with an exact resource');
+        }
+      }
+      if (!names(x.mustNotExpose) || (!x.mustNotExpose.length && !(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(pv))) errs.push('infrastructure.mustNotExpose must name at least one service (it may be empty when privileges are declared)');
+      if (!names(x.mustStayExposed)) errs.push('infrastructure.mustStayExposed must list the approved exposed services (it may be empty)');
+    }
+  }
+  // Workflow and idempotency: the operations, the normal workflows built from them (with the state each must leave) and the invariants
+  // that must hold after ANY sequence. Repeated, reordered and concurrent variants are generated from these; nothing is inferred.
+  // A schema migration the repair needs (FR-16, M4-06): the up and down files the candidate writes (new files, outside the application
+  // files), the deployment order, and the rows an older revision may write while rolled back, inserted before the migration re-applies.
+  if (p.migration !== undefined) {
+    const m = p.migration;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(m)) errs.push('migration must be an object');
+    else {
+      keysOnly(errs, m, ['up', 'down', 'deployOrder', 'interim'], 'migration');
+      for (const k of ['up', 'down']) {
+        if (!(0,_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)(m[k]) || !/\.sql$/.test(m[k])) errs.push(`migration.${k} must be a relative .sql path`);
+        else if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(a) && Array.isArray(a.files) && a.files.includes(m[k])) errs.push(`migration.${k} must not be an application file: the candidate writes it`);
+      }
+      if (m.up === m.down) errs.push('migration.up and migration.down must differ');
+      if (!['migrate-then-deploy', 'deploy-then-migrate'].includes(m.deployOrder)) errs.push("migration.deployOrder must be 'migrate-then-deploy' or 'deploy-then-migrate'");
+      if (m.interim !== undefined && (!Array.isArray(m.interim) || m.interim.length > 16 || !m.interim.every((x) => (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(x) && typeof x.sql === 'string' && /^\s*INSERT\b/i.test(x.sql) && !/;\s*\S/.test(x.sql) && Array.isArray(x.params)))) errs.push('migration.interim must list at most 16 INSERT statements with params arrays');
+      if (!p.database) errs.push('migration needs a database section');
+    }
+  }
+  if (p.workflow !== undefined) {
+    const w = p.workflow;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(w)) errs.push('workflow must be an object');
+    else {
+      keysOnly(errs, w, ['operations', 'normal', 'invariants'], 'workflow');
+      const ops = new Set();
+      if (!Array.isArray(w.operations) || !w.operations.length || w.operations.length > 16) errs.push('workflow.operations must hold 1 to 16 operations');
+      else for (const [i, o] of w.operations.entries()) {
+        const at = `workflow.operations[${i}]`;
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(o)) { errs.push(`${at} must be an object`); continue; }
+        keysOnly(errs, o, ['id', 'actor', 'method', 'path', 'body', 'mutating', 'expectStatus'], at);
+        if (typeof o.id !== 'string' || !SLUG.test(o.id) || ops.has(o.id)) errs.push(`${at}.id must be a unique slug`);
+        ops.add(o.id);
+        if (!actorIds.has(o.actor)) errs.push(`${at}.actor must name a declared actor`);
+        checkRequestShape(errs, o, at);
+        if (typeof o.mutating !== 'boolean') errs.push(`${at}.mutating must say whether the operation changes durable state`);
+      }
+      const check = (c, at) => {
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(c) || typeof c.id !== 'string' || !SLUG.test(c.id) || typeof c.sql !== 'string' || !/^\s*SELECT\b/i.test(c.sql) || !('expect' in c)) errs.push(`${at} must be {id, sql (one SELECT), params, expect}`);
+      };
+      if (!Array.isArray(w.normal) || !w.normal.length || w.normal.length > 8) errs.push('workflow.normal must hold 1 to 8 legitimate workflows');
+      else for (const [i, n] of w.normal.entries()) {
+        const at = `workflow.normal[${i}]`;
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(n)) { errs.push(`${at} must be an object`); continue; }
+        keysOnly(errs, n, ['id', 'steps', 'checks'], at);
+        if (typeof n.id !== 'string' || !SLUG.test(n.id)) errs.push(`${at}.id must be a slug`);
+        if (!Array.isArray(n.steps) || !n.steps.length || n.steps.length > 8 || !n.steps.every((s) => ops.has(s))) errs.push(`${at}.steps must list 1 to 8 declared operation ids`);
+        (n.checks || []).forEach((c, j) => check(c, `${at}.checks[${j}]`));
+      }
+      if (!Array.isArray(w.invariants) || !w.invariants.length || w.invariants.length > 12) errs.push('workflow.invariants must hold 1 to 12 state invariants that hold after any sequence');
+      else w.invariants.forEach((c, j) => check(c, `workflow.invariants[${j}]`));
+    }
+  }
+  // A leaked credential: where it is (never its value), the environment name the replacement is wired from, whether the old credential
+  // must be revoked, and the legitimate requests that must work with the replacement (against declared hosts that accept only it).
+  if (p.credential !== undefined) {
+    const c = p.credential;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(c)) errs.push('credential must be an object');
+    else {
+      keysOnly(errs, c, ['location', 'env', 'revocation', 'provider', 'network', 'controls'], 'credential');
+      if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(c.location) || !(0,_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)(c.location.file) || !Number.isInteger(c.location.line) || c.location.line < 1) errs.push('credential.location must be {file, line}: where the leaked value is, never the value');
+      else if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(a) && Array.isArray(a.files) && !a.files.includes(c.location.file)) errs.push('credential.location.file must be one of the application files');
+      if (typeof c.env !== 'string' || !/^[A-Z_][A-Z0-9_]{0,63}$/.test(c.env)) errs.push('credential.env must be the upper-case environment name the replacement is read from');
+      if (!['required', 'not-required'].includes(c.revocation)) errs.push("credential.revocation must be 'required' or 'not-required'");
+      if (typeof c.provider !== 'string' || !SLUG.test(c.provider)) errs.push('credential.provider must be a slug naming the issuing service');
+      const n = (0,_posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_2__/* .validateNetwork */ .jO)(c.network);
+      if (n) errs.push(`credential.network: ${n}`);
+      if (!Array.isArray(c.controls) || !c.controls.length) errs.push('credential.controls must list the requests that must work with the replacement credential');
+      else for (const [i, r] of c.controls.entries()) {
+        const w = `credential.controls[${i}]`;
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(r)) { errs.push(`${w} must be an object`); continue; }
+        keysOnly(errs, r, ['id', 'actor', 'method', 'path', 'body', 'expectStatus', 'expectIncludes'], w);
+        if (typeof r.id !== 'string' || !SLUG.test(r.id)) errs.push(`${w}.id must be a slug`);
+        if (!actorIds.has(r.actor)) errs.push(`${w}.actor must name a declared actor`);
+        checkRequestShape(errs, r, w);
+      }
+      if (a?.runtime === 'python') errs.push('the credential section is supported for the node runtime only in this release');
+    }
+  }
+  // A vulnerable dependency (npm): the advisory's package and range, where the package tarballs live, and which section's attacks show
+  // the vulnerability in this application. The manifest and the lockfile must be application files: a repair edits them.
+  if (p.dependency !== undefined) {
+    const d = p.dependency;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(d)) errs.push('dependency must be an object');
+    else {
+      keysOnly(errs, d, ['ecosystem', 'package', 'vulnerable', 'advisory', 'sources', 'exploit'], 'dependency');
+      if (d.ecosystem !== 'npm') errs.push("dependency.ecosystem: only 'npm' is supported in this release");
+      if (typeof d.package !== 'string' || !/^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]{0,213}$/.test(d.package)) errs.push('dependency.package must be an npm package name');
+      if (typeof d.vulnerable !== 'string' || !d.vulnerable.trim() || d.vulnerable.length > 200) errs.push('dependency.vulnerable must be a version range');
+      if (typeof d.advisory !== 'string' || !d.advisory.trim()) errs.push('dependency.advisory must name the advisory');
+      if (!(0,_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)(d.sources)) errs.push('dependency.sources must be a relative directory holding the package tarballs');
+      if (!['filesystem', 'sql', 'ssrf'].includes(d.exploit) || p[d.exploit] === undefined) errs.push('dependency.exploit must name the profile section (filesystem, sql or ssrf) whose attacks show the vulnerability');
+      if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(a) && Array.isArray(a.files) && !['package.json', 'package-lock.json'].every((f) => a.files.includes(f))) errs.push('application.files must include package.json and package-lock.json for a dependency repair');
+    }
+  }
+  // Password storage: where the application stores a credential, how a user registers and logs in, the legacy format existing users
+  // carry (with known test passwords: the legacy rows are built from them), and the approved storage format and its minimum costs.
+  if (p.passwords !== undefined) {
+    const w = p.passwords;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(w)) errs.push('passwords must be an object');
+    else {
+      keysOnly(errs, w, ['table', 'userColumn', 'hashColumn', 'legacy', 'register', 'login', 'approved', 'actor'], 'passwords');
+      for (const k of ['table', 'userColumn', 'hashColumn']) if (typeof w[k] !== 'string' || !IDENT.test(w[k])) errs.push(`passwords.${k} must be an identifier`);
+      if (!actorIds.has(w.actor)) errs.push('passwords.actor must name a declared actor (the one sending register and login requests)');
+      for (const op of ['register', 'login']) {
+        const r = w[op];
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(r)) { errs.push(`passwords.${op} is required`); continue; }
+        keysOnly(errs, r, ['method', 'path', 'body', 'expectStatus', 'denyStatus'], `passwords.${op}`);
+        checkRequestShape(errs, r, `passwords.${op}`);
+        const t = JSON.stringify([r.path, r.body ?? null]);
+        if (!t.includes('{{user}}') || !t.includes('{{password}}')) errs.push(`passwords.${op}: the path or body must carry {{user}} and {{password}}`);
+        if (r.expectStatus !== undefined && (!Array.isArray(r.expectStatus) || !r.expectStatus.every(Number.isInteger))) errs.push(`passwords.${op}.expectStatus must list status codes`);
+      }
+      if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(w.login) && (!Array.isArray(w.login.denyStatus) || !w.login.denyStatus.length || !w.login.denyStatus.every(Number.isInteger))) errs.push('passwords.login.denyStatus must list the status codes of a refused login');
+      const L = w.legacy;
+      if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(L)) errs.push('passwords.legacy is required: the format existing users carry, and at least one user with a known test password');
+      else {
+        keysOnly(errs, L, ['digest', 'users'], 'passwords.legacy');
+        if (!['md5', 'sha1', 'sha256', 'sha512'].includes(L.digest)) errs.push("passwords.legacy.digest must be one of md5, sha1, sha256, sha512 (an unsalted hex digest)");
+        if (!Array.isArray(L.users) || !L.users.length || L.users.length > 8 || !L.users.every((u) => (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(u) && typeof u.name === 'string' && u.name && typeof u.password === 'string' && u.password.length >= 4)) errs.push('passwords.legacy.users must list 1 to 8 {name, password} test users');
+      }
+      const A = w.approved;
+      if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(A) || A.format !== 'scrypt') errs.push("passwords.approved.format must be 'scrypt' (the only format the verifier recomputes in this release)");
+      else for (const k of ['minN', 'minR', 'minSaltBytes', 'minKeyBytes']) if (!Number.isInteger(A[k]) || A[k] < 1) errs.push(`passwords.approved.${k} must be a positive integer`);
+    }
+  }
+  if ((p.ssrf !== undefined || p.filesystem !== undefined) && a?.runtime === 'python') errs.push('the ssrf and filesystem sections are supported for the node runtime only in this release');
+  if (p.sql !== undefined) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p.sql)) errs.push('sql must be an object');
+    else { keysOnly(errs, p.sql, ['inputs', 'stateChecks'], 'sql'); checkInputs(errs, p.sql, 'sql', actorIds, { secrets: true }); }
+  }
+  // Server-side request forgery: the network the application can reach is declared (hosts, their DNS answers, what each serves), with a
+  // destination policy. Secrets planted in a forbidden host's responses show disclosure; the connection itself is the forbidden effect.
+  if (p.ssrf !== undefined) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p.ssrf)) errs.push('ssrf must be an object');
+    else {
+      keysOnly(errs, p.ssrf, ['policy', 'approved', 'hosts', 'inputs'], 'ssrf');
+      const n = (0,_posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_2__/* .validateNetwork */ .jO)({ policy: p.ssrf.policy, approved: p.ssrf.approved, hosts: p.ssrf.hosts });
+      if (n) errs.push(`ssrf: ${n}`);
+      checkInputs(errs, p.ssrf, 'ssrf', actorIds, { secrets: false });
+    }
+  }
+  // Path traversal: a real file tree with an allowed root; files outside it plant secrets; declared links are real symbolic links.
+  if (p.filesystem !== undefined) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p.filesystem)) errs.push('filesystem must be an object');
+    else {
+      keysOnly(errs, p.filesystem, ['root', 'tree', 'links', 'inputs'], 'filesystem');
+      const f = (0,_posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_2__/* .validateFiles */ .kc)({ root: p.filesystem.root, tree: p.filesystem.tree, ...(p.filesystem.links !== undefined ? { links: p.filesystem.links } : {}) });
+      if (f) errs.push(`filesystem: ${f}`);
+      checkInputs(errs, p.filesystem, 'filesystem', actorIds, { secrets: false });
+    }
+  }
+  if (p.authorization !== undefined) {
+    const z = p.authorization;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(z)) errs.push('authorization must be an object');
+    else {
+      keysOnly(errs, z, ['table', 'idColumn', 'contentColumn', 'objects', 'operations', 'policy', 'controls'], 'authorization');
+      // Declared legitimate workflows outside the actor matrix (a public page, a health route): they must keep working after a repair.
+      if (z.controls !== undefined) {
+        if (!Array.isArray(z.controls) || z.controls.length > 32) errs.push('authorization.controls must be an array of at most 32');
+        else for (const [i, c] of z.controls.entries()) {
+          const w = `authorization.controls[${i}]`;
+          if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(c)) { errs.push(`${w} must be an object`); continue; }
+          keysOnly(errs, c, ['id', 'actor', 'method', 'path', 'body', 'expectStatus', 'expectIncludes'], w);
+          if (typeof c.id !== 'string' || !SLUG.test(c.id)) errs.push(`${w}.id must be a slug`);
+          if (!actorIds.has(c.actor)) errs.push(`${w}.actor must name a declared actor`);
+          checkRequestShape(errs, c, w);
+          if (c.expectIncludes !== undefined && (!Array.isArray(c.expectIncludes) || !c.expectIncludes.every((x) => typeof x === 'string' && x))) errs.push(`${w}.expectIncludes must list strings`);
+        }
+      }
+      for (const k of ['table', 'idColumn', 'contentColumn']) if (typeof z[k] !== 'string' || !IDENT.test(z[k])) errs.push(`authorization.${k} must be an identifier`);
+      if (!Array.isArray(z.objects) || !z.objects.length) errs.push('authorization.objects must be a non-empty array');
+      else for (const [i, o] of z.objects.entries()) {
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(o)) { errs.push(`authorization.objects[${i}] must be an object`); continue; }
+        keysOnly(errs, o, ['id', 'owner', 'rowId', 'secret'], `authorization.objects[${i}]`);
+        if (!actorIds.has(o.owner)) errs.push(`authorization.objects[${i}].owner must name a declared actor`);
+        if (!(Number.isInteger(o.rowId) || (typeof o.rowId === 'string' && o.rowId.length <= 64))) errs.push(`authorization.objects[${i}].rowId must be an integer or short string`);
+        if (typeof o.secret !== 'string' || !SLUG.test(o.secret)) errs.push(`authorization.objects[${i}].secret must name the planted secret the object holds`);
+      }
+      if (!Array.isArray(z.operations) || !z.operations.length) errs.push('authorization.operations must be a non-empty array');
+      else {
+        for (const [i, op] of z.operations.entries()) {
+          if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(op)) { errs.push(`authorization.operations[${i}] must be an object`); continue; }
+          keysOnly(errs, op, ['id', 'effect', 'method', 'path', 'body', 'expectStatus'], `authorization.operations[${i}]`);
+          if (!EFFECTS.includes(op.effect)) errs.push(`authorization.operations[${i}].effect must be one of ${EFFECTS.join(', ')} (other effects are not supported in this milestone)`);
+          checkRequestShape(errs, op, `authorization.operations[${i}]`);
+          if (!String(op.path).includes('{{id}}')) errs.push(`authorization.operations[${i}].path must mark the object id with {{id}}`);
+          if (op.effect === 'update' && !JSON.stringify(op.body ?? null).includes('{{value}}')) errs.push(`authorization.operations[${i}]: an update body must mark the written value with {{value}}`);
+        }
+        if (!z.operations.some((op) => op?.effect === 'read')) errs.push('authorization.operations needs at least one read operation (the security run uses it to show the application works)');
+      }
+      const pol = z.policy;
+      if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(pol) || !Array.isArray(pol.allow) || !pol.allow.length || !pol.allow.every((r) => POLICY_RULES.includes(r))) errs.push(`authorization.policy.allow must list rules from ${POLICY_RULES.join(', ')}`);
+    }
+  }
+  if (p.tests !== undefined) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p.tests) || typeof p.tests.command !== 'string' || !p.tests.command.trim()) errs.push('tests.command must be a string');
+    else keysOnly(errs, p.tests, ['command', 'required', 'flaky'], 'tests');
+  }
+  if (p.approval !== undefined && !((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p.approval) && typeof p.approval.approvedBy === 'string' && p.approval.approvedBy.trim() && typeof p.approval.reason === 'string' && p.approval.reason.trim())) errs.push('approval must be {approvedBy, reason}');
+  return errs;
+}
+
+/** Which actors a policy allows to act on an object. Pure. */
+function policyAllows(policy, actor, object, actorsById) {
+  if (!actor || actor.anonymous) return false;
+  const owner = actorsById[object.owner];
+  for (const rule of policy.allow) {
+    if (rule === 'owner' && actor.id === object.owner) return true;
+    if (rule === 'same-tenant-admin' && actor.role === 'admin' && owner && actor.tenant === owner.tenant) return true;
+    if (rule === 'any-admin' && actor.role === 'admin') return true;
+  }
+  return false;
 }
 
 

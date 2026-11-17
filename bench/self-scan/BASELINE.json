@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-17T12:31:03.069Z",
-  "commit": "0f1a9bea8c2835a812f8f410e57bf139b611bf64",
+  "generatedAt": "2026-11-17T19:04:20.980Z",
+  "commit": "41f666d3d22e66644fac96be154c82218b2d34b8",
   "targets": {
     "hooks": {
       "total": 20,
@@ -61,7 +61,7 @@
       }
     },
     "scanner/src": {
-      "total": 703,
+      "total": 704,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -351,6 +351,7 @@
         "repair/dependencies.js": 1,
         "repair/import.js": 2,
         "repair/intake.js": 1,
+        "repair/profile-draft.js": 1,
         "repair/profile.js": 2,
         "repair/recipe-eval.js": 1,
         "repair/recipes.js": 2,

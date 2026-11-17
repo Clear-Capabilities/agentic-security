@@ -191,6 +191,10 @@ Rules that are easy to get wrong:
 - **Where it is reported.** `findings[].cacheProvenance` (`reused` with the generation and closure fingerprint, or `recomputed`), `findings._incrementalStats` (non-enumerable), `scan.scanHealth.deepAnalysis.incremental`.
 - **A call chain hundreds deep makes even a cold run non-deterministic** (the engine recurses on the JS stack and a `RangeError` is swallowed). Do not build parity fixtures that deep.
 
+## Library entry points (opt-in)
+
+`ir/parser-js.js` states which parameters belong to functions a module EXPORTS (`collectExports`: CommonJS `module.exports`/`exports.x`, ES `export`, methods of exported classes except `_`-prefixed, private, getters and setters; a TypeScript number, boolean or function type is excluded) as a `js:caller-controlled` param annotation, the JavaScript twin of Haskell's `hs:caller-controlled`. The catalog source `js-src-caller-controlled-param` (provenance `caller-argument`, lineage `user-input`/`candidate`) turns it into taint only while `AGENTIC_SECURITY_LIBRARY_SOURCES=1` (`optIn`, read per call by `_optedIn` in `matchAnnotationParams`/`matchAnnotationParamSources`). It is off until its precision cost is measured on the independent population's dev split; the IR annotation is emitted either way and is inert without the flag. Tests: `test/library-sources.test.js`.
+
 ## Haskell catalog
 
 `catalog-haskell.js` is **generated** from `language/haskell-models.js` (one registry of sources, sinks and sanitizers; entries

@@ -29,7 +29,7 @@ async function findingFor(root, entry, family) {
   try {
     const { runFullScan } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 67198));
     const scan = await runFullScan({ fileContents: { [entry]: node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_2__.join(root, entry), 'utf8') }, scanRoot: root, provenance: false }, () => {});
-    const f = (scan.findings || []).find((x) => (0,_intake_js__WEBPACK_IMPORTED_MODULE_5__/* .familyForFinding */ .lG)(x) === family);
+    const f = (scan.findings || []).find((x) => (0,_intake_js__WEBPACK_IMPORTED_MODULE_5__.familyForFinding)(x) === family);
     if (f) return { findingId: f.id, id: f.id, stableId: f.stableId, file: entry, cwe: f.cwe };
   } catch { /* fall through to a declared finding */ }
   return { findingId: `recipe-example:${family}:${entry}`, file: entry };
