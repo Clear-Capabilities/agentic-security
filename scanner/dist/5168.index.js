@@ -20,7 +20,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(68962);
 /* harmony import */ var _intake_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(30356);
 /* harmony import */ var _contracts_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(20771);
-/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(50382);
+/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(90460);
 /* harmony import */ var _candidates_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4370);
 /* harmony import */ var _recipes_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(60681);
 // `agentic-security repair plan|run|show|resume|cancel|verify|export|recipes` (verified-remediation PRD FR-18, FR-11).
@@ -50,6 +50,8 @@ const USAGE = `agentic-security repair <command>
   verify  <bundle-dir> [--root <path>] [--image <archive.tar>] [--json]
   export  <run-id> --out <directory> [--root <path>]
   artifact <run-id> --image <archive.tar> --app-dir <dir> [--allow-execution] [--root <path>] [--json]
+  staging <run-id> (--receipt <deployment-receipt.json>) --image <archive.tar> --app-dir <dir> [--allow-execution] [--root <path>] [--json]
+  observe <run-id> [--report reopen|reversion|regression --note <text>] [--root <path>] [--json]
   import  --format sarif|normalized --file <report.json> | --show <import-id> | --accept-risk <imported-id> --import <import-id> --reason <why> [--root <path>] [--json]
   recipes list|evaluate|promote|retire|rollback|draft [<recipe-id>[@<version>]] [--reason <why>] [--file <recipe.json>] [--allow-execution] [--root <path>] [--json]
 families: sql-injection, object-authorization, ssrf, path-traversal, password-storage, dependency, credential, workflow, infrastructure
@@ -216,9 +218,11 @@ async function cmdExport(args, root) {
     sourceDigest: r.plan.contract.sourceDigest, disposition: r.record.disposition, completion: r.record.completion, application: r.record.application, artifact: r.record.artifact, environment: r.record.environment,
     artifactDigest: r.record.source?.artifactDigest ?? null,
     patchDigest: r.record.patchDigest ?? null, patchFiles, approvalsRequired: r.plan.contract.policyFacts.filter((f) => f.approval !== 'approved').map((f) => `${f.id}: ${f.approval}`),
-    rollback: 'the patch replaces whole files; the before digests in record.json name the content to restore, and an applied patch is reverted with `agentic-security undo`',
+    rollback: `the patch replaces whole files; the before digests in record.json name the content to restore, and an applied patch is reverted with \`agentic-security undo\`${r.record.migration ? `; schema: apply ${r.plan.contract.obligations.find((o) => o.kind === 'migration-window')?.inputs.down} (verified to apply and to leave a schema the original serves); a full rollback ${r.record.migration.exposure.fullRollback === 'exposed' ? 'REINSTATES the exposure' : r.record.migration.exposure.fullRollback === 'closed' ? 'kept the exposure closed' : 'has an unknown effect on the exposure'}; mitigation: ${r.record.migration.mitigations.join('; ') || 'none stated'}` : ''}`,
+    migration: r.record.migration ? { deployOrder: r.record.migration.deployOrder, legs: r.record.migration.legs.map((l) => ({ leg: l.leg, code: l.code, steps: l.steps, obligation: l.obligation, required: l.required, status: l.status })), exposure: r.record.migration.exposure, mitigations: r.record.migration.mitigations } : null,
+    staging: r.record.staging ? { status: r.record.staging.status, environment: r.record.staging.environment, basis: r.record.staging.basis, artifactDigest: r.record.staging.artifactDigest } : null,
     redactions: 'request header values in the contract are replaced by digests; patch bytes are exported unchanged',
-    claim: r.record.disposition !== 'verified-for-contract' ? 'not verified' : r.record.artifact === 'artifact-verified' ? `verified for contract ${r.plan.contract.contractId} only, in the source and in image ${r.record.source.artifactDigest}; staging and deployment not observed` : `verified for contract ${r.plan.contract.contractId} only; source-only, nothing built or deployed`,
+    claim: r.record.disposition !== 'verified-for-contract' ? 'not verified' : r.record.environment === 'staging-verified' ? `verified for contract ${r.plan.contract.contractId} only, in the source and in image ${r.record.source.artifactDigest}, which a deployment receipt places in staging and on which the contract checks were re-run; the live staging service was not exercised` : r.record.artifact === 'artifact-verified' ? `verified for contract ${r.plan.contract.contractId} only, in the source and in image ${r.record.source.artifactDigest}; staging and deployment not observed` : `verified for contract ${r.plan.contract.contractId} only; source-only, nothing built or deployed`,
   };
   node_fs__WEBPACK_IMPORTED_MODULE_0__.writeFileSync(node_path__WEBPACK_IMPORTED_MODULE_1__.join(dest, 'bundle.json'), JSON.stringify(manifest, null, 2) + '\n');
   out(args, `exported ${id} to ${dest} (${Object.keys(patchFiles).length} patched file(s)); an export does not mean the patch is verified: ${manifest.claim}`, manifest);
@@ -375,9 +379,52 @@ async function cmdArtifact(args, root) {
   return v.artifact === 'artifact-verified' ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok : v.artifact === 'artifact-mismatch' ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.failed : _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked;
 }
 
+// `repair staging`: bind the verified artifact to where it runs. The receipt says which artifact a staging (or production) environment
+// runs; the contract checks are re-executed on that image here. Neither alone changes the environment state (AC-16.6), and a failure on
+// the staged artifact leaves the source verification as it was (AC-16.3).
+async function cmdStaging(args, root) {
+  const id = args._[2];
+  const r = (0,_coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .readRun */ .cI)(root, id);
+  if (r.error) { err(r.error); return (0,_coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .isRunId */ .Pk)(id) ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked : _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+  if (!args.flags.receipt) { err('staging needs --receipt <deployment-receipt.json> (this build ships no deployment connector to read the environment back)'); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+  let receipt;
+  try { receipt = readJsonFile(args.flags.receipt); } catch (e) { err(`the receipt could not be read: ${e.message}`); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+  const { stagingVerdict } = await __webpack_require__.e(/* import() */ 8595).then(__webpack_require__.bind(__webpack_require__, 58595));
+  let image = null; let checks = [];
+  if (args.flags.image) {
+    if (!args.flags['app-dir']) { err('--image needs --app-dir <dir>'); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+    const { readImage, compareArtifact, rerunOnArtifact } = await __webpack_require__.e(/* import() */ 4410).then(__webpack_require__.bind(__webpack_require__, 24410));
+    try { image = readImage(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(String(args.flags.image)))); } catch (e) { err(`the image could not be read: ${String(e.message).slice(0, 200)}`); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+    const comparison = compareArtifact({ record: r.record, plan: r.plan, image, appDir: args.flags['app-dir'] });
+    if (comparison.problems.length) checks = [{ obligation: 'artifact-content', status: 'failed', reason: comparison.problems.slice(0, 3).join('; ') }];
+    else if (args.flags['allow-execution'] && r.record.exactPatch) checks = await rerunOnArtifact({ record: r.record, plan: r.plan, image, appDir: args.flags['app-dir'], config: configFor(args, root) });
+  }
+  const v = stagingVerdict({ record: r.record, imageDigest: image?.digest ?? null, receipt, checks });
+  const updated = { ...r.record, environment: v.environment, staging: v.staging };
+  const valid = (0,_schemas_js__WEBPACK_IMPORTED_MODULE_5__/* .validateRepairRecord */ .bY)(updated);
+  if (!valid.ok) { err(`the updated record failed its schema: ${valid.errors.map((e) => e.message).join('; ')}`); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked; }
+  node_fs__WEBPACK_IMPORTED_MODULE_0__.writeFileSync(node_path__WEBPACK_IMPORTED_MODULE_1__.join(r.dir, 'record.json'), `${JSON.stringify(updated, null, 2)}\n`);
+  out(args, [`staging ${v.staging.status}: environment ${v.environment} (disposition ${updated.disposition}, artifact ${updated.artifact})`, ...v.staging.checks.map((c) => `  ${c.status.padEnd(10)} ${c.obligation} on the staged image`), ...v.staging.problems.map((p) => `  problem: ${p}`), v.staging.note].join('\n'), { environment: v.environment, staging: v.staging });
+  return v.staging.status === 'verified' ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok : ['failed', 'mismatch'].includes(v.staging.status) ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.failed : ['invalid'].includes(v.staging.status) ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage : _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked;
+}
+
+// `repair observe`: post-merge operational observations (is the verified patch still on disk; operator reports of a reopen, reversion or
+// regression). Appended to the run's observations log; the verification record is never edited.
+async function cmdObserve(args, root) {
+  const id = args._[2];
+  const r = (0,_coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .readRun */ .cI)(root, id);
+  if (r.error) { err(r.error); return (0,_coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .isRunId */ .Pk)(id) ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked : _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+  const { observe } = await __webpack_require__.e(/* import() */ 8595).then(__webpack_require__.bind(__webpack_require__, 58595));
+  const o = observe({ runDir: r.dir, root, record: r.record, report: args.flags.report ? String(args.flags.report) : null, note: args.flags.note });
+  if (!o.ok) { err(o.reason); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
+  const pres = o.entries[0];
+  out(args, [`patch ${pres.state} on disk`, ...pres.files.map((f) => `  ${f.state.padEnd(9)} ${f.file}`), ...o.history.filter((h) => h.kind !== 'patch-presence').map((h) => `  ${h.at} ${h.kind}: ${h.note}`), `disposition ${r.record.disposition} unchanged: observations are recorded beside the verification, never over it`].join('\n'), { presence: pres, history: o.history });
+  return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok;
+}
+
 async function cmdRepair(args, root) {
   const sub = args._[1];
-  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes, import: cmdImport, artifact: cmdArtifact };
+  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes, import: cmdImport, artifact: cmdArtifact, staging: cmdStaging, observe: cmdObserve };
   if (!handlers[sub] || args.flags.help) { (handlers[sub] ? process.stdout : process.stderr).write(`${USAGE}\n`); return args.flags.help ? _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.ok : _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.usage; }
   try { return await handlers[sub](args, root); } catch (e) { err(String(e?.message || e)); return _coordinator_js__WEBPACK_IMPORTED_MODULE_8__/* .EXIT */ .dc.blocked; }
 }

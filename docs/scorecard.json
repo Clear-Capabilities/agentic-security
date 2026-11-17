@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.204.0",
-    "bundleSha256": "753bcb1947b2b7270439029d795a17b3e18eb8e487369a05e0741333228d23f8",
-    "commit": "9642da326724b6c4c1fa3aaf892272e39f94c12a",
+    "engineVersion": "0.205.0",
+    "bundleSha256": "084994f0eb4fc3ecec6dfbf310e0e7528320bb996d7041c347b2e54558aea7af",
+    "commit": "d6865ecd98e1de3b98fd1d3038459061cc5e68c1",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-17T06:18:39.565Z",
+    "generatedAt": "2026-11-17T13:19:47.553Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -623,7 +623,7 @@
         }
       },
       "scanner/src": {
-        "total": 704,
+        "total": 703,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -906,7 +906,7 @@
           "posture/watch-mode.js": 1,
           "posture/workflow-installer.js": 2,
           "pr-comment.js": 1,
-          "repair/cli.js": 6,
+          "repair/cli.js": 4,
           "repair/contracts.js": 2,
           "repair/coordinator.js": 1,
           "repair/credentials.js": 1,
@@ -916,6 +916,7 @@
           "repair/profile.js": 2,
           "repair/recipe-eval.js": 1,
           "repair/recipes.js": 2,
+          "repair/staging.js": 1,
           "report/index.js": 2,
           "runScan.js": 2,
           "sandbox/backend-namespace.js": 1,
@@ -1010,8 +1011,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 392,
-    "d": 587
+    "n": 384,
+    "d": 586
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2264,9 +2265,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.204.0",
-    "commit": "9642da326724b6c4c1fa3aaf892272e39f94c12a",
-    "bundleSha256": "753bcb1947b2b7270439029d795a17b3e18eb8e487369a05e0741333228d23f8",
+    "engineVersion": "0.205.0",
+    "commit": "d6865ecd98e1de3b98fd1d3038459061cc5e68c1",
+    "bundleSha256": "084994f0eb4fc3ecec6dfbf310e0e7528320bb996d7041c347b2e54558aea7af",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",

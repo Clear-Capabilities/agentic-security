@@ -74,11 +74,20 @@ const PY_DRIVER = ${JSON.stringify(PY_DRIVER_SRC)};
 const out = { responses: {} };
 const text = (e) => String((e && e.message) || e).slice(0, 160);
 function finish(extra) { Object.assign(out, extra); try { fs.writeFileSync('__oracle_result.json', JSON.stringify(out)); } catch {} process.exit(0); }
+// Version 6: declared migration steps run after the seed, in order: a statement block (exec) or one INSERT with parameters (rows an
+// older revision wrote between two migrations). A step that fails is a setup failure, so a migration that cannot apply never runs the app.
+function setupDb(d) {
+  d.exec(INPUT.schemaSql);
+  for (const s of INPUT.seed) d.prepare(s.sql).run(...s.params);
+  for (const [mi, m] of (INPUT.migrations || []).entries()) {
+    try { if (m.exec !== undefined) d.exec(m.exec); else d.prepare(m.sql).run(...m.params); }
+    catch (e) { throw new Error('migration step ' + mi + ': ' + text(e)); }
+  }
+}
 let db;
 try {
   db = new DatabaseSync('__oracle_app.db');
-  db.exec(INPUT.schemaSql);
-  for (const s of INPUT.seed) db.prepare(s.sql).run(...s.params);
+  setupDb(db);
 } catch (e) { finish({ setupFailed: true, setupError: text(e) }); }
 // Python runtime: the verifier-authored driver below runs the application's WSGI callable for every declared request (a real WSGI
 // environ, no HTTP server), over the same database file, under an isolated interpreter (-I: no user site, no PYTHONPATH).
@@ -223,8 +232,7 @@ if (INPUT.sequences) {
     let sdb;
     try {
       sdb = new DatabaseSync('__oracle_seq_' + si + '.db');
-      sdb.exec(INPUT.schemaSql);
-      for (const s of INPUT.seed) sdb.prepare(s.sql).run(...s.params);
+      setupDb(sdb);
       const h = await factory(filesRoot ? { db: sdb, filesRoot } : { db: sdb });
       if (typeof h !== 'function') throw new Error('the factory did not return a request listener');
       server = http.createServer(h);
@@ -246,6 +254,19 @@ if (INPUT.sequences) {
 finish({ completed: true, ...(INPUT.network ? { connections, lookups } : {}) });
 `;
 
+/** Version 6: migration steps. A statement block (no ATTACH, no extension loading) or one INSERT with parameters. */
+function validateMigrations(m) {
+  if (!Array.isArray(m) || m.length > 16) return 'migrations must be an array of at most 16 steps';
+  for (const [n, x] of m.entries()) {
+    if (!isPlain(x)) return `migration step ${n} must be an object`;
+    if (x.exec !== undefined) {
+      if (Object.keys(x).length !== 1 || !isStr(x.exec, 20000) || !x.exec.trim()) return `migration step ${n}: exec must be a non-empty statement block`;
+      if (/\b(?:ATTACH|DETACH|load_extension|VACUUM\s+INTO)\b/i.test(x.exec)) return `migration step ${n}: ATTACH, DETACH, VACUUM INTO and extension loading are refused`;
+    } else if (!isStr(x.sql, 2000) || !/^\s*INSERT\b/i.test(x.sql) || /;\s*\S/.test(x.sql) || !Array.isArray(x.params) || x.params.length > 32 || Object.keys(x).some((k) => k !== 'sql' && k !== 'params')) return `migration step ${n}: an INSERT step is one INSERT with a params array`;
+  }
+  return null;
+}
+
 /** Validation shared by both adapters. Returns a problem string or null. */
 function validateAppInputs(i, { requireAttack }) {
   if (!isId(i.export)) return 'export must be an identifier';
@@ -255,6 +276,7 @@ function validateAppInputs(i, { requireAttack }) {
   for (const s of i.seed) if (!s || !isStr(s.sql, 2000) || !/^\s*INSERT\b/i.test(s.sql) || !Array.isArray(s.params) || s.params.length > 32) return 'every seed entry is one INSERT with a params array';
   if (!Array.isArray(i.requests) || i.requests.length > 128 || (i.requests.length < 1 && !Array.isArray(i.sequences))) return 'requests must hold 1 to 128 entries (or be empty when sequences are declared)';
   if (i.sequences !== undefined) { const p = validateSequences(i); if (p) return p; }
+  if (i.migrations !== undefined) { const p = validateMigrations(i.migrations); if (p) return p; }
   const ids = new Set();
   for (const r of i.requests) {
     if (!r || !isId(r.id) || ids.has(r.id)) return 'every request needs a unique identifier id';
@@ -469,6 +491,7 @@ function prepareAppInputs(i, token) {
   return {
     export: i.export, schemaSql: i.schemaSql, runtime: i.runtime || 'node', python: i.runtime === 'python' ? findPython() : null, requestTimeoutMs: Math.min(Number(i.requestTimeoutMs) || 2000, 5000),
     seed: i.seed.map((s) => ({ sql: s.sql, params: deep(s.params, token) })),
+    ...(i.migrations ? { migrations: i.migrations.map((m) => (m.exec !== undefined ? { exec: m.exec } : { sql: m.sql, params: deep(m.params, token) })) } : {}),
     requests: i.requests.map((r) => ({ id: r.id, method: r.method, path: subst(r.path, token), headers: deep(r.headers || {}, token), ...(r.body !== undefined ? { body: deep(r.body, token) } : {}) })),
     ...(i.network ? { network: deep(i.network, token) } : {}),
     ...(i.files ? { files: { root: i.files.root, tree: deep(i.files.tree, token), links: i.files.links || {} } } : {}),
@@ -566,6 +589,7 @@ const APP_PLATFORMS = Object.freeze({
 });
 const APP_BUDGETS = Object.freeze({ timeoutMs: 20000, graceMs: 1000, maxOutputBytes: 65536, maxFileBytes: 1048576, maxFiles: 64 });
 const APP_LIMITS = [
+  'declared migration steps (version 6) run after the seed on every fresh database file, so a revision is judged on the schema those steps leave; data a running application writes between two migrations is not carried over, only the INSERT steps the profile declares for it',
   'the application must load from the workspace with Node\'s standard library only; its factory receives an open node:sqlite database',
   'requests run one at a time in the declared order over an in-memory HTTP connection: no concurrency and no network are exercised',
   'only the declared requests, secrets and state checks are judged; behaviour outside them is not verified',
@@ -577,7 +601,7 @@ const APP_LIMITS = [
 
 function loadedOrOpen(result) {
   if (!result) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: false, benignCompleted: false }, reason: 'the application run left no result' };
-  if (result.setupFailed) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: false, setupFailed: true, benignCompleted: false }, reason: 'the declared schema or seed could not be created' };
+  if (result.setupFailed) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: false, setupFailed: true, benignCompleted: false, ...(/^migration step \d+/.test(String(result.setupError || '')) ? { migrationFailed: String(result.setupError).slice(0, 160) } : {}) }, reason: /^migration step \d+/.test(String(result.setupError || '')) ? `a declared migration step could not be applied (${String(result.setupError).slice(0, 160)})` : 'the declared schema or seed could not be created' };
   if (result.loadFailed) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: false, benignCompleted: false }, reason: 'the application did not load or its factory did not return a request listener' };
   if (!result.completed) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: true, benignCompleted: false }, reason: 'the application run did not complete every request' };
   return null;
@@ -630,7 +654,7 @@ function interpretBehaviour({ inputs, token, result, pathOf }) {
 }
 
 const securitySpec = {
-  id: 'application-security', class: 'application-security', version: '5',
+  id: 'application-security', class: 'application-security', version: '6',
   description: 'Does an attack request reach a forbidden effect in a running application? The application is started over a fresh SQLite file, every declared request is sent as real HTTP, and the verifier judges the responses and its own read-only read of the database. Refuted only when no attack violates AND every legitimate control request met its expectation.',
   prerequisites: ['node-runtime', 'node-sqlite', 'confinement-backend'],
   platforms: APP_PLATFORMS, budgets: APP_BUDGETS,
@@ -644,7 +668,7 @@ const securitySpec = {
 };
 
 const behaviourSpec = {
-  id: 'application-behaviour', class: 'application-behaviour', version: '5',
+  id: 'application-behaviour', class: 'application-behaviour', version: '6',
   description: 'Does a revision of a running application still serve its legitimate requests? Control requests only; the hypothesis is that legitimate behaviour REGRESSED, so a revision is clean when this is refuted. A deny-everything or feature-removing patch confirms it.',
   prerequisites: ['node-runtime', 'node-sqlite', 'confinement-backend'],
   platforms: APP_PLATFORMS, budgets: APP_BUDGETS,

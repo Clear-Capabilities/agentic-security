@@ -28,6 +28,7 @@ export const OBLIGATION_KINDS = Object.freeze({
   'dependency-resolved': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the lockfile agrees with the manifest, every package comes from the declared sources with its recorded integrity, every dependency resolves, and no resolved instance of the advisory\'s package (direct or transitive) is in the vulnerable range' },
   'credential-removed': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the leaked credential is in no application file, plain or in any re-encoding the verifier recognises (base64, hex, reversed, percent-encoded, split into joined literals, character codes)' },
   'infrastructure-effective': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the effective configuration of every declared file, ingested together, gives no public route to a service that must not be exposed and keeps one to every approved exposed service; a file the adapters cannot read fails it' },
+  'migration-window': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the declared schema migration applies, the revision that is not yet deployed still serves its legitimate workflows in the declared deployment order, the down migration restores a schema the original revision serves, and the migration re-applies after a rollback over the rows the profile says an older revision writes; whether each rollback reinstates the exposure is stated, never hidden' },
   'project-tests': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the central verifier: rescan, new-finding delta, footprint and the per-test delta of the project suite' },
 });
 
@@ -119,7 +120,7 @@ export function validateCandidate(rec) {
   return result(ctx);
 }
 
-export const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'lifecycle', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
+export const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'lifecycle', 'migration', 'staging', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
 
 export function validateRepairRecord(rec) {
   const g = guardObject(rec); if (!g.ok) return result(g.ctx);

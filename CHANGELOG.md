@@ -9,6 +9,19 @@
 > make the history less accurate, not more.
 
 
+## 0.205.0 - Verified remediation, milestone 4 (fifth part): migrations, rollback and staging
+
+**Measured, 0.204.0:** `TIMINGS preflight=3s push=6s pr=4s checks=354s merge=5s verify=5s tag=2s release=222s npm=90s total=691s release-clock=234s`; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.
+
+For the Labs capability `contract-repair`. Measured on macOS. Requirement-by-requirement record: `docs/verified-remediation/LEDGER.md`.
+
+- **Changed results, listed first.** Repair challenge gate: 62 cases, unsafe patches accepted 0 of 49, caught by the declared obligation 49 of 49, legitimate repairs rejected 0 of 13 (was 58). The application oracles are now version 6 and their conformance fixtures were re-pinned. Self-scan 703 (was 704): two low false positives in `src/repair/cli.js` (an error message template near a file write) no longer fall inside the detector's window, and the new `src/repair/staging.js` carries one low synchronous-I/O note, as `cli.js` does.
+- **Schema migrations in a repair.** A profile may declare a `migration` (the up and down files the candidate writes, the deployment order, and rows an older version writes while rolled back). The patched code runs on the schema its up file leaves, and a new required `migration-window` obligation checks the deployment window, that the down migration applies and the original code still works, and that the migration applies again after a rollback over those rows with the attacks still blocked. On an order service, a repair that ships no migration, an index that cannot be created again over the duplicate rows, and a down migration that does not apply are each rejected at the step that fails; relabelling duplicates before adding the unique index is verified.
+- **What a rollback does, stated.** The record lists the exposure after a full rollback, after rolling back only the code, and after rolling back only the schema. On the fixture every rollback reinstates the double charge, and the record says so with "none observed" as the mitigation.
+- **Staging receipts.** `repair staging <run-id> --receipt <file> --image <tar> --app-dir <dir> --allow-execution` sets `staging-verified` only when the record's artifact was verified, the receipt names that exact image for staging, and the contract's checks pass again on it. A receipt alone changes nothing; a receipt for another image makes the environment `unavailable` and leaves the source verification as it was; a production receipt file is recorded as declared, not observed. The live staging service is not exercised and no deployment connector ships.
+- **Post-merge observations.** `repair observe <run-id>` records whether the verified patch is still on disk and, with `--report`, a reported reopen, reversion or regression, beside the run and never over it.
+- **Not in this release.** Dependency ecosystems beyond npm and pinned real packages; trust stores and privilege grants in infrastructure; PostgreSQL; real models.
+
 ## 0.204.0 - Verified remediation, milestone 4 (fourth part): infrastructure exposure
 
 **Measured, 0.203.0:** `TIMINGS preflight=4s push=7s pr=5s checks=426s merge=5s verify=7s tag=2s release=224s npm=91s total=771s release-clock=238s`; the registry listing was not visible within the 90 s wait and a resumed run confirmed it.

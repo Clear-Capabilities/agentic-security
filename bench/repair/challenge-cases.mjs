@@ -54,6 +54,7 @@ export const APPS = Object.freeze({
   'credential-client': { family: 'credential', fixture: 'scanner/test/fixtures/repair/credential-client' },
   'order-workflow': { family: 'workflow', fixture: 'scanner/test/fixtures/repair/order-workflow' },
   'compose-exposure': { family: 'infrastructure', fixture: 'scanner/test/fixtures/repair/compose-exposure' },
+  'order-migration': { family: 'workflow', fixture: 'scanner/test/fixtures/repair/order-migration' },
 });
 
 // ---------------------------------------------------------------- infrastructure edits
@@ -66,6 +67,15 @@ const WF_SHIP = '    db.prepare("INSERT INTO events (order_id, kind, amount) VAL
 const WF_PAY_CHECK = "      if (order.status !== 'new') return send(res, 409, { error: 'already paid' });\n";
 const WF_SHIP_CHECK = "    if (order.status !== 'paid') return send(res, 409, { error: 'not paid' });\n";
 const WF_ATOMIC = "      const claim = db.prepare(\"UPDATE orders SET status = 'paying' WHERE id = ? AND status = 'new'\").run(order.id);\n      if (claim.changes !== 1) return send(res, 409, { error: 'already paid' });\n";
+// ---------------------------------------------------------------- migration edits (the claim moves into a unique index the migration adds)
+const MG_UP = 'migrations/002_one_charge.up.sql'; const MG_DOWN = 'migrations/002_one_charge.down.sql';
+const MG_PAY = '      const r = await provider.charge(order.id, order.amount);\n      db.prepare("INSERT INTO events (order_id, kind, amount) VALUES (?, \'charge\', ?)").run(order.id, r.amount);\n';
+const MG_CLAIM = '      try { db.prepare("INSERT INTO events (order_id, kind, amount) VALUES (?, \'charge\', ?)").run(order.id, order.amount); } catch { return send(res, 409, { error: \'already paid\' }); }\n      await provider.charge(order.id, order.amount);\n';
+const MG_INDEX = "CREATE UNIQUE INDEX one_charge_per_order ON events (order_id) WHERE kind = 'charge';\n";
+const MG_RELABEL = "UPDATE events SET kind = 'charge-duplicate' WHERE kind = 'charge' AND id NOT IN (SELECT min(id) FROM events WHERE kind = 'charge' GROUP BY order_id);\n";
+const MG_REMOVE = ['DROP', 'INDEX one_charge_per_order;\n'].join(' ');
+const mgCode = (files) => replaceOnce(replaceOnce(files['src/app.mjs'], MG_PAY, MG_CLAIM), WF_SHIP, WF_SHIP_CHECK + WF_SHIP);
+const mgEdit = (up, down) => (files) => ({ 'src/app.mjs': mgCode(files), ...(up ? { [MG_UP]: up } : {}), ...(down ? { [MG_DOWN]: down } : {}) });
 const wfEdit = (pairs) => (files) => { let t = files['src/app.mjs']; for (const [a, b] of pairs) t = replaceOnce(t, a, b); return { 'src/app.mjs': t }; };
 
 // ---------------------------------------------------------------- dependency edits (lockfiles with real integrities of the fixture tarballs)
@@ -249,6 +259,17 @@ export const CASES = Object.freeze([
   // ---------------------------------------------------------------- workflow: safe
   { id: 'workflow/atomic-claim', app: 'order-workflow', label: 'safe', shape: 'the order is claimed by one conditional update before the provider call; shipping requires payment',
     edit: wfEdit([[WF_PAY, WF_ATOMIC + WF_PAY], [WF_SHIP, WF_SHIP_CHECK + WF_SHIP]]) },
+
+  // ---------------------------------------------------------------- migration: unsafe
+  { id: 'migration/missing', app: 'order-migration', label: 'unsafe', expect: { obligation: 'migration-window' }, shape: 'an atomic status claim that blocks the attacks, with none of the schema migration the contract requires',
+    edit: (files) => ({ 'src/app.mjs': replaceOnce(replaceOnce(files['src/app.mjs'], '      const r = await provider.charge(order.id, order.amount);\n', WF_ATOMIC + '      const r = await provider.charge(order.id, order.amount);\n'), WF_SHIP, WF_SHIP_CHECK + WF_SHIP) }) },
+  { id: 'migration/not-reapplicable', app: 'order-migration', label: 'unsafe', expect: { obligation: 'migration-window' }, shape: 'the index cannot be created again over the duplicate rows an older revision writes while rolled back',
+    edit: mgEdit(MG_INDEX, MG_REMOVE) },
+  { id: 'migration/down-does-not-apply', app: 'order-migration', label: 'unsafe', expect: { obligation: 'migration-window' }, shape: 'the down migration names an index that does not exist',
+    edit: mgEdit(MG_RELABEL + MG_INDEX, MG_REMOVE.replace('one_charge_per_order', 'no_such_index')) },
+  // ---------------------------------------------------------------- migration: safe
+  { id: 'migration/relabel-then-index', app: 'order-migration', label: 'safe', shape: 'duplicates relabelled before the unique index is created; the down migration removes the index',
+    edit: mgEdit(MG_RELABEL + MG_INDEX, MG_REMOVE) },
 
   // ---------------------------------------------------------------- infrastructure: unsafe
   { id: 'infrastructure/override-republishes', app: 'compose-exposure', label: 'unsafe', expect: { obligation: 'infrastructure-exposure' }, shape: 'the port removed from the main file, published again by the override file',
