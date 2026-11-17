@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.201.0",
-    "bundleSha256": "c545838761e7e66cb452273ee6a42078af7a4271ad5d14c38ea446dc87d4c3c1",
-    "commit": "a692e7a36a96518b01ad6f25b839887bdf8a6b12",
+    "engineVersion": "0.202.0",
+    "bundleSha256": "ee6e87bd3be7792cccca2edf892958dd9ad1459722ac56c060b098ce81137bd5",
+    "commit": "345f762d219c6bf4bdcba3ee31da9a4524512c0a",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-17T02:12:13.139Z",
+    "generatedAt": "2026-11-17T03:27:54.547Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -623,7 +623,7 @@
         }
       },
       "scanner/src": {
-        "total": 701,
+        "total": 704,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -906,7 +906,7 @@
           "posture/watch-mode.js": 1,
           "posture/workflow-installer.js": 2,
           "pr-comment.js": 1,
-          "repair/cli.js": 3,
+          "repair/cli.js": 6,
           "repair/contracts.js": 2,
           "repair/coordinator.js": 1,
           "repair/credentials.js": 1,
@@ -1010,8 +1010,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 291,
-    "d": 584
+    "n": 389,
+    "d": 587
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2264,9 +2264,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.201.0",
-    "commit": "a692e7a36a96518b01ad6f25b839887bdf8a6b12",
-    "bundleSha256": "c545838761e7e66cb452273ee6a42078af7a4271ad5d14c38ea446dc87d4c3c1",
+    "engineVersion": "0.202.0",
+    "commit": "345f762d219c6bf4bdcba3ee31da9a4524512c0a",
+    "bundleSha256": "ee6e87bd3be7792cccca2edf892958dd9ad1459722ac56c060b098ce81137bd5",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",
