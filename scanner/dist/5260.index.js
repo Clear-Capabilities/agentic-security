@@ -1486,7 +1486,7 @@ function obligationSummary(contract) {
 
 /***/ }),
 
-/***/ 13361:
+/***/ 75897:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -1522,207 +1522,10 @@ var state_dir = __webpack_require__(31174);
 var schemas = __webpack_require__(68962);
 // EXTERNAL MODULE: ./src/repair/contracts.js + 1 modules
 var contracts = __webpack_require__(20771);
-// EXTERNAL MODULE: ./src/posture/oracles/oracle.js
-var oracle = __webpack_require__(15991);
-;// CONCATENATED MODULE: ./src/repair/lab.js
-// The repair lab (verified-remediation PRD FR-05, FR-06): one obligation, one exact file set, executed through the oracle runner and
-// therefore through the trust boundary only (network denied, process tree ended, harness digest-checked, verdict formed verifier-side).
-//
-// This module adds no execution path of its own. It builds the oracle request from the contract's obligation, binds the request to the
-// exact tree being judged (the digest of the file set stands in for a commit, so `confirmed`/`refuted` are reachable for an uncommitted
-// candidate), and then checks the receipt it got back: issued in this process by the oracle runner (a copied or deserialized receipt is not),
-// for these files, these inputs and the oracle logic the contract pinned. A mismatch is `invalid`, never a pass (AC-06.5).
-
-
-
-const OUTCOME_TO_STATUS = Object.freeze({ confirmed: 'confirmed', refuted: 'refuted', inconclusive: 'inconclusive', unsupported: 'unavailable', 'not-run': 'unavailable', error: 'error' });
-
-/** The 64-hex binding of a file set, used where the oracle asks for an exact commit. */
-const treeBinding = (files) => (0,identity/* digestOf */.ol)(files).slice('sha256:'.length);
-
-/**
- * @param {object} obligation  a contract obligation with an oracle (not `project-tests`)
- * @param {Record<string,string>} files  the application files, original or patched
- * @param {{config:object, signal?:AbortSignal, entry:string, hypothesisId:string, inputs?:object, deps?:object, probeEnv?:object, runOracle?:Function}} o  (`runOracle` is a test seam: a stand-in cannot issue a receipt this module accepts)
- * @returns {Promise<{observed:'confirmed'|'refuted'|'inconclusive'|'unavailable'|'error'|'invalid', reason:string, receipt:object|null, details:object|null, filesDigest:string, inputsDigest:string}>}
- */
-async function runObligation(obligation, files, o) {
-  const inputs = o.inputs || obligation.inputs;
-  const filesDigest = (0,identity/* digestOf */.ol)(files);
-  const inputsDigest = (0,identity/* digestOf */.ol)(inputs);
-  const res = await (o.runOracle || oracle/* runOracle */.qm)({
-    oracleId: obligation.oracleId, hypothesisId: o.hypothesisId, commit: treeBinding(files), files, entry: o.entry, inputs,
-  }, { config: o.config, signal: o.signal, ...(o.deps ? { deps: o.deps } : {}), ...(o.probeEnv ? { probeEnv: o.probeEnv } : {}) });
-  if (res.status === 'rejected') return { observed: 'invalid', reason: `the oracle refused the request: ${(res.errors || []).join('; ').slice(0, 300)}`, receipt: null, details: null, filesDigest, inputsDigest };
-  const base = { filesDigest, inputsDigest, receipt: res.receipt || null };
-  if (!res.receipt) return { ...base, observed: res.status === 'cancelled' ? 'cancelled' : (OUTCOME_TO_STATUS[res.outcome] || 'error'), reason: res.reason, details: null };
-  const r = res.receipt;
-  const bindingProblems = [];
-  if (!(0,oracle/* isIssuedReceipt */.AH)(r)) bindingProblems.push('the receipt was not issued by the oracle runner in this process');
-  if (r.request.filesDigest !== filesDigest) bindingProblems.push('the receipt is for different files');
-  if (r.request.inputsDigest !== inputsDigest) bindingProblems.push('the receipt is for different inputs');
-  if (r.oracle.logicDigest !== obligation.oracleLogicDigest) bindingProblems.push('the oracle logic differs from the logic the contract pinned (re-plan the contract)');
-  if (bindingProblems.length) return { ...base, observed: 'invalid', reason: bindingProblems.join('; '), details: null };
-  return { ...base, observed: OUTCOME_TO_STATUS[r.settled.outcome] || 'error', reason: res.reason, details: r.observed || null };
-}
-
-/** Did an observed outcome meet the obligation's expectation for this revision? passed | failed | inconclusive | unavailable | invalid | cancelled */
-function judge(observed, expectation) {
-  if (['unavailable', 'invalid', 'error', 'cancelled'].includes(observed)) return observed === 'error' ? 'inconclusive' : observed;
-  if (observed === 'inconclusive') return 'inconclusive';
-  return observed === expectation ? 'passed' : 'failed';
-}
-
-;// CONCATENATED MODULE: ./src/repair/counterexamples.js
-// Counterexamples (verified-remediation PRD FR-07): validate the generated checks against the original, turn a failed check into a
-// minimal, structured counterexample, and keep the sealed set out of the feedback loop.
-//
-//   validateAgainstOriginal  A control whose expectation the original does not meet is a wrong expectation: it is QUARANTINED with the
-//                            reason and removed from the obligation the candidates are judged by (AC-07.3). An attack (or a generated
-//                            state check) that reaches no forbidden effect on the ORIGINAL cannot show that a patch repaired anything,
-//                            but it can show that a patch removed a protection the original already had: it stays in the obligation as
-//                            a REGRESSION GUARD, recorded with its reason, and does not count toward the obligation being meaningful.
-//                            (Until 0.198.0 these were quarantined, so a candidate deleting an existing check was judged only by the
-//                            attacks the original failed.) Both lists are recorded, never silent.
-//   counterexampleFrom       A failed development obligation becomes {obligation, request, actor, preconditions, effect}: the request
-//                            the verifier saw violate, the actor's identity, and the authoritative assertion it broke. A failed SEALED
-//                            obligation yields only "a sealed check failed": no request, value or outcome detail reaches generation
-//                            (AC-07.5).
-//   shrinkCounterexample     Character-level reduction of the attack value (query parameters and string body fields), batched: every
-//                            one-deletion variant is a separate attack request in ONE oracle run, and the shortest variant that still
-//                            discloses THE SAME secret (or breaks the same state check) is kept, so the failed property is preserved
-//                            (AC-07.4). Bounded by rounds and by the per-run request ceiling.
-
-
-const REQ_CAP = 120; // the application oracles accept at most 128 requests per run
-
-const idOf = (r) => r.id;
-
-/** The obligation's inputs with quarantined requests and checks removed. Pure. */
-function withoutQuarantined(inputs, quarantined) {
-  const q = new Set(quarantined.map((x) => x.id));
-  return { ...inputs, requests: inputs.requests.filter((r) => !q.has(r.id)), stateChecks: (inputs.stateChecks || []).filter((c) => !q.has(c.id)) };
-}
-
-/**
- * Run each oracle obligation on the original and quarantine the checks that cannot be meaningful.
- * @returns {{baseline: object[], quarantined: object[], effectiveInputs: Record<string, object>}}
- */
-async function validateAgainstOriginal(contract, originalFiles, run) {
-  const baseline = []; const quarantined = []; const regressionGuards = []; const effectiveInputs = {};
-  for (const ob of contract.obligations.filter((x) => x.oracleId)) {
-    const res = await run(ob, originalFiles, ob.inputs);
-    const d = res.details || {};
-    const q = []; const g = [];
-    if (ob.kind === 'app-attack-blocked' || ob.kind === 'app-attack-sealed') {
-      const violated = new Set((d.attackViolations || []).map((v) => v.id));
-      if (res.observed === 'confirmed' || res.observed === 'refuted') {
-        const reqs = ob.inputs.requests;
-        for (const r of reqs.filter((x) => x.role === 'attack' && (x.forbid?.secrets?.length || x.forbid?.connections))) {
-          if (!violated.has(r.id)) g.push({ id: r.id, obligation: ob.id, reason: r.forbid?.connections ? 'the original revision already blocks this attack (no forbidden destination, no planted secret): kept as a regression guard, it cannot show a repair' : 'the original revision already blocks this attack (no planted secret disclosed): kept as a regression guard, it cannot show a repair' });
-        }
-        // A generated state check names the write attacks it guards: if the original does not break it, the check and those writes stay
-        // as regression guards. Profile-declared state checks (no `guards`) are regression guards by declaration.
-        for (const c of (ob.inputs.stateChecks || []).filter((x) => Array.isArray(x.guards))) {
-          if (violated.has(c.id)) continue;
-          g.push({ id: c.id, obligation: ob.id, reason: 'the original revision makes no unauthorized change this check can see: kept as a regression guard, it cannot show a repair' });
-          for (const w of c.guards) g.push({ id: w, obligation: ob.id, reason: 'this write attack does not change durable state on the original revision: kept as a regression guard' });
-        }
-        for (const c of (d.controlFailures || [])) q.push({ id: c.id, obligation: ob.id, reason: `the original revision does not meet this control's expectation (${c.reason}); the expectation is wrong or the application needs setup the profile lacks` });
-      }
-    } else if (ob.kind === 'app-behaviour-preserved') {
-      for (const c of (d.controlFailures || [])) q.push({ id: c.id, obligation: ob.id, reason: `the original revision does not meet this legitimate expectation (${c.reason}); mark it originalMishandles if the repair should fix it` });
-    }
-    const seen = new Set();
-    const uniq = q.filter((x) => (seen.has(x.id) ? false : seen.add(x.id)));
-    quarantined.push(...uniq);
-    const gseen = new Set();
-    regressionGuards.push(...g.filter((x) => !seen.has(x.id) && (gseen.has(x.id) ? false : gseen.add(x.id))));
-    effectiveInputs[ob.id] = withoutQuarantined(ob.inputs, uniq);
-    baseline.push({ obligation: ob.id, kind: ob.kind, observed: res.observed, expectation: ob.baselineExpectation, status: ob.baselineExpectation ? judge(res.observed, ob.baselineExpectation) : 'recorded', reason: res.reason });
-  }
-  return { baseline, quarantined, regressionGuards, effectiveInputs };
-}
-
-/** Structured feedback for the next proposal from one failed obligation run. */
-function counterexampleFrom(ob, inputs, res, actorsByHeader) {
-  if (ob.kind === 'app-attack-sealed') return { obligation: ob.id, sealed: true, message: 'a sealed held-out check failed; its content is not disclosed to candidate generation' };
-  const d = res.details || {};
-  const byId = Object.fromEntries(inputs.requests.map((r) => [r.id, r]));
-  const actorOf = (r) => actorsByHeader?.(r?.headers) ?? null;
-  if (ob.kind === 'app-attack-blocked') {
-    const v = (d.attackViolations || [])[0];
-    if (!v) return { obligation: ob.id, message: res.reason };
-    const req = byId[v.id] || null;
-    const check = (inputs.stateChecks || []).find((c) => c.id === v.id) || null;
-    const writer = check && Array.isArray(check.guards) ? check.guards.map((g) => byId[g]).find(Boolean) || null : null;
-    return {
-      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : v.effect === 'forbidden-connection' ? 'forbidden-connection' : v.effect === 'credential-storage' ? 'credential-storage' : 'secret-disclosed',
-      ...(v.destinations ? { destinations: v.destinations } : {}),
-      ...(v.properties ? { failedProperties: v.properties } : {}),
-      request: req ? { method: req.method, path: req.path, body: req.body ?? null } : writer ? { method: writer.method, path: writer.path, body: writer.body ?? null } : null,
-      actor: actorOf(req || writer), secrets: v.secrets || [], stateCheck: check ? check.sql : null, guardedRequests: check?.guards?.length ?? 0,
-      violations: (d.attackViolations || []).length, message: res.reason,
-    };
-  }
-  const f = (d.controlFailures || [])[0];
-  const req = f ? byId[f.id] : null;
-  return { obligation: ob.id, property: 'legitimate-behaviour', request: req ? { method: req.method, path: req.path, body: req.body ?? null } : null, actor: actorOf(req), expected: req?.expect ?? null, message: f ? f.reason : res.reason };
-}
-
-function reductions(req) {
-  const out = [];
-  const url = new URL(req.path, 'http://x.local');
-  for (const [k, v] of url.searchParams) {
-    for (let i = 0; i < v.length; i++) {
-      const u = new URL(url); u.searchParams.set(k, v.slice(0, i) + v.slice(i + 1));
-      out.push({ ...req, path: u.pathname + u.search });
-    }
-  }
-  if (req.body && typeof req.body === 'object') {
-    for (const [k, v] of Object.entries(req.body)) if (typeof v === 'string') for (let i = 0; i < v.length; i++) out.push({ ...req, body: { ...req.body, [k]: v.slice(0, i) + v.slice(i + 1) } });
-  }
-  return out;
-}
-
-// Size of the attacker-controlled values, decoded: the URL API re-encodes characters differently from the request builder, so the
-// encoded path length would make a shorter value look longer.
-const sizeOf = (r) => {
-  let n = 0;
-  for (const [, v] of new URL(r.path, 'http://x.local').searchParams) n += v.length;
-  if (r.body && typeof r.body === 'object') for (const v of Object.values(r.body)) if (typeof v === 'string') n += v.length;
-  return n;
-};
-
-/**
- * Shrink one violating attack request while it still discloses the same secret(s). `run(ob, files, inputs)` is the lab runner.
- * @returns {Promise<{request:object, original:object, runs:number, preserved:boolean}>}
- */
-async function shrinkCounterexample(ob, inputs, files, violatingId, run, { maxRounds = 6, ...o } = {}) {
-  const controls = inputs.requests.filter((r) => r.role === 'control');
-  let best = inputs.requests.find((r) => r.id === violatingId);
-  const original = best;
-  const secrets = new Set(best?.forbid?.secrets || []);
-  const destinations = new Set((o.destinations || []).map((d) => d.address).filter(Boolean));
-  let runs = 0;
-  if (!best || (!secrets.size && !destinations.size)) return { request: best, original, runs, preserved: true };
-  for (let round = 0; round < maxRounds; round++) {
-    const cands = reductions(best).slice(0, REQ_CAP - controls.length).map((r, i) => ({ ...r, id: `shrink_${round}_${i}` }));
-    if (!cands.length) break;
-    const res = await run(ob, files, { ...inputs, requests: [...controls, ...cands], stateChecks: [] });
-    runs++;
-    // The same property: the same planted secret, or (a forbidden connection) the same forbidden address.
-    const same = (v) => (secrets.size && o.effect !== 'forbidden-connection' ? (v.secrets || []).some((s) => secrets.has(s)) : (v.destinations || []).some((d) => destinations.has(d.address)));
-    const hits = new Set((res.details?.attackViolations || []).filter(same).map(idOf));
-    const next = cands.filter((c) => hits.has(c.id)).sort((a, b) => sizeOf(a) - sizeOf(b))[0];
-    if (!next || sizeOf(next) >= sizeOf(best)) break;
-    best = { ...next, id: original.id };
-  }
-  return { request: best, original, runs, preserved: true };
-}
-
-
-
+// EXTERNAL MODULE: ./src/repair/lab.js
+var lab = __webpack_require__(73633);
+// EXTERNAL MODULE: ./src/repair/counterexamples.js
+var counterexamples = __webpack_require__(68941);
 // EXTERNAL MODULE: ./src/repair/candidates.js
 var candidates = __webpack_require__(4370);
 ;// CONCATENATED MODULE: ./src/repair/portfolio.js
@@ -1794,179 +1597,8 @@ function crossInputs(inputs, shared) {
   return { ...inputs, requests: [...inputs.requests.filter((r) => r.role === 'control'), ...attacks], stateChecks: [] };
 }
 
-// EXTERNAL MODULE: ./src/artifact/safe-tar.js
-var safe_tar = __webpack_require__(90642);
-;// CONCATENATED MODULE: ./src/repair/dependencies.js
-// Dependency repair (verified-remediation PRD FR-14, M4-02, M4-03), npm first.
-//
-// Two verifier-side halves, both over the EXACT files of a revision (the manifest and the lockfile are candidate files like any other):
-//
-//   checkResolution   the `dependency-resolved` obligation. The lockfile must agree with the manifest (every manifest dependency is in
-//                     the lockfile's root entry with the same range, and the installed version satisfies it: AC-14.2, a manifest-only
-//                     edit with a stale lockfile fails); every resolved package must come from the declared package sources with the
-//                     integrity the lockfile records, re-hashed here from the tarball bytes (provenance); every package's own
-//                     dependencies must resolve (Node's lookup, walking up) to a version satisfying their range; and NO resolved
-//                     instance of the advisory's package, direct or transitive, may be in the vulnerable range (AC-14.3).
-//   materialize       builds node_modules for the application oracles from the lockfile: each entry's tarball is read from the package
-//                     sources, its integrity checked, and its files extracted through the hardened tar reader. The application then
-//                     runs against the packages a candidate actually resolves to (AC-14.1, AC-14.4: an API change without the source
-//                     adaptation, or a behaviour-breaking upgrade, fails the behaviour obligations).
-//
-// Limits, stated: npm lockfile version 2 or 3 only; packages come from local tarballs declared by the profile (no registry, no network,
-// so a package source outside the project is a named limitation); the package manager itself is not executed and no install script
-// runs; ranges are the npm subset `x.y.z`, `^`, `~`, `>`, `>=`, `<`, `<=`, `=`, space for AND and `||` for OR (no prerelease logic,
-// no `x` wildcards beyond `*`).
-
-
-
-
-
-const parseV = (v) => { const m = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(v).trim()); return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null; };
-const cmp = (a, b) => { for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
-
-function comparators(part) {
-  const out = [];
-  for (const tok of part.trim().split(/\s+/).filter(Boolean)) {
-    if (tok === '*' || tok === 'x') continue;
-    const m = /^(\^|~|>=|<=|>|<|=)?(v?\d+\.\d+\.\d+)$/.exec(tok);
-    if (!m) return null;
-    const v = parseV(m[2]); const op = m[1] || '=';
-    if (op === '^') { out.push(['>=', v]); out.push(['<', v[0] > 0 ? [v[0] + 1, 0, 0] : v[1] > 0 ? [0, v[1] + 1, 0] : [0, 0, v[2] + 1]]); }
-    else if (op === '~') { out.push(['>=', v]); out.push(['<', [v[0], v[1] + 1, 0]]); }
-    else out.push([op, v]);
-  }
-  return out;
-}
-
-/** Does `version` satisfy `range`? null when the range is outside the supported subset (never guessed). */
-function satisfies(version, range) {
-  const v = parseV(version);
-  if (!v || typeof range !== 'string') return null;
-  let any = false;
-  for (const part of range.split('||')) {
-    const cs = comparators(part);
-    if (cs === null) return null;
-    if (cs.every(([op, w]) => { const c = cmp(v, w); return op === '=' ? c === 0 : op === '>' ? c > 0 : op === '>=' ? c >= 0 : op === '<' ? c < 0 : c <= 0; })) any = true;
-  }
-  return any;
-}
-
-const nameOf = (p) => { const i = p.lastIndexOf('node_modules/'); return i < 0 ? null : p.slice(i + 'node_modules/'.length); };
-
-/** Node's lookup from a package path: the nearest node_modules/<name> walking up. */
-function resolveFrom(pkgs, fromPath, name) {
-  let base = fromPath;
-  for (;;) {
-    const cand = `${base ? `${base}/` : ''}node_modules/${name}`;
-    if (pkgs[cand]) return cand;
-    if (!base) return null;
-    const i = base.lastIndexOf('/node_modules/');
-    base = i < 0 ? '' : base.slice(0, i);
-  }
-}
-
-function tarballFor(root, dep, entry) {
-  const r = String(entry.resolved || '');
-  if (!r.startsWith('file:')) return { problem: `${entry.name || '?'}: resolved from ${r.split(':')[0] || 'nowhere'}, not from the declared package sources` };
-  const rel = external_node_path_.posix.normalize(r.slice(5));
-  const sources = external_node_path_.posix.normalize(dep.sources).replace(/\/$/, '');
-  if (rel.startsWith('..') || external_node_path_.isAbsolute(rel) || !(rel === sources || rel.startsWith(`${sources}/`))) return { problem: `${rel}: outside the declared package sources ${sources}` };
-  let bytes;
-  try {
-    const abs = external_node_path_.join(root, rel);
-    const realRoot = external_node_fs_.realpathSync(root);
-    if (!external_node_fs_.realpathSync(abs).startsWith(realRoot + external_node_path_.sep)) return { problem: `${rel}: a link out of the project` };
-    bytes = external_node_fs_.readFileSync(abs);
-  } catch { return { problem: `${rel}: the tarball is missing` }; }
-  const m = /^sha512-([A-Za-z0-9+/=]+)$/.exec(String(entry.integrity || ''));
-  if (!m) return { problem: `${rel}: the lockfile records no sha512 integrity` };
-  if (external_node_crypto_.createHash('sha512').update(bytes).digest('base64') !== m[1]) return { problem: `${rel}: the tarball does not match the integrity the lockfile records` };
-  return { bytes, rel };
-}
-
-function readPackage(bytes) {
-  const files = {};
-  for (const e of (0,safe_tar/* readTarEntries */.ET)((0,safe_tar/* decompressIfGzip */.zr)(bytes))) {
-    if (e.unsafe || !['0', '\0', ''].includes(e.typeflag) || !e.name.startsWith('package/')) continue;
-    files[e.name.slice('package/'.length)] = e.data.toString('utf8');
-  }
-  return files;
-}
-
-/**
- * The `dependency-resolved` check over one revision's files. Pure apart from reading the declared tarballs under `root`.
- * @returns {{ok:boolean, problems:string[], vulnerable:object[], resolved:object[]}}
- */
-function checkResolution(root, dep, files) {
-  const problems = []; const vulnerable = [];
-  let manifest; let lock;
-  try { manifest = JSON.parse(files['package.json']); } catch { return { ok: false, problems: ['package.json is missing or not JSON'], vulnerable, resolved: [] }; }
-  try { lock = JSON.parse(files['package-lock.json']); } catch { return { ok: false, problems: ['package-lock.json is missing or not JSON'], vulnerable, resolved: [] }; }
-  if (![2, 3].includes(lock.lockfileVersion) || !lock.packages || typeof lock.packages !== 'object') return { ok: false, problems: ['only npm lockfile versions 2 and 3 are supported'], vulnerable, resolved: [] };
-  const pkgs = lock.packages;
-  const rootDeps = manifest.dependencies || {};
-  const lockRoot = pkgs['']?.dependencies || {};
-  for (const [name, range] of Object.entries(rootDeps)) {
-    if (lockRoot[name] !== range) problems.push(`the lockfile is stale: package.json asks for ${name}@${range}, the lockfile root records ${lockRoot[name] ?? 'nothing'}`);
-    const at = pkgs[`node_modules/${name}`];
-    if (!at) { problems.push(`${name} is not installed by the lockfile`); continue; }
-    const s = /^file:/.test(range) ? null : satisfies(at.version, range);
-    if (s === false) problems.push(`the lockfile installs ${name}@${at.version}, which does not satisfy ${range}`);
-  }
-  for (const name of Object.keys(lockRoot)) if (!(name in rootDeps)) problems.push(`the lockfile root records ${name}, which package.json no longer asks for`);
-  const resolved = [];
-  for (const [p, entry] of Object.entries(pkgs)) {
-    if (!p) continue;
-    const name = nameOf(p);
-    if (!name || typeof entry?.version !== 'string') { problems.push(`${p}: not a package entry`); continue; }
-    const t = tarballFor(root, dep, { ...entry, name });
-    if (t.problem) problems.push(t.problem);
-    else {
-      try {
-        const meta = JSON.parse(readPackage(t.bytes)['package.json'] || '{}');
-        if (meta.name !== name || meta.version !== entry.version) problems.push(`${p}: the tarball holds ${meta.name}@${meta.version}, the lockfile says ${name}@${entry.version}`);
-      } catch (e) { problems.push(`${p}: the tarball could not be read (${String(e.message).slice(0, 80)})`); }
-    }
-    for (const [d, range] of Object.entries(entry.dependencies || {})) {
-      const at = resolveFrom(pkgs, p, d);
-      if (!at) problems.push(`${name}@${entry.version} needs ${d}@${range}, which nothing installs`);
-      else if (satisfies(pkgs[at].version, range) === false) problems.push(`${name}@${entry.version} needs ${d}@${range} and resolves ${pkgs[at].version}`);
-    }
-    resolved.push({ path: p, name, version: entry.version });
-    if (name === dep.package) {
-      const bad = satisfies(entry.version, dep.vulnerable);
-      if (bad === null) problems.push(`the vulnerable range ${dep.vulnerable} is outside the supported range syntax`);
-      if (bad) vulnerable.push({ path: p, version: entry.version, transitive: p !== `node_modules/${name}` });
-    }
-  }
-  for (const v of vulnerable) problems.push(`${v.transitive ? 'a transitive' : 'the direct'} ${dep.package}@${v.version} at ${v.path} is in the vulnerable range ${dep.vulnerable} (${dep.advisory})`);
-  return { ok: problems.length === 0, problems, vulnerable, resolved };
-}
-
-/**
- * The files the application oracles run: the revision's application files plus node_modules built from its lockfile. Entries that do
- * not verify are left out (the resolution obligation reports them); the application then fails to load what it needs.
- */
-function materialize(root, dep, files, { maxFiles = 400, maxBytes = 4 << 20 } = {}) {
-  const out = { ...files };
-  let lock;
-  try { lock = JSON.parse(files['package-lock.json']); } catch { return out; }
-  let n = 0; let bytes = 0;
-  for (const [p, entry] of Object.entries(lock?.packages || {})) {
-    const name = nameOf(p);
-    if (!p || !name) continue;
-    const t = tarballFor(root, dep, { ...entry, name });
-    if (t.problem) continue;
-    for (const [rel, text] of Object.entries(readPackage(t.bytes))) {
-      const norm = external_node_path_.posix.normalize(rel);
-      if (norm.startsWith('..') || external_node_path_.posix.isAbsolute(norm)) continue;
-      if (++n > maxFiles || (bytes += text.length) > maxBytes) throw new Error('the resolved packages exceed the verifier\'s size bound');
-      out[`${p}/${norm}`] = text;
-    }
-  }
-  return out;
-}
-
+// EXTERNAL MODULE: ./src/repair/dependencies.js
+var dependencies = __webpack_require__(74178);
 ;// CONCATENATED MODULE: ./src/repair/credentials.js
 // Credential repair (verified-remediation PRD FR-15, M4-04): source removal, replacement wiring and the lifecycle a source change cannot
 // complete on its own.
@@ -2261,14 +1893,14 @@ async function runRepair(o) {
   const entry = plan.entry;
   // A dependency repair runs the application against the packages each revision's lockfile resolves to (FR-14).
   const depDecl = plan.contract.family === 'dependency' ? plan.contract.obligations.find((x) => x.kind === 'dependency-resolved')?.inputs : null;
-  const runFiles = (files) => { if (!depDecl) return files; try { return materialize(o.root, depDecl, files); } catch { return files; } };
+  const runFiles = (files) => { if (!depDecl) return files; try { return (0,dependencies/* materialize */.O9)(o.root, depDecl, files); } catch { return files; } };
   // Verifier-side obligations with no oracle (dependency resolution, credential removal): computed here over a revision's exact files.
   const credDecl = plan.contract.obligations.find((x) => x.kind === 'credential-removed')?.inputs || null;
   if (credDecl) leakedValue = extractCredential(original[credDecl.file], credDecl.line);
   const staticChecks = (files) => {
     const out = [];
     if (depDecl) {
-      const rs = checkResolution(o.root, depDecl, files);
+      const rs = (0,dependencies/* checkResolution */.x0)(o.root, depDecl, files);
       out.push({ obligation: 'dependency-resolution', kind: 'dependency-resolved', ok: rs.ok, reason: rs.ok ? `${depDecl.package} resolves outside ${depDecl.vulnerable} everywhere; the lockfile is consistent and every package verified` : rs.problems.slice(0, 6).join('; '), counterexample: { obligation: 'dependency-resolution', property: 'dependency-resolution', problems: rs.problems.slice(0, 10), vulnerable: rs.vulnerable, message: rs.problems[0] } });
     }
     if (credDecl) {
@@ -2281,13 +1913,13 @@ async function runRepair(o) {
   const run = async (ob, files, inputs) => {
     record.budget.used.oracleRuns++; record.accounting.oracleRuns++;
     files = runFiles(files);
-    return runObligation(ob, files, { config: o.config, signal: ctl.signal, entry, hypothesisId: `${plan.contract.contractId}:${ob.id}`, inputs, deps: o.deps?.runOracleDeps, probeEnv: o.deps?.probeEnv, runOracle: o.deps?.runOracle });
+    return (0,lab/* runObligation */.SX)(ob, files, { config: o.config, signal: ctl.signal, entry, hypothesisId: `${plan.contract.contractId}:${ob.id}`, inputs, deps: o.deps?.runOracleDeps, probeEnv: o.deps?.probeEnv, runOracle: o.deps?.runOracle });
   };
 
   try {
     // 3. baseline: every generated check must mean something on the original
     emit({ kind: 'baseline' });
-    const base = await validateAgainstOriginal(plan.contract, original, run);
+    const base = await (0,counterexamples/* validateAgainstOriginal */.DF)(plan.contract, original, run);
     if (stopped()) return stoppedResult();
     record.quarantined = base.quarantined;
     record.regressionGuards = base.regressionGuards;
@@ -2385,7 +2017,7 @@ async function runRepair(o) {
           const inputs = base.effectiveInputs[ob.id];
           const res = await run(ob, patched, inputs);
           if (stopped()) return stoppedResult();
-          const status = judge(res.observed, ob.patchedExpectation);
+          const status = (0,lab/* judge */.S4)(res.observed, ob.patchedExpectation);
           cs.results.push(resultOf(ob, res, status));
           if (status === 'failed') failures.push({ ob, inputs, res });
           else if (status !== 'passed' && verdict === 'passed') verdict = status === 'cancelled' ? 'cancelled' : 'inconclusive';
@@ -2399,11 +2031,11 @@ async function runRepair(o) {
           verdict = 'failed';
           if (resolutionFailed) record.counterexamples.push({ candidateId: cand.candidateId, ...resolutionFailed });
           const { ob, inputs, res } = failures.find((f) => f.ob.kind === 'app-attack-blocked') || failures[0];
-          let cx = counterexampleFrom(ob, inputs, res, actorLookup(plan.actors));
+          let cx = (0,counterexamples/* counterexampleFrom */.Xc)(ob, inputs, res, actorLookup(plan.actors));
           const firstSecret = (res.details?.attackViolations || []).find((v) => v.effect === 'secret-disclosed' || v.effect === 'forbidden-connection');
           let shrunk = null;
           if (firstSecret && ob.kind === 'app-attack-blocked') {
-            const sh = await shrinkCounterexample(ob, inputs, patched, firstSecret.id, run, { maxRounds: 4, effect: firstSecret.effect, destinations: firstSecret.destinations });
+            const sh = await (0,counterexamples/* shrinkCounterexample */.St)(ob, inputs, patched, firstSecret.id, run, { maxRounds: 4, effect: firstSecret.effect, destinations: firstSecret.destinations });
             if (stopped()) return stoppedResult();
             shrunk = sh.request;
             cx = { ...cx, request: { method: sh.request.method, path: sh.request.path, body: sh.request.body ?? null }, shrunkFrom: { method: sh.original.method, path: sh.original.path, body: sh.original.body ?? null }, shrinkRuns: sh.runs, propertyPreserved: sh.preserved };
@@ -2424,7 +2056,7 @@ async function runRepair(o) {
         for (const s of [...survivors]) {
           const res = await run(attackOb, s.patched, cin);
           if (stopped()) return stoppedResult();
-          const status = judge(res.observed, attackOb.patchedExpectation);
+          const status = (0,lab/* judge */.S4)(res.observed, attackOb.patchedExpectation);
           s.cs.crossExecution = { attacks: cin.requests.filter((r) => r.role === 'attack').length, status, reason: res.reason };
           if (status !== 'passed') {
             s.cs.status = status === 'failed' ? 'rejected' : 'inconclusive';
@@ -2448,7 +2080,7 @@ async function runRepair(o) {
           for (const ob of sealedObs) {
             const res = await run(ob, patched, base.effectiveInputs[ob.id]);
             if (stopped()) return stoppedResult();
-            const status = judge(res.observed, ob.patchedExpectation);
+            const status = (0,lab/* judge */.S4)(res.observed, ob.patchedExpectation);
             cs.results.push(resultOf(ob, res, status, status === 'failed' ? 'a sealed held-out check failed' : undefined));
             if (status !== 'passed') { verdict = status === 'failed' ? 'failed' : 'inconclusive'; if (status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: ob.id, sealed: true, message: 'a sealed held-out check failed; its content is not disclosed to candidate generation' }); roundFeedback.push({ candidateId: cand.candidateId, counterexample: { obligation: ob.id, sealed: true, message: 'a sealed held-out check failed' } }); } break; }
           }
@@ -2518,6 +2150,353 @@ async function centralVerify(o, plan, cand, budgets) {
   } catch (e) {
     return { obligation: 'central-verifier', kind: 'project-tests', observed: 'error', status: 'inconclusive', reason: `the central verifier failed: ${String(e?.message || e).slice(0, 200)}` };
   }
+}
+
+
+/***/ }),
+
+/***/ 68941:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   DF: () => (/* binding */ validateAgainstOriginal),
+/* harmony export */   St: () => (/* binding */ shrinkCounterexample),
+/* harmony export */   Xc: () => (/* binding */ counterexampleFrom),
+/* harmony export */   h4: () => (/* binding */ withoutQuarantined)
+/* harmony export */ });
+/* harmony import */ var _lab_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73633);
+// Counterexamples (verified-remediation PRD FR-07): validate the generated checks against the original, turn a failed check into a
+// minimal, structured counterexample, and keep the sealed set out of the feedback loop.
+//
+//   validateAgainstOriginal  A control whose expectation the original does not meet is a wrong expectation: it is QUARANTINED with the
+//                            reason and removed from the obligation the candidates are judged by (AC-07.3). An attack (or a generated
+//                            state check) that reaches no forbidden effect on the ORIGINAL cannot show that a patch repaired anything,
+//                            but it can show that a patch removed a protection the original already had: it stays in the obligation as
+//                            a REGRESSION GUARD, recorded with its reason, and does not count toward the obligation being meaningful.
+//                            (Until 0.198.0 these were quarantined, so a candidate deleting an existing check was judged only by the
+//                            attacks the original failed.) Both lists are recorded, never silent.
+//   counterexampleFrom       A failed development obligation becomes {obligation, request, actor, preconditions, effect}: the request
+//                            the verifier saw violate, the actor's identity, and the authoritative assertion it broke. A failed SEALED
+//                            obligation yields only "a sealed check failed": no request, value or outcome detail reaches generation
+//                            (AC-07.5).
+//   shrinkCounterexample     Character-level reduction of the attack value (query parameters and string body fields), batched: every
+//                            one-deletion variant is a separate attack request in ONE oracle run, and the shortest variant that still
+//                            discloses THE SAME secret (or breaks the same state check) is kept, so the failed property is preserved
+//                            (AC-07.4). Bounded by rounds and by the per-run request ceiling.
+
+
+const REQ_CAP = 120; // the application oracles accept at most 128 requests per run
+
+const idOf = (r) => r.id;
+
+/** The obligation's inputs with quarantined requests and checks removed. Pure. */
+function withoutQuarantined(inputs, quarantined) {
+  const q = new Set(quarantined.map((x) => x.id));
+  return { ...inputs, requests: inputs.requests.filter((r) => !q.has(r.id)), stateChecks: (inputs.stateChecks || []).filter((c) => !q.has(c.id)) };
+}
+
+/**
+ * Run each oracle obligation on the original and quarantine the checks that cannot be meaningful.
+ * @returns {{baseline: object[], quarantined: object[], effectiveInputs: Record<string, object>}}
+ */
+async function validateAgainstOriginal(contract, originalFiles, run) {
+  const baseline = []; const quarantined = []; const regressionGuards = []; const effectiveInputs = {};
+  for (const ob of contract.obligations.filter((x) => x.oracleId)) {
+    const res = await run(ob, originalFiles, ob.inputs);
+    const d = res.details || {};
+    const q = []; const g = [];
+    if (ob.kind === 'app-attack-blocked' || ob.kind === 'app-attack-sealed') {
+      const violated = new Set((d.attackViolations || []).map((v) => v.id));
+      if (res.observed === 'confirmed' || res.observed === 'refuted') {
+        const reqs = ob.inputs.requests;
+        for (const r of reqs.filter((x) => x.role === 'attack' && (x.forbid?.secrets?.length || x.forbid?.connections))) {
+          if (!violated.has(r.id)) g.push({ id: r.id, obligation: ob.id, reason: r.forbid?.connections ? 'the original revision already blocks this attack (no forbidden destination, no planted secret): kept as a regression guard, it cannot show a repair' : 'the original revision already blocks this attack (no planted secret disclosed): kept as a regression guard, it cannot show a repair' });
+        }
+        // A generated state check names the write attacks it guards: if the original does not break it, the check and those writes stay
+        // as regression guards. Profile-declared state checks (no `guards`) are regression guards by declaration.
+        for (const c of (ob.inputs.stateChecks || []).filter((x) => Array.isArray(x.guards))) {
+          if (violated.has(c.id)) continue;
+          g.push({ id: c.id, obligation: ob.id, reason: 'the original revision makes no unauthorized change this check can see: kept as a regression guard, it cannot show a repair' });
+          for (const w of c.guards) g.push({ id: w, obligation: ob.id, reason: 'this write attack does not change durable state on the original revision: kept as a regression guard' });
+        }
+        for (const c of (d.controlFailures || [])) q.push({ id: c.id, obligation: ob.id, reason: `the original revision does not meet this control's expectation (${c.reason}); the expectation is wrong or the application needs setup the profile lacks` });
+      }
+    } else if (ob.kind === 'app-behaviour-preserved') {
+      for (const c of (d.controlFailures || [])) q.push({ id: c.id, obligation: ob.id, reason: `the original revision does not meet this legitimate expectation (${c.reason}); mark it originalMishandles if the repair should fix it` });
+    }
+    const seen = new Set();
+    const uniq = q.filter((x) => (seen.has(x.id) ? false : seen.add(x.id)));
+    quarantined.push(...uniq);
+    const gseen = new Set();
+    regressionGuards.push(...g.filter((x) => !seen.has(x.id) && (gseen.has(x.id) ? false : gseen.add(x.id))));
+    effectiveInputs[ob.id] = withoutQuarantined(ob.inputs, uniq);
+    baseline.push({ obligation: ob.id, kind: ob.kind, observed: res.observed, expectation: ob.baselineExpectation, status: ob.baselineExpectation ? (0,_lab_js__WEBPACK_IMPORTED_MODULE_0__/* .judge */ .S4)(res.observed, ob.baselineExpectation) : 'recorded', reason: res.reason });
+  }
+  return { baseline, quarantined, regressionGuards, effectiveInputs };
+}
+
+/** Structured feedback for the next proposal from one failed obligation run. */
+function counterexampleFrom(ob, inputs, res, actorsByHeader) {
+  if (ob.kind === 'app-attack-sealed') return { obligation: ob.id, sealed: true, message: 'a sealed held-out check failed; its content is not disclosed to candidate generation' };
+  const d = res.details || {};
+  const byId = Object.fromEntries(inputs.requests.map((r) => [r.id, r]));
+  const actorOf = (r) => actorsByHeader?.(r?.headers) ?? null;
+  if (ob.kind === 'app-attack-blocked') {
+    const v = (d.attackViolations || [])[0];
+    if (!v) return { obligation: ob.id, message: res.reason };
+    const req = byId[v.id] || null;
+    const check = (inputs.stateChecks || []).find((c) => c.id === v.id) || null;
+    const writer = check && Array.isArray(check.guards) ? check.guards.map((g) => byId[g]).find(Boolean) || null : null;
+    return {
+      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : v.effect === 'forbidden-connection' ? 'forbidden-connection' : v.effect === 'credential-storage' ? 'credential-storage' : 'secret-disclosed',
+      ...(v.destinations ? { destinations: v.destinations } : {}),
+      ...(v.properties ? { failedProperties: v.properties } : {}),
+      request: req ? { method: req.method, path: req.path, body: req.body ?? null } : writer ? { method: writer.method, path: writer.path, body: writer.body ?? null } : null,
+      actor: actorOf(req || writer), secrets: v.secrets || [], stateCheck: check ? check.sql : null, guardedRequests: check?.guards?.length ?? 0,
+      violations: (d.attackViolations || []).length, message: res.reason,
+    };
+  }
+  const f = (d.controlFailures || [])[0];
+  const req = f ? byId[f.id] : null;
+  return { obligation: ob.id, property: 'legitimate-behaviour', request: req ? { method: req.method, path: req.path, body: req.body ?? null } : null, actor: actorOf(req), expected: req?.expect ?? null, message: f ? f.reason : res.reason };
+}
+
+function reductions(req) {
+  const out = [];
+  const url = new URL(req.path, 'http://x.local');
+  for (const [k, v] of url.searchParams) {
+    for (let i = 0; i < v.length; i++) {
+      const u = new URL(url); u.searchParams.set(k, v.slice(0, i) + v.slice(i + 1));
+      out.push({ ...req, path: u.pathname + u.search });
+    }
+  }
+  if (req.body && typeof req.body === 'object') {
+    for (const [k, v] of Object.entries(req.body)) if (typeof v === 'string') for (let i = 0; i < v.length; i++) out.push({ ...req, body: { ...req.body, [k]: v.slice(0, i) + v.slice(i + 1) } });
+  }
+  return out;
+}
+
+// Size of the attacker-controlled values, decoded: the URL API re-encodes characters differently from the request builder, so the
+// encoded path length would make a shorter value look longer.
+const sizeOf = (r) => {
+  let n = 0;
+  for (const [, v] of new URL(r.path, 'http://x.local').searchParams) n += v.length;
+  if (r.body && typeof r.body === 'object') for (const v of Object.values(r.body)) if (typeof v === 'string') n += v.length;
+  return n;
+};
+
+/**
+ * Shrink one violating attack request while it still discloses the same secret(s). `run(ob, files, inputs)` is the lab runner.
+ * @returns {Promise<{request:object, original:object, runs:number, preserved:boolean}>}
+ */
+async function shrinkCounterexample(ob, inputs, files, violatingId, run, { maxRounds = 6, ...o } = {}) {
+  const controls = inputs.requests.filter((r) => r.role === 'control');
+  let best = inputs.requests.find((r) => r.id === violatingId);
+  const original = best;
+  const secrets = new Set(best?.forbid?.secrets || []);
+  const destinations = new Set((o.destinations || []).map((d) => d.address).filter(Boolean));
+  let runs = 0;
+  if (!best || (!secrets.size && !destinations.size)) return { request: best, original, runs, preserved: true };
+  for (let round = 0; round < maxRounds; round++) {
+    const cands = reductions(best).slice(0, REQ_CAP - controls.length).map((r, i) => ({ ...r, id: `shrink_${round}_${i}` }));
+    if (!cands.length) break;
+    const res = await run(ob, files, { ...inputs, requests: [...controls, ...cands], stateChecks: [] });
+    runs++;
+    // The same property: the same planted secret, or (a forbidden connection) the same forbidden address.
+    const same = (v) => (secrets.size && o.effect !== 'forbidden-connection' ? (v.secrets || []).some((s) => secrets.has(s)) : (v.destinations || []).some((d) => destinations.has(d.address)));
+    const hits = new Set((res.details?.attackViolations || []).filter(same).map(idOf));
+    const next = cands.filter((c) => hits.has(c.id)).sort((a, b) => sizeOf(a) - sizeOf(b))[0];
+    if (!next || sizeOf(next) >= sizeOf(best)) break;
+    best = { ...next, id: original.id };
+  }
+  return { request: best, original, runs, preserved: true };
+}
+
+
+
+
+/***/ }),
+
+/***/ 74178:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   O9: () => (/* binding */ materialize),
+/* harmony export */   ib: () => (/* binding */ satisfies),
+/* harmony export */   x0: () => (/* binding */ checkResolution)
+/* harmony export */ });
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+/* harmony import */ var _artifact_safe_tar_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(90642);
+// Dependency repair (verified-remediation PRD FR-14, M4-02, M4-03), npm first.
+//
+// Two verifier-side halves, both over the EXACT files of a revision (the manifest and the lockfile are candidate files like any other):
+//
+//   checkResolution   the `dependency-resolved` obligation. The lockfile must agree with the manifest (every manifest dependency is in
+//                     the lockfile's root entry with the same range, and the installed version satisfies it: AC-14.2, a manifest-only
+//                     edit with a stale lockfile fails); every resolved package must come from the declared package sources with the
+//                     integrity the lockfile records, re-hashed here from the tarball bytes (provenance); every package's own
+//                     dependencies must resolve (Node's lookup, walking up) to a version satisfying their range; and NO resolved
+//                     instance of the advisory's package, direct or transitive, may be in the vulnerable range (AC-14.3).
+//   materialize       builds node_modules for the application oracles from the lockfile: each entry's tarball is read from the package
+//                     sources, its integrity checked, and its files extracted through the hardened tar reader. The application then
+//                     runs against the packages a candidate actually resolves to (AC-14.1, AC-14.4: an API change without the source
+//                     adaptation, or a behaviour-breaking upgrade, fails the behaviour obligations).
+//
+// Limits, stated: npm lockfile version 2 or 3 only; packages come from local tarballs declared by the profile (no registry, no network,
+// so a package source outside the project is a named limitation); the package manager itself is not executed and no install script
+// runs; ranges are the npm subset `x.y.z`, `^`, `~`, `>`, `>=`, `<`, `<=`, `=`, space for AND and `||` for OR (no prerelease logic,
+// no `x` wildcards beyond `*`).
+
+
+
+
+
+const parseV = (v) => { const m = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(v).trim()); return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null; };
+const cmp = (a, b) => { for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
+
+function comparators(part) {
+  const out = [];
+  for (const tok of part.trim().split(/\s+/).filter(Boolean)) {
+    if (tok === '*' || tok === 'x') continue;
+    const m = /^(\^|~|>=|<=|>|<|=)?(v?\d+\.\d+\.\d+)$/.exec(tok);
+    if (!m) return null;
+    const v = parseV(m[2]); const op = m[1] || '=';
+    if (op === '^') { out.push(['>=', v]); out.push(['<', v[0] > 0 ? [v[0] + 1, 0, 0] : v[1] > 0 ? [0, v[1] + 1, 0] : [0, 0, v[2] + 1]]); }
+    else if (op === '~') { out.push(['>=', v]); out.push(['<', [v[0], v[1] + 1, 0]]); }
+    else out.push([op, v]);
+  }
+  return out;
+}
+
+/** Does `version` satisfy `range`? null when the range is outside the supported subset (never guessed). */
+function satisfies(version, range) {
+  const v = parseV(version);
+  if (!v || typeof range !== 'string') return null;
+  let any = false;
+  for (const part of range.split('||')) {
+    const cs = comparators(part);
+    if (cs === null) return null;
+    if (cs.every(([op, w]) => { const c = cmp(v, w); return op === '=' ? c === 0 : op === '>' ? c > 0 : op === '>=' ? c >= 0 : op === '<' ? c < 0 : c <= 0; })) any = true;
+  }
+  return any;
+}
+
+const nameOf = (p) => { const i = p.lastIndexOf('node_modules/'); return i < 0 ? null : p.slice(i + 'node_modules/'.length); };
+
+/** Node's lookup from a package path: the nearest node_modules/<name> walking up. */
+function resolveFrom(pkgs, fromPath, name) {
+  let base = fromPath;
+  for (;;) {
+    const cand = `${base ? `${base}/` : ''}node_modules/${name}`;
+    if (pkgs[cand]) return cand;
+    if (!base) return null;
+    const i = base.lastIndexOf('/node_modules/');
+    base = i < 0 ? '' : base.slice(0, i);
+  }
+}
+
+function tarballFor(root, dep, entry) {
+  const r = String(entry.resolved || '');
+  if (!r.startsWith('file:')) return { problem: `${entry.name || '?'}: resolved from ${r.split(':')[0] || 'nowhere'}, not from the declared package sources` };
+  const rel = node_path__WEBPACK_IMPORTED_MODULE_2__.posix.normalize(r.slice(5));
+  const sources = node_path__WEBPACK_IMPORTED_MODULE_2__.posix.normalize(dep.sources).replace(/\/$/, '');
+  if (rel.startsWith('..') || node_path__WEBPACK_IMPORTED_MODULE_2__.isAbsolute(rel) || !(rel === sources || rel.startsWith(`${sources}/`))) return { problem: `${rel}: outside the declared package sources ${sources}` };
+  let bytes;
+  try {
+    const abs = node_path__WEBPACK_IMPORTED_MODULE_2__.join(root, rel);
+    const realRoot = node_fs__WEBPACK_IMPORTED_MODULE_1__.realpathSync(root);
+    if (!node_fs__WEBPACK_IMPORTED_MODULE_1__.realpathSync(abs).startsWith(realRoot + node_path__WEBPACK_IMPORTED_MODULE_2__.sep)) return { problem: `${rel}: a link out of the project` };
+    bytes = node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(abs);
+  } catch { return { problem: `${rel}: the tarball is missing` }; }
+  const m = /^sha512-([A-Za-z0-9+/=]+)$/.exec(String(entry.integrity || ''));
+  if (!m) return { problem: `${rel}: the lockfile records no sha512 integrity` };
+  if (node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash('sha512').update(bytes).digest('base64') !== m[1]) return { problem: `${rel}: the tarball does not match the integrity the lockfile records` };
+  return { bytes, rel };
+}
+
+function readPackage(bytes) {
+  const files = {};
+  for (const e of (0,_artifact_safe_tar_js__WEBPACK_IMPORTED_MODULE_3__/* .readTarEntries */ .ET)((0,_artifact_safe_tar_js__WEBPACK_IMPORTED_MODULE_3__/* .decompressIfGzip */ .zr)(bytes))) {
+    if (e.unsafe || !['0', '\0', ''].includes(e.typeflag) || !e.name.startsWith('package/')) continue;
+    files[e.name.slice('package/'.length)] = e.data.toString('utf8');
+  }
+  return files;
+}
+
+/**
+ * The `dependency-resolved` check over one revision's files. Pure apart from reading the declared tarballs under `root`.
+ * @returns {{ok:boolean, problems:string[], vulnerable:object[], resolved:object[]}}
+ */
+function checkResolution(root, dep, files) {
+  const problems = []; const vulnerable = [];
+  let manifest; let lock;
+  try { manifest = JSON.parse(files['package.json']); } catch { return { ok: false, problems: ['package.json is missing or not JSON'], vulnerable, resolved: [] }; }
+  try { lock = JSON.parse(files['package-lock.json']); } catch { return { ok: false, problems: ['package-lock.json is missing or not JSON'], vulnerable, resolved: [] }; }
+  if (![2, 3].includes(lock.lockfileVersion) || !lock.packages || typeof lock.packages !== 'object') return { ok: false, problems: ['only npm lockfile versions 2 and 3 are supported'], vulnerable, resolved: [] };
+  const pkgs = lock.packages;
+  const rootDeps = manifest.dependencies || {};
+  const lockRoot = pkgs['']?.dependencies || {};
+  for (const [name, range] of Object.entries(rootDeps)) {
+    if (lockRoot[name] !== range) problems.push(`the lockfile is stale: package.json asks for ${name}@${range}, the lockfile root records ${lockRoot[name] ?? 'nothing'}`);
+    const at = pkgs[`node_modules/${name}`];
+    if (!at) { problems.push(`${name} is not installed by the lockfile`); continue; }
+    const s = /^file:/.test(range) ? null : satisfies(at.version, range);
+    if (s === false) problems.push(`the lockfile installs ${name}@${at.version}, which does not satisfy ${range}`);
+  }
+  for (const name of Object.keys(lockRoot)) if (!(name in rootDeps)) problems.push(`the lockfile root records ${name}, which package.json no longer asks for`);
+  const resolved = [];
+  for (const [p, entry] of Object.entries(pkgs)) {
+    if (!p) continue;
+    const name = nameOf(p);
+    if (!name || typeof entry?.version !== 'string') { problems.push(`${p}: not a package entry`); continue; }
+    const t = tarballFor(root, dep, { ...entry, name });
+    if (t.problem) problems.push(t.problem);
+    else {
+      try {
+        const meta = JSON.parse(readPackage(t.bytes)['package.json'] || '{}');
+        if (meta.name !== name || meta.version !== entry.version) problems.push(`${p}: the tarball holds ${meta.name}@${meta.version}, the lockfile says ${name}@${entry.version}`);
+      } catch (e) { problems.push(`${p}: the tarball could not be read (${String(e.message).slice(0, 80)})`); }
+    }
+    for (const [d, range] of Object.entries(entry.dependencies || {})) {
+      const at = resolveFrom(pkgs, p, d);
+      if (!at) problems.push(`${name}@${entry.version} needs ${d}@${range}, which nothing installs`);
+      else if (satisfies(pkgs[at].version, range) === false) problems.push(`${name}@${entry.version} needs ${d}@${range} and resolves ${pkgs[at].version}`);
+    }
+    resolved.push({ path: p, name, version: entry.version });
+    if (name === dep.package) {
+      const bad = satisfies(entry.version, dep.vulnerable);
+      if (bad === null) problems.push(`the vulnerable range ${dep.vulnerable} is outside the supported range syntax`);
+      if (bad) vulnerable.push({ path: p, version: entry.version, transitive: p !== `node_modules/${name}` });
+    }
+  }
+  for (const v of vulnerable) problems.push(`${v.transitive ? 'a transitive' : 'the direct'} ${dep.package}@${v.version} at ${v.path} is in the vulnerable range ${dep.vulnerable} (${dep.advisory})`);
+  return { ok: problems.length === 0, problems, vulnerable, resolved };
+}
+
+/**
+ * The files the application oracles run: the revision's application files plus node_modules built from its lockfile. Entries that do
+ * not verify are left out (the resolution obligation reports them); the application then fails to load what it needs.
+ */
+function materialize(root, dep, files, { maxFiles = 400, maxBytes = 4 << 20 } = {}) {
+  const out = { ...files };
+  let lock;
+  try { lock = JSON.parse(files['package-lock.json']); } catch { return out; }
+  let n = 0; let bytes = 0;
+  for (const [p, entry] of Object.entries(lock?.packages || {})) {
+    const name = nameOf(p);
+    if (!p || !name) continue;
+    const t = tarballFor(root, dep, { ...entry, name });
+    if (t.problem) continue;
+    for (const [rel, text] of Object.entries(readPackage(t.bytes))) {
+      const norm = node_path__WEBPACK_IMPORTED_MODULE_2__.posix.normalize(rel);
+      if (norm.startsWith('..') || node_path__WEBPACK_IMPORTED_MODULE_2__.posix.isAbsolute(norm)) continue;
+      if (++n > maxFiles || (bytes += text.length) > maxBytes) throw new Error('the resolved packages exceed the verifier\'s size bound');
+      out[`${p}/${norm}`] = text;
+    }
+  }
+  return out;
 }
 
 
@@ -2844,7 +2823,7 @@ function importedFinding(root, id, importedId) {
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
 /* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(71130);
 /* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(68962);
-/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(13361);
+/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(75897);
 /* harmony import */ var _import_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(46777);
 // Plan inputs, resolved ONE way for every route (verified-remediation PRD AC-04.5): the CLI's `repair plan` and the MCP tool
 // `repair_plan` both call `planFromInputs`, so the same finding, profile and source give the same contract and obligations.
@@ -2907,6 +2886,67 @@ function planFromInputs(o) {
   const r = (0,_coordinator_js__WEBPACK_IMPORTED_MODULE_5__/* .planRepair */ .RZ)({ root: o.root, finding, family, profile, profileOrigin: origin, commit });
   if (!r.plan) return { plan: null, blocked: r.blocked, problems: r.problems, status: r.problems.length ? 'usage' : 'blocked' };
   return { plan: r.plan, blocked: r.blocked, problems: [], status: r.blocked.length ? 'blocked' : 'ok' };
+}
+
+
+/***/ }),
+
+/***/ 73633:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   S4: () => (/* binding */ judge),
+/* harmony export */   SX: () => (/* binding */ runObligation)
+/* harmony export */ });
+/* unused harmony exports OUTCOME_TO_STATUS, treeBinding */
+/* harmony import */ var _posture_oracles_oracle_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(15991);
+/* harmony import */ var _posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(41877);
+// The repair lab (verified-remediation PRD FR-05, FR-06): one obligation, one exact file set, executed through the oracle runner and
+// therefore through the trust boundary only (network denied, process tree ended, harness digest-checked, verdict formed verifier-side).
+//
+// This module adds no execution path of its own. It builds the oracle request from the contract's obligation, binds the request to the
+// exact tree being judged (the digest of the file set stands in for a commit, so `confirmed`/`refuted` are reachable for an uncommitted
+// candidate), and then checks the receipt it got back: issued in this process by the oracle runner (a copied or deserialized receipt is not),
+// for these files, these inputs and the oracle logic the contract pinned. A mismatch is `invalid`, never a pass (AC-06.5).
+
+
+
+const OUTCOME_TO_STATUS = Object.freeze({ confirmed: 'confirmed', refuted: 'refuted', inconclusive: 'inconclusive', unsupported: 'unavailable', 'not-run': 'unavailable', error: 'error' });
+
+/** The 64-hex binding of a file set, used where the oracle asks for an exact commit. */
+const treeBinding = (files) => (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__/* .digestOf */ .ol)(files).slice('sha256:'.length);
+
+/**
+ * @param {object} obligation  a contract obligation with an oracle (not `project-tests`)
+ * @param {Record<string,string>} files  the application files, original or patched
+ * @param {{config:object, signal?:AbortSignal, entry:string, hypothesisId:string, inputs?:object, deps?:object, probeEnv?:object, runOracle?:Function}} o  (`runOracle` is a test seam: a stand-in cannot issue a receipt this module accepts)
+ * @returns {Promise<{observed:'confirmed'|'refuted'|'inconclusive'|'unavailable'|'error'|'invalid', reason:string, receipt:object|null, details:object|null, filesDigest:string, inputsDigest:string}>}
+ */
+async function runObligation(obligation, files, o) {
+  const inputs = o.inputs || obligation.inputs;
+  const filesDigest = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__/* .digestOf */ .ol)(files);
+  const inputsDigest = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__/* .digestOf */ .ol)(inputs);
+  const res = await (o.runOracle || _posture_oracles_oracle_js__WEBPACK_IMPORTED_MODULE_0__/* .runOracle */ .qm)({
+    oracleId: obligation.oracleId, hypothesisId: o.hypothesisId, commit: treeBinding(files), files, entry: o.entry, inputs,
+  }, { config: o.config, signal: o.signal, ...(o.deps ? { deps: o.deps } : {}), ...(o.probeEnv ? { probeEnv: o.probeEnv } : {}) });
+  if (res.status === 'rejected') return { observed: 'invalid', reason: `the oracle refused the request: ${(res.errors || []).join('; ').slice(0, 300)}`, receipt: null, details: null, filesDigest, inputsDigest };
+  const base = { filesDigest, inputsDigest, receipt: res.receipt || null };
+  if (!res.receipt) return { ...base, observed: res.status === 'cancelled' ? 'cancelled' : (OUTCOME_TO_STATUS[res.outcome] || 'error'), reason: res.reason, details: null };
+  const r = res.receipt;
+  const bindingProblems = [];
+  if (!(0,_posture_oracles_oracle_js__WEBPACK_IMPORTED_MODULE_0__/* .isIssuedReceipt */ .AH)(r)) bindingProblems.push('the receipt was not issued by the oracle runner in this process');
+  if (r.request.filesDigest !== filesDigest) bindingProblems.push('the receipt is for different files');
+  if (r.request.inputsDigest !== inputsDigest) bindingProblems.push('the receipt is for different inputs');
+  if (r.oracle.logicDigest !== obligation.oracleLogicDigest) bindingProblems.push('the oracle logic differs from the logic the contract pinned (re-plan the contract)');
+  if (bindingProblems.length) return { ...base, observed: 'invalid', reason: bindingProblems.join('; '), details: null };
+  return { ...base, observed: OUTCOME_TO_STATUS[r.settled.outcome] || 'error', reason: res.reason, details: r.observed || null };
+}
+
+/** Did an observed outcome meet the obligation's expectation for this revision? passed | failed | inconclusive | unavailable | invalid | cancelled */
+function judge(observed, expectation) {
+  if (['unavailable', 'invalid', 'error', 'cancelled'].includes(observed)) return observed === 'error' ? 'inconclusive' : observed;
+  if (observed === 'inconclusive') return 'inconclusive';
+  return observed === expectation ? 'passed' : 'failed';
 }
 
 

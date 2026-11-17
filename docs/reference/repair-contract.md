@@ -15,6 +15,7 @@ How to use the workflow is in the [verified remediation guide](../guides/verifie
 | `repair cancel` | Asks a running repair, in any process, to stop. | a cancel marker |
 | `repair export` | Writes the contract, the record, the exact patch bytes and a manifest to a directory. Request header values and any credential they carry are replaced by digests. | the export directory |
 | `repair verify` | Checks an exported bundle: patch bytes against their digests, the contract against the manifest, and optionally whether the source under `--root` is the verified baseline or that baseline with the patch applied. Executes nothing. | nothing |
+| `repair artifact` | Looks for a verified repair in a built image (`--image`, a `docker save` or OCI-layout tar; `--app-dir`, where the application lives in it): every patched file by its patched digest, every package the verified lockfile resolves by version, and, with `--allow-execution`, the contract's checks re-run on the image's own files. Updates the record's `artifact` and `source`. A signature or label sets nothing. | the run record |
 | `repair import` | Reads an external report (`--format sarif` for SARIF 2.1.0, or `--format normalized`) into a signed import record: each location confined to the project and mapped to the current source, duplicates merged with every source kept. `--show <import-id>` prints a record; `--accept-risk <imported-id> --import <import-id> --reason <why>` records an accepted risk. Plan an imported finding with `repair plan --import <import-id> --finding <imported-id>`. Executes nothing. | the import record |
 | `repair recipes` | `list`, `evaluate <recipe>` (executes the recipe's examples; needs `--allow-execution`), `promote`, `retire`, `rollback` (each needs `--reason`), `draft --file <recipe.json>`. Every change is a signed ledger record. | the recipe ledger |
 
@@ -124,7 +125,7 @@ A profile is declared by the operator: how to start the application and what its
 | `policyDigest` | Digest of the policy the run used. |
 | `disposition` | `proposed`, `refuted-finding`, `needs-review`, `verified-for-contract`, `mitigation`, `rejected`, `blocked` or `cancelled`. |
 | `application` | `not-applied`, `applied`, `reverted` or `concurrent-change-refused`. |
-| `artifact` | Always `source-only` in this release: nothing is built. |
+| `artifact` | `source-only` until `repair artifact` checks an image: `artifact-verified` (every patched file and package present as verified, and every re-run check passed on the image's files), `artifact-mismatch` (a file is missing, different or the pre-patch version, a package is missing or vulnerable, or a check failed on the image), `unavailable` (the content matched but the checks were not run). |
 | `environment` | Always `not-checked` in this release: nothing is deployed. |
 | `completion` | `complete`, `partial` (a budget stop), `cancelled`, `unavailable` or `invalid`. |
 | `candidates` | Every candidate: round, generator, status (`verified-for-contract`, `passed-not-selected`, `rejected`, `refused`, `duplicate`, `inconclusive`, `cancelled`), the coordinator-computed scope and structural key, its rank among the round's survivors, the cross-execution result, and each obligation result with its receipt digest. |
@@ -144,7 +145,7 @@ A profile is declared by the operator: how to start the application and what its
 | `patchDigest` | The selected patch's digest. |
 | `exactPatch` | The selected patch's files and before and after digests. |
 | `legacy` | The legacy `ok`, `verified` and `fixCompleteness` view. FULL means the named contract passed, not universal correctness. |
-| `source` | Reserved for an artifact digest; an artifact or environment state needs it. |
+| `source` | After `repair artifact`: the image digest, the application directory, each patched file's state, each package's state, the re-run checks and the problems. `artifact-verified` is refused without it. |
 
 **Dispositions**
 
@@ -243,5 +244,5 @@ No recipe is learned from examples in this release: both shipped transformations
 - The application oracles run in the trust boundary. On Linux the boundary currently refuses to run (the namespace backend lacks proved read denial), so repair execution there is `blocked`, never a downgraded pass. The execution tests were run on macOS with the userspace backend.
 - No model proposes candidates in this release. Candidates come from the shipped recipes (`sql-parameterize-template`, `path-realpath-containment`) or are supplied by a person (`--candidates`). Server-side request forgery, object authorization and password storage have no recipe.
 - The challenge corpus (`bench/repair/`) is synthetic regression evidence written by the verifier's authors. It is not an independent accuracy measurement.
-- A verified repair is source-only. Nothing is built, staged or deployed, and the record never says otherwise.
+- A verified repair is source-only until `repair artifact` checks an image. Even then nothing is staged or deployed by this tool, `environment` stays `not-checked`, and no deployment receipt or signature changes any state. Migrations and rollback windows are not exercised.
 - An exported bundle's integrity establishes custody, not semantic correctness. Re-run the plan to re-establish evidence.

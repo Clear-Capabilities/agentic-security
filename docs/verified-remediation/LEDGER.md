@@ -156,10 +156,22 @@ Measured on 2026-11-16 on this checkout (macOS, userspace backend).
 | M4-03 ecosystem adapters and pinned real packages | open | | | npm only. Haskell, Nix, Python and other ecosystems have no adapter; the packages are synthetic, so AC-14.5 is not met. |
 | M4-04 credential lifecycle plan and evidence, scoped connectors | integration-tested (macOS) | `src/repair/credentials.js`, oracle version 4 (`env`, route `requireHeaders`), `credential` family, `credential-removed` obligation, record field `lifecycle` | `test/repair/repair-credential.test.js`, `npm run bench:repair:challenge:check` | The leaked value is never stored: the contract records its location and length, the verifier reads it from the original snapshot at check time, and the run record redacts every recognised form of it (a pre-existing path, change-scope signals copying source lines, was carrying it into records). AC-15.1 base64, split literals and a fallback literal are rejected; a replacement read from the wrong variable fails against a host that accepts only the replacement; reading the declared variable is verified. AC-15.2 that repair is `verified-for-contract` with `lifecycle.complete: false` and `revocation: required-not-verified`. AC-15.3 a connector error or a reply without a receipt is `failed`. AC-15.5 no connector is called unless the operator asks, and a profile has no field that could. No connector ships; distribution is never checked. |
 | M4-05 effective infrastructure configuration | open | | | Not built in this part. |
-| M4-06 source-to-artifact, staging, migrations, rollback | open | | | Not built in this part. |
+| M4-06 source-to-artifact, staging, migrations, rollback | partial (third part) | see below | | |
 | AC-12.4 (all seven families) | integration-tested | `bench/repair/` | `npm run bench:repair:challenge:check` | 50 cases: unsafe accepted 0/40, caught by the declared obligation 40/40, safe rejected 0/10. Synthetic, shared authorship. |
 
 Self-scan baseline change, reviewed (698 to 701): `repair/contracts.js` 1 to 2 and `repair/dependencies.js` 0 to 1 (synchronous reads of the declared package tarballs, verifier side), `repair/credentials.js` 0 to 1 (the per-module contract-route report on line 0).
+
+## M4, third part: source-to-artifact verification
+
+Measured on 2026-11-16 on this checkout (macOS, userspace backend).
+
+| ID | Status | Changed paths | Verification | Evidence and limitation |
+| --- | --- | --- | --- | --- |
+| M4-06 source-to-artifact | integration-tested (macOS, synthetic images) | `src/repair/artifact.js`, `src/repair/cli.js` (`repair artifact`, `repair export` artifact digest, `repair verify --image`) | `test/repair/repair-artifact.test.js` | The image is read through the existing hardened archive reader. Every patched file is compared by digest (AC-16.1: an image built from the unpatched source shows the pre-patch digest and is `artifact-mismatch`); for a dependency repair every package the verified lockfile resolves must be in the image at that version, and a vulnerable copy anywhere under the application directory is a mismatch (AC-16.2); with execution enabled the contract's oracle obligations are re-run on the image's own files through the trust boundary. `artifact-verified` needs all three; content alone is `unavailable`. AC-16.6: a revision label and a signature label on an unpatched image change nothing. AC-16.5: an export names the checked image's digest, and `repair verify --image` refuses a different image. |
+| M4-06 staging, migrations, rollback (AC-16.3, AC-16.4) | open | | | Nothing is deployed or observed in staging; `environment` stays `not-checked`. No database migration or rollback window is exercised. |
+| M4-05 effective infrastructure configuration | open | | | Not built. |
+
+Self-scan baseline change, reviewed (701 to 704): `repair/cli.js` 3 to 6 (two more stderr message templates of the reviewed class, and a timing-comparison report on two public image digests, which are not secrets).
 
 ## M3 and later
 

@@ -9,7 +9,7 @@ import path from 'node:path';
 import { digestOf } from '../posture/assurance/identity.js';
 import { resolveAssuranceConfig } from '../posture/assurance/config.js';
 import { stateDir } from '../posture/state-dir.js';
-import { validateContract } from './schemas.js';
+import { validateContract, validateRepairRecord } from './schemas.js';
 import { planFromInputs } from './intake.js';
 import { obligationSummary, supportFor } from './contracts.js';
 import { runRepair, readRun, requestCancel, runsDir, isRunId, EXIT, validatePolicy } from './coordinator.js';
@@ -22,8 +22,9 @@ export const USAGE = `agentic-security repair <command>
   show    <run-id> [--root <path>] [--json]
   resume  <run-id> [--allow-execution] [--root <path>] [--json]
   cancel  <run-id> [--root <path>]
-  verify  <bundle-dir> [--root <path>] [--json]
+  verify  <bundle-dir> [--root <path>] [--image <archive.tar>] [--json]
   export  <run-id> --out <directory> [--root <path>]
+  artifact <run-id> --image <archive.tar> --app-dir <dir> [--allow-execution] [--root <path>] [--json]
   import  --format sarif|normalized --file <report.json> | --show <import-id> | --accept-risk <imported-id> --import <import-id> --reason <why> [--root <path>] [--json]
   recipes list|evaluate|promote|retire|rollback|draft [<recipe-id>[@<version>]] [--reason <why>] [--file <recipe.json>] [--allow-execution] [--root <path>] [--json]
 families: sql-injection, object-authorization, ssrf, path-traversal, password-storage, dependency, credential
@@ -188,10 +189,11 @@ async function cmdExport(args, root) {
   const manifest = {
     schema: 'agentic-security/repair-export', schemaVersion: '1.0.0', runId: id, contractId: r.plan.contract.contractId, contractDigest: r.plan.contract.contractDigest,
     sourceDigest: r.plan.contract.sourceDigest, disposition: r.record.disposition, completion: r.record.completion, application: r.record.application, artifact: r.record.artifact, environment: r.record.environment,
+    artifactDigest: r.record.source?.artifactDigest ?? null,
     patchDigest: r.record.patchDigest ?? null, patchFiles, approvalsRequired: r.plan.contract.policyFacts.filter((f) => f.approval !== 'approved').map((f) => `${f.id}: ${f.approval}`),
     rollback: 'the patch replaces whole files; the before digests in record.json name the content to restore, and an applied patch is reverted with `agentic-security undo`',
     redactions: 'request header values in the contract are replaced by digests; patch bytes are exported unchanged',
-    claim: r.record.disposition === 'verified-for-contract' ? `verified for contract ${r.plan.contract.contractId} only; source-only, nothing built or deployed` : 'not verified',
+    claim: r.record.disposition !== 'verified-for-contract' ? 'not verified' : r.record.artifact === 'artifact-verified' ? `verified for contract ${r.plan.contract.contractId} only, in the source and in image ${r.record.source.artifactDigest}; staging and deployment not observed` : `verified for contract ${r.plan.contract.contractId} only; source-only, nothing built or deployed`,
   };
   fs.writeFileSync(path.join(dest, 'bundle.json'), JSON.stringify(manifest, null, 2) + '\n');
   out(args, `exported ${id} to ${dest} (${Object.keys(patchFiles).length} patched file(s)); an export does not mean the patch is verified: ${manifest.claim}`, manifest);
@@ -217,6 +219,17 @@ async function cmdVerify(args, root) {
   let contract = null;
   try { contract = JSON.parse(fs.readFileSync(path.join(path.resolve(dir), 'contract.json'), 'utf8')); } catch { problems.push('contract.json is missing'); }
   if (contract && contract.contractDigest !== m.contractDigest) problems.push('the contract in the bundle is not the one the manifest names');
+  let artifactMatches = null;
+  if (args.flags.image) {
+    // AC-16.5: the bundle names the exact image it was checked against; a different image is a different artifact
+    try {
+      const { readImage } = await import('./artifact.js');
+      const img = readImage(fs.readFileSync(path.resolve(String(args.flags.image))));
+      artifactMatches = !!m.artifactDigest && img.digest === m.artifactDigest;
+      if (!m.artifactDigest) problems.push('the bundle names no checked artifact');
+      else if (!artifactMatches) problems.push(`the image is ${img.digest}, not the checked artifact ${m.artifactDigest}`);
+    } catch (e) { problems.push(`the image could not be read: ${String(e.message).slice(0, 120)}`); }
+  }
   let sourceMatches = null;
   if (contract && args.flags.root) {
     const { snapshotSource } = await import('./contracts.js');
@@ -227,7 +240,7 @@ async function cmdVerify(args, root) {
   }
   const ok = problems.length === 0;
   out(args, ok ? `bundle intact: ${m.claim}${sourceMatches === 'baseline' ? '; the source under --root is the verified baseline (patch not applied)' : sourceMatches === 'patch-applied' ? '; the patched files under --root are exactly the patch' : ''}. Integrity is custody, not a re-verification: re-run the plan to re-establish evidence` : `bundle problems:\n  ${problems.join('\n  ')}`,
-    { ok, problems, sourceMatches, claim: m.claim, note: 'integrity establishes custody, not semantic correctness; nothing was executed' });
+    { ok, problems, sourceMatches, artifactMatches, claim: m.claim, note: 'integrity establishes custody, not semantic correctness; nothing was executed' });
   return ok ? EXIT.ok : EXIT.failed;
 }
 
@@ -313,9 +326,33 @@ function importText(rec) {
   return lines.join('\n');
 }
 
+// `repair artifact`: does a built image contain the verified repair, and does it still meet the contract (FR-16)? Content and package
+// checks need nothing else; re-running the contract's checks on the image's own files executes it, so it needs --allow-execution.
+async function cmdArtifact(args, root) {
+  const id = args._[2];
+  const r = readRun(root, id);
+  if (r.error) { err(r.error); return isRunId(id) ? EXIT.blocked : EXIT.usage; }
+  if (!args.flags.image || !args.flags['app-dir']) { err('artifact needs --image <archive.tar> and --app-dir <dir> (where the application lives inside the image)'); return EXIT.usage; }
+  if (r.record.disposition !== 'verified-for-contract' || !r.record.exactPatch) { err(`run ${id} has no verified patch to look for (disposition ${r.record.disposition})`); return EXIT.blocked; }
+  const { readImage, compareArtifact, rerunOnArtifact, artifactVerdict } = await import('./artifact.js');
+  let image;
+  try { image = readImage(fs.readFileSync(path.resolve(String(args.flags.image)))); } catch (e) { err(`the image could not be read: ${String(e.message).slice(0, 200)}`); return EXIT.usage; }
+  const comparison = compareArtifact({ record: r.record, plan: r.plan, image, appDir: args.flags['app-dir'] });
+  let checks = [];
+  if (args.flags['allow-execution'] && !comparison.problems.length) checks = await rerunOnArtifact({ record: r.record, plan: r.plan, image, appDir: args.flags['app-dir'], config: configFor(args, root) });
+  const v = artifactVerdict({ image, appDir: args.flags['app-dir'], comparison, checks });
+  const updated = { ...r.record, artifact: v.artifact, source: v.source };
+  if (!args.flags['allow-execution'] && !comparison.problems.length) updated.source.problems.push('the contract checks were not re-run on the artifact (pass --allow-execution)');
+  const valid = validateRepairRecord(updated);
+  if (!valid.ok) { err(`the updated record failed its schema: ${valid.errors.map((e) => e.message).join('; ')}`); return EXIT.blocked; }
+  fs.writeFileSync(path.join(r.dir, 'record.json'), `${JSON.stringify(updated, null, 2)}\n`);
+  out(args, [`artifact ${image.digest}: ${v.artifact}`, ...v.source.files.map((f) => `  ${f.state.padEnd(10)} ${f.file}`), ...v.source.packages.map((p) => `  ${p.state.padEnd(10)} ${p.path}@${p.version}`), ...v.source.checks.map((c) => `  ${c.status.padEnd(10)} ${c.obligation} on the artifact`), ...v.source.problems.map((p) => `  problem: ${p}`), 'staging and deployment are not observed'].join('\n'), { artifact: v.artifact, source: v.source });
+  return v.artifact === 'artifact-verified' ? EXIT.ok : v.artifact === 'artifact-mismatch' ? EXIT.failed : EXIT.blocked;
+}
+
 export async function cmdRepair(args, root) {
   const sub = args._[1];
-  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes, import: cmdImport };
+  const handlers = { plan: cmdPlan, run: cmdRun, show: cmdShow, resume: cmdResume, cancel: cmdCancel, export: cmdExport, verify: cmdVerify, recipes: cmdRecipes, import: cmdImport, artifact: cmdArtifact };
   if (!handlers[sub] || args.flags.help) { (handlers[sub] ? process.stdout : process.stderr).write(`${USAGE}\n`); return args.flags.help ? EXIT.ok : EXIT.usage; }
   try { return await handlers[sub](args, root); } catch (e) { err(String(e?.message || e)); return EXIT.blocked; }
 }
