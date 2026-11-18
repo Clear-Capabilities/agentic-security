@@ -139,3 +139,37 @@ function _remediation(fp) {
   if (/\.(?:php|phtml)$/i.test(fp)) return 'Use random_bytes(32) or random_int(0, $max).';
   return 'Use crypto.randomBytes(32).toString("hex") or crypto.getRandomValues().';
 }
+
+// The `jsbn` big-integer package ships its own `SecureRandom`. Despite the name it is an RC4-based generator seeded from
+// `window.crypto` only when that exists; under Node, and in any page where it does not, the seed pool is filled from `Math.random()`
+// and the time, so the "secure" output is predictable. It is used to draw private keys and nonces (`new BigInteger(bits, rng)`).
+// Reported where the class is imported, which is where the fix replaces it with a CSPRNG-backed source; only when the file actually
+// instantiates it.
+const JSBN_IMPORT = /(?:\{[^}]{0,200}\bSecureRandom\b[^}]{0,200}\}\s*=\s*require\(\s*(['"])jsbn\1\s*\)|import\s*\{[^}]{0,200}\bSecureRandom\b[^}]{0,200}\}\s*from\s*(['"])jsbn\2|\bSecureRandom\s*=\s*require\(\s*(['"])jsbn\3\s*\)\s*\.\s*SecureRandom\b)/g;
+
+export function scanJsbnSecureRandom(fp, raw) {
+  if (!fp || typeof raw !== 'string' || !/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(fp)) return [];
+  if (!raw.includes('jsbn') || !/\bnew\s+SecureRandom\s*\(/.test(raw)) return [];
+  const findings = [];
+  for (const m of raw.matchAll(JSBN_IMPORT)) {
+    const at = m.index + m[0].indexOf('SecureRandom');
+    const line = _line(raw, at);
+    const ls = raw.lastIndexOf('\n', at) + 1;
+    const le = raw.indexOf('\n', at);
+    findings.push({
+      id: `weak-rng-jsbn:${fp}:${line}`,
+      file: fp,
+      line,
+      vuln: 'Insecure Randomness: jsbn SecureRandom (seeded from Math.random outside browsers) used as a random source',
+      severity: 'high',
+      family: 'weak-rng',
+      cwe: 'CWE-338',
+      parser: 'WEAK-RNG',
+      confidence: 0.75,
+      description: 'The `SecureRandom` class exported by the `jsbn` package seeds an RC4 generator from `window.crypto` only when it exists. Under Node.js, and anywhere `window.crypto` is missing, its pool is filled from `Math.random` and the clock, so keys or nonces drawn from it can be predicted.',
+      remediation: 'Draw random bytes from the platform CSPRNG instead: `crypto.randomBytes` or `crypto.getRandomValues`, wrapped in an object with the `nextBytes(array)` method jsbn expects if it is passed to `new BigInteger(bits, rng)`.',
+      snippet: raw.slice(ls, le > 0 ? le : raw.length).trim().slice(0, 120),
+    });
+  }
+  return findings;
+}

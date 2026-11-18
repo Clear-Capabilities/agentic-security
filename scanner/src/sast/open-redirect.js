@@ -104,14 +104,79 @@ function _isEnclosingParam(code, callIdx, target) {
   return params.includes(target) || goParams.includes(target);
 }
 
+// A "starts with /" test alone is not a same-origin check: `//evil.example` and `/\\evil.example` start with `/` and browsers treat
+// them as another host. The prefix patterns of ALLOWLIST_PATTERNS count only when the same code also rejects those.
+const PREFIX_ONLY_PATTERNS = new Set([ALLOWLIST_PATTERNS[3], ALLOWLIST_PATTERNS[4], ALLOWLIST_PATTERNS[16]]);
+const REJECTS_PROTOCOL_RELATIVE =
+  /['"`]\/\/['"`]|\\\/\\\/|['"`]\/\\\\['"`]|\[\s*1\s*\]\s*[!=]==?\s*['"`]\/|charAt\s*\(\s*1\s*\)|\.host(?:name)?\b|\bnetloc\b|\bhost\.nil\?|\bnew\s+URL\s*\(|\burlparse\s*\(|\bparse_url\s*\(|\burl\.Parse\s*\(|\bURI\s*\(|url_has_allowed_host_and_scheme|is_safe_url|IsLocalUrl/;
+
+const BARE_SLASH_PREFIX = /(?:startsWith\s*\(\s*['"]\/['"]\s*\)|HasPrefix\s*\(\s*\w+\s*,\s*"\/"\s*\))/;
+
 function _allowListedPrior(raw, callLine, target) {
   const lines = raw.split('\n');
   const lo = Math.max(0, callLine - 30);
   const before = lines.slice(lo, callLine).join('\n');
   // Strip the target out of `before` so the regex isn't fooled by the
   // target literal itself appearing in an allow-list match.
-  for (const p of ALLOWLIST_PATTERNS) if (p.test(before)) return true;
+  for (const p of ALLOWLIST_PATTERNS) {
+    if (!p.test(before)) continue;
+    // a longer fixed prefix (`startsWith('/app/')`) pins the path; a bare `/` does not pin the host
+    if (PREFIX_ONLY_PATTERNS.has(p) && BARE_SLASH_PREFIX.test(before) && !REJECTS_PROTOCOL_RELATIVE.test(before)) continue;
+    return true;
+  }
   return false;
+}
+
+// A "local path" check used as the same-origin guard of a redirect that accepts anything starting with `/` (CWE-601): Ruby's
+// URI ABS_PATH regexp, `start_with?('/')`, `startsWith('/')`, `startswith('/')`, `[0] === '/'`. `//host/x` and `/\host/x` pass all of
+// them and leave the site. Reported at the check, in code about redirects, unless the same lines also reject `//` and `/\` or parse
+// the host.
+const LOCAL_PATH_TEST = {
+  rb: /=~\s*URI(?:::DEFAULT_PARSER|::RFC2396_PARSER|::Parser\.new|::RFC2396_Parser\.new)?\.regexp\[\s*:ABS_PATH\s*\]|=~\s*URI::ABS_PATH\b|\.start_with\?\s*\(?\s*['"]\/['"]\s*\)?|=~\s*%r\{\\A\/\}|=~\s*\/\\A\\\/\//g,
+  js: /\.startsWith\s*\(\s*['"`]\/['"`]\s*\)|\[\s*0\s*\]\s*===?\s*['"`]\/['"`]|\.charAt\s*\(\s*0\s*\)\s*===?\s*['"`]\/['"`]/g,
+  py: /\.startswith\s*\(\s*['"]\/['"]\s*\)/g,
+  php: /\bstr_starts_with\s*\(\s*\$\w+\s*,\s*['"]\/['"]\s*\)|\$\w+\s*\[\s*0\s*\]\s*===?\s*['"]\/['"]/g,
+};
+const REDIRECT_CONTEXT = /redirect|return_?to|returnUrl|same_?origin|next_?url|safe_?url|local_?url|callback_?url|continue_?url/i;
+
+export function scanWeakLocalPathGuard(fp, raw) {
+  if (!raw || raw.length > 500_000) return [];
+  const lang = _lang(fp);
+  const re0 = LOCAL_PATH_TEST[lang];
+  if (!re0 || !REDIRECT_CONTEXT.test(raw)) return [];
+  const code = blankComments(raw, (lang === 'py' || lang === 'rb') ? 'py' : undefined);
+  const lines = code.split('\n');
+  const out = [];
+  const seen = new Set();
+  const re = new RegExp(re0.source, re0.flags);
+  let m;
+  while ((m = re.exec(code))) {
+    const line = _lineOf(code, m.index);
+    if (seen.has(line)) continue;
+    const text = lines[line - 1] || '';
+    // the test must decide something: a condition, a boolean expression, or a returned predicate
+    if (!/\b(?:if|unless|elsif|elif|return|when|while)\b|&&|\|\||\?|\band\b|\bor\b/.test(text)
+      && !/^\s*(?:\|\||&&|or\b|and\b)/.test(lines[line] || '') && !/(?:\|\||&&|\bor|\band)\s*$/.test(lines[line - 2] || '')) continue;
+    // `p.startsWith('/') ? p : '/' + p` adds a missing slash; it is normalisation, not a guard
+    if (/\?[^:]*:\s*(?:`\/\$\{|['"]\/['"]\s*[+.]|"\/#\{)/.test(text)) continue;
+    const win = lines.slice(Math.max(0, line - 11), Math.min(lines.length, line + 10)).join('\n');
+    if (!REDIRECT_CONTEXT.test(win)) continue;
+    const near = lines.slice(Math.max(0, line - 6), Math.min(lines.length, line + 5)).join('\n');
+    if (REJECTS_PROTOCOL_RELATIVE.test(near)) continue;
+    seen.add(line);
+    out.push({
+      id: `open-redirect-weak-local-path:${fp}:${line}`,
+      file: fp, line,
+      vuln: 'Open Redirect: "local path" check accepts //host and /\\host',
+      severity: 'medium', cwe: 'CWE-601', family: 'open-redirect', stride: 'Spoofing',
+      snippet: (raw.split('\n')[line - 1] || '').trim().slice(0, 200),
+      description: 'A redirect target is accepted as same-site because it starts with `/` (or matches an absolute-path pattern). `//attacker.example/x` and `/\\attacker.example/x` pass that test, and browsers resolve both to another host, so the check lets an attacker send users off the site.',
+      remediation: 'Also reject targets whose second character is `/` or `\\`, or parse the target and require that it has no host (or a host on your allow-list) before redirecting.',
+      parser: 'OPEN-REDIRECT',
+      confidence: 0.6,
+    });
+  }
+  return out;
 }
 
 export function scanOpenRedirect(fp, raw) {

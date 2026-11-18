@@ -320,12 +320,71 @@ function branchTerminates(lines, block) {
   return false;
 }
 
+/**
+ * A throwing validator called as a plain statement directly inside a `try:` block, where EVERY `except` handler of that `try`
+ * leaves (raise, return, abort), and the sink comes after the whole try statement at the try's own level or deeper:
+ *
+ *     try:
+ *         check_url(u)
+ *     except PolicyError as e:
+ *         raise ValueError(...)
+ *     fetch(u)
+ *
+ * Either the validator returned normally or the exception it raised ends the function, so the sink runs only after the check
+ * passed. A handler that swallows (`pass`, a log line) breaks it, and so does an `else:` clause (code there is skipped by
+ * nothing). Indentation style only.
+ */
+function tryGuardHandlersExit(lines, guardIdx, sinkIdx, gl) {
+  if (CONDITIONAL_HEAD.test(gl) || BOOLEAN_ASSIGN.test(gl)) return false;
+  const gi = indentOf(lines[guardIdx]);
+  // The guard must be a direct statement of the try body.
+  let tryIdx = -1;
+  for (let i = guardIdx - 1; i >= 0; i--) {
+    if (blank(lines[i])) continue;
+    const ind = indentOf(lines[i]);
+    if (ind >= gi) { if (ind === gi) continue; continue; }
+    tryIdx = /^\s*try\s*:\s*$/.test(code(lines[i])) ? i : -1;
+    break;
+  }
+  if (tryIdx < 0) return false;
+  const ti = indentOf(lines[tryIdx]);
+  let handlers = 0;
+  let end = -1;
+  for (let i = guardIdx + 1; i <= sinkIdx; i++) {
+    if (blank(lines[i])) continue;
+    const ind = indentOf(lines[i]);
+    if (ind > ti) continue;
+    if (ind < ti) return false;
+    const c = code(lines[i]);
+    if (/^\s*except\b[^:]*:\s*$/.test(c)) {
+      handlers++;
+      const body = [];
+      for (let k = i + 1; k < lines.length; k++) { if (blank(lines[k])) continue; if (indentOf(lines[k]) <= ti) break; body.push(k); }
+      const inner = body.length ? indentOf(lines[body[0]]) : -1;
+      if (!body.some((k) => indentOf(lines[k]) === inner && TERMINATOR.test(code(lines[k])))) return false;
+      continue;
+    }
+    if (/^\s*finally\s*:\s*$/.test(c)) continue;
+    if (/^\s*else\s*:\s*$/.test(c)) return false;
+    end = i;
+    break;
+  }
+  if (!handlers || end < 0) return false;
+  // From the end of the try statement to the sink, nothing may close the try's own block.
+  for (let i = end; i <= sinkIdx; i++) { if (!blank(lines[i]) && indentOf(lines[i]) < ti) return false; }
+  return true;
+}
+
 function indentDominates(lines, guardIdx, sinkIdx, gl) {
   const gi = indentOf(lines[guardIdx]);
   // The guard's block must still enclose the sink: no non-blank line between may be LESS indented than the guard.
   for (let i = guardIdx + 1; i <= sinkIdx; i++) {
     if (blank(lines[i])) continue;
-    if (indentOf(lines[i]) < gi) return result(false, 'guard-block-closed-before-sink');
+    if (indentOf(lines[i]) < gi) {
+      return tryGuardHandlersExit(lines, guardIdx, sinkIdx, gl)
+        ? result(true, 'try-guard-every-handler-exits')
+        : result(false, 'guard-block-closed-before-sink');
+    }
   }
   if (MODIFIER_EXIT.test(gl)) return result(true, 'early-exit-on-guard-line');
   const head = CONDITIONAL_HEAD.test(gl) || /\bif\b|\bunless\b/.test(gl) && /:\s*$/.test(gl);

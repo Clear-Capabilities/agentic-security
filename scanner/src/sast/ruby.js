@@ -230,6 +230,45 @@ function _returnedFromPathResolver(code, start, end) {
   return next === undefined || RB_TAIL_CLOSERS.test(next);                // last expression of its branch or method
 }
 
+// Kernel#open with a path that is not a literal (CWE-78). Receiver-less `open(x)` is Kernel#open: when x begins with `|` Ruby starts
+// the rest of x as a shell command and returns a pipe to it. File.open never does that, so a name that comes from a directory listing,
+// an argument or a config can run a command. Silent on a literal first argument, on any receiver (`File.open`, `URI.open`, `io.open`),
+// and in a file that defines its own `open` method, where the bare call is that method.
+const KERNEL_OPEN_RE = /(^|[^\w.:@$])open(?:\s*\(\s*|[ \t]+)(?!nil\b|true\b|false\b|self\b)([A-Za-z_@][\w@.:?!\[\]]{0,80})\s*(?=[,)\n]|\s+do\b|\s*\{)/gm;
+export function scanRubyKernelOpen(fp, raw) {
+  if (!/\.(?:rb|rake)$/i.test(fp)) return [];
+  if (!raw || raw.length > 500_000 || !/\bopen\b/.test(raw)) return [];
+  const code = blankComments(raw, 'py');
+  if (/\bdef\s+(?:self\.)?open\b|\balias(?:_method)?\s+:?open\b|define_method\s*\(?\s*:open\b/.test(code)) return [];
+  const out = []; const seen = new Set();
+  const re = new RegExp(KERNEL_OPEN_RE.source, 'gm');
+  let m;
+  while ((m = re.exec(code))) {
+    const at = m.index + m[1].length;
+    const before = code.slice(code.lastIndexOf('\n', at - 1) + 1, at);
+    // a definition, or a word inside a string on this line
+    if (/\bdef\s+$/.test(before) || /['"]/.test(before.replace(/(['"])(?:\\.|(?!\1)[^\\\n])*\1/g, ''))) continue;
+    if (/%[wiWI][([{][^)\]}]*$/.test(before)) continue; // a word in a %w() list
+    // without parentheses, `open x` must start an expression (prose in a heredoc reads `..., open Xcode.app,`)
+    if (!/^\s*\(/.test(code.slice(at + 4)) && !/(?:^\s*|[=(|&{]\s*|\b(?:return|and|or|unless|if|then|do)\s+)$/.test(before)) continue;
+    const arg = m[2];
+    if (/^[A-Z][A-Z0-9_]*$/.test(arg)) continue; // a constant
+    const line = lineOf(raw, at);
+    if (seen.has(line)) continue;
+    seen.add(line);
+    out.push({
+      id: `ruby-kernel-open:${fp}:${line}`, file: fp, line,
+      vuln: 'Command Injection: Kernel#open with a non-literal path',
+      severity: 'high', cwe: 'CWE-78', family: 'command-injection', parser: 'RUBY',
+      description: `\`open(${arg}, ...)\` is Kernel#open, not File.open: a value that starts with \`|\` makes Ruby run the rest of it as a shell command. A file name from a directory listing, an argument or a setting is enough.`,
+      remediation: 'Use File.open (or File.read / IO.binread) for files, and URI.open only for URLs you have validated. Neither treats a leading `|` as a command.',
+      snippet: (raw.split('\n')[line - 1] || '').trim().slice(0, 200),
+      confidence: 0.6,
+    });
+  }
+  return out;
+}
+
 /** File.join(...) whose last component is variable and which reaches the filesystem. */
 export function scanRubyPathJoin(fp, raw) {
   if (!/\.rb$/i.test(fp)) return [];

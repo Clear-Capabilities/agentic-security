@@ -129,3 +129,36 @@ test('files in other languages and files with no authorization checks are ignore
   assert.deepEqual(scanAuthzSubjectConsistency('C.php', php([bare('a'), bare('b'), bare('c'), bare('d')])), []);
   assert.deepEqual(scanAuthzSubjectConsistency('C.php', ''), []);
 });
+
+// Action-keyed checks (`userHasAccess('publish')` in `publish()`): the framework's handlers for the same action must run them too.
+test('ReportBehavior.php: an action handler that skips the check its action applies by name is reported at its first statement', () => {
+  const code = read('vulnerable', 'ReportBehavior.php');
+  const out = scanAuthzSubjectConsistency('ReportBehavior.php', code);
+  assert.deepEqual(out.map((f) => f.line), [lineOf(code, "$report = $this->loadReport(post('id'));")]);
+  assert.equal(out[0].cwe, 'CWE-285');
+  assert.match(out[0].vuln, /onPublish serves the 'publish' action/);
+  assert.deepEqual(scanAuthzSubjectConsistency('ReportBehavior.php', read('clean', 'ReportBehavior.php')), []);
+});
+
+test('one action keyed by name is not a convention, and a helper with no handler prefix is not an entry point', () => {
+  const one = read('vulnerable', 'ReportBehavior.php').replace(/userHasAccess\('archive'\)/g, "userHasAccess('other')");
+  assert.deepEqual(scanAuthzSubjectConsistency('ReportBehavior.php', one), []);
+  const helper = read('vulnerable', 'ReportBehavior.php').replace('function onPublish()', 'function publishPreview()');
+  assert.deepEqual(scanAuthzSubjectConsistency('ReportBehavior.php', helper), []);
+});
+
+// A role check names no subject: when the siblings check the subject itself, a role-only handler is still an outlier.
+test('TenantResource.java: handlers gated only by a global role while siblings check the tenant are reported', () => {
+  const code = read('vulnerable', 'TenantResource.java');
+  const out = scanAuthzSubjectConsistency('TenantResource.java', code);
+  assert.deepEqual(out.map((f) => f.vuln.split(' takes')[0]), ['Missing authorization: get', 'Missing authorization: getUserRoles']);
+  assert.deepEqual(scanAuthzSubjectConsistency('TenantResource.java', read('clean', 'TenantResource.java')), []);
+});
+
+test('a local read from the caller identity, and a delegating handler, are not outliers; throwIfNotFound is not a guard', () => {
+  const code = read('vulnerable', 'TenantResource.java');
+  const names = scanAuthzSubjectConsistency('TenantResource.java', code).map((f) => f.vuln);
+  assert.ok(!names.some((v) => /updateMine|renameAll/.test(v)));
+  const notFound = code.replace(/throwIfCannotManageTenant\(tenant\);/g, 'throwIfNotFound(tenant);');
+  assert.deepEqual(scanAuthzSubjectConsistency('TenantResource.java', notFound), []);
+});

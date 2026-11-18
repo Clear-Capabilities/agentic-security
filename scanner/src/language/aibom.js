@@ -196,7 +196,7 @@ export function extractNixAI(files) {
   // the NixOS entry point: a configuration.nix (shortest path wins), else the file no other file imports by name
   const names = Object.keys(nix).sort((a, b) => a.length - b.length || a.localeCompare(b));
   const base = (p) => p.replace(/^.*\//, '');
-  const importedBy = (f) => names.some((o) => o !== f && new RegExp(`\\./?(?:[\\w./-]*/)?${base(f).replace(/\./g, '\\.')}\\b`).test(nix[o]));
+  const importedBy = (f) => names.some((o) => o !== f && new RegExp(`\\./?(?:[\\w./-]*/)?${base(f).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(nix[o]));
   const entry = names.find((p) => base(p) === 'configuration.nix') || names.find((p) => !importedBy(p)) || names[0];
   let cfg = null;
   try { cfg = resolveNixosConfig({ entry, files: nix }); } catch (e) { gaps.push({ kind: 'nixos-resolution-failed', detail: e.message }); }

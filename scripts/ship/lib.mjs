@@ -114,7 +114,7 @@ export function preflightProblems({ version, files, changelog, npmLatest, branch
   if (dirty) problems.push(`the working tree has ${dirty} uncommitted change(s)`);
   if (npmLatest && version && cmpVersions(version, npmLatest) <= 0) problems.push(`version ${version} is not greater than the published ${npmLatest}`);
   for (const [path, text] of Object.entries(files || {})) if (version && !String(text).includes(version)) problems.push(`${path} does not mention version ${version}`);
-  if (version && !new RegExp(`^## ${version.replace(/\./g, '\\.')}\\b`, 'm').test(changelog || '')) problems.push(`CHANGELOG.md has no "## ${version}" entry`);
+  if (version && !new RegExp(`^## ${version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'm').test(changelog || '')) problems.push(`CHANGELOG.md has no "## ${version}" entry`);
   return problems;
 }
 

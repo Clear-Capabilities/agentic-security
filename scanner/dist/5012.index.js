@@ -1,0 +1,3550 @@
+export const id = 5012;
+export const ids = [5012,119];
+export const modules = {
+
+/***/ 30119:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   ET: () => (/* binding */ readTarEntries),
+/* harmony export */   Jn: () => (/* binding */ whiteoutTarget),
+/* harmony export */   TarSafetyError: () => (/* binding */ TarSafetyError),
+/* harmony export */   dR: () => (/* binding */ DEFAULT_LIMITS),
+/* harmony export */   l0: () => (/* binding */ isWhiteoutName),
+/* harmony export */   zr: () => (/* binding */ decompressIfGzip)
+/* harmony export */ });
+/* unused harmony export isSafeEntryName */
+/* harmony import */ var node_zlib__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(38522);
+// Hand-rolled, hardened POSIX/GNU tar reader for OCI/Docker image archives.
+//
+// Why hand-rolled instead of a dependency: this repo has no tar library (see
+// `src/artifact/CLAUDE.md`), and PRD 5's own Safety Requirements ask for exact
+// control over the failure modes a generic tar library treats as implementation
+// detail: malicious entry paths, decompression bombs, giant layers, oversized
+// archives. Rolling it ourselves means every one of those limits is a named,
+// tested constant in this file rather than a library default we'd have to audit.
+//
+// Scope: ustar + GNU longname ('L' typeflag) + base-256 size fields. PAX extended
+// headers ('x'/'g') and GNU longlink ('K') are structurally skipped (their data
+// block is consumed so offsets stay correct, but their content is not applied) —
+// a disclosed limitation, not a silent one. Real docker-save/oci-archive output
+// from Go's archive/tar for images in this size/complexity class essentially
+// never needs them; synthetic fixtures in this codebase never emit them either.
+
+
+const BLOCK = 512;
+
+const DEFAULT_LIMITS = Object.freeze({
+  maxEntries: 200_000,
+  maxEntrySize: 512 * 1024 * 1024, // 512MB per tar entry
+  maxTotalSize: 4 * 1024 * 1024 * 1024, // 4GB per archive (sum of entry sizes)
+  maxGunzipOutput: 4 * 1024 * 1024 * 1024, // decompression-bomb guard
+});
+
+class TarSafetyError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.name = 'TarSafetyError';
+    this.code = code;
+  }
+}
+
+function parseSizeField(buf) {
+  if (buf[0] & 0x80) {
+    // GNU base-256 extension for sizes that don't fit in octal-ASCII.
+    let n = 0n;
+    for (let i = 1; i < buf.length; i++) n = (n << 8n) | BigInt(buf[i]);
+    return Number(n);
+  }
+  const s = buf.toString('ascii').replace(/\0.*$/, '').trim();
+  if (!s) return 0;
+  const n = parseInt(s, 8);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function cstr(buf) {
+  return buf.toString('utf8').replace(/\0.*$/, '');
+}
+
+// A tar entry name is unsafe when it would escape a virtual extraction root:
+// absolute paths, `..` segments, embedded NULs, or an unreasonable length.
+// Because this module never writes to a real filesystem path (every caller
+// keeps extracted content in an in-memory Map keyed by this string), the
+// classic zip-slip *write* vulnerability cannot occur here — but a hostile
+// name must still never be silently treated as an ordinary path by downstream
+// manifest/package-DB matching, so unsafe entries are flagged, never dropped
+// silently and never accepted as-is.
+function isSafeEntryName(name) {
+  if (typeof name !== 'string' || name.length === 0 || name.length > 4096) return false;
+  if (name.includes('\0')) return false;
+  const norm = name.replace(/\\/g, '/');
+  if (norm.startsWith('/')) return false;
+  if (norm.split('/').some((p) => p === '..')) return false;
+  return true;
+}
+
+function isWhiteoutName(name) {
+  return (name.split('/').pop() || '').startsWith('.wh.');
+}
+
+// Resolves a whiteout entry name to what it deletes. `.wh..wh..opq` marks a
+// directory as "opaque" (everything from earlier layers under it is hidden,
+// not individually deleted) — reported distinctly so callers don't conflate
+// it with a single-file deletion.
+function whiteoutTarget(name) {
+  const parts = name.split('/');
+  const base = parts.pop();
+  if (base === '.wh..wh..opq') return { opaque: true, dir: parts.join('/') };
+  return { opaque: false, path: [...parts, base.slice(4)].join('/') };
+}
+
+// Decompresses a gzip member with a hard output-size cap (Node's native
+// ERR_BUFFER_TOO_LARGE on overflow — no custom streaming counter needed).
+// Returns the input unchanged when it isn't gzip-magic (plain tar).
+function decompressIfGzip(buf, limits = DEFAULT_LIMITS) {
+  if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+    try {
+      return node_zlib__WEBPACK_IMPORTED_MODULE_0__.gunzipSync(buf, { maxOutputLength: limits.maxGunzipOutput });
+    } catch (err) {
+      if (err && err.code === 'ERR_BUFFER_TOO_LARGE') {
+        throw new TarSafetyError('decompressed layer exceeds the decompression-bomb guard', 'gunzip_too_large');
+      }
+      throw new TarSafetyError(`gzip stream is malformed: ${err.message}`, 'gunzip_malformed');
+    }
+  }
+  return buf;
+}
+
+/**
+ * Reads a decompressed tar buffer and yields one record per entry:
+ *   { name, size, typeflag, linkname, data, unsafe }
+ * `data` is a Buffer view into `buf` (never copied) for safe entries, `null`
+ * for unsafe ones. Throws TarSafetyError (never returns a partial result) the
+ * moment any configured limit is exceeded.
+ */
+function* readTarEntries(buf, limits = DEFAULT_LIMITS) {
+  if (!Buffer.isBuffer(buf)) throw new TarSafetyError('tar input must be a Buffer', 'bad_input');
+  let offset = 0;
+  let count = 0;
+  let totalSize = 0;
+  let pendingLongName = null;
+
+  while (offset + BLOCK <= buf.length) {
+    const header = buf.subarray(offset, offset + BLOCK);
+    if (header.every((b) => b === 0)) {
+      offset += BLOCK;
+      continue; // end-of-archive zero-fill padding
+    }
+
+    count += 1;
+    if (count > limits.maxEntries) {
+      throw new TarSafetyError(`tar archive has more than ${limits.maxEntries} entries`, 'too_many_entries');
+    }
+
+    let name = cstr(header.subarray(0, 100));
+    const typeflag = String.fromCharCode(header[156] || 0);
+    const linkname = cstr(header.subarray(157, 257));
+    const magic = header.subarray(257, 263).toString('ascii');
+    const prefix = magic.startsWith('ustar') ? cstr(header.subarray(345, 500)) : '';
+    if (prefix) name = `${prefix}/${name}`;
+    const size = parseSizeField(header.subarray(124, 136));
+
+    offset += BLOCK;
+
+    if (size < 0 || !Number.isFinite(size)) {
+      throw new TarSafetyError(`tar entry "${name}" has an invalid size field`, 'bad_size');
+    }
+    if (size > limits.maxEntrySize) {
+      throw new TarSafetyError(`tar entry "${name}" (${size} bytes) exceeds the per-entry size limit`, 'entry_too_large');
+    }
+    totalSize += size;
+    if (totalSize > limits.maxTotalSize) {
+      throw new TarSafetyError('tar archive exceeds the total-size limit', 'archive_too_large');
+    }
+
+    const dataBlocks = Math.ceil(size / BLOCK);
+    if (offset + size > buf.length) {
+      throw new TarSafetyError(`tar entry "${name}" claims more data than the archive contains`, 'truncated');
+    }
+    const data = size > 0 ? buf.subarray(offset, offset + size) : Buffer.alloc(0);
+    offset += dataBlocks * BLOCK;
+
+    const resolvedName = pendingLongName ? pendingLongName : name;
+    pendingLongName = null;
+
+    if (typeflag === 'L') {
+      // GNU longname: this entry's data IS the next entry's real name.
+      pendingLongName = cstr(data);
+      continue;
+    }
+    if (typeflag === 'K' || typeflag === 'x' || typeflag === 'g') {
+      // GNU longlink / PAX extended header — structurally skipped (see header comment).
+      continue;
+    }
+
+    if (!isSafeEntryName(resolvedName)) {
+      yield { name: resolvedName, size, typeflag, linkname, data: null, unsafe: true };
+      continue;
+    }
+
+    yield { name: resolvedName.replace(/\\/g, '/'), size, typeflag, linkname, data, unsafe: false };
+  }
+}
+
+
+/***/ }),
+
+/***/ 29892:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+
+// EXPORTS
+__webpack_require__.d(__webpack_exports__, {
+  oL: () => (/* binding */ computePatchScope),
+  wN: () => (/* binding */ heuristicSymbols),
+  fA: () => (/* binding */ jsSymbols),
+  ni: () => (/* binding */ legacyBounds),
+  nY: () => (/* binding */ pySymbols)
+});
+
+// UNUSED EXPORTS: DEFAULT_BOUNDS
+
+// EXTERNAL MODULE: external "node:crypto"
+var external_node_crypto_ = __webpack_require__(77598);
+// EXTERNAL MODULE: ../../agentic-security/scanner/node_modules/@babel/parser/lib/index.js
+var lib = __webpack_require__(85209);
+;// CONCATENATED MODULE: ./src/fix/line-diff.js
+// Line diff for patch scope (verified-remediation PRD FR-03, GAP-03).
+//
+// The patch bound used to be |lines(after) - lines(before)|, so rewriting 150 lines into 150 different lines measured zero. This is a
+// real line diff: Myers' O(ND) shortest edit script over whole lines, returning hunks with exact before/after line ranges.
+//
+// Bounded: the edit distance search stops at MAX_EDIT_DISTANCE. Past that the diff is reported `approximate: true` and every line of both
+// sides that is not in the common prefix or suffix counts as changed. That fallback can only OVER-count, never under-count, so a policy
+// that reads it can be too strict but never too lenient.
+//
+// Pure: no fs, no clock.
+
+const MAX_EDIT_DISTANCE = 4000;
+
+const splitLines = (text) => {
+  if (text === null || text === undefined) return [];
+  const s = String(text);
+  if (s === '') return [];
+  const lines = s.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop(); // a trailing newline does not add a line
+  return lines;
+};
+
+// Myers forward search, returning the edit script as a list of ops over the trimmed middle.
+function myers(a, b, maxD) {
+  const n = a.length; const m = b.length; const max = n + m;
+  const off = max + 1;
+  const v = new Int32Array(2 * max + 3);
+  const trace = [];
+  for (let d = 0; d <= Math.min(max, maxD); d++) {
+    trace.push(v.slice());
+    for (let k = -d; k <= d; k += 2) {
+      let x;
+      if (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) x = v[off + k + 1];
+      else x = v[off + k - 1] + 1;
+      let y = x - k;
+      while (x < n && y < m && a[x] === b[y]) { x++; y++; }
+      v[off + k] = x;
+      if (x >= n && y >= m) return backtrack(trace, a, b, off, d);
+    }
+  }
+  return null;
+}
+
+function backtrack(trace, a, b, off, dEnd) {
+  const ops = [];
+  let x = a.length; let y = b.length;
+  for (let d = dEnd; d > 0; d--) {
+    const v = trace[d];
+    const k = x - y;
+    const prevK = (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) ? k + 1 : k - 1;
+    const prevX = v[off + prevK]; const prevY = prevX - prevK;
+    while (x > prevX && y > prevY) { ops.push(['=', x - 1, y - 1]); x--; y--; }
+    if (x === prevX) ops.push(['+', x, y - 1]); else ops.push(['-', x - 1, y]);
+    x = prevX; y = prevY;
+  }
+  while (x > 0 && y > 0) { ops.push(['=', x - 1, y - 1]); x--; y--; }
+  return ops.reverse();
+}
+
+/**
+ * @param {string|null} beforeText
+ * @param {string|null} afterText
+ * @returns {{additions:number, deletions:number, hunks:{beforeStart:number,beforeCount:number,afterStart:number,afterCount:number,added:string[],deleted:string[]}[], approximate:boolean}}
+ *   Line numbers are 1-based. A hunk with beforeCount 0 is a pure insertion after line beforeStart-1.
+ */
+function diffLines(beforeText, afterText, { maxEditDistance = MAX_EDIT_DISTANCE } = {}) {
+  const a = splitLines(beforeText); const b = splitLines(afterText);
+  let pre = 0;
+  while (pre < a.length && pre < b.length && a[pre] === b[pre]) pre++;
+  let suf = 0;
+  while (suf < a.length - pre && suf < b.length - pre && a[a.length - 1 - suf] === b[b.length - 1 - suf]) suf++;
+  const am = a.slice(pre, a.length - suf); const bm = b.slice(pre, b.length - suf);
+  if (!am.length && !bm.length) return { additions: 0, deletions: 0, hunks: [], approximate: false };
+  let ops = am.length && bm.length ? myers(am, bm, maxEditDistance) : null;
+  let approximate = false;
+  if (!ops) {
+    if (am.length && bm.length) approximate = true; // search bound hit: count the whole middle as replaced
+    ops = [...am.map((_, i) => ['-', i, 0]), ...bm.map((_, j) => ['+', 0, j])];
+  }
+  const hunks = [];
+  let cur = null; let ai = 0; let bi = 0;
+  const flush = () => { if (cur) { hunks.push(cur); cur = null; } };
+  for (const [op] of ops) {
+    if (op === '=') { flush(); ai++; bi++; continue; }
+    if (!cur) cur = { beforeStart: pre + ai + 1, beforeCount: 0, afterStart: pre + bi + 1, afterCount: 0, added: [], deleted: [] };
+    if (op === '-') { cur.deleted.push(am[ai]); cur.beforeCount++; ai++; } else { cur.added.push(bm[bi]); cur.afterCount++; bi++; }
+  }
+  flush();
+  const additions = hunks.reduce((s, h) => s + h.afterCount, 0);
+  const deletions = hunks.reduce((s, h) => s + h.beforeCount, 0);
+  return { additions, deletions, hunks, approximate };
+}
+
+// EXTERNAL MODULE: ./src/posture/material-change.js
+var material_change = __webpack_require__(51668);
+;// CONCATENATED MODULE: ./src/fix/patch-scope.js
+// Actual patch scope (verified-remediation PRD FR-03, GAP-03): the ONE implementation every route uses to say how big a patch is.
+//
+// Before this module, fix-plan.js and the MCP synthesize_fix handler each measured |lines(after) - lines(before)|, so a 150-line rewrite
+// into 150 different lines measured 0 and slipped under every size bound. computePatchScope measures what changed:
+//
+//   - additions and deletions from a real line diff (line-diff.js), changed ranges on both sides, and the file operation (add, modify,
+//     delete, rename);
+//   - `editedLines`, the size the bounds use: per hunk, max(added, deleted). A pure insertion or deletion counts its lines; a rewrite of
+//     N lines into N different lines counts N, never 0;
+//   - formatting-only versus semantic change (whitespace-normalized lines compared), reported separately and never made invisible: a
+//     formatting-only file still counts toward `editedLines`;
+//   - touched symbols: functions, methods, classes and route handlers whose span covers a changed line, from the Babel AST for JS/TS
+//     (`structural: 'ast'`), an indentation heuristic for Python and a declaration heuristic elsewhere (`structural: 'heuristic'`, a named
+//     fallback a policy can require review for);
+//   - material categories, from posture/material-change.js's classifier (fed this diff, not a line set) plus the equal-length cases the
+//     classifier does not see: a changed authorization condition, credentials, trust-boundary settings and TLS verification.
+//
+// Model-supplied counts are never an input. Pure: no fs, no clock.
+
+
+
+
+
+const DEFAULT_BOUNDS = Object.freeze({ maxFiles: 3, maxEditedLines: 100 });
+
+const JS_EXT = /\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/i;
+const PY_EXT = /\.py$/i;
+const sha256 = (t) => (t === null || t === undefined ? null : `sha256:${(0,external_node_crypto_.createHash)('sha256').update(String(t)).digest('hex')}`);
+const norm = (l) => l.replace(/\s+/g, '');
+
+// The equal-length changes the hunk classifier misses. Tested on BOTH sides of a hunk: a condition that was edited shows up as one
+// deleted and one added line of the same length, and either side carrying the vocabulary is enough.
+const SCOPE_MATERIAL = [
+  { category: 'authZ', kind: 'authz-condition-changed', re: /(?:\bif\b|\?|&&|\|\||\breturn\b|[!=]==?|\bwhere\b|\bfilter\b)[^\n]*\b(?:owner\w*|tenant\w*|role\w*|isAdmin|is_admin|admin|permission\w*|authori[sz]\w*|req\.user|request\.user|current_?user|userId|user_id|org(?:anization)?Id|scope\w*|acl)\b|\b(?:owner\w*|tenant\w*|role\w*|req\.user|userId|user_id)\b[^\n]*(?:[!=]==?|&&|\|\|)/i },
+  { category: 'auth', kind: 'authn-changed', re: /\b(?:authenticate|isAuthenticated|requireAuth|verifyToken|passport|session\s*\.|jwt\s*\.\s*verify|login|logout|password\w*\s*(?:===?|!==?))\b/i },
+  { category: 'crypto', kind: 'crypto-changed', re: /\b(?:createHash|createHmac|createCipheriv|createDecipheriv|randomBytes|pbkdf2|scrypt|bcrypt|argon2|hashlib\s*\.|MessageDigest|rejectUnauthorized|verify\s*=|checkServerIdentity|ca\s*:)\b/i },
+  { category: 'credentials', kind: 'credential-changed', re: /\b(?:secret|api[_-]?key|access[_-]?key|private[_-]?key|token|credential\w*|passwd|password)\b\s*[:=]/i },
+  { category: 'trust-boundary', kind: 'trust-boundary-changed', re: /\b(?:cors|origin|csrf|csurf|helmet|sameSite|httpOnly|allowlist|whitelist|denylist|blocklist|redirect)\b/i },
+];
+
+const range = (start, count) => (count > 0 ? [start, start + count - 1] : null);
+
+/** Symbols (name, kind, 1-based inclusive span) from a JS/TS source, or null when it does not parse. */
+function jsSymbols(text, file = 'x.js') {
+  let ast;
+  try {
+    ast = (0,lib/* parse */.qg)(String(text), { sourceType: 'unambiguous', errorRecovery: true, allowReturnOutsideFunction: true, plugins: [/\.tsx?$|\.[mc]?ts$/i.test(file) ? 'typescript' : 'flow', 'jsx', 'classProperties', 'decorators-legacy'] });
+  } catch { return null; }
+  const out = [];
+  const nameOf = (n) => {
+    if (!n) return null;
+    if (n.type === 'Identifier') return n.name;
+    if (n.type === 'StringLiteral') return n.value;
+    if (n.type === 'MemberExpression' || n.type === 'OptionalMemberExpression') { const o = nameOf(n.object); const p = n.computed ? (n.property.type === 'StringLiteral' ? n.property.value : '[computed]') : nameOf(n.property); return o && p ? `${o}.${p}` : p || o; }
+    if (n.type === 'ThisExpression') return 'this';
+    return null;
+  };
+  const isFn = (n) => n && /^(?:FunctionExpression|ArrowFunctionExpression|ClassExpression)$/.test(n.type);
+  const add = (name, kind, node) => { if (name && node?.loc) out.push({ name, kind, start: node.loc.start.line, end: node.loc.end.line }); };
+  const walk = (node, parent) => {
+    if (!node || typeof node.type !== 'string') return;
+    switch (node.type) {
+      case 'FunctionDeclaration': add(nameOf(node.id), 'function', node); break;
+      case 'ClassDeclaration': add(nameOf(node.id), 'class', node); break;
+      case 'ClassMethod': case 'ClassPrivateMethod': case 'ObjectMethod': add(nameOf(node.key), 'method', node); break;
+      case 'VariableDeclarator': if (isFn(node.init)) add(nameOf(node.id), node.init.type === 'ClassExpression' ? 'class' : 'function', node); break;
+      case 'AssignmentExpression': if (isFn(node.right)) add(nameOf(node.left), 'function', node); break;
+      case 'ObjectProperty': case 'ClassProperty': if (isFn(node.value)) add(nameOf(node.key), 'method', node); break;
+      case 'CallExpression': {
+        // app.get('/path', handler): the handler is named after its route
+        const callee = node.callee;
+        const verb = callee?.type === 'MemberExpression' && !callee.computed ? callee.property?.name : null;
+        const first = node.arguments?.[0];
+        if (verb && /^(?:get|post|put|patch|delete|del|all|use|options|head)$/i.test(verb) && first?.type === 'StringLiteral' && node.arguments.slice(1).some(isFn)) add(`${verb.toUpperCase()} ${first.value}`, 'route-handler', node);
+        break;
+      }
+      default: break;
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'loc' || key === 'start' || key === 'end' || key === 'leadingComments' || key === 'trailingComments' || key === 'innerComments' || key === 'extra') continue;
+      const child = node[key];
+      if (Array.isArray(child)) { for (const c of child) if (c && typeof c.type === 'string') walk(c, node); } else if (child && typeof child.type === 'string') walk(child, node);
+    }
+  };
+  walk(ast.program, null);
+  return out;
+}
+
+/** Python def/class blocks by indentation. A heuristic: decorators and continuation lines are approximate. */
+function pySymbols(text) {
+  const lines = splitLines(text); const out = []; const stack = [];
+  const indent = (l) => l.match(/^[ \t]*/)[0].replace(/\t/g, '    ').length;
+  lines.forEach((l, i) => {
+    if (!l.trim() || /^\s*#/.test(l)) return;
+    const ind = indent(l);
+    while (stack.length && ind <= stack[stack.length - 1].indent) { const s = stack.pop(); s.sym.end = i; }
+    const m = l.match(/^\s*(?:async\s+)?(def|class)\s+([A-Za-z_]\w*)/);
+    if (m) { const sym = { name: stack.length ? `${stack.map((s) => s.sym.name).join('.')}.${m[2]}` : m[2], kind: m[1] === 'def' ? 'function' : 'class', start: i + 1, end: lines.length }; out.push(sym); stack.push({ indent: ind, sym }); }
+  });
+  for (const s of stack) s.sym.end = lines.length;
+  return out;
+}
+
+// Two linear patterns, no overlapping repetition (an earlier single pattern backtracked catastrophically on long whitespace runs):
+// a keyword declaration (function/def/class/...), and a C-family method header `mods type name(`.
+const KEYWORD_DECL_RE = /\b(?:function|func|fn|def|sub|class|struct|impl|interface|module|trait|enum)[ \t]+([A-Za-z_][\w:.]*)/;
+const MODIFIER_RE = /^(?:public|private|protected|internal|static|final|abstract|synchronized|override|virtual|async)[ \t]+/;
+const METHOD_DECL_RE = /^([\w<>\[\],.?]+)[ \t]+([A-Za-z_]\w*)[ \t]*\(/;
+const NOT_A_TYPE = new Set(['return', 'new', 'else', 'throw', 'await', 'yield', 'case', 'goto', 'delete', 'typeof', 'in', 'of']);
+const declOf = (l) => {
+  if (l.length > 400) return null;
+  const k = l.match(KEYWORD_DECL_RE); if (k) return k[1];
+  // modifiers are stripped one at a time (no nested quantifier), then `type name(` is matched once
+  let rest = l.replace(/^[ \t]+/, '');
+  for (let i = 0; i < 12; i++) { const mm = rest.match(MODIFIER_RE); if (!mm) break; rest = rest.slice(mm[0].length); }
+  const m = rest.match(METHOD_DECL_RE); if (m && !NOT_A_TYPE.has(m[1]) && !/;\s*$/.test(l)) return m[2];
+  return null;
+};
+
+/** Nearest preceding declaration line for each changed line. Used where no structural parser exists, and labelled as such. */
+function heuristicSymbols(text) {
+  const lines = splitLines(text); const decls = [];
+  lines.forEach((l, i) => { const name = declOf(l); if (name) decls.push({ name, kind: 'declaration', start: i + 1 }); });
+  decls.forEach((d, i) => { d.end = i + 1 < decls.length ? decls[i + 1].start - 1 : lines.length; });
+  return decls;
+}
+
+function symbolsFor(file, text) {
+  if (text === null || text === undefined) return { symbols: [], structural: 'none' };
+  if (JS_EXT.test(file)) { const s = jsSymbols(text, file); if (s) return { symbols: s, structural: 'ast' }; return { symbols: heuristicSymbols(text), structural: 'heuristic', fallbackReason: 'the file did not parse as JavaScript/TypeScript' }; }
+  if (PY_EXT.test(file)) return { symbols: pySymbols(text), structural: 'heuristic', fallbackReason: 'Python symbols come from an indentation heuristic, not a parser' };
+  return { symbols: heuristicSymbols(text), structural: 'heuristic', fallbackReason: 'no structural parser for this file type' };
+}
+
+const touching = (symbols, lines) => {
+  const hit = [];
+  for (const s of symbols) if (lines.some((ln) => ln >= s.start && ln <= s.end)) hit.push(s);
+  // keep the innermost symbol per changed line plus every enclosing one: the caller wants every scope whose behaviour moved
+  return hit;
+};
+
+/**
+ * @param {{before:Record<string,string|null>, after:Record<string,string|null>, renames?:{from:string,to:string}[], bounds?:{maxFiles?:number,maxEditedLines?:number}}} o
+ *   `before[f] === null` (or absent) with `after[f]` set is an added file; `after[f] === null` is a deleted file.
+ */
+function computePatchScope({ before = {}, after = {}, renames = [], bounds = {} }) {
+  const b = { ...DEFAULT_BOUNDS, ...bounds };
+  const renameTo = new Map(renames.map((r) => [r.to, r.from]));
+  const renamedFrom = new Set(renames.map((r) => r.from));
+  const files = [];
+  const materialInput = {};
+  const scopeMaterial = [];
+  let approximate = false;
+  const names = [...new Set([...Object.keys(after), ...renames.map((r) => r.to)])].filter((f) => !renamedFrom.has(f) || f in after).sort();
+  for (const file of names) {
+    const src = renameTo.get(file) || file;
+    const pre = before[src] ?? null;
+    const post = after[file] ?? null;
+    const operation = renameTo.has(file) ? 'rename' : pre === null && post !== null ? 'add' : pre !== null && post === null ? 'delete' : pre === post ? 'unchanged' : 'modify';
+    const d = diffLines(pre, post);
+    approximate = approximate || d.approximate;
+    const editedLines = d.hunks.reduce((s, h) => s + Math.max(h.beforeCount, h.afterCount), 0);
+    // formatting-only: the whitespace-normalized, blank-free line sequences agree
+    const nb = splitLines(pre).map(norm).filter(Boolean); const na = splitLines(post).map(norm).filter(Boolean);
+    const sd = diffLines(nb.join('\n'), na.join('\n'));
+    const formattingOnly = operation === 'modify' && sd.additions === 0 && sd.deletions === 0 && editedLines > 0;
+    const beforeLines = d.hunks.flatMap((h) => Array.from({ length: h.beforeCount }, (_, i) => h.beforeStart + i));
+    const afterLines = d.hunks.flatMap((h) => Array.from({ length: h.afterCount }, (_, i) => h.afterStart + i));
+    const sb = symbolsFor(file, pre); const sa = symbolsFor(file, post);
+    // a pure insertion touches the symbol it was inserted into, found on the after side
+    const touched = new Map();
+    for (const s of touching(sb.symbols, beforeLines)) touched.set(`${s.kind}:${s.name}`, { name: s.name, kind: s.kind, side: 'before' });
+    for (const s of touching(sa.symbols, afterLines)) { const k = `${s.kind}:${s.name}`; touched.set(k, { name: s.name, kind: s.kind, side: touched.has(k) ? 'both' : 'after' }); }
+    const structural = [sb, sa].some((x) => x.structural === 'heuristic') ? 'heuristic' : [sb, sa].some((x) => x.structural === 'ast') ? 'ast' : 'none';
+    files.push({
+      file, ...(renameTo.has(file) ? { renamedFrom: src } : {}), operation,
+      additions: d.additions, deletions: d.deletions, editedLines,
+      changedRanges: d.hunks.map((h) => ({ before: range(h.beforeStart, h.beforeCount), after: range(h.afterStart, h.afterCount) })),
+      formattingOnly, semanticEditedLines: formattingOnly ? 0 : sd.hunks.reduce((s, h) => s + Math.max(h.beforeCount, h.afterCount), 0),
+      touchedSymbols: [...touched.values()].sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0)),
+      structural, ...(structural === 'heuristic' ? { structuralFallback: sb.fallbackReason || sa.fallbackReason } : {}),
+      beforeDigest: sha256(pre), afterDigest: sha256(post),
+    });
+    if (!formattingOnly && operation !== 'unchanged') {
+      materialInput[file] = { before: pre ?? '', after: post ?? '' };
+      for (const h of d.hunks) for (const [side, lines] of [['-', h.deleted], ['+', h.added]]) for (const line of lines) for (const p of SCOPE_MATERIAL) if (p.re.test(line)) scopeMaterial.push({ file, kind: p.kind, category: p.category, side, line: line.trim().slice(0, 200) });
+    }
+  }
+  const cls = (0,material_change/* classifyFixMaterialRisk */.kz)(materialInput);
+  const categories = [...new Set([...cls.highImpactCategories, ...scopeMaterial.map((m) => m.category)])].sort();
+  const live = files.filter((f) => f.operation !== 'unchanged');
+  const totals = {
+    files: live.length, additions: live.reduce((s, f) => s + f.additions, 0), deletions: live.reduce((s, f) => s + f.deletions, 0),
+    editedLines: live.reduce((s, f) => s + f.editedLines, 0), semanticEditedLines: live.reduce((s, f) => s + f.semanticEditedLines, 0),
+    touchedSymbols: live.reduce((s, f) => s + f.touchedSymbols.length, 0),
+    operations: Object.fromEntries(['add', 'modify', 'delete', 'rename'].map((op) => [op, live.filter((f) => f.operation === op).length])),
+  };
+  const exceeds = [];
+  if (totals.files > b.maxFiles) exceeds.push(`touches ${totals.files} files (limit ${b.maxFiles})`);
+  if (totals.editedLines > b.maxEditedLines) exceeds.push(`edits ${totals.editedLines} lines (limit ${b.maxEditedLines})`);
+  return {
+    schema: 'agentic-security/patch-scope', version: 1,
+    files, totals, approximate,
+    material: { categories, material: categories.length > 0, risk: cls.materialRisk, signals: [...cls.findings.filter((f) => f.kind !== 'routine').map((f) => ({ file: f.file, kind: f.kind, category: null, side: f.side, line: String(f.line || '').slice(0, 200) })), ...scopeMaterial] },
+    structuralFallback: files.filter((f) => f.structural === 'heuristic').map((f) => f.file),
+    bounds: b, exceedsBounds: exceeds.length > 0, exceedsReasons: exceeds,
+  };
+}
+
+/** The legacy bound triple ({files, loc, exceedsBounds}) from the one scope computation, for callers that read the old field names. */
+function legacyBounds(scope) {
+  return { files: scope.totals.files, loc: scope.totals.editedLines, exceedsBounds: scope.exceedsBounds };
+}
+
+
+/***/ }),
+
+/***/ 21735:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   El: () => (/* binding */ makeCandidate),
+/* harmony export */   We: () => (/* binding */ checkCandidate),
+/* harmony export */   qW: () => (/* binding */ parameterizeTemplateSql),
+/* harmony export */   uI: () => (/* binding */ queueProposer)
+/* harmony export */ });
+/* unused harmony exports RECIPE_SQL_PARAMETERIZE, matchesAny, sqlParameterizeRecipe */
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(76760);
+/* harmony import */ var _posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(91026);
+/* harmony import */ var _fix_patch_scope_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(29892);
+/* harmony import */ var _fix_test_results_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(91928);
+/* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(62805);
+// Candidate patches (verified-remediation PRD FR-07, section 6.3): proposers, identity and the scope gate.
+//
+// Proposers return file contents only. The trusted coordinator computes everything authoritative: the candidate id and patch digest,
+// the actual diff (patch-scope.js), the edit-scope and protected-path checks and the test-surface check. A proposer's counts, claims or
+// self-reported results are never read.
+//
+//   sqlParameterizeRecipe  deterministic recipe: `<db>.prepare(`...'${v}'...`).all|get|run|iterate()` becomes a prepared statement with
+//                          `?` placeholders and the values passed as arguments. Preconditions, all required, or the recipe does not
+//                          apply: every interpolation sits exactly inside a single-quoted SQL literal ('${v}'), the statement is called
+//                          immediately with no arguments, and the file is one of the contract's allowed files. An interpolation in any
+//                          other position (an identifier, a number, an ORDER BY) is refused: placeholders cannot carry it.
+//   queueProposer          user-supplied candidates, consumed in order across rounds (a scripted refinement, or a person's patches).
+//
+// A model proposer is not part of this milestone; its absence is reported, never filled with a stand-in.
+
+
+
+
+
+
+const RECIPE_SQL_PARAMETERIZE = Object.freeze({ id: 'sql-parameterize-template', version: '1' });
+
+// ---------------------------------------------------------------- glob for protected paths
+
+function globRe(pattern) {
+  let re = '';
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === '*' && pattern[i + 1] === '*') { re += pattern[i + 2] === '/' ? '(?:.*/)?' : '.*'; i += pattern[i + 2] === '/' ? 2 : 1; }
+    else if (c === '*') re += '[^/]*';
+    else re += c.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`^${re}$`);
+}
+const matchesAny = (rel, patterns) => patterns.some((p) => globRe(p).test(rel));
+
+// ---------------------------------------------------------------- the scope gate
+
+// Primitives below the layer the application oracles observe: a raw binding, a child process, another thread, a datagram socket or a
+// native addon could open a connection or touch a file the oracle never sees, so a candidate that verified with one would have
+// verified nothing about it. A candidate may not INTRODUCE one (an original that already uses one is the operator's to declare).
+const UNOBSERVED_PRIMITIVES = [
+  [/\bprocess\.binding\s*\(|\binternalBinding\b|\bprocess\._linkedBinding\b/, 'a raw runtime binding'],
+  [/['"](?:node:)?child_process['"]/, 'a child process'],
+  [/['"](?:node:)?(?:worker_threads|cluster)['"]/, 'another thread or process'],
+  [/['"](?:node:)?dgram['"]/, 'a datagram socket'],
+  [/\bprocess\.dlopen\b|\.node['"]\s*\)/, 'a native addon'],
+  [/^\s*(?:import\s+(?:subprocess|socket|ctypes|multiprocessing)\b|from\s+(?:subprocess|socket|ctypes|multiprocessing)\s+import\b)/m, 'a process, socket or foreign-function module'],
+];
+const count = (re, t) => (String(t || '').match(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`)) || []).length;
+
+/**
+ * May this candidate be judged at all? Checked before anything executes.
+ * @returns {{ok:boolean, reasons:string[], scope:object, changed:Record<string,string|null>}}
+ */
+function checkCandidate(contract, originalFiles, proposedFiles) {
+  const reasons = [];
+  const changed = {};
+  for (const [rel, text] of Object.entries(proposedFiles || {})) {
+    if (typeof rel !== 'string' || node_path__WEBPACK_IMPORTED_MODULE_0__.posix.normalize(rel) !== rel || rel.startsWith('/') || rel.startsWith('..')) { reasons.push(`${String(rel).slice(0, 80)}: not a confined relative path`); continue; }
+    if (text !== null && typeof text !== 'string') { reasons.push(`${rel}: content must be text or null`); continue; }
+    if ((originalFiles[rel] ?? null) !== text) changed[rel] = text;
+  }
+  for (const rel of Object.keys(changed)) {
+    if (matchesAny(rel, contract.editScope.prohibited)) reasons.push(`${rel}: a protected path (verifier state, tests, runner configuration, dependencies); a candidate cannot change what judges it`);
+    else if (!contract.editScope.allowed.includes(rel)) reasons.push(`${rel}: outside the contract's allowed edit scope`);
+  }
+  for (const [rel, text] of Object.entries(changed)) {
+    for (const [re, what] of UNOBSERVED_PRIMITIVES) if (count(re, text) > count(re, originalFiles[rel])) reasons.push(`${rel}: introduces ${what}, which the application oracles cannot observe`);
+  }
+  const surface = (0,_fix_test_results_js__WEBPACK_IMPORTED_MODULE_3__/* .testSurfaceChanges */ .N)(changed, (rel) => originalFiles[rel] ?? null);
+  for (const b of surface.blocked) reasons.push(`${b.file}: ${b.reason}`);
+  const before = Object.fromEntries(Object.keys(changed).map((r) => [r, originalFiles[r] ?? null]));
+  const scope = (0,_fix_patch_scope_js__WEBPACK_IMPORTED_MODULE_2__/* .computePatchScope */ .oL)({ before, after: changed, bounds: { maxFiles: contract.editScope.maxFiles, maxEditedLines: contract.editScope.maxEditedLines } });
+  if (!Object.keys(changed).length) reasons.push('the candidate changes nothing');
+  if (scope.exceedsBounds) reasons.push(...scope.exceedsReasons.map((r) => `over the contract's change budget: ${r}`));
+  return { ok: reasons.length === 0, reasons, scope, changed };
+}
+
+/** The candidate record, with identities computed here. */
+function makeCandidate(contract, originalFiles, proposal, checked) {
+  const rec = {
+    schema: _schemas_js__WEBPACK_IMPORTED_MODULE_4__/* .SCHEMAS */ .H6.candidate, schemaVersion: _schemas_js__WEBPACK_IMPORTED_MODULE_4__/* .SCHEMA_VERSION */ .f$,
+    contractDigest: contract.contractDigest, baselineDigest: contract.sourceDigest,
+    generator: proposal.generator, generatorIdentity: proposal.generatorIdentity, generationParameters: proposal.generationParameters || {},
+    files: checked.changed,
+    beforeDigests: Object.fromEntries(Object.keys(checked.changed).map((r) => [r, originalFiles[r] == null ? null : (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__/* .digestOf */ .ol)(originalFiles[r])])),
+    afterDigests: Object.fromEntries(Object.entries(checked.changed).map(([r, t]) => [r, t == null ? null : (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__/* .digestOf */ .ol)(t)])),
+    patchDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__/* .digestOf */ .ol)(checked.changed),
+    scope: { totals: checked.scope.totals, material: checked.scope.material, touchedSymbols: checked.scope.files.flatMap((f) => (f.touchedSymbols || []).map((s) => `${f.file}:${s.name || s}`)).slice(0, 40) },
+    strategy: proposal.strategy || null, rationale: proposal.rationale || null, assumptions: proposal.assumptions || [], proposedTests: [],
+    accounting: { tokens: proposal.accounting?.tokens ?? null, calls: proposal.accounting?.calls ?? null, wallMs: proposal.accounting?.wallMs ?? null, usd: proposal.accounting?.usd ?? null },
+  };
+  rec.candidateId = (0,_schemas_js__WEBPACK_IMPORTED_MODULE_4__/* .candidateIdOf */ .qT)(rec);
+  const v = (0,_schemas_js__WEBPACK_IMPORTED_MODULE_4__/* .validateCandidate */ .mu)(rec);
+  return v.ok ? { candidate: rec, problems: [] } : { candidate: null, problems: v.errors.map((e) => `${e.path}: ${e.message}`) };
+}
+
+// ---------------------------------------------------------------- deterministic SQL recipe
+
+/** Scan a template literal starting at the backtick index; returns {end, quasis, exprs} or null. */
+function readTemplate(text, start) {
+  const quasis = []; const exprs = [];
+  let cur = ''; let i = start + 1;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '\\') { cur += c + (text[i + 1] ?? ''); i += 2; continue; }
+    if (c === '`') { quasis.push(cur); return { end: i, quasis, exprs }; }
+    if (c === '$' && text[i + 1] === '{') {
+      let depth = 1; let j = i + 2; let e = '';
+      while (j < text.length && depth > 0) {
+        const d = text[j];
+        if (d === '`' || d === "'" || d === '"') return null; // nested strings: not a shape this recipe handles
+        if (d === '{') depth++; else if (d === '}') depth--;
+        if (depth > 0) e += d;
+        j++;
+      }
+      if (depth) return null;
+      quasis.push(cur); exprs.push(e.trim()); cur = ''; i = j; continue;
+    }
+    cur += c; i++;
+  }
+  return null;
+}
+
+const PREPARE_RE = /\.prepare\(\s*`/g;
+const CALL_RE = /^\s*\)\s*\.(all|get|run|iterate)\(\s*\)/;
+
+/** Apply the recipe to one file. Returns {text, applied, refused:[reasons]}. Pure. */
+function parameterizeTemplateSql(text) {
+  const refused = []; let applied = 0;
+  let out = ''; let last = 0;
+  PREPARE_RE.lastIndex = 0;
+  let m;
+  while ((m = PREPARE_RE.exec(text))) {
+    const tick = m.index + m[0].length - 1;
+    const t = readTemplate(text, tick);
+    if (!t) { refused.push(`line ${text.slice(0, tick).split('\n').length}: the template could not be read safely`); continue; }
+    if (!t.exprs.length) continue;
+    const call = CALL_RE.exec(text.slice(t.end + 1));
+    if (!call) { refused.push(`line ${text.slice(0, tick).split('\n').length}: the statement is not called immediately with no arguments`); continue; }
+    let sql = ''; let ok = true;
+    for (let k = 0; k < t.quasis.length; k++) {
+      let q = t.quasis[k];
+      if (k > 0) { if (!q.startsWith("'")) { ok = false; break; } q = q.slice(1); }
+      if (k < t.exprs.length) { if (!q.endsWith("'")) { ok = false; break; } q = q.slice(0, -1) + '?'; }
+      sql += q;
+    }
+    if (!ok || /\$\{/.test(sql)) { refused.push(`line ${text.slice(0, tick).split('\n').length}: an interpolation is not a quoted SQL value, so a placeholder cannot carry it`); continue; }
+    const lit = `'${sql.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')}'`;
+    out += text.slice(last, tick) + lit + text.slice(t.end + 1, t.end + 1 + call[0].length - 1) + t.exprs.join(', ') + ')';
+    last = t.end + 1 + call[0].length;
+    PREPARE_RE.lastIndex = last;
+    applied++;
+  }
+  out += text.slice(last);
+  return { text: applied ? out : text, applied, refused };
+}
+
+/** The deterministic recipe as a proposer: one candidate, round 1 only, over the contract's allowed files. */
+function sqlParameterizeRecipe() {
+  return {
+    id: `${RECIPE_SQL_PARAMETERIZE.id}@${RECIPE_SQL_PARAMETERIZE.version}`,
+    async propose({ contract, files, round }) {
+      if (round !== 1 || contract.family !== 'sql-injection') return { proposals: [], notes: [] };
+      const out = {}; const notes = [];
+      for (const rel of contract.editScope.allowed) {
+        if (!/\.(?:m?js|cjs|ts)$/.test(rel) || typeof files[rel] !== 'string') continue;
+        const r = parameterizeTemplateSql(files[rel]);
+        if (r.applied) out[rel] = r.text;
+        notes.push(...r.refused.map((x) => `${rel} ${x}`));
+      }
+      if (!Object.keys(out).length) return { proposals: [], notes: notes.length ? notes : ['the recipe matched no statement'] };
+      return { proposals: [{ generator: 'deterministic-recipe', generatorIdentity: `${RECIPE_SQL_PARAMETERIZE.id}@${RECIPE_SQL_PARAMETERIZE.version}`, files: out, strategy: 'parameterize every quoted SQL value', rationale: 'bound parameters keep request values out of the SQL text' }], notes };
+    },
+  };
+}
+
+/**
+ * User-supplied candidates, in order. `items` are {files, strategy?, rationale?, round?}. Items that name a `round` are offered together
+ * in that round (a portfolio of strategies); items without one are offered one per round, in order.
+ */
+function queueProposer(items, identity = 'user-supplied') {
+  const queue = [...items];
+  const toProposal = (it) => ({ generator: 'user-supplied', generatorIdentity: identity, files: it.files, strategy: it.strategy || null, rationale: it.rationale || null });
+  return {
+    id: identity,
+    async propose({ round, max }) {
+      const grouped = queue.filter((it) => Number.isInteger(it.round));
+      let take;
+      if (grouped.length) {
+        take = grouped.filter((it) => it.round === round).slice(0, Math.max(1, max || 1));
+        for (const t of take) queue.splice(queue.indexOf(t), 1);
+      } else take = queue.splice(0, 1);
+      return { proposals: take.map(toProposal), notes: [] };
+    },
+    remaining: () => queue.length,
+  };
+}
+
+
+/***/ }),
+
+/***/ 22058:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   $B: () => (/* binding */ buildContract),
+/* harmony export */   NL: () => (/* binding */ obligationSummary),
+/* harmony export */   l3: () => (/* binding */ supportFor),
+/* harmony export */   snapshotSource: () => (/* binding */ snapshotSource)
+/* harmony export */ });
+/* unused harmony exports CONTRACT_BUILDER_VERSION, PROFILE_SUPPORT, PROTECTED_PATTERNS, SQL_PROBES */
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
+/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31421);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(76760);
+/* harmony import */ var _posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(91026);
+/* harmony import */ var _posture_oracles_registry_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(45603);
+/* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(62805);
+/* harmony import */ var _profile_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(61252);
+/* harmony import */ var _posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(68216);
+// Repair contracts (verified-remediation PRD FR-04, section 6.2): what a repair must establish, as declarative obligations over
+// registered verifier operations.
+//
+// Inputs: a normalized finding, an operator-declared application profile (profile.js) and the exact source snapshot. Output: a closed,
+// versioned RepairContract (schemas.js) whose identity covers the source, the configuration and dependency digests, the profile's policy
+// facts, the oracle logic each obligation runs on, and the edit scope. Identical inputs give an identical contract id (no clock, no
+// randomness); a change to any of them gives a different one (AC-04.1, AC-04.2).
+//
+// The family decides the required obligations, not which checks happen to be available (FR-04):
+//   sql-injection          the declared untrusted inputs carry attack probes that must reach no planted secret (development set, plus
+//                          a sealed held-out set), the declared legitimate values must still return their expected data, and legitimate
+//                          values the original mishandles (a quote in a name) must work after the repair (AC-04.3). Behavioural
+//                          equivalence is never required of attacker input (AC-04.7).
+//   object-authorization   the full actor matrix: for every declared object and operation, each actor (owner, other member, another
+//                          tenant, admin, anonymous) gets the outcome the declared policy gives it. A denied read must not disclose the
+//                          object's planted secret; a denied update must not change durable state, whatever the HTTP status (a 403 that
+//                          still wrote is a violation); allowed actors must keep working (AC-04.4).
+// Project tests, the rescan and the footprint run through the central verifier as the `project-tests` obligation.
+//
+// A missing prerequisite (no seed secret to protect, no read operation, an application file that does not exist) makes the contract
+// `blocked` with the reason: it is never weakened into a contract that could pass (AC-04.6).
+
+
+
+
+
+
+
+
+
+
+const CONTRACT_BUILDER_VERSION = '1';
+
+/**
+ * Per-profile support (verified-remediation PRD FR-12, AC-12.5, M3-06): what has been executed, per family, runtime and platform, and
+ * the test that executes it. macOS and Linux are separate columns; one platform's execution never qualifies the other. `declared` means
+ * the profile validates and a contract builds, but no test executes that combination. Printed by `repair plan`; the reference page's
+ * "Profile support" table is held to this list by the contract test.
+ */
+const PROFILE_SUPPORT = Object.freeze([
+  { family: 'sql-injection', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'sql-parameterize-template', evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'sql-injection', runtime: 'python', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'object-authorization', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'object-authorization', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
+  { family: 'ssrf', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'ssrf-host-allowlist', evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'path-traversal', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'path-realpath-containment', evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'password-storage', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'password-scrypt-migrate', evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'password-storage', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
+  { family: 'dependency', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-dependency.test.js' },
+  { family: 'credential', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-credential.test.js' },
+  { family: 'workflow', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow-state.test.js' },
+  { family: 'infrastructure', runtime: 'node', macos: 'integration-tested', linux: 'unverified', recipe: null, evidence: 'scanner/test/repair/repair-infrastructure.test.js' },
+]);
+
+/** The support row for a contract's family and runtime, or null (an unsupported combination is refused when the profile validates). */
+const supportFor = (family, runtime) => PROFILE_SUPPORT.find((s) => s.family === family && s.runtime === (runtime || 'node')) || null;
+
+// Attack probes for a value placed in a SQL string literal. Split once, statically: the development set feeds back to candidate
+// generation; the sealed set is run only on a candidate that passed everything else, and its content never leaves the coordinator.
+const SQL_PROBES = Object.freeze({
+  development: ["x' OR '1'='1", "x' OR 1=1 --"],
+  sealed: ["zz' OR 'a'='a' --", "') OR ('1'='1", 'x" OR "1"="1'],
+});
+
+const DEFAULT_EDIT_BUDGET = Object.freeze({ maxFiles: 3, maxEditedLines: 100 });
+// Paths a candidate may never touch, whatever the profile says: the verifier's own state, version control, dependency trees and the
+// project's test and runner configuration (a candidate cannot weaken the checks that judge it).
+const PROTECTED_PATTERNS = Object.freeze([
+  '.agentic-security/**', '.git/**', 'node_modules/**', '**/*.test.*', '**/*.spec.*', 'test/**', 'tests/**', '__tests__/**',
+  'package.json', 'package-lock.json', 'jest.config.*', 'vitest.config.*', '.mocharc*', '**/__oracle_*',
+]);
+
+const fill = (tpl, map, { encode }) => tpl.replace(/\{\{(value|id)\}\}/g, (_, k) => (encode ? encodeURIComponent(String(map[k])) : String(map[k])));
+const fillBody = (body, map) => (body === undefined ? undefined : JSON.parse(JSON.stringify(body), (k, v) => (typeof v === 'string' ? fill(v, map, { encode: false }) : v)));
+const reqOf = (r, actor, map) => ({ method: r.method, path: fill(r.path, map, { encode: true }), headers: { ...(actor?.headers || {}) }, ...(r.body !== undefined ? { body: fillBody(r.body, map) } : {}) });
+
+/** Read the application files and the configuration that can change behaviour. Never follows a link out of the root. */
+function snapshotSource(root, profile) {
+  const files = {}; const missing = [];
+  const realRoot = node_fs__WEBPACK_IMPORTED_MODULE_1__.realpathSync(root);
+  for (const rel of profile.application.files) {
+    const abs = node_path__WEBPACK_IMPORTED_MODULE_3__.resolve(realRoot, rel);
+    try {
+      const st = node_fs__WEBPACK_IMPORTED_MODULE_1__.lstatSync(abs);
+      if (!st.isFile() || st.isSymbolicLink() || !abs.startsWith(realRoot + node_path__WEBPACK_IMPORTED_MODULE_3__.sep)) { missing.push(rel); continue; }
+      files[rel] = node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(abs, 'utf8');
+    } catch { missing.push(rel); }
+  }
+  const configDigests = {};
+  for (const rel of ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', '.nvmrc']) {
+    try { configDigests[rel] = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_3__.join(realRoot, rel), 'utf8')); } catch { /* absent */ }
+  }
+  let python = null;
+  if (profile.application.runtime === 'python') {
+    for (const p of ['/usr/bin/python3', '/opt/homebrew/bin/python3', '/usr/local/bin/python3']) {
+      try { if (node_fs__WEBPACK_IMPORTED_MODULE_1__.statSync(p).isFile()) { python = String((0,node_child_process__WEBPACK_IMPORTED_MODULE_2__.spawnSync)(p, ['-I', '-c', 'import sys, sqlite3; print(sys.version.split()[0], sqlite3.sqlite_version)'], { encoding: 'utf8', timeout: 5000 }).stdout || '').trim() || null; break; } } catch { /* next */ }
+    }
+  }
+  if (profile.dependency && typeof profile.dependency.sources === 'string') {
+    // the package tarballs a lockfile may resolve to are part of what the contract judges
+    const tarballs = {};
+    try { for (const f of node_fs__WEBPACK_IMPORTED_MODULE_1__.readdirSync(node_path__WEBPACK_IMPORTED_MODULE_3__.join(realRoot, profile.dependency.sources)).sort()) if (f.endsWith('.tgz')) tarballs[f] = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_3__.join(realRoot, profile.dependency.sources, f)).toString('base64')); } catch { /* absent: the resolution obligation reports it */ }
+    configDigests.packageSources = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(tarballs);
+  }
+  configDigests.runtime = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)({ node: process.versions.node, sqlite: process.versions.sqlite || null, ...(profile.application.runtime === 'python' ? { python } : {}) });
+  return { files, missing, sourceDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(files), configDigests };
+}
+
+function obligation(kind, id, inputs, { required = true, origin = 'generated-from-profile', scope }) {
+  const k = _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn[kind];
+  const o = (0,_posture_oracles_registry_js__WEBPACK_IMPORTED_MODULE_5__.getOracle)(k.oracle);
+  return {
+    id, kind, required, oracleId: k.oracle, oracleVersion: o.version, oracleLogicDigest: o.logicDigest,
+    scope, baselineExpectation: k.expectBaseline, patchedExpectation: k.expectPatched, evidenceOrigin: origin,
+    inputs, inputsDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(inputs), description: k.description,
+  };
+}
+
+const appInputs = (profile, requests, stateChecks = [], extra = {}) => ({
+  ...(profile.application.runtime === 'python' ? { runtime: 'python' } : {}),
+  export: profile.application.export, schemaSql: profile.database.schemaSql, seed: profile.database.seed, requests, stateChecks, ...extra,
+});
+
+function seedHasSecret(profile, name) {
+  return JSON.stringify(profile.database.seed).includes(`{{secret:${name}}}`);
+}
+
+function sqlObligations(profile, actors, blocked) {
+  const out = [];
+  const controls = []; const after = []; const dev = []; const sealed = [];
+  for (const inp of profile.sql.inputs) {
+    const actor = actors[inp.actor];
+    for (const s of inp.protectedSecrets) if (!seedHasSecret(profile, s)) blocked.push(`sql input ${inp.id}: the seed plants no {{secret:${s}}} value, so a disclosure could not be observed`);
+    inp.benign.forEach((b, j) => {
+      const r = { id: `${inp.id.replace(/-/g, '_')}_benign_${j}`, role: 'control', ...reqOf(inp, actor, { value: b.value }), expect: { status: b.expectStatus || [200], bodyIncludes: b.expectIncludes } };
+      (b.originalMishandles ? after : controls).push(r);
+    });
+    const probe = (set, list) => SQL_PROBES[set].forEach((v, j) => list.push({ id: `${inp.id.replace(/-/g, '_')}_${set}_${j}`, role: 'attack', ...reqOf(inp, actor, { value: v }), forbid: { secrets: [...inp.protectedSecrets] }, probe: v }));
+    probe('development', dev); probe('sealed', sealed);
+  }
+  if (!controls.length) blocked.push('sql: no benign value is declared that the original serves correctly; mark only quoted values originalMishandles');
+  const stateChecks = (profile.sql.stateChecks || []).map((c) => ({ ...c, role: 'attack' }));
+  const strip = (r) => { const { probe, ...rest } = r; return rest; };
+  if (controls.length) {
+    out.push(obligation('app-attack-blocked', 'sql-attacks-development', appInputs(profile, [...controls, ...dev.map(strip)], stateChecks), { scope: 'declared untrusted inputs, development probe set' }));
+    out.push(obligation('app-attack-sealed', 'sql-attacks-sealed', appInputs(profile, [...controls, ...sealed.map(strip)], stateChecks), { scope: 'declared untrusted inputs, sealed probe set (never fed back)' }));
+    out.push(obligation('app-behaviour-preserved', 'sql-legitimate-queries', appInputs(profile, controls), { scope: 'declared legitimate values' }));
+  }
+  if (after.length) out.push(obligation('app-behaviour-after', 'sql-legitimate-quoted-values', appInputs(profile, after), { scope: 'legitimate values the original mishandles' }));
+  return out;
+}
+
+/** Controls (and the after-repair controls) from an input's declared legitimate values. Shared by every value-input family. */
+function benignRequests(inp, actor, controls, after) {
+  inp.benign.forEach((b, j) => {
+    const r = { id: `${inp.id.replace(/-/g, '_')}_benign_${j}`, role: 'control', ...reqOf(inp, actor, { value: b.value }), expect: { status: b.expectStatus || [200], bodyIncludes: b.expectIncludes } };
+    (b.originalMishandles ? after : controls).push(r);
+  });
+}
+
+/** The obligations of a value-input family from its development and sealed attack values. */
+function valueFamilyObligations(family, profile, actors, blocked, { probes, forbid, extra, scopeNoun }) {
+  const out = []; const controls = []; const after = []; const dev = []; const sealed = [];
+  for (const inp of profile[family].inputs) {
+    const actor = actors[inp.actor];
+    benignRequests(inp, actor, controls, after);
+    for (const set of ['development', 'sealed']) probes[set].forEach((v, j) => (set === 'sealed' ? sealed : dev).push({ id: `${inp.id.replace(/-/g, '_')}_${set}_${j}`, role: 'attack', ...reqOf(inp, actor, { value: v }), forbid: forbid(v) }));
+  }
+  if (!controls.length) blocked.push(`${family}: no legitimate value is declared that the original serves correctly`);
+  if (!dev.length) blocked.push(`${family}: the declaration yields no attack value, so no forbidden effect could be observed`);
+  if (blocked.length) return out;
+  out.push(obligation('app-attack-blocked', `${family}-attacks-development`, appInputs(profile, [...controls, ...dev], [], extra), { scope: `${scopeNoun}, development attack set` }));
+  if (sealed.length) out.push(obligation('app-attack-sealed', `${family}-attacks-sealed`, appInputs(profile, [...controls, ...sealed], [], extra), { scope: `${scopeNoun}, sealed attack set (never fed back)` }));
+  out.push(obligation('app-behaviour-preserved', `${family}-legitimate-requests`, appInputs(profile, controls, [], extra), { scope: 'declared legitimate values' }));
+  if (after.length) out.push(obligation('app-behaviour-after', `${family}-legitimate-after`, appInputs(profile, after, [], extra), { scope: 'legitimate values the original mishandles' }));
+  return out;
+}
+
+const SECRET_NAMES = (text) => [...String(text).matchAll(/\{\{secret:([a-z][a-z0-9-]{0,31})\}\}/g)].map((m) => m[1]);
+const ipv4Int = (a) => a.split('.').reduce((n, o) => n * 256 + Number(o), 0);
+
+/**
+ * SSRF attack values, generated from the declared network. A host is forbidden when the policy does not permit every address it can
+ * resolve to (an allowlist names the approved hosts; public-only forbids loopback, private, link-local and the other internal ranges,
+ * so a host that rebinds from a public to a private address is forbidden). Development: each forbidden host by name and by address,
+ * and every approved host's declared redirect that leaves the approved set. Sealed: the same destinations spelled differently
+ * (decimal and IPv4-mapped IPv6 addresses, upper case with a trailing dot, an approved host as user information).
+ */
+function ssrfProbes(s) {
+  const permittedAddr = (h, a) => (s.policy === 'public-only' ? !(0,_posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_8__/* .isPrivateAddress */ .C0)(a) : s.approved.includes(h.name));
+  const forbidden = s.hosts.filter((h) => !h.addresses.every((a) => permittedAddr(h, a)));
+  const port = (h) => (h.port && h.port !== 80 ? `:${h.port}` : '');
+  const pathOf = (h) => h.routes?.[0]?.path || '/';
+  const development = []; const sealed = [];
+  for (const h of forbidden) {
+    development.push(`http://${h.name}${port(h)}${pathOf(h)}`);
+    const v4 = h.addresses.find((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a) && !permittedAddr(h, a));
+    if (v4) {
+      development.push(`http://${v4}${port(h)}${pathOf(h)}`);
+      sealed.push(`http://${ipv4Int(v4)}${port(h)}${pathOf(h)}`, `http://[::ffff:${v4}]${port(h)}${pathOf(h)}`);
+    }
+    sealed.push(`http://${h.name.toUpperCase()}.${port(h)}${pathOf(h)}`);
+    if (s.approved[0]) sealed.push(`http://${s.approved[0]}@${h.name}${port(h)}${pathOf(h)}`);
+  }
+  const forbiddenNames = new Set(forbidden.map((h) => h.name));
+  const forbiddenAddrs = new Set(forbidden.flatMap((h) => h.addresses));
+  for (const h of s.hosts.filter((x) => !forbiddenNames.has(x.name))) {
+    for (const r of h.routes || []) {
+      const loc = r.status >= 300 && r.status < 400 ? Object.entries(r.headers || {}).find(([k]) => k.toLowerCase() === 'location')?.[1] : null;
+      if (!loc) continue;
+      let target; try { target = new URL(loc, `http://${h.name}`); } catch { continue; }
+      const host = target.hostname.replace(/^\[|\]$/g, '');
+      if (forbiddenNames.has(host) || forbiddenAddrs.has(host)) development.push(`http://${h.name}${port(h)}${r.path}`);
+    }
+  }
+  const secrets = [...new Set(forbidden.flatMap((h) => (h.routes || []).flatMap((r) => SECRET_NAMES(r.body || ''))))];
+  return { development: [...new Set(development)], sealed: [...new Set(sealed)].filter((v) => !development.includes(v)), secrets, forbidden: forbidden.map((h) => h.name) };
+}
+
+function ssrfObligations(profile, actors, blocked) {
+  const s = profile.ssrf;
+  const p = ssrfProbes(s);
+  if (!p.forbidden.length) blocked.push('ssrf: every declared host is permitted by the policy, so there is no forbidden destination to test');
+  const network = { policy: s.policy, approved: s.approved, hosts: s.hosts };
+  return valueFamilyObligations('ssrf', profile, actors, blocked, {
+    probes: p, forbid: () => ({ ...(p.secrets.length ? { secrets: [...p.secrets] } : {}), connections: true }), extra: { network }, scopeNoun: 'declared untrusted URL inputs',
+  });
+}
+
+/**
+ * Path traversal attack values, generated from the declared tree. Every file outside the allowed root that plants a secret is a
+ * target. Development: the relative escape, the absolute path, and every declared link inside the root that points outside it.
+ * Sealed: an escape through a subdirectory and a `./` prefix (each must also disclose on the original, or it is quarantined).
+ */
+function traversalProbes(f) {
+  const root = f.root.replace(/\/$/, '');
+  const inside = (rel) => rel === root || rel.startsWith(`${root}/`);
+  const development = []; const sealed = []; const secrets = new Set();
+  const subdir = Object.keys(f.tree).filter(inside).map((r) => r.slice(root.length + 1).split('/')).find((parts) => parts.length > 1)?.[0] || null;
+  for (const [rel, content] of Object.entries(f.tree)) {
+    if (inside(rel)) continue;
+    const names = SECRET_NAMES(content);
+    if (!names.length) continue;
+    names.forEach((n) => secrets.add(n));
+    const up = node_path__WEBPACK_IMPORTED_MODULE_3__.posix.relative(root, rel);
+    // the file, its absolute path, and its directory (for an application that appends a file name to the request value)
+    development.push(up, `{{fs:abs}}/${rel}`, node_path__WEBPACK_IMPORTED_MODULE_3__.posix.dirname(up));
+    for (const [link, target] of Object.entries(f.links || {})) {
+      if (!inside(link)) continue;
+      const dest = node_path__WEBPACK_IMPORTED_MODULE_3__.posix.normalize(node_path__WEBPACK_IMPORTED_MODULE_3__.posix.join(node_path__WEBPACK_IMPORTED_MODULE_3__.posix.dirname(link), target));
+      if (inside(dest) || !(rel === dest || rel.startsWith(`${dest}/`))) continue;
+      development.push(`${node_path__WEBPACK_IMPORTED_MODULE_3__.posix.relative(root, link)}/${node_path__WEBPACK_IMPORTED_MODULE_3__.posix.relative(dest, rel)}`);
+    }
+    const dir = node_path__WEBPACK_IMPORTED_MODULE_3__.posix.dirname(up);
+    sealed.push(`./${up}`, `./${dir}`);
+    if (subdir) sealed.push(`${subdir}/../${up}`, `${subdir}/../${dir}`);
+  }
+  return { development: [...new Set(development)], sealed: [...new Set(sealed)], secrets: [...secrets] };
+}
+
+function filesystemObligations(profile, actors, blocked) {
+  const f = profile.filesystem;
+  const p = traversalProbes(f);
+  if (!p.secrets.length) blocked.push('filesystem: no file outside the allowed root plants a {{secret:<name>}} value, so a disclosure could not be observed');
+  const files = { root: f.root, tree: f.tree, ...(f.links ? { links: f.links } : {}) };
+  return valueFamilyObligations('filesystem', profile, actors, blocked, {
+    probes: p, forbid: () => ({ secrets: [...p.secrets] }), extra: { files }, scopeNoun: 'declared untrusted path inputs',
+  });
+}
+
+/**
+ * Password storage: the stored credential is judged by the verifier, not by the application's own answers. New users register (two
+ * with the same password, to show salting) and their stored values must not be plaintext or a fast digest and must recompute under
+ * the approved format; legitimate logins (legacy users included, wrong passwords refused) must keep working; and a legacy user's
+ * stored value must be migrated to the approved format after a successful login.
+ */
+function passwordObligations(profile, actors, blocked) {
+  const w = profile.passwords;
+  const actor = actors[w.actor];
+  const T = `SELECT ${w.hashColumn} FROM ${w.table} WHERE ${w.userColumn} = ?`;
+  const fillCred = (tpl, user, password) => {
+    const f = (s) => s.replace(/\{\{user\}\}/g, user).replace(/\{\{password\}\}/g, password);
+    const enc = (s) => s.replace(/\{\{user\}\}/g, encodeURIComponent(user)).replace(/\{\{password\}\}/g, encodeURIComponent(password));
+    return { method: tpl.method, path: enc(tpl.path), headers: { ...(actor?.headers || {}) }, ...(tpl.body !== undefined ? { body: JSON.parse(JSON.stringify(tpl.body), (k, v) => (typeof v === 'string' ? f(v) : v)) } : {}) };
+  };
+  const reg = (id, user, pw) => ({ id, role: 'control', ...fillCred(w.register, user, pw), expect: { status: w.register.expectStatus || [200, 201] } });
+  const login = (id, user, pw, ok) => ({ id, role: 'control', ...fillCred(w.login, user, pw), expect: { status: ok ? (w.login.expectStatus || [200]) : w.login.denyStatus } });
+  const approved = { format: 'scrypt', minN: w.approved.minN, minR: w.approved.minR, minSaltBytes: w.approved.minSaltBytes, minKeyBytes: w.approved.minKeyBytes };
+  const NEW_PW = '{{secret:new-password}}';
+  const legacySeed = w.legacy.users.map((u) => ({ sql: `INSERT INTO ${w.table} (${w.userColumn}, ${w.hashColumn}) VALUES (?, ?)`, params: [u.name, node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash(w.legacy.digest).update(u.password, 'utf8').digest('hex')] }));
+  const withSeed = (inputs) => ({ ...inputs, seed: [...inputs.seed, ...legacySeed] });
+  const out = [];
+  const storage = [
+    reg('register_new_a', 'new-user-a', NEW_PW), reg('register_new_b', 'new-user-b', NEW_PW),
+    login('login_new_a', 'new-user-a', NEW_PW, true), login('login_new_a_wrong', 'new-user-a', 'not-the-password', false),
+  ];
+  const storageChecks = [
+    { id: 'stored_new_a', role: 'attack', sql: T, params: ['new-user-a'], credential: { password: NEW_PW, properties: ['not-plaintext', 'not-fast-digest', 'approved-format'], approved } },
+    { id: 'stored_new_b', role: 'attack', sql: T, params: ['new-user-b'], credential: { password: NEW_PW, properties: ['not-plaintext', 'not-fast-digest', 'approved-format', 'distinct-from'], distinctFrom: 'stored_new_a', approved } },
+  ];
+  out.push(obligation('app-attack-blocked', 'password-storage', withSeed(appInputs(profile, storage, storageChecks)), { scope: 'stored credentials of newly registered users: not plaintext, not a fast digest, salted, recomputed under the approved format' }));
+  const legit = [];
+  w.legacy.users.forEach((u, i) => { legit.push(login(`login_legacy_${i}`, u.name, u.password, true), login(`login_legacy_${i}_wrong`, u.name, `${u.password}-wrong`, false)); });
+  legit.push(reg('register_new_c', 'new-user-c', 'another-pass-1'), login('login_new_c', 'new-user-c', 'another-pass-1', true));
+  out.push(obligation('app-behaviour-preserved', 'password-legitimate-logins', withSeed(appInputs(profile, legit)), { scope: 'legacy and new users log in with the right password and are refused with a wrong one' }));
+  const migrate = w.legacy.users.map((u, i) => login(`login_legacy_${i}_migrate`, u.name, u.password, true));
+  const migrated = w.legacy.users.map((u, i) => ({ id: `migrated_legacy_${i}`, role: 'control', sql: T, params: [u.name], credential: { password: u.password, properties: ['not-fast-digest', 'approved-format'], approved } }));
+  out.push(obligation('app-behaviour-after', 'password-legacy-migrated', withSeed(appInputs(profile, migrate, migrated)), { scope: 'a legacy user\'s stored value is in the approved format after a successful login' }));
+  void blocked;
+  return out;
+}
+
+/**
+ * Workflow and idempotency (FR-12, M3-05). Every sequence runs on a fresh database and a fresh application instance. Controls: each
+ * declared normal workflow, with its own checks and every invariant. Development attacks: each mutating step replayed, each adjacent
+ * pair swapped, the workflow reversed. Sealed attacks: each mutating step submitted twice at once (cooperative interleaving in one
+ * process). An attack is judged by the invariants alone: a status code never decides.
+ */
+function workflowObligations(profile, actors, blocked) {
+  const w = profile.workflow;
+  const opsById = Object.fromEntries(w.operations.map((op) => [op.id, op]));
+  const step = (id, extra = {}) => { const op = opsById[id]; return { ...reqOf(op, actors[op.actor], {}), ...extra }; };
+  const inv = w.invariants.map((c) => ({ id: `inv_${c.id.replace(/-/g, '_')}`, sql: c.sql, params: c.params || [], expect: c.expect }));
+  const controls = w.normal.map((n) => ({
+    id: `normal_${n.id.replace(/-/g, '_')}`, role: 'control',
+    steps: n.steps.map((s) => step(s, opsById[s].expectStatus ? { expectStatus: opsById[s].expectStatus } : {})),
+    checks: [...(n.checks || []).map((c) => ({ id: `chk_${c.id.replace(/-/g, '_')}`, sql: c.sql, params: c.params || [], expect: c.expect })), ...inv],
+  }));
+  const dev = []; const sealed = []; const seen = new Set();
+  const add = (list, id, steps) => { const k = JSON.stringify(steps); if (seen.has(k)) return; seen.add(k); list.push({ id, role: 'attack', steps, checks: inv }); };
+  for (const n of w.normal) {
+    const nid = n.id.replace(/-/g, '_');
+    n.steps.forEach((s, k) => {
+      if (!opsById[s].mutating) return;
+      const ids = [...n.steps.slice(0, k + 1), s, ...n.steps.slice(k + 1)];
+      add(dev, `replay_${nid}_${k}`, ids.map((x) => step(x)));
+      add(sealed, `concurrent_${nid}_${k}`, [...n.steps.slice(0, k).map((x) => step(x)), step(s, { concurrentGroup: 1 }), step(s, { concurrentGroup: 1 }), ...n.steps.slice(k + 1).map((x) => step(x))]);
+    });
+    for (let k = 0; k + 1 < n.steps.length; k++) {
+      if (n.steps[k] === n.steps[k + 1]) continue;
+      const ids = [...n.steps]; [ids[k], ids[k + 1]] = [ids[k + 1], ids[k]];
+      add(dev, `reorder_${nid}_${k}`, ids.map((x) => step(x)));
+    }
+    if (n.steps.length > 2) add(dev, `reverse_${nid}`, [...n.steps].reverse().map((x) => step(x)));
+  }
+  if (!dev.length) blocked.push('workflow: no declared normal workflow has a mutating step or two distinct steps, so no replay or reorder can be generated');
+  if (blocked.length) return [];
+  return [
+    obligation('app-attack-blocked', 'workflow-attacks-development', appInputs(profile, [], [], { sequences: [...controls, ...dev] }), { scope: 'replayed and reordered variants of the declared workflows, each on a fresh database' }),
+    ...(sealed.length ? [obligation('app-attack-sealed', 'workflow-attacks-sealed', appInputs(profile, [], [], { sequences: [...controls, ...sealed] }), { scope: 'concurrent double submissions of each mutating step (cooperative interleaving in one process; held out)' })] : []),
+    obligation('app-behaviour-preserved', 'workflow-normal', appInputs(profile, [], [], { sequences: controls }), { scope: 'the declared normal workflows, their checks and every invariant' }),
+  ];
+}
+
+function authzObligations(profile, actors, blocked) {
+  const z = profile.authorization;
+  const out = [];
+  const reads = []; const readControls = []; const writeAttacks = []; const writeControls = []; const attackChecks = []; const controlChecks = [];
+  const matrix = [];
+  for (const obj of z.objects) {
+    if (!seedHasSecret(profile, obj.secret)) blocked.push(`object ${obj.id}: the seed plants no {{secret:${obj.secret}}} value, so a disclosure could not be observed`);
+    let lastWriter = null; const deniedWriters = [];
+    for (const op of z.operations) {
+      for (const actor of Object.values(actors)) {
+        const allowed = (0,_profile_js__WEBPACK_IMPORTED_MODULE_7__/* .policyAllows */ .Jy)(z.policy, actor, obj, actors);
+        const rid = `${op.id}_${obj.id}_${actor.id}`.replace(/-/g, '_');
+        matrix.push({ object: obj.id, operation: op.id, effect: op.effect, actor: actor.id, role: actor.role ?? null, tenant: actor.tenant ?? null, owner: obj.owner, allowed });
+        if (op.effect === 'read') {
+          if (allowed) readControls.push({ id: rid, role: 'control', ...reqOf(op, actor, { id: obj.rowId }), expect: { status: op.expectStatus || [200], bodyIncludes: [`{{secret:${obj.secret}}}`] } });
+          else reads.push({ id: rid, role: 'attack', ...reqOf(op, actor, { id: obj.rowId }), forbid: { secrets: [obj.secret] } });
+        } else {
+          const value = `${allowed ? 'written' : 'forged'}-by-${actor.id}-${obj.id}`;
+          const r = reqOf(op, actor, { id: obj.rowId, value });
+          if (allowed) { writeControls.push({ id: rid, role: 'control', ...r, expect: { status: op.expectStatus || [200, 201, 204] } }); lastWriter = value; }
+          else { writeAttacks.push({ id: rid, role: 'attack', ...r, forbid: {} }); deniedWriters.push(rid); }
+        }
+      }
+    }
+    // One check per object: its content is still the planted value after every denied write. Several denied writes to one object would
+    // overwrite each other, so a per-write check would see only the last; the object-level check sees any of them. `guards` names the
+    // requests it judges (verifier-side metadata, never sent to the application).
+    if (deniedWriters.length) attackChecks.push({ id: `${obj.id.replace(/-/g, '_')}_unchanged`, role: 'attack', sql: `SELECT count(*) AS n FROM ${z.table} WHERE ${z.idColumn} = ? AND ${z.contentColumn} = ?`, params: [obj.rowId, `{{secret:${obj.secret}}}`], expect: [{ n: 1 }], guards: deniedWriters });
+    if (lastWriter) controlChecks.push({ id: `${obj.id.replace(/-/g, '_')}_written`, role: 'control', sql: `SELECT count(*) AS n FROM ${z.table} WHERE ${z.idColumn} = ? AND ${z.contentColumn} = ?`, params: [obj.rowId, lastWriter], expect: [{ n: 1 }] });
+  }
+  for (const c of z.controls || []) {
+    writeControls.push({ id: `control_${c.id.replace(/-/g, '_')}`, role: 'control', ...reqOf(c, actors[c.actor], {}), expect: { status: c.expectStatus || [200], ...(c.expectIncludes ? { bodyIncludes: c.expectIncludes } : {}) } });
+  }
+  if (!readControls.length) blocked.push('authorization: no actor is allowed to read any declared object, so the application cannot be shown to work');
+  if (!reads.length && !writeAttacks.length) blocked.push('authorization: the policy allows every actor everything, so there is nothing to deny');
+  if (blocked.length) return { obligations: out, matrix };
+  // The security run holds every denied attempt plus the allowed READS only: an allowed write would overwrite the state a denied write
+  // must be judged by. Allowed writes are judged in the behaviour run. Order: allowed reads, denied reads, then denied writes, so a
+  // write that succeeds on a vulnerable revision cannot make an earlier legitimate read look broken.
+  out.push(obligation('app-attack-blocked', 'authz-denied-actors', appInputs(profile, [...readControls, ...reads, ...writeAttacks], attackChecks), { scope: 'every declared actor x object x operation the policy denies' }));
+  out.push(obligation('app-behaviour-preserved', 'authz-allowed-workflows', appInputs(profile, [...readControls, ...writeControls], controlChecks), { scope: 'every declared actor x object x operation the policy allows' }));
+  return { obligations: out, matrix };
+}
+
+/**
+ * @param {{finding:object, profile:object, profileOrigin:'repository-file'|'operator-profile-outside-repository', source:{files,sourceDigest,configDigests,missing}, commit?:string|null, family:'sql-injection'|'object-authorization', editBudget?:{maxFiles:number,maxEditedLines:number}}} o
+ * @returns {{contract:object|null, blocked:string[], problems:string[], matrix?:object[]}}
+ */
+function buildContract(o) {
+  const problems = (0,_profile_js__WEBPACK_IMPORTED_MODULE_7__/* .validateProfile */ .UT)(o.profile);
+  if (problems.length) return { contract: null, blocked: [], problems };
+  const profile = o.profile;
+  const blocked = [];
+  for (const m of o.source.missing || []) blocked.push(`application file ${m} is missing or not a regular file`);
+  const actors = Object.fromEntries((profile.actors || []).map((a) => [a.id, a]));
+  let obligations; let matrix = null;
+  if (o.family === 'sql-injection') {
+    if (!profile.sql) return { contract: null, blocked: ['the profile has no sql section for a sql-injection finding'], problems: [] };
+    obligations = sqlObligations(profile, actors, blocked);
+  } else if (o.family === 'object-authorization') {
+    if (!profile.authorization) return { contract: null, blocked: ['the profile has no authorization section for an authorization finding'], problems: [] };
+    ({ obligations, matrix } = authzObligations(profile, actors, blocked));
+  } else if (o.family === 'ssrf') {
+    if (!profile.ssrf) return { contract: null, blocked: ['the profile has no ssrf section for a server-side request forgery finding'], problems: [] };
+    obligations = ssrfObligations(profile, actors, blocked);
+  } else if (o.family === 'dependency') {
+    // The advisory's attacks come from the declared exploit section; the resolution obligation judges the manifest, the lockfile and
+    // the resolved graph; the application runs against the packages each revision resolves to.
+    if (!profile.dependency) return { contract: null, blocked: ['the profile has no dependency section for a dependency finding'], problems: [] };
+    const via = { filesystem: filesystemObligations, sql: sqlObligations, ssrf: ssrfObligations }[profile.dependency.exploit];
+    obligations = via(profile, actors, blocked);
+    const d = profile.dependency;
+    const dinputs = { ecosystem: d.ecosystem, package: d.package, vulnerable: d.vulnerable, advisory: d.advisory, sources: d.sources };
+    obligations.unshift({
+      id: 'dependency-resolution', kind: 'dependency-resolved', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `${d.package} outside ${d.vulnerable} everywhere it resolves; lockfile consistent with the manifest; packages from ${d.sources} with their recorded integrity`,
+      baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: dinputs, inputsDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(dinputs), description: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn['dependency-resolved'].description,
+    });
+  } else if (o.family === 'infrastructure') {
+    if (!profile.infrastructure) return { contract: null, blocked: ['the profile has no infrastructure section for an infrastructure finding'], problems: [] };
+    const x = profile.infrastructure;
+    const xinputs = { files: x.files, environment: x.environment, mustNotExpose: x.mustNotExpose, mustStayExposed: x.mustStayExposed, ...(x.privileges ? { privileges: { mustNotAllow: x.privileges.mustNotAllow, mustAllow: x.privileges.mustAllow || [] } } : {}) };
+    obligations = [{
+      id: 'infrastructure-exposure', kind: 'infrastructure-effective', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `the effective configuration of ${x.files.length} file(s) in ${x.environment}: ${x.mustNotExpose.length ? `${x.mustNotExpose.join(', ')} not exposed` : 'no exposure requirement'}${x.mustStayExposed.length ? `; ${x.mustStayExposed.join(', ')} still exposed` : ''}${x.privileges ? `; ${x.privileges.mustNotAllow.length} action(s) denied and ${(x.privileges.mustAllow || []).length} kept for named identities` : ''}`,
+      baselineExpectation: 'failed', patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: xinputs, inputsDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(xinputs), description: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn['infrastructure-effective'].description,
+    }];
+  } else if (o.family === 'workflow') {
+    if (!profile.workflow) return { contract: null, blocked: ['the profile has no workflow section for a workflow finding'], problems: [] };
+    obligations = workflowObligations(profile, actors, blocked);
+  } else if (o.family === 'credential') {
+    if (!profile.credential) return { contract: null, blocked: ['the profile has no credential section for a leaked credential finding'], problems: [] };
+    const c = profile.credential;
+    const loc = c.location;
+    const original = o.source.files[loc.file];
+    const len = original ? (String(original).split('\n')[loc.line - 1] || '').match(/(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g)?.reduce((m, s) => Math.max(m, s.length - 2), 0) ?? 0 : 0;
+    if (len < 12) blocked.push(`credential: no string literal of 12 characters or more is at ${loc.file}:${loc.line}, so the leaked value could not be located`);
+    const cinputs = { file: loc.file, line: loc.line, length: len, env: c.env, provider: c.provider, revocation: c.revocation };
+    obligations = [{
+      id: 'credential-removal', kind: 'credential-removed', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `the value leaked at ${loc.file}:${loc.line} is in no application file, plain or re-encoded`, baselineExpectation: 'failed', patchedExpectation: 'passed',
+      evidenceOrigin: 'registered-family', inputs: cinputs, inputsDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(cinputs), description: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn['credential-removed'].description,
+    }];
+    const controls = c.controls.map((r) => ({ id: `credential_${r.id.replace(/-/g, '_')}`, role: 'control', ...reqOf(r, actors[r.actor], {}), expect: { status: r.expectStatus || [200], ...(r.expectIncludes ? { bodyIncludes: r.expectIncludes } : {}) } }));
+    obligations.push(obligation('app-behaviour-after', 'credential-replacement-wired', appInputs(profile, controls, [], { network: c.network, env: { [c.env]: '{{secret:replacement-credential}}' } }), { scope: `the application works with a replacement credential read from ${c.env}, against hosts that accept only that replacement` }));
+  } else if (o.family === 'password-storage') {
+    if (!profile.passwords) return { contract: null, blocked: ['the profile has no passwords section for a password storage finding'], problems: [] };
+    obligations = passwordObligations(profile, actors, blocked);
+  } else if (o.family === 'path-traversal') {
+    if (!profile.filesystem) return { contract: null, blocked: ['the profile has no filesystem section for a path traversal finding'], problems: [] };
+    obligations = filesystemObligations(profile, actors, blocked);
+  } else return { contract: null, blocked: [`family ${o.family} has no registered repair contract in this milestone`], problems: [] };
+  if (profile.migration) {
+    if (!obligations.some((x) => x.kind === 'app-behaviour-preserved' || x.kind === 'app-behaviour-after')) blocked.push('migration: the family has no application behaviour obligation to run against the migrated schema');
+    const m = profile.migration;
+    const minputs = { up: m.up, down: m.down, deployOrder: m.deployOrder, interim: m.interim || [] };
+    obligations.push({
+      id: 'migration-window', kind: 'migration-window', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+      scope: `${m.up} then ${m.down} on the declared schema and seed; deployment order ${m.deployOrder}; ${minputs.interim.length} row(s) written while rolled back`,
+      baselineExpectation: null, patchedExpectation: 'passed', evidenceOrigin: 'registered-family', inputs: minputs, inputsDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(minputs), description: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn['migration-window'].description,
+    });
+  }
+  obligations.push({
+    id: 'central-verifier', kind: 'project-tests', required: true, oracleId: null, oracleVersion: null, oracleLogicDigest: null,
+    scope: profile.tests ? `rescan, new-finding delta, footprint and the per-test delta of '${profile.tests.command}'` : 'rescan, new-finding delta and footprint; no project test command was declared, so the test leg is not run and the record says so',
+    baselineExpectation: null, patchedExpectation: 'passed', evidenceOrigin: 'registered-family', description: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .OBLIGATION_KINDS */ .Xn['project-tests'].description,
+  });
+  const approved = o.profileOrigin === 'operator-profile-outside-repository' && profile.approval;
+  const policyFacts = [{
+    id: 'application-profile', origin: o.profileOrigin, approval: approved ? 'approved' : 'declared',
+    digest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)({ actors: profile.actors ?? null, sql: profile.sql ?? null, authorization: profile.authorization ?? null, ssrf: profile.ssrf ?? null, filesystem: profile.filesystem ?? null, passwords: profile.passwords ?? null, workflow: profile.workflow ?? null, credential: profile.credential ?? null, dependency: profile.dependency ?? null, infrastructure: profile.infrastructure ?? null, migration: profile.migration ?? null, database: profile.database ?? null }),
+    ...(approved ? { approvedBy: profile.approval.approvedBy } : {}),
+  }];
+  const knownUnknowns = [
+    'only the declared requests, actors, objects and state checks are verified; behaviour outside them is not observed',
+    'no call-graph slice beyond the declared application files is computed: callers outside them are not exercised',
+    'requests run one at a time in a single process; no concurrency is exercised',
+  ];
+  if (!approved) knownUnknowns.push('the profile facts are declared, not approved: a verified result holds for the declared contract only');
+  if (!profile.tests) knownUnknowns.push('no project test command was declared');
+  const findingFile = o.finding?.locations?.[0]?.file || o.finding?.file || null;
+  const contract = {
+    schema: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .SCHEMAS */ .H6.contract, schemaVersion: _schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .SCHEMA_VERSION */ .f$,
+    family: o.family,
+    findingRefs: [o.finding.findingId || o.finding.stableId || o.finding.id],
+    rootCauseGroup: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)({ family: o.family, file: findingFile }),
+    sourceCommit: o.commit ?? null, sourceDigest: o.source.sourceDigest, configDigests: o.source.configDigests,
+    profile: { application: profile.application, database: { engine: profile.database?.engine ?? null }, runtime: profile.application.runtime || 'node', builder: CONTRACT_BUILDER_VERSION, ...(matrix ? { actorMatrix: matrix } : {}) },
+    obligations, policyFacts,
+    // a dependency repair edits the manifest and the lockfile; every other protected path stays protected
+    editScope: { allowed: [...profile.application.files, ...(profile.migration ? [profile.migration.up, profile.migration.down] : [])], prohibited: o.family === 'dependency' ? PROTECTED_PATTERNS.filter((x) => x !== 'package.json' && x !== 'package-lock.json') : [...PROTECTED_PATTERNS], ...(o.editBudget || DEFAULT_EDIT_BUDGET) },
+    executionPolicy: { execution: 'trust-boundary', network: 'denied', model: 'none-unless-operator-configured' },
+    knownUnknowns,
+  };
+  contract.contractId = (0,_schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .contractIdOf */ .JF)(contract);
+  contract.contractDigest = (0,_schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .contractDigestOf */ .U_)(contract);
+  const v = (0,_schemas_js__WEBPACK_IMPORTED_MODULE_6__/* .validateContract */ .T7)(contract);
+  if (!v.ok) return { contract: null, blocked, problems: v.errors.map((e) => `${e.path}: ${e.message}`) };
+  return { contract, blocked, problems: [], ...(matrix ? { matrix } : {}) };
+}
+
+/** The obligations of a contract as a reader sees them: kind, scope, required, oracle. Used by CLI and MCP alike (AC-04.5). */
+function obligationSummary(contract) {
+  return contract.obligations.map((o) => ({ id: o.id, kind: o.kind, required: o.required, oracle: o.oracleId ? `${o.oracleId}@${o.oracleVersion}` : 'central-verifier', scope: o.scope, requests: o.inputs?.requests?.length ?? null, stateChecks: o.inputs?.stateChecks?.length ?? null }));
+}
+
+
+
+
+/***/ }),
+
+/***/ 52184:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+
+// EXPORTS
+__webpack_require__.d(__webpack_exports__, {
+  dc: () => (/* binding */ EXIT),
+  Pk: () => (/* binding */ isRunId),
+  RZ: () => (/* binding */ planRepair),
+  cI: () => (/* binding */ readRun),
+  AX: () => (/* binding */ requestCancel),
+  Lq: () => (/* binding */ runRepair),
+  AM: () => (/* binding */ runsDir),
+  tE: () => (/* binding */ validatePolicy)
+});
+
+// UNUSED EXPORTS: DEFAULT_BUDGETS, PLAN_SCHEMA, POLICY_SCHEMA, resolveBudgets
+
+// EXTERNAL MODULE: external "node:fs"
+var external_node_fs_ = __webpack_require__(73024);
+// EXTERNAL MODULE: external "node:path"
+var external_node_path_ = __webpack_require__(76760);
+// EXTERNAL MODULE: external "node:crypto"
+var external_node_crypto_ = __webpack_require__(77598);
+// EXTERNAL MODULE: ./src/posture/assurance/identity.js
+var identity = __webpack_require__(91026);
+// EXTERNAL MODULE: ./src/posture/assurance/config.js
+var config = __webpack_require__(20622);
+// EXTERNAL MODULE: ./src/posture/oracles/registry.js + 2 modules
+var registry = __webpack_require__(45603);
+// EXTERNAL MODULE: ./src/posture/state-dir.js
+var state_dir = __webpack_require__(69259);
+// EXTERNAL MODULE: ./src/repair/schemas.js
+var schemas = __webpack_require__(62805);
+// EXTERNAL MODULE: ./src/repair/contracts.js
+var contracts = __webpack_require__(22058);
+// EXTERNAL MODULE: ./src/repair/lab.js
+var lab = __webpack_require__(14370);
+;// CONCATENATED MODULE: ./src/repair/migrations.js
+// Schema migrations in a repair (verified-remediation PRD FR-16, AC-16.4): does the migration the candidate ships keep the deployment
+// window, the rollback and the forward recovery working, and what does each rollback do to the exposure?
+//
+// The candidate writes the up and down files the profile names. Every application run of the PATCHED revision applies its up file after
+// the declared seed (oracle version 6 `migrations`), so the contract's attacks and controls judge the patched code on the schema it
+// needs. This module adds the `migration-window` legs, each an ordinary oracle run through the trust boundary on a fresh database:
+//
+//   window     the revision live while the other half of the deployment is pending: the ORIGINAL code on the migrated schema
+//              (migrate-then-deploy), or the PATCHED code on the old schema (deploy-then-migrate). Its legitimate workflows must work.
+//   rollback   up then down, then the ORIGINAL code: the down file must apply and the original must serve its legitimate workflows.
+//   recovery   up, down, the rows the profile says an older revision writes while rolled back, then up again, then the PATCHED code:
+//              the migration must re-apply over those rows, and the patched code must still block the attacks and serve the workflows.
+//
+// Exposure facts, stated and never a pass condition: whether the attacks reach their forbidden effect in the window, after a full
+// rollback (original code, old schema), with the code rolled back and the schema kept, and with the schema rolled back and the code
+// kept. A rollback that reinstates the exposure is reported with it; a combination that keeps it closed is reported as a mitigation.
+//
+// Limits, stated: only the declared rows stand in for data written between steps (what a running application writes is not carried
+// across runs); one SQLite file per run, no locking, long-running migration or replica behaviour; the deployment itself is not observed.
+
+
+/** The inputs of an obligation with the migration steps a revision's files call for. A revision without the up file gets none. */
+function withMigrations(inputs, steps) {
+  return { ...inputs, migrations: steps };
+}
+
+/** The steps for the patched revision's normal runs: its up file, when present. */
+function patchedSteps(decl, files) {
+  return typeof files[decl.up] === 'string' && files[decl.up].trim() ? [{ exec: files[decl.up] }] : [];
+}
+
+const exposureOf = (res, ob) => {
+  if (['unavailable', 'invalid'].includes(res.observed)) return 'unknown';
+  if (res.details?.setupFailed) return 'unknown';
+  const s = (0,lab/* judge */.S4)(res.observed, ob.patchedExpectation);
+  return s === 'passed' ? 'closed' : s === 'failed' ? 'exposed' : 'unknown';
+};
+
+/**
+ * Run the legs for one candidate. `run(ob, files, inputs)` is the coordinator's runner (budget accounting, trust boundary).
+ * @returns {Promise<{ok:boolean, status:'passed'|'failed'|'inconclusive', reason:string, legs:object[], exposure:object, mitigations:string[], counterexample:object|null}>}
+ */
+async function checkMigration({ decl, original, patched, behaviour, attack, inputsOf, run, stopped }) {
+  const up = patched[decl.up]; const down = patched[decl.down];
+  const missing = [decl.up, decl.down].filter((f) => typeof patched[f] !== 'string' || !patched[f].trim());
+  if (missing.length) return { ok: false, status: 'failed', reason: `the contract requires a migration and the candidate does not write ${missing.join(' and ')}`, legs: [], exposure: {}, mitigations: [], counterexample: { obligation: 'migration-window', property: 'migration-missing', message: `missing ${missing.join(', ')}` } };
+  const U = { exec: up }; const D = { exec: down };
+  const interim = (decl.interim || []).map((r) => ({ sql: r.sql, params: r.params }));
+  const legs = [];
+  const exec = async (leg, who, files, steps, ob, required) => {
+    const res = await run(ob, files, withMigrations(inputsOf(ob), steps));
+    const status = res.details?.setupFailed ? 'failed' : (0,lab/* judge */.S4)(res.observed, ob.patchedExpectation);
+    const reason = res.details?.migrationFailed ? `a migration step did not apply: ${res.details.migrationFailed}` : res.reason;
+    const r = { leg, code: who, steps: steps.map((s) => (s === U ? 'up' : s === D ? 'down' : 'interim-row')), obligation: ob.id, required, status, observed: res.observed, reason: String(reason || '').slice(0, 300), res };
+    legs.push(r);
+    return r;
+  };
+  // the window
+  const windowLeg = decl.deployOrder === 'migrate-then-deploy'
+    ? { code: 'original', files: original, steps: [U] }
+    : { code: 'patched', files: patched, steps: [] };
+  const w = await exec('window', windowLeg.code, windowLeg.files, windowLeg.steps, behaviour, true);
+  if (stopped()) return null;
+  const wx = attack ? await exec('window', windowLeg.code, windowLeg.files, windowLeg.steps, attack, false) : null;
+  if (stopped()) return null;
+  // the rollback
+  const rb = await exec('rollback', 'original', original, [U, D], behaviour, true);
+  if (stopped()) return null;
+  const rbx = attack ? await exec('rollback', 'original', original, [U, D], attack, false) : null;
+  if (stopped()) return null;
+  const schemaOnly = attack ? await exec('schema-rollback', 'patched', patched, [U, D], attack, false) : null;
+  if (stopped()) return null;
+  // the forward recovery
+  const rec = await exec('recovery', 'patched', patched, [U, D, ...interim, U], behaviour, true);
+  if (stopped()) return null;
+  const recx = attack ? await exec('recovery', 'patched', patched, [U, D, ...interim, U], attack, true) : null;
+  if (stopped()) return null;
+
+  const required = legs.filter((l) => l.required);
+  const failed = required.filter((l) => l.status === 'failed');
+  const open = required.filter((l) => l.status !== 'passed' && l.status !== 'failed');
+  const exposure = {
+    window: wx ? exposureOf(wx.res, attack) : 'unknown',
+    fullRollback: rbx ? exposureOf(rbx.res, attack) : 'unknown',
+    codeRollbackSchemaKept: decl.deployOrder === 'migrate-then-deploy' && wx ? exposureOf(wx.res, attack) : 'unknown',
+    schemaRollbackCodeKept: schemaOnly ? exposureOf(schemaOnly.res, attack) : 'unknown',
+  };
+  const mitigations = [];
+  if (exposure.codeRollbackSchemaKept === 'closed') mitigations.push('roll back the code and keep the migrated schema: the attacks stayed blocked');
+  if (exposure.schemaRollbackCodeKept === 'closed') mitigations.push('roll back the schema and keep the patched code: the attacks stayed blocked');
+  if (exposure.fullRollback === 'exposed' && !mitigations.length) mitigations.push('none observed: every rollback tested reinstates the exposure, so a rollback needs a control outside this contract');
+  const describe = (l) => `${l.leg} (${l.code} code, ${l.steps.join(' > ') || 'old schema'}) ${l.obligation}: ${l.reason}`;
+  const reason = failed.length ? failed.map(describe).join('; ') : open.length ? open.map(describe).join('; ') : `window, rollback and recovery passed (${decl.deployOrder}); full rollback ${exposure.fullRollback === 'exposed' ? 'reinstates the exposure' : exposure.fullRollback === 'closed' ? 'keeps it closed' : 'exposure unknown'}`;
+  const status = failed.length ? 'failed' : open.length ? 'inconclusive' : 'passed';
+  for (const l of legs) delete l.res;
+  return {
+    ok: status === 'passed', status, reason: reason.slice(0, 600), legs, exposure, mitigations,
+    counterexample: failed.length ? { obligation: 'migration-window', property: `migration-${failed[0].leg}`, leg: failed[0].leg, code: failed[0].code, steps: failed[0].steps, message: describe(failed[0]).slice(0, 300) } : null,
+  };
+}
+
+// EXTERNAL MODULE: ./src/repair/counterexamples.js
+var counterexamples = __webpack_require__(52798);
+// EXTERNAL MODULE: ./src/repair/candidates.js
+var candidates = __webpack_require__(21735);
+;// CONCATENATED MODULE: ./src/repair/portfolio.js
+// Candidate portfolios (verified-remediation PRD FR-09, M2-01, M2-02): structural deduplication, cross-execution and deterministic ranking.
+//
+//   structuralKey     Two candidates that differ only in whitespace and comments are the same strategy: the key is a digest of each
+//                     changed file with comments and whitespace removed. A structural duplicate consumes an attempt and is not run.
+//   crossInputs       Every counterexample any candidate of the round produced (a development attack that disclosed a secret or
+//                     broke a state check) becomes an extra attack request for every OTHER surviving candidate. A candidate that
+//                     passed its own run but fails a sibling's counterexample is rejected before ranking (T-26). Sealed failures are
+//                     never shared: their content does not leave the coordinator.
+//   rankSurvivors     Deterministic order over candidates that passed every development obligation and the cross-execution:
+//                     fewer material-risk categories, fewer files, fewer edited lines, generator preference (deterministic recipe,
+//                     then user-supplied, then model), then candidate id. No model-supplied score is read.
+
+
+const stripComments = (t) => String(t)
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1')
+  .replace(/(^|\n)\s*#[^\n]*/g, '$1');
+
+function structuralKey(files) {
+  const norm = {};
+  for (const [rel, t] of Object.entries(files || {}).sort(([a], [b]) => a.localeCompare(b))) norm[rel] = t === null ? null : stripComments(t).replace(/\s+/g, '');
+  return (0,identity/* digestOf */.ol)(norm);
+}
+
+const GENERATOR_ORDER = { 'deterministic-recipe': 0, 'user-supplied': 1, 'configured-model': 2 };
+
+function rankSurvivors(survivors) {
+  const key = (s) => [
+    s.candidate.scope?.material?.categories?.length ?? 0,
+    s.candidate.scope?.totals?.files ?? 99,
+    s.candidate.scope?.totals?.editedLines ?? 1e9,
+    GENERATOR_ORDER[s.candidate.generator] ?? 9,
+  ];
+  return [...survivors].sort((a, b) => {
+    const ka = key(a); const kb = key(b);
+    for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i];
+    return a.candidate.candidateId.localeCompare(b.candidate.candidateId);
+  });
+}
+
+/**
+ * The attack requests that disclosed a planted secret in a failed run, as shareable requests (`cross_<n>` ids). Only disclosure attacks are
+ * shared: a durable-state attack is judged by an object-level check the sibling runs anyway. Content stays inside the coordinator.
+ */
+function sharedAttacksFrom(inputs, details, extra = []) {
+  const byId = Object.fromEntries(inputs.requests.map((r) => [r.id, r]));
+  const out = [];
+  for (const v of details?.attackViolations || []) {
+    if (v.effect !== 'secret-disclosed' && v.effect !== 'forbidden-connection') continue;
+    const r = byId[v.id];
+    if (r && r.role === 'attack') out.push(r);
+  }
+  for (const r of extra) if (r && r.role === 'attack' && (r.forbid?.secrets?.length || r.forbid?.connections)) out.push(r);
+  return out;
+}
+
+/** Inputs carrying ONLY the controls and the shared attacks (deduplicated by request shape), for the cross-execution run. */
+function crossInputs(inputs, shared) {
+  const seen = new Set(); const attacks = [];
+  for (const r of shared) {
+    const k = (0,identity/* digestOf */.ol)({ m: r.method, p: r.path, b: r.body ?? null, h: r.headers ?? {} });
+    if (seen.has(k)) continue;
+    seen.add(k);
+    attacks.push({ ...r, id: `cross_${attacks.length}` });
+  }
+  return { ...inputs, requests: [...inputs.requests.filter((r) => r.role === 'control'), ...attacks], stateChecks: [] };
+}
+
+// EXTERNAL MODULE: ./src/repair/dependencies.js
+var dependencies = __webpack_require__(56540);
+;// CONCATENATED MODULE: ./src/repair/credentials.js
+// Credential repair (verified-remediation PRD FR-15, M4-04): source removal, replacement wiring and the lifecycle a source change cannot
+// complete on its own.
+//
+// The leaked value is never stored. A contract records its LOCATION (file and line) and length; the verifier reads the value from the
+// original source snapshot when it checks a revision, and every message names only the form it found, never the value.
+//
+//   checkRemoval   the `credential-removed` obligation over a revision's files: the value must not appear in any application file, nor
+//                  any re-encoding of it this module can recognise: base64 and base64url (with or without padding), hex in either case,
+//                  the value reversed, the value percent-encoded, the value split into adjacent string literals joined with `+` or in a
+//                  template, and the value as character codes (`String.fromCharCode(...)`, a numeric array). Re-encoding is not
+//                  removal (AC-15.1). An encoding outside that list (a custom cipher, a value fetched at runtime from a file the
+//                  candidate adds) is not recognised: that is a stated limit, and the behaviour obligation still requires the
+//                  replacement credential from the environment.
+//   lifecycle      what the record states beyond the source: replacement distribution and old-credential revocation are external.
+//                  Revocation is `verified` only from a connector the OPERATOR invoked with its own credentials that returned a receipt;
+//                  a connector error is `failed` (AC-15.3), no connector is `unavailable`, and nothing in a project file can invoke one
+//                  (AC-15.5). A source repair with revocation required and not verified is `lifecycle incomplete` (AC-15.2).
+
+/** The longest string literal on the given line of the original text: the leaked value, read at check time and never stored. */
+function extractCredential(text, line) {
+  const l = String(text || '').split('\n')[line - 1] || '';
+  const lits = [...l.matchAll(/(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g)].map((m) => m[2]);
+  const best = lits.sort((a, b) => b.length - a.length)[0];
+  return best && best.length >= 12 ? best : null;
+}
+
+const joined = (t) => String(t)
+  .replace(/(['"`])\s*\+\s*(['"`])/g, '')
+  .replace(/\$\{\s*(['"])((?:\\.|(?!\1)[^\\\n])*)\1\s*\}/g, '$2');
+
+function charCodeRuns(t) {
+  const out = [];
+  for (const m of String(t).matchAll(/(?:fromCharCode\s*\(|\[)\s*((?:\d{1,5}\s*,\s*){7,}\d{1,5})\s*[\])]/g)) {
+    const codes = m[1].split(',').map((x) => Number(x.trim()));
+    if (codes.every((c) => c >= 0 && c < 0x110000)) out.push(String.fromCodePoint(...codes));
+  }
+  return out;
+}
+
+/** Which recognised forms of the value appear in which files. Messages name forms and files only. */
+function checkRemoval(value, files) {
+  if (!value) return { ok: false, found: [{ file: null, form: 'the leaked value could not be read from the original source at the declared line' }] };
+  const b64 = Buffer.from(value, 'utf8').toString('base64');
+  const forms = [
+    ['the value', value], ['base64', b64], ['base64 without padding', b64.replace(/=+$/, '')],
+    ['base64url', Buffer.from(value, 'utf8').toString('base64url')], ['hex', Buffer.from(value, 'utf8').toString('hex')],
+    ['upper-case hex', Buffer.from(value, 'utf8').toString('hex').toUpperCase()], ['the value reversed', [...value].reverse().join('')],
+    ...(encodeURIComponent(value) !== value ? [['the value percent-encoded', encodeURIComponent(value)]] : []),
+  ];
+  const found = [];
+  for (const [file, text] of Object.entries(files || {})) {
+    if (typeof text !== 'string') continue;
+    for (const [form, v] of forms) if (text.includes(v)) found.push({ file, form });
+    if (!found.some((f) => f.file === file) && joined(text).includes(value)) found.push({ file, form: 'the value split into joined string literals' });
+    if (charCodeRuns(text).some((s) => s.includes(value))) found.push({ file, form: 'the value as character codes' });
+  }
+  return { ok: found.length === 0, found };
+}
+
+/** Revocation through an operator-invoked connector. Never throws; only a returned receipt is `verified`. */
+async function revoke(connector, request) {
+  if (!connector || typeof connector.revoke !== 'function') return { status: 'unavailable', reason: 'no revocation connector was invoked by the operator' };
+  try {
+    const r = await connector.revoke(request);
+    if (r && r.ok === true && typeof r.receipt === 'string' && r.receipt.length) return { status: 'verified', receipt: r.receipt.slice(0, 200), connector: String(connector.id || 'connector').slice(0, 80) };
+    return { status: 'failed', reason: String(r?.reason || 'the connector did not return a receipt').slice(0, 200), connector: String(connector.id || 'connector').slice(0, 80) };
+  } catch (e) {
+    return { status: 'failed', reason: `the connector failed: ${String(e?.message || e).slice(0, 160)}`, connector: String(connector.id || 'connector').slice(0, 80) };
+  }
+}
+
+/** Every recognised form of the value, for redaction. */
+function formsOf(value) {
+  if (!value) return [];
+  const b64 = Buffer.from(value, 'utf8').toString('base64');
+  return [value, b64, b64.replace(/=+$/, ''), Buffer.from(value, 'utf8').toString('base64url'), Buffer.from(value, 'utf8').toString('hex'), Buffer.from(value, 'utf8').toString('hex').toUpperCase(), [...value].reverse().join(''), encodeURIComponent(value)];
+}
+
+/** Replace every recognised form of the value in every string of `obj`, in place. Records carry source lines (scope signals). */
+function redactValue(obj, value) {
+  const forms = formsOf(value).filter((f) => f.length >= 8);
+  if (!forms.length) return obj;
+  const walk = (o) => {
+    if (!o || typeof o !== 'object') return;
+    for (const [k, v] of Object.entries(o)) {
+      if (typeof v === 'string') { let s = v; for (const f of forms) s = s.split(f).join('[credential redacted]'); if (s !== v) o[k] = s; }
+      else walk(v);
+    }
+  };
+  walk(obj);
+  return obj;
+}
+
+// EXTERNAL MODULE: ./src/lineage/deployment/ingest.js + 4 modules
+var ingest = __webpack_require__(99368);
+// EXTERNAL MODULE: ./src/lineage/deployment/iam-eval.js
+var iam_eval = __webpack_require__(11863);
+;// CONCATENATED MODULE: ./src/repair/infrastructure.js
+// Infrastructure repair (verified-remediation PRD FR-15, M4-05): judge the EFFECTIVE configuration, not the edited text.
+//
+// Every declared configuration file of a revision is ingested together by the deployment boundary adapters (`src/lineage/deployment/`:
+// container composition, Kubernetes manifests, a Terraform plan in JSON), so files merge the way the adapters model them: a
+// composition override that re-publishes a port is part of the graph whatever the main file says. Nothing is executed, deployed or
+// fetched; no cloud API is called.
+//
+//   checkInfrastructure  the `infrastructure-effective` obligation. A service is EXPOSED when a public route reaches it over routing
+//                        edges (`routes-to`) alone: its own published port, load balancer or ingress. Every service the profile says
+//                        must not be exposed must have no such route (the exposure is closed); every service it says must stay
+//                        exposed must still have one (an approved workflow still works, AC-15.4). A route, hop or service the adapters
+//                        could not resolve, and a file they could not parse, is a gap: the obligation fails rather than assume the
+//                        exposure closed.
+//
+//   checkPrivileges      the privilege half (FR-15, M4-06 follow-up): for each declared (identity, action, exact resource), the grants
+//                        the adapters read for that identity (IAM policies in a Terraform plan or a policy document) are decided by the
+//                        existing action-level evaluator (`iam-eval.js`): a matching allow, then any matching deny whose condition holds.
+//                        A forbidden action must be `not-granted` or `blocked`; a kept action must be `possible`. `unresolved` (an
+//                        unsupported condition, a clipped action list, an opaque grant) fails both ways: unknown is never a pass. An
+//                        identity the adapters could not resolve, or one with no node at all, is a gap.
+//
+// Limits, stated: only the formats the adapters read; reachability through a service's dependencies (another service that is itself
+// exposed) is not exposure here and is not judged; host firewalls, service meshes and cloud policies outside the files are not read;
+// nothing is applied (the shared apply service never writes composition or Terraform files) and nothing is deployed.
+
+
+
+/** Which services a public route reaches over routing edges only. Returns {exposed: Map(name -> route names), gaps: string[]}. */
+function directExposure(graph) {
+  const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
+  const routesTo = new Map();
+  for (const e of graph.edges) if (e.relation === 'routes-to') { if (!routesTo.has(e.from)) routesTo.set(e.from, []); routesTo.get(e.from).push(e); }
+  const exposed = new Map(); const gaps = [];
+  for (const start of graph.nodes.filter((n) => n.kind === 'route' && n.trustZone === 'public')) {
+    const seen = new Set([start.id]); const queue = [start.id];
+    while (queue.length) {
+      const id = queue.shift();
+      for (const e of routesTo.get(id) || []) {
+        if (e.effect === 'deny' || seen.has(e.to)) continue;
+        seen.add(e.to);
+        const to = nodes.get(e.to);
+        if (!to) { gaps.push(`${start.name}: routes to an unknown node`); continue; }
+        if (to.resolved === false) gaps.push(`${start.name}: routes to an unresolved ${to.kind} ${to.name}`);
+        if (to.kind === 'service') { if (!exposed.has(to.name)) exposed.set(to.name, []); exposed.get(to.name).push(start.name); }
+        queue.push(e.to);
+      }
+    }
+  }
+  return { exposed, gaps };
+}
+
+const resourceName = (n) => String(n.name).replace(/^aws\//, '');
+
+/** Decide each declared privilege over one ingested graph. Returns problems. */
+function checkPrivileges(graph, privileges) {
+  const problems = [];
+  const byName = new Map(graph.nodes.filter((n) => n.kind === 'identity').map((n) => [n.name, n]));
+  const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
+  const decide = (g) => {
+    const ident = byName.get(g.identity);
+    if (!ident) return { outcome: 'no-identity' };
+    if (ident.resolved === false) return { outcome: 'unresolved', why: [`the identity is not resolved (${ident.unresolvedReason || 'unknown'})`] };
+    const edges = graph.edges.filter((e) => e.relation === 'grants' && e.from === ident.id && nodes.get(e.to) && (0,iam_eval/* resourceMatches */.uH)(resourceName(nodes.get(e.to)), g.resource));
+    const d = (0,iam_eval/* decideAction */.jO)(edges.filter((e) => e.effect === 'allow'), edges.filter((e) => e.effect === 'deny'), g.action, {});
+    return { outcome: d.outcome, why: d.unresolvedBy };
+  };
+  for (const g of privileges.mustNotAllow) {
+    const d = decide(g);
+    if (d.outcome === 'possible') problems.push(`${g.identity} can still ${g.action} on ${g.resource}`);
+    else if (d.outcome === 'unresolved') problems.push(`whether ${g.identity} can ${g.action} on ${g.resource} is unresolved: ${(d.why || []).join('; ').slice(0, 200)}`);
+    else if (d.outcome === 'no-identity') problems.push(`${g.identity} is not an identity the configuration declares, so its grants are unknown`);
+  }
+  for (const g of privileges.mustAllow || []) {
+    const d = decide(g);
+    if (d.outcome === 'possible') continue;
+    problems.push(d.outcome === 'unresolved' ? `whether ${g.identity} can still ${g.action} on ${g.resource} is unresolved: ${(d.why || []).join('; ').slice(0, 200)}` : d.outcome === 'no-identity' ? `${g.identity} is gone: an approved workflow is broken` : `${g.identity} can no longer ${g.action} on ${g.resource}: an approved workflow is broken`);
+  }
+  return problems;
+}
+
+/** The `infrastructure-effective` check over one revision's files. */
+function checkInfrastructure(decl, files) {
+  const input = decl.files.filter((f) => typeof files[f] === 'string').map((f) => ({ path: f, text: files[f] }));
+  const problems = [];
+  for (const f of decl.files) if (typeof files[f] !== 'string') problems.push(`${f} is missing from the revision`);
+  const g = (0,ingest/* ingestDeploymentConfig */.In)({ files: input, environment: decl.environment });
+  if (!g || g.status !== 'ok' || !g.graph) return { ok: false, problems: [...problems, `the configuration could not be ingested: ${(g?.errors || []).map((e) => e.message).join('; ').slice(0, 200) || g?.status}`], exposed: {} };
+  // every declared file must be read by an adapter: a file nobody parsed could re-open what the others close
+  for (const f of g.files || []) if (f.status !== 'ingested') problems.push(`${f.file}: ${f.status}, so its effect on exposure is unknown`);
+  const { exposed, gaps } = directExposure(g.graph);
+  problems.push(...gaps);
+  for (const s of decl.mustNotExpose) if (exposed.has(s)) problems.push(`${s} is still exposed by ${exposed.get(s).join(', ')}`);
+  const services = new Set(g.graph.nodes.filter((n) => n.kind === 'service').map((n) => n.name));
+  for (const s of decl.mustStayExposed) if (!exposed.has(s)) problems.push(`${s} is no longer exposed${services.has(s) ? '' : ' (the service is gone)'}: an approved workflow is broken`);
+  if (decl.privileges) problems.push(...checkPrivileges(g.graph, decl.privileges));
+  return { ok: problems.length === 0, problems, exposed: Object.fromEntries([...exposed].map(([k, v]) => [k, v])) };
+}
+
+;// CONCATENATED MODULE: ./src/repair/coordinator.js
+// The repair coordinator (verified-remediation PRD section 5.2, FR-06, FR-07, FR-17): one state machine for every route (CLI, MCP,
+// headless callers, batch), calling the existing canonical services and adding none of its own.
+//
+//   plan      contract from finding + profile + exact source (contracts.js). No execution.
+//   run       baseline validation on the original (quarantine), then bounded rounds: proposals -> scope gate -> development obligations
+//             -> counterexample (shrunk) fed to the next round -> central verifier (rescan, footprint, project test delta) -> sealed
+//             obligations -> promotion. Every oracle run goes through the oracle runner and the trust boundary (lab.js).
+//   apply     only on request, only for a verified-for-contract candidate, only through applyVerifiedFix (signed scan, confinement,
+//             material-change approval, concurrent-modification check, transactional write). A source that drifted from the contract
+//             is refused before that (T-13).
+//
+// Trust rules this module enforces:
+//   - Promotion needs, for every required oracle obligation, a result produced in THIS process whose receipt the oracle runner issued
+//     for exactly the promoted files and the contract's inputs and oracle logic. Persisted records carry receipt digests only; `resume`
+//     re-executes every leg and never turns stored JSON back into evidence (AC-17.4, T-16).
+//   - Execution is enabled only by the operator (the assurance config the caller passes); a missing backend or a disabled feature is
+//     `blocked` with the next prerequisite, never a downgraded pass (AC-04.6, AC-05.6).
+//   - Budgets are enforced here, outside candidate code: rounds, strategies per round, attack cases per candidate, the whole-run wall
+//     deadline (an AbortSignal that reaches the oracle runner, which ends the process tree), and identical candidates consume an attempt
+//     without being re-run (AC-07.6). A budget stop is `partial`, never a proof.
+//   - Sealed obligations run only on a candidate that passed everything else; their outcome is recorded but never fed back.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const PLAN_SCHEMA = 'agentic-security/repair-plan';
+const POLICY_SCHEMA = 'agentic-security/repair-policy';
+const DEFAULT_BUDGETS = Object.freeze({ strategiesPerRound: 3, rounds: 3, attackCasesPerCandidate: 64, wallMs: 15 * 60_000, testCommandMs: 120_000, workers: 1 });
+const BUDGET_CEILINGS = Object.freeze({ strategiesPerRound: 3, rounds: 3, attackCasesPerCandidate: 120, wallMs: 60 * 60_000, testCommandMs: 120_000, workers: 2 });
+const EXIT = Object.freeze({ ok: 0, failed: 1, usage: 2, blocked: 3, cancelled: 4 });
+
+const runsDir = (root) => external_node_path_.join((0,state_dir/* stateDir */.Pn)(root), 'repair', 'runs');
+const RUN_ID_RE = /^rrun-[0-9a-f]{16}$/;
+const isRunId = (s) => typeof s === 'string' && RUN_ID_RE.test(s);
+
+// ---------------------------------------------------------------- policy and budgets
+
+/** Budgets within their ceilings. An unknown key or an out-of-range value is an error, never clamped silently. */
+function resolveBudgets(requested = {}) {
+  const errors = []; const b = { ...DEFAULT_BUDGETS };
+  for (const [k, v] of Object.entries(requested || {})) {
+    if (!(k in DEFAULT_BUDGETS)) { errors.push(`unknown budget '${k}'`); continue; }
+    if (!Number.isInteger(v) || v < 1 || v > BUDGET_CEILINGS[k]) { errors.push(`budget ${k} must be an integer from 1 to ${BUDGET_CEILINGS[k]}`); continue; }
+    b[k] = v;
+  }
+  return { budgets: b, errors };
+}
+
+/** A repair policy: budgets and the model setting. It cannot enable execution: only the operator's assurance config can. */
+function validatePolicy(p) {
+  const errs = [];
+  if (p === undefined || p === null) return { policy: { schema: POLICY_SCHEMA, schemaVersion: '1.0.0', budgets: {}, model: 'none' }, errors: [] };
+  if (typeof p !== 'object' || Array.isArray(p)) return { policy: null, errors: ['the policy must be a JSON object'] };
+  for (const k of Object.keys(p)) if (!['schema', 'schemaVersion', 'budgets', 'model'].includes(k)) errs.push(`policy: unknown field '${k}'`);
+  if (p.schema !== POLICY_SCHEMA) errs.push(`policy.schema must be '${POLICY_SCHEMA}'`);
+  if (p.model !== undefined && p.model !== 'none') errs.push("policy.model: only 'none' is supported in this milestone (no model proposer is wired; a local-only policy never becomes a remote call)");
+  const { errors } = resolveBudgets(p.budgets);
+  return { policy: errs.length || errors.length ? null : { budgets: {}, model: 'none', ...p }, errors: [...errs, ...errors] };
+}
+
+// ---------------------------------------------------------------- plan
+
+/**
+ * @param {{root:string, finding:object, family:string, profile:object, profileOrigin:string, commit?:string|null}} o
+ */
+function planRepair(o) {
+  const source = (0,contracts.snapshotSource)(o.root, o.profile);
+  const built = (0,contracts/* buildContract */.$B)({ finding: o.finding, profile: o.profile, profileOrigin: o.profileOrigin, source, commit: o.commit ?? null, family: o.family });
+  if (!built.contract) return { plan: null, blocked: built.blocked, problems: built.problems };
+  const plan = {
+    schema: PLAN_SCHEMA, schemaVersion: '1.0.0', contract: built.contract, finding: o.finding,
+    blocked: built.blocked, entry: o.profile.application.entry, tests: o.profile.tests || null,
+    actors: (o.profile.actors || []).map((a) => ({ id: a.id, headersDigest: (0,identity/* digestOf */.ol)(a.headers || {}) })),
+  };
+  return { plan, blocked: built.blocked, problems: [] };
+}
+
+// ---------------------------------------------------------------- persistence
+
+function writeJson(file, value) {
+  external_node_fs_.mkdirSync(external_node_path_.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  external_node_fs_.writeFileSync(tmp, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 });
+  external_node_fs_.renameSync(tmp, file);
+}
+
+function readRun(root, runId) {
+  if (!isRunId(runId)) return { error: 'not a repair run id' };
+  const dir = external_node_path_.join(runsDir(root), runId);
+  try {
+    const record = JSON.parse(external_node_fs_.readFileSync(external_node_path_.join(dir, 'record.json'), 'utf8'));
+    const plan = JSON.parse(external_node_fs_.readFileSync(external_node_path_.join(dir, 'plan.json'), 'utf8'));
+    const v = (0,schemas/* validateRepairRecord */.bY)(record);
+    return { dir, record, plan, valid: v.ok, problems: v.ok ? [] : v.errors.map((e) => `${e.path}: ${e.message}`) };
+  } catch (e) { return { error: `the run could not be read: ${String(e.message).slice(0, 160)}` }; }
+}
+
+/** Ask a running repair (in any process) to stop. It notices within a fraction of a second and records `cancelled`. */
+function requestCancel(root, runId) {
+  if (!isRunId(runId)) return { ok: false, reason: 'not a repair run id' };
+  const dir = external_node_path_.join(runsDir(root), runId);
+  try { JSON.parse(external_node_fs_.readFileSync(external_node_path_.join(dir, 'record.json'), 'utf8')); } catch { return { ok: false, reason: 'no such run' }; }
+  external_node_fs_.writeFileSync(external_node_path_.join(dir, 'cancel'), new Date().toISOString());
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------- run
+
+const actorLookup = (profileActors) => (headers) => {
+  const d = (0,identity/* digestOf */.ol)(headers || {});
+  return profileActors.find((a) => a.headersDigest === d)?.id ?? null;
+};
+
+function baseRecord(runId, plan) {
+  const c = plan.contract;
+  return {
+    schema: schemas/* SCHEMAS */.H6.record, schemaVersion: schemas/* SCHEMA_VERSION */.f$, runId, contractId: c.contractId, contractDigest: c.contractDigest,
+    findingRefs: c.findingRefs, sourceDigest: c.sourceDigest,
+    disposition: 'proposed', application: 'not-applied', artifact: 'source-only', environment: 'not-checked', completion: 'partial',
+    candidates: [], selected: null, rounds: 0, obligationResults: [], counterexamples: [], quarantined: [], regressionGuards: [], lifecycle: null, migration: null, staging: null,
+    budget: null, accounting: { oracleRuns: 0, wallMs: 0, modelTokens: null, modelCalls: 0, usd: null }, reasons: [], nextPrerequisite: null,
+    scope: `contract ${c.contractId} (${c.family}): ${c.obligations.length} obligations over ${c.editScope.allowed.length} application file(s); source-only, nothing built or deployed`,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * @param {{root:string, plan:object, policy?:object, config:object, proposers:object[], signal?:AbortSignal, runId?:string,
+ *   apply?:{approval?:object}|null, deps?:{verifyPatch?:Function, applyVerifiedFix?:Function, runOracleDeps?:object, probeEnv?:object},
+ *   onEvent?:(e:object)=>void, resumedFrom?:string}} o
+ * @returns {Promise<{record:object, exitCode:number, runId:string, dir:string}>}
+ */
+async function runRepair(o) {
+  const started = Date.now();
+  const plan = o.plan;
+  const runId = o.runId || `rrun-${external_node_crypto_.randomBytes(8).toString('hex')}`;
+  const dir = external_node_path_.join(runsDir(o.root), runId);
+  const record = baseRecord(runId, plan);
+  const emit = (e) => { try { o.onEvent?.(e); } catch { /* observer errors never change the run */ } try { external_node_fs_.appendFileSync(external_node_path_.join(dir, 'events.jsonl'), JSON.stringify({ t: Date.now() - started, ...e }) + '\n'); } catch { /* best effort */ } };
+  const { policy, errors: policyErrors } = validatePolicy(o.policy);
+  if (o.resumedFrom) record.reasons.push(`resumed from ${o.resumedFrom}: every verification leg re-executed in this process`);
+  writeJson(external_node_path_.join(dir, 'plan.json'), plan);
+  let leakedValue = null; // a credential repair's value, read from the original at check time: redacted from the record, never written
+  const finish = (disposition, completion, exitCode, extra = {}) => {
+    Object.assign(record, { disposition, completion, ...extra });
+    if (leakedValue) redactValue(record, leakedValue);
+    record.accounting.wallMs = Date.now() - started;
+    record.policyDigest = (0,identity/* digestOf */.ol)(policy || o.policy || null);
+    const v = (0,schemas/* validateRepairRecord */.bY)(record);
+    if (!v.ok) { record.disposition = 'blocked'; record.completion = 'invalid'; record.reasons.push(`the record failed its own schema: ${v.errors.map((e) => e.message).join('; ').slice(0, 300)}`); exitCode = EXIT.blocked; }
+    writeJson(external_node_path_.join(dir, 'record.json'), record);
+    emit({ kind: 'finished', disposition: record.disposition, completion: record.completion });
+    return { record, exitCode, runId, dir };
+  };
+  writeJson(external_node_path_.join(dir, 'record.json'), record);
+  if (policy) writeJson(external_node_path_.join(dir, 'policy.json'), policy);
+  if (!policy) return finish('blocked', 'invalid', EXIT.usage, { reasons: policyErrors });
+  const budgets = resolveBudgets(policy.budgets).budgets;
+  record.budget = { ...budgets, used: { rounds: 0, proposals: 0, oracleRuns: 0 } };
+
+  // 1. the contract still describes this source, and its oracle logic is still the registered logic
+  const cv = (0,schemas/* validateContract */.T7)(plan.contract);
+  if (!cv.ok) return finish('blocked', 'invalid', EXIT.usage, { reasons: cv.errors.map((e) => `${e.path}: ${e.message}`) });
+  for (const ob of plan.contract.obligations.filter((x) => x.oracleId)) {
+    if ((0,registry.getOracle)(ob.oracleId)?.logicDigest !== ob.oracleLogicDigest) return finish('blocked', 'invalid', EXIT.blocked, { reasons: [`obligation ${ob.id}: the oracle logic changed since the contract was planned`], nextPrerequisite: 'repair plan (re-plan the contract against the current verifier)' });
+  }
+  const profileStub = { application: plan.contract.profile.application };
+  const now = (0,contracts.snapshotSource)(o.root, profileStub);
+  if (now.sourceDigest !== plan.contract.sourceDigest) return finish('blocked', 'invalid', EXIT.blocked, { reasons: ['the application source changed since the contract was planned; its evidence would not describe this code'], nextPrerequisite: 'repair plan (re-plan against the current source)' });
+  if (plan.blocked?.length) return finish('blocked', 'unavailable', EXIT.blocked, { reasons: plan.blocked, nextPrerequisite: 'complete the application profile' });
+  const gate = (0,config/* featureStatus */.FX)(o.config, 'verification-oracles');
+  if (gate.status !== 'ok') return finish('blocked', 'unavailable', EXIT.blocked, { reasons: [`execution is not enabled: ${gate.reason}`], nextPrerequisite: 'repair run --allow-execution (the operator enables sandboxed execution; a repository file cannot)' });
+
+  // 2. cancellation and the wall deadline reach the oracle runner through one signal
+  const ctl = new AbortController();
+  const stop = (why) => { if (!ctl.signal.aborted) { record.reasons.push(why); ctl.abort(); } };
+  o.signal?.addEventListener('abort', () => stop('cancelled by the caller'), { once: true });
+  const timer = setTimeout(() => stop(`the whole-run wall budget of ${budgets.wallMs} ms ran out`), budgets.wallMs);
+  const poll = setInterval(() => { if (external_node_fs_.existsSync(external_node_path_.join(dir, 'cancel'))) stop('cancelled by request'); }, 150);
+  const cleanup = () => { clearTimeout(timer); clearInterval(poll); };
+  const stopped = () => ctl.signal.aborted;
+  const stoppedResult = () => { cleanup(); const byBudget = record.reasons.some((r) => r.includes('wall budget')); return finish(byBudget ? 'blocked' : 'cancelled', byBudget ? 'partial' : 'cancelled', EXIT.cancelled, { nextPrerequisite: `repair resume ${runId}` }); };
+
+  const original = now.files;
+  const entry = plan.entry;
+  // A dependency repair runs the application against the packages each revision's lockfile resolves to (FR-14).
+  const depDecl = plan.contract.family === 'dependency' ? plan.contract.obligations.find((x) => x.kind === 'dependency-resolved')?.inputs : null;
+  const runFiles = (files) => { if (!depDecl) return files; try { return (0,dependencies/* materialize */.O9)(o.root, depDecl, files); } catch { return files; } };
+  // Verifier-side obligations with no oracle (dependency resolution, credential removal): computed here over a revision's exact files.
+  const credDecl = plan.contract.obligations.find((x) => x.kind === 'credential-removed')?.inputs || null;
+  const infraDecl = plan.contract.obligations.find((x) => x.kind === 'infrastructure-effective')?.inputs || null;
+  // A repair that ships a schema migration: every run of a revision holding the up file applies it (FR-16, AC-16.4).
+  const migDecl = plan.contract.obligations.find((x) => x.kind === 'migration-window')?.inputs || null;
+  if (credDecl) leakedValue = extractCredential(original[credDecl.file], credDecl.line);
+  const staticChecks = (files) => {
+    const out = [];
+    if (depDecl) {
+      const rs = (0,dependencies/* checkResolution */.x0)(o.root, depDecl, files);
+      out.push({ obligation: 'dependency-resolution', kind: 'dependency-resolved', ok: rs.ok, reason: rs.ok ? `${depDecl.package} resolves outside ${depDecl.vulnerable} everywhere; the lockfile is consistent and every package verified` : rs.problems.slice(0, 6).join('; '), counterexample: { obligation: 'dependency-resolution', property: 'dependency-resolution', problems: rs.problems.slice(0, 10), vulnerable: rs.vulnerable, message: rs.problems[0] } });
+    }
+    if (infraDecl) {
+      const ix = checkInfrastructure(infraDecl, files);
+      out.push({ obligation: 'infrastructure-exposure', kind: 'infrastructure-effective', ok: ix.ok, reason: ix.ok ? `no public route reaches ${infraDecl.mustNotExpose.join(', ')}; approved services still exposed` : ix.problems.slice(0, 6).join('; '), counterexample: { obligation: 'infrastructure-exposure', property: 'effective-exposure', problems: ix.problems.slice(0, 10), exposed: ix.exposed, message: ix.problems[0] } });
+    }
+    if (credDecl) {
+      // the value is read from the ORIGINAL snapshot at the declared line, held in memory only for this comparison
+      const rm = checkRemoval(extractCredential(original[credDecl.file], credDecl.line), files);
+      out.push({ obligation: 'credential-removal', kind: 'credential-removed', ok: rm.ok, reason: rm.ok ? 'the leaked value is in no application file, plain or in a recognised re-encoding' : rm.found.slice(0, 6).map((f) => `${f.form} in ${f.file}`).join('; '), counterexample: { obligation: 'credential-removal', property: 'credential-present', found: rm.found.slice(0, 10), message: rm.found[0] ? `${rm.found[0].form} in ${rm.found[0].file}` : 'the credential is present' } });
+    }
+    return out;
+  };
+  const run = async (ob, files, inputs) => {
+    record.budget.used.oracleRuns++; record.accounting.oracleRuns++;
+    if (migDecl) { const eff = inputs || ob.inputs; if (eff.migrations === undefined) { const st = patchedSteps(migDecl, files); inputs = st.length ? { ...eff, migrations: st } : eff; } }
+    files = runFiles(files);
+    return (0,lab/* runObligation */.SX)(ob, files, { config: o.config, signal: ctl.signal, entry, hypothesisId: `${plan.contract.contractId}:${ob.id}`, inputs, deps: o.deps?.runOracleDeps, probeEnv: o.deps?.probeEnv, runOracle: o.deps?.runOracle });
+  };
+
+  try {
+    // 3. baseline: every generated check must mean something on the original
+    emit({ kind: 'baseline' });
+    const base = await (0,counterexamples/* validateAgainstOriginal */.DF)(plan.contract, original, run);
+    if (stopped()) return stoppedResult();
+    record.quarantined = base.quarantined;
+    record.regressionGuards = base.regressionGuards;
+    record.obligationResults.push(...base.baseline.map((b) => ({ ...b, revision: 'original', required: false })));
+    const staticOriginal = staticChecks(original);
+    for (const s of staticOriginal) record.obligationResults.push({ obligation: s.obligation, kind: s.kind, revision: 'original', required: false, observed: s.ok ? 'passed' : 'failed', expectation: 'failed', status: 'recorded', reason: s.reason });
+    const unavailable = base.baseline.filter((b) => ['unavailable', 'invalid'].includes(b.observed));
+    if (unavailable.length) { cleanup(); return finish('blocked', 'unavailable', EXIT.blocked, { reasons: unavailable.map((b) => `${b.obligation} on the original: ${b.reason}`), nextPrerequisite: 'a working confinement backend and node:sqlite on this host' }); }
+    const attackObs = plan.contract.obligations.filter((x) => x.kind === 'app-attack-blocked');
+    // A family with no attack obligation (a leaked credential) is reproduced by its verifier-side check failing on the original.
+    const reproduced = attackObs.length ? base.baseline.filter((b) => b.kind === 'app-attack-blocked' && b.observed === 'confirmed') : staticOriginal.filter((s) => !s.ok);
+    if (!attackObs.length && !reproduced.length) { cleanup(); return finish('refuted-finding', 'complete', EXIT.ok, { reasons: [`the original revision already passes ${staticOriginal.map((s) => s.obligation).join(', ')}: the finding is not reproduced, and no patch is proposed`] }); }
+    const behaviourOk = base.baseline.filter((b) => b.kind === 'app-behaviour-preserved').every((b) => b.observed === 'refuted' || base.effectiveInputs[b.obligation].requests.length > 0);
+    if (!reproduced.length) {
+      cleanup();
+      const refuted = base.baseline.filter((b) => b.kind === 'app-attack-blocked').every((b) => b.observed === 'refuted');
+      if (refuted && behaviourOk) return finish('refuted-finding', 'complete', EXIT.ok, { reasons: ['no declared attack reaches a forbidden effect on the original revision while its legitimate requests work: the finding is not reproduced for this contract, and no patch is proposed'] });
+      return finish('needs-review', 'partial', EXIT.blocked, { reasons: base.baseline.filter((b) => b.kind === 'app-attack-blocked').map((b) => `${b.obligation} on the original: ${b.reason}`), nextPrerequisite: 'a profile under which the original revision reproduces the finding and serves its legitimate requests' });
+    }
+    for (const ob of plan.contract.obligations.filter((x) => x.oracleId)) {
+      const eff = base.effectiveInputs[ob.id];
+      // Regression guards stay in the obligation but cannot show a repair: an attack obligation needs at least one check the original fails.
+      const guard = new Set(base.regressionGuards.filter((x) => x.obligation === ob.id).map((x) => x.id));
+      const meaningful = ob.kind.startsWith('app-attack') ? eff.requests.some((r) => r.role === 'attack' && !guard.has(r.id)) || (eff.stateChecks || []).some((c) => !guard.has(c.id)) || (eff.sequences || []).some((s) => s.role === 'attack' && !guard.has(s.id)) : eff.requests.length || (eff.sequences || []).length;
+      if (!meaningful) { cleanup(); return finish('needs-review', 'partial', EXIT.blocked, { reasons: [`required obligation ${ob.id} has no check left that is meaningful on the original revision (every attack is already blocked there, or quarantined)`], nextPrerequisite: 'review the quarantined checks, the regression guards and the profile' }); }
+    }
+
+    // attack-case budget per candidate
+    const capped = {};
+    for (const ob of plan.contract.obligations.filter((x) => x.oracleId)) {
+      const eff = base.effectiveInputs[ob.id];
+      const attacks = eff.requests.filter((r) => r.role === 'attack');
+      if (attacks.length > budgets.attackCasesPerCandidate) {
+        const keep = new Set(attacks.slice(0, budgets.attackCasesPerCandidate).map((r) => r.id));
+        capped[ob.id] = attacks.length - keep.size;
+        base.effectiveInputs[ob.id] = { ...eff, requests: eff.requests.filter((r) => r.role !== 'attack' || keep.has(r.id)) };
+      }
+    }
+    if (Object.keys(capped).length) record.reasons.push(`attack cases over the per-candidate budget were omitted: ${Object.entries(capped).map(([k, n]) => `${k} ${n}`).join(', ')}; the verification is partial for those cases`);
+
+    // 4. rounds. Each round is a portfolio (FR-09): every proposal is judged on the development obligations; counterexamples one
+    // candidate produced are run against every other survivor (cross-execution, T-26); the survivors are ranked deterministically and
+    // the sealed set runs in rank order on exactly one candidate at a time. Structural duplicates consume an attempt without running.
+    const order = { 'app-behaviour-preserved': 0, 'app-behaviour-after': 1, 'app-attack-blocked': 2 };
+    const devObs = plan.contract.obligations.filter((x) => x.oracleId && x.kind !== 'app-attack-sealed').sort((a, b) => order[a.kind] - order[b.kind]);
+    const sealedObs = plan.contract.obligations.filter((x) => x.kind === 'app-attack-sealed');
+    const attackOb = devObs.find((x) => x.kind === 'app-attack-blocked');
+    const seen = new Set(); const seenStructure = new Set();
+    let feedback = null; let selected = null; let anyInconclusive = false; let anyProposal = false;
+    const resultOf = (ob, res, status, reason) => ({ obligation: ob.id, kind: ob.kind, observed: res.observed, status, reason: reason ?? res.reason, receiptDigest: res.receipt?.receiptDigest ?? null, filesDigest: res.filesDigest, inputsDigest: res.inputsDigest, live: res.receipt });
+    for (let round = 1; round <= budgets.rounds && !selected; round++) {
+      record.rounds = round; record.budget.used.rounds = round;
+      const proposals = [];
+      for (const p of o.proposers) {
+        if (proposals.length >= budgets.strategiesPerRound) break;
+        let got;
+        try { got = await p.propose({ contract: plan.contract, files: original, round, feedback, max: budgets.strategiesPerRound - proposals.length }); }
+        catch (e) { record.reasons.push(`proposer ${p.id} failed: ${String(e?.message || e).slice(0, 160)}`); continue; }
+        for (const n of got.notes || []) record.reasons.push(`proposer ${p.id}: ${n}`);
+        proposals.push(...(got.proposals || []).slice(0, budgets.strategiesPerRound - proposals.length));
+      }
+      if (!proposals.length) break;
+      anyProposal = true;
+      const survivors = []; const shared = []; const roundFeedback = [];
+      // 4a. development obligations, every proposal
+      for (const prop of proposals) {
+        if (stopped()) return stoppedResult();
+        record.budget.used.proposals++;
+        const chk = (0,candidates/* checkCandidate */.We)(plan.contract, original, prop.files);
+        const summary = { round, generator: prop.generator, generatorIdentity: prop.generatorIdentity, strategy: prop.strategy || null };
+        if (!chk.ok) { record.candidates.push({ ...summary, status: 'refused', reasons: chk.reasons, scope: chk.scope.totals }); roundFeedback.push({ refused: chk.reasons }); emit({ kind: 'candidate-refused', reasons: chk.reasons }); continue; }
+        const made = (0,candidates/* makeCandidate */.El)(plan.contract, original, prop, chk);
+        if (!made.candidate) { record.candidates.push({ ...summary, status: 'refused', reasons: made.problems }); continue; }
+        const cand = made.candidate;
+        if (seen.has(cand.patchDigest)) { record.candidates.push({ ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, status: 'duplicate', reasons: ['an identical patch was already judged; it consumes an attempt and is not run again'] }); continue; }
+        const skey = structuralKey(cand.files);
+        if (seenStructure.has(skey)) { seen.add(cand.patchDigest); record.candidates.push({ ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, status: 'duplicate', reasons: ['structurally identical to a patch already judged (differs only in whitespace or comments); it consumes an attempt and is not run again'] }); continue; }
+        seen.add(cand.patchDigest); seenStructure.add(skey);
+        writeJson(external_node_path_.join(dir, 'candidates', `${cand.candidateId.replace(':', '-')}.json`), cand);
+        const patched = { ...original };
+        for (const [rel, t] of Object.entries(cand.files)) { if (t === null) delete patched[rel]; else patched[rel] = t; }
+        const cs = { ...summary, candidateId: cand.candidateId, patchDigest: cand.patchDigest, structuralKey: skey, scope: cand.scope, status: 'pending', results: [] };
+        record.candidates.push(cs);
+        emit({ kind: 'candidate', candidateId: cand.candidateId, round });
+        const t0 = Date.now();
+        // Every development obligation runs, so the record attributes every failure; the counterexample fed back is the first security
+        // failure, else the first behaviour failure.
+        let verdict = 'passed'; const failures = [];
+        let resolutionFailed = null;
+        for (const s of staticChecks(patched)) {
+          cs.results.push({ obligation: s.obligation, kind: s.kind, observed: s.ok ? 'passed' : 'failed', status: s.ok ? 'passed' : 'failed', reason: s.reason });
+          if (!s.ok && !resolutionFailed) resolutionFailed = s.counterexample;
+        }
+        for (const ob of devObs) {
+          const inputs = base.effectiveInputs[ob.id];
+          const res = await run(ob, patched, inputs);
+          if (stopped()) return stoppedResult();
+          const status = (0,lab/* judge */.S4)(res.observed, ob.patchedExpectation);
+          cs.results.push(resultOf(ob, res, status));
+          if (status === 'failed') failures.push({ ob, inputs, res });
+          else if (status !== 'passed' && verdict === 'passed') verdict = status === 'cancelled' ? 'cancelled' : 'inconclusive';
+        }
+        if (migDecl && !failures.length && !resolutionFailed && verdict === 'passed') {
+          const behaviour = devObs.find((x) => x.kind === 'app-behaviour-preserved') || devObs.find((x) => x.kind === 'app-behaviour-after');
+          const mg = await checkMigration({ decl: migDecl, original, patched, behaviour, attack: attackOb, inputsOf: (ob) => base.effectiveInputs[ob.id], run, stopped });
+          if (!mg || stopped()) return stoppedResult();
+          cs.results.push({ obligation: 'migration-window', kind: 'migration-window', observed: mg.status, status: mg.status, reason: mg.reason });
+          cs.migration = { deployOrder: migDecl.deployOrder, legs: mg.legs, exposure: mg.exposure, mitigations: mg.mitigations };
+          if (mg.status === 'failed') resolutionFailed = mg.counterexample;
+          else if (mg.status !== 'passed') verdict = 'inconclusive';
+        }
+        if (resolutionFailed && !failures.length) {
+          verdict = 'failed';
+          record.counterexamples.push({ candidateId: cand.candidateId, ...resolutionFailed });
+          roundFeedback.push({ candidateId: cand.candidateId, counterexample: resolutionFailed });
+        }
+        if (failures.length) {
+          verdict = 'failed';
+          if (resolutionFailed) record.counterexamples.push({ candidateId: cand.candidateId, ...resolutionFailed });
+          const { ob, inputs, res } = failures.find((f) => f.ob.kind === 'app-attack-blocked') || failures[0];
+          let cx = (0,counterexamples/* counterexampleFrom */.Xc)(ob, inputs, res, actorLookup(plan.actors));
+          const firstSecret = (res.details?.attackViolations || []).find((v) => v.effect === 'secret-disclosed' || v.effect === 'forbidden-connection');
+          let shrunk = null;
+          if (firstSecret && ob.kind === 'app-attack-blocked') {
+            const sh = await (0,counterexamples/* shrinkCounterexample */.St)(ob, inputs, patched, firstSecret.id, run, { maxRounds: 4, effect: firstSecret.effect, destinations: firstSecret.destinations });
+            if (stopped()) return stoppedResult();
+            shrunk = sh.request;
+            cx = { ...cx, request: { method: sh.request.method, path: sh.request.path, body: sh.request.body ?? null }, shrunkFrom: { method: sh.original.method, path: sh.original.path, body: sh.original.body ?? null }, shrinkRuns: sh.runs, propertyPreserved: sh.preserved };
+          }
+          cx.alsoFailed = failures.filter((f) => f.ob.id !== ob.id).map((f) => f.ob.id);
+          record.counterexamples.push({ candidateId: cand.candidateId, ...cx });
+          roundFeedback.push({ candidateId: cand.candidateId, counterexample: cx });
+          for (const f of failures.filter((x) => x.ob.kind === 'app-attack-blocked')) shared.push(...sharedAttacksFrom(f.inputs, f.res.details, shrunk ? [shrunk] : []));
+        }
+        cs.wallMs = Date.now() - t0;
+        if (verdict === 'inconclusive') anyInconclusive = true;
+        if (verdict === 'passed') survivors.push({ cand, cs, patched });
+        else cs.status = verdict === 'failed' ? 'rejected' : verdict;
+      }
+      // 4b. cross-execution: a survivor must also withstand every counterexample its siblings produced this round
+      if (shared.length && attackOb && survivors.length) {
+        const cin = crossInputs(base.effectiveInputs[attackOb.id], shared);
+        for (const s of [...survivors]) {
+          const res = await run(attackOb, s.patched, cin);
+          if (stopped()) return stoppedResult();
+          const status = (0,lab/* judge */.S4)(res.observed, attackOb.patchedExpectation);
+          s.cs.crossExecution = { attacks: cin.requests.filter((r) => r.role === 'attack').length, status, reason: res.reason };
+          if (status !== 'passed') {
+            s.cs.status = status === 'failed' ? 'rejected' : 'inconclusive';
+            if (status === 'failed') record.counterexamples.push({ candidateId: s.cand.candidateId, obligation: `${attackOb.id} (cross-execution)`, property: 'secret-disclosed', message: 'a counterexample found against a sibling candidate in this round also defeats this one' });
+            else anyInconclusive = true;
+            survivors.splice(survivors.indexOf(s), 1);
+          }
+        }
+      }
+      // 4c. rank, then the central verifier and the sealed set in rank order
+      const ranked = rankSurvivors(survivors.map((s) => ({ ...s, candidate: s.cand })));
+      ranked.forEach((s, i) => { s.cs.rank = i + 1; });
+      for (const s of ranked) {
+        if (selected) { s.cs.status = 'passed-not-selected'; continue; }
+        const { cand, cs, patched } = s;
+        let verdict = 'passed';
+        const central = await centralVerify(o, plan, cand, budgets, cs, (0,identity/* digestOf */.ol)(runFiles(patched)));
+        cs.results.push(central);
+        if (central.status !== 'passed') { verdict = central.status === 'failed' ? 'failed' : 'inconclusive'; if (central.status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: 'central-verifier', property: 'central-verifier', message: central.reason }); roundFeedback.push({ candidateId: cand.candidateId, counterexample: { obligation: 'central-verifier', message: central.reason } }); } }
+        if (verdict === 'passed') {
+          for (const ob of sealedObs) {
+            const res = await run(ob, patched, base.effectiveInputs[ob.id]);
+            if (stopped()) return stoppedResult();
+            const status = (0,lab/* judge */.S4)(res.observed, ob.patchedExpectation);
+            cs.results.push(resultOf(ob, res, status, status === 'failed' ? 'a sealed held-out check failed' : undefined));
+            if (status !== 'passed') { verdict = status === 'failed' ? 'failed' : 'inconclusive'; if (status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: ob.id, sealed: true, message: 'a sealed held-out check failed; its content is not disclosed to candidate generation' }); roundFeedback.push({ candidateId: cand.candidateId, counterexample: { obligation: ob.id, sealed: true, message: 'a sealed held-out check failed' } }); } break; }
+          }
+        }
+        if (verdict === 'inconclusive') anyInconclusive = true;
+        if (verdict === 'passed' && promotable(plan.contract, cs, runFiles(patched))) { cs.status = 'verified-for-contract'; selected = { cand, cs }; continue; }
+        cs.status = verdict === 'passed' ? 'inconclusive' : verdict === 'failed' ? 'rejected' : verdict;
+      }
+      feedback = roundFeedback.length ? { round, items: roundFeedback, ...roundFeedback[roundFeedback.length - 1] } : feedback;
+    }
+    cleanup();
+    for (const c of record.candidates) for (const r of c.results || []) delete r.live;
+    if (!anyProposal) return finish('blocked', 'unavailable', EXIT.blocked, { reasons: [...record.reasons, 'no candidate generator produced a proposal'], nextPrerequisite: 'supply candidates (--candidates <file.json>) or a family with a deterministic recipe' });
+    if (!selected) {
+      const exhausted = record.rounds >= budgets.rounds;
+      return finish(anyInconclusive ? 'needs-review' : 'rejected', exhausted ? 'partial' : 'complete', anyInconclusive ? EXIT.blocked : EXIT.failed, { reasons: [...record.reasons, exhausted ? `no candidate satisfied every required obligation within ${budgets.rounds} round(s); this is a budget stop, not a proof that no repair exists` : 'no candidate satisfied every required obligation'] });
+    }
+    record.selected = selected.cand.candidateId;
+    record.patchDigest = selected.cand.patchDigest;
+    record.exactPatch = { files: selected.cand.files, beforeDigests: selected.cand.beforeDigests, afterDigests: selected.cand.afterDigests };
+    record.obligationResults.push(...selected.cs.results.map((r) => ({ obligation: r.obligation, kind: r.kind, revision: 'patched', required: true, status: r.status, observed: r.observed, receiptDigest: r.receiptDigest ?? null, reason: r.reason })));
+    if (selected.cs.migration) {
+      record.migration = selected.cs.migration;
+      if (record.migration.exposure.fullRollback === 'exposed') record.reasons.push(`rolling back this repair reinstates the exposure; mitigation: ${record.migration.mitigations.join('; ')}`);
+    }
+    record.legacy = { ok: true, verified: true, fixCompleteness: selected.cs.results.find((r) => r.obligation === 'central-verifier')?.fixCompleteness ?? null, note: 'FULL in the legacy fields means the named contract passed, not universal correctness' };
+    // A credential repair's lifecycle: the source half is what this run verified; distribution is external and not checked; revocation is
+    // verified only by a connector the operator invoked (`o.revoke`), never because a project file asked for it (FR-15).
+    if (credDecl) {
+      const rv = credDecl.revocation === 'not-required' ? { status: 'not-required' } : o.revoke ? await revoke(o.deps?.revocationConnector || null, { provider: credDecl.provider, location: `${credDecl.file}:${credDecl.line}` }) : { status: 'required-not-verified', reason: 'revocation is required and no connector was invoked: removing the value from the source does not revoke it' };
+      record.lifecycle = { sourceRemoved: 'verified', replacementWired: 'verified', distribution: 'not-checked', revocation: rv.status, ...(rv.reason ? { revocationReason: rv.reason } : {}), ...(rv.receipt ? { revocationReceipt: rv.receipt } : {}), complete: rv.status === 'verified' || rv.status === 'not-required' };
+      if (!record.lifecycle.complete) record.reasons.push(`source repaired, lifecycle incomplete: revocation ${rv.status}`);
+    }
+    // 5. application, only on request and only through the canonical service
+    if (o.apply) {
+      const drift = (0,contracts.snapshotSource)(o.root, profileStub);
+      if (drift.sourceDigest !== plan.contract.sourceDigest) return finish('verified-for-contract', 'complete', EXIT.blocked, { application: 'concurrent-change-refused', reasons: [...record.reasons, 'the source changed after verification; the verified patch was not applied'] });
+      const apply = o.deps?.applyVerifiedFix || (await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 18303))).applyVerifiedFix;
+      const a = await apply({ scanRoot: o.root, finding: { ...plan.finding, stableId: plan.finding.stableId || plan.contract.findingRefs[0], id: plan.finding.id || plan.contract.findingRefs[0] }, files: selected.cand.files, fixMeta: { approval: o.apply.approval || undefined, repairContract: plan.contract.contractId } });
+      if (!a.applied) return finish('verified-for-contract', 'complete', EXIT.blocked, { application: a.reason && /changed on disk/.test(a.reason) ? 'concurrent-change-refused' : 'not-applied', reasons: [...record.reasons, `not applied: ${a.reason}`] });
+      return finish('verified-for-contract', 'complete', EXIT.ok, { application: 'applied' });
+    }
+    return finish('verified-for-contract', 'complete', EXIT.ok);
+  } catch (e) {
+    cleanup();
+    return finish('blocked', 'invalid', EXIT.blocked, { reasons: [...record.reasons, `the coordinator failed: ${String(e?.message || e).slice(0, 200)}`] });
+  }
+}
+
+/** Every required oracle obligation passed on exactly these files, with a live receipt bound to them. */
+function promotable(contract, cs, patched) {
+  const fd = (0,identity/* digestOf */.ol)(patched);
+  for (const ob of contract.obligations.filter((x) => x.required)) {
+    const r = cs.results.find((x) => x.obligation === ob.id);
+    if (!r || r.status !== 'passed') return false;
+    if (ob.oracleId && (!r.live || r.filesDigest !== fd || r.live.request.filesDigest !== fd)) return false;
+  }
+  return true;
+}
+
+/**
+ * A password-storage migration proof for the central verifier: every password migration obligation of the contract passed on THIS
+ * candidate, each with a live receipt (a result this coordinator's oracle run produced, never a candidate's claim). Bound to the digest of
+ * the exact files handed to the verifier, so a proof for one candidate cannot excuse another. Null for any other family.
+ */
+async function migrationProofFor(contract, cs, files, patchedDigest) {
+  if (contract?.family !== 'password-storage' || !cs) return null;
+  const { PASSWORD_MIGRATION_OBLIGATIONS, migrationFilesDigest } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 33633));
+  const passed = PASSWORD_MIGRATION_OBLIGATIONS.filter((id) => {
+    const ob = contract.obligations.find((x) => x.id === id);
+    const r = cs.results.find((x) => x.obligation === id);
+    return ob && r && r.status === 'passed' && (!ob.oracleId || (r.live && r.filesDigest === patchedDigest && r.live.request?.filesDigest === patchedDigest));
+  });
+  return passed.length === PASSWORD_MIGRATION_OBLIGATIONS.length ? { passed, filesDigest: migrationFilesDigest(files) } : null;
+}
+
+/** The project-tests obligation: the central verifier (verify-patch.js) on the exact candidate. */
+async function centralVerify(o, plan, cand, budgets, cs, patchedDigest) {
+  const verify = o.deps?.verifyPatch || (await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 51985))).verifyPatch;
+  const finding = { id: plan.finding.id || plan.contract.findingRefs[0], stableId: plan.finding.stableId || plan.contract.findingRefs[0] };
+  try {
+    const files = Object.fromEntries(Object.entries(cand.files).filter(([, t]) => t !== null));
+    const migrationProof = await migrationProofFor(plan.contract, cs, files, patchedDigest);
+    const r = await verify({ scanRoot: o.root, finding, files, route: 'repair', mode: 'verify', testCommand: plan.tests?.command, testTimeoutMs: budgets.testCommandMs, requiredTests: plan.tests?.required || [], flakyTests: plan.tests?.flaky || [], ...(migrationProof ? { extra: { migrationProof } } : {}) });
+    const legs = Object.fromEntries(['securityAfter', 'newFindingDelta', 'behaviorTests', 'behaviorPreservation'].map((k) => [k, r.fixVerification?.[k]?.status ?? null]));
+    const ok = r.verdict?.ok === true && r.canonical?.ok === true;
+    return { obligation: 'central-verifier', kind: 'project-tests', observed: ok ? 'passed' : 'failed', status: ok ? 'passed' : 'failed', reason: ok ? 'rescan, new-finding delta, footprint and test legs passed or were recorded as not run' : String(r.verdict?.summary || 'a central verification leg failed').slice(0, 400), legs, fixCompleteness: r.fixVerification?.fixCompleteness ?? null };
+  } catch (e) {
+    return { obligation: 'central-verifier', kind: 'project-tests', observed: 'error', status: 'inconclusive', reason: `the central verifier failed: ${String(e?.message || e).slice(0, 200)}` };
+  }
+}
+
+
+/***/ }),
+
+/***/ 52798:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   DF: () => (/* binding */ validateAgainstOriginal),
+/* harmony export */   St: () => (/* binding */ shrinkCounterexample),
+/* harmony export */   Xc: () => (/* binding */ counterexampleFrom),
+/* harmony export */   h4: () => (/* binding */ withoutQuarantined)
+/* harmony export */ });
+/* harmony import */ var _lab_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(14370);
+// Counterexamples (verified-remediation PRD FR-07): validate the generated checks against the original, turn a failed check into a
+// minimal, structured counterexample, and keep the sealed set out of the feedback loop.
+//
+//   validateAgainstOriginal  A control whose expectation the original does not meet is a wrong expectation: it is QUARANTINED with the
+//                            reason and removed from the obligation the candidates are judged by (AC-07.3). An attack (or a generated
+//                            state check) that reaches no forbidden effect on the ORIGINAL cannot show that a patch repaired anything,
+//                            but it can show that a patch removed a protection the original already had: it stays in the obligation as
+//                            a REGRESSION GUARD, recorded with its reason, and does not count toward the obligation being meaningful.
+//                            (Until 0.198.0 these were quarantined, so a candidate deleting an existing check was judged only by the
+//                            attacks the original failed.) Both lists are recorded, never silent.
+//   counterexampleFrom       A failed development obligation becomes {obligation, request, actor, preconditions, effect}: the request
+//                            the verifier saw violate, the actor's identity, and the authoritative assertion it broke. A failed SEALED
+//                            obligation yields only "a sealed check failed": no request, value or outcome detail reaches generation
+//                            (AC-07.5).
+//   shrinkCounterexample     Character-level reduction of the attack value (query parameters and string body fields), batched: every
+//                            one-deletion variant is a separate attack request in ONE oracle run, and the shortest variant that still
+//                            discloses THE SAME secret (or breaks the same state check) is kept, so the failed property is preserved
+//                            (AC-07.4). Bounded by rounds and by the per-run request ceiling.
+
+
+const REQ_CAP = 120; // the application oracles accept at most 128 requests per run
+
+const idOf = (r) => r.id;
+
+/** The obligation's inputs with quarantined requests and checks removed. Pure. */
+function withoutQuarantined(inputs, quarantined) {
+  const q = new Set(quarantined.map((x) => x.id));
+  return { ...inputs, requests: inputs.requests.filter((r) => !q.has(r.id)), stateChecks: (inputs.stateChecks || []).filter((c) => !q.has(c.id)), ...(inputs.sequences ? { sequences: inputs.sequences.filter((s) => !q.has(s.id)) } : {}) };
+}
+
+/**
+ * Run each oracle obligation on the original and quarantine the checks that cannot be meaningful.
+ * @returns {{baseline: object[], quarantined: object[], effectiveInputs: Record<string, object>}}
+ */
+async function validateAgainstOriginal(contract, originalFiles, run) {
+  const baseline = []; const quarantined = []; const regressionGuards = []; const effectiveInputs = {};
+  for (const ob of contract.obligations.filter((x) => x.oracleId)) {
+    const res = await run(ob, originalFiles, ob.inputs);
+    const d = res.details || {};
+    const q = []; const g = [];
+    if (ob.kind === 'app-attack-blocked' || ob.kind === 'app-attack-sealed') {
+      const violated = new Set((d.attackViolations || []).map((v) => v.id));
+      if (res.observed === 'confirmed' || res.observed === 'refuted') {
+        const reqs = ob.inputs.requests;
+        for (const r of reqs.filter((x) => x.role === 'attack' && (x.forbid?.secrets?.length || x.forbid?.connections))) {
+          if (!violated.has(r.id)) g.push({ id: r.id, obligation: ob.id, reason: r.forbid?.connections ? 'the original revision already blocks this attack (no forbidden destination, no planted secret): kept as a regression guard, it cannot show a repair' : 'the original revision already blocks this attack (no planted secret disclosed): kept as a regression guard, it cannot show a repair' });
+        }
+        // A generated state check names the write attacks it guards: if the original does not break it, the check and those writes stay
+        // as regression guards. Profile-declared state checks (no `guards`) are regression guards by declaration.
+        for (const c of (ob.inputs.stateChecks || []).filter((x) => Array.isArray(x.guards))) {
+          if (violated.has(c.id)) continue;
+          g.push({ id: c.id, obligation: ob.id, reason: 'the original revision makes no unauthorized change this check can see: kept as a regression guard, it cannot show a repair' });
+          for (const w of c.guards) g.push({ id: w, obligation: ob.id, reason: 'this write attack does not change durable state on the original revision: kept as a regression guard' });
+        }
+        for (const s of (ob.inputs.sequences || []).filter((x) => x.role === 'attack')) {
+          if (!violated.has(s.id)) g.push({ id: s.id, obligation: ob.id, reason: 'the original revision keeps every invariant through this sequence: kept as a regression guard, it cannot show a repair' });
+        }
+        for (const c of (d.controlFailures || [])) q.push({ id: c.id, obligation: ob.id, reason: `the original revision does not meet this control's expectation (${c.reason}); the expectation is wrong or the application needs setup the profile lacks` });
+      }
+    } else if (ob.kind === 'app-behaviour-preserved') {
+      for (const c of (d.controlFailures || [])) q.push({ id: c.id, obligation: ob.id, reason: `the original revision does not meet this legitimate expectation (${c.reason}); mark it originalMishandles if the repair should fix it` });
+    }
+    const seen = new Set();
+    const uniq = q.filter((x) => (seen.has(x.id) ? false : seen.add(x.id)));
+    quarantined.push(...uniq);
+    const gseen = new Set();
+    regressionGuards.push(...g.filter((x) => !seen.has(x.id) && (gseen.has(x.id) ? false : gseen.add(x.id))));
+    effectiveInputs[ob.id] = withoutQuarantined(ob.inputs, uniq);
+    baseline.push({ obligation: ob.id, kind: ob.kind, observed: res.observed, expectation: ob.baselineExpectation, status: ob.baselineExpectation ? (0,_lab_js__WEBPACK_IMPORTED_MODULE_0__/* .judge */ .S4)(res.observed, ob.baselineExpectation) : 'recorded', reason: res.reason });
+  }
+  return { baseline, quarantined, regressionGuards, effectiveInputs };
+}
+
+/** Structured feedback for the next proposal from one failed obligation run. */
+function counterexampleFrom(ob, inputs, res, actorsByHeader) {
+  if (ob.kind === 'app-attack-sealed') return { obligation: ob.id, sealed: true, message: 'a sealed held-out check failed; its content is not disclosed to candidate generation' };
+  const d = res.details || {};
+  const byId = Object.fromEntries(inputs.requests.map((r) => [r.id, r]));
+  const actorOf = (r) => actorsByHeader?.(r?.headers) ?? null;
+  if (ob.kind === 'app-attack-blocked') {
+    const v = (d.attackViolations || [])[0];
+    if (!v) return { obligation: ob.id, message: res.reason };
+    if (v.sequence) {
+      const seq = (inputs.sequences || []).find((s) => s.id === v.id);
+      return { obligation: ob.id, property: 'workflow-invariant', sequence: seq ? { id: seq.id, steps: seq.steps.map((r) => `${r.method} ${r.path}${r.concurrentGroup ? ' (concurrent)' : ''}`) } : { id: v.id }, brokenInvariants: v.checks || [], violations: (d.attackViolations || []).length, message: res.reason };
+    }
+    const req = byId[v.id] || null;
+    const check = (inputs.stateChecks || []).find((c) => c.id === v.id) || null;
+    const writer = check && Array.isArray(check.guards) ? check.guards.map((g) => byId[g]).find(Boolean) || null : null;
+    return {
+      obligation: ob.id, property: v.effect === 'durable-state' ? 'unauthorized-durable-change' : v.effect === 'forbidden-connection' ? 'forbidden-connection' : v.effect === 'credential-storage' ? 'credential-storage' : 'secret-disclosed',
+      ...(v.destinations ? { destinations: v.destinations } : {}),
+      ...(v.properties ? { failedProperties: v.properties } : {}),
+      request: req ? { method: req.method, path: req.path, body: req.body ?? null } : writer ? { method: writer.method, path: writer.path, body: writer.body ?? null } : null,
+      actor: actorOf(req || writer), secrets: v.secrets || [], stateCheck: check ? check.sql : null, guardedRequests: check?.guards?.length ?? 0,
+      violations: (d.attackViolations || []).length, message: res.reason,
+    };
+  }
+  const f = (d.controlFailures || [])[0];
+  const req = f ? byId[f.id] : null;
+  return { obligation: ob.id, property: 'legitimate-behaviour', request: req ? { method: req.method, path: req.path, body: req.body ?? null } : null, actor: actorOf(req), expected: req?.expect ?? null, message: f ? f.reason : res.reason };
+}
+
+function reductions(req) {
+  const out = [];
+  const url = new URL(req.path, 'http://x.local');
+  for (const [k, v] of url.searchParams) {
+    for (let i = 0; i < v.length; i++) {
+      const u = new URL(url); u.searchParams.set(k, v.slice(0, i) + v.slice(i + 1));
+      out.push({ ...req, path: u.pathname + u.search });
+    }
+  }
+  if (req.body && typeof req.body === 'object') {
+    for (const [k, v] of Object.entries(req.body)) if (typeof v === 'string') for (let i = 0; i < v.length; i++) out.push({ ...req, body: { ...req.body, [k]: v.slice(0, i) + v.slice(i + 1) } });
+  }
+  return out;
+}
+
+// Size of the attacker-controlled values, decoded: the URL API re-encodes characters differently from the request builder, so the
+// encoded path length would make a shorter value look longer.
+const sizeOf = (r) => {
+  let n = 0;
+  for (const [, v] of new URL(r.path, 'http://x.local').searchParams) n += v.length;
+  if (r.body && typeof r.body === 'object') for (const v of Object.values(r.body)) if (typeof v === 'string') n += v.length;
+  return n;
+};
+
+/**
+ * Shrink one violating attack request while it still discloses the same secret(s). `run(ob, files, inputs)` is the lab runner.
+ * @returns {Promise<{request:object, original:object, runs:number, preserved:boolean}>}
+ */
+async function shrinkCounterexample(ob, inputs, files, violatingId, run, { maxRounds = 6, ...o } = {}) {
+  const controls = inputs.requests.filter((r) => r.role === 'control');
+  let best = inputs.requests.find((r) => r.id === violatingId);
+  const original = best;
+  const secrets = new Set(best?.forbid?.secrets || []);
+  const destinations = new Set((o.destinations || []).map((d) => d.address).filter(Boolean));
+  let runs = 0;
+  if (!best || (!secrets.size && !destinations.size)) return { request: best, original, runs, preserved: true };
+  for (let round = 0; round < maxRounds; round++) {
+    const cands = reductions(best).slice(0, REQ_CAP - controls.length).map((r, i) => ({ ...r, id: `shrink_${round}_${i}` }));
+    if (!cands.length) break;
+    const res = await run(ob, files, { ...inputs, requests: [...controls, ...cands], stateChecks: [] });
+    runs++;
+    // The same property: the same planted secret, or (a forbidden connection) the same forbidden address.
+    const same = (v) => (secrets.size && o.effect !== 'forbidden-connection' ? (v.secrets || []).some((s) => secrets.has(s)) : (v.destinations || []).some((d) => destinations.has(d.address)));
+    const hits = new Set((res.details?.attackViolations || []).filter(same).map(idOf));
+    const next = cands.filter((c) => hits.has(c.id)).sort((a, b) => sizeOf(a) - sizeOf(b))[0];
+    if (!next || sizeOf(next) >= sizeOf(best)) break;
+    best = { ...next, id: original.id };
+  }
+  return { request: best, original, runs, preserved: true };
+}
+
+
+
+
+/***/ }),
+
+/***/ 56540:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   O9: () => (/* binding */ materialize),
+/* harmony export */   ib: () => (/* binding */ satisfies),
+/* harmony export */   x0: () => (/* binding */ checkResolution)
+/* harmony export */ });
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+/* harmony import */ var _artifact_safe_tar_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(30119);
+// Dependency repair (verified-remediation PRD FR-14, M4-02, M4-03), npm first.
+//
+// Two verifier-side halves, both over the EXACT files of a revision (the manifest and the lockfile are candidate files like any other):
+//
+//   checkResolution   the `dependency-resolved` obligation. The lockfile must agree with the manifest (every manifest dependency is in
+//                     the lockfile's root entry with the same range, and the installed version satisfies it: AC-14.2, a manifest-only
+//                     edit with a stale lockfile fails); every resolved package must come from the declared package sources with the
+//                     integrity the lockfile records, re-hashed here from the tarball bytes (provenance); every package's own
+//                     dependencies must resolve (Node's lookup, walking up) to a version satisfying their range; and NO resolved
+//                     instance of the advisory's package, direct or transitive, may be in the vulnerable range (AC-14.3).
+//   materialize       builds node_modules for the application oracles from the lockfile: each entry's tarball is read from the package
+//                     sources, its integrity checked, and its files extracted through the hardened tar reader. The application then
+//                     runs against the packages a candidate actually resolves to (AC-14.1, AC-14.4: an API change without the source
+//                     adaptation, or a behaviour-breaking upgrade, fails the behaviour obligations).
+//
+// Limits, stated: npm lockfile version 2 or 3 only; packages come from local tarballs declared by the profile (no registry, no network,
+// so a package source outside the project is a named limitation); the package manager itself is not executed and no install script
+// runs; ranges are the npm subset `x.y.z`, `^`, `~`, `>`, `>=`, `<`, `<=`, `=`, space for AND and `||` for OR (no prerelease logic,
+// no `x` wildcards beyond `*`).
+
+
+
+
+
+const parseV = (v) => { const m = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(v).trim()); return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null; };
+const cmp = (a, b) => { for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
+
+function comparators(part) {
+  const out = [];
+  for (const tok of part.trim().split(/\s+/).filter(Boolean)) {
+    if (tok === '*' || tok === 'x') continue;
+    const m = /^(\^|~|>=|<=|>|<|=)?(v?\d+\.\d+\.\d+)$/.exec(tok);
+    if (!m) return null;
+    const v = parseV(m[2]); const op = m[1] || '=';
+    if (op === '^') { out.push(['>=', v]); out.push(['<', v[0] > 0 ? [v[0] + 1, 0, 0] : v[1] > 0 ? [0, v[1] + 1, 0] : [0, 0, v[2] + 1]]); }
+    else if (op === '~') { out.push(['>=', v]); out.push(['<', [v[0], v[1] + 1, 0]]); }
+    else out.push([op, v]);
+  }
+  return out;
+}
+
+/** Does `version` satisfy `range`? null when the range is outside the supported subset (never guessed). */
+function satisfies(version, range) {
+  const v = parseV(version);
+  if (!v || typeof range !== 'string') return null;
+  let any = false;
+  for (const part of range.split('||')) {
+    const cs = comparators(part);
+    if (cs === null) return null;
+    if (cs.every(([op, w]) => { const c = cmp(v, w); return op === '=' ? c === 0 : op === '>' ? c > 0 : op === '>=' ? c >= 0 : op === '<' ? c < 0 : c <= 0; })) any = true;
+  }
+  return any;
+}
+
+const nameOf = (p) => { const i = p.lastIndexOf('node_modules/'); return i < 0 ? null : p.slice(i + 'node_modules/'.length); };
+
+/** Node's lookup from a package path: the nearest node_modules/<name> walking up. */
+function resolveFrom(pkgs, fromPath, name) {
+  let base = fromPath;
+  for (;;) {
+    const cand = `${base ? `${base}/` : ''}node_modules/${name}`;
+    if (pkgs[cand]) return cand;
+    if (!base) return null;
+    const i = base.lastIndexOf('/node_modules/');
+    base = i < 0 ? '' : base.slice(0, i);
+  }
+}
+
+function tarballFor(root, dep, entry) {
+  const r = String(entry.resolved || '');
+  if (!r.startsWith('file:')) return { problem: `${entry.name || '?'}: resolved from ${r.split(':')[0] || 'nowhere'}, not from the declared package sources` };
+  const rel = node_path__WEBPACK_IMPORTED_MODULE_2__.posix.normalize(r.slice(5));
+  const sources = node_path__WEBPACK_IMPORTED_MODULE_2__.posix.normalize(dep.sources).replace(/\/$/, '');
+  if (rel.startsWith('..') || node_path__WEBPACK_IMPORTED_MODULE_2__.isAbsolute(rel) || !(rel === sources || rel.startsWith(`${sources}/`))) return { problem: `${rel}: outside the declared package sources ${sources}` };
+  let bytes;
+  try {
+    const abs = node_path__WEBPACK_IMPORTED_MODULE_2__.join(root, rel);
+    const realRoot = node_fs__WEBPACK_IMPORTED_MODULE_1__.realpathSync(root);
+    if (!node_fs__WEBPACK_IMPORTED_MODULE_1__.realpathSync(abs).startsWith(realRoot + node_path__WEBPACK_IMPORTED_MODULE_2__.sep)) return { problem: `${rel}: a link out of the project` };
+    bytes = node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(abs);
+  } catch { return { problem: `${rel}: the tarball is missing` }; }
+  const m = /^sha512-([A-Za-z0-9+/=]+)$/.exec(String(entry.integrity || ''));
+  if (!m) return { problem: `${rel}: the lockfile records no sha512 integrity` };
+  if (node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash('sha512').update(bytes).digest('base64') !== m[1]) return { problem: `${rel}: the tarball does not match the integrity the lockfile records` };
+  return { bytes, rel };
+}
+
+function readPackage(bytes) {
+  const files = {};
+  for (const e of (0,_artifact_safe_tar_js__WEBPACK_IMPORTED_MODULE_3__/* .readTarEntries */ .ET)((0,_artifact_safe_tar_js__WEBPACK_IMPORTED_MODULE_3__/* .decompressIfGzip */ .zr)(bytes))) {
+    if (e.unsafe || !['0', '\0', ''].includes(e.typeflag) || !e.name.startsWith('package/')) continue;
+    files[e.name.slice('package/'.length)] = e.data.toString('utf8');
+  }
+  return files;
+}
+
+/**
+ * The `dependency-resolved` check over one revision's files. Pure apart from reading the declared tarballs under `root`.
+ * @returns {{ok:boolean, problems:string[], vulnerable:object[], resolved:object[]}}
+ */
+function checkResolution(root, dep, files) {
+  const problems = []; const vulnerable = [];
+  let manifest; let lock;
+  try { manifest = JSON.parse(files['package.json']); } catch { return { ok: false, problems: ['package.json is missing or not JSON'], vulnerable, resolved: [] }; }
+  try { lock = JSON.parse(files['package-lock.json']); } catch { return { ok: false, problems: ['package-lock.json is missing or not JSON'], vulnerable, resolved: [] }; }
+  if (![2, 3].includes(lock.lockfileVersion) || !lock.packages || typeof lock.packages !== 'object') return { ok: false, problems: ['only npm lockfile versions 2 and 3 are supported'], vulnerable, resolved: [] };
+  const pkgs = lock.packages;
+  const rootDeps = manifest.dependencies || {};
+  const lockRoot = pkgs['']?.dependencies || {};
+  for (const [name, range] of Object.entries(rootDeps)) {
+    if (lockRoot[name] !== range) problems.push(`the lockfile is stale: package.json asks for ${name}@${range}, the lockfile root records ${lockRoot[name] ?? 'nothing'}`);
+    const at = pkgs[`node_modules/${name}`];
+    if (!at) { problems.push(`${name} is not installed by the lockfile`); continue; }
+    const s = /^file:/.test(range) ? null : satisfies(at.version, range);
+    if (s === false) problems.push(`the lockfile installs ${name}@${at.version}, which does not satisfy ${range}`);
+  }
+  for (const name of Object.keys(lockRoot)) if (!(name in rootDeps)) problems.push(`the lockfile root records ${name}, which package.json no longer asks for`);
+  const resolved = [];
+  for (const [p, entry] of Object.entries(pkgs)) {
+    if (!p) continue;
+    const name = nameOf(p);
+    if (!name || typeof entry?.version !== 'string') { problems.push(`${p}: not a package entry`); continue; }
+    const t = tarballFor(root, dep, { ...entry, name });
+    if (t.problem) problems.push(t.problem);
+    else {
+      try {
+        const meta = JSON.parse(readPackage(t.bytes)['package.json'] || '{}');
+        if (meta.name !== name || meta.version !== entry.version) problems.push(`${p}: the tarball holds ${meta.name}@${meta.version}, the lockfile says ${name}@${entry.version}`);
+      } catch (e) { problems.push(`${p}: the tarball could not be read (${String(e.message).slice(0, 80)})`); }
+    }
+    for (const [d, range] of Object.entries(entry.dependencies || {})) {
+      const at = resolveFrom(pkgs, p, d);
+      if (!at) problems.push(`${name}@${entry.version} needs ${d}@${range}, which nothing installs`);
+      else if (satisfies(pkgs[at].version, range) === false) problems.push(`${name}@${entry.version} needs ${d}@${range} and resolves ${pkgs[at].version}`);
+    }
+    resolved.push({ path: p, name, version: entry.version });
+    if (name === dep.package) {
+      const bad = satisfies(entry.version, dep.vulnerable);
+      if (bad === null) problems.push(`the vulnerable range ${dep.vulnerable} is outside the supported range syntax`);
+      if (bad) vulnerable.push({ path: p, version: entry.version, transitive: p !== `node_modules/${name}` });
+    }
+  }
+  for (const v of vulnerable) problems.push(`${v.transitive ? 'a transitive' : 'the direct'} ${dep.package}@${v.version} at ${v.path} is in the vulnerable range ${dep.vulnerable} (${dep.advisory})`);
+  return { ok: problems.length === 0, problems, vulnerable, resolved };
+}
+
+/**
+ * The files the application oracles run: the revision's application files plus node_modules built from its lockfile. Entries that do
+ * not verify are left out (the resolution obligation reports them); the application then fails to load what it needs.
+ */
+function materialize(root, dep, files, { maxFiles = 400, maxBytes = 4 << 20 } = {}) {
+  const out = { ...files };
+  let lock;
+  try { lock = JSON.parse(files['package-lock.json']); } catch { return out; }
+  let n = 0; let bytes = 0;
+  for (const [p, entry] of Object.entries(lock?.packages || {})) {
+    const name = nameOf(p);
+    if (!p || !name) continue;
+    const t = tarballFor(root, dep, { ...entry, name });
+    if (t.problem) continue;
+    for (const [rel, text] of Object.entries(readPackage(t.bytes))) {
+      const norm = node_path__WEBPACK_IMPORTED_MODULE_2__.posix.normalize(rel);
+      if (norm.startsWith('..') || node_path__WEBPACK_IMPORTED_MODULE_2__.posix.isAbsolute(norm)) continue;
+      if (++n > maxFiles || (bytes += text.length) > maxBytes) throw new Error('the resolved packages exceed the verifier\'s size bound');
+      out[`${p}/${norm}`] = text;
+    }
+  }
+  return out;
+}
+
+
+/***/ }),
+
+/***/ 91860:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   WR: () => (/* binding */ importedFinding),
+/* harmony export */   decide: () => (/* binding */ decide),
+/* harmony export */   importReport: () => (/* binding */ importReport),
+/* harmony export */   loadImport: () => (/* binding */ loadImport),
+/* harmony export */   saveImport: () => (/* binding */ saveImport)
+/* harmony export */ });
+/* unused harmony exports IMPORT_SCHEMA, NORMALIZED_SCHEMA, MAPPINGS, IMPORT_DISPOSITIONS, confineLocation */
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(31421);
+/* harmony import */ var _posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(91026);
+/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(69259);
+/* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(37455);
+/* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(62805);
+/* harmony import */ var _intake_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(61969);
+// External finding intake (verified-remediation PRD FR-13, M4-01): SARIF 2.1.0 and a documented normalized JSON format.
+//
+// A report is UNTRUSTED INPUT. Nothing in it is code, policy or an instruction:
+//   - every location is confined to the project: a relative path, or a file: URI under the source root; an absolute path elsewhere,
+//     a `..` escape, another scheme (http:, data:), a path through a link out of the project or a reserved path is REJECTED with
+//     its reason, never followed;
+//   - message text is kept as capped, control-character-free data (`untrustedText`), never rendered, never read by policy, never sent
+//     to a model by this module;
+//   - only a closed set of fields is read; a report cannot set a family, an approval, a policy or an execution flag.
+//
+// Mapping to the current source (AC-13.4). Each location is checked against the files as they are now: the line exists; the reported
+// snippet (when given) is at that line, or found exactly once nearby (`relocated`), or found more than once (`ambiguous`); a report
+// for another revision maps only when git shows the file unchanged since that revision (`exact`) or renamed (`renamed`, followed);
+// a revision this repository does not have is `revision-unknown`. Only `exact`, `relocated` and `renamed` findings can be planned.
+//
+// Deduplication keeps provenance: findings merge only when they are at the same file and line, with the same CWE, and the same
+// snippet (or none); every source (tool, rule id, report) is kept on the merged finding. Two rules that merely share a CWE at
+// different lines are never merged.
+//
+// Custody (AC-13.2). The import record is written under the project state directory and signed with the per-install key: it shows
+// what was imported and how it mapped, not that a finding is real. An imported finding's custody is `imported`, or
+// `locally-corroborated` when the signed internal scan reports the same family within two lines. Applying a repair of an imported
+// finding still needs the signed internal scan and everything else `applyVerifiedFix` requires; nothing here creates scan state.
+
+
+
+
+
+
+
+
+
+
+const IMPORT_SCHEMA = 'agentic-security/finding-import';
+const NORMALIZED_SCHEMA = 'agentic-security/external-findings';
+const MAPPINGS = Object.freeze(['exact', 'relocated', 'renamed', 'stale', 'ambiguous', 'missing', 'revision-mismatch', 'revision-unknown', 'rejected']);
+const PLANNABLE = new Set(['exact', 'relocated', 'renamed']);
+const IMPORT_DISPOSITIONS = Object.freeze(['open', 'unsupported', 'accepted-risk']);
+const LIMITS = Object.freeze({ reportBytes: 8 << 20, results: 5000, text: 500, snippet: 400, ruleId: 200, file: 400 });
+const RESERVED = /^(?:\.git|\.agentic-security|node_modules)(?:\/|$)/;
+
+const clean = (s, max) => (typeof s === 'string' ? s.replace(/[\u0000-\u0008\u000b-\u001f\u007f‪-‮⁦-⁩]/g, ' ').slice(0, max) : null);
+const cweOf = (v) => { const m = /(?:CWE[-_: ]?)(\d{1,5})/i.exec(String(v || '')); return m ? `CWE-${Number(m[1])}` : null; };
+
+/** A report location as a project-relative path, or {rejected: reason}. Pure apart from the link check. */
+function confineLocation(root, uri, { srcRootUri = null } = {}) {
+  if (typeof uri !== 'string' || !uri.length || uri.length > LIMITS.file) return { rejected: 'no usable location' };
+  let rel = uri;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(uri)) {
+    if (!/^file:/i.test(uri)) return { rejected: `the ${uri.split(':')[0]} scheme is not a project file` };
+    let p;
+    try { p = decodeURIComponent(new URL(uri).pathname); } catch { return { rejected: 'a malformed file URI' }; }
+    const base = srcRootUri && /^file:/i.test(srcRootUri) ? decodeURIComponent(new URL(srcRootUri).pathname) : null;
+    const rootReal = node_fs__WEBPACK_IMPORTED_MODULE_1__.realpathSync(root);
+    if (base && p.startsWith(base)) rel = p.slice(base.length);
+    else if (p.startsWith(rootReal + '/') || p.startsWith(node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(root) + '/')) rel = node_path__WEBPACK_IMPORTED_MODULE_2__.relative(p.startsWith(rootReal) ? rootReal : node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(root), p);
+    else return { rejected: 'a file URI outside the project' };
+  } else {
+    try { rel = decodeURIComponent(uri); } catch { return { rejected: 'a malformed path' }; }
+  }
+  rel = rel.replace(/\\/g, '/').replace(/^\.\//, '');
+  if (rel.startsWith('/')) return { rejected: 'an absolute path outside the project' };
+  if (rel.includes('\0')) return { rejected: 'a path with a NUL byte' };
+  const norm = node_path__WEBPACK_IMPORTED_MODULE_2__.posix.normalize(rel);
+  if (norm.startsWith('..') || norm === '.') return { rejected: 'a path that leaves the project' };
+  if (RESERVED.test(norm)) return { rejected: 'a reserved path (version control, verifier state, dependencies)' };
+  try {
+    const rootReal = node_fs__WEBPACK_IMPORTED_MODULE_1__.realpathSync(root);
+    const real = node_fs__WEBPACK_IMPORTED_MODULE_1__.realpathSync(node_path__WEBPACK_IMPORTED_MODULE_2__.join(rootReal, norm));
+    if (!real.startsWith(rootReal + node_path__WEBPACK_IMPORTED_MODULE_2__.sep)) return { rejected: 'a path through a link that leaves the project' };
+  } catch { /* a missing file is a mapping outcome, not a confinement failure */ }
+  return { file: norm };
+}
+
+// ---------------------------------------------------------------- parsers (closed field sets)
+
+function fromSarif(doc) {
+  if (!doc || doc.version !== '2.1.0' || !Array.isArray(doc.runs)) return { problems: ['not a SARIF 2.1.0 log (version 2.1.0 with runs[])'] };
+  const out = []; const problems = [];
+  for (const [ri, run] of doc.runs.entries()) {
+    const driver = run?.tool?.driver || {};
+    const tool = { name: clean(driver.name, 120) || 'unknown', version: clean(driver.semanticVersion || driver.version, 60) };
+    const rules = Object.fromEntries((driver.rules || []).filter((r) => r && typeof r.id === 'string').map((r) => [r.id, r]));
+    const srcRoot = run?.originalUriBaseIds?.SRCROOT?.uri || run?.originalUriBaseIds?.['%SRCROOT%']?.uri || null;
+    const vcp = Array.isArray(run?.versionControlProvenance) ? run.versionControlProvenance[0] : null;
+    const revision = typeof vcp?.revisionId === 'string' && /^[0-9a-f]{7,64}$/i.test(vcp.revisionId) ? vcp.revisionId.toLowerCase() : null;
+    const hashes = {};
+    for (const a of run?.artifacts || []) { const u = a?.location?.uri; const h = a?.hashes?.['sha-256']; if (typeof u === 'string' && typeof h === 'string' && /^[0-9a-f]{64}$/i.test(h)) hashes[u] = h.toLowerCase(); }
+    for (const [i, r] of (run.results || []).entries()) {
+      const ruleId = clean(r?.ruleId || r?.rule?.id, LIMITS.ruleId);
+      const rule = rules[ruleId] || {};
+      const loc = r?.locations?.[0]?.physicalLocation;
+      const uri = loc?.artifactLocation?.uri;
+      const region = loc?.region || {};
+      const tags = [...(rule.properties?.tags || []), ...(r?.properties?.tags || [])].filter((t) => typeof t === 'string');
+      const cwe = cweOf(r?.properties?.cwe) || cweOf(rule.properties?.cwe) || cweOf(tags.find((t) => /cwe/i.test(t))) || cweOf(rule.relationships?.find?.((x) => /cwe/i.test(x?.target?.toolComponent?.name || ''))?.target?.id);
+      out.push({
+        index: `${ri}:${i}`, tool, ruleId, cwe, revision, srcRootUri: srcRoot,
+        level: ['error', 'warning', 'note', 'none'].includes(r?.level) ? r.level : null,
+        uri: typeof uri === 'string' ? uri : null, uriBaseId: loc?.artifactLocation?.uriBaseId || null,
+        startLine: Number.isInteger(region.startLine) && region.startLine > 0 ? region.startLine : null,
+        startColumn: Number.isInteger(region.startColumn) && region.startColumn > 0 ? region.startColumn : null,
+        snippet: clean(region.snippet?.text, LIMITS.snippet),
+        artifactSha256: typeof uri === 'string' ? hashes[uri] || null : null,
+        fingerprint: clean(Object.values(r?.partialFingerprints || r?.fingerprints || {})[0], 120),
+        untrustedText: clean(r?.message?.text || r?.message?.markdown, LIMITS.text),
+      });
+    }
+  }
+  if (!out.length && !problems.length) problems.push('the log has no results');
+  return { results: out, problems };
+}
+
+function fromNormalized(doc) {
+  if (!doc || doc.schema !== NORMALIZED_SCHEMA || !/^1\.\d+\.\d+$/.test(String(doc.schemaVersion)) || !Array.isArray(doc.findings)) return { problems: [`not a ${NORMALIZED_SCHEMA} 1.x document with findings[]`] };
+  const tool = { name: clean(doc.tool?.name, 120) || 'unknown', version: clean(doc.tool?.version, 60) };
+  const revision = typeof doc.revision === 'string' && /^[0-9a-f]{7,64}$/i.test(doc.revision) ? doc.revision.toLowerCase() : null;
+  const results = doc.findings.map((f, i) => ({
+    index: `0:${i}`, tool, ruleId: clean(f?.ruleId, LIMITS.ruleId), cwe: cweOf(f?.cwe), revision, srcRootUri: null,
+    level: ['critical', 'high', 'medium', 'low', 'info'].includes(f?.severity) ? f.severity : null,
+    uri: typeof f?.file === 'string' ? f.file : null, uriBaseId: null,
+    startLine: Number.isInteger(f?.startLine) && f.startLine > 0 ? f.startLine : null,
+    startColumn: Number.isInteger(f?.startColumn) && f.startColumn > 0 ? f.startColumn : null,
+    snippet: clean(f?.snippet, LIMITS.snippet), artifactSha256: typeof f?.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(f.sha256) ? f.sha256.toLowerCase() : null,
+    fingerprint: clean(f?.fingerprint, 120), untrustedText: clean(f?.message, LIMITS.text),
+  }));
+  return { results, problems: [] };
+}
+
+// ---------------------------------------------------------------- mapping to the current source
+
+const git = (root, args) => { const r = (0,node_child_process__WEBPACK_IMPORTED_MODULE_3__.spawnSync)('git', ['-C', root, ...args], { encoding: 'utf8', timeout: 15000, maxBuffer: 8 << 20 }); return r.status === 0 ? r.stdout : null; };
+
+function mapLocation(root, r, ctx) {
+  const c = confineLocation(root, r.uri, { srcRootUri: r.srcRootUri });
+  if (c.rejected) return { mapping: 'rejected', reason: c.rejected, file: null };
+  let file = c.file; let note = null;
+  if (r.revision && ctx.head && !ctx.head.startsWith(r.revision) && !r.revision.startsWith(ctx.head)) {
+    if (git(root, ['cat-file', '-e', `${r.revision}^{commit}`]) === null) return { mapping: 'revision-unknown', reason: `this repository has no commit ${r.revision.slice(0, 12)}`, file };
+    const renamed = ctx.renames(r.revision)[file];
+    if (renamed) { note = `renamed from ${file}`; file = renamed; }
+    const changed = git(root, ['diff', '--no-ext-diff', '--no-textconv', '--name-only', r.revision, 'HEAD', '--', file]);
+    if (changed === null) return { mapping: 'revision-mismatch', reason: 'git could not compare the reported revision with HEAD', file };
+    if (changed.trim() && !r.snippet) return { mapping: 'revision-mismatch', reason: `${file} changed since the reported revision and the report gives no snippet to relocate it`, file };
+    if (!changed.trim() && !note) note = 'reported for another revision; the file is unchanged since';
+  }
+  let text;
+  try { text = node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_2__.join(root, file), 'utf8'); } catch { return { mapping: 'missing', reason: `${file} does not exist in the current source`, file }; }
+  if (r.artifactSha256 && node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash('sha256').update(text).digest('hex') !== r.artifactSha256 && !r.snippet) return { mapping: 'stale', reason: 'the file changed since the report and no snippet locates the finding', file };
+  const lines = text.split('\n');
+  if (!r.startLine) return { mapping: 'ambiguous', reason: 'the report gives no line', file };
+  if (r.startLine > lines.length) return r.snippet ? relocate(lines, r, file, note) : { mapping: 'stale', reason: 'the reported line is past the end of the file', file };
+  if (!r.snippet) return { mapping: note?.startsWith('renamed') ? 'renamed' : 'exact', line: r.startLine, file, ...(note ? { note } : {}) };
+  const want = r.snippet.trim().split('\n')[0].trim();
+  if (want && lines[r.startLine - 1].includes(want)) return { mapping: note?.startsWith('renamed') ? 'renamed' : 'exact', line: r.startLine, file, ...(note ? { note } : {}) };
+  return relocate(lines, r, file, note);
+}
+
+function relocate(lines, r, file, note) {
+  const want = r.snippet.trim().split('\n')[0].trim();
+  if (!want) return { mapping: 'ambiguous', reason: 'the snippet is empty', file };
+  const hits = []; lines.forEach((l, i) => { if (l.includes(want)) hits.push(i + 1); });
+  if (hits.length === 1) return { mapping: note?.startsWith('renamed') ? 'renamed' : 'relocated', line: hits[0], file, note: [note, `moved from line ${r.startLine} to ${hits[0]}`].filter(Boolean).join('; ') };
+  if (!hits.length) return { mapping: 'stale', reason: 'the reported snippet is no longer in the file', file };
+  return { mapping: 'ambiguous', reason: `the reported snippet occurs ${hits.length} times`, file };
+}
+
+// ---------------------------------------------------------------- import
+
+function corroborated(root, f) {
+  try {
+    const body = node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_2__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_5__/* .stateDir */ .Pn)(root), 'last-scan.json'), 'utf8');
+    if ((0,_posture_integrity_js__WEBPACK_IMPORTED_MODULE_6__/* .verifyLastScan */ .Ef)(body, node_path__WEBPACK_IMPORTED_MODULE_2__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_5__/* .stateDir */ .Pn)(root), 'last-scan.json.sig')) !== true) return null;
+    const scan = JSON.parse(body);
+    const fam = (0,_intake_js__WEBPACK_IMPORTED_MODULE_8__.familyForFinding)(f);
+    if (!fam) return null;
+    const m = (scan.findings || []).find((x) => x.file === f.file && Number.isInteger(x.line) && Math.abs(x.line - f.line) <= 2 && (0,_intake_js__WEBPACK_IMPORTED_MODULE_8__.familyForFinding)(x) === fam);
+    return m ? { stableId: m.stableId || m.id, line: m.line } : null;
+  } catch { return null; }
+}
+
+/**
+ * Parse, confine, map, deduplicate and record a report. Never throws.
+ * @param {{root:string, format:'sarif'|'normalized', text:string, reportName?:string}} o
+ */
+function importReport(o) {
+  if (typeof o.text !== 'string' || Buffer.byteLength(o.text) > LIMITS.reportBytes) return { ok: false, problems: [`the report must be text of at most ${LIMITS.reportBytes} bytes`] };
+  let doc;
+  try { doc = JSON.parse(o.text); } catch { return { ok: false, problems: ['the report is not JSON'] }; }
+  const parsed = o.format === 'sarif' ? fromSarif(doc) : o.format === 'normalized' ? fromNormalized(doc) : { problems: ["format must be 'sarif' or 'normalized'"] };
+  if (parsed.problems.length && !parsed.results?.length) return { ok: false, problems: parsed.problems };
+  if (parsed.results.length > LIMITS.results) return { ok: false, problems: [`the report holds more than ${LIMITS.results} results`] };
+  const head = (git(o.root, ['rev-parse', 'HEAD']) || '').trim() || null;
+  const renameCache = {};
+  const ctx = {
+    head,
+    renames: (rev) => (renameCache[rev] ??= Object.fromEntries((git(o.root, ['diff', '--no-ext-diff', '--no-textconv', '-M', '--name-status', rev, 'HEAD']) || '').split('\n').filter((l) => /^R\d*\t/.test(l)).map((l) => { const [, from, to] = l.split('\t'); return [from, to]; }))),
+  };
+  const byKey = new Map(); const rejected = [];
+  for (const r of parsed.results) {
+    const m = mapLocation(o.root, r, ctx);
+    const source = { tool: r.tool, ruleId: r.ruleId, level: r.level, report: clean(o.reportName, 200), index: r.index, fingerprint: r.fingerprint, untrustedText: r.untrustedText, revision: r.revision, reportedLine: r.startLine, reportedFile: clean(r.uri, LIMITS.file) };
+    if (m.mapping === 'rejected') { rejected.push({ ...source, reason: m.reason }); continue; }
+    const snippetDigest = r.snippet ? (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(r.snippet.trim()) : null;
+    const key = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)({ file: m.file, line: m.line ?? r.startLine, cwe: r.cwe, snippetDigest, rule: r.cwe ? null : `${r.tool.name}:${r.ruleId}` });
+    const prev = byKey.get(key);
+    if (prev) { prev.sources.push(source); continue; }
+    const base = { file: m.file, line: m.line ?? r.startLine ?? null, column: r.startColumn, cwe: r.cwe, ruleId: r.ruleId };
+    const family = (0,_intake_js__WEBPACK_IMPORTED_MODULE_8__.familyForFinding)(base);
+    byKey.set(key, {
+      importedId: `imp-${key.slice(7, 23)}`, file: m.file, line: base.line, column: r.startColumn, cwe: r.cwe, family,
+      mapping: m.mapping, mappingReason: m.reason || m.note || null, plannable: PLANNABLE.has(m.mapping) && !!family,
+      disposition: family ? 'open' : 'unsupported', snippetDigest, artifactSha256: r.artifactSha256, sources: [source],
+    });
+  }
+  const findings = [...byKey.values()];
+  for (const f of findings) { const c = PLANNABLE.has(f.mapping) ? corroborated(o.root, f) : null; f.custody = c ? 'locally-corroborated' : 'imported'; if (c) f.corroboratedBy = c; }
+  const record = {
+    schema: IMPORT_SCHEMA, schemaVersion: '1.0.0', format: o.format, reportDigest: (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)(o.text), head,
+    counts: { results: parsed.results.length, findings: findings.length, merged: parsed.results.length - rejected.length - findings.length, rejected: rejected.length, plannable: findings.filter((f) => f.plannable).length, byMapping: Object.fromEntries(MAPPINGS.map((k) => [k, k === 'rejected' ? rejected.length : findings.filter((f) => f.mapping === k).length])) },
+    findings, rejected, decisions: [],
+  };
+  record.importId = `imp-${(0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_4__/* .digestOf */ .ol)({ reportDigest: record.reportDigest, head }).slice(7, 23)}`;
+  return { ok: true, record, problems: parsed.problems };
+}
+
+// ---------------------------------------------------------------- the signed import store
+
+const importFile = (root, id) => (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_5__.statePath)(root, 'imports', `${id}.json`);
+const isImportId = (s) => typeof s === 'string' && /^imp-[0-9a-f]{16}$/.test(s);
+
+function saveImport(root, record) {
+  (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_5__.ensureStateDir)(root);
+  const f = importFile(root, record.importId);
+  node_fs__WEBPACK_IMPORTED_MODULE_1__.mkdirSync(node_path__WEBPACK_IMPORTED_MODULE_2__.dirname(f), { recursive: true });
+  const text = `${JSON.stringify(record, null, 2)}\n`;
+  node_fs__WEBPACK_IMPORTED_MODULE_1__.writeFileSync(`${f}.tmp`, text);
+  node_fs__WEBPACK_IMPORTED_MODULE_1__.renameSync(`${f}.tmp`, f);
+  node_fs__WEBPACK_IMPORTED_MODULE_1__.writeFileSync(`${f}.sig`, (0,_posture_integrity_js__WEBPACK_IMPORTED_MODULE_6__/* .signLastScan */ .lU)(text));
+  return f;
+}
+
+/** A stored import, verified against the per-install signature. A hand-edited or foreign record is refused. */
+function loadImport(root, id) {
+  if (!isImportId(id)) return { record: null, reason: 'not an import id' };
+  const f = importFile(root, id);
+  let text;
+  try { text = node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(f, 'utf8'); } catch { return { record: null, reason: `no import ${id}` }; }
+  if ((0,_posture_integrity_js__WEBPACK_IMPORTED_MODULE_6__/* .verifyLastScan */ .Ef)(text, `${f}.sig`) !== true) return { record: null, reason: 'the import record signature does not verify under this installation\'s key' };
+  try { return { record: JSON.parse(text) }; } catch { return { record: null, reason: 'the import record is not JSON' }; }
+}
+
+/** Record an operator decision on an imported finding (accepted risk), with a reason, in the signed record. */
+function decide(root, id, importedId, { disposition, reason, actor }) {
+  const l = loadImport(root, id);
+  if (!l.record) return { ok: false, reason: l.reason };
+  if (!IMPORT_DISPOSITIONS.includes(disposition) || disposition === 'unsupported') return { ok: false, reason: `disposition must be one of open, accepted-risk` };
+  if (!reason || !String(reason).trim()) return { ok: false, reason: 'a reason is required' };
+  const f = l.record.findings.find((x) => x.importedId === importedId);
+  if (!f) return { ok: false, reason: `no imported finding ${importedId}` };
+  f.disposition = disposition;
+  l.record.decisions.push({ importedId, disposition, reason: String(reason).slice(0, 500), actor: String(actor || 'operator').slice(0, 80) });
+  saveImport(root, l.record);
+  return { ok: true };
+}
+
+/**
+ * The finding the repair workflow plans from, for one imported finding. Refuses one that cannot be planned: rejected, unmapped,
+ * ambiguous, for another revision, without a supported family, or accepted as a risk.
+ */
+function importedFinding(root, id, importedId) {
+  const l = loadImport(root, id);
+  if (!l.record) return { finding: null, reason: l.reason };
+  const f = l.record.findings.find((x) => x.importedId === importedId);
+  if (!f) return { finding: null, reason: `no imported finding ${importedId} in ${id}` };
+  if (f.disposition === 'accepted-risk') return { finding: null, reason: `${importedId} is an accepted risk; record it as open to repair it` };
+  if (!f.family) return { finding: null, reason: `${importedId} has no supported repair family (CWE ${f.cwe || 'unknown'})` };
+  if (!PLANNABLE.has(f.mapping)) return { finding: null, reason: `${importedId} does not map to the current source: ${f.mapping} (${f.mappingReason || 'no reason'})` };
+  const head = (git(root, ['rev-parse', 'HEAD']) || '').trim() || null;
+  if (l.record.head && head && l.record.head !== head) return { finding: null, reason: 'HEAD moved since the import; import the report again' };
+  const src = f.sources[0];
+  const n = (0,_schemas_js__WEBPACK_IMPORTED_MODULE_7__/* .normalizeFinding */ .vb)({ id: importedId, file: f.file, line: f.line, column: f.column, cwe: f.cwe, family: f.family, ruleId: src.ruleId }, { custody: f.custody, sourceTool: src.tool.name, sourceToolVersion: src.tool.version, commit: head && /^[0-9a-f]{40}$/.test(head) ? head : null });
+  return { finding: { ...n, findingId: importedId, id: importedId, file: f.file, importId: id, sources: f.sources.map((s) => ({ tool: s.tool, ruleId: s.ruleId, report: s.report })) }, family: f.family, commit: n.repository.commit };
+}
+
+
+/***/ }),
+
+/***/ 61969:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   FAMILIES_SUPPORTED: () => (/* binding */ FAMILIES_SUPPORTED),
+/* harmony export */   Z: () => (/* binding */ planFromInputs),
+/* harmony export */   familyForFinding: () => (/* binding */ familyForFinding),
+/* harmony export */   signedFinding: () => (/* binding */ signedFinding)
+/* harmony export */ });
+/* unused harmony export insideRoot */
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(69259);
+/* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(37455);
+/* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(62805);
+/* harmony import */ var _coordinator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(52184);
+/* harmony import */ var _import_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(91860);
+// Plan inputs, resolved ONE way for every route (verified-remediation PRD AC-04.5): the CLI's `repair plan` and the MCP tool
+// `repair_plan` both call `planFromInputs`, so the same finding, profile and source give the same contract and obligations.
+//
+// The finding comes from the SIGNED scan state only (an unsigned or tampered scan supplies nothing), or is declared by the operator
+// with a family and a file, in which case its custody is `unresolved` and it says so. A profile file that resolves inside the
+// repository is repository-supplied: its facts are `declared`, never `approved`.
+
+
+
+
+
+
+
+
+const FAMILY_BY_CWE = { 'CWE-89': 'sql-injection', 'CWE-639': 'object-authorization', 'CWE-284': 'object-authorization', 'CWE-285': 'object-authorization', 'CWE-862': 'object-authorization', 'CWE-863': 'object-authorization', 'CWE-918': 'ssrf', 'CWE-22': 'path-traversal', 'CWE-23': 'path-traversal', 'CWE-36': 'path-traversal', 'CWE-73': 'path-traversal', 'CWE-916': 'password-storage', 'CWE-759': 'password-storage', 'CWE-760': 'password-storage', 'CWE-256': 'password-storage', 'CWE-798': 'credential', 'CWE-259': 'credential', 'CWE-321': 'credential', 'CWE-362': 'workflow', 'CWE-367': 'workflow', 'CWE-841': 'workflow', 'CWE-837': 'workflow' };
+const familyForFinding = (f) => FAMILY_BY_CWE[String(f?.cwe || '').toUpperCase().replace(/^(\d)/, 'CWE-$1')] || null;
+const FAMILIES_SUPPORTED = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential', 'workflow', 'infrastructure']);
+
+function signedFinding(root, id) {
+  const file = node_path__WEBPACK_IMPORTED_MODULE_1__.join((0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .stateDir */ .Pn)(root), 'last-scan.json');
+  let body;
+  try { body = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(file, 'utf8'); } catch { return { finding: null, reason: 'no scan state (run a scan first, or declare the family and file)' }; }
+  if ((0,_posture_integrity_js__WEBPACK_IMPORTED_MODULE_3__/* .verifyLastScan */ .Ef)(body, `${file}.sig`) !== true) return { finding: null, reason: 'the scan state signature does not verify' };
+  const scan = JSON.parse(body);
+  const f = (scan.findings || []).find((x) => x.stableId === id || x.id === id);
+  return f ? { finding: f, commit: scan.git?.commit || scan.commit || null } : { finding: null, reason: `finding ${id} is not in the signed scan` };
+}
+
+/** Is `p` inside `root` after resolving links? Unknown counts as inside (the weaker trust). */
+function insideRoot(root, p) {
+  try { const r = node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(root); const f = node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(p); return f === r || f.startsWith(r + node_path__WEBPACK_IMPORTED_MODULE_1__.sep); } catch { return true; }
+}
+
+/**
+ * @param {{root:string, profilePath:string, findingId?:string, family?:string, file?:string}} o
+ * @returns {{plan:object|null, blocked:string[], problems:string[], status:'ok'|'usage'|'blocked'}}
+ */
+function planFromInputs(o) {
+  let profile;
+  try { profile = JSON.parse(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(o.profilePath, 'utf8')); } catch (e) { return { plan: null, blocked: [], problems: [`the profile could not be read: ${String(e.message).slice(0, 160)}`], status: 'usage' }; }
+  if (o.family && !FAMILIES_SUPPORTED.includes(o.family)) return { plan: null, blocked: [], problems: [`family must be one of ${FAMILIES_SUPPORTED.join(', ')}`], status: 'usage' };
+  let finding; let commit = null; let family = o.family || null;
+  if (o.importId) {
+    // An imported finding (FR-13): from the signed import record, only when it maps to the current source.
+    const s = (0,_import_js__WEBPACK_IMPORTED_MODULE_6__/* .importedFinding */ .WR)(o.root, String(o.importId), String(o.findingId || ''));
+    if (!s.finding) return { plan: null, blocked: [s.reason], problems: [], status: 'blocked' };
+    finding = s.finding; family = family || s.family; commit = s.commit;
+  } else if (o.findingId) {
+    const s = signedFinding(o.root, String(o.findingId));
+    if (!s.finding) return { plan: null, blocked: [s.reason], problems: [], status: 'blocked' };
+    finding = { ...(0,_schemas_js__WEBPACK_IMPORTED_MODULE_4__/* .normalizeFinding */ .vb)(s.finding, { commit: s.commit }), stableId: s.finding.stableId, id: s.finding.id };
+    family = family || familyForFinding(s.finding);
+    commit = typeof s.commit === 'string' && /^[0-9a-f]{40}$/.test(s.commit) ? s.commit : null;
+  } else if (o.family && o.file) {
+    finding = { ...(0,_schemas_js__WEBPACK_IMPORTED_MODULE_4__/* .normalizeFinding */ .vb)({ file: String(o.file), id: `declared:${o.family}:${o.file}` }, { custody: 'unresolved' }), declaredBy: 'operator' };
+  } else return { plan: null, blocked: [], problems: ['name a finding id, or a family and a file for a finding the scanner did not report'], status: 'usage' };
+  if (!family) return { plan: null, blocked: [`the finding has no repair family in this milestone; name one of ${FAMILIES_SUPPORTED.join(', ')}`], problems: [], status: 'blocked' };
+  const origin = insideRoot(o.root, o.profilePath) ? 'repository-file' : 'operator-profile-outside-repository';
+  const r = (0,_coordinator_js__WEBPACK_IMPORTED_MODULE_5__/* .planRepair */ .RZ)({ root: o.root, finding, family, profile, profileOrigin: origin, commit });
+  if (!r.plan) return { plan: null, blocked: r.blocked, problems: r.problems, status: r.problems.length ? 'usage' : 'blocked' };
+  return { plan: r.plan, blocked: r.blocked, problems: [], status: r.blocked.length ? 'blocked' : 'ok' };
+}
+
+
+/***/ }),
+
+/***/ 14370:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   S4: () => (/* binding */ judge),
+/* harmony export */   SX: () => (/* binding */ runObligation)
+/* harmony export */ });
+/* unused harmony exports OUTCOME_TO_STATUS, treeBinding */
+/* harmony import */ var _posture_oracles_oracle_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(79220);
+/* harmony import */ var _posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(91026);
+// The repair lab (verified-remediation PRD FR-05, FR-06): one obligation, one exact file set, executed through the oracle runner and
+// therefore through the trust boundary only (network denied, process tree ended, harness digest-checked, verdict formed verifier-side).
+//
+// This module adds no execution path of its own. It builds the oracle request from the contract's obligation, binds the request to the
+// exact tree being judged (the digest of the file set stands in for a commit, so `confirmed`/`refuted` are reachable for an uncommitted
+// candidate), and then checks the receipt it got back: issued in this process by the oracle runner (a copied or deserialized receipt is not),
+// for these files, these inputs and the oracle logic the contract pinned. A mismatch is `invalid`, never a pass (AC-06.5).
+
+
+
+const OUTCOME_TO_STATUS = Object.freeze({ confirmed: 'confirmed', refuted: 'refuted', inconclusive: 'inconclusive', unsupported: 'unavailable', 'not-run': 'unavailable', error: 'error' });
+
+/** The 64-hex binding of a file set, used where the oracle asks for an exact commit. */
+const treeBinding = (files) => (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__/* .digestOf */ .ol)(files).slice('sha256:'.length);
+
+/**
+ * @param {object} obligation  a contract obligation with an oracle (not `project-tests`)
+ * @param {Record<string,string>} files  the application files, original or patched
+ * @param {{config:object, signal?:AbortSignal, entry:string, hypothesisId:string, inputs?:object, deps?:object, probeEnv?:object, runOracle?:Function}} o  (`runOracle` is a test seam: a stand-in cannot issue a receipt this module accepts)
+ * @returns {Promise<{observed:'confirmed'|'refuted'|'inconclusive'|'unavailable'|'error'|'invalid', reason:string, receipt:object|null, details:object|null, filesDigest:string, inputsDigest:string}>}
+ */
+async function runObligation(obligation, files, o) {
+  const inputs = o.inputs || obligation.inputs;
+  const filesDigest = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__/* .digestOf */ .ol)(files);
+  const inputsDigest = (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_1__/* .digestOf */ .ol)(inputs);
+  const res = await (o.runOracle || _posture_oracles_oracle_js__WEBPACK_IMPORTED_MODULE_0__/* .runOracle */ .qm)({
+    oracleId: obligation.oracleId, hypothesisId: o.hypothesisId, commit: treeBinding(files), files, entry: o.entry, inputs,
+  }, { config: o.config, signal: o.signal, ...(o.deps ? { deps: o.deps } : {}), ...(o.probeEnv ? { probeEnv: o.probeEnv } : {}) });
+  if (res.status === 'rejected') return { observed: 'invalid', reason: `the oracle refused the request: ${(res.errors || []).join('; ').slice(0, 300)}`, receipt: null, details: null, filesDigest, inputsDigest };
+  const base = { filesDigest, inputsDigest, receipt: res.receipt || null };
+  if (!res.receipt) return { ...base, observed: res.status === 'cancelled' ? 'cancelled' : (OUTCOME_TO_STATUS[res.outcome] || 'error'), reason: res.reason, details: null };
+  const r = res.receipt;
+  const bindingProblems = [];
+  if (!(0,_posture_oracles_oracle_js__WEBPACK_IMPORTED_MODULE_0__/* .isIssuedReceipt */ .AH)(r)) bindingProblems.push('the receipt was not issued by the oracle runner in this process');
+  if (r.request.filesDigest !== filesDigest) bindingProblems.push('the receipt is for different files');
+  if (r.request.inputsDigest !== inputsDigest) bindingProblems.push('the receipt is for different inputs');
+  if (r.oracle.logicDigest !== obligation.oracleLogicDigest) bindingProblems.push('the oracle logic differs from the logic the contract pinned (re-plan the contract)');
+  if (bindingProblems.length) return { ...base, observed: 'invalid', reason: bindingProblems.join('; '), details: null };
+  return { ...base, observed: OUTCOME_TO_STATUS[r.settled.outcome] || 'error', reason: res.reason, details: r.observed || null };
+}
+
+/** Did an observed outcome meet the obligation's expectation for this revision? passed | failed | inconclusive | unavailable | invalid | cancelled */
+function judge(observed, expectation) {
+  if (['unavailable', 'invalid', 'error', 'cancelled'].includes(observed)) return observed === 'error' ? 'inconclusive' : observed;
+  if (observed === 'inconclusive') return 'inconclusive';
+  return observed === expectation ? 'passed' : 'failed';
+}
+
+
+/***/ }),
+
+/***/ 61252:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Jy: () => (/* binding */ policyAllows),
+/* harmony export */   Ow: () => (/* binding */ PROFILE_SCHEMA),
+/* harmony export */   UT: () => (/* binding */ validateProfile)
+/* harmony export */ });
+/* harmony import */ var _posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(99666);
+/* harmony import */ var _schemas_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(62805);
+/* harmony import */ var _posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(68216);
+// The application profile (verified-remediation PRD FR-04, FR-05): how to start the application and what its legitimate behaviour is.
+//
+// A profile is DECLARED by the operator; nothing here is inferred from code and presented as approved intent. It names the entry module
+// and factory, the database schema and seed, the actors (with the request headers that authenticate each), and per family the inputs or
+// objects the contract is built from. A profile file inside the repository is repository-supplied input: its facts are recorded as
+// `declared`, never `approved`, and it cannot widen execution (it has no field that could: execution is enabled only by the operator).
+//
+// Closed world: an unknown field is an error. Identifiers that reach SQL (table and column names in generated state checks) must be plain
+// identifiers. Validation never throws.
+
+
+
+
+const PROFILE_SCHEMA = 'agentic-security/repair-profile';
+const IDENT = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const SLUG = /^[a-z][a-z0-9-]{0,39}$/;
+const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+const POLICY_RULES = ['owner', 'same-tenant-admin', 'any-admin'];
+const EFFECTS = ['read', 'update'];
+
+const keysOnly = (errs, obj, allowed, where) => { for (const k of Object.keys(obj)) if (!allowed.includes(k)) errs.push(`${where}: unknown field '${k}'`); };
+
+function checkRequestShape(errs, r, where) {
+  if (!METHODS.includes(r.method)) errs.push(`${where}.method must be one of ${METHODS.join(', ')}`);
+  if (typeof r.path !== 'string' || !r.path.startsWith('/') || r.path.length > 500) errs.push(`${where}.path must start with /`);
+  if (r.body !== undefined && !(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(r.body)) errs.push(`${where}.body must be an object`);
+}
+
+/** One declared untrusted value input (sql, ssrf, filesystem): the request carrying {{value}} and its legitimate values. */
+function checkValueInput(errs, inp, w, actorIds, { secrets }) {
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(inp)) { errs.push(`${w} must be an object`); return; }
+  keysOnly(errs, inp, ['id', 'actor', 'method', 'path', 'body', 'benign', ...(secrets ? ['protectedSecrets'] : [])], w);
+  if (typeof inp.id !== 'string' || !SLUG.test(inp.id)) errs.push(`${w}.id must be a slug`);
+  if (!actorIds.has(inp.actor)) errs.push(`${w}.actor must name a declared actor`);
+  checkRequestShape(errs, inp, w);
+  if (!JSON.stringify([inp.path, inp.body ?? null]).includes('{{value}}')) errs.push(`${w}: the path or body must mark the untrusted value with {{value}}`);
+  if (!Array.isArray(inp.benign) || !inp.benign.length) errs.push(`${w}.benign must list at least one legitimate value with its expected response`);
+  else for (const [j, b] of inp.benign.entries()) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(b) || typeof b.value !== 'string') { errs.push(`${w}.benign[${j}].value must be a string`); continue; }
+    keysOnly(errs, b, ['value', 'expectIncludes', 'expectStatus', 'originalMishandles'], `${w}.benign[${j}]`);
+    if (!Array.isArray(b.expectIncludes) || !b.expectIncludes.length) errs.push(`${w}.benign[${j}].expectIncludes must list at least one expected value`);
+  }
+  if (secrets && (!Array.isArray(inp.protectedSecrets) || !inp.protectedSecrets.length || !inp.protectedSecrets.every((s) => SLUG.test(s)))) errs.push(`${w}.protectedSecrets must name the planted secrets another actor's data holds`);
+}
+
+function checkInputs(errs, sec, name, actorIds, opts) {
+  if (!Array.isArray(sec.inputs) || !sec.inputs.length || sec.inputs.length > 8) { errs.push(`${name}.inputs must hold 1 to 8 inputs`); return; }
+  for (const [i, inp] of sec.inputs.entries()) checkValueInput(errs, inp, `${name}.inputs[${i}]`, actorIds, opts);
+}
+
+/** Problems with a profile; an empty list means it can be used. */
+function validateProfile(p) {
+  const errs = [];
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p)) return ['the profile must be a JSON object'];
+  // a draft from `repair profile-draft` marks what the code could not state with `TODO: ...`; such a profile is not finished
+  const unfinished = [];
+  const scanTodo = (v, at) => {
+    if (unfinished.length >= 5) return;
+    if (typeof v === 'string' && /^TODO:/.test(v)) unfinished.push(at);
+    else if (Array.isArray(v)) v.forEach((x, i) => scanTodo(x, `${at}[${i}]`));
+    else if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(v)) for (const [k, x] of Object.entries(v)) { if (/^TODO:/.test(k)) unfinished.push(`${at}.<key>`); scanTodo(x, at ? `${at}.${k}` : k); }
+  };
+  scanTodo(p, '');
+  if (unfinished.length) errs.push(`the profile is an unfinished draft: complete the TODO values at ${unfinished.join(', ')}${unfinished.length >= 5 ? ' (and more)' : ''}`);
+  keysOnly(errs, p, ['schema', 'schemaVersion', 'application', 'database', 'actors', 'sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow', 'infrastructure', 'migration', 'tests', 'approval'], 'profile');
+  // A profile with only an infrastructure section runs no application: no factory, database or actors are needed.
+  const infraOnly = p.infrastructure !== undefined && !['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'dependency', 'credential', 'workflow'].some((k) => p[k] !== undefined);
+  if (p.schema !== PROFILE_SCHEMA) errs.push(`schema must be '${PROFILE_SCHEMA}'`);
+  if (!/^1\.\d+\.\d+$/.test(String(p.schemaVersion))) errs.push('schemaVersion must be 1.x.y');
+  const a = p.application;
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(a)) errs.push('application is required');
+  else {
+    keysOnly(errs, a, ['entry', 'export', 'files', 'runtime'], 'application');
+    if (!(0,_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)(a.entry)) errs.push('application.entry must be a relative path');
+    if (!(infraOnly && a.export === undefined) && (typeof a.export !== 'string' || !IDENT.test(a.export))) errs.push('application.export must be an identifier');
+    if (!Array.isArray(a.files) || !a.files.length || a.files.length > 60 || !a.files.every(_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)) errs.push('application.files must list 1 to 60 relative paths');
+    else if (!a.files.includes(a.entry)) errs.push('application.files must include the entry');
+    if (a.runtime !== undefined && !['node', 'python'].includes(a.runtime)) errs.push("application.runtime must be 'node' or 'python'");
+    if (a.runtime === 'python' && !/\.py$/.test(String(a.entry))) errs.push('application.entry must be a .py file for the python runtime');
+  }
+  const d = p.database;
+  if (infraOnly && d === undefined) { /* nothing runs */ } else if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(d)) errs.push('database is required');
+  else {
+    keysOnly(errs, d, ['engine', 'schemaSql', 'seed'], 'database');
+    if (d.engine !== 'sqlite') errs.push("database.engine: only 'sqlite' is supported in this milestone");
+    if (typeof d.schemaSql !== 'string' || !d.schemaSql.trim()) errs.push('database.schemaSql is required');
+    if (!Array.isArray(d.seed)) errs.push('database.seed must be an array');
+  }
+  const actorIds = new Set();
+  if (infraOnly && p.actors === undefined) { /* nothing runs */ } else if (!Array.isArray(p.actors) || !p.actors.length) errs.push('actors must be a non-empty array');
+  else for (const [i, ac] of p.actors.entries()) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(ac)) { errs.push(`actors[${i}] must be an object`); continue; }
+    keysOnly(errs, ac, ['id', 'tenant', 'role', 'headers', 'anonymous'], `actors[${i}]`);
+    if (typeof ac.id !== 'string' || !SLUG.test(ac.id) || actorIds.has(ac.id)) errs.push(`actors[${i}].id must be a unique slug`);
+    actorIds.add(ac.id);
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(ac.headers || {})) errs.push(`actors[${i}].headers must be an object`);
+  }
+  if (!['sql', 'authorization', 'ssrf', 'filesystem', 'passwords', 'credential', 'workflow', 'infrastructure'].some((k) => p[k] !== undefined)) errs.push('the profile needs a sql, authorization, ssrf, filesystem, passwords, credential, workflow or infrastructure section');
+  // Infrastructure: the configuration files whose EFFECTIVE result is judged together, the environment, the services that must not be
+  // exposed and the approved services that must stay exposed.
+  if (p.infrastructure !== undefined) {
+    const x = p.infrastructure;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(x)) errs.push('infrastructure must be an object');
+    else {
+      keysOnly(errs, x, ['files', 'environment', 'mustNotExpose', 'mustStayExposed', 'privileges'], 'infrastructure');
+      if (!Array.isArray(x.files) || !x.files.length || x.files.length > 40 || !x.files.every(_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)) errs.push('infrastructure.files must list 1 to 40 configuration files');
+      else if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(a) && Array.isArray(a.files) && !x.files.every((f) => a.files.includes(f))) errs.push('infrastructure.files must be application files (a repair edits them)');
+      if (typeof x.environment !== 'string' || !SLUG.test(x.environment)) errs.push('infrastructure.environment must be a slug');
+      const names = (v) => Array.isArray(v) && v.every((s) => typeof s === 'string' && /^[A-Za-z0-9][\w.-]{0,62}$/.test(s));
+      // privilege: actions an identity must not be able to perform, and the ones it must keep (IAM policies in a Terraform plan)
+      const pv = x.privileges;
+      const grantList = (v) => Array.isArray(v) && v.length <= 32 && v.every((g) => (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(g) && Object.keys(g).every((k) => ['identity', 'action', 'resource'].includes(k))
+        && typeof g.identity === 'string' && /^[A-Za-z0-9][\w./:-]{0,120}$/.test(g.identity) && typeof g.action === 'string' && /^[A-Za-z0-9-]{1,40}:[A-Za-z0-9]{1,80}$/.test(g.action)
+        && typeof g.resource === 'string' && /^[\w:./*-]{1,200}$/.test(g.resource) && !/[*?]/.test(g.resource));
+      if (pv !== undefined) {
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(pv)) errs.push('infrastructure.privileges must be an object');
+        else {
+          keysOnly(errs, pv, ['mustNotAllow', 'mustAllow'], 'infrastructure.privileges');
+          if (!grantList(pv.mustNotAllow) || !pv.mustNotAllow.length) errs.push('infrastructure.privileges.mustNotAllow must list 1 to 32 {identity, action, resource} entries with an exact resource (no wildcard)');
+          if (!grantList(pv.mustAllow || [])) errs.push('infrastructure.privileges.mustAllow must list at most 32 {identity, action, resource} entries with an exact resource');
+        }
+      }
+      if (!names(x.mustNotExpose) || (!x.mustNotExpose.length && !(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(pv))) errs.push('infrastructure.mustNotExpose must name at least one service (it may be empty when privileges are declared)');
+      if (!names(x.mustStayExposed)) errs.push('infrastructure.mustStayExposed must list the approved exposed services (it may be empty)');
+    }
+  }
+  // Workflow and idempotency: the operations, the normal workflows built from them (with the state each must leave) and the invariants
+  // that must hold after ANY sequence. Repeated, reordered and concurrent variants are generated from these; nothing is inferred.
+  // A schema migration the repair needs (FR-16, M4-06): the up and down files the candidate writes (new files, outside the application
+  // files), the deployment order, and the rows an older revision may write while rolled back, inserted before the migration re-applies.
+  if (p.migration !== undefined) {
+    const m = p.migration;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(m)) errs.push('migration must be an object');
+    else {
+      keysOnly(errs, m, ['up', 'down', 'deployOrder', 'interim'], 'migration');
+      for (const k of ['up', 'down']) {
+        if (!(0,_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)(m[k]) || !/\.sql$/.test(m[k])) errs.push(`migration.${k} must be a relative .sql path`);
+        else if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(a) && Array.isArray(a.files) && a.files.includes(m[k])) errs.push(`migration.${k} must not be an application file: the candidate writes it`);
+      }
+      if (m.up === m.down) errs.push('migration.up and migration.down must differ');
+      if (!['migrate-then-deploy', 'deploy-then-migrate'].includes(m.deployOrder)) errs.push("migration.deployOrder must be 'migrate-then-deploy' or 'deploy-then-migrate'");
+      if (m.interim !== undefined && (!Array.isArray(m.interim) || m.interim.length > 16 || !m.interim.every((x) => (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(x) && typeof x.sql === 'string' && /^\s*INSERT\b/i.test(x.sql) && !/;\s*\S/.test(x.sql) && Array.isArray(x.params)))) errs.push('migration.interim must list at most 16 INSERT statements with params arrays');
+      if (!p.database) errs.push('migration needs a database section');
+    }
+  }
+  if (p.workflow !== undefined) {
+    const w = p.workflow;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(w)) errs.push('workflow must be an object');
+    else {
+      keysOnly(errs, w, ['operations', 'normal', 'invariants'], 'workflow');
+      const ops = new Set();
+      if (!Array.isArray(w.operations) || !w.operations.length || w.operations.length > 16) errs.push('workflow.operations must hold 1 to 16 operations');
+      else for (const [i, o] of w.operations.entries()) {
+        const at = `workflow.operations[${i}]`;
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(o)) { errs.push(`${at} must be an object`); continue; }
+        keysOnly(errs, o, ['id', 'actor', 'method', 'path', 'body', 'mutating', 'expectStatus'], at);
+        if (typeof o.id !== 'string' || !SLUG.test(o.id) || ops.has(o.id)) errs.push(`${at}.id must be a unique slug`);
+        ops.add(o.id);
+        if (!actorIds.has(o.actor)) errs.push(`${at}.actor must name a declared actor`);
+        checkRequestShape(errs, o, at);
+        if (typeof o.mutating !== 'boolean') errs.push(`${at}.mutating must say whether the operation changes durable state`);
+      }
+      const check = (c, at) => {
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(c) || typeof c.id !== 'string' || !SLUG.test(c.id) || typeof c.sql !== 'string' || !/^\s*SELECT\b/i.test(c.sql) || !('expect' in c)) errs.push(`${at} must be {id, sql (one SELECT), params, expect}`);
+      };
+      if (!Array.isArray(w.normal) || !w.normal.length || w.normal.length > 8) errs.push('workflow.normal must hold 1 to 8 legitimate workflows');
+      else for (const [i, n] of w.normal.entries()) {
+        const at = `workflow.normal[${i}]`;
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(n)) { errs.push(`${at} must be an object`); continue; }
+        keysOnly(errs, n, ['id', 'steps', 'checks'], at);
+        if (typeof n.id !== 'string' || !SLUG.test(n.id)) errs.push(`${at}.id must be a slug`);
+        if (!Array.isArray(n.steps) || !n.steps.length || n.steps.length > 8 || !n.steps.every((s) => ops.has(s))) errs.push(`${at}.steps must list 1 to 8 declared operation ids`);
+        (n.checks || []).forEach((c, j) => check(c, `${at}.checks[${j}]`));
+      }
+      if (!Array.isArray(w.invariants) || !w.invariants.length || w.invariants.length > 12) errs.push('workflow.invariants must hold 1 to 12 state invariants that hold after any sequence');
+      else w.invariants.forEach((c, j) => check(c, `workflow.invariants[${j}]`));
+    }
+  }
+  // A leaked credential: where it is (never its value), the environment name the replacement is wired from, whether the old credential
+  // must be revoked, and the legitimate requests that must work with the replacement (against declared hosts that accept only it).
+  if (p.credential !== undefined) {
+    const c = p.credential;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(c)) errs.push('credential must be an object');
+    else {
+      keysOnly(errs, c, ['location', 'env', 'revocation', 'provider', 'network', 'controls'], 'credential');
+      if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(c.location) || !(0,_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)(c.location.file) || !Number.isInteger(c.location.line) || c.location.line < 1) errs.push('credential.location must be {file, line}: where the leaked value is, never the value');
+      else if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(a) && Array.isArray(a.files) && !a.files.includes(c.location.file)) errs.push('credential.location.file must be one of the application files');
+      if (typeof c.env !== 'string' || !/^[A-Z_][A-Z0-9_]{0,63}$/.test(c.env)) errs.push('credential.env must be the upper-case environment name the replacement is read from');
+      if (!['required', 'not-required'].includes(c.revocation)) errs.push("credential.revocation must be 'required' or 'not-required'");
+      if (typeof c.provider !== 'string' || !SLUG.test(c.provider)) errs.push('credential.provider must be a slug naming the issuing service');
+      const n = (0,_posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_2__/* .validateNetwork */ .jO)(c.network);
+      if (n) errs.push(`credential.network: ${n}`);
+      if (!Array.isArray(c.controls) || !c.controls.length) errs.push('credential.controls must list the requests that must work with the replacement credential');
+      else for (const [i, r] of c.controls.entries()) {
+        const w = `credential.controls[${i}]`;
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(r)) { errs.push(`${w} must be an object`); continue; }
+        keysOnly(errs, r, ['id', 'actor', 'method', 'path', 'body', 'expectStatus', 'expectIncludes'], w);
+        if (typeof r.id !== 'string' || !SLUG.test(r.id)) errs.push(`${w}.id must be a slug`);
+        if (!actorIds.has(r.actor)) errs.push(`${w}.actor must name a declared actor`);
+        checkRequestShape(errs, r, w);
+      }
+      if (a?.runtime === 'python') errs.push('the credential section is supported for the node runtime only in this release');
+    }
+  }
+  // A vulnerable dependency (npm): the advisory's package and range, where the package tarballs live, and which section's attacks show
+  // the vulnerability in this application. The manifest and the lockfile must be application files: a repair edits them.
+  if (p.dependency !== undefined) {
+    const d = p.dependency;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(d)) errs.push('dependency must be an object');
+    else {
+      keysOnly(errs, d, ['ecosystem', 'package', 'vulnerable', 'advisory', 'sources', 'exploit'], 'dependency');
+      if (d.ecosystem !== 'npm') errs.push("dependency.ecosystem: only 'npm' is supported in this release");
+      if (typeof d.package !== 'string' || !/^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]{0,213}$/.test(d.package)) errs.push('dependency.package must be an npm package name');
+      if (typeof d.vulnerable !== 'string' || !d.vulnerable.trim() || d.vulnerable.length > 200) errs.push('dependency.vulnerable must be a version range');
+      if (typeof d.advisory !== 'string' || !d.advisory.trim()) errs.push('dependency.advisory must name the advisory');
+      if (!(0,_schemas_js__WEBPACK_IMPORTED_MODULE_1__/* .isRelPath */ .ji)(d.sources)) errs.push('dependency.sources must be a relative directory holding the package tarballs');
+      if (!['filesystem', 'sql', 'ssrf'].includes(d.exploit) || p[d.exploit] === undefined) errs.push('dependency.exploit must name the profile section (filesystem, sql or ssrf) whose attacks show the vulnerability');
+      if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(a) && Array.isArray(a.files) && !['package.json', 'package-lock.json'].every((f) => a.files.includes(f))) errs.push('application.files must include package.json and package-lock.json for a dependency repair');
+    }
+  }
+  // Password storage: where the application stores a credential, how a user registers and logs in, the legacy format existing users
+  // carry (with known test passwords: the legacy rows are built from them), and the approved storage format and its minimum costs.
+  if (p.passwords !== undefined) {
+    const w = p.passwords;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(w)) errs.push('passwords must be an object');
+    else {
+      keysOnly(errs, w, ['table', 'userColumn', 'hashColumn', 'legacy', 'register', 'login', 'approved', 'actor'], 'passwords');
+      for (const k of ['table', 'userColumn', 'hashColumn']) if (typeof w[k] !== 'string' || !IDENT.test(w[k])) errs.push(`passwords.${k} must be an identifier`);
+      if (!actorIds.has(w.actor)) errs.push('passwords.actor must name a declared actor (the one sending register and login requests)');
+      for (const op of ['register', 'login']) {
+        const r = w[op];
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(r)) { errs.push(`passwords.${op} is required`); continue; }
+        keysOnly(errs, r, ['method', 'path', 'body', 'expectStatus', 'denyStatus'], `passwords.${op}`);
+        checkRequestShape(errs, r, `passwords.${op}`);
+        const t = JSON.stringify([r.path, r.body ?? null]);
+        if (!t.includes('{{user}}') || !t.includes('{{password}}')) errs.push(`passwords.${op}: the path or body must carry {{user}} and {{password}}`);
+        if (r.expectStatus !== undefined && (!Array.isArray(r.expectStatus) || !r.expectStatus.every(Number.isInteger))) errs.push(`passwords.${op}.expectStatus must list status codes`);
+      }
+      if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(w.login) && (!Array.isArray(w.login.denyStatus) || !w.login.denyStatus.length || !w.login.denyStatus.every(Number.isInteger))) errs.push('passwords.login.denyStatus must list the status codes of a refused login');
+      const L = w.legacy;
+      if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(L)) errs.push('passwords.legacy is required: the format existing users carry, and at least one user with a known test password');
+      else {
+        keysOnly(errs, L, ['digest', 'users'], 'passwords.legacy');
+        if (!['md5', 'sha1', 'sha256', 'sha512'].includes(L.digest)) errs.push("passwords.legacy.digest must be one of md5, sha1, sha256, sha512 (an unsalted hex digest)");
+        if (!Array.isArray(L.users) || !L.users.length || L.users.length > 8 || !L.users.every((u) => (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(u) && typeof u.name === 'string' && u.name && typeof u.password === 'string' && u.password.length >= 4)) errs.push('passwords.legacy.users must list 1 to 8 {name, password} test users');
+      }
+      const A = w.approved;
+      if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(A) || A.format !== 'scrypt') errs.push("passwords.approved.format must be 'scrypt' (the only format the verifier recomputes in this release)");
+      else for (const k of ['minN', 'minR', 'minSaltBytes', 'minKeyBytes']) if (!Number.isInteger(A[k]) || A[k] < 1) errs.push(`passwords.approved.${k} must be a positive integer`);
+    }
+  }
+  if ((p.ssrf !== undefined || p.filesystem !== undefined) && a?.runtime === 'python') errs.push('the ssrf and filesystem sections are supported for the node runtime only in this release');
+  if (p.sql !== undefined) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p.sql)) errs.push('sql must be an object');
+    else { keysOnly(errs, p.sql, ['inputs', 'stateChecks'], 'sql'); checkInputs(errs, p.sql, 'sql', actorIds, { secrets: true }); }
+  }
+  // Server-side request forgery: the network the application can reach is declared (hosts, their DNS answers, what each serves), with a
+  // destination policy. Secrets planted in a forbidden host's responses show disclosure; the connection itself is the forbidden effect.
+  if (p.ssrf !== undefined) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p.ssrf)) errs.push('ssrf must be an object');
+    else {
+      keysOnly(errs, p.ssrf, ['policy', 'approved', 'hosts', 'inputs'], 'ssrf');
+      const n = (0,_posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_2__/* .validateNetwork */ .jO)({ policy: p.ssrf.policy, approved: p.ssrf.approved, hosts: p.ssrf.hosts });
+      if (n) errs.push(`ssrf: ${n}`);
+      checkInputs(errs, p.ssrf, 'ssrf', actorIds, { secrets: false });
+    }
+  }
+  // Path traversal: a real file tree with an allowed root; files outside it plant secrets; declared links are real symbolic links.
+  if (p.filesystem !== undefined) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p.filesystem)) errs.push('filesystem must be an object');
+    else {
+      keysOnly(errs, p.filesystem, ['root', 'tree', 'links', 'inputs'], 'filesystem');
+      const f = (0,_posture_oracles_app_adapters_js__WEBPACK_IMPORTED_MODULE_2__/* .validateFiles */ .kc)({ root: p.filesystem.root, tree: p.filesystem.tree, ...(p.filesystem.links !== undefined ? { links: p.filesystem.links } : {}) });
+      if (f) errs.push(`filesystem: ${f}`);
+      checkInputs(errs, p.filesystem, 'filesystem', actorIds, { secrets: false });
+    }
+  }
+  if (p.authorization !== undefined) {
+    const z = p.authorization;
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(z)) errs.push('authorization must be an object');
+    else {
+      keysOnly(errs, z, ['table', 'idColumn', 'contentColumn', 'objects', 'operations', 'policy', 'controls'], 'authorization');
+      // Declared legitimate workflows outside the actor matrix (a public page, a health route): they must keep working after a repair.
+      if (z.controls !== undefined) {
+        if (!Array.isArray(z.controls) || z.controls.length > 32) errs.push('authorization.controls must be an array of at most 32');
+        else for (const [i, c] of z.controls.entries()) {
+          const w = `authorization.controls[${i}]`;
+          if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(c)) { errs.push(`${w} must be an object`); continue; }
+          keysOnly(errs, c, ['id', 'actor', 'method', 'path', 'body', 'expectStatus', 'expectIncludes'], w);
+          if (typeof c.id !== 'string' || !SLUG.test(c.id)) errs.push(`${w}.id must be a slug`);
+          if (!actorIds.has(c.actor)) errs.push(`${w}.actor must name a declared actor`);
+          checkRequestShape(errs, c, w);
+          if (c.expectIncludes !== undefined && (!Array.isArray(c.expectIncludes) || !c.expectIncludes.every((x) => typeof x === 'string' && x))) errs.push(`${w}.expectIncludes must list strings`);
+        }
+      }
+      for (const k of ['table', 'idColumn', 'contentColumn']) if (typeof z[k] !== 'string' || !IDENT.test(z[k])) errs.push(`authorization.${k} must be an identifier`);
+      if (!Array.isArray(z.objects) || !z.objects.length) errs.push('authorization.objects must be a non-empty array');
+      else for (const [i, o] of z.objects.entries()) {
+        if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(o)) { errs.push(`authorization.objects[${i}] must be an object`); continue; }
+        keysOnly(errs, o, ['id', 'owner', 'rowId', 'secret'], `authorization.objects[${i}]`);
+        if (!actorIds.has(o.owner)) errs.push(`authorization.objects[${i}].owner must name a declared actor`);
+        if (!(Number.isInteger(o.rowId) || (typeof o.rowId === 'string' && o.rowId.length <= 64))) errs.push(`authorization.objects[${i}].rowId must be an integer or short string`);
+        if (typeof o.secret !== 'string' || !SLUG.test(o.secret)) errs.push(`authorization.objects[${i}].secret must name the planted secret the object holds`);
+      }
+      if (!Array.isArray(z.operations) || !z.operations.length) errs.push('authorization.operations must be a non-empty array');
+      else {
+        for (const [i, op] of z.operations.entries()) {
+          if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(op)) { errs.push(`authorization.operations[${i}] must be an object`); continue; }
+          keysOnly(errs, op, ['id', 'effect', 'method', 'path', 'body', 'expectStatus'], `authorization.operations[${i}]`);
+          if (!EFFECTS.includes(op.effect)) errs.push(`authorization.operations[${i}].effect must be one of ${EFFECTS.join(', ')} (other effects are not supported in this milestone)`);
+          checkRequestShape(errs, op, `authorization.operations[${i}]`);
+          if (!String(op.path).includes('{{id}}')) errs.push(`authorization.operations[${i}].path must mark the object id with {{id}}`);
+          if (op.effect === 'update' && !JSON.stringify(op.body ?? null).includes('{{value}}')) errs.push(`authorization.operations[${i}]: an update body must mark the written value with {{value}}`);
+        }
+        if (!z.operations.some((op) => op?.effect === 'read')) errs.push('authorization.operations needs at least one read operation (the security run uses it to show the application works)');
+      }
+      const pol = z.policy;
+      if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(pol) || !Array.isArray(pol.allow) || !pol.allow.length || !pol.allow.every((r) => POLICY_RULES.includes(r))) errs.push(`authorization.policy.allow must list rules from ${POLICY_RULES.join(', ')}`);
+    }
+  }
+  if (p.tests !== undefined) {
+    if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p.tests) || typeof p.tests.command !== 'string' || !p.tests.command.trim()) errs.push('tests.command must be a string');
+    else keysOnly(errs, p.tests, ['command', 'required', 'flaky'], 'tests');
+  }
+  if (p.approval !== undefined && !((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_0__/* .isPlainObject */ .Qd)(p.approval) && typeof p.approval.approvedBy === 'string' && p.approval.approvedBy.trim() && typeof p.approval.reason === 'string' && p.approval.reason.trim())) errs.push('approval must be {approvedBy, reason}');
+  return errs;
+}
+
+/** Which actors a policy allows to act on an object. Pure. */
+function policyAllows(policy, actor, object, actorsById) {
+  if (!actor || actor.anonymous) return false;
+  const owner = actorsById[object.owner];
+  for (const rule of policy.allow) {
+    if (rule === 'owner' && actor.id === object.owner) return true;
+    if (rule === 'same-tenant-admin' && actor.role === 'admin' && owner && actor.tenant === owner.tenant) return true;
+    if (rule === 'any-admin' && actor.role === 'admin') return true;
+  }
+  return false;
+}
+
+
+/***/ }),
+
+/***/ 62805:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   H6: () => (/* binding */ SCHEMAS),
+/* harmony export */   JF: () => (/* binding */ contractIdOf),
+/* harmony export */   T7: () => (/* binding */ validateContract),
+/* harmony export */   U_: () => (/* binding */ contractDigestOf),
+/* harmony export */   Xn: () => (/* binding */ OBLIGATION_KINDS),
+/* harmony export */   bY: () => (/* binding */ validateRepairRecord),
+/* harmony export */   f$: () => (/* binding */ SCHEMA_VERSION),
+/* harmony export */   ji: () => (/* binding */ isRelPath),
+/* harmony export */   mu: () => (/* binding */ validateCandidate),
+/* harmony export */   qT: () => (/* binding */ candidateIdOf),
+/* harmony export */   vb: () => (/* binding */ normalizeFinding)
+/* harmony export */ });
+/* unused harmony exports DISPOSITIONS, APPLICATION_STATES, ARTIFACT_STATES, ENVIRONMENT_STATES, COMPLETION_STATES, CUSTODY, GENERATORS, FAMILIES, EVIDENCE_ORIGINS, CONTRACT_ID_FIELDS, CANDIDATE_ID_FIELDS, OBLIGATION_FIELDS, validateObligation, CONTRACT_FIELDS, RECORD_FIELDS */
+/* harmony import */ var _posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(91026);
+/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(69259);
+/* harmony import */ var _posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(99666);
+// Versioned, closed repair records (verified-remediation PRD section 6): NormalizedFinding, RepairContract, CandidatePatch,
+// VerificationRun and the RepairRecord envelope.
+//
+// Built on the assurance schema kit (closed world: an unknown field is an error, never carried), with identities computed by the
+// coordinator over an allowlist of semantic fields (assurance/identity.js), so no clock, run id or model-supplied count can move an id.
+// Validation never throws. Migration policy: version 1.x readers accept 1.x; a 2.0 record is refused (UNSUPPORTED_MAJOR), and adding
+// a field means a minor version and an allowlist entry, never a silently carried key.
+
+
+
+
+const SCHEMAS = Object.freeze({
+  finding: 'agentic-security/normalized-finding',
+  contract: 'agentic-security/repair-contract',
+  candidate: 'agentic-security/candidate-patch',
+  run: 'agentic-security/verification-run',
+  record: 'agentic-security/repair-record',
+});
+const SCHEMA_VERSION = '1.0.0';
+
+// The registered obligation kinds. A contract naming any other kind is refused: obligations are declarative and run through registered
+// verifier operations only, so a contract file cannot carry an assertion of its own.
+const OBLIGATION_KINDS = Object.freeze({
+  'app-attack-blocked': { oracle: 'application-security', expectBaseline: 'confirmed', expectPatched: 'refuted', set: 'development', description: 'the declared development attack requests reach no forbidden effect on the patched revision, after reproducing on the original' },
+  'app-attack-sealed': { oracle: 'application-security', expectBaseline: 'confirmed', expectPatched: 'refuted', set: 'sealed', description: 'held-out attack variants, run only on a candidate that passed every development obligation; their content and outcome never reach candidate generation' },
+  'app-behaviour-preserved': { oracle: 'application-behaviour', expectBaseline: 'refuted', expectPatched: 'refuted', set: 'development', description: 'the declared legitimate requests and state checks hold on the original and on the patched revision' },
+  'app-behaviour-after': { oracle: 'application-behaviour', expectBaseline: null, expectPatched: 'refuted', set: 'development', description: 'legitimate requests the original mishandles (for example a quoted value) hold on the patched revision' },
+  'dependency-resolved': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the lockfile agrees with the manifest, every package comes from the declared sources with its recorded integrity, every dependency resolves, and no resolved instance of the advisory\'s package (direct or transitive) is in the vulnerable range' },
+  'credential-removed': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the leaked credential is in no application file, plain or in any re-encoding the verifier recognises (base64, hex, reversed, percent-encoded, split into joined literals, character codes)' },
+  'infrastructure-effective': { oracle: null, expectBaseline: 'failed', expectPatched: 'passed', set: 'development', description: 'the effective configuration of every declared file, ingested together, gives no public route to a service that must not be exposed and keeps one to every approved exposed service; with declared privileges, each forbidden action of a named identity on an exact resource is not granted or denied and each kept action stays possible, and an unresolved decision fails; a file the adapters cannot read fails it' },
+  'migration-window': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the declared schema migration applies, the revision that is not yet deployed still serves its legitimate workflows in the declared deployment order, the down migration restores a schema the original revision serves, and the migration re-applies after a rollback over the rows the profile says an older revision writes; whether each rollback reinstates the exposure is stated, never hidden' },
+  'project-tests': { oracle: null, expectBaseline: null, expectPatched: 'passed', set: 'development', description: 'the central verifier: rescan, new-finding delta, footprint and the per-test delta of the project suite' },
+});
+
+const DISPOSITIONS = Object.freeze(['proposed', 'refuted-finding', 'needs-review', 'verified-for-contract', 'mitigation', 'rejected', 'blocked', 'cancelled']);
+const APPLICATION_STATES = Object.freeze(['not-applied', 'applied', 'reverted', 'concurrent-change-refused']);
+const ARTIFACT_STATES = Object.freeze(['unbuilt', 'source-only', 'artifact-verified', 'artifact-mismatch', 'unavailable']);
+const ENVIRONMENT_STATES = Object.freeze(['not-checked', 'staging-verified', 'deployment-observed', 'unavailable']);
+const COMPLETION_STATES = Object.freeze(['complete', 'partial', 'cancelled', 'unavailable', 'invalid']);
+const CUSTODY = Object.freeze(['internal-scan', 'imported', 'locally-corroborated', 'reproduced', 'refuted', 'unresolved']);
+const GENERATORS = Object.freeze(['deterministic-recipe', 'configured-model', 'user-supplied']);
+const FAMILIES = Object.freeze(['sql-injection', 'object-authorization', 'ssrf', 'path-traversal', 'password-storage', 'dependency', 'credential', 'workflow', 'infrastructure']);
+const EVIDENCE_ORIGINS = Object.freeze(['generated-from-profile', 'operator-declared', 'approved-invariant', 'counterexample', 'registered-family']);
+
+const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w@.\-/]{1,512}$/;
+const isRelPath = (p) => typeof p === 'string' && REL_PATH.test(p) && !p.includes('\\') && p.split('/')[0] !== _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .STATE_DIR_NAME */ .Ky;
+
+// ---------------------------------------------------------------- identities (allowlisted fields only)
+
+const CONTRACT_ID_FIELDS = ['findingRefs', 'rootCauseGroup', 'sourceCommit', 'sourceDigest', 'configDigests', 'profile', 'obligations', 'policyFacts', 'editScope', 'executionPolicy'];
+const contractIdOf = (c) => (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_0__/* .semanticId */ .YN)('rcon', c, CONTRACT_ID_FIELDS);
+const contractDigestOf = (c) => (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_0__/* .digestOf */ .ol)(Object.fromEntries(CONTRACT_ID_FIELDS.map((f) => [f, c[f] ?? null])));
+const CANDIDATE_ID_FIELDS = ['contractDigest', 'baselineDigest', 'patchDigest'];
+const candidateIdOf = (c) => (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_0__/* .semanticId */ .YN)('rcand', c, CANDIDATE_ID_FIELDS);
+
+// ---------------------------------------------------------------- validators
+
+const OBLIGATION_FIELDS = ['id', 'kind', 'required', 'oracleId', 'oracleVersion', 'oracleLogicDigest', 'scope', 'baselineExpectation', 'patchedExpectation', 'evidenceOrigin', 'inputs', 'inputsDigest', 'description'];
+
+function validateObligation(ctx, o, i) {
+  const p = `obligations[${i}]`;
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .isPlainObject */ .Qd)(o)) { ctx.err('BAD_TYPE', p, 'must be an object'); return; }
+  for (const k of Object.keys(o)) if (!OBLIGATION_FIELDS.includes(k)) ctx.err('UNKNOWN_FIELD', `${p}.${k}`, `field '${k}' is not part of an obligation`);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkString */ .Em)(ctx, `${p}.id`, o.id);
+  if (!Object.hasOwn(OBLIGATION_KINDS, o.kind)) { ctx.err('UNKNOWN_ENUM', `${p}.kind`, `unknown obligation kind ${JSON.stringify(o.kind)}; registered kinds: ${Object.keys(OBLIGATION_KINDS).join(', ')}`); return; }
+  if (typeof o.required !== 'boolean') ctx.err('BAD_TYPE', `${p}.required`, 'must be a boolean');
+  const kind = OBLIGATION_KINDS[o.kind];
+  if (kind.oracle && o.oracleId !== kind.oracle) ctx.err('RULE_VIOLATION', `${p}.oracleId`, `obligation kind ${o.kind} runs only on ${kind.oracle}`);
+  if (kind.oracle) (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkDigest */ .H2)(ctx, `${p}.oracleLogicDigest`, o.oracleLogicDigest);
+  if (o.inputs !== undefined) { if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .isPlainObject */ .Qd)(o.inputs)) ctx.err('BAD_TYPE', `${p}.inputs`, 'must be an object'); else if (o.inputsDigest !== (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_0__/* .digestOf */ .ol)(o.inputs)) ctx.err('RULE_VIOLATION', `${p}.inputsDigest`, 'does not match the inputs'); }
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkEnum */ .S1)(ctx, `${p}.evidenceOrigin`, o.evidenceOrigin, EVIDENCE_ORIGINS);
+}
+
+const CONTRACT_FIELDS = ['schema', 'schemaVersion', 'contractId', 'contractDigest', 'family', 'findingRefs', 'rootCauseGroup', 'sourceCommit', 'sourceDigest', 'configDigests', 'profile', 'obligations', 'policyFacts', 'editScope', 'executionPolicy', 'knownUnknowns', 'expiresAt', 'approval'];
+const CONTRACT_REQUIRED = ['schema', 'schemaVersion', 'contractId', 'contractDigest', 'family', 'findingRefs', 'sourceDigest', 'profile', 'obligations', 'policyFacts', 'editScope', 'executionPolicy', 'knownUnknowns'];
+
+function validateContract(rec) {
+  const g = (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .guardObject */ .NW)(rec); if (!g.ok) return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(g.ctx);
+  const ctx = g.ctx;
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkHeader */ .eb)(ctx, rec, SCHEMAS.contract)) return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(ctx);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkFields */ .oA)(ctx, rec, CONTRACT_FIELDS, CONTRACT_REQUIRED);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkEnum */ .S1)(ctx, 'family', rec.family, FAMILIES);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkCommit */ .su)(ctx, 'sourceCommit', rec.sourceCommit ?? null);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkDigest */ .H2)(ctx, 'sourceDigest', rec.sourceDigest);
+  if (!Array.isArray(rec.findingRefs) || !rec.findingRefs.length) ctx.err('MISSING_FIELD', 'findingRefs', 'at least one finding reference');
+  if (!Array.isArray(rec.obligations) || !rec.obligations.length) ctx.err('MISSING_FIELD', 'obligations', 'at least one obligation');
+  else {
+    const ids = new Set();
+    rec.obligations.forEach((o, i) => { validateObligation(ctx, o, i); if (ids.has(o?.id)) ctx.err('DUPLICATE_ID', `obligations[${i}].id`, 'duplicate obligation id'); ids.add(o?.id); });
+    if (!rec.obligations.some((o) => o?.required)) ctx.err('RULE_VIOLATION', 'obligations', 'a contract needs at least one required obligation');
+  }
+  const es = rec.editScope;
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .isPlainObject */ .Qd)(es) || !Array.isArray(es.allowed) || !es.allowed.every(isRelPath)) ctx.err('BAD_TYPE', 'editScope.allowed', 'must list confined relative paths');
+  if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .isPlainObject */ .Qd)(es) && es.prohibited !== undefined && (!Array.isArray(es.prohibited) || !es.prohibited.every((p) => typeof p === 'string'))) ctx.err('BAD_TYPE', 'editScope.prohibited', 'must list path patterns');
+  if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .isPlainObject */ .Qd)(es) && (!Number.isInteger(es.maxFiles) || es.maxFiles < 1 || es.maxFiles > 50 || !Number.isInteger(es.maxEditedLines) || es.maxEditedLines < 1 || es.maxEditedLines > 5000)) ctx.err('RULE_VIOLATION', 'editScope', 'maxFiles 1..50 and maxEditedLines 1..5000 are required');
+  if (!Array.isArray(rec.policyFacts)) ctx.err('BAD_TYPE', 'policyFacts', 'must be an array');
+  else rec.policyFacts.forEach((f, i) => { if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .isPlainObject */ .Qd)(f)) return ctx.err('BAD_TYPE', `policyFacts[${i}]`, 'must be an object'); (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkEnum */ .S1)(ctx, `policyFacts[${i}].origin`, f.origin, ['operator-profile-outside-repository', 'repository-file', 'inferred-from-code', 'approved-invariant']); (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkEnum */ .S1)(ctx, `policyFacts[${i}].approval`, f.approval, ['approved', 'declared', 'proposed']); });
+  if (!Array.isArray(rec.knownUnknowns)) ctx.err('BAD_TYPE', 'knownUnknowns', 'must be an array');
+  if (rec.contractId !== undefined && rec.contractId !== contractIdOf(rec)) ctx.err('ID_MISMATCH', 'contractId', 'does not match the contract content');
+  if (rec.contractDigest !== undefined && rec.contractDigest !== contractDigestOf(rec)) ctx.err('ID_MISMATCH', 'contractDigest', 'does not match the contract content');
+  return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(ctx);
+}
+
+const CANDIDATE_FIELDS = ['schema', 'schemaVersion', 'candidateId', 'contractDigest', 'baselineDigest', 'generator', 'generatorIdentity', 'generationParameters', 'files', 'beforeDigests', 'afterDigests', 'patchDigest', 'scope', 'strategy', 'rationale', 'assumptions', 'proposedTests', 'accounting', 'createdAt'];
+
+function validateCandidate(rec) {
+  const g = (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .guardObject */ .NW)(rec); if (!g.ok) return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(g.ctx);
+  const ctx = g.ctx;
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkHeader */ .eb)(ctx, rec, SCHEMAS.candidate)) return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(ctx);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkFields */ .oA)(ctx, rec, CANDIDATE_FIELDS, ['schema', 'schemaVersion', 'candidateId', 'contractDigest', 'baselineDigest', 'generator', 'generatorIdentity', 'files', 'patchDigest', 'scope', 'accounting']);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkEnum */ .S1)(ctx, 'generator', rec.generator, GENERATORS);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkDigest */ .H2)(ctx, 'contractDigest', rec.contractDigest); (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkDigest */ .H2)(ctx, 'baselineDigest', rec.baselineDigest); (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkDigest */ .H2)(ctx, 'patchDigest', rec.patchDigest);
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .isPlainObject */ .Qd)(rec.files) || !Object.keys(rec.files).length || !Object.keys(rec.files).every(isRelPath)) ctx.err('BAD_TYPE', 'files', 'must map confined relative paths to contents');
+  else for (const [k, v] of Object.entries(rec.files)) if (v !== null && typeof v !== 'string') ctx.err('BAD_TYPE', `files.${k}`, 'must be a string or null (deletion)');
+  if ((0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .isPlainObject */ .Qd)(rec.files) && rec.patchDigest !== (0,_posture_assurance_identity_js__WEBPACK_IMPORTED_MODULE_0__/* .digestOf */ .ol)(rec.files)) ctx.err('RULE_VIOLATION', 'patchDigest', 'does not match the files');
+  const a = rec.accounting;
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .isPlainObject */ .Qd)(a)) ctx.err('BAD_TYPE', 'accounting', 'must be an object');
+  else for (const k of ['tokens', 'calls', 'wallMs', 'usd']) if (!(a[k] === null || (typeof a[k] === 'number' && a[k] >= 0))) ctx.err('BAD_TYPE', `accounting.${k}`, 'must be a non-negative number or null (unknown, never zero)');
+  if (rec.candidateId !== undefined && rec.candidateId !== candidateIdOf(rec)) ctx.err('ID_MISMATCH', 'candidateId', 'does not match the candidate content');
+  return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(ctx);
+}
+
+const RECORD_FIELDS = ['schema', 'policyDigest', 'sourceDigest', 'patchDigest', 'exactPatch', 'schemaVersion', 'runId', 'contractId', 'contractDigest', 'findingRefs', 'disposition', 'application', 'artifact', 'environment', 'completion', 'candidates', 'selected', 'rounds', 'obligationResults', 'counterexamples', 'quarantined', 'regressionGuards', 'lifecycle', 'migration', 'staging', 'budget', 'accounting', 'reasons', 'nextPrerequisite', 'legacy', 'scope', 'createdAt', 'source'];
+
+function validateRepairRecord(rec) {
+  const g = (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .guardObject */ .NW)(rec); if (!g.ok) return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(g.ctx);
+  const ctx = g.ctx;
+  if (!(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkHeader */ .eb)(ctx, rec, SCHEMAS.record)) return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(ctx);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkFields */ .oA)(ctx, rec, RECORD_FIELDS, ['schema', 'schemaVersion', 'runId', 'contractId', 'disposition', 'application', 'artifact', 'environment', 'completion', 'reasons', 'scope']);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkEnum */ .S1)(ctx, 'disposition', rec.disposition, DISPOSITIONS);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkEnum */ .S1)(ctx, 'application', rec.application, APPLICATION_STATES);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkEnum */ .S1)(ctx, 'artifact', rec.artifact, ARTIFACT_STATES);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkEnum */ .S1)(ctx, 'environment', rec.environment, ENVIRONMENT_STATES);
+  (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .checkEnum */ .S1)(ctx, 'completion', rec.completion, COMPLETION_STATES);
+  // a verified-for-contract record needs a complete run with every required obligation passed
+  if (rec.disposition === 'verified-for-contract') {
+    if (rec.completion !== 'complete') ctx.err('RULE_VIOLATION', 'completion', 'verified-for-contract needs a complete run');
+    const req = (rec.obligationResults || []).filter((o) => o.required);
+    if (!req.length || req.some((o) => o.status !== 'passed')) ctx.err('RULE_VIOLATION', 'obligationResults', 'verified-for-contract needs every required obligation passed');
+  }
+  if (rec.artifact === 'artifact-verified' || rec.environment !== 'not-checked' && rec.environment !== 'unavailable') {
+    if (!rec.source || !(0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .isDigest */ .Bc)(rec.source.artifactDigest)) ctx.err('RULE_VIOLATION', 'artifact', 'an artifact or environment state needs a bound artifact digest');
+  }
+  return (0,_posture_assurance_schema_kit_js__WEBPACK_IMPORTED_MODULE_2__/* .result */ .Ke)(ctx);
+}
+
+/** A finding as the repair workflow sees it, from the internal scan (imported findings come through repair/importers). */
+function normalizeFinding(f, { commit = null, treeDigest = null, sourceTool = 'agentic-security', sourceToolVersion = null, custody = 'internal-scan' } = {}) {
+  const loc = { file: f.file, line: Number.isInteger(f.line) ? f.line : null, column: Number.isInteger(f.column) ? f.column : null };
+  return {
+    schema: SCHEMAS.finding, schemaVersion: SCHEMA_VERSION,
+    findingId: f.stableId || f.id, sourceTool, sourceToolVersion,
+    externalRuleId: f.ruleId || f.rule || null, externalArtifactDigest: null,
+    repository: { commit, treeDigest },
+    locations: [loc], cwe: f.cwe || null, family: f.family || null, vuln: f.vuln || null,
+    severity: f.severity || null, confidence: f.confidence ?? null, reachability: f.relevanceTier || f.reachability || null,
+    exploitEvidence: f.proofTier || null, disposition: 'open', custody,
+    mappingLimitations: f.cwe ? [] : ['no CWE was reported; it is unknown, not inferred'],
+  };
+}
+
+
+/***/ })
+
+};

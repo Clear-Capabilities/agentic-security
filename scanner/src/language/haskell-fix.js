@@ -90,7 +90,7 @@ function unwrapQueryExpr(expr) {
 
 // ── imports ──────────────────────────────────────────────────────────────────
 function importInfo(text, module) {
-  const re = new RegExp(`^import\\s+(qualified\\s+)?${module.replace(/\./g, '\\.')}(?:\\s+qualified)?(?:\\s+as\\s+(\\w+))?\\s*(?:\\((.*)\\))?\\s*(hiding\\b.*)?$`, 'm');
+  const re = new RegExp(`^import\\s+(qualified\\s+)?${module.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s+qualified)?(?:\\s+as\\s+(\\w+))?\\s*(?:\\((.*)\\))?\\s*(hiding\\b.*)?$`, 'm');
   const m = re.exec(text);
   if (!m) return null;
   return { index: m.index, line: m[0], qualified: !!(m[1] || /\bqualified\b/.test(m[0])), alias: m[2] || null, items: m[3] === undefined ? null : m[3].split(/,(?![^(]*\))/).map((x) => x.trim()).filter(Boolean), hiding: !!m[4] };

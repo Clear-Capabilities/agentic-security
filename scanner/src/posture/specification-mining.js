@@ -41,7 +41,7 @@ const NAME_FAMILIES = [
   {
     label: 'authorization-check',
     nameRe: /(?:validate|check|require|enforce)\w*(?:access|authoriz|permission)|\bauthorize\b|\bcanAccess\b/i,
-    bodyMustHave: /\b(?:role|permission|scope|claim|isAllowed|can\(|allowedTo|hasPermission)\b/,
+    bodyMustHave: /\b(?:role|permission|scope|claim|isAllowed|allowedTo|hasPermission)\b|\bcan\s*\(/,
     severity: 'medium',
     cwe: 'CWE-863',
     rationale: 'function name claims an authorization check but body has no role/permission/scope reference',
@@ -49,7 +49,11 @@ const NAME_FAMILIES = [
   {
     label: 'output-sanitizer',
     nameRe: /\b(?:sanitize|escape|clean|safe(?:n|ify)?|purify)\w*(?:html|xml|sql|input|user|output)\b/i,
-    bodyMustHave: /\b(?:DOMPurify|escape|encodeURI|sanitizeHtml|replace\(|str\.replace|html_escape|escape_html|bleach)\b/,
+    // Alternatives that end in `(` sit OUTSIDE the trailing `\b`: a word
+    // boundary after `(` needs a word character next, so `.replace(/&/g, ...)`
+    // and `verify("...")` (a regex or string first argument) never matched and
+    // a body that plainly escapes was reported as not escaping.
+    bodyMustHave: /\b(?:DOMPurify|escape|encodeURI|sanitizeHtml|str\.replace|html_escape|escape_html|bleach)\b|\breplace(?:All)?\s*\(/,
     severity: 'high',
     cwe: 'CWE-79',
     rationale: 'function name claims sanitization but body has no encoding/escaping/library call',
@@ -57,7 +61,7 @@ const NAME_FAMILIES = [
   {
     label: 'signature-verify',
     nameRe: /(?:verify|check|validate)\w*(?:signature|sig|hmac)\b/i,
-    bodyMustHave: /\b(?:hmac|createVerify|verify\(|timingSafeEqual|crypto\.subtle\.verify|hashlib\.compare|hash_equals)\b/,
+    bodyMustHave: /\b(?:hmac|createVerify|timingSafeEqual|crypto\.subtle\.verify|hashlib\.compare|hash_equals)\b|\bverify\s*\(/,
     severity: 'high',
     cwe: 'CWE-347',
     rationale: 'function name claims signature verification but body has no HMAC / verify / constant-time-compare call',
@@ -81,7 +85,7 @@ const NAME_FAMILIES = [
   {
     label: 'admin-gate',
     nameRe: /\b(?:isAdmin|requireAdmin|adminOnly|enforceAdmin)\b/i,
-    bodyMustHave: /\b(?:admin|role\s*===?\s*['"]admin['"]|isAdmin|hasRole\(['"]admin['"]\))\b/i,
+    bodyMustHave: /\b(?:admin|isAdmin)\b|\brole\s*===?\s*['"]admin['"]|\bhasRole\(['"]admin['"]\)/i,
     severity: 'high',
     cwe: 'CWE-862',
     rationale: 'function name claims admin gating but body has no admin-role reference',

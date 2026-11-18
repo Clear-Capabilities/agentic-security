@@ -39,6 +39,7 @@ function _getPath(obj, dottedPath) {
 
 function _setPath(obj, dottedPath, value) {
   const parts = dottedPath.split('.');
+  if (parts.some((k) => k === '__proto__' || k === 'constructor' || k === 'prototype')) return;
   let o = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     // Only backfill onto a parent object that already exists — if

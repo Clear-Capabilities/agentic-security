@@ -862,7 +862,7 @@ export function toSTIX(scan, meta = {}) {
       modified: now,
       indicator_types: ['vulnerable'],
       name: `${f.vuln || 'Security finding'} signature`,
-      pattern: `[file:name = '${(f.file || '').replace(/'/g, "\\'")}']`,
+      pattern: `[file:name = '${(f.file || '').replace(/[\\']/g, '\\$&')}']`,
       pattern_type: 'stix',
       pattern_version: '2.1',
       valid_from: now,
