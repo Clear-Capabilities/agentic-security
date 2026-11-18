@@ -162,3 +162,23 @@ test('a local read from the caller identity, and a delegating handler, are not o
   const notFound = code.replace(/throwIfCannotManageTenant\(tenant\);/g, 'throwIfNotFound(tenant);');
   assert.deepEqual(scanAuthzSubjectConsistency('TenantResource.java', notFound), []);
 });
+
+// Class-level check while the record is in hand (PHP policy calls).
+test('TicketController.php: a handler holding a record that only checks the class is reported at the class check', () => {
+  const code = read('vulnerable', 'TicketController.php');
+  const out = scanAuthzSubjectConsistency('TicketController.php', code);
+  const lines = code.split('\n');
+  const at = lines.findIndex((l, i) => i > lineOf(code, 'function attachments') && l.includes("authorize('view', Ticket::class)")) + 1;
+  assert.deepEqual(out.map((f) => f.line), [at]);
+  assert.equal(out[0].cwe, 'CWE-863');
+  assert.match(out[0].vuln, /attachments/);
+});
+
+test('TicketController.php: the fixed version, and a listing that holds no single record, report nothing', () => {
+  assert.deepEqual(scanAuthzSubjectConsistency('TicketController.php', read('clean', 'TicketController.php')), []);
+});
+
+test('a class-only check is not reported when the file checks records for a different ability only', () => {
+  const code = read('vulnerable', 'TicketController.php').replace(/authorize\('view', \$ticket\)/g, "authorize('delete', $ticket)");
+  assert.deepEqual(scanAuthzSubjectConsistency('TicketController.php', code), []);
+});

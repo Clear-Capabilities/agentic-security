@@ -9,6 +9,19 @@
 > make the history less accurate, not more.
 
 
+## 0.210.0 - Recall work, fourth part: authorization, OAuth email linking, account oracles, Go paths, DNS rebinding; development recall up, validation unchanged
+
+**Measured, 0.209.0:** `TIMINGS preflight=5s push=8s pr=7s checks=888s merge=6s verify=5s tag=2s release=286s npm=667s total=1874s release-clock=299s`; the first attempt stopped on the hosted bundle test, because the bundle had been rebuilt in a worktree whose dependencies were a link to another checkout, which changes the bundler's module ids. The bundle was rebuilt from a real install and the release resumed.
+
+Every accuracy figure below was measured on the independent population (real upstream code at the vulnerable commit, labelled by public advisories), development and validation splits only; the sealed split was not touched.
+
+- **Independent accuracy, re-measured (run `78f62b67a861`, engine at `5f0e22ed`, the same 223 entries as run `20483cfb80af`).** Localized precision 64/68, recall 64/223, F1 0.440 (95% grouped-bootstrap interval 0.355 to 0.523); every entry was scored this time. The previous run read 54/60, 54/222, F1 0.383. **By split:** development 63 detected of 180 with 1 false positive (F1 0.516, was 53 of 179 with 3, F1 0.451); validation 1 detected of 43 with 3 false positives (F1 0.043, unchanged). The development entries the new rules detect were read while writing them, so the development figure measures fit. Validation, which nobody read, did not move for the second release running: rules written from individual advisories are not transferring. The next release changes approach (framework models written from API documentation, without reading any advisory) and is judged on validation. The commit after `5f0e22ed` changes only generated reports. The run directories are not committed.
+- **Authorization.** A handler holding one record that asks the policy only about the record's class while sibling handlers check the record (PHP, CWE-863); a copy or move that checks the target but not the source (Python, CWE-285).
+- **Authentication and disclosure.** An account matched by a provider-reported email with no verified-email or trusted-provider check (CWE-287); an unauthenticated handler that answers whether an email has an account (CWE-200).
+- **Markup, paths, fetches.** DOM serialisation that treats element content as markup but text nodes as decoded text (CWE-79); Go request values joined into paths with no check, a decoded escaped path forwarded without normalisation, and bare-prefix containment through named path imports and member roots; a host validated by a helper whose result is discarded, then the original URL fetched (DNS rebinding, CWE-367); a Laravel validation rule that fetches over HTTP after an SSRF guard without `bail` (CWE-918).
+- **Engine fixes.** The regular-expression source-to-sink pass no longer taints an assignment above the step that tainted its variable, and the weak path guard family is no longer dropped by the guard check that read its own defective guard as protection.
+- **Not done, with the reason.** Fix-correctness against the maintainers' fixes was not re-measured in this release (0/11 at 0.208.0). A model proposer for repairs needs an operator endpoint and is not built.
+
 ## 0.209.0 - Recall work, third part: 26 structural rules across six classes; development recall up, validation unchanged
 
 **Measured, 0.208.1:** `TIMINGS preflight=6s push=10s pr=5s checks=60s merge=6s verify=21s tag=2s release=256s npm=392s total=758s release-clock=285s`; the first attempt stopped on a timing check (`ttff`) that measured 10 to 16.5 s for the same code across runs, and a re-run of that job passed.

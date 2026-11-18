@@ -74,8 +74,9 @@ export const ANALYZER_NAMES = Object.freeze([
   'scanWeakHashCacheKey', 'scanRailsSkipAuthFilter', 'scanFilterEnforceAsymmetry', 'scanReadPermissionWrite',
   'scanNondominatingAuthzCheck', 'scanJsbnSecureRandom', 'scanEmptyHmacKey', 'scanRedirectCredentialForwarding',
   'scanPathFileHandling', 'scanDecompressionBomb', 'scanDecodedLength', 'scanReceiveLoopException',
-  'scanJsMarkupMarkSafe', 'scanJsIncompleteRegexEscape', 'scanJsExecParamInterpolation', 'scanPythonRunWrittenCode',
+  'scanJsMarkupMarkSafe', 'scanJsMixedTextMarkup', 'scanJsIncompleteRegexEscape', 'scanJsExecParamInterpolation', 'scanPythonRunWrittenCode',
   'scanPhpHtmlAttrInterpolation',
+  'scanSourceTargetAuthz', 'scanOAuthEmailAccountLink', 'scanAccountExistenceOracle',
 ]);
 
 // File-extension applicability gates -- an analyzer NOT in this map is

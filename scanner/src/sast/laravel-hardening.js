@@ -196,3 +196,88 @@ export function scanLaravelHardening(file, raw) {
 
   return findings;
 }
+
+// ---------------------------------------------------------------------------
+// Validation rule list that fetches a URL after an SSRF guard, without 'bail'
+// (CWE-918). Project-wide: the rule classes live in their own files.
+//
+// Laravel runs EVERY rule of an attribute's list even after one has failed,
+// unless the list starts with 'bail' (or the request sets
+// $stopOnFirstFailure). A list that puts a guard rule first (one that refuses
+// private, loopback and metadata addresses) and a rule that fetches the URL
+// after it (to check its content type, say) therefore fetches the very URL the
+// guard rejected: the guard only adds an error message. Reported at the
+// attribute's list, where 'bail' belongs.
+// ---------------------------------------------------------------------------
+
+const _RULE_CLASS_RE = /\bclass\s+(\w+)\s+(?:extends\s+[\w\\]+\s+)?implements\s+[^{]*\b(?:ValidationRule|Rule|InvokableRule|ImplicitRule|DataAwareRule)\b/;
+// An outbound HTTP request made by the rule itself.
+const _RULE_FETCH_RE = /\bHttp::(?:get|head|post|send)\s*\(|\bHttp::[^;]{0,300}?->\s*(?:get|head|post|send)\s*\(|->\s*(?:head|get|request|send)\s*\(\s*\$\w+|\bcurl_exec\s*\(|\bfile_get_contents\s*\(\s*\$|\bget_headers\s*\(\s*\$|\bfopen\s*\(\s*\$/;
+// A rule whose job is refusing internal destinations.
+const _GUARD_BODY_RE = /FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE|\bis(?:Public|Private|Internal|Reserved|Loopback)(?:Host|Ip|Address|Url)?\s*\(|\b(?:private|reserved|internal)\s+(?:ip|address|network|range)/i;
+const _GUARD_NAME_RE = /^(?:\w*(?:Safe|Public|External|Ssrf)\w*(?:Url|Uri|Host|Address)\w*|\w*(?:Not|No)(?:Private|Internal|Local)\w*|\w*Ssrf\w*)$/;
+
+function _phpLine(code, idx) { return code.slice(0, idx).split('\n').length; }
+
+function _bracketEnd(code, open) {
+  let d = 0;
+  for (let i = open; i < code.length; i++) {
+    const c = code[i];
+    if (c === '"' || c === "'") { const q = c; i++; while (i < code.length && code[i] !== q) { if (code[i] === '\\') i++; i++; } continue; }
+    if (c === '[' || c === '(') d++;
+    else if (c === ']' || c === ')') { d--; if (d === 0) return i; }
+  }
+  return -1;
+}
+
+export function scanLaravelFetchRuleWithoutBail(fileContents) {
+  const out = [];
+  const php = Object.entries(fileContents || {}).filter(([p, c]) => /\.php$/i.test(p) && typeof c === 'string' && c.length < 500_000
+    && !/(?:^|[\\/])(?:vendor|tests?)[\\/]/i.test(p));
+  if (!php.length) return out;
+  const fetchers = new Set();
+  const guards = new Set();
+  for (const [, c] of php) {
+    const m = _RULE_CLASS_RE.exec(c);
+    if (!m) continue;
+    // the fetch must happen in the rule's own code
+    if (_RULE_FETCH_RE.test(c)) fetchers.add(m[1]);
+    if (_GUARD_BODY_RE.test(c) || _GUARD_NAME_RE.test(m[1])) guards.add(m[1]);
+  }
+  if (!fetchers.size || !guards.size) return out;
+  for (const [file, c] of php) {
+    if (!/\bnew\s+\w+\s*\(/.test(c)) continue;
+    if (/\$stopOnFirstFailure\s*=\s*true/.test(c)) continue;
+    const keyRe = /(['"])[\w.*-]+\1\s*=>\s*\[/g;
+    let k;
+    while ((k = keyRe.exec(c))) {
+      const open = k.index + k[0].length - 1;
+      const close = _bracketEnd(c, open);
+      if (close < 0) continue;
+      const list = c.slice(open + 1, close);
+      if (/(['"])bail\1/.test(list)) continue;
+      // `new \App\Rules\Name(` is reduced to its last segment
+      const items = [...list.matchAll(/\bnew\s+([\w\\]{1,200})\s*\(/g)].map((x) => [x[0], x[1].split('\\').pop()]);
+      // a guard that fetches is itself the first request; the defect needs a separate later fetcher
+      const gi = items.findIndex((x) => guards.has(x[1]));
+      if (gi < 0) continue;
+      const fetcher = items.slice(gi + 1).find((x) => fetchers.has(x[1]) && !guards.has(x[1]));
+      if (!fetcher) continue;
+      const line = _phpLine(c, k.index);
+      out.push({
+        id: `laravel:fetch-rule-without-bail:${file}:${line}`,
+        file, line,
+        vuln: 'SSRF: URL fetched by a validation rule that runs after the SSRF guard rejected it (no bail)',
+        severity: 'high',
+        family: 'ssrf',
+        cwe: 'CWE-918',
+        parser: 'LARAVEL',
+        confidence: 0.7,
+        snippet: (c.split('\n')[line - 1] || '').trim().slice(0, 200),
+        description: `This validation list runs \`${items[gi][1]}\`, which refuses internal destinations, and then \`${fetcher[1]}\`, which makes a request to the URL. Without 'bail' Laravel runs every rule of the list even after one fails, so the request goes to the address the guard just rejected; the guard only adds an error message.`,
+        remediation: "Start the list with 'bail' so validation stops at the first failing rule (or set `$stopOnFirstFailure = true` on the form request), and keep the guard before any rule that touches the network.",
+      });
+    }
+  }
+  return out;
+}

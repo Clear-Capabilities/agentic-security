@@ -165,7 +165,7 @@ function unit(code, { name, line, paramsText, bodyOpen, prelude = '' }) {
   const close = matchClose(code, bodyOpen);
   if (close === -1) return null;
   const body = code.slice(bodyOpen + 1, close);
-  return { name, line, bodyLine: lineAt(code, bodyOpen), params: paramNames(paramsText), body, prelude };
+  return { name, line, bodyLine: lineAt(code, bodyOpen), params: paramNames(paramsText), paramsText, body, prelude };
 }
 
 function phpUnits(code) {
@@ -430,6 +430,103 @@ function finding(file, d) {
   };
 }
 
+// Class-level check while the instance is in hand (PHP policy calls). Laravel-style policies accept either a class name
+// (`authorize('view', Invoice::class)`, a question about the TYPE) or a record (`authorize('view', $invoice)`, a question about THIS
+// record). A handler that holds a record, bound from the route (`show(Invoice $invoice)`) or looked up (`$invoice = Invoice::find($id)`),
+// and asks only the class-level question lets any caller with the type-level permission act on every record. The rule reports it only
+// when the file has established the record-level convention: at least MIN_GUARDED handlers pass a record of the same class to a check
+// for the same ability.
+const CLASS_ONLY_ABILITY_EXEMPT = /^(?:create|store|index|list|viewAny|\w+Any|import|export|search)$/i;
+const SINGLE_RECORD = /(?:->|::)\s{0,4}(?:find\w*|first\w*|sole|findOrFail|getBy\w+|getOne)\s{0,4}\(/;
+
+function phpHeldRecords(u) {
+  const held = new Map();   // $var -> Class
+  // A (possibly namespaced) type is read as one token and its last segment taken, so no quantified group repeats.
+  const lastSeg = (t) => t.slice(t.lastIndexOf('\\') + 1);
+  for (const m of String(u.paramsText || '').matchAll(/(?:^|[,(])\s{0,8}\??([\\\w]{1,400})\s{1,8}(\$[A-Za-z_]\w{0,63})/g)) {
+    const cls = lastSeg(m[1]);
+    if (!/^[A-Z]/.test(cls) || /Request$|^(?:Closure|Collection|Builder|Carbon|DateTime\w*|Response|Transformer)$|Transformer$/.test(cls)) continue;
+    held.set(m[2], cls);
+  }
+  for (const m0 of u.body.matchAll(/(\$[A-Za-z_]\w{0,63})\s{0,4}=(?![=>])\s{0,4}([\\\w]{1,400})::(?!class\b)/g)) {
+    const m = [m0[0], m0[1], lastSeg(m0[2])];
+    m.index = m0.index;
+    if (!/^[A-Z]/.test(m[2])) continue;
+    const end = u.body.indexOf(';', m.index);
+    const stmt = u.body.slice(m.index, end === -1 ? m.index + 400 : Math.min(end, m.index + 600));
+    if (SINGLE_RECORD.test(stmt) && !held.has(m[1])) held.set(m[1], m[2]);
+  }
+  return held;
+}
+
+function classOnlyOutliers(units) {
+  const info = [];
+  for (const u of units) {
+    const held = phpHeldRecords(u);
+    const classChecks = [];
+    const instanceOn = new Set();   // `Class|ability` pairs this unit checks on a record
+    for (const g of u.guards) {
+      const a = String(g.args || '');
+      const cm = a.match(/^\s*(['"])([\w.-]{1,60})\1\s{0,4},\s{0,4}([\\\w]{1,400})::class\s*$/);
+      const cmCls = cm ? cm[3].slice(cm[3].lastIndexOf('\\') + 1) : '';
+      if (cm && /^[A-Z]/.test(cmCls)) { classChecks.push({ g, ability: cm[2], cls: cmCls }); continue; }
+      const im = a.match(/^\s*(['"])([\w.-]{1,60})\1\s{0,4},\s{0,4}(\$[A-Za-z_]\w{0,63})\s*$/);
+      if (im && held.has(im[3])) instanceOn.add(`${held.get(im[3])}|${im[2]}`);
+    }
+    info.push({ u, held, classChecks, instanceOn });
+  }
+  const recordCheckers = new Map();   // `Class|ability` -> units checking a record of that class for that ability
+  for (const x of info) for (const c of x.instanceOn) {
+    if (!recordCheckers.has(c)) recordCheckers.set(c, []);
+    recordCheckers.get(c).push(x.u);
+  }
+  const out = [];
+  for (const x of info) {
+    const u = x.u;
+    for (const cc of x.classChecks) {
+      const key = `${cc.cls}|${cc.ability}`;
+      if (CLASS_ONLY_ABILITY_EXEMPT.test(cc.ability) || x.instanceOn.has(key)) continue;
+      // The file must check records of this class for this SAME ability: a file that checks `delete` per record but `view` per type
+      // has chosen type-level viewing, and that is not ours to second-guess.
+      const siblings = recordCheckers.get(key) || [];
+      if (siblings.length < MIN_GUARDED) continue;
+      const v = [...x.held.entries()].find(([, c]) => c === cc.cls)?.[0];
+      if (!v) continue;
+      // The record must be one the handler acts on, and no other check may read it.
+      const esc = v.replace(/\$/g, '\\$');
+      if ((u.body.match(new RegExp(`${esc}(?!\\w)`, 'g')) || []).length < 1) continue;
+      if (u.guards.some((g) => g.subjects.has(v))) continue;
+      out.push({ unit: u, subject: `${v} (a ${cc.cls} record)`, guard: `${cc.g.name}('${cc.ability}', ${cc.cls}::class)`, guarded: siblings,
+        population: siblings.length + 1, siblingSubjects: new Set(), classOnly: true,
+        line: u.bodyLine + lineAt(u.body, cc.g.index) - 1, cls: cc.cls, ability: cc.ability, variable: v });
+      break;
+    }
+  }
+  return out;
+}
+
+function classOnlyFinding(file, d) {
+  const u = d.unit;
+  const siblings = d.guarded.map((g) => g.name);
+  return {
+    id: `authz-subject-consistency:${file}:${d.line}:${u.name}:class-only`,
+    severity: 'medium',
+    file, line: d.line,
+    vuln: `Authorization checks the type, not the record: ${u.name} holds ${d.subject} but only calls ${d.guard}, while ${siblings.length} handlers in this file check the ${d.cls} record itself`,
+    cwe: 'CWE-863',
+    family: 'broken-access-control',
+    parser: 'AUTHZ-CONSISTENCY',
+    confidence: 0.6,
+    description:
+      `${u.name} acts on ${d.variable} but asks the policy only whether the caller may '${d.ability}' ${d.cls} records in general. ` +
+      `${siblings.slice(0, 6).join(', ')} pass the ${d.cls} record to the check, so the policy decides per record; here any caller with ` +
+      `the type-level permission reaches every record, including ones the record-level rule would refuse.`,
+    remediation: `Pass the record to the check: authorize('${d.ability}', ${d.variable}) (keep the class-level check if it is also wanted).`,
+    checkedFor: `a record-level authorization call on ${d.variable} in ${u.name}; compared against ${siblings.length} sibling handler(s)`,
+    evidenceSiblings: siblings,
+  };
+}
+
 /** Per-file entry point. */
 export function scanAuthzSubjectConsistency(file, raw) {
   if (!raw || typeof raw !== 'string' || raw.length > 1_000_000) return [];
@@ -446,8 +543,10 @@ export function scanAuthzSubjectConsistency(file, raw) {
     const outliers = analyseHandlers(units);
     const seen = new Set(outliers.map((d) => d.unit));
     for (const d of actionKeyedOutliers(units)) if (!seen.has(d.unit)) outliers.push(d);
-    return outliers.map((d) => finding(file, d)).sort((a, b) => a.line - b.line);
+    const found = outliers.map((d) => finding(file, d));
+    if (lang === 'php') for (const d of classOnlyOutliers(units)) if (!seen.has(d.unit)) found.push(classOnlyFinding(file, d));
+    return found.sort((a, b) => a.line - b.line);
   } catch { return []; }
 }
 
-export const _internals = { MIN_GUARDED, MIN_GUARDED_RATIO, analyseHandlers, actionKeyedOutliers, AUTHZ_NAME, subjectsOf, guardCalls, paramNames, assignedLocals, phpUnits, javaUnits, jsRouteUnits };
+export const _internals = { classOnlyOutliers, phpHeldRecords, MIN_GUARDED, MIN_GUARDED_RATIO, analyseHandlers, actionKeyedOutliers, AUTHZ_NAME, subjectsOf, guardCalls, paramNames, assignedLocals, phpUnits, javaUnits, jsRouteUnits };
