@@ -9,6 +9,14 @@
 > make the history less accurate, not more.
 
 
+## 0.208.1 - The delete guard: the project directory is the boundary, variables a command sets are followed, deletions inside if and for are checked
+
+**Measured, 0.208.0:** `TIMINGS preflight=4s push=7s pr=4s checks=427s merge=5s verify=11s tag=2s release=255s npm=545s total=1260s release-clock=273s`.
+
+- **Deletion is allowed only inside the project directory by default.** The Bash guard's default allowed root was `~/code`, so an agent working in one project could delete a sibling project, and a project kept anywhere else had no deletions allowed at all. The default is now the project directory (`CLAUDE_PROJECT_DIR`): files and folders made inside the project can be deleted again, the project directory itself and everything outside it cannot. A project directory that is the filesystem root, the home directory or an ancestor of it gives no default root, so every deletion is refused there. `allowedRoots` in `.agentic-security/destructive-guard.json` still sets the boundary explicitly.
+- **A variable the same command sets to a literal path is followed.** `S=build/out; rm -rf "$S"` was always refused, because a target containing a variable cannot be checked; it is now resolved and judged by where it points. Only an assignment the shell certainly ran counts: one at the top level after the start or a `;` and not followed by a pipe or `&`, or one joined to the deletion by `&&` alone. An assignment inside `if`, a loop, a brace group or parentheses, a conditional one (`false && S=...`), a prefix assignment (`S=x rm $S`, which does not change `$S` for that command's own words), an empty value, a value with spaces or glob characters, one built from a command substitution, `+=`, and any `read`, `unset`, `eval`, `source`, `declare`, `local`, `let` or `printf` in the command all leave the variable unresolved, and the deletion refused. `$PWD` resolves to the directory the guard is tracking.
+- **Fixed: a deletion after `then`, `do`, `else` or `{` was not checked.** The guard took the keyword for the command name, so `if true; then rm -rf /; fi` and `for f in a; do rm -rf /etc; done` were allowed in block mode. The command now follows the keyword. Covered both ways in `scanner/test/pre-bash-guard.test.js`, which fails on the previous guard in 5 of its 14 tests.
+
 ## 0.208.0 - Recall work, second part: a Ruby XSS rule, the password-storage repair recipe, the first full measurement since 0.206.0
 
 **Measured, 0.207.0:** `TIMINGS preflight=4s push=8s pr=4s checks=467s merge=5s verify=12s tag=2s release=255s npm=1371s total=2128s release-clock=274s`; the registry listing took about 23 minutes to appear after the publish step succeeded, and a resumed run confirmed it.
