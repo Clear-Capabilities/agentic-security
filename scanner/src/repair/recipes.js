@@ -162,10 +162,115 @@ export function allowlistFetchTransform(text, { contract } = {}) {
   return applied ? { text: `${out.replace(/\s*$/, '\n')}${allowlistHelper(hosts)}`, applied, refused } : { text, applied: 0, refused: refused.length ? refused : ['no fetch of an identifier matched'] };
 }
 
+/**
+ * Password storage: an unsalted fast digest (`createHash('md5'|'sha1'|'sha256'|'sha512').update(pw).digest('hex')`) used to store a
+ * password and to check it at login becomes salted scrypt, with legacy rows still accepted and rewritten on their next successful login.
+ * The digest helper `<name>` is renamed `<name>Legacy` and a new `<name>` returns `scrypt$N$r$p$<salt hex>$<key hex>`, so every place
+ * that STORES a password now stores scrypt. Each login comparison `<row>.<hash column> !== <name>(<pw>)` (either order, `===` too)
+ * becomes `!checkPasswordAndMigrate(<db>, <pw>, <row>)`, which accepts an scrypt value or the legacy digest (compared in constant time),
+ * and after a legacy match writes the scrypt value back with `UPDATE <table> SET <hash column> = ? WHERE <user column> = ?`.
+ * Preconditions, all required: exactly one digest helper, a function declaration or a const arrow function of one parameter that only
+ * returns the hex digest; every other use of the helper is a call; at least one comparison against `<row>.<hash column>`; the database
+ * handle is the one identifier the file calls `.prepare(` on (node:sqlite); the contract states the credential table and columns (its
+ * stored-credential check) and they are plain identifiers; the module is ESM or CommonJS. Parameters: the contract's minimums, never
+ * below N 16384, r 8, a 16 byte salt and a 32 byte key.
+ */
+const PW_HELPER = /(?:function\s+([A-Za-z_$][\w$]*)\s*\(\s*([A-Za-z_$][\w$]*)\s*\)\s*\{\s*return\s+|const\s+([A-Za-z_$][\w$]*)\s*=\s*\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>\s*\{?\s*(?:return\s+)?)((?:[A-Za-z_$][\w$]*\.)?createHash\(\s*['"](md5|sha1|sha256|sha512)['"]\s*\)\s*\.update\(([^;{}]{1,200}?)\)\s*\.digest\(\s*['"]hex['"]\s*\))\s*;?\s*\}?;?/g;
+const SQL_IDENT = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
+function credentialShape(contract) {
+  for (const o of contract?.obligations || []) {
+    for (const c of o.inputs?.stateChecks || []) {
+      const m = c.credential?.approved && /^SELECT (\w+) FROM (\w+) WHERE (\w+) = \?$/.exec(String(c.sql || ''));
+      if (m) return { hashColumn: m[1], table: m[2], userColumn: m[3], approved: c.credential.approved };
+    }
+  }
+  return null;
+}
+const pow2AtLeast = (n) => { let v = 16384; while (v < n && v < (1 << 20)) v *= 2; return v; };
+function passwordHelper({ name, db, table, hashColumn, userColumn, N, R, S, K }) {
+  return [
+    '',
+    '// Added by the password-scrypt-migrate recipe: passwords are stored as salted scrypt; a legacy digest is still accepted at login',
+    '// (compared in constant time) and is rewritten as scrypt after the first successful login.',
+    `function ${name}(password) {`,
+    `  const salt = pwCrypto.randomBytes(${S});`,
+    `  const key = pwCrypto.scryptSync(String(password), salt, ${K}, { N: ${N}, r: ${R}, p: 1, maxmem: ${256 * N * R + (1 << 20)} });`,
+    `  return ['scrypt', ${N}, ${R}, 1, salt.toString('hex'), key.toString('hex')].join('$');`,
+    '}',
+    'function verifyPasswordScrypt(password, stored) {',
+    "  const s = String(stored ?? '');",
+    "  if (s.startsWith('scrypt$')) {",
+    "    const [, n, r, p, saltHex, keyHex] = s.split('$');",
+    '    const N = Number(n); const R = Number(r); const P = Number(p);',
+    '    if (!(N > 1 && N <= 1048576 && R >= 1 && R <= 32 && P >= 1 && P <= 16) || !/^[0-9a-f]+$/i.test(saltHex || \'\') || !/^[0-9a-f]+$/i.test(keyHex || \'\')) return false;',
+    "    const key = pwCrypto.scryptSync(String(password), Buffer.from(saltHex, 'hex'), keyHex.length / 2, { N, r: R, p: P, maxmem: 256 * N * R + (1 << 20) });",
+    "    return pwCrypto.timingSafeEqual(key, Buffer.from(keyHex, 'hex'));",
+    '  }',
+    `  const legacy = Buffer.from(String(${name}Legacy(password)));`,
+    '  const have = Buffer.from(s);',
+    '  return legacy.length === have.length && pwCrypto.timingSafeEqual(legacy, have);',
+    '}',
+    `function checkPasswordAndMigrate(${db}, password, row) {`,
+    '  if (!row) return false;',
+    `  const stored = row.${hashColumn};`,
+    '  if (!verifyPasswordScrypt(password, stored)) return false;',
+    `  if (!String(stored).startsWith('scrypt$')) ${db}.prepare('UPDATE ${table} SET ${hashColumn} = ? WHERE ${userColumn} = ?').run(${name}(password), row.${userColumn});`,
+    '  return true;',
+    '}',
+    '',
+  ].join('\n');
+}
+export function passwordScryptTransform(text, { contract } = {}) {
+  const no = (why) => ({ text, applied: 0, refused: [why] });
+  const helpers = [...text.matchAll(PW_HELPER)];
+  if (helpers.length !== 1) return no(helpers.length ? 'more than one fast-digest password helper' : 'no helper that only returns a fast hex digest of its argument');
+  const h = helpers[0];
+  const name = h[1] || h[3];
+  if (/\b(?:pwCrypto|verifyPasswordScrypt|checkPasswordAndMigrate)\b/.test(text) || new RegExp(`\\b${name}Legacy\\b`).test(text)) return no('a name the recipe adds already exists');
+  const esm = /^\s*import\s[^;]*from\s+['"]/m.test(text) || /^\s*export\s/m.test(text);
+  const cjs = /\brequire\(\s*['"](?:node:)?[\w/.-]+['"]\s*\)/.test(text);
+  if (!esm && !cjs) return no('the module is neither ESM nor CommonJS');
+  const dbs = [...new Set([...text.matchAll(/\b([A-Za-z_$][\w$]*)\s*\.\s*prepare\s*\(/g)].map((m) => m[1]))];
+  if (dbs.length !== 1) return no(dbs.length ? 'more than one identifier is used as a database handle' : 'no database handle (`.prepare(`) to rewrite a legacy row with');
+  const shape = credentialShape(contract);
+  if (!shape) return no('the contract states no stored-credential check, so the credential table and columns are unknown');
+  if (![shape.table, shape.hashColumn, shape.userColumn].every((x) => SQL_IDENT.test(x))) return no('the credential table or columns are not plain identifiers');
+  const n = name.replace(/\$/g, '\\$');
+  const call = `${n}\\(\\s*([^()]{1,200}?(?:\\([^()]*\\)[^()]*?)?)\\s*\\)`;
+  const field = `([A-Za-z_$][\\w$]*)\\.${shape.hashColumn}`;
+  const cmpA = new RegExp(`${field}\\s*([!=]==?)\\s*${call}`, 'g');
+  const cmpB = new RegExp(`${call}\\s*([!=]==?)\\s*${field}`, 'g');
+  let applied = 0;
+  let out = text.replace(cmpA, (w, row, op, pw) => { applied++; return `${op.startsWith('!') ? '!' : ''}checkPasswordAndMigrate(${dbs[0]}, ${pw}, ${row})`; });
+  out = out.replace(cmpB, (w, pw, op, row) => { applied++; return `${op.startsWith('!') ? '!' : ''}checkPasswordAndMigrate(${dbs[0]}, ${pw}, ${row})`; });
+  if (!applied) return no(`no login comparison of <row>.${shape.hashColumn} with ${name}(...)`);
+  // every remaining mention of the helper must be a call (a store), never a reference passed around or compared some other way
+  // comments and string literals are not uses, and `x.<name>(` is another object's method, not the helper
+  const rest = out.replace(h[0], '').replace(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g, "''").replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ' ');
+  const mentions = [...rest.matchAll(new RegExp(`(?<![\\w$.])${n}\\b(\\s*\\()?`, 'g'))];
+  if (mentions.some((m) => !m[1])) return no(`${name} is used other than by a call`);
+  if (new RegExp(`[!=]==?\\s*${n}\\s*\\(|${n}\\s*\\([^)]*\\)\\s*[!=]==?`).test(rest)) return no(`${name} is compared somewhere this recipe cannot rewrite`);
+  const legacyDecl = h[0].replace(new RegExp(`\\b${n}\\b`), `${name}Legacy`);
+  out = out.replace(h[0], legacyDecl);
+  const a = shape.approved || {};
+  const N = pow2AtLeast(Number(a.minN) || 0); const R = Math.max(8, Number(a.minR) || 0); const S = Math.max(16, Number(a.minSaltBytes) || 0); const K = Math.max(32, Number(a.minKeyBytes) || 0);
+  if (R > 32 || S > 64 || K > 128) return no('the contract asks for scrypt parameters beyond what this recipe writes');
+  const importLine = esm ? "import * as pwCrypto from 'node:crypto';\n" : "const pwCrypto = require('node:crypto');\n";
+  // the import goes after a shebang and any leading line comments or 'use strict' lines
+  const lines = out.split('\n');
+  let skip = 0;
+  if (lines[0]?.startsWith('#!')) skip = 1;
+  while (skip < lines.length - 1 && /^[ \t]*(?:\/\/|['"]use strict['"];?[ \t]*$)/.test(lines[skip])) skip++;
+  const lead = lines.slice(0, skip).map((l) => `${l}\n`).join('');
+  out = lead + importLine + out.slice(lead.length);
+  return { text: `${out.replace(/\s*$/, '\n')}${passwordHelper({ name, db: dbs[0], ...shape, N, R, S, K })}`, applied, refused: [] };
+}
+
 export const TRANSFORMS = Object.freeze({
   'sql-parameterize-template': { family: 'sql-injection', apply: parameterizeTemplateSql, source: parameterizeTemplateSql.toString() },
   'path-realpath-containment': { family: 'path-traversal', apply: containPathTransform, source: containPathTransform.toString() + CONTAIN_HELPER },
   'ssrf-host-allowlist': { family: 'ssrf', apply: allowlistFetchTransform, source: allowlistFetchTransform.toString() + closingParen.toString() + allowlistHelper.toString() },
+  'password-scrypt-migrate': { family: 'password-storage', apply: passwordScryptTransform, source: passwordScryptTransform.toString() + credentialShape.toString() + passwordHelper.toString() + PW_HELPER.source },
 });
 
 // ---------------------------------------------------------------- shipped recipe documents
@@ -221,6 +326,23 @@ export const SHIPPED_RECIPES = Object.freeze([
     ],
     contraindications: ['a request that legitimately takes longer than ten seconds without its own signal', 'a redirect chain longer than five hops', 'a destination chosen from hosts the profile does not list', 'a public-only policy (not handled)'],
     rollback: 'retire the recipe; applied patches have apply-service backups',
+  },
+  {
+    schema: RECIPE_SCHEMA, recipeId: 'password-scrypt-migrate', version: '1', transform: 'password-scrypt-migrate',
+    provenance: { origin: 'shipped', author: 'agentic-security maintainers', note: 'hand-written; not learned from examples' }, signer: 'shipped-with-scanner',
+    supports: { family: 'password-storage', languages: ['javascript'], runtime: { name: 'node', min: '22.5.0' }, driver: 'node:crypto scrypt; node:sqlite (prepare(sql).run) to rewrite a legacy row', engine: 'sqlite' },
+    preconditions: ['exactly one helper that only returns a fast hex digest (md5, sha1, sha256, sha512) of its one argument', 'at least one login comparison of <row>.<hash column> with that helper, every other use a call that stores', 'one identifier is the database handle', 'the contract states the credential table and columns'],
+    editScope: { maxFiles: 1, files: 'the contract\'s allowed files' },
+    obligations: ['app-attack-blocked', 'app-behaviour-preserved', 'app-behaviour-after', 'project-tests'],
+    examples: [
+      { id: 'login', kind: 'positive', fixture: `${FIX}/password-login`, family: 'password-storage', expect: 'verified-for-contract' },
+      // written as a held-out example; the first version refused it (a comment naming the helper counted as a use), so it is development now
+      { id: 'accounts', kind: 'positive', fixture: `${FIX}/password-accounts`, family: 'password-storage', expect: 'verified-for-contract' },
+      { id: 'per-user-salt', kind: 'safe-negative', text: "import crypto from 'node:crypto';\nconst hash = (pw, salt) => crypto.createHash('sha256').update(salt + pw).digest('hex');\nexport const check = (db, row, pw) => same(row.pw, hash(pw, row.salt)) && db.prepare('SELECT 1').get();\n", expect: 'refused' },
+      { id: 'node-22.4', kind: 'unsupported-version', fixture: `${FIX}/password-login`, family: 'password-storage', nodeVersion: '22.4.0', expect: 'not-applicable' },
+    ],
+    contraindications: ['a digest that other systems also read (a shared credential store)', 'a login path that compares the digest somewhere other than against the row', 'a database other than node:sqlite'],
+    rollback: 'retire the recipe; applied patches have apply-service backups, and rows already rewritten as scrypt keep working only with the patched code',
   },
 ]);
 

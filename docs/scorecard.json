@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.207.0",
-    "bundleSha256": "e74dce31cb6ad86b19dfe64f17101aeae89e3536aaf4b5d8cdbca6b5e296360e",
-    "commit": "e9c2be4e8a27e133614b072820486c9f832336a7",
+    "engineVersion": "0.208.0",
+    "bundleSha256": "7087d205d40555232625bdfbda552cc07209665b1e1364ef8194b8c8f0c3a57b",
+    "commit": "d9b22cc6051e307b8b32ed9189be6fe805d23fc4",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-17T20:36:06.562Z",
+    "generatedAt": "2026-11-18T05:26:04.214Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -1012,8 +1012,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 239,
-    "d": 587
+    "n": 382,
+    "d": 586
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2214,8 +2214,8 @@
           "timedOut": 0
         },
         "analyzers": {
-          "numerator": 122,
-          "denominator": 122,
+          "numerator": 123,
+          "denominator": 123,
           "percent": 100,
           "failed": 0,
           "timedOut": 0,
@@ -2266,34 +2266,34 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.207.0",
-    "commit": "e9c2be4e8a27e133614b072820486c9f832336a7",
-    "bundleSha256": "e74dce31cb6ad86b19dfe64f17101aeae89e3536aaf4b5d8cdbca6b5e296360e",
+    "engineVersion": "0.208.0",
+    "commit": "d9b22cc6051e307b8b32ed9189be6fe805d23fc4",
+    "bundleSha256": "7087d205d40555232625bdfbda552cc07209665b1e1364ef8194b8c8f0c3a57b",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",
     "approvedIndependentBaseline": "a72968195aa1",
     "identity": "the commit and bundle below identify exactly the tree that was measured",
     "currentEngineIndependentAccuracy": "unmeasured",
-    "currentEngineIndependentReason": "the latest independent run (83df9f624d98) measured engine 0.195.32, not the engine above; it is a historical record",
+    "currentEngineIndependentReason": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not the engine above; it is a historical record",
     "independentRun": {
-      "runId": "83df9f624d98",
-      "engineVersion": "0.195.32",
-      "measuredAt": "2026-11-13T05:56:54.413Z",
+      "runId": "7f60b3bb47f7",
+      "engineVersion": "0.207.0",
+      "measuredAt": "2026-11-18T04:42:30.760Z",
       "comparableToCurrentEngine": false,
       "historical": true,
       "identity": {
-        "sourceCommit": "688a873b2752578855d2fe4e2e60ea47c7f46272",
-        "bundleSha256": "e134fd2c0bc9e4ee558bd90d11af4f7a9f56ba5783996954daa7be8bc4996eb6",
-        "bundleSidecarSha256": "e134fd2c0bc9e4ee558bd90d11af4f7a9f56ba5783996954daa7be8bc4996eb6",
+        "sourceCommit": "83aabd8369f3eeeb6138c7a620de844bdc47938b",
+        "bundleSha256": "8b586e8da7c50e2ead82cbb4bcc5121caee3fd428d818c797c8b46221432f610",
+        "bundleSidecarSha256": "8b586e8da7c50e2ead82cbb4bcc5121caee3fd428d818c797c8b46221432f610",
         "measurementValid": true,
         "invalidReasons": [],
-        "lockfileSha256": "a0c795619dff1b3ff1f3708b0e7847d761bac39837aa8900144ffb9d202f4273",
+        "lockfileSha256": "531d2abd306bb52f9a4714cb95cca7ff2ccb96effa6335efa0fe32cbf51b6f2d",
         "configSha256": "7a9f18deda06dcf6ee8ce5864e2c3d50c15f8aba4ee9122b0a788ed3e2369a71",
         "modelEndpointMode": "none",
         "toolchain": {
           "node": "v24.20.0",
-          "os": "darwin 27.0.0 arm64"
+          "os": "darwin 27.2.0 arm64"
         }
       },
       "population": {
@@ -2304,7 +2304,7 @@
           "dev",
           "validation"
         ],
-        "perLanguageCap": 40,
+        "perLanguageCap": 30,
         "sealedSplitTouched": false
       },
       "configuration": {
@@ -2313,12 +2313,10 @@
         "note": "the CLI default outside CI; no model endpoint, so deterministic and offline apart from the fetch"
       },
       "denominators": {
-        "inScope": 283,
-        "scored": 279,
-        "unscored": 4,
-        "unscoredByClass": {
-          "timeout": 4
-        },
+        "inScope": 223,
+        "scored": 223,
+        "unscored": 0,
+        "unscoredByClass": {},
         "unaccounted": 0,
         "reconciles": true
       },
@@ -2326,26 +2324,26 @@
         "quotable": true,
         "reason": null,
         "precision": {
-          "n": 7,
-          "d": 19,
-          "value": 0.3684210526315789
+          "n": 11,
+          "d": 20,
+          "value": 0.55
         },
         "recall": {
-          "n": 7,
-          "d": 279,
-          "value": 0.025089605734767026
+          "n": 11,
+          "d": 223,
+          "value": 0.04932735426008968
         },
-        "f1": 0.04697986577181208,
+        "f1": 0.09053497942386832,
         "f1Interval": {
           "method": "grouped-bootstrap-95",
           "level": 0.95,
           "replicates": 2000,
-          "groups": 156,
-          "units": 279,
-          "point": 0.04697986577181208,
+          "groups": 130,
+          "units": 223,
+          "point": 0.09053497942386832,
           "status": "measured",
-          "low": 0.014813448134481348,
-          "high": 0.08421052631578947,
+          "low": 0.04405286343612335,
+          "high": 0.14285714285714285,
           "undefinedDraws": 0,
           "seed": 2259309968
         }
@@ -2364,28 +2362,28 @@
         },
         {
           "language": "go",
-          "entries": 40,
+          "entries": 30,
           "status": "reportable",
           "recall": {
             "n": 1,
-            "d": 40,
-            "value": 0.025
+            "d": 30,
+            "value": 0.03333333333333333
           },
           "precision": {
             "n": 1,
             "d": 3,
             "value": 0.3333333333333333
           },
-          "f1": 0.046511627906976744,
+          "f1": 0.06060606060606061,
           "recallInterval": {
             "method": "wilson-95",
             "level": 0.95,
             "status": "measured",
-            "point": 0.025,
-            "low": 0.004426831453704344,
-            "high": 0.12881369088183614,
+            "point": 0.03333333333333333,
+            "low": 0.005908590316197976,
+            "high": 0.16670391146115726,
             "successes": 1,
-            "n": 40
+            "n": 30
           },
           "precisionInterval": {
             "method": "wilson-95",
@@ -2400,61 +2398,61 @@
           "counts": {
             "tp": 1,
             "fp": 2,
-            "fn": 39,
-            "tn": 38
+            "fn": 29,
+            "tn": 28
           }
         },
         {
           "language": "java",
-          "entries": 23,
+          "entries": 27,
           "status": "insufficient_population",
           "counts": {
-            "tp": 0,
+            "tp": 1,
             "fp": 2,
-            "fn": 23,
-            "tn": 21
+            "fn": 26,
+            "tn": 25
           }
         },
         {
           "language": "javascript",
-          "entries": 40,
+          "entries": 30,
           "status": "reportable",
           "recall": {
-            "n": 1,
-            "d": 40,
-            "value": 0.025
+            "n": 3,
+            "d": 30,
+            "value": 0.1
           },
           "precision": {
-            "n": 1,
+            "n": 3,
             "d": 4,
-            "value": 0.25
+            "value": 0.75
           },
-          "f1": 0.045454545454545456,
+          "f1": 0.17647058823529413,
           "recallInterval": {
             "method": "wilson-95",
             "level": 0.95,
             "status": "measured",
-            "point": 0.025,
-            "low": 0.004426831453704344,
-            "high": 0.12881369088183614,
-            "successes": 1,
-            "n": 40
+            "point": 0.1,
+            "low": 0.03459988847741868,
+            "high": 0.256210827331743,
+            "successes": 3,
+            "n": 30
           },
           "precisionInterval": {
             "method": "wilson-95",
             "level": 0.95,
             "status": "measured",
-            "point": 0.25,
-            "low": 0.04558726029536886,
-            "high": 0.6993581599030918,
-            "successes": 1,
+            "point": 0.75,
+            "low": 0.3006418400969081,
+            "high": 0.954412739704631,
+            "successes": 3,
             "n": 4
           },
           "counts": {
-            "tp": 1,
-            "fp": 3,
-            "fn": 39,
-            "tn": 37
+            "tp": 3,
+            "fp": 1,
+            "fn": 27,
+            "tn": 29
           }
         },
         {
@@ -2470,11 +2468,11 @@
         },
         {
           "language": "php",
-          "entries": 40,
+          "entries": 30,
           "status": "reportable",
           "recall": {
             "n": 0,
-            "d": 40,
+            "d": 30,
             "value": 0
           },
           "precision": {
@@ -2489,9 +2487,9 @@
             "status": "measured",
             "point": 0,
             "low": 0,
-            "high": 0.08762160245846368,
+            "high": 0.11351339476145204,
             "successes": 0,
-            "n": 40
+            "n": 30
           },
           "precisionInterval": {
             "status": "unmeasured",
@@ -2500,34 +2498,34 @@
           "counts": {
             "tp": 0,
             "fp": 0,
-            "fn": 40,
-            "tn": 40
+            "fn": 30,
+            "tn": 30
           }
         },
         {
           "language": "python",
-          "entries": 40,
+          "entries": 30,
           "status": "reportable",
           "recall": {
             "n": 1,
-            "d": 40,
-            "value": 0.025
+            "d": 30,
+            "value": 0.03333333333333333
           },
           "precision": {
             "n": 1,
             "d": 4,
             "value": 0.25
           },
-          "f1": 0.045454545454545456,
+          "f1": 0.058823529411764705,
           "recallInterval": {
             "method": "wilson-95",
             "level": 0.95,
             "status": "measured",
-            "point": 0.025,
-            "low": 0.004426831453704344,
-            "high": 0.12881369088183614,
+            "point": 0.03333333333333333,
+            "low": 0.005908590316197976,
+            "high": 0.16670391146115726,
             "successes": 1,
-            "n": 40
+            "n": 30
           },
           "precisionInterval": {
             "method": "wilson-95",
@@ -2542,86 +2540,92 @@
           "counts": {
             "tp": 1,
             "fp": 3,
-            "fn": 39,
-            "tn": 37
+            "fn": 29,
+            "tn": 27
           }
         },
         {
           "language": "ruby",
-          "entries": 40,
+          "entries": 30,
           "status": "reportable",
           "recall": {
             "n": 3,
-            "d": 40,
-            "value": 0.075
+            "d": 30,
+            "value": 0.1
           },
           "precision": {
             "n": 3,
-            "d": 5,
-            "value": 0.6
+            "d": 4,
+            "value": 0.75
           },
-          "f1": 0.13333333333333333,
+          "f1": 0.17647058823529413,
           "recallInterval": {
             "method": "wilson-95",
             "level": 0.95,
             "status": "measured",
-            "point": 0.075,
-            "low": 0.025836025573262464,
-            "high": 0.19864233651643165,
+            "point": 0.1,
+            "low": 0.03459988847741868,
+            "high": 0.256210827331743,
             "successes": 3,
-            "n": 40
+            "n": 30
           },
           "precisionInterval": {
             "method": "wilson-95",
             "level": 0.95,
             "status": "measured",
-            "point": 0.6,
-            "low": 0.23072427940911855,
-            "high": 0.8823792268590028,
+            "point": 0.75,
+            "low": 0.3006418400969081,
+            "high": 0.954412739704631,
             "successes": 3,
-            "n": 5
+            "n": 4
           },
           "counts": {
             "tp": 3,
-            "fp": 2,
-            "fn": 37,
-            "tn": 38
+            "fp": 1,
+            "fn": 27,
+            "tn": 29
           }
         },
         {
           "language": "typescript",
-          "entries": 40,
+          "entries": 30,
           "status": "reportable",
           "recall": {
-            "n": 0,
-            "d": 40,
-            "value": 0
+            "n": 1,
+            "d": 30,
+            "value": 0.03333333333333333
           },
           "precision": {
-            "n": 0,
-            "d": 0,
-            "value": null
+            "n": 1,
+            "d": 1,
+            "value": 1
           },
-          "f1": 0,
+          "f1": 0.06451612903225806,
           "recallInterval": {
             "method": "wilson-95",
             "level": 0.95,
             "status": "measured",
-            "point": 0,
-            "low": 0,
-            "high": 0.08762160245846368,
-            "successes": 0,
-            "n": 40
+            "point": 0.03333333333333333,
+            "low": 0.005908590316197976,
+            "high": 0.16670391146115726,
+            "successes": 1,
+            "n": 30
           },
           "precisionInterval": {
-            "status": "unmeasured",
-            "reason": "nothing was reported"
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 1,
+            "low": 0.2065493117918027,
+            "high": 1,
+            "successes": 1,
+            "n": 1
           },
           "counts": {
-            "tp": 0,
+            "tp": 1,
             "fp": 0,
-            "fn": 40,
-            "tn": 40
+            "fn": 29,
+            "tn": 30
           }
         }
       ],
@@ -2633,12 +2637,12 @@
       "minEntriesForRate": 30,
       "fixedVersionPressure": {
         "meaning": "findings of ANY family on the fixed version, not only the labelled CWE: the alert burden a user would see",
-        "entriesMeasured": 279,
-        "total": 33793,
-        "mean": 121.12186379928315,
-        "median": 36,
+        "entriesMeasured": 223,
+        "total": 32912,
+        "mean": 147.58744394618833,
+        "median": 33,
         "p95": 636,
-        "entriesWithAnyFinding": 271
+        "entriesWithAnyFinding": 216
       }
     },
     "historicalIndependentRecord": {

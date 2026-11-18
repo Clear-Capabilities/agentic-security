@@ -18,6 +18,7 @@
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { createHash } from 'node:crypto';
 import { runFullScan } from '../engine.js';
 import { gateFixOutput } from './fix-honesty-gate.js';
 import { runProjectTests } from './test-runner.js';
@@ -34,6 +35,7 @@ export async function verifyPatch({
   originalFindingStableId,
   files,   // { [relPath]: newContent }
   depFileContents = {},
+  migrationProof = null,
 } = {}) {
   if (!files || typeof files !== 'object') return { ok: false, reason: 'no-files-provided' };
   let fileContents = { ...files };
@@ -84,8 +86,15 @@ export async function verifyPatch({
   } catch { preExisting = new Set(); baselineScanned = false; }
   const stillHasOriginal = !!originalFindingStableId &&
     findings.some(f => f.stableId === originalFindingStableId);
+  // A password migration keeps the legacy digest so existing users can still log in once; that line is the original finding's text, so
+  // it keeps its stable id. It is excused ONLY when the repair's executed application checks, run by the verifier on exactly these files,
+  // proved what the finding is about: new passwords are stored under the approved KDF, legacy users still log in, and a legacy user's
+  // value is rewritten in the approved format after a successful login (see legacyRetainedForMigration).
+  let retainedForMigration = null;
   if (stillHasOriginal) {
-    return { ok: false, reason: 'original-finding-still-present', stableId: originalFindingStableId };
+    const kept = findings.filter((f) => f.stableId === originalFindingStableId);
+    retainedForMigration = legacyRetainedForMigration(kept, files, migrationProof);
+    if (!retainedForMigration) return { ok: false, reason: 'original-finding-still-present', stableId: originalFindingStableId };
   }
   // With language context in play, files that were only read for context carry findings that predate the patch;
   // only findings in the PATCHED files can be introduced by it.
@@ -107,7 +116,34 @@ export async function verifyPatch({
     preExisting: preExistingRetained.map((f) => ({ vuln: f.vuln, file: f.file, line: f.line, severity: f.severity, stableId: f.stableId })),
     baselineScanned,
     targetReproduced,
+    ...(retainedForMigration ? { retainedForMigration } : {}),
   };
+}
+
+/** The application obligations that together prove a password-storage migration (repair/contracts.js). */
+export const PASSWORD_MIGRATION_OBLIGATIONS = Object.freeze(['password-storage', 'password-legitimate-logins', 'password-legacy-migrated']);
+const WEAK_PASSWORD_HASH_CWE = /^CWE-(?:916|327|328|759|760)$/;
+const APPROVED_KDF = /\bscrypt(?:Sync)?\s*\(|\bhashlib\.scrypt\s*\(/;
+
+/**
+ * Whether the surviving original finding is a legacy check kept for a migration that was PROVED, never asserted by the patch. Required:
+ * a proof listing every password migration obligation as passed, bound to the digest of exactly the files being verified (the caller,
+ * the repair coordinator, takes it from oracle results it ran itself); every surviving instance is a weak password hash finding; and
+ * each file it is in also derives keys with an approved KDF. Returns the retained instances, or null when anything is missing.
+ */
+export function legacyRetainedForMigration(kept, files, proof) {
+  if (!proof || typeof proof !== 'object' || !Array.isArray(proof.passed) || !kept.length) return null;
+  if (!PASSWORD_MIGRATION_OBLIGATIONS.every((id) => proof.passed.includes(id))) return null;
+  if (typeof proof.filesDigest !== 'string' || proof.filesDigest !== migrationFilesDigest(files)) return null;
+  if (!kept.every((f) => WEAK_PASSWORD_HASH_CWE.test(String(f.cwe || '')) && typeof files[f.file] === 'string' && APPROVED_KDF.test(files[f.file]))) return null;
+  return kept.map((f) => ({ vuln: f.vuln, file: f.file, line: f.line, cwe: f.cwe, stableId: f.stableId, reason: 'legacy password check kept for migration; storage, legacy login and migration were each proved by an executed application check' }));
+}
+
+/** The digest a migration proof is bound to: the verified files, sorted by path. */
+export function migrationFilesDigest(files) {
+  const h = createHash('sha256');
+  for (const k of Object.keys(files || {}).sort()) { h.update(k); h.update('\0'); h.update(String(files[k] ?? '')); h.update('\0'); }
+  return `sha256:${h.digest('hex')}`;
 }
 
 // Detect which linter the project uses and run it on the patched files.
@@ -218,6 +254,7 @@ export async function verifyFix({
   poc,
   patchNegative,
   assuranceConfig,
+  migrationProof,
 } = {}) {
   // R5 (reporting half) — time each stage as it runs. Measured here rather
   // than inside each stage because only this function knows the boundaries of
@@ -227,7 +264,7 @@ export async function verifyFix({
   let mark = t0;
   const _lap = (name) => { const now = Date.now(); stages[name] = now - mark; mark = now; };
 
-  const rescan = await verifyPatch({ scanRoot, originalFindingStableId, files, depFileContents });
+  const rescan = await verifyPatch({ scanRoot, originalFindingStableId, files, depFileContents, migrationProof });
   _lap('rescan');
   const lint = runProjectLinter(scanRoot, Object.keys(files || {}));
   _lap('lint');
