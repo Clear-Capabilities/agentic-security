@@ -9,6 +9,22 @@
 > make the history less accurate, not more.
 
 
+## 0.209.0 - Recall work, third part: 26 structural rules across six classes; development recall up, validation unchanged
+
+**Measured, 0.208.1:** `TIMINGS preflight=6s push=10s pr=5s checks=60s merge=6s verify=21s tag=2s release=256s npm=392s total=758s release-clock=285s`; the first attempt stopped on a timing check (`ttff`) that measured 10 to 16.5 s for the same code across runs, and a re-run of that job passed.
+
+Every accuracy figure below was measured on the independent population (real upstream code at the vulnerable commit, labelled by public advisories), development and validation splits only; the sealed split was not touched.
+
+- **Independent accuracy, re-measured (run `20483cfb80af`, engine at `884a5d97`, the same 223 entries as run `7f60b3bb47f7`).** Localized precision 54/60, recall 54/222, F1 0.383 (95% grouped-bootstrap interval 0.296 to 0.467); one development entry timed out and is in no denominator. The previous run read 11/20, 11/223, F1 0.091. **By split, and this is the honest reading:** development 53 detected of 179 with 3 false positives (F1 0.451, was 10 of 180 with 7, F1 0.102); validation 1 detected of 43 with 3 false positives (F1 0.043, unchanged at 1 detected, one false positive more, on a TypeScript XSS entry). Every development entry the new rules detect was read while writing them, so the development figure measures fit, not generalization. The validation split, which nobody read, did not move. The rules are general shapes (no project, path or advisory key), but on this evidence they do not yet transfer to unseen advisories, and the next rounds are judged on validation. The commit after `884a5d97` changes only tests and generated reports. The run directories are not committed.
+- **Resource exhaustion in decoders.** Decompression drained whole without a size limit (PHP, JavaScript including `DecompressionStream`, Go, Ruby), decoded lengths that size an allocation or a loop without a bound (Go, C#, Java, including a `1 << n` whose guard admits 31), and a C# receive loop whose only exception handler is outside the loop.
+- **Path and file handling.** A bare prefix containment check, a reference joined and read without containment, a weak clean guard, unmasked file modes, a PHP upload stored under the client's name, a suffix extension deny list, Ruby request paths served as files, a path verified and then read again (TOCTOU).
+- **Injection gaps.** A quote escaped without the backslash and a quoted interpolation in generated code, frontmatter parsing with its JavaScript engine left on, caller keyword arguments forwarded as git options, prototype pollution through regex-capture keys and a delete after a split-path walk, XXE through a factory implementation constructed directly, Ruby `Kernel#open` on a non-literal path, a local-path redirect guard that accepts `//host`, and PHP stream fetches that follow redirects after a host allow-list.
+- **Authorization and crypto.** Credentials forwarded across a redirect, an empty HMAC key, an authorization check that does not dominate the sink (a validator in a `try` whose handler swallows the error), writes behind a read permission, asymmetric filters, Rails `skip_before_action` on an authenticated action, weak hashes as cache keys, a weak random source in a crypto library.
+- **Library command execution is opt-in.** The rule that follows an exported function's parameter into a shell command reports only with `AGENTIC_SECURITY_LIBRARY_SOURCES=1`, the same opt-in as the taint engine's caller-controlled source: a library's parameter is its caller's input, not an attacker's. `test/detector-liveness.test.js` proves it silent without the flag and live with it.
+- **Seven precision fixes,** and in our own code: three regular expressions that escaped only the dot now escape every metacharacter, and the legacy configuration path setter refuses prototype keys.
+- **Fix-correctness against the maintainers' real fixes, re-measured (0.208.0 engine).** 11 localized detections, 0 synthesized fixes (0/11). Not improved in this release.
+- **Not done, with the reason.** A model proposer for repairs needs an operator endpoint and is not built.
+
 ## 0.208.1 - The delete guard: the project directory is the boundary, variables a command sets are followed, deletions inside if and for are checked
 
 **Measured, 0.208.0:** `TIMINGS preflight=4s push=7s pr=4s checks=427s merge=5s verify=11s tag=2s release=255s npm=545s total=1260s release-clock=273s`.
