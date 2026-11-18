@@ -22,6 +22,13 @@
 //   bare-prefix-containment  CWE-22  Containment decided by a raw string prefix of
 //                                    a resolved path, with no trailing separator:
 //                                    `/srv/app-evil` starts with `/srv/app`.
+//   go-request-path-join     CWE-22  A Go handler joins a request value (query,
+//                                    form, route parameter) into a filesystem
+//                                    path with no Base / IsLocal / containment
+//                                    check in the function.
+//   go-decoded-path-forwarded CWE-22 A Go middleware decodes a path rewritten
+//                                    from the incoming escaped path into URL.Path
+//                                    and forwards the request without normalizing.
 //   unmasked-file-mode       CWE-732 A permission mode parsed from data (metadata,
 //                                    an archive header) is applied with chmod
 //                                    without masking it to the permission bits,
@@ -508,6 +515,121 @@ function scanRubyRequestPathServe(fp, code, fns) {
 }
 
 // ---------------------------------------------------------------------------
+// Rule: go-request-path-join
+// ---------------------------------------------------------------------------
+
+// A value read from the HTTP request (query, form, route parameter) in a Go
+// handler is joined, as is, into a filesystem path. filepath.Join cleans the
+// result, so `..` segments in the request value climb out of the base
+// directory: Join("/srv/subs", "../../etc/passwd") is "/etc/passwd". Reported at
+// the join; silent when the function reduces the value to its last element,
+// checks it for `..` or locality, checks the joined path's containment, or
+// matches it against a pattern.
+const GO_REQ_SOURCE = /\br\s*\.\s*URL\s*\.\s*Query\s*\(\s*\)\s*\.\s*Get\s*\(|\b(?:r|req|request)\s*\.\s*(?:FormValue|PostFormValue|PathValue)\s*\(|\bmux\s*\.\s*Vars\s*\(\s*\w+\s*\)\s*\[|\bchi\s*\.\s*URLParam\s*\(|\b(?:c|ctx)\s*\.\s*(?:Query|Param|PostForm|FormValue|DefaultQuery|QueryParam|Params)\s*\(/;
+const GO_JOIN = /\b(?:filepath|path)\s*\.\s*Join\s*\(/g;
+
+function splitArgs(text) {
+  const parts = []; let rest = text; let k;
+  while ((k = splitTopComma(rest)) >= 0) { parts.push(rest.slice(0, k)); rest = rest.slice(k + 1); }
+  parts.push(rest);
+  return parts;
+}
+
+// ---------------------------------------------------------------------------
+// Rule: go-decoded-path-forwarded
+// ---------------------------------------------------------------------------
+
+// A Go middleware rewrites the request path from the request's own escaped
+// path, decodes the result into URL.Path (url.PathUnescape), and hands the
+// request to the next handler without normalizing it. Decoding turns `%2e%2e`
+// and `%2f` into `..` and `/`, so the path the next handler routes and
+// authorizes on contains traversal segments that were not visible when the
+// incoming path was matched. Reported at the forward; silent when the function
+// normalizes (JoinPath, path.Clean) or rejects `..`.
+const GO_REQ_PATH = /\b(\w+)\s*\.\s*URL\s*\.\s*(?:RawPath|Path|EscapedPath\s*\(\s*\))/;
+
+function scanGoDecodedPathForwarded(fp, code, fns) {
+  const out = [];
+  if (!/\bPathUnescape\s*\(/.test(code) || !/\.\s*ServeHTTP\s*\(/.test(code)) return out;
+  for (const f of fns) {
+    const body = code.slice(f.bodyStart, f.end);
+    const dec = /\b(\w+)\s*\.\s*URL\s*\.\s*Path\s*(?:,\s*\w+\s*)?=\s*url\s*\.\s*PathUnescape\s*\(\s*([^)\n]+)\)/.exec(body);
+    if (!dec) continue;
+    const reqVar = dec[1];
+    // locals holding the incoming path
+    const seeds = [];
+    const asg = /\b(\w+)\s*:?=\s*([^\n;]+)/g; let a;
+    while ((a = asg.exec(body))) if (GO_REQ_PATH.test(a[2]) && !/PathUnescape/.test(a[2])) seeds.push(a[1]);
+    const tainted = propagate(body, seeds, 'go');
+    // what was decoded: the raw path rewritten from the incoming path, or a tainted local
+    const arg = dec[2].trim();
+    let fromRequest = [...tainted].some((t) => mentions(arg, t, 'go'));
+    if (!fromRequest && new RegExp(`^${escRe(reqVar)}\\s*\\.\\s*URL\\s*\\.\\s*RawPath$`).test(arg)) {
+      const rw = new RegExp(`\\b${escRe(reqVar)}\\s*\\.\\s*URL\\s*\\.\\s*RawPath\\s*=(?!=)\\s*([^\\n;]+)`).exec(body);
+      fromRequest = !!rw && [...tainted].some((t) => mentions(rw[1], t, 'go'));
+    }
+    if (!fromRequest) continue;
+    if (/\bJoinPath\s*\(|\bpath\s*\.\s*Clean\s*\(|\bfilepath\s*\.\s*Clean\s*\(|["`]\.\.["`/]/.test(body)) continue;
+    const fwd = /\b\w+(?:\s*\.\s*\w+)*\s*\.\s*ServeHTTP\s*\(\s*\w+\s*,\s*(\w+)\s*\)/g; let m;
+    while ((m = fwd.exec(body))) {
+      if (m[1] !== reqVar || m.index < dec.index) continue;
+      const line = lineOf(code, f.bodyStart + m.index);
+      out.push(finding(fp, line, code, {
+        rule: 'go-decoded-path-forwarded', cwe: 'CWE-22', family: 'path-traversal', severity: 'medium',
+        vuln: 'Path traversal: rewritten request path decoded and forwarded without normalization',
+        description: 'The request path is rewritten from the incoming escaped path and decoded into `URL.Path`, then the request is passed to the next handler without normalizing the result. Decoding turns `%2e%2e` and `%2f` into `..` and `/`, so the next handler routes and authorizes on a path with traversal segments that were not visible when the incoming path was matched.',
+        remediation: 'Normalize after decoding (`req.URL = req.URL.JoinPath()` or `path.Clean`) and reject the request when the normalized path differs from the decoded one; or match and rewrite on the decoded, cleaned path only.',
+      }));
+      break;
+    }
+  }
+  return out;
+}
+
+function scanGoRequestPathJoin(fp, code, fns) {
+  const out = [];
+  if (!GO_REQ_SOURCE.test(code)) return out;
+  for (const f of fns) {
+    const body = code.slice(f.bodyStart, f.end);
+    if (!GO_REQ_SOURCE.test(body)) continue;
+    const seeds = [];
+    const asg = /\b(\w+)(?:\s*,\s*\w+)?\s*:?=\s*([^\n;]+)/g; let a;
+    // Base, or a project helper that sanitizes / validates the path, ends the taint
+    // (filepath.Clean does not: it keeps a leading `..`).
+    const kill = /\b(?:filepath|path)\s*\.\s*Base\s*\(|\b\w*(?:[Ss]anitiz|[Ss]afe[A-Z_]|[Vv]alidat|[Cc]onfine)\w*\s*\(/;
+    while ((a = asg.exec(body))) if (GO_REQ_SOURCE.test(a[2]) && !kill.test(a[2])) seeds.push(a[1]);
+    if (!seeds.length) continue;
+    const tainted = propagate(body, seeds, 'go', kill);
+    const jr = new RegExp(GO_JOIN.source, 'g'); let m;
+    while ((m = jr.exec(body))) {
+      const open = m.index + m[0].length - 1;
+      const close = matchBracket(body, open);
+      if (close < 0) continue;
+      const args = splitArgs(body.slice(open + 1, close)).map((x) => x.trim());
+      // the request value as a whole, later argument of the join
+      const hit = args.slice(1).find((x) => tainted.has(x));
+      if (!hit) continue;
+      const v = escRe(hit);
+      const guarded = new RegExp(
+        `\\b(?:filepath|path)\\s*\\.\\s*(?:Base|IsLocal|Rel)\\s*\\(\\s*${v}\\b`
+        + `|\\bstrings\\s*\\.\\s*(?:Contains|ContainsAny|Index|HasPrefix|HasSuffix)\\s*\\(\\s*${v}\\s*,`
+        + `|\\bMatchString\\s*\\(\\s*${v}\\b|\\bValidPath\\s*\\(|\\bIsLocal\\s*\\(|\\bfilepath\\s*\\.\\s*Rel\\s*\\(`
+        + `|\\bstrings\\s*\\.\\s*HasPrefix\\s*\\(|\\bSecureJoin\\s*\\(|\\bOpenInRoot\\s*\\(|\\bOpenRoot\\s*\\(|\\bos\\s*\\.\\s*Root\\b`
+        + `|["\`]\\.\\.["\`]`).test(body);
+      if (guarded) continue;
+      const line = lineOf(code, f.bodyStart + m.index);
+      out.push(finding(fp, line, code, {
+        rule: 'go-request-path-join', cwe: 'CWE-22', family: 'path-traversal',
+        vuln: 'Path traversal: request value joined into a filesystem path',
+        description: `\`${hit}\` is read from the HTTP request and joined into a filesystem path with no check in this handler. Join cleans the result, so a value like \`../../etc/passwd\` climbs out of the base directory and names any file the process can read or write.`,
+        remediation: 'Reduce the value to a single element with `filepath.Base` (and reject `.`, `..` and empty), or require `filepath.IsLocal(v)` before joining, or open through an `os.Root` for the base directory (Go 1.24+). If subdirectories are allowed, check the joined path with `filepath.Rel` against the base and reject a result that starts with `..`.',
+      }));
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Rule: weak-clean-guard
 // ---------------------------------------------------------------------------
 
@@ -528,7 +650,8 @@ function scanWeakCleanGuard(fp, code, lang, fns) {
     // A real `..` / absolute-path check on the same value elsewhere in the
     // function makes the clean comparison a canonical-form check, not the
     // traversal guard.
-    const other = new RegExp(`(?:HasPrefix|Contains|startswith|startsWith|includes|indexOf|in)\\s*\\(?\\s*${v}\\s*,?\\s*['"]\\.\\.|['"]\\.\\.['"]\\s*(?:in|===?|==)\\s*|\\.\\.\\s*['"]\\s*in\\s+${v}|\\bIsLocal\\s*\\(|\\bValidPath\\s*\\(|\\bIsAbs\\s*\\(\\s*${v}|\\bisabs\\s*\\(\\s*${v}|\\bisAbsolute\\s*\\(\\s*${v}|is_relative_to|relative_to|\\bRel\\s*\\(|path\\s*\\.\\s*relative\\s*\\(|split\\s*\\([^)]*\\)[^\\n]*\\.\\.`);
+    // a separate `..` rejection, as a function (`HasPrefix(v, "..")`) or a method (`v.startsWith('..')`)
+    const other = new RegExp(`(?:HasPrefix|Contains|startswith|startsWith|includes|indexOf|in)\\s*\\(?\\s*${v}\\s*,?\\s*['"]\\.\\.|\\b${v}\\s*\\.\\s*(?:startsWith|startswith|starts_with|includes|indexOf|contains|Contains|StartsWith)\\s*\\(\\s*['"]\\.\\.|['"]\\.\\.['"]\\s*(?:in|===?|==)\\s*|\\.\\.\\s*['"]\\s*in\\s+${v}|\\bIsLocal\\s*\\(|\\bValidPath\\s*\\(|\\bIsAbs\\s*\\(\\s*${v}|\\bisabs\\s*\\(\\s*${v}|\\bisAbsolute\\s*\\(\\s*${v}|is_relative_to|relative_to|\\bRel\\s*\\(|path\\s*\\.\\s*relative\\s*\\(|split\\s*\\([^)]*\\)[^\\n]*\\.\\.`);
     if (other.test(body)) continue;
     // A value made absolute before the comparison is safe: Clean of a rooted
     // path cannot keep a leading `..`.
@@ -556,9 +679,15 @@ function scanBarePrefixContainment(fp, code, lang, fns) {
     resolver = /\brealpath\s*\(/;
     sepRe = (v) => new RegExp(`\\$${v}\\s*(?:\\.=|=\\s*[^;]*\\.\\s*)(?:DIRECTORY_SEPARATOR|['"][\\\\/]['"])|\\$${v}\\s*\\.\\s*(?:DIRECTORY_SEPARATOR|['"][\\\\/]['"])`);
   } else if (lang === 'js') {
-    re = /\b(\w+)\s*\.\s*startsWith\s*\(\s*(\w+)\s*\)/g;
-    resolver = /\b(?:path\s*\.\s*resolve|realpath(?:Sync)?|fs\s*\.\s*realpathSync|path\s*\.\s*normalize)\s*\(/;
-    sepRe = (v) => new RegExp(`${v}\\s*(?:\\+=|=[^;\\n]*\\+)\\s*(?:path\\s*\\.\\s*sep|['"][\\\\/]['"])|${v}\\s*\\+\\s*(?:path\\s*\\.\\s*sep|['"][\\\\/]['"])|${v}\\s*\\.\\s*endsWith\\s*\\(`);
+    // The root may be a member (`this.root`, `this.config.basePath`) resolved where it is set.
+    re = /\b(\w+)\s*\.\s*startsWith\s*\(\s*([\w.]{1,120})\s*\)/g;
+    // `resolve` / `normalize` imported by name from the path module are the path functions too,
+    // and so is a same-class `this.resolve...Path(...)` helper.
+    const bare = /\bimport\s*\{[^}]*\b(?:resolve|normalize)\b[^}]*\}\s*from\s*['"](?:node:)?path['"]|\{[^}]*\b(?:resolve|normalize)\b[^}]*\}\s*=\s*require\s*\(\s*['"](?:node:)?path['"]/.test(code);
+    resolver = bare
+      ? /(?:\bpath\s*\.\s*resolve|\brealpath(?:Sync)?|\bfs\s*\.\s*realpathSync|\bpath\s*\.\s*normalize|(?<![\w$.])(?:resolve|normalize)|\bthis\s*\.\s*(?:resolve|normali[sz]e|canonicali[sz]e)\w*Path)\s*\(/
+      : /\b(?:path\s*\.\s*resolve|realpath(?:Sync)?|fs\s*\.\s*realpathSync|path\s*\.\s*normalize)\s*\(/;
+    sepRe = (v) => new RegExp(`${v}\\s*(?:\\+=|=[^;\\n]*\\+)\\s*(?:path\\s*\\.\\s*sep|\\bsep\\b|['"][\\\\/]['"])|${v}\\s*\\+\\s*(?:path\\s*\\.\\s*sep|\\bsep\\b|['"][\\\\/]['"])|${v}\\s*\\.\\s*endsWith\\s*\\(`);
   } else if (lang === 'py') {
     re = /\b(\w+)\s*\.\s*startswith\s*\(\s*(\w+)\s*\)/g;
     resolver = /\bos\.path\.(?:realpath|abspath|normpath)\s*\(/;
@@ -576,8 +705,15 @@ function scanBarePrefixContainment(fp, code, lang, fns) {
     if (!fn) continue;
     const body = code.slice(fn.bodyStart, fn.end);
     const pfx = lang === 'php' ? '\\$' : '\\b';
-    const assignedFromResolver = (v) => new RegExp(`${pfx}${escRe(v)}\\s*(?::=|=(?!=))\\s*[^;\\n]*${resolver.source}`).test(body)
-      || (lang === 'go' && new RegExp(`\\b${escRe(v)}\\s*,\\s*\\w+\\s*:?=\\s*${resolver.source}`).test(body));
+    const assignedFromResolver = (v) => {
+      if (lang === 'js' && /\./.test(v)) {
+        // a member root: resolved where it is assigned, anywhere in the file
+        const mv = v.split(/\s*\.\s*/).map(escRe).join('\\s*\\.\\s*');
+        return new RegExp(`${mv}\\s*=(?!=)\\s*[^;\\n]*${resolver.source}`).test(code);
+      }
+      return new RegExp(`${pfx}${escRe(v)}\\s*(?::=|=(?!=))\\s*[^;\\n]*${resolver.source}`).test(body)
+        || (lang === 'go' && new RegExp(`\\b${escRe(v)}\\s*,\\s*\\w+\\s*:?=\\s*${resolver.source}`).test(body));
+    };
     // Both sides resolved paths: this is a filesystem containment decision.
     if (!assignedFromResolver(a) || !assignedFromResolver(b)) continue;
     if (sepRe(escRe(b)).test(body)) continue;
@@ -692,6 +828,8 @@ export function scanPathFileHandling(fp, code) {
   out.push(...scanWeakCleanGuard(fp, code, lang, fns));
   out.push(...scanBarePrefixContainment(fp, code, lang, fns));
   if (lang === 'go') out.push(...scanUnmaskedFileMode(fp, code, fns));
+  if (lang === 'go') out.push(...scanGoRequestPathJoin(fp, code, fns));
+  if (lang === 'go') out.push(...scanGoDecodedPathForwarded(fp, code, fns));
   out.push(...scanSuffixDenylist(fp, code, lang, fns));
   const seen = new Set();
   return out.filter((f) => (seen.has(f.id) ? false : (seen.add(f.id), true)));

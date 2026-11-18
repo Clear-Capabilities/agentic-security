@@ -22,6 +22,7 @@
 // Precision comes from requiring the mitigation to be ABSENT: each rule names
 // the specific control the real fix added, and stays silent when it is present.
 import { blankComments } from './_comment-strip.js';
+import { _internal as _pfh } from './path-file-handling.js';
 
 const SRC_RE = /\.(?:py|js|jsx|ts|tsx|mjs|cjs)$/i;
 
@@ -87,7 +88,7 @@ function mk(file, line, sub, severity, cwe, vuln, description, remediation, chec
 export function scanRedirectToctou(file, raw) {
   if (!raw || typeof raw !== 'string' || raw.length > 500_000) return [];
   if (!SRC_RE.test(file)) return [];
-  if (!/redirect|getaddrinfo|gethostbyname|realpath|resolve/i.test(raw)) return [];
+  if (!/redirect|getaddrinfo|gethostbyname|realpath|resolve|lookup/i.test(raw)) return [];
   const code = blankComments(raw, /\.py$/i.test(file) ? 'py' : null);
   const out = [];
   const seen = new Set();
@@ -160,6 +161,75 @@ export function scanRedirectToctou(file, raw) {
       + 'of re-resolving the original name.',
       'evidence that the validated result is pinned and reused rather than re-resolved'));
     break;   // one finding per file is enough to act on
+  }
+  for (const f of validatedHostRefetched(file, code)) push(f);
+  return out;
+}
+
+// T4.5b: the resolve-and-check lives in a same-file VALIDATOR helper, and the
+// caller then hands the original URL to an HTTP client. The helper resolves
+// the host, rejects private / loopback / link-local answers, and returns
+// nothing usable (it raises, or answers yes/no); the client resolves the name
+// again when it connects. A DNS answer that changes between the two lookups
+// (rebinding) reaches the address the helper refused. The fix pins: the helper
+// returns the address it checked and the request is made to that address (or
+// the client is given a resolver that re-applies the check at connect time).
+// Reported at the request, which is where the second resolution happens.
+const VALIDATOR_RESOLVE_RE = /\b(?:socket\s*\.\s*)?(?:getaddrinfo|gethostbyname(?:_ex)?)\s*\(|\bdns\s*\.\s*(?:promises\s*\.\s*)?(?:lookup|resolve4?|resolve6)\s*\(|\bdns\.resolver\.resolve\s*\(/;
+const ADDRESS_CLASS_RE = /\.\s*is_(?:private|loopback|link_local|reserved|global|multicast|unspecified)\b|\bis(?:Private|Loopback|LinkLocal|Reserved|Internal)\w*\s*\(|\.\s*range\s*\(\s*\)|\b(?:private|internal|loopback)_?(?:ranges?|networks?|cidrs?|ips?)\b/i;
+const PY_FETCH_RE = /\b(?:requests|httpx|session|client|http|self\.session|self\.client)\s*\.\s*(?:get|post|put|patch|delete|head|request|stream)\s*\(\s*(?:['"][A-Z]+['"]\s*,\s*)?(\w+)\s*[,)]|\b(?:urlopen|urllib\.request\.urlopen)\s*\(\s*(\w+)\s*[,)]/g;
+// The client names are written with a one-letter class (`fetc[h]`) so this
+// pattern's own text never reads as a call to them.
+const JS_FETCH_RE = /\b(?:fetc[h]|axio[s](?:\s*\.\s*(?:get|post|put|patch|delete|head|request))?|go[t](?:\s*\.\s*(?:get|post))?|undici\s*\.\s*reques[t]|https?\s*\.\s*(?:get|reques[t]))\s*\(\s*(\w+)\s*[,)]/g;
+
+function validatedHostRefetched(file, code) {
+  const lang = _pfh.langOf(file);
+  if (lang !== 'py' && lang !== 'js') return [];
+  if (!VALIDATOR_RESOLVE_RE.test(code)) return [];
+  const fns = _pfh.functionsOf(code, lang);
+  const validators = fns.filter((f) => {
+    const body = code.slice(f.bodyStart, f.end);
+    if (!VALIDATOR_RESOLVE_RE.test(body) || !ADDRESS_CLASS_RE.test(body)) return false;
+    // A helper that hands back what it resolved (an address, a pinned URL) is
+    // the fixed form: the caller can connect to the checked address.
+    const returnsValue = lang === 'py'
+      ? /^\s*return\s+(?!None\b|True\b|False\b|not\b)\S/m.test(body)
+      : /\breturn\s+(?!true\b|false\b|undefined\b|null\b|!)[\w$[{(`'"]/.test(body);
+    return !returnsValue;
+  });
+  if (!validators.length) return [];
+  const names = validators.map((f) => f.name.replace(/[$]/g, '\\$'));
+  const callRe = new RegExp(`(?<![\\w$.])(?:self\\.|this\\.|cls\\.)?(?:${names.join('|')})\\s*\\(\\s*(\\w+)\\s*[,)]`, 'g');
+  const out = [];
+  let m;
+  while ((m = callRe.exec(code))) {
+    const v = m[1];
+    const fn = fns.filter((f) => f.bodyStart <= m.index && m.index < f.end).sort((a, b) => b.bodyStart - a.bodyStart)[0];
+    if (!fn || validators.includes(fn)) continue;
+    const after = code.slice(m.index + m[0].length, fn.end);
+    const whole = code.slice(fn.bodyStart, fn.end);
+    // pinning evidence anywhere in the caller, or a connect-time lookup hook in the file
+    if (PIN_RE.test(whole) || CONNECT_TIME_REVALIDATION_RE.test(code)) continue;
+    // the checked name must not be reassigned between the check and the request
+    const fre = new RegExp((lang === 'py' ? PY_FETCH_RE : JS_FETCH_RE).source, 'g');
+    let r;
+    while ((r = fre.exec(after))) {
+      const arg = r[1] || r[2];
+      if (arg !== v) continue;
+      const between = after.slice(0, r.index);
+      if (new RegExp(`(?:^|[^\\w$.=!<>])${v}\\s*=(?!=)`).test(between)) break;
+      const line = _lineOf(code, m.index + m[0].length + r.index);
+      out.push(mk(file, line, 'toctou-resolve', 'medium', 'CWE-367',
+        'URL host validated by resolving it, then fetched by name (TOCTOU / DNS rebinding)',
+        `The host of \`${v}\` is resolved and its address checked against private and loopback ranges by a helper, but the helper `
+        + 'returns nothing the request can use, so the HTTP client resolves the name again when it connects. A DNS answer that '
+        + 'changes between the two lookups sends the request to the internal address the check refused.',
+        'Have the check return the address it validated and connect to that address (sending the original Host header), or give '
+        + 'the client a resolver / connection hook that applies the same address check at connect time. Disable redirect '
+        + 'following too, or re-check every hop.',
+        'the validated address being returned and used for the request'));
+      break;
+    }
   }
   return out;
 }

@@ -39,7 +39,7 @@ import { scanClaudeHookInjection } from './sast/claude-hook-injection.js';
 import { scanDjangoHardening } from './sast/django-hardening.js';
 import { scanDefiDeep } from './sast/defi-deep.js';
 import { scanSpringbootHardening } from './sast/springboot-hardening.js';
-import { scanLaravelHardening } from './sast/laravel-hardening.js';
+import { scanLaravelHardening, scanLaravelFetchRuleWithoutBail } from './sast/laravel-hardening.js';
 import { scanSwift } from './sast/swift.js';
 import { scanDartFlutter } from './sast/dart-flutter.js';
 import { scanWeakRandomness, scanJsbnSecureRandom } from './sast/weak-randomness.js';
@@ -160,9 +160,13 @@ import { scanDecompressionBomb } from './sast/decompression-bomb.js';
 import { scanDecodedLength } from './sast/decoded-length.js';
 import { scanReceiveLoopException } from './sast/receive-loop-exception.js';
 import { scanJsMarkupMarkSafe } from './sast/js-markup-mark-safe.js';
+import { scanJsMixedTextMarkup } from './sast/js-mixed-text-markup.js';
 import { scanJsIncompleteRegexEscape } from './sast/js-incomplete-regex-escape.js';
 import { scanJsExecParamInterpolation } from './sast/js-exec-param-interpolation.js';
 import { scanPythonRunWrittenCode } from './sast/python-run-written-code.js';
+import { scanSourceTargetAuthz } from './sast/source-target-authz.js';
+import { scanOAuthEmailAccountLink } from './sast/oauth-email-account-link.js';
+import { scanAccountExistenceOracle } from './sast/account-existence-oracle.js';
 import { scanPhpHtmlAttrInterpolation } from './sast/php-html-attr-interpolation.js';
 import { scanCSRF } from './sast/csrf.js';
 import { scanTOCTOU } from './sast/toctou.js';
@@ -1753,6 +1757,11 @@ export function dropGuardedFindings(findings, fileContents, onDrop = null) {
     // Scoped to this family rather than loosening the window heuristic, which
     // is doing its job for every other CWE-22 emitter.
     if (f.family === 'sibling-guard-omission') return true;
+    // The same holds for a WEAK guard (`weak-path-guard`: a bare string-prefix
+    // containment test, a `Clean(p) != p` check): the finding sits on the guard
+    // line, so the window check read the defective guard as protection and
+    // dropped every one of them.
+    if (f.family === 'weak-path-guard') return true;
     const cwe = f.cwe || '';
     const isXss = cwe === 'CWE-79' && /reflected xss/i.test(f.vuln || '');
     if (cwe !== 'CWE-918' && cwe !== 'CWE-22' && cwe !== 'CWE-601' && !isXss) return true;
@@ -2023,7 +2032,7 @@ function performRegexAnalysis(fp,raw){if(_INTENTIONAL_VULN_PATH_RE.test(fp.repla
     const uv=_usedIdentifiers(_dropKeywordArgNames(args)).filter(v=>!["true","false","null","undefined","const","let","var","function","return","if","else","new","this","async","await","typeof","instanceof","void"].includes(v)&&v.length>1);const safeShape=_detectSafeSinkShape(sp.vuln,args,{lines,line});sinks.push({type:sp.type,severity:sp.severity,vuln:sp.vuln,cwe:sp.cwe,stride:sp.stride,line,file:fp,snippet:lt.trim(),usedVars:uv,args:args.trim(),safeShape});}}
   for(const sp of SANITIZER_PATTERNS){const re=new RegExp(sp.regex.source,sp.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const lt=lines[line-1]||"";const am=lt.match(/(?:const|let|var|)\s*(\w+)\s*=/)||lt.match(/(\w+)\s*=/);sanitizers.push({type:sp.type,line,file:fp,snippet:lt.trim(),outputVar:am?am[1]:null});}}
   const tv=new Map();for(const src of sources)if(src.variable)tv.set(src.variable,{source:src,path:[{type:"source",label:"Input: "+src.label,line:src.line,snippet:src.snippet}],sanitized:false,sanitizerType:null});
-  for(let i=0;i<lines.length;i++){const lt=lines[i];const am=lt.match(/\b(?:const|let|var)\s+(\w+)(?:\s*:[^=]+?)?\s*=\s*(.+)/)||lt.match(/(?:const|let|var|)\s*(\w+)\s*=(?!=)\s*(.+)/);if(!am)continue;const[,dv,rhs]=am;if(tv.has(dv))continue;for(const[tn,ti]of tv){if(!new RegExp(`\\b${tn}\\b`).test(rhs))continue;let san=false,st=null;for(const s of sanitizers)if(s.line===i+1){san=true;st=s.type;break;}if(!san)for(const sp of SANITIZER_PATTERNS)if(new RegExp(sp.regex.source,sp.regex.flags).test(rhs)){san=true;st=sp.type;break;}tv.set(dv,{source:ti.source,path:[...ti.path,{type:san?"sanitizer":"propagation",label:san?`${st} on ${dv}`:`Assigned to "${dv}"`,line:i+1,snippet:lt.trim(),sanitized:san,sanitizerType:st}],sanitized:san,sanitizerType:st});break;}}
+  for(let i=0;i<lines.length;i++){const lt=lines[i];const am=lt.match(/\b(?:const|let|var)\s+(\w+)(?:\s*:[^=]+?)?\s*=\s*(.+)/)||lt.match(/(?:const|let|var|)\s*(\w+)\s*=(?!=)\s*(.+)/);if(!am)continue;const[,dv,rhs]=am;if(tv.has(dv))continue;for(const[tn,ti]of tv){if(!new RegExp(`\\b${tn}\\b`).test(rhs))continue;/* flow order: an assignment ABOVE the step that tainted `tn` cannot carry its value (a source at line 765 tainting `const node = ..` at line 88 paired unrelated code); the sink pairing below already requires sink.line>=src.line */if(i+1<ti.path[ti.path.length-1].line)continue;let san=false,st=null;for(const s of sanitizers)if(s.line===i+1){san=true;st=s.type;break;}if(!san)for(const sp of SANITIZER_PATTERNS)if(new RegExp(sp.regex.source,sp.regex.flags).test(rhs)){san=true;st=sp.type;break;}tv.set(dv,{source:ti.source,path:[...ti.path,{type:san?"sanitizer":"propagation",label:san?`${st} on ${dv}`:`Assigned to "${dv}"`,line:i+1,snippet:lt.trim(),sanitized:san,sanitizerType:st}],sanitized:san,sanitizerType:st});break;}}
   for(const sink of sinks){const safeShapeDowngrade=sink.safeShape?{isSan:true,sanType:sink.safeShape}:null;for(const src of sources){const sv=src.variable;let reached=false,pp=[],isSan=false,st=null;if(sv&&sink.usedVars.includes(sv)){const ti=tv.get(sv);if(ti){reached=true;pp=ti.path;isSan=!!ti.sanitized;st=ti.sanitizerType;}}if(!reached)for(const uv of sink.usedVars)if(tv.has(uv)){const ti=tv.get(uv);if(ti.source===src||ti.source.label.includes(src.label)){reached=true;pp=ti.path;isSan=!!ti.sanitized;st=ti.sanitizerType;break;}}if(!reached&&sv&&sink.line>=src.line&&sink.line-src.line<200&&((sink.args&&sink.usedVars.includes(sv))||lines.slice(Math.max(0,sink.line-10),sink.line+5).some(l=>{if(!_usedIdentifiers(l).includes(sv))return false;/* skip re-declarations: different binding, not a use */if(new RegExp(`\\b(?:const|let|var|function|def)\\s+${sv}\\b`).test(l))return false;return true;}))){reached=true;pp=[{type:"source",label:"Input: "+src.label,line:src.line,snippet:src.snippet}];
 // FP-3: only credit a sanitizer here if it has a captured outputVar AND that var
 // is what reaches the sink. A bare `escape(s);` (return discarded) does NOT count.
@@ -8991,9 +9000,13 @@ async function queryRegistries(components){
       _aF.push(...(runDetector(_detectorErrors,p,'scanDecodedLength',()=>scanDecodedLength(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanReceiveLoopException',()=>scanReceiveLoopException(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanJsMarkupMarkSafe',()=>scanJsMarkupMarkSafe(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanJsMixedTextMarkup',()=>scanJsMixedTextMarkup(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanJsIncompleteRegexEscape',()=>scanJsIncompleteRegexEscape(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanJsExecParamInterpolation',()=>scanJsExecParamInterpolation(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanPythonRunWrittenCode',()=>scanPythonRunWrittenCode(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanSourceTargetAuthz',()=>scanSourceTargetAuthz(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanOAuthEmailAccountLink',()=>scanOAuthEmailAccountLink(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanAccountExistenceOracle',()=>scanAccountExistenceOracle(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanPhpHtmlAttrInterpolation',()=>scanPhpHtmlAttrInterpolation(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanCSRF',()=>scanCSRF(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanTOCTOU',()=>scanTOCTOU(p,cc))||[]));
@@ -9578,6 +9591,7 @@ function _deterministicFileTimings(timings) {
   let _languageBom=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$|\.cabal$|(?:^|\/)(?:cabal\.project(?:\.freeze)?|package\.yaml|stack\.yaml(?:\.lock)?|flake\.lock)$/i.test(f))){const{languageBom}=await import('./language/bom.js');const{resolvedHaskellGraph,nixClosureOf}=await import('./language/resolved-pass.js');const _rg=resolvedHaskellGraph(allFileContents);const _nc=nixClosureOf(allFileContents);_languageBom=languageBom(allFileContents,{...(_rg?{resolved:_rg.graph}:{}),...(_nc&&!_nc.refused.length?{closure:_nc.closure}:{})});}}catch(_){_languageBom=null;}
   aF.push(...(runDetector(_detectorErrors,'<project>','scanDbTaintCrossFile',()=>scanDbTaintCrossFile(fc))||[]));
   aF.push(...(runDetector(_detectorErrors,'<project>','scanCsharpCrossFile',()=>scanCsharpCrossFile(fc))||[]));
+  aF.push(...(runDetector(_detectorErrors,'<project>','scanLaravelFetchRuleWithoutBail',()=>scanLaravelFetchRuleWithoutBail(fc))||[]));
   // SARD_80_F1 W5.41/W5.42 — unlike the ADD-only cross-file passes above,
   // this one SUPPRESSES an already-emitted java-structural.js or
   // java-bench-extras.js finding when every real caller (checked project-
