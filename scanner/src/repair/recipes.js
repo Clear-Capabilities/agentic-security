@@ -256,7 +256,12 @@ export function passwordScryptTransform(text, { contract } = {}) {
   const N = pow2AtLeast(Number(a.minN) || 0); const R = Math.max(8, Number(a.minR) || 0); const S = Math.max(16, Number(a.minSaltBytes) || 0); const K = Math.max(32, Number(a.minKeyBytes) || 0);
   if (R > 32 || S > 64 || K > 128) return no('the contract asks for scrypt parameters beyond what this recipe writes');
   const importLine = esm ? "import * as pwCrypto from 'node:crypto';\n" : "const pwCrypto = require('node:crypto');\n";
-  const lead = out.match(/^(?:#![^\n]*\n)?(?:\s*(?:\/\/[^\n]*|'use strict';?|"use strict";?)\n)*/)[0];
+  // the import goes after a shebang and any leading line comments or 'use strict' lines
+  const lines = out.split('\n');
+  let skip = 0;
+  if (lines[0]?.startsWith('#!')) skip = 1;
+  while (skip < lines.length - 1 && /^[ \t]*(?:\/\/|['"]use strict['"];?[ \t]*$)/.test(lines[skip])) skip++;
+  const lead = lines.slice(0, skip).map((l) => `${l}\n`).join('');
   out = lead + importLine + out.slice(lead.length);
   return { text: `${out.replace(/\s*$/, '\n')}${passwordHelper({ name, db: dbs[0], ...shape, N, R, S, K })}`, applied, refused: [] };
 }
@@ -333,7 +338,7 @@ export const SHIPPED_RECIPES = Object.freeze([
       { id: 'login', kind: 'positive', fixture: `${FIX}/password-login`, family: 'password-storage', expect: 'verified-for-contract' },
       // written as a held-out example; the first version refused it (a comment naming the helper counted as a use), so it is development now
       { id: 'accounts', kind: 'positive', fixture: `${FIX}/password-accounts`, family: 'password-storage', expect: 'verified-for-contract' },
-      { id: 'per-user-salt', kind: 'safe-negative', text: "import crypto from 'node:crypto';\nconst hash = (pw, salt) => crypto.createHash('sha256').update(salt + pw).digest('hex');\nexport const check = (db, row, pw) => row.pw === hash(pw, row.salt) && db.prepare('SELECT 1').get();\n", expect: 'refused' },
+      { id: 'per-user-salt', kind: 'safe-negative', text: "import crypto from 'node:crypto';\nconst hash = (pw, salt) => crypto.createHash('sha256').update(salt + pw).digest('hex');\nexport const check = (db, row, pw) => same(row.pw, hash(pw, row.salt)) && db.prepare('SELECT 1').get();\n", expect: 'refused' },
       { id: 'node-22.4', kind: 'unsupported-version', fixture: `${FIX}/password-login`, family: 'password-storage', nodeVersion: '22.4.0', expect: 'not-applicable' },
     ],
     contraindications: ['a digest that other systems also read (a shared credential store)', 'a login path that compares the digest somewhere other than against the row', 'a database other than node:sqlite'],
