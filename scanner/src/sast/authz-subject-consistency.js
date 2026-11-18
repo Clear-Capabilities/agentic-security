@@ -43,8 +43,10 @@ const MIN_GUARDED_RATIO = 0.6;
 
 // An authorization-shaped callee. Verb-anchored so `getAccessToken` or `accessLog` is not a check, and authentication
 // (`authenticate*`) never counts: knowing who the caller is says nothing about what they may touch. `is*Allowed` is left out on
-// purpose: on real code it is as often a feature flag (`isEmergencyPublishAllowed`) as a permission check.
-const AUTHZ_NAME = /^(?:authori[sz]e\w*|can|cannot|allows|denies|isGranted|denyAccessUnlessGranted|can[A-Z_]\w*|cannot[A-Z_]\w*|userCan\w*|user_can\w*|(?:require|check|ensure|assert|verify|has|enforce|validate|user_?has|must)_?\w*(?:Access|access|Permission|permission|Allowed|allowed|Authori[sz]ed|authori[sz]ed|Privilege|privilege|Rights?|rights?|Role|role|Authority|authority)\w*|should\w*(?:Hide|hide|Deny|deny|Forbid|forbid)\w*)$/;
+// purpose: on real code it is as often a feature flag (`isEmergencyPublishAllowed`) as a permission check. A `throwIfCannot*` /
+// `throwIfNot<Something>` guard (`throwIfCannotAdminRealm(realm)`) is a check that throws instead of returning; `throwIfNotFound` and the
+// other existence or validity forms are not.
+const AUTHZ_NAME = /^(?:authori[sz]e\w*|can|cannot|allows|denies|isGranted|denyAccessUnlessGranted|can[A-Z_]\w*|cannot[A-Z_]\w*|userCan\w*|user_can\w*|(?:require|check|ensure|assert|verify|has|enforce|validate|user_?has|must)_?\w*(?:Access|access|Permission|permission|Allowed|allowed|Authori[sz]ed|authori[sz]ed|Privilege|privilege|Rights?|rights?|Role|role|Authority|authority)\w*|should\w*(?:Hide|hide|Deny|deny|Forbid|forbid)\w*|throwIf(?:Cannot\w*|Not(?!Found|Null|Empty|Exists?|Valid|Present|Defined|Set|Supported|Implemented)[A-Z]\w*|Forbidden\w*|Unauthori[sz]ed\w*))$/;
 const AUTHN = /authenticat/i;
 const AUTHZ_ANNOTATION = /@(?:PreAuthorize|PostAuthorize|Secured|RolesAllowed)\b/;
 
@@ -52,6 +54,12 @@ const AUTHZ_ANNOTATION = /@(?:PreAuthorize|PostAuthorize|Secured|RolesAllowed)\b
 const NOT_A_SUBJECT = new Set(['this', '$this', 'self', 'super', 'c', 'ctx', 'context', 'req', 'request', '$request', 'res', 'response',
   'user', '$user', 'currentUser', 'identity', 'auth', '$auth', 'session', 'principal', 'authentication', 'new', 'true', 'false', 'null',
   'undefined', 'class', 'await', 'typeof', 'instanceof', 'function']);
+
+// A check of the caller's role or authority, which names no object.
+const ROLE_CHECK = /(?:Role|role|Authority|authority|Admin|admin)\w*$/;
+
+// The right-hand side of an assignment that reads the authenticated caller's own identity.
+const CALLER_IDENTITY = /\b(?:auth\w*|getAuthenticated\w*|currentUser\w*|getCurrentUser\w*|principal|getPrincipal|identity|session|getSession|securityContext|getUserPrincipal)\b/i;
 
 const ROUTE_RE = /\b(?:app|router|api|server|route|routes|r)\s{0,4}\.\s{0,4}(get|post|put|patch|delete|all)\s{0,4}\(\s{0,4}(['"`])([^'"`\n]{1,300})\2/g;
 
@@ -93,13 +101,13 @@ function subjectsOf(args) {
 }
 
 /** Authorization calls in `body`: [{ name, args, subjects, index }]. */
-function guardCalls(body) {
+function guardCalls(body, nameRe = AUTHZ_NAME) {
   const out = [];
   // No nested quantifiers anywhere in this module: it runs over untrusted code. The qualifier (`$this->`, `Gate::`, `a.b.`) is read
   // backwards from the name, one segment at a time, instead of by a repeated group.
   for (const m of body.matchAll(/(?<![\w$])([A-Za-z_]\w{0,80})\s{0,4}\(/g)) {
     const name = m[1];
-    if (!AUTHZ_NAME.test(name) || AUTHN.test(name)) continue;
+    if (!nameRe.test(name) || AUTHN.test(name)) continue;
     let qual = '', before = body.slice(Math.max(0, m.index - 240), m.index);
     for (let k = 0; k < 3; k++) {
       const q = before.match(/([\w$]{1,64})\s{0,2}(->|\.|::)\s{0,2}$/);
@@ -253,7 +261,12 @@ function annotate(u, lang) {
   const guards = [...calls, ...preludeCalls, ...annotations];
   const ctx = u.contextParams || new Set();
   const locals = assignedLocals(u.body, lang);
-  const introduces = new Set([...u.params, ...locals.keys()].filter((x) => !ctx.has(x) && !NOT_A_SUBJECT.has(x)));
+  // A local read from the caller's own identity (`String realm = authInfo.getValue()`) is the caller's, not a subject they chose, and an
+  // object the handler constructs (`$m = new Maintenance`) is new: there is no existing one whose access could be checked.
+  const bodyLines = u.body.split('\n');
+  const ownLocals = [...locals.entries()].filter(([, at]) => !CALLER_IDENTITY.test(bodyLines[at - 1] || '') && !/=\s{0,4}new\s/.test(bodyLines[at - 1] || ''))
+    .map(([n]) => n);
+  const introduces = new Set([...u.params, ...ownLocals].filter((x) => !ctx.has(x) && !NOT_A_SUBJECT.has(x)));
   const guardedOn = new Map();
   for (const g of guards) for (const s of g.subjects) if (!ctx.has(s) && !guardedOn.has(s)) guardedOn.set(s, g.name);
   return { ...u, guards, introduces, guardedOn, locals };
@@ -289,6 +302,11 @@ function kind(u) {
   return READ_NAME.test(u.name) ? 'read' : WRITE_NAME.test(u.name) ? 'write' : null;
 }
 
+/** Does the body call one of the named (checked) handlers? */
+function delegatesTo(u, names) {
+  return [...names].some((n) => new RegExp(`(?:->|\\.|::|\\b)${n.replace(/[^\w]/g, '')}\\s{0,4}\\(`).test(u.body));
+}
+
 /** Pure analysis over one file's units; returns the outliers with their evidence. */
 function analyseHandlers(units) {
   const bySubject = new Map();
@@ -297,17 +315,26 @@ function analyseHandlers(units) {
     bySubject.get(s).push(u);
   }
   const best = new Map();   // unit -> strongest evidence
-  for (const [s, all] of bySubject) for (const pop of resourceGroups(s, all)) {
-    const guarded = pop.filter((u) => u.guardedOn.has(s));
-    if (guarded.length < MIN_GUARDED || guarded.length / pop.length < MIN_GUARDED_RATIO) continue;
-    const guardedNames = new Set(guarded.map((u) => u.name));
+  for (const [s, all] of bySubject) for (const group of resourceGroups(s, all)) {
+    const pop = group;
+    const direct = pop.filter((u) => u.guardedOn.has(s));
+    const guardedNames = new Set(direct.map((u) => u.name));
+    // A handler that hands the subject to a checked sibling is checked through it, and counts as such.
+    const delegating = new Set(pop.filter((u) => !u.guardedOn.has(s) && delegatesTo(u, guardedNames)));
+    const guarded = direct;
+    if (guarded.length < MIN_GUARDED || (guarded.length + delegating.size) / pop.length < MIN_GUARDED_RATIO) continue;
     for (const u of pop) {
-      if (u.guards.length) continue;                                        // checks something: not ours to second-guess
+      if (delegating.has(u) || u.guardedOn.has(s)) continue;
+      // A check on something else is not ours to second-guess. A check on no value at all (a global role, `hasRole(ADMIN)`) is
+      // different when the siblings check this subject: the role says who may call the handler, not which subject they may touch.
+      // Only a ROLE check qualifies: a class-level policy call (`authorize('view', Invoice::class)`) is about the subject's type.
+      const roleOnly = u.guards.length > 0 && u.guards.every((g) => g.subjects.size === 0 && ROLE_CHECK.test(g.name));
+      if (u.guards.length && !roleOnly) continue;
       if (AUTHZ_NAME.test(u.name)) continue;                                // the permission model itself, not a handler
       if (REDIRECT_ONLY.test(u.body)) continue;                             // sends the caller elsewhere, reads nothing
-      if (kind(u) === 'read' && !guarded.some((g) => kind(g) === 'read')) continue;
-      const delegates = [...guardedNames].some((n) => new RegExp(`(?:->|\\.|::|\\b)${n.replace(/[^\w]/g, '')}\\s{0,4}\\(`).test(u.body));
-      if (delegates) continue;
+      // An unchecked read is compared only with checked reads (reads are often open on purpose). A read gated by a role check is not
+      // open on purpose, so it is compared with every sibling.
+      if (kind(u) === 'read' && !roleOnly && !guarded.some((g) => kind(g) === 'read')) continue;
       const prev = best.get(u);
       if (prev && prev.guarded.length >= guarded.length) continue;
       const tally = new Map();
@@ -318,6 +345,48 @@ function analyseHandlers(units) {
     }
   }
   return [...best.values()];
+}
+
+// Action-keyed checks. Some permission models name the ACTION rather than an object: `import()` opens with
+// `if (!$this->userHasAccess('import')) abort(403)`. The handlers that serve the same action under the framework's handler-name
+// convention (`onImport`, `onImportLoadForm`, `handleImport`) are entry points of that action too, and should run the same check. The
+// rule needs the file to key at least MIN_ACTION_KEYS different actions this way (the convention is established, not a one-off), the
+// guard's only argument to be a string literal equal to its own handler's name, and the outlier to run no authorization check at all.
+const MIN_ACTION_KEYS = 2;
+const HANDLER_PREFIX = /^(?:on|handle|action|ajax)([A-Z]\w*)$/;
+
+// The action-keyed comparison also reads `userHasAccess('import')`-style predicates. They stay out of the subject comparison above, where
+// a handler that RETURNS `userHasPermission(...)` to the client is answering a question, not enforcing anything; here the guard's only
+// argument must be the action's own name, which a query endpoint does not do.
+const ACTION_GUARD_NAME = new RegExp(`${AUTHZ_NAME.source}|^(?:user|current_?[Uu]ser)_?[Hh]as\\w*(?:Access|Permission)$`);
+
+function actionKeyedOutliers(units) {
+  const keyed = new Map();   // stem (lowercase) -> { unit, guard }
+  for (const u of units) u.actionGuards = guardCalls(u.body, ACTION_GUARD_NAME);
+  for (const u of units) {
+    for (const g of u.actionGuards) {
+      const lit = String(g.args || '').trim().match(/^(['"])([A-Za-z][\w-]{1,40})\1$/);
+      if (!lit) continue;
+      const stem = lit[2].toLowerCase();
+      const hp = u.name.match(HANDLER_PREFIX);
+      const own = (hp ? hp[1] : u.name).toLowerCase();
+      if (own === stem && !keyed.has(stem)) keyed.set(stem, { unit: u, guard: g.name });
+    }
+  }
+  if (keyed.size < MIN_ACTION_KEYS) return [];
+  const out = [];
+  for (const u of units) {
+    const m = u.name.match(HANDLER_PREFIX);
+    if (!m || u.guards.length || u.actionGuards.length || REDIRECT_ONLY.test(u.body)) continue;
+    const first = m[1].split(/(?=[A-Z])/)[0].toLowerCase();
+    const k = keyed.get(first);
+    if (!k || k.unit === u) continue;
+    // Calling the checked handler on this object (`$this->import()`) runs its check; a same-named method of another object does not.
+    if (new RegExp(`(?:\\$this\\s{0,2}->\\s{0,2}|\\bthis\\s{0,2}\\.\\s{0,2}|\\b(?:self|static)::|(?<![\\w$>.:]))${k.unit.name}\\s{0,4}\\(`).test(u.body)) continue;
+    out.push({ unit: u, subject: `the '${first}' action`, guard: k.guard, guarded: [k.unit], population: 1, siblingSubjects: new Set(),
+      actionKeyed: true });
+  }
+  return out;
 }
 
 // Where the missing check belongs. An object-level check needs the object, so when the handler assigns a variable the siblings' checks
@@ -344,7 +413,9 @@ function finding(file, d) {
     id: `authz-subject-consistency:${file}:${line}:${u.name}`,
     severity: 'medium',
     file, line,
-    vuln: `Missing authorization: ${u.name} takes ${d.subject} but runs no authorization check, while ${d.guarded.length} of the ${d.population} handlers that take it apply ${guard}`,
+    vuln: d.actionKeyed
+      ? `Missing authorization: ${u.name} serves ${d.subject} but runs no authorization check, while ${siblings[0]} checks it with ${guard}`
+      : `Missing authorization: ${u.name} takes ${d.subject} but runs no authorization check, while ${d.guarded.length} of the ${d.population} handlers that take it apply ${guard}`,
     cwe: 'CWE-285',
     family: 'broken-access-control',
     parser: 'AUTHZ-CONSISTENCY',
@@ -372,8 +443,11 @@ export function scanAuthzSubjectConsistency(file, raw) {
     if (!/authori[sz]e|Permission|permission|Access|access|Allowed|allowed|can[A-Z(_]|Role|role|Granted|Hide/.test(code)) return [];
     const raw_units = lang === 'php' ? phpUnits(code) : lang === 'java' ? javaUnits(code) : jsRouteUnits(code);
     const units = raw_units.map((u) => annotate(u, lang));
-    return analyseHandlers(units).map((d) => finding(file, d)).sort((a, b) => a.line - b.line);
+    const outliers = analyseHandlers(units);
+    const seen = new Set(outliers.map((d) => d.unit));
+    for (const d of actionKeyedOutliers(units)) if (!seen.has(d.unit)) outliers.push(d);
+    return outliers.map((d) => finding(file, d)).sort((a, b) => a.line - b.line);
   } catch { return []; }
 }
 
-export const _internals = { MIN_GUARDED, MIN_GUARDED_RATIO, analyseHandlers, AUTHZ_NAME, subjectsOf, guardCalls, paramNames, assignedLocals, phpUnits, javaUnits, jsRouteUnits };
+export const _internals = { MIN_GUARDED, MIN_GUARDED_RATIO, analyseHandlers, actionKeyedOutliers, AUTHZ_NAME, subjectsOf, guardCalls, paramNames, assignedLocals, phpUnits, javaUnits, jsRouteUnits };

@@ -487,6 +487,30 @@ const META = {
 
 function lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }
 
+// True when the sink's FIRST argument, starting at `argStart` (the opening
+// quote), is nothing but string literals joined by `+` up to the argument's
+// end (`,` or `)`). A query split over several lines for readability
+// (`"SELECT a " + "FROM t " + "WHERE x = 1"`) is one compile-time constant:
+// no value can reach it, so it is not an injection. Any non-literal term
+// (identifier, call, ternary, parenthesised expression) returns false and
+// the finding stands. Comments are already blanked in `code`.
+const _JAVA_STRING_LIT = /"(?:[^"\\\n]|\\.)*"/y;
+export function _argIsLiteralOnlyConcat(code, argStart) {
+  let i = argStart;
+  const skipWs = () => { while (i < code.length && /\s/.test(code[i])) i++; };
+  for (let terms = 0; terms < 200; terms++) {
+    skipWs();
+    _JAVA_STRING_LIT.lastIndex = i;
+    const lit = _JAVA_STRING_LIT.exec(code);
+    if (!lit) return false;
+    i = _JAVA_STRING_LIT.lastIndex;
+    skipWs();
+    if (code[i] === '+') { i++; continue; }
+    return code[i] === ',' || code[i] === ')';
+  }
+  return false;
+}
+
 export function scanJavaStructural(fp, raw) {
   if (!/\.java$/i.test(fp)) return [];
   if (!raw || raw.length > 500_000) return [];
@@ -521,6 +545,9 @@ export function scanJavaStructural(fp, raw) {
       // value genuinely IS tainted, just unreachable) before this fix.
       if (deadRanges.length && isLineInDeadRange(line, deadRanges)) continue;
       if (_trailingIdentIsLiteral(code, m[1], m.index, deadRanges)) continue;
+      // A concatenation of string literals only is a constant, not a query
+      // or command built from a value.
+      if (_argIsLiteralOnlyConcat(code, m.index + m[0].indexOf('"'))) continue;
       emit(key, line, META[key]);
     }
   }

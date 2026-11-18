@@ -1,4 +1,5 @@
 import { blankComments } from './_comment-strip.js';
+import { scanPhpRawSqlSubstitution } from './php-raw-sql-substitution.js';
 // PHP-specific detectors. Covers the canonical PHP foot-guns:
 //
 //   - $_REQUEST / $_GET / $_POST flowing into eval / system / exec / passthru / shell_exec / `` / popen / proc_open
@@ -132,5 +133,7 @@ export function scanPhp(fp, rawInput) {
       });
     }
   }
+  // Raw SQL built by value substitution (strtr/sprintf into whereRaw with no bindings, implode of a decoded array into IN (...)).
+  for (const f of scanPhpRawSqlSubstitution(fp, raw)) push(f);
   return findings;
 }

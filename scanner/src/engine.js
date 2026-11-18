@@ -42,7 +42,7 @@ import { scanSpringbootHardening } from './sast/springboot-hardening.js';
 import { scanLaravelHardening } from './sast/laravel-hardening.js';
 import { scanSwift } from './sast/swift.js';
 import { scanDartFlutter } from './sast/dart-flutter.js';
-import { scanWeakRandomness } from './sast/weak-randomness.js';
+import { scanWeakRandomness, scanJsbnSecureRandom } from './sast/weak-randomness.js';
 import { scanGraphQL as scanGraphQLModule } from './sast/graphql.js';
 import { scanSensitiveDataLogging } from './sast/sensitive-data-logging.js';
 import { scanComparisonSafety } from './sast/comparison-safety.js';
@@ -104,8 +104,16 @@ import { blankComments } from './sast/_comment-strip.js';
 import { scanJwtExp } from './sast/jwt-exp.js';
 import { scanSiblingGuard } from './sast/sibling-guard.js';
 import { scanAuthzSubjectConsistency } from './sast/authz-subject-consistency.js';
+import { scanWeakHashCacheKey } from './sast/weak-hash-cache-key.js';
+import { scanRailsSkipAuthFilter } from './sast/rails-skip-auth-filter.js';
+import { scanFilterEnforceAsymmetry } from './sast/filter-enforce-asymmetry.js';
+import { scanReadPermissionWrite } from './sast/read-permission-write.js';
+import { scanNondominatingAuthzCheck } from './sast/nondominating-authz-check.js';
+import { scanEmptyHmacKey } from './sast/empty-hmac-key.js';
+import { scanRedirectCredentialForwarding } from './sast/redirect-credential-forwarding.js';
 import { scanZipSlip } from './sast/zip-slip.js';
 import { scanFileUpload } from './sast/file-upload.js';
+import { scanPathFileHandling } from './sast/path-file-handling.js';
 import { scanHostHeader } from './sast/host-header.js';
 import { scanPythonSinks } from './sast/python-sinks.js';
 import { scanCSharp } from './sast/csharp.js';
@@ -121,8 +129,11 @@ import { scanDatabaseRLS } from './sast/db-rls.js';
 import { scanRateLimit } from './sast/rate-limit.js';
 import { scanConventionDeviationProject } from './sast/convention-deviation.js';
 import { scanResourceExhaustion } from './sast/resource-exhaustion.js';
-import { scanRedirectToctou } from './sast/redirect-toctou.js';
+import { scanRedirectToctou, scanPhpStreamRedirect } from './sast/redirect-toctou.js';
 import { scanCodegenSink } from './sast/codegen-sink.js';
+import { scanLiteralEscaping } from './sast/literal-escaping.js';
+import { scanFrontmatterEngine } from './sast/frontmatter-engine.js';
+import { scanGitOptionInjection } from './sast/git-option-injection.js';
 import { scanOwnershipAuthz } from './sast/ownership-authz.js';
 import { scanAuthProvider } from './sast/auth-provider.js';
 import { scanEnvHygiene } from './sast/env-hygiene.js';
@@ -145,13 +156,21 @@ import { scanMassAssignment } from './sast/mass-assignment.js';
 import { scanPrototypePollution } from './sast/prototype-pollution.js';
 import { scanPrototypePollutionStructural } from './sast/prototype-pollution-structural.js';
 import { scanRubyHtmlInterpolation } from './sast/ruby-html-interpolation.js';
+import { scanDecompressionBomb } from './sast/decompression-bomb.js';
+import { scanDecodedLength } from './sast/decoded-length.js';
+import { scanReceiveLoopException } from './sast/receive-loop-exception.js';
+import { scanJsMarkupMarkSafe } from './sast/js-markup-mark-safe.js';
+import { scanJsIncompleteRegexEscape } from './sast/js-incomplete-regex-escape.js';
+import { scanJsExecParamInterpolation } from './sast/js-exec-param-interpolation.js';
+import { scanPythonRunWrittenCode } from './sast/python-run-written-code.js';
+import { scanPhpHtmlAttrInterpolation } from './sast/php-html-attr-interpolation.js';
 import { scanCSRF } from './sast/csrf.js';
 import { scanTOCTOU } from './sast/toctou.js';
 import { scanNoSQLInjection } from './sast/nosql-injection.js';
 import { scanLDAPInjection } from './sast/ldap-injection.js';
 import { scanXPathInjection } from './sast/xpath-injection.js';
 import { scanSSTI } from './sast/ssti.js';
-import { scanOpenRedirect } from './sast/open-redirect.js';
+import { scanOpenRedirect, scanWeakLocalPathGuard } from './sast/open-redirect.js';
 import { scanWrongContextSanitizer, scanSanitizerContextMismatch } from './sast/wrong-context-sanitizer.js';
 import { scanFrontendHygiene } from './sast/frontend-hygiene.js';
 import { scanCsvInjection } from './sast/csv-injection.js';
@@ -180,7 +199,7 @@ import { scanMutationXSS } from './sast/mutation-xss.js';
 import { scanDeserializationGadgets, _detectGadgets } from './sast/deserialization-gadgets.js';
 // Phase 2 — Kotlin / Ruby / PHP coverage.
 import { scanKotlin } from './sast/kotlin.js';
-import { scanRuby, scanRubyPathJoin } from './sast/ruby.js';
+import { scanRuby, scanRubyPathJoin, scanRubyKernelOpen } from './sast/ruby.js';
 import { scanPhp } from './sast/php.js';
 import { classifySecretCandidate as _entropyClassifySecret } from './sast/_secret-entropy.js';
 // Phase 1 — precision-engineering posture modules.
@@ -708,7 +727,7 @@ const SINK_PATTERNS=[{regex:/(?:db|database|collection|model|query|cursor|sessio
 // is fine — the data param doesn't render unless the template uses unsafe blocks.
 // Real SSTI is `res.render(req.body.tmpl)` or `res.render(\`${userInput}\`)`. We
 // only fire when the first arg is NOT a static double/single-quoted literal.
-{regex:/\b(?:res|response)\s*\.\s*render\s*\(\s*(?!['"][\w./-]+['"][\s,)])/g,type:"Template Render",severity:"medium",vuln:"SSTI",cwe:"CWE-1336",stride:"Elevation of Privilege"},{regex:/(?:pickle\.loads|yaml\.unsafe_load|unserialize)\s*\(/g,type:"Deserialization",severity:"critical",vuln:"Insecure Deserialization",cwe:"CWE-502",stride:"Elevation of Privilege"},{regex:/(?:fetch|axios(?:\.(?:get|post|put|patch|delete|head|request))?|http\.request|https\.request|http\.get|https\.get|requests\.(?:get|post|put|delete|patch|head|request)|needle\.(?:get|post|put|patch|delete|head|request)|got(?:\.(?:get|post|put|patch|delete|head|stream))?|undici\.(?:fetch|request)|superagent\.(?:get|post|put|patch|delete|head)|ky\.(?:get|post|put|patch|delete|head)|node-fetch|phin)\s*\(/g,type:"Outbound HTTP",severity:"high",vuln:"SSRF",cwe:"CWE-918",stride:"Spoofing"},{regex:/(?:localStorage|sessionStorage)\s*\.\s*setItem\s*\(/g,type:"Client Storage",severity:"medium",vuln:"Data Exposure",cwe:"CWE-922",stride:"Information Disclosure"},{regex:/(?:Object\.assign|_\.assign|_\.merge|_\.extend)\s*\([^,]+,/g,type:"Object Merge",severity:"high",vuln:"Mass Assignment",cwe:"CWE-915",stride:"Tampering"},{regex:/\.\s*(?:create|update|save|build)\s*\(\s*(?:req\.body|request\.data|ctx\.request\.body|\{[^}]*\.\.\.)/g,type:"Model Write",severity:"high",vuln:"Mass Assignment",cwe:"CWE-915",stride:"Tampering"},{regex:/(?:findById|findByPk|get_object_or_404)\s*\(/g,type:"Direct Lookup",severity:"high",vuln:"IDOR",cwe:"CWE-639",stride:"Tampering"},{regex:/\.(?:findOne|findFirst)\s*\(\s*\{[^}]*(?:_id|id)\s*:/g,type:"ID Lookup",severity:"high",vuln:"IDOR",cwe:"CWE-639",stride:"Tampering"},{regex:/\.(?:updateOne|deleteOne|findOneAndUpdate|findOneAndDelete|findByIdAndUpdate|findByIdAndDelete|destroy)\s*\(/g,type:"ID Mutation",severity:"critical",vuln:"IDOR",cwe:"CWE-639",stride:"Tampering"},{regex:/(?:_\.merge|_\.defaultsDeep|_\.setWith|_\.set)\s*\(/g,type:"Prototype Pollution (lodash)",severity:"critical",vuln:"Prototype Pollution",cwe:"CWE-1321",stride:"Tampering"},{regex:/(?:merge|deepMerge|deepExtend|defaultsDeep)\s*\([^,]+,/g,type:"Deep Merge",severity:"high",vuln:"Prototype Pollution",cwe:"CWE-1321",stride:"Tampering"},{regex:/\$\s*\.\s*(?:html|append|prepend|after|before)\s*\(/g,type:"jQuery DOM (CVE-2020-11022)",severity:"high",vuln:"XSS (Supply Chain)",cwe:"CWE-79",stride:"Tampering"},{regex:/yaml\s*\.\s*safe_load\s*\(/g,type:"YAML SafeLoad",severity:"info",vuln:"Safe YAML",cwe:"",stride:""},{regex:/new\s+RegExp\s*\([^)]*(?:req\.|request\.|params|query|body|input|user)/g,type:"Dynamic RegExp",severity:"high",vuln:"ReDoS",cwe:"CWE-1333",stride:"Denial of Service"},{regex:/jsonwebtoken\s*\.\s*verify\s*\([^,]+,[^,]*(?:algorithms|algorithm)/g,type:"JWT Verify",severity:"info",vuln:"Safe JWT",cwe:"",stride:""},{regex:/(?:jwt\.verify|jsonwebtoken\.verify)\s*\(\s*[^,]+,\s*[^,{]+\s*\)/g,type:"JWT Verify (no algo)",severity:"high",vuln:"JWT Algorithm Confusion",cwe:"CWE-327",stride:"Spoofing"},{regex:/(?:vm\.runInContext|vm\.runInNewContext|vm\.runInThisContext|new\s+vm\.Script)\s*\(/g,type:"VM Sandbox",severity:"critical",vuln:"RCE (VM Sandbox Escape)",cwe:"CWE-94",stride:"Elevation of Privilege"},{regex:/crypto\.createHash\s*\(\s*['"](?:md5|sha1|md4)['"]/gi,type:"Weak Hash",severity:"high",vuln:"Weak Cryptography",cwe:"CWE-916",stride:"Information Disclosure"},{regex:/bypassSecurityTrust(?:Html|Script|Style|Url|ResourceUrl)\s*\(/g,type:"Angular Trust Bypass",severity:"critical",vuln:"XSS (Angular DomSanitizer Bypass)",cwe:"CWE-79",stride:"Tampering"},{regex:/nativeElement\s*\.\s*innerHTML\s*=(?!=)/g,type:"Angular DOM Write",severity:"critical",vuln:"XSS (Angular innerHTML)",cwe:"CWE-79",stride:"Tampering"},{regex:/(?:res\.setHeader|res\.set)\s*\(\s*['"][^'"]+['"]\s*,/g,type:"Header Injection",severity:"medium",vuln:"Header Injection",cwe:"CWE-113",stride:"Tampering"},{regex:/child_process\s*\.\s*fork\s*\(/g,type:"Process Fork",severity:"critical",vuln:"Command Injection (fork)",cwe:"CWE-78",stride:"Elevation of Privilege"},{regex:/(?:\{|,)\s*\$(?:where|regex|gt|lt|gte|lte|ne|in|nin|or|and|not|nor|exists|type|mod|text|near|within)\s*:/g,type:"NoSQL Operator",severity:"high",vuln:"NoSQL Injection",cwe:"CWE-943",stride:"Tampering",contextRe:/(?:\.find|\.findOne|\.findOneAndUpdate|\.updateOne|\.updateMany|\.deleteOne|\.deleteMany|\.aggregate|\.countDocuments|\.distinct|Model\.\w+)\s*\(/, langScope:/\.(?:js|jsx|ts|tsx|mjs|cjs|java|py)$/i},{regex:/(?:pug|jade|ejs|nunjucks|swig|dot|twig|mustache|handlebars)\.(?:compile|render|renderFile)\s*\(/g,type:"Template Engine",severity:"high",vuln:"Server-Side Template Injection",cwe:"CWE-1336",stride:"Elevation of Privilege"},{regex:/res\.(?:setHeader|set)\s*\([^;)]*(?:\\r\\n|\\n|%0[aAdD])/g,type:"Response Splitting",severity:"medium",vuln:"HTTP Response Splitting",cwe:"CWE-113",stride:"Tampering"},{regex:/Object\.(?:defineProperty|setPrototypeOf)\s*\([^,)]*(?:req\.|body\.|query\.)/g,type:"Proto Manipulation",severity:"critical",vuln:"Prototype Pollution via Object.defineProperty",cwe:"CWE-1321",stride:"Tampering"},{regex:/jwt\s*\.\s*sign\s*\([^,)]*(?:req\.|body\.|query\.)/g,type:"JWT Sign with User Data",severity:"high",vuln:"JWT Forged Payload (User-Controlled Claims)",cwe:"CWE-347",stride:"Spoofing"},{regex:/res\s*\.\s*json\s*\([^;)]*(?:findAll|findAndCountAll|find\s*\(|\$queryInterface)\s*\(/g,type:"Bulk Data Exposure",severity:"high",vuln:"Unrestricted Data Exposure via API",cwe:"CWE-200",stride:"Information Disclosure"},
+{regex:/\b(?:res|response)\s*\.\s*render\s*\(\s*(?!['"][\w./-]+['"][\s,)])/g,type:"Template Render",severity:"medium",vuln:"SSTI",cwe:"CWE-1336",stride:"Elevation of Privilege"},{regex:/(?:pickle\.loads|yaml\.unsafe_load|unserialize)\s*\(/g,type:"Deserialization",severity:"critical",vuln:"Insecure Deserialization",cwe:"CWE-502",stride:"Elevation of Privilege"},{regex:/(?:fetch|axios(?:\.(?:get|post|put|patch|delete|head|request))?|http\.request|https\.request|http\.get|https\.get|requests\.(?:get|post|put|delete|patch|head|request)|needle\.(?:get|post|put|patch|delete|head|request)|got(?:\.(?:get|post|put|patch|delete|head|stream))?|undici\.(?:fetch|request)|superagent\.(?:get|post|put|patch|delete|head)|ky\.(?:get|post|put|patch|delete|head)|node-fetch|phin)\s*\(/g,type:"Outbound HTTP",severity:"high",vuln:"SSRF",cwe:"CWE-918",stride:"Spoofing"},{regex:/(?:localStorage|sessionStorage)\s*\.\s*setItem\s*\(/g,type:"Client Storage",severity:"medium",vuln:"Data Exposure",cwe:"CWE-922",stride:"Information Disclosure"},{regex:/(?:Object\.assign|_\.assign|_\.merge|_\.extend)\s*\([^,]+,/g,type:"Object Merge",severity:"high",vuln:"Mass Assignment",cwe:"CWE-915",stride:"Tampering"},{regex:/\.\s*(?:create|update|save|build)\s*\(\s*(?:req\.body|request\.data|ctx\.request\.body|\{[^}]*\.\.\.)/g,type:"Model Write",severity:"high",vuln:"Mass Assignment",cwe:"CWE-915",stride:"Tampering"},{regex:/(?:findById|findByPk|get_object_or_404)\s*\(/g,type:"Direct Lookup",severity:"high",vuln:"IDOR",cwe:"CWE-639",stride:"Tampering"},{regex:/\.(?:findOne|findFirst)\s*\(\s*\{[^}]*(?:_id|id)\s*:/g,type:"ID Lookup",severity:"high",vuln:"IDOR",cwe:"CWE-639",stride:"Tampering"},{regex:/\.(?:updateOne|deleteOne|findOneAndUpdate|findOneAndDelete|findByIdAndUpdate|findByIdAndDelete|destroy)\s*\(/g,type:"ID Mutation",severity:"critical",vuln:"IDOR",cwe:"CWE-639",stride:"Tampering"},{regex:/(?:_\.merge|_\.defaultsDeep|_\.setWith|_\.set)\s*\(/g,type:"Prototype Pollution (lodash)",severity:"critical",vuln:"Prototype Pollution",cwe:"CWE-1321",stride:"Tampering",langScope:/\.(?:js|jsx|ts|tsx|mjs|cjs|vue|svelte)$/i},{regex:/(?:merge|deepMerge|deepExtend|defaultsDeep)\s*\([^,]+,/g,type:"Deep Merge",severity:"high",vuln:"Prototype Pollution",cwe:"CWE-1321",stride:"Tampering",langScope:/\.(?:js|jsx|ts|tsx|mjs|cjs|vue|svelte)$/i},{regex:/\$\s*\.\s*(?:html|append|prepend|after|before)\s*\(/g,type:"jQuery DOM (CVE-2020-11022)",severity:"high",vuln:"XSS (Supply Chain)",cwe:"CWE-79",stride:"Tampering"},{regex:/yaml\s*\.\s*safe_load\s*\(/g,type:"YAML SafeLoad",severity:"info",vuln:"Safe YAML",cwe:"",stride:""},{regex:/new\s+RegExp\s*\([^)]*(?:req\.|request\.|params|query|body|input|user)/g,type:"Dynamic RegExp",severity:"high",vuln:"ReDoS",cwe:"CWE-1333",stride:"Denial of Service"},{regex:/jsonwebtoken\s*\.\s*verify\s*\([^,]+,[^,]*(?:algorithms|algorithm)/g,type:"JWT Verify",severity:"info",vuln:"Safe JWT",cwe:"",stride:""},{regex:/(?:jwt\.verify|jsonwebtoken\.verify)\s*\(\s*[^,]+,\s*[^,{]+\s*\)/g,type:"JWT Verify (no algo)",severity:"high",vuln:"JWT Algorithm Confusion",cwe:"CWE-327",stride:"Spoofing"},{regex:/(?:vm\.runInContext|vm\.runInNewContext|vm\.runInThisContext|new\s+vm\.Script)\s*\(/g,type:"VM Sandbox",severity:"critical",vuln:"RCE (VM Sandbox Escape)",cwe:"CWE-94",stride:"Elevation of Privilege"},{regex:/crypto\.createHash\s*\(\s*['"](?:md5|sha1|md4)['"]/gi,type:"Weak Hash",severity:"high",vuln:"Weak Cryptography",cwe:"CWE-916",stride:"Information Disclosure"},{regex:/bypassSecurityTrust(?:Html|Script|Style|Url|ResourceUrl)\s*\(/g,type:"Angular Trust Bypass",severity:"critical",vuln:"XSS (Angular DomSanitizer Bypass)",cwe:"CWE-79",stride:"Tampering"},{regex:/nativeElement\s*\.\s*innerHTML\s*=(?!=)/g,type:"Angular DOM Write",severity:"critical",vuln:"XSS (Angular innerHTML)",cwe:"CWE-79",stride:"Tampering"},{regex:/(?:res\.setHeader|res\.set)\s*\(\s*['"][^'"]+['"]\s*,/g,type:"Header Injection",severity:"medium",vuln:"Header Injection",cwe:"CWE-113",stride:"Tampering"},{regex:/child_process\s*\.\s*fork\s*\(/g,type:"Process Fork",severity:"critical",vuln:"Command Injection (fork)",cwe:"CWE-78",stride:"Elevation of Privilege"},{regex:/(?:\{|,)\s*\$(?:where|regex|gt|lt|gte|lte|ne|in|nin|or|and|not|nor|exists|type|mod|text|near|within)\s*:/g,type:"NoSQL Operator",severity:"high",vuln:"NoSQL Injection",cwe:"CWE-943",stride:"Tampering",contextRe:/(?:\.find|\.findOne|\.findOneAndUpdate|\.updateOne|\.updateMany|\.deleteOne|\.deleteMany|\.aggregate|\.countDocuments|\.distinct|Model\.\w+)\s*\(/, langScope:/\.(?:js|jsx|ts|tsx|mjs|cjs|java|py)$/i},{regex:/(?:pug|jade|ejs|nunjucks|swig|dot|twig|mustache|handlebars)\.(?:compile|render|renderFile)\s*\(/g,type:"Template Engine",severity:"high",vuln:"Server-Side Template Injection",cwe:"CWE-1336",stride:"Elevation of Privilege"},{regex:/res\.(?:setHeader|set)\s*\([^;)]*(?:\\r\\n|\\n|%0[aAdD])/g,type:"Response Splitting",severity:"medium",vuln:"HTTP Response Splitting",cwe:"CWE-113",stride:"Tampering"},{regex:/Object\.(?:defineProperty|setPrototypeOf)\s*\([^,)]*(?:req\.|body\.|query\.)/g,type:"Proto Manipulation",severity:"critical",vuln:"Prototype Pollution via Object.defineProperty",cwe:"CWE-1321",stride:"Tampering"},{regex:/jwt\s*\.\s*sign\s*\([^,)]*(?:req\.|body\.|query\.)/g,type:"JWT Sign with User Data",severity:"high",vuln:"JWT Forged Payload (User-Controlled Claims)",cwe:"CWE-347",stride:"Spoofing"},{regex:/res\s*\.\s*json\s*\([^;)]*(?:findAll|findAndCountAll|find\s*\(|\$queryInterface)\s*\(/g,type:"Bulk Data Exposure",severity:"high",vuln:"Unrestricted Data Exposure via API",cwe:"CWE-200",stride:"Information Disclosure"},
 // Ruby dynamic method dispatch — send()/public_send() with variable method name (Ruby files only)
 {regex:/\.\s*(?:send|public_send)\s*\(\s*(?!['"`])\w/g,type:"Dynamic Dispatch",severity:"critical",vuln:"Unsafe Reflection / RCE",cwe:"CWE-470",stride:"Elevation of Privilege",langScope:/\.(?:rb|rake|gemspec|ru)$/i},
 // Ruby eval variants
@@ -1497,7 +1516,13 @@ function _hasPostLookupOwnershipCheck(lines, sinkLine){
 // prefix check, or a known SSRF-filter helper. Control-flow (not assignment),
 // so it isn't caught by the sanitizer-on-assignment path. Recall-safe: an
 // unguarded fetch still has no guard in its window.
-const _SSRF_HOST_GUARD_RE = /\b(?:DENY|ALLOW(?:ED)?|allow_?list|deny_?list|block_?list|allowed_?hosts?|blocked_?hosts?|ALLOWED_HOSTS)\b|\.(?:hostname|host|getHost\s*\(\s*\))\b[\s\S]{0,60}?(?:\bin\b|\.has\s*\(|\.includes\s*\(|\.contains\s*\(|[!=]=|\.startsWith\s*\(|\.startswith\s*\()|\b(?:startsWith|startswith)\s*\(\s*['"](?:10\.|192\.168\.|127\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|::1|fc00|fd)|\bipaddress\b|\bis_private\b|\bis_loopback\b|getaddrinfo|gethostbyname|ssrf[-_]?req[-_]?filter|isSafeUrl|isPrivateIp|validateUrl|_is_metadata_or_private|urlparse\s*\([^)]*\)\s*\.\s*(?:hostname|netloc)/i;
+// The last alternative is a SHAPE, like the path guard's: a project-local URL
+// validator (`enforce_outbound_url(u)`, `validateTargetHost(h)`, `assertSafeUrl(u)`)
+// invoked on the value that reaches the sink. A closed list of names can never
+// contain a codebase's own SSRF guard. Safe on shape because
+// `_guardMatchNearSinkIdentifier` requires it to name the sink's identifier AND
+// to dominate the sink.
+const _SSRF_HOST_GUARD_RE = /\b(?:DENY|ALLOW(?:ED)?|allow_?list|deny_?list|block_?list|allowed_?hosts?|blocked_?hosts?|ALLOWED_HOSTS)\b|\.(?:hostname|host|getHost\s*\(\s*\))\b[\s\S]{0,60}?(?:\bin\b|\.has\s*\(|\.includes\s*\(|\.contains\s*\(|[!=]=|\.startsWith\s*\(|\.startswith\s*\()|\b(?:startsWith|startswith)\s*\(\s*['"](?:10\.|192\.168\.|127\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|::1|fc00|fd)|\bipaddress\b|\bis_private\b|\bis_loopback\b|getaddrinfo|gethostbyname|ssrf[-_]?req[-_]?filter|isSafeUrl|isPrivateIp|validateUrl|_is_metadata_or_private|urlparse\s*\([^)]*\)\s*\.\s*(?:hostname|netloc)|\b[a-z_]*(?:enforce|ensure|validate|assert|require|verify|check|guard)_?[a-z]*?_?(?:url|uri|host|ssrf|outbound|egress)[a-z_]*\s*\(/i;
 
 // A comment-stripped window around the sink. Comments must not read as guards
 // (e.g. a "no host allow-list / 169.254.169.254" comment describing the vuln).
@@ -1785,6 +1810,14 @@ function _usedIdentifiers(args){
   }
   return [...out];
 }
+// A keyword argument's NAME (`pk=` in `get_object_or_404(Model, pk=oid)`, `timeout=` in Python, Kotlin and Ruby
+// named arguments) is the callee's parameter, not a variable the call reads. Counting it let a source variable
+// that merely shares the name, or a flow that wrote a same-named variable elsewhere in the file, "reach" the
+// sink. Only a name at the START of an argument (after `(`-content start or a comma) followed by a single `=`
+// is dropped; `==`, `=>` and the value after the `=` are kept.
+function _dropKeywordArgNames(args){
+  return String(args||'').replace(/(^|,)(\s*)[A-Za-z_]\w*\s*=(?![=>])/g,'$1$2');
+}
 function _detectSafeSinkShape(vuln, args, ctx){
   // 1.1: Reflected XSS / SSRF / Path Traversal / Open Redirect / Code Injection
   // sinks with empty or whitespace-only args cannot reflect user input — skip
@@ -1980,7 +2013,14 @@ function performRegexAnalysis(fp,raw){if(_INTENTIONAL_VULN_PATH_RE.test(fp.repla
     const line=lineAt(cleaned,m.index);const lt=lines[line-1]||"";
     // FP-7: per-pattern surrounding-context gate — required call must appear in nearby lines
     if(sp.contextRe){const surround=lines.slice(Math.max(0,line-5),Math.min(lines.length,line+2)).join("\n");if(!sp.contextRe.test(surround))continue;}
-    const af=raw.substring(m.index,Math.min(raw.length,m.index+500));const am=af.match(/\(((?:[^()]|\([^()]*\)){0,400})\)/);const args=am?am[1]:"";const uv=_usedIdentifiers(args).filter(v=>!["true","false","null","undefined","const","let","var","function","return","if","else","new","this","async","await","typeof","instanceof","void"].includes(v)&&v.length>1);const safeShape=_detectSafeSinkShape(sp.vuln,args,{lines,line});sinks.push({type:sp.type,severity:sp.severity,vuln:sp.vuln,cwe:sp.cwe,stride:sp.stride,line,file:fp,snippet:lt.trim(),usedVars:uv,args:args.trim(),safeShape});}}
+    const af=raw.substring(m.index,Math.min(raw.length,m.index+500));const am=af.match(/\(((?:[^()]|\([^()]*\)){0,400})\)/);let args=am?am[1]:"";
+    // An ASSIGNMENT sink (`el.innerHTML = …`) has no call parentheses, so the
+    // first parenthesised group after it belongs to some later statement. When
+    // the right-hand side is one plain string literal (no `${}` interpolation),
+    // that literal IS the argument: `el.innerHTML = ''` clears an element and
+    // writes no value from anywhere, so it is a static-literal sink shape.
+    if(/=\s*$/.test(m[0])){const rhs=(raw.substring(m.index+m[0].length).match(/^[^;\n]*/)||[""])[0];if(/^\s*(?:'[^'\\\n]*'|"[^"\\\n]*"|`[^`\\$]*`)\s*$/.test(rhs))args=rhs;}
+    const uv=_usedIdentifiers(_dropKeywordArgNames(args)).filter(v=>!["true","false","null","undefined","const","let","var","function","return","if","else","new","this","async","await","typeof","instanceof","void"].includes(v)&&v.length>1);const safeShape=_detectSafeSinkShape(sp.vuln,args,{lines,line});sinks.push({type:sp.type,severity:sp.severity,vuln:sp.vuln,cwe:sp.cwe,stride:sp.stride,line,file:fp,snippet:lt.trim(),usedVars:uv,args:args.trim(),safeShape});}}
   for(const sp of SANITIZER_PATTERNS){const re=new RegExp(sp.regex.source,sp.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const lt=lines[line-1]||"";const am=lt.match(/(?:const|let|var|)\s*(\w+)\s*=/)||lt.match(/(\w+)\s*=/);sanitizers.push({type:sp.type,line,file:fp,snippet:lt.trim(),outputVar:am?am[1]:null});}}
   const tv=new Map();for(const src of sources)if(src.variable)tv.set(src.variable,{source:src,path:[{type:"source",label:"Input: "+src.label,line:src.line,snippet:src.snippet}],sanitized:false,sanitizerType:null});
   for(let i=0;i<lines.length;i++){const lt=lines[i];const am=lt.match(/\b(?:const|let|var)\s+(\w+)(?:\s*:[^=]+?)?\s*=\s*(.+)/)||lt.match(/(?:const|let|var|)\s*(\w+)\s*=(?!=)\s*(.+)/);if(!am)continue;const[,dv,rhs]=am;if(tv.has(dv))continue;for(const[tn,ti]of tv){if(!new RegExp(`\\b${tn}\\b`).test(rhs))continue;let san=false,st=null;for(const s of sanitizers)if(s.line===i+1){san=true;st=s.type;break;}if(!san)for(const sp of SANITIZER_PATTERNS)if(new RegExp(sp.regex.source,sp.regex.flags).test(rhs)){san=true;st=sp.type;break;}tv.set(dv,{source:ti.source,path:[...ti.path,{type:san?"sanitizer":"propagation",label:san?`${st} on ${dv}`:`Assigned to "${dv}"`,line:i+1,snippet:lt.trim(),sanitized:san,sanitizerType:st}],sanitized:san,sanitizerType:st});break;}}
@@ -6077,7 +6117,12 @@ function scanReDoS(fp,raw){
   // Regex literals: scan against `cleaned` so comment slashes don't fool us.
   // Extracted with a character-class-aware walker rather than a regex — see
   // _extractRegexLiterals for why the regex form was actively harmful.
-  for (const { body, index } of _extractRegexLiterals(cleaned)) {
+  // Python has no `/…/` regex-literal syntax: a slash there is division or
+  // text (a URL path inside a triple-quoted pattern template), and reading the
+  // text between two slashes as a regex reported fragments that never existed
+  // as patterns. Python patterns are strings passed to `re`, handled elsewhere.
+  const literalSyntax = !/\.py$/i.test(fp);
+  if (literalSyntax) for (const { body, index } of _extractRegexLiterals(cleaned)) {
     if (!_isLikelyUnsafeRegex(body)) continue;
     const line = cleaned.substring(0, index).split("\n").length;
     out.push({
@@ -8914,8 +8959,9 @@ async function queryRegistries(components){
       _aF.push(...(runDetector(_detectorErrors,p,'scanJNDI',()=>scanJNDI(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanJavaDeserialization',()=>scanJavaDeserialization(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanJwtExp',()=>scanJwtExp(p,cc))||[]));
-      _aF.push(...(runDetector(_detectorErrors,p,'scanZipSlip',()=>scanZipSlip(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanSiblingGuard',()=>scanSiblingGuard(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanAuthzSubjectConsistency',()=>scanAuthzSubjectConsistency(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanZipSlip',()=>scanZipSlip(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanSiblingGuard',()=>scanSiblingGuard(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanAuthzSubjectConsistency',()=>scanAuthzSubjectConsistency(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanWeakHashCacheKey',()=>scanWeakHashCacheKey(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRailsSkipAuthFilter',()=>scanRailsSkipAuthFilter(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanFilterEnforceAsymmetry',()=>scanFilterEnforceAsymmetry(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanReadPermissionWrite',()=>scanReadPermissionWrite(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanNondominatingAuthzCheck',()=>scanNondominatingAuthzCheck(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanJsbnSecureRandom',()=>scanJsbnSecureRandom(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanEmptyHmacKey',()=>scanEmptyHmacKey(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRedirectCredentialForwarding',()=>scanRedirectCredentialForwarding(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanFileUpload',()=>scanFileUpload(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPathFileHandling',()=>scanPathFileHandling(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanHostHeader',()=>scanHostHeader(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanPythonSinks',()=>scanPythonSinks(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanCSharp',()=>scanCSharp(p,cc))||[]));
@@ -8924,7 +8970,7 @@ async function queryRegistries(components){
       _aF.push(...(runDetector(_detectorErrors,p,'scanRust',()=>scanRust(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanGoExtended',()=>scanGoExtended(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanDatabaseRLS',()=>scanDatabaseRLS(p,cc))||[]));
-      _aF.push(...(runDetector(_detectorErrors,p,'scanRateLimit',()=>scanRateLimit(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanResourceExhaustion',()=>scanResourceExhaustion(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRedirectToctou',()=>scanRedirectToctou(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanCodegenSink',()=>scanCodegenSink(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanOwnershipAuthz',()=>scanOwnershipAuthz(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanRateLimit',()=>scanRateLimit(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanResourceExhaustion',()=>scanResourceExhaustion(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRedirectToctou',()=>scanRedirectToctou(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanPhpStreamRedirect',()=>scanPhpStreamRedirect(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanCodegenSink',()=>scanCodegenSink(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanLiteralEscaping',()=>scanLiteralEscaping(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanFrontmatterEngine',()=>scanFrontmatterEngine(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanGitOptionInjection',()=>scanGitOptionInjection(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanOwnershipAuthz',()=>scanOwnershipAuthz(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanAuthProvider',()=>scanAuthProvider(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanEnvHygiene',()=>scanEnvHygiene(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanWebhook',()=>scanWebhook(p,cc))||[]));
@@ -8938,13 +8984,24 @@ async function queryRegistries(components){
       _aF.push(...(runDetector(_detectorErrors,p,'scanPrototypePollution',()=>scanPrototypePollution(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanPrototypePollutionStructural',()=>scanPrototypePollutionStructural(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanRubyHtmlInterpolation',()=>scanRubyHtmlInterpolation(p,cc))||[]));
+      // Resource exhaustion in decoders: decompression and image decoding with no output bound (PHP/Ruby/JS/Go/Java),
+      // lengths/counts/shifts decoded from untrusted bytes with no bound (Go/C#/Java), and C# receive loops a single
+      // malformed message can end. Each module gates on its own file extensions.
+      _aF.push(...(runDetector(_detectorErrors,p,'scanDecompressionBomb',()=>scanDecompressionBomb(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanDecodedLength',()=>scanDecodedLength(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanReceiveLoopException',()=>scanReceiveLoopException(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanJsMarkupMarkSafe',()=>scanJsMarkupMarkSafe(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanJsIncompleteRegexEscape',()=>scanJsIncompleteRegexEscape(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanJsExecParamInterpolation',()=>scanJsExecParamInterpolation(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPythonRunWrittenCode',()=>scanPythonRunWrittenCode(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPhpHtmlAttrInterpolation',()=>scanPhpHtmlAttrInterpolation(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanCSRF',()=>scanCSRF(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanTOCTOU',()=>scanTOCTOU(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanNoSQLInjection',()=>scanNoSQLInjection(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanLDAPInjection',()=>scanLDAPInjection(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanXPathInjection',()=>scanXPathInjection(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanSSTI',()=>scanSSTI(p,cc))||[]));
-      _aF.push(...(runDetector(_detectorErrors,p,'scanOpenRedirect',()=>scanOpenRedirect(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanOpenRedirect',()=>scanOpenRedirect(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanWeakLocalPathGuard',()=>scanWeakLocalPathGuard(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanWrongContextSanitizer',()=>scanWrongContextSanitizer(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanSanitizerContextMismatch',()=>scanSanitizerContextMismatch(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanFrontendHygiene',()=>scanFrontendHygiene(p,cc))||[]));
@@ -8974,7 +9031,7 @@ async function queryRegistries(components){
       _aF.push(...(runDetector(_detectorErrors,p,'scanSSRFCloudMetadata',()=>scanSSRFCloudMetadata(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanMutationXSS',()=>scanMutationXSS(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanKotlin',()=>scanKotlin(p,cc))||[]));
-      _aF.push(...(runDetector(_detectorErrors,p,'scanRuby',()=>scanRuby(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRubyPathJoin',()=>scanRubyPathJoin(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanRuby',()=>scanRuby(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRubyPathJoin',()=>scanRubyPathJoin(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRubyKernelOpen',()=>scanRubyKernelOpen(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanPhp',()=>scanPhp(p,cc))||[]));
       // Integration block: scaffolded SAST scanners. Gated by env var.
       if (process.env.AGENTIC_SECURITY_NO_INTEGRATION !== '1') {

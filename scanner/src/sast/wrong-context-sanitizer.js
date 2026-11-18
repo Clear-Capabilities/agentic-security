@@ -45,6 +45,26 @@ const SCHEME_GUARD = [
 
 function lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }
 
+// True when the URL value starts with a literal prefix that already FIXES the
+// scheme, so nothing the encoded value contributes can turn it into a
+// `javascript:` or `data:` URL. A URL scheme is letters, digits, `+`, `.` and
+// `-` up to the first `:`; a prefix holding any other character either ends a
+// complete scheme (`data:`, `mailto:`, `https://host/`) or makes the URL
+// relative (`/img/`, `./`, `?q=`, `#`). A prefix of scheme characters only
+// (`foo`, or none) does not: `foo` + `javascript:x` is still attacker-chosen.
+// `valueText` is the attribute or assignment value from just after `=`.
+const _SCHEME_CHAR = /^[A-Za-z0-9+.\-]*$/;
+const _ENC_NAME = new RegExp('\\b' + HTML_ENCODER);
+function _literalPrefixFixesScheme(valueText) {
+  let v = String(valueText || '').replace(/^\s*[{"'`]?/, '');
+  // The literal part ends at the first interpolation, concatenation, JSX or
+  // PHP expression, quote, or the encoder call itself.
+  const stops = [v.indexOf('${'), v.indexOf('+'), v.indexOf('{'), v.indexOf('<?'),
+    v.search(/["'`]/), v.search(_ENC_NAME)].filter(i => i >= 0);
+  const prefix = (stops.length ? v.slice(0, Math.min(...stops)) : v).trim();
+  return prefix.length > 0 && !_SCHEME_CHAR.test(prefix);
+}
+
 function isJsLike(fp) { return /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(fp); }
 function isPhp(fp) { return /\.php$/i.test(fp); }
 
@@ -121,6 +141,11 @@ export function scanWrongContextSanitizer(fp, raw) {
     while ((m = re.exec(code))) {
       const line = lineOf(code, m.index);
       if (seen.has(line)) continue;
+      // A literal prefix that fixes the scheme (`src="data:${escapeHtml(t)}"`,
+      // `href = '/u/' + escapeHtml(id)`): the value cannot pick the scheme,
+      // so HTML-encoding it is the right tool for the attribute.
+      const valueText = m[1] !== undefined ? m[1] : m[0].replace(/^[^=]*=/, '');
+      if (_literalPrefixFixesScheme(valueText)) continue;
       // Suppress when a scheme guard appears within 5 lines above.
       const lo = Math.max(0, line - 6);
       const near = lines.slice(lo, line).join('\n');

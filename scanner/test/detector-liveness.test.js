@@ -59,6 +59,19 @@ const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtur
 //     per-file SAST dispatch. Now 1 finding on vulnerable, 0 on clean.
 const KNOWN_DARK = new Map([]);
 
+// Fixtures whose rule is OFF by default behind an operator opt-in. They are not dark: the test below scans each
+// one twice and requires zero findings with the flag unset AND at least one with it set, so the gate is proved
+// in both directions rather than excused.
+const OPT_IN = new Map([
+  ['js-exec-param-interpolation', 'AGENTIC_SECURITY_LIBRARY_SOURCES'],
+]);
+
+async function withEnv(name, value, fn) {
+  const prev = process.env[name];
+  if (value === undefined) delete process.env[name]; else process.env[name] = value;
+  try { return await fn(); } finally { if (prev === undefined) delete process.env[name]; else process.env[name] = prev; }
+}
+
 function fixturesWithVulnerableTree() {
   if (!fs.existsSync(FIXTURES)) return [];
   return fs.readdirSync(FIXTURES).sort()
@@ -82,7 +95,7 @@ test('every rule fixture still produces a finding THROUGH runScan, not just in i
 
   const dark = [];
   for (const name of names) {
-    if (KNOWN_DARK.has(name)) continue;
+    if (KNOWN_DARK.has(name) || OPT_IN.has(name)) continue;
     const n = await findingCount(path.join(FIXTURES, name, 'vulnerable'));
     if (n === 0) dark.push(name);
   }
@@ -91,6 +104,18 @@ test('every rule fixture still produces a finding THROUGH runScan, not just in i
     'These rules produce ZERO findings through a full scan. Either the detector broke, or — as '
     + 'with rate-limit.js — its output is being discarded somewhere downstream. Call the detector '
     + `directly to tell those apart:\n  ${dark.join('\n  ')}`);
+});
+
+test('an opt-in rule finds nothing with its flag unset and finds its fixture with the flag set', async () => {
+  const wrong = [];
+  for (const [name, flag] of OPT_IN) {
+    const dir = path.join(FIXTURES, name, 'vulnerable');
+    assert.ok(fs.existsSync(dir), `OPT_IN names a fixture that does not exist: ${name}`);
+    const off = await withEnv(flag, undefined, () => findingCount(dir));
+    const on = await withEnv(flag, '1', () => findingCount(dir));
+    if (off !== 0 || on === 0) wrong.push(`${name}: ${off} finding(s) with ${flag} unset, ${on} with it set`);
+  }
+  assert.deepEqual(wrong, []);
 });
 
 test('the known-dark list contains no stale entries (fix one, remove it)', async () => {

@@ -83,7 +83,7 @@ function _renderJest(finding, poc) {
 
 import { test, expect } from '@jest/globals';
 
-test('${finding.vuln.replace(/'/g, "\\'")}', async () => {
+test('${finding.vuln.replace(/[\\']/g, '\\$&')}', async () => {
   const URL_ = ${JSON.stringify(url)};
   const METHOD = ${JSON.stringify(method)};
   ${payloadLine}

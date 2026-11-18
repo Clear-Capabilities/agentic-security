@@ -8,6 +8,7 @@
 //   - SAXBuilder()                                (JDOM)
 //   - SchemaFactory.newInstance()
 //   - TransformerFactory.newInstance()
+//   - a factory implementation constructed directly (new ...TransformerFactoryImpl(), ...DocumentBuilderFactoryImpl())
 //   - XMLReaderFactory.createXMLReader()
 //
 // Java-safe configurations (any one suppresses the finding for the file):
@@ -38,6 +39,9 @@ const JAVA_VULN_PATTERNS = [
   { name: 'SchemaFactory',          re: /\bSchemaFactory\s*\.\s*newInstance\s*\(/g },
   { name: 'TransformerFactory',     re: /\bTransformerFactory\s*\.\s*newInstance\s*\(\s*\)/g },
   { name: 'XMLReaderFactory',       re: /\bXMLReaderFactory\s*\.\s*createXMLReader\s*\(/g },
+  // a factory implementation constructed directly (`new net.sf.saxon.TransformerFactoryImpl()`, the JDK's internal
+  // `DocumentBuilderFactoryImpl`) skips newInstance() but has the same unhardened defaults
+  { name: 'factory implementation', re: /\bnew\s+(?:[\w.]*\.)?(?:TransformerFactoryImpl|DocumentBuilderFactoryImpl|SAXParserFactoryImpl|XMLInputFactoryImpl|SAXTransformerFactoryImpl|SchemaFactoryImpl|XMLSchemaFactory|BasicTransformerFactory)\s*\(\s*\)/g },
 ];
 
 const JAVA_SAFE_RES = [
@@ -94,6 +98,21 @@ function _stripLineComment(s, lang) {
   return s;
 }
 
+// `TransformerFactory.newInstance().newTransformer().transform(dom, out)`:
+// a no-argument newTransformer() is the identity transform (no stylesheet is
+// parsed), and a DOMSource input is a tree that was already parsed, so this
+// call parses no XML text and no entity can be resolved by it. Only the
+// chained form is recognised, and only when the input is `new DOMSource(...)`
+// or a variable this file declares as a DOMSource; a stylesheet argument or a
+// StreamSource/SAXSource input (which IS parsed) keeps the finding.
+function _isIdentityTransformOfDom(code, afterFactory) {
+  const tail = code.slice(afterFactory, afterFactory + 300);
+  const t = /^\s*\.\s*newTransformer\s*\(\s*\)\s*\.\s*transform\s*\(\s*(new\s+DOMSource\s*\(|([A-Za-z_]\w*)\s*,)/.exec(tail);
+  if (!t) return false;
+  if (t[1].startsWith('new')) return true;
+  return new RegExp(`\\bDOMSource\\s+${t[2]}\\s*[=;,)]`).test(code);
+}
+
 function _lineOf(raw, idx) {
   return raw.substring(0, idx).split('\n').length;
 }
@@ -113,6 +132,7 @@ export function scanXXE(fp, raw) {
       const re = new RegExp(p.re.source, p.re.flags);
       let m;
       while ((m = re.exec(code))) {
+        if (p.name === 'TransformerFactory' && _isIdentityTransformOfDom(code, re.lastIndex)) continue;
         const line = _lineOf(raw, m.index);
         findings.push({
           id: `xxe:${fp}:${line}:${p.name}`,

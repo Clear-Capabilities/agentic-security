@@ -52,6 +52,13 @@ function walk(node, visit, stopAtFunctions, root = node) {
 const isCall = (n, name) => n?.type === 'CallExpression' && n.callee?.type === 'MemberExpression' && !n.callee.computed && n.callee.property?.name === name;
 const isObjectKeys = (n) => n?.type === 'CallExpression' && n.callee?.type === 'MemberExpression' && n.callee.object?.type === 'Identifier' && n.callee.object.name === 'Object' && ['keys', 'entries', 'getOwnPropertyNames'].includes(n.callee.property?.name);
 const idName = (n) => (n?.type === 'Identifier' ? n.name : null);
+// a split path, also through a filter/slice/map chain or a type assertion (`p.split('.').filter(Boolean)`)
+const isSplitInit = (n) => {
+  if (n?.type === 'TSAsExpression' || n?.type === 'ParenthesizedExpression') return isSplitInit(n.expression);
+  if (isCall(n, 'split')) return true;
+  return (isCall(n, 'filter') || isCall(n, 'slice') || isCall(n, 'map')) && isSplitInit(n.callee.object);
+};
+const isMatchCall = (n) => isCall(n, 'match') || isCall(n, 'exec');
 const fnName = (fn, parent) => fn.id?.name || (parent?.type === 'VariableDeclarator' ? idName(parent.id) : null) || (fn.key ? idName(fn.key) : null);
 
 /** The key variables of one function body (callbacks passed to forEach/reduce on a key list are treated as part of it). */
@@ -71,10 +78,16 @@ function keyVariables(fn) {
     if (line && !boundAt.has(name)) boundAt.set(name, line);
   };
   // two passes, so a list variable declared after its first use in source order is still known
+  const matchVars = new Set(); // variables holding the result of `s.match(re)` / `re.exec(s)`
   for (let pass = 0; pass < 2; pass++) {
     walk(fn.body, (n) => {
+      if (n.type === 'VariableDeclarator' && n.id?.type === 'Identifier' && isMatchCall(n.init)) matchVars.add(n.id.name);
+      // a key taken from a regex capture group (`const key = m[1]`): it enters at the match, but the match parses many things, so the
+      // refusal belongs at the write; no entry line is recorded and the finding is reported at the write
+      if (n.type === 'VariableDeclarator' && n.id?.type === 'Identifier' && n.init?.type === 'MemberExpression' && n.init.computed
+        && idName(n.init.object) && matchVars.has(n.init.object.name) && n.init.property?.type === 'NumericLiteral' && n.init.property.value > 0) keys.add(n.id.name);
       if (n.type === 'VariableDeclarator' && n.id?.type === 'Identifier') {
-        if (isCall(n.init, 'split') || (n.init?.type === 'TSAsExpression' && isCall(n.init.expression, 'split'))) { splitVars.add(n.id.name); if (!boundAt.has(n.id.name)) boundAt.set(n.id.name, n.loc?.start?.line); }
+        if (isSplitInit(n.init)) { splitVars.add(n.id.name); if (!boundAt.has(n.id.name)) boundAt.set(n.id.name, n.loc?.start?.line); }
         else if (isObjectKeys(n.init) || (n.init && listish(n.init))) listVars.add(n.id.name);
         // the last segment of a split path
         const i = n.init;
@@ -104,10 +117,10 @@ function analyseFunction(fn, parent, code, guardNames) {
   // a module-level helper or constant that names the prototype keys (`UNSAFE_KEYS.has(k)`, `check_prototype_pollution(k)`) guards too
   for (const g of guardNames) if (new RegExp(`\\b${g.replace(/\$/g, '\\$')}\\b`).test(text)) return null;
   const keys = keyVariables(fn);
-  if (!keys.size) return null;
+  if (!keys.size && !keys.splitVars.size) return null;
   const self = fnName(fn, parent);
   const splitVars = new Set();
-  walk(fn.body, (n) => { if (n.type === 'VariableDeclarator' && idName(n.id) && (isCall(n.init, 'split') || (n.init?.type === 'TSAsExpression' && isCall(n.init.expression, 'split')))) splitVars.add(n.id.name); }, true);
+  walk(fn.body, (n) => { if (n.type === 'VariableDeclarator' && idName(n.id) && isSplitInit(n.init)) splitVars.add(n.id.name); }, true);
   // a key is a key variable, or the last segment of a split path written inline (`parts[parts.length - 1]`)
   const isKey = (p) => (p?.type === 'Identifier' && keys.has(p.name)) || (p?.type === 'MemberExpression' && p.computed && idName(p.object) && splitVars.has(p.object.name));
   const keyed = (m) => m?.type === 'MemberExpression' && m.computed && isKey(m.property);
@@ -129,6 +142,8 @@ function analyseFunction(fn, parent, code, guardNames) {
       if (n.left.type === 'Identifier' && keyed(n.right) && idName(n.right.object) === n.left.name) walkFound = true;
       if (n.left.type === 'Identifier' && keyed(n.right)) indexedByKey.add(n.left.name);
     }
+    // `delete cur[k]` after a walk removes a property of whatever object the walk reached, Object.prototype included
+    if (n.type === 'UnaryExpression' && n.operator === 'delete' && keyed(n.argument) && !intoFresh(n.argument) && !inPlace(n.argument) && !write) write = { left: n.argument, loc: n.loc };
     if (n.type === 'VariableDeclarator' && n.id?.type === 'Identifier' && keyed(n.init)) indexedByKey.add(n.id.name);
     // reduce((acc, k) => acc[k] ...) returning the indexed value descends too
     if (n.type === 'ReturnStatement' && keyed(n.argument)) walkFound = true;
@@ -137,7 +152,9 @@ function analyseFunction(fn, parent, code, guardNames) {
   // recursion with a key-indexed value: merge(t[k], s[k]) or extend(deep, clone, copy) where copy = options[k]
   if (!walkFound && self) {
     walk(fn.body, (n) => {
-      if (n.type === 'CallExpression' && idName(n.callee) === self && n.arguments.some((a) => keyed(a) || (a.type === 'Identifier' && indexedByKey.has(a.name)))) walkFound = true;
+      // a function calling itself, or a class method calling itself through `this`
+      const callee = n.type === 'CallExpression' ? (idName(n.callee) || (n.callee?.type === 'MemberExpression' && n.callee.object?.type === 'ThisExpression' && fn.type === 'ClassMethod' ? idName(n.callee.property) : null)) : null;
+      if (n.type === 'CallExpression' && callee === self && n.arguments.some((a) => keyed(a) || (a.type === 'Identifier' && indexedByKey.has(a.name)))) walkFound = true;
     }, true);
   }
   if (!walkFound || !write) return null;
@@ -151,7 +168,7 @@ function analyseFunction(fn, parent, code, guardNames) {
 export function scanPrototypePollutionStructural(file, code) {
   if (!FILE_RE.test(file) || !code || code.length > 400_000) return [];
   // cheap gate: a computed write with an identifier key must appear somewhere
-  if (!/\]\s*=[^=]/.test(code) || !/\bfor\s*\(|\.forEach\(|\.reduce\(|\.split\(/.test(code)) return [];
+  if (!(/\]\s*=[^=]/.test(code) || /\bdelete\s+[\w$.]+\[/.test(code)) || !/\bfor\s*\(|\.forEach\(|\.reduce\(|\.split\(|\.match\(|\.exec\(/.test(code)) return [];
   const ast = parse(file, code);
   if (!ast) return [];
   const out = []; const seen = new Set();
@@ -161,6 +178,19 @@ export function scanPrototypePollutionStructural(file, code) {
     const d = st.type === 'ExportNamedDeclaration' ? st.declaration : st;
     if (d?.type === 'FunctionDeclaration' && d.id && PROTO_KEY_TEST.test(code.slice(d.start, d.end))) guardNames.push(d.id.name);
     if (d?.type === 'VariableDeclaration') for (const dc of d.declarations) if (idName(dc.id) && dc.init && PROTO_KEY_TEST.test(code.slice(dc.init.start, dc.init.end))) guardNames.push(dc.id.name);
+  }
+  // a module-level function that uses one of those (`assertSafeKey(k)` testing `UNSAFE.has(k)`) guards too, transitively
+  const topFns = [];
+  for (const st of ast.program.body) {
+    const d = st.type === 'ExportNamedDeclaration' ? st.declaration : st;
+    if (d?.type === 'FunctionDeclaration' && d.id) topFns.push([d.id.name, code.slice(d.start, d.end)]);
+  }
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const [name, text] of topFns) {
+      if (guardNames.includes(name)) continue;
+      if (guardNames.some((g) => new RegExp(`\\b${g.replace(/\$/g, '\\$')}\\b`).test(text))) { guardNames.push(name); changed = true; }
+    }
   }
   const visitFns = (node, parent) => {
     if (!node || typeof node !== 'object') return;

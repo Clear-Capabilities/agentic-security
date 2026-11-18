@@ -164,4 +164,40 @@ export function scanRedirectToctou(file, raw) {
   return out;
 }
 
+// T4.4b for PHP streams. `file_get_contents($url, false, $ctx)` (also fopen/file/readfile/copy/get_headers) follows HTTP redirects
+// unless the stream context's `http` options set `follow_location` to 0, so a host allow-list checked on the URL protects only the
+// first hop. Reported at the `http` options of the context, which is where `'follow_location' => 0` belongs; requires the host check
+// (an `in_array` of the parsed host, or a comparison of a `parse_url(...)` host) and the fetch in the same stretch of code.
+const PHP_HTTP_OPTS_RE = /['"]http['"]\s*=>\s*(?:\[|array\s*\()/g;
+const PHP_STREAM_FETCH_RE = /\b(?:file_get_contents|fopen|file|readfile|copy|get_headers|getimagesize|simplexml_load_file)\s*\(\s*\$\w+[^;]*\$\w+/;
+const PHP_HOST_CHECK_RE = /\bin_array\s*\(\s*\$\w*host\w*|\bin_array\s*\(\s*(?:parse_url|\$\w+\s*\[\s*['"]host['"])|\$\w*host\w*\s*[!=]==?|[!=]==?\s*\$\w*host\w*|PHP_URL_HOST|\[\s*['"]host['"]\s*\]\s*[!=]==?/i;
+const PHP_NO_FOLLOW_RE = /['"]follow_location['"]\s*=>\s*(?:0|false)\b|['"]max_redirects['"]\s*=>\s*[01]\b/i;
+
+export function scanPhpStreamRedirect(file, raw) {
+  if (!raw || typeof raw !== 'string' || raw.length > 500_000) return [];
+  if (!/\.php$/i.test(file) || !/stream_context_create/.test(raw)) return [];
+  const code = blankComments(raw, 'php');
+  const lines = code.split('\n');
+  const out = [];
+  const re = new RegExp(PHP_HTTP_OPTS_RE.source, 'g');
+  let m;
+  while ((m = re.exec(code))) {
+    const line = _lineOf(code, m.index);
+    const after = lines.slice(line - 1, Math.min(lines.length, line + 25)).join('\n');
+    const before = lines.slice(Math.max(0, line - 26), line).join('\n');
+    if (!/stream_context_create/.test(after) || !PHP_STREAM_FETCH_RE.test(after)) continue;
+    if (!PHP_HOST_CHECK_RE.test(before)) continue;
+    if (PHP_NO_FOLLOW_RE.test(`${before}\n${after}`)) continue;
+    out.push(mk(file, line, 'unvalidated-redirect-hop', 'medium', 'CWE-918',
+      'URL host allow-list checked once, then the PHP stream follows redirects',
+      'The URL\'s host is checked against an allow-list, then fetched through a stream context whose `http` options do not set '
+      + '`follow_location` to 0. PHP streams follow redirects by default, so an allowed host that answers with a redirect '
+      + 'to an internal address is fetched anyway: the check covers the first hop only.',
+      'Add `\'follow_location\' => 0` to the context\'s `http` options (and treat a 3xx as an error), or follow each redirect '
+      + 'yourself and re-run the host check on every Location.',
+      'follow_location disabled in the same stream context'));
+  }
+  return out;
+}
+
 export const _internals = { FOLLOWS_REDIRECTS_RE, HEADER_STRIP_RE, PER_HOP_CHECK_RE, URL_VALIDATION_RE, PIN_RE, CONNECT_TIME_REVALIDATION_RE };
