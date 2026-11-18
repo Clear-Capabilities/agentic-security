@@ -4,12 +4,14 @@
 //
 // Behavior controlled by .agentic-security/destructive-guard.json:
 //   { "mode": "warn" | "block" | "off", "allowedRoots": ["/abs/path", "~/code"], "disposableDirs": ["/abs/scratch"], "extraPatterns": [{...}] }
-//   allowedRoots: deletion is allowed strictly INSIDE these (the root itself is protected). disposableDirs: may be deleted wholesale.
+//   allowedRoots: deletion is allowed strictly INSIDE these (the root itself is protected). Default: the project directory
+//   (CLAUDE_PROJECT_DIR), so files and folders made inside the project can be deleted again and nothing outside it can.
+//   disposableDirs: may be deleted wholesale.
 //
 // File deletion is PATH-AWARE, not a text match. `rm`, `rmdir`, `unlink` and `find -delete` targets are parsed out of the command,
-// resolved (~, $HOME, relative paths, `cd`, symlinks) and allowed ONLY when they are strictly inside an allowed root (default ~/code).
-// Anything outside, anything that cannot be resolved statically ($VAR, command substitution, xargs), and the allowed root itself are
-// blocked. It cannot see deletion done inside another program (node -e fs.rmSync, python shutil.rmtree): it guards against mistakes,
+// resolved (~, $HOME, relative paths, `cd`, symlinks, and variables the same command sets to a literal path) and allowed ONLY when
+// they are strictly inside an allowed root. Anything outside, anything that cannot be resolved statically (a variable set elsewhere
+// or conditionally, command substitution, xargs), and the allowed root itself are blocked. It cannot see deletion done inside another program (node -e fs.rmSync, python shutil.rmtree): it guards against mistakes,
 // it is not a sandbox.
 //
 // CommonJS, no deps.
@@ -137,9 +139,16 @@ function realish(p) {
     rest.push(path.basename(cur)); cur = up;
   }
 }
-function allowedRootsFrom(cfg) {
-  const list = Array.isArray(cfg.allowedRoots) && cfg.allowedRoots.length ? cfg.allowedRoots : [path.join(HOME, 'code')];
-  return list.map((r) => expandHome(String(r))).filter((r) => path.isAbsolute(r)).map((r) => realish(path.resolve(r)));
+// The default root is the project directory. A project directory that is the filesystem root, the home directory or an ancestor
+// of it gives no default root at all (every deletion is refused): allowing "everything inside $HOME" is not a boundary.
+function allowedRootsFrom(cfg, projectDir = cwd) {
+  if (Array.isArray(cfg.allowedRoots) && cfg.allowedRoots.length) {
+    return cfg.allowedRoots.map((r) => expandHome(String(r))).filter((r) => path.isAbsolute(r)).map((r) => realish(path.resolve(r)));
+  }
+  if (!projectDir || !path.isAbsolute(projectDir)) return [];
+  const p = realish(path.resolve(projectDir)); const home = realish(HOME);
+  if (p === path.parse(p).root || p === home || home.startsWith(p + path.sep)) return [];
+  return [p];
 }
 
 // `disposableDirs`: directories that may be deleted wholesale, themselves included (scratch work areas). Unlike allowedRoots, where
@@ -162,15 +171,23 @@ const isVarStart = (src, i) => src[i] === '$' && /[A-Za-z_{@*#?!0-9]/.test(src[i
 // separately so they are analysed as commands too, and a word containing an unresolvable expansion is flagged `unresolved`.
 function splitShell(src) {
   const segments = []; const subs = [];
-  let words = []; let cur = ''; let has = false; let unresolved = false;
+  let words = []; let cur = ''; let has = false; let unresolved = false; let ops = ''; let depth = 0;
   const endWord = () => { if (has) words.push({ text: cur, unresolved }); cur = ''; has = false; unresolved = false; };
-  const endSeg = () => { endWord(); if (words.length) segments.push(words); words = []; };
+  const endSeg = () => {
+    endWord();
+    if (words.length) {
+      words.prev = ops; words.next = ''; words.depth = depth;
+      if (segments.length) segments[segments.length - 1].next = ops;
+      segments.push(words); ops = '';
+    }
+    words = [];
+  };
   const heredocs = [];
   let i = 0; const n = src.length;
   while (i < n) {
     const c = src[i];
     if (c === '\n') {
-      endSeg(); i++;
+      endSeg(); ops += '\n'; i++;
       while (heredocs.length) {
         const h = heredocs.shift();
         while (i < n) {
@@ -207,7 +224,11 @@ function splitShell(src) {
       if (w) heredocs.push({ word: w, strip });
       endWord(); i = j; continue;
     }
-    if (c === ';' || c === '|' || c === '&' || c === '(' || c === ')') { endSeg(); i++; continue; }
+    if (c === ';' || c === '|' || c === '&' || c === '(' || c === ')') {
+      endSeg(); ops += c;
+      if (c === '(') depth++; else if (c === ')') depth = Math.max(0, depth - 1);
+      i++; continue;
+    }
     if (c === '>' || c === '<') { // a redirection is not a command word: skip the operator and its target
       endWord(); i++; if (src[i] === '>' || src[i] === '&') i++; while (src[i] === ' ') i++;
       while (i < n && !/[\s;|&()]/.test(src[i])) i++;
@@ -217,12 +238,22 @@ function splitShell(src) {
     cur += c; has = true; i++;
   }
   endSeg();
+  if (segments.length) segments[segments.length - 1].next = ops;
   return { segments, subs };
 }
 
 const WRAPPERS = new Set(['sudo', 'doas', 'env', 'command', 'builtin', 'time', 'nohup', 'nice', 'exec', 'xargs', 'stdbuf', 'ionice']);
 const DELETERS = new Set(['rm', 'rmdir', 'unlink', 'shred', 'trash']);
 const base = (w) => path.basename(w);
+
+// Commands that can set or unset shell variables in ways the parser does not follow. Seeing any of them (anywhere in a segment)
+// makes every variable unresolvable from that point on.
+const VAR_WRITERS = new Set(['read', 'unset', 'eval', 'source', '.', 'declare', 'typeset', 'local', 'readonly', 'mapfile', 'readarray', 'getopts', 'let', 'printf']);
+const COMPOUND_OPEN = new Set(['if', 'while', 'until', 'for', 'select', 'case', '{']);
+const COMPOUND_CLOSE = new Set(['fi', 'done', 'esac', '}']);
+const KEYWORD_LEAD = new Set(['if', 'then', 'elif', 'else', 'do', 'while', 'until', '{', '!']);
+const ASSIGN = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s;
+const VAR_REF = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
 
 /**
  * Every deletion target in `command` that is not strictly inside an allowed root, as [{ target, reason }].
@@ -236,16 +267,70 @@ function analyzeDeletes(command, { roots, startCwd, disposable = [] }) {
     const { segments, subs } = splitShell(src);
     let cwd = cwdIn; // null = unknown
     for (const sub of subs) run(sub, cwd, depth + 1);
-    for (const seg of segments) {
+    // name -> { value, seg, sure }: `sure` = the assignment ran unconditionally at top level; otherwise it counts only for a use
+    // reached from it through `&&` alone (the use runs only if the assignment did). A name in `poisoned` never resolves again.
+    const vars = new Map(); const poisoned = new Set(); let poisonAll = false; let compound = 0;
+    const lookup = (name, segIdx) => {
+      if (name === 'PWD') return cwd;
+      if (poisonAll || poisoned.has(name)) return null;
+      const v = vars.get(name); if (!v) return null;
+      if (v.sure) return v.value;
+      for (let j = v.seg + 1; j <= segIdx; j++) {
+        if (segments[j].prev !== '&&' || segments[j].depth !== 0) return null;
+      }
+      return v.value;
+    };
+    // A word's text with every variable reference substituted, or unresolved when any reference (or a substitution) is unknown.
+    const resolveWord = (w, segIdx) => {
+      if (!w.unresolved) return w;
+      if (w.text.includes('$(...)') || w.text.includes('`...`')) return w;
+      let ok = true;
+      const text = w.text.replace(VAR_REF, (m, a, b) => { const v = lookup(a || b, segIdx); if (v == null) { ok = false; return m; } return v; });
+      if (!ok || text.includes('$')) return w;
+      return { text, unresolved: false };
+    };
+    for (let si = 0; si < segments.length; si++) {
+      const seg = segments[si];
+      const first = seg[0].text;
+      if (COMPOUND_CLOSE.has(first)) compound = Math.max(0, compound - 1);
+      const conditionalCtx = compound > 0 || seg.depth > 0 || COMPOUND_OPEN.has(first);
+      if (COMPOUND_OPEN.has(first)) compound++;
+      if (seg.some((w) => VAR_WRITERS.has(w.text))) poisonAll = true;
+      if (first === 'for' || first === 'select') { if (seg[1]) poisoned.add(seg[1].text); }
+      // Assignments: a segment made only of NAME=value words (optionally after `export`) sets shell variables. NAME=value before a
+      // command only sets that command's environment and does not change the shell's value, so it is not recorded.
+      {
+        let lead = 0; while (lead < seg.length && KEYWORD_LEAD.has(seg[lead].text)) lead++;
+        const rest = seg.slice(lead);
+        const ws = rest[0] && rest[0].text === 'export' ? rest.slice(1) : rest;
+        const inKeyword = lead > 0;
+        const allAssign = ws.length > 0 && ws.every((w) => ASSIGN.test(w.text));
+        for (const w of seg) { const m = /^([A-Za-z_][A-Za-z0-9_]*)(?:\+=|\[)/.exec(w.text); if (m) poisoned.add(m[1]); }
+        if (allAssign) {
+          for (const w of ws) {
+            const [, name, raw] = ASSIGN.exec(w.text);
+            const r = resolveWord({ text: raw, unresolved: w.unresolved }, si);
+            const value = r.unresolved ? null : expandHome(r.text);
+            if (value == null || value === '' || /[\s*?[\]]/.test(value) || conditionalCtx || inKeyword) { poisoned.add(name); vars.delete(name); continue; }
+            const sure = /^[;\n]*$/.test(seg.prev) && /^(?:&&)?[;\n]*$/.test(seg.next);
+            poisoned.delete(name);
+            vars.set(name, { value, seg: si, sure });
+          }
+          continue;
+        } else if (rest[0] && rest[0].text === 'export') {
+          for (const w of ws) { const m = ASSIGN.exec(w.text); if (m) poisoned.add(m[1]); }
+        }
+      }
       let k = 0; let viaXargs = false;
       while (k < seg.length) {
         const w = seg[k].text;
         if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) { k++; continue; }
+        if (KEYWORD_LEAD.has(w)) { k++; continue; } // `then rm ...`, `do rm ...`: the command follows the keyword
         if (WRAPPERS.has(base(w))) { if (base(w) === 'xargs') viaXargs = true; k++; while (k < seg.length && /^-/.test(seg[k].text)) k++; continue; }
         break;
       }
       if (k >= seg.length) continue;
-      const cmd = base(seg[k].text); const args = seg.slice(k + 1);
+      const cmd = base(seg[k].text); const args = seg.slice(k + 1).map((a) => resolveWord(a, si));
       if (cmd === 'cd' || cmd === 'pushd') {
         const t = args.find((a) => !/^-/.test(a.text));
         if (!t) { cwd = HOME; continue; }

@@ -15,7 +15,7 @@ Workflow + guard installer dispatcher.
 | `--ci` | Generate a CI security-gate workflow. Auto-detects your provider or set `--provider github|gitlab|circleci|buildkite|jenkins`; `--fail-on critical|high|medium`; dry-run unless `--apply`. GitHub Actions is generated inline; gitlab/circleci/buildkite/jenkins come from `scripts/ci-templates/` |
 | `--predeploy` | Pre-deploy gate that blocks `vercel`/`fly`/`wrangler` deploys **in your terminal** (not just CI) on critical/KEV findings. Sub-commands: `install` (default), `check`, `status`, `off` |
 | `--bodyguard` | Configure the AI bodyguard PreToolUse hook. Modes: `warn`, `block`, `off`. Per-project forbidden APIs at `.agentic-security/forbidden-apis.yml` |
-| `--destructive-guard` | Configure the destructive-Bash-command guard (rm -rf, force-push, etc.). Modes: `warn`, `block`, `off` |
+| `--destructive-guard` | Configure the destructive-Bash-command guard (rm -rf, force-push, etc.). Modes: `warn`, `block`, `off`. File deletion is allowed only strictly inside the project directory; `allowedRoots` in `.agentic-security/destructive-guard.json` changes the boundary |
 | `--all` | One-pass setup: installs hooks + CI + bodyguard + destructive-guard with sensible defaults (the pre-deploy gate stays opt-in) |
 
 Bare `/setup` (no flag) prints this mode menu. `--model-optimizer` was removed in 0.195.34 with the per-prompt model-cost advisor; if it is passed, say so in one line and print the menu.
