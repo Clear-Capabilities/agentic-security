@@ -42,7 +42,7 @@
 // sanitizer must never silently drop a real vulnerability, so the walk never
 // treats a sanitizer call as clearing the tainted path on its own.
 
-import { matchSource, matchSinkOrSanitizer, matchMemberWriteSink, matchAnnotationParams, matchAnnotationParamSources } from './catalog.js';
+import { matchSource, matchSinkOrSanitizer, matchMemberWriteSink, matchAnnotationParams, matchAnnotationParamSources, CATALOG as _CATALOG_ENTRIES } from './catalog.js';
 import { functionRecord } from '../ir/callgraph.js';
 import { accessPathOf, isCoveredBy, hasTaintedDescendant, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual, pathIsCoveredByPrefix } from './access-paths.js';
 import { aliasesForVar } from './points-to.js';
@@ -662,7 +662,15 @@ function exprTaint(expr, state, callContext) {
     case 'unknown':           return false;
     // Haskell: the element of a collection that is itself a call result (`words s`'s elements, `lines body`'s) is a `member` whose object is a call,
     // which is not an access path. An element of a tainted collection is tainted; reading a field of a tainted value is the same fact.
-    case 'member':            return /\.(?:hs|lhs)$/i.test(_currentFile || '') ? exprTaint(expr.object, state, callContext) : false;
+    // Every language: a field read off a call RESULT (`new URL(request.url).searchParams`,
+    // `url.parse(req.url, true).query`) is as tainted as the result. The same value bound to a
+    // name first (`const u = new URL(request.url); u.searchParams`) was already tainted through the
+    // access path of `u`; without this case the inline form silently dropped it.
+    case 'member':
+      if (/\.(?:hs|lhs)$/i.test(_currentFile || '')) return exprTaint(expr.object, state, callContext);
+      // A named field only: an element read (`[]`, how the Python IR lowers `a, b = f(x)`) keeps its old meaning.
+      if (typeof expr.prop !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(expr.prop)) return false;
+      return !!(expr.object && (expr.object.kind === 'call' || expr.object.kind === 'member')) && exprTaint(expr.object, state, callContext);
     default:                  return false;
   }
 }
@@ -1419,6 +1427,34 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
             if (!kw || kw.kind !== 'literal' || !new RegExp(pattern).test(String(kw.value))) continue;
           }
         }
+        // `match.rejectKeyword`: the negative form of requireKeyword: a call
+        // that passes the named keyword as a literal matching the pattern is
+        // the safe form of the API and is not a sink (Django's
+        // `HttpResponse(body, content_type="application/json")` is not an HTML
+        // response; `torch.load(f, weights_only=True)` cannot unpickle code).
+        // Only a statically known literal rejects: an absent or computed
+        // keyword keeps the sink, so this can only remove a finding on
+        // evidence.
+        if (e.match && e.match.rejectKeyword && callKwargs) {
+          const { name, pattern } = e.match.rejectKeyword;
+          const kw = callKwargs[name];
+          if (kw && kw.kind === 'literal' && new RegExp(pattern, 'i').test(String(kw.value))) continue;
+        }
+        // `match.rejectOptionKey`: an options-object argument carrying this
+        // key selects the confined form of the API (Express
+        // `res.sendFile(name, { root: dir })` resolves inside `dir` and refuses
+        // `..`). Only an object literal that names the key counts as evidence.
+        // `match.requireRequestSource`: report on request evidence; defer on a parameter (judged at the call site that
+        // merges this finding); otherwise (operator input, or nothing known) this sink is not reported.
+        let _reqGate = null;
+        if (e.match && e.match.requireRequestSource) {
+          const k = _originKinds(taintedArgExpr, callContext);
+          if (k.req) _reqGate = { _reqOrigin: true };
+          else if (k.param) _reqGate = { _reqPending: true };
+          else continue;
+        }
+        if (e.match && e.match.rejectOptionKey
+          && (argExprs || []).some((a) => a && a.kind === 'object' && (a.props || []).some((p) => p && p.key === e.match.rejectOptionKey))) continue;
         // Premortem #10: attribute the source for THIS sink to the
         // source(s) that taint the actual argument expression — not the
         // first source the worklist happened to record. We walk the
@@ -1437,6 +1473,7 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
         const _sanNames = _sanitizersForExpr(taintedArgExpr, callContext);
         const _unsanNames = _unsanitizersForExpr(taintedArgExpr, callContext);
         findings.push({
+          ...(_reqGate || {}),
           ...(_sanNames.size ? { _sanitizersOnPath: [..._sanNames] } : {}),
           ...(_unsanNames.size ? { _unsanitizersOnPath: [..._unsanNames] } : {}),
           // Haskell: two sinks of the same kind on one line (`if b then f (clean x) else f x`) are distinct
@@ -1626,6 +1663,112 @@ function _inheritSources(callContext, target, exprs, state) {
   }
 }
 
+// `match.requireRequestSource` (catalog-framework-models.js): a filesystem or
+// program-selection sink that ordinary command-line and library code feeds
+// from its own environment, arguments, console and files
+// (`fs.readFileSync(path.join(process.env.HOME, ...))`, `spawnSync(gitBinary, ...)`).
+// Such a sink is reported only on POSITIVE evidence that its argument comes
+// from a remote party. Evidence is read at the sink from the argument
+// expression (an inline source, a variable's recorded origins, and the origin
+// kinds remembered for each assignment in `callContext._originKinds`); a
+// value that rests on a parameter is deferred and judged against the
+// arguments at the call site that merges the callee's finding
+// (`_judgePendingAtCallSite`); at collection the resolved evidence chain is a
+// last source of evidence (`_hasRequestOrigin`). Operator input, or no
+// evidence at all, does not report these sinks: the cost is a missed flow the
+// engine could not attribute, which is the stated trade for sinks that
+// command-line code calls on every line.
+// Origins that are not a remote party's request: operator input, and a remote SERVER's reply (`network`), whose
+// values a client typically hashes or stores rather than lets a requester choose.
+const _OPERATOR_PROVENANCE = new Set(['env', 'cli', 'file-read', 'stdin', 'caller-argument', 'network']);
+// Operator-input catalog sources that predate the provenance labels.
+const _OPERATOR_SOURCE_IDS = new Set([
+  'py-os-getenv', 'py-os-environ', 'py-input', 'java-system-getenv', 'java-system-getProperty', 'java-io-readline',
+  'rb-env', 'php-env', 'cs-console-readline', 'cs-console-read',
+]);
+let _requireRequestSinkIds = null;
+function _classifyOriginRecord(r, out, depth = 0) {
+  if (!r) return out;
+  if (Array.isArray(r.from) && r.from.length && depth < 8) { for (const x of r.from) _classifyOriginRecord(x, out, depth + 1); return out; }
+  if (r.isParam || r.provenance === 'param') { out.param = true; return out; }
+  if (r.provenance === 'interproc') return out;
+  if (_OPERATOR_PROVENANCE.has(r.provenance) || _OPERATOR_SOURCE_IDS.has(r.sourceId)) out.op = true;
+  else out.req = true;
+  return out;
+}
+function _lookupOriginKinds(path, callContext, out) {
+  const m = callContext && callContext._originKinds;
+  if (!m || !path) return;
+  for (const k of [path, path.split('.')[0]]) {
+    const v = m.get(k);
+    if (v) { if (v.req) out.req = true; if (v.op) out.op = true; if (v.param) out.param = true; }
+  }
+}
+// Which kinds of origin (remote `req`, operator `op`) feed an expression. Bounded walk; reads only.
+function _originKinds(expr, callContext, out = { req: false, op: false, param: false }, depth = 0) {
+  if (!expr || typeof expr !== 'object' || depth > 40) return out;
+  if (expr.kind === 'member' || expr.kind === 'call' || expr.kind === 'ident') {
+    const hit = exprIsSource(expr, callContext);
+    if (hit) {
+      if (_OPERATOR_PROVENANCE.has(hit.provenance) || _OPERATOR_SOURCE_IDS.has(hit.id)) out.op = true;
+      else out.req = true;
+    }
+  }
+  const ap = accessPathOf(expr);
+  if (ap !== null) {
+    _lookupOriginKinds(ap, callContext, out);
+    for (const r of _sourcesReachingExpr(expr, null, callContext && callContext._taintSources)) _classifyOriginRecord(r, out);
+    return out;
+  }
+  switch (expr.kind) {
+    case 'binary': case 'logical':
+      _originKinds(expr.left, callContext, out, depth + 1); _originKinds(expr.right, callContext, out, depth + 1); break;
+    case 'tpl': for (const p of expr.parts || []) _originKinds(p, callContext, out, depth + 1); break;
+    case 'union': for (const b of expr.branches || []) _originKinds(b, callContext, out, depth + 1); break;
+    case 'object': for (const p of expr.props || []) _originKinds(p && p.value, callContext, out, depth + 1); break;
+    case 'array': for (const e of expr.elements || []) _originKinds(e, callContext, out, depth + 1); break;
+    case 'member': _originKinds(expr.object, callContext, out, depth + 1); break;
+    case 'call':
+      for (const a of expr.args || []) _originKinds(a, callContext, out, depth + 1);
+      if (expr.callee && typeof expr.callee === 'object' && expr.callee.kind === 'member') _originKinds(expr.callee.object, callContext, out, depth + 1);
+      else if (typeof expr.callee === 'string' && expr.callee.includes('.')) {
+        const recv = expr.callee.slice(0, expr.callee.lastIndexOf('.'));
+        _lookupOriginKinds(recv, callContext, out);
+        for (const r of _sourcesReachingExpr({ kind: 'ident', name: recv.split('.')[0] }, null, callContext && callContext._taintSources)) _classifyOriginRecord(r, out);
+      }
+      break;
+    default: break;
+  }
+  return out;
+}
+function _requiresRequestOrigin(sinkId) {
+  if (!_requireRequestSinkIds) {
+    _requireRequestSinkIds = new Set();
+    for (const e of _CATALOG_ENTRIES) if (e && e.kind === 'sink' && e.match && e.match.requireRequestSource) _requireRequestSinkIds.add(e.id);
+  }
+  return _requireRequestSinkIds.has(sinkId);
+}
+// Collect time: a gated finding is reported when request evidence was seen at the sink or at a call site that
+// merged it (`_reqOrigin`), or when its resolved evidence chain names a remote origin. A finding still waiting on
+// a parameter (`_reqPending`) that no caller resolved to request input is not reported.
+function _hasRequestOrigin(f) {
+  if (!f || !_requiresRequestOrigin(f.sinkId)) return true;
+  if (f._reqOrigin) return true;
+  const kinds = { req: false, op: false, param: false };
+  for (const r of f.trace || []) _classifyOriginRecord(r, kinds);
+  return kinds.req;
+}
+// Merge time: a callee finding waiting on its parameter is judged against the arguments this call site passes.
+// Returns null to drop it, or the (possibly updated) finding.
+function _judgePendingAtCallSite(f, callSite, callContext) {
+  if (!f || !f._reqPending || f._reqOrigin) return f;
+  const kinds = { req: false, op: false, param: false };
+  for (const a of (callSite && callSite.args) || []) _originKinds(a, callContext, kinds);
+  if (kinds.req) { const o = { ...f, _reqOrigin: true }; delete o._reqPending; return o; }
+  if (kinds.param) return f;
+  return null;
+}
+
 function _rootSources(trace, depth = 0, out = [], seen = new Set()) {
   for (const t of trace || []) {
     if (!t) continue;
@@ -1659,7 +1802,9 @@ function _mergeSummaryFindings(callContext, callerQid, sum, via, callSite) {
     }
     return argSources;
   };
-  for (const f of sum.findings) {
+  for (const f0 of sum.findings) {
+    const f = _judgePendingAtCallSite(f0, callSite, callContext);
+    if (!f) continue;
     const key = _findingKey(f);
     if (callContext._findingKeys.has(key)) continue;
     callContext._findingKeys.add(key);
@@ -1703,6 +1848,13 @@ function step(node, stateIn, callContext) {
       const target = typeof node.target === 'string' ? node.target : null;
       // A Haskell module-level cell written with tainted data: every function reads it tainted from now on (see _cellSeeds).
       if (target && target.startsWith('$cell:') && !_cellSeeds.has(target) && exprTaint(node.source, state, callContext)) _cellSeeds.add(target);
+      // Origin kinds of the assigned value, read only by the `requireRequestSource` sink gate (see _originKinds).
+      // Computed for a tainted right-hand side only; a clean assignment forgets what the name held.
+      if (target && callContext) {
+        if (!callContext._originKinds) callContext._originKinds = new Map();
+        if (src || exprTaint(node.source, state, callContext)) callContext._originKinds.set(target, _originKinds(node.source, callContext));
+        else callContext._originKinds.delete(target);
+      }
       // Sink matching is additive to this case's existing source/target/taint
       // handling below: an assignment's RHS can itself be a sink call (e.g.
       // `const rows = db.query(tainted)`), which previously went unreported
@@ -3266,6 +3418,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       // every path pushing into `_findings` sets `file` explicitly as of
       // this fix.
       const file = f.file || attributedFn.file;
+      if (!_hasRequestOrigin(f)) continue;
       const key = `${f.sinkId}:${file}:${f.line}${f.siteKey ? ':' + f.siteKey : ''}`;
       // DAG-05: a duplicate is still part of what THIS function contributed (the first
       // collector may be a function that later changes), so it is recorded; it is not re-emitted.

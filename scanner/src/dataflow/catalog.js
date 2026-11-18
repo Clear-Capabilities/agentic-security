@@ -873,7 +873,9 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-jinja-from-string', language: 'py', framework: 'jinja2', match: { type: 'call', callee: 'from_string' }, argIndex: 0,
     vuln: { name: 'SSTI (Jinja2.from_string)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never feed a user-supplied string into a template engine. Use pre-registered templates and pass values as variables.' } },
-  { kind: 'sink', id: 'rb-erb-new',           language: 'rb', framework: 'erb',    match: { type: 'call', callee: 'new', receiverTypeIn: ['^ERB$'] }, argIndex: 0,
+  // `receiver` is required as well: `receiverTypeIn` alone accepts an UNRESOLVED type, so every `X.new(input)` in a
+  // Ruby file (Regexp.new, Struct.new, a model's new) read as a template compile.
+  { kind: 'sink', id: 'rb-erb-new',           language: 'rb', framework: 'erb',    match: { type: 'call', callee: 'new', receiver: '^ERB$', receiverTypeIn: ['^ERB$'] }, argIndex: 0,
     vuln: { name: 'SSTI (ERB.new)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Use pre-existing templates with binding/locals — never construct a template from user input.' } },
   { kind: 'sink', id: 'js-handlebars-compile',language: 'js', framework: 'handlebars', match: { type: 'call', callee: 'compile' }, argIndex: 0,
@@ -965,7 +967,9 @@ export const CATALOG = [
   { kind: 'sink', id: 'go-ldap-newsearchrequest', language: 'go', framework: 'go-ldap', match: { type: 'call', callee: 'NewSearchRequest' }, argIndex: 'all',
     vuln: { name: 'LDAP Injection (go-ldap NewSearchRequest)', severity: 'high', cwe: 'CWE-90',
             remediation: 'Escape LDAP filter metacharacters before building the filter string.' } },
-  { kind: 'sink', id: 'java-xpath-compile', language: 'java', framework: 'xpath', match: { type: 'call', callee: 'compile' }, argIndex: 0,
+  // `Pattern.compile(regex)` shares the callee name with XPath's `compile(expr)`; a regex is not an XPath
+  // expression (its own ReDoS sink lives in catalog-framework-models.js), so the Pattern receiver is excluded.
+  { kind: 'sink', id: 'java-xpath-compile', language: 'java', framework: 'xpath', match: { type: 'call', callee: 'compile', receiverExclude: '^Pattern$' }, argIndex: 0,
     vuln: { name: 'XPath Injection (XPath.compile)', severity: 'high', cwe: 'CWE-643',
             remediation: 'Use XPathVariableResolver or setXPathVariableResolver; never concat user input into the expression.' } },
   // Taint-recall PRD (80%) Tier 1: XPath.evaluate() called directly (no
@@ -999,7 +1003,7 @@ export const CATALOG = [
   { kind: 'sink', id: 'cs-xml-selectnodes', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'SelectNodes' }, argIndex: 0,
     vuln: { name: 'XPath Injection (XmlDocument.SelectNodes)', severity: 'high', cwe: 'CWE-643',
             remediation: 'Use XPathExpression with bound variables (SetContext/AddVariable); never concat user input into the expression string.' } },
-  { kind: 'sink', id: 'kt-xpath-compile', language: 'kt', framework: 'xpath', match: { type: 'call', callee: 'compile' }, argIndex: 0,
+  { kind: 'sink', id: 'kt-xpath-compile', language: 'kt', framework: 'xpath', match: { type: 'call', callee: 'compile', receiverExclude: '^Pattern$' }, argIndex: 0,
     vuln: { name: 'XPath Injection (XPath.compile)', severity: 'high', cwe: 'CWE-643',
             remediation: 'Use XPathVariableResolver; never concat user input into the expression.' } },
   // Taint-recall PRD (80%): the idiomatic real-world shape is chained —
@@ -2201,6 +2205,7 @@ export const CATALOG = [
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { EXPANDED_SANITIZERS } from './catalog-expanded.js';
 import { HASKELL_CATALOG } from './catalog-haskell.js';
+import { FRAMEWORK_MODELS } from './catalog-framework-models.js';
 import { cppExtRe } from '../ir/parser-cpp.js';
 
 // Language-scope guard. `file` is optional — when absent, behavior is
@@ -2430,6 +2435,8 @@ function _receiverTypeConfirms(entry, receiverType) {
     _ids.add(k);
     CATALOG.push(e);
   }
+  // Framework request sources and sinks (catalog-framework-models.js). Same id rule: a base entry wins.
+  for (const e of FRAMEWORK_MODELS) { const k = String(e.id).toLowerCase(); if (_ids.has(k)) continue; _ids.add(k); CATALOG.push(e); }
   // Haskell models (generated from language/haskell-models.js). Entries are import-qualified.
   for (const e of HASKELL_CATALOG) { const k = String(e.id).toLowerCase(); if (_ids.has(k)) continue; _ids.add(k); CATALOG.push(e); }
 }

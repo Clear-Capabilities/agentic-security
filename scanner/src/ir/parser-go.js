@@ -121,6 +121,15 @@ function _lowerExpr(text) {
     const parts = _splitTopLevelCommas(inner).map(_lowerExpr);
     return { kind: 'tpl', parts };
   }
+  // A byte/rune slice conversion (`[]byte("<p>" + q)`, the usual argument of
+  // `w.Write`) carries exactly its operand's value. Without this branch the
+  // leading `[` matched nothing below and the whole argument lowered to
+  // `unknown`, dropping its taint. Only a conversion that spans the whole
+  // expression is unwrapped; anything chained after it falls through.
+  if (/^\[\](?:byte|rune)\s*\(/.test(s)) {
+    const conv = matchBalancedCall(s, /^\[\](?:byte|rune)/);
+    if (conv && s.slice(conv.endIdx).trim() === '') return _lowerExpr(conv.argsText);
+  }
   // R3 (PRD §5): string concat with `+` MUST be checked before the bare-literal
   // rule below — otherwise `"SELECT " + q` (starts with `"`) is captured whole as
   // a single literal and taint cannot flow through the concatenation. Only fires

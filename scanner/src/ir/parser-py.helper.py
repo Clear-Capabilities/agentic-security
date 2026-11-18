@@ -50,6 +50,7 @@
 import ast
 import hashlib
 import json
+import re
 import sys
 from typing import Any, Optional
 
@@ -769,6 +770,105 @@ def _param_annotations(node: Any, params: list[str]) -> list[dict[str, Any]]:
             continue
         out.append({"index": idx, "name": arg.arg, "decorator": marker})
 
+    out.extend(_route_params(node, params))
+    return out
+
+
+# Route decorators whose handler parameters the framework fills from the
+# request: Flask/Quart/Bottle `@app.route("/p/<x>")`, FastAPI/Starlette/
+# Flask 2 `@app.get("/p/{x}")` and friends, `@app.api_route(...)`.
+_ROUTE_DECORATOR_ATTRS = {"route", "get", "post", "put", "patch", "delete", "api_route"}
+# A parameter whose annotation is one of these cannot carry an injection
+# payload (the framework converts or rejects the value).
+_NON_TEXT_ANNOTATIONS = {"int", "float", "bool", "UUID", "uuid", "datetime", "date", "time", "Decimal", "PositiveInt", "NonNegativeInt", "conint", "confloat"}
+# Default-value markers that make a parameter dependency-injected or
+# framework-provided rather than request text.
+_INJECTED_DEFAULTS = {"Depends", "Security", "BackgroundTasks"}
+# Annotations naming framework objects that are injected, not parsed from the request.
+_INJECTED_ANNOTATIONS = {"BackgroundTasks", "Response", "WebSocket", "Session", "AsyncSession", "HTTPConnection"}
+# Flask/Werkzeug route converters that only admit non-text values.
+_NUMERIC_CONVERTER_RE = re.compile(r"<(?:int|float|uuid):(\w+)>")
+
+
+def _annotation_name(ann: Any) -> Optional[str]:
+    """Last name of a parameter annotation, unwrapping Optional[...] and
+    Annotated[T, ...] to T; None when the annotation is absent or complex."""
+    while isinstance(ann, ast.Subscript):
+        base = ann.value
+        base_name = base.attr if isinstance(base, ast.Attribute) else (base.id if isinstance(base, ast.Name) else None)
+        if base_name not in ("Optional", "Annotated"):
+            return base_name
+        inner = ann.slice
+        if isinstance(inner, ast.Tuple) and inner.elts:
+            inner = inner.elts[0]
+        ann = inner
+    if isinstance(ann, ast.Name):
+        return ann.id
+    if isinstance(ann, ast.Attribute):
+        return ann.attr
+    if isinstance(ann, ast.Constant) and isinstance(ann.value, str):
+        return ann.value.split("[")[0].split(".")[-1]
+    return None
+
+
+def _route_params(node: Any, params: list[str]) -> list[dict[str, Any]]:
+    """`py:route-param` markers for the parameters of a web route handler.
+
+    Only a decorator CALL whose attribute is a route verb and whose first
+    argument is a literal path beginning with "/" counts, so `@cache.get`,
+    `@property` and a bare `@app.get` without a path never mark anything. A
+    parameter is skipped when it is annotated with a non-text type, when its
+    default is a dependency-injection marker, when its annotation names an
+    injected framework object, or when the route path binds it with a
+    numeric converter (`<int:id>`)."""
+    route_paths: list[str] = []
+    for d in getattr(node, "decorator_list", []) or []:
+        if not isinstance(d, ast.Call) or not isinstance(d.func, ast.Attribute):
+            continue
+        if d.func.attr not in _ROUTE_DECORATOR_ATTRS or not d.args:
+            continue
+        first = d.args[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str) and first.value.startswith("/"):
+            route_paths.append(first.value)
+    if not route_paths:
+        return []
+    numeric = set()
+    for p in route_paths:
+        numeric.update(_NUMERIC_CONVERTER_RE.findall(p))
+    args = node.args
+    positional = list(getattr(args, "posonlyargs", [])) + list(args.args)
+    all_args = positional + list(args.kwonlyargs)
+    defaults: dict[str, Any] = {}
+    pos_defaults = list(args.defaults)
+    offset = len(positional) - len(pos_defaults)
+    for i, dflt in enumerate(pos_defaults):
+        if 0 <= offset + i < len(positional):
+            defaults[positional[offset + i].arg] = dflt
+    for a, dflt in zip(args.kwonlyargs, args.kw_defaults):
+        if dflt is not None:
+            defaults[a.arg] = dflt
+    out: list[dict[str, Any]] = []
+    for a in all_args:
+        name = a.arg
+        if name in ("self", "cls") or name in numeric:
+            continue
+        ann = _annotation_name(a.annotation) if a.annotation is not None else None
+        if ann in _NON_TEXT_ANNOTATIONS or ann in _INJECTED_ANNOTATIONS:
+            continue
+        dflt = defaults.get(name)
+        if dflt is not None:
+            f = dflt.func if isinstance(dflt, ast.Call) else dflt
+            marker = f.attr if isinstance(f, ast.Attribute) else (f.id if isinstance(f, ast.Name) else None)
+            if marker in _INJECTED_DEFAULTS:
+                continue
+            # A non-string literal default (`page=1`, `flag=False`) means a numeric/boolean query parameter.
+            if isinstance(dflt, ast.Constant) and not isinstance(dflt.value, str) and dflt.value is not None:
+                continue
+        try:
+            idx = params.index(name)
+        except ValueError:
+            continue
+        out.append({"index": idx, "name": name, "decorator": "py:route-param"})
     return out
 
 

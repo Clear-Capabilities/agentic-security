@@ -391,6 +391,8 @@ export function parseJsFile(file, code) {
   const enterFn = (name, scopeName, node, params) => {
     const line = node.loc?.start?.line || 1;
     const exported = isExportedFunction(node, name);
+    const serverAction = (exported && exportsOf.useServer === true)
+      || ((node?.body?.directives || []).some((d) => d.value?.value === 'use server'));
     const qid = fnQid(file, scopeName, name, line);
     const entryId = nextNodeId();
     const exitId  = nextNodeId();
@@ -439,6 +441,12 @@ export function parseJsFile(file, code) {
         // fact the Haskell IR states as `hs:caller-controlled`). The IR states the fact; the catalog decides whether it is a source.
         if (exported && resolvedIdent?.type === 'Identifier' && callerControllable(resolvedIdent)) {
           paramAnnotations.push({ index: idx, name: resolvedIdent.name, decorator: 'js:caller-controlled' });
+        }
+        // Next.js server actions: a function exported from a 'use server' module, or one whose own body starts with the
+        // directive, is invoked by the client with arguments it chose (form data, plain values). The IR states the fact;
+        // the catalog's `js:server-action` source decides that it is request input.
+        if (serverAction && resolvedIdent?.type === 'Identifier' && callerControllable(resolvedIdent)) {
+          paramAnnotations.push({ index: idx, name: resolvedIdent.name, decorator: 'js:server-action' });
         }
         if (p.type === 'Identifier') return p.name;
         if (p.type === 'ObjectPattern') return '<obj>';
@@ -537,7 +545,7 @@ export function parseJsFile(file, code) {
     return {
       visitor: {
         Program: {
-          enter(path) { collectExports(path.node, exportsOf); enterFn('<module>', '', path.node, []); },
+          enter(path) { collectExports(path.node, exportsOf); exportsOf.useServer = (path.node.directives || []).some((d) => d.value?.value === 'use server'); enterFn('<module>', '', path.node, []); },
           exit() { exitFn(); },
         },
         FunctionDeclaration: {
