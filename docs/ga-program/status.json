@@ -198,7 +198,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
           "evidencePath": null
         },
         {
@@ -301,7 +301,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
           "evidencePath": null
         },
         {
@@ -405,7 +405,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
           "evidencePath": null
         },
         {
@@ -508,7 +508,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
           "evidencePath": null
         },
         {
@@ -901,7 +901,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
           "evidencePath": null
         },
         {
@@ -1127,7 +1127,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
           "evidencePath": null
         },
         {
@@ -1850,7 +1850,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
           "evidencePath": null
         },
         {
@@ -1894,7 +1894,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "deterministic-scan:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)"
+      "nextAction": "deterministic-scan:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)"
     },
     {
       "capabilityId": "dependency-risk",
@@ -2015,7 +2015,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
           "evidencePath": null
         },
         {
@@ -2059,7 +2059,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "taint-and-reachability:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)"
+      "nextAction": "taint-and-reachability:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)"
     },
     {
       "capabilityId": "falsification",
@@ -2108,7 +2108,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
           "evidencePath": null
         },
         {
@@ -2152,7 +2152,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "falsification:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)"
+      "nextAction": "falsification:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)"
     },
     {
       "capabilityId": "exploit-proof",
@@ -2273,7 +2273,7 @@
           "requirement": "The independent real-code accuracy record was measured on the current engine, names its source commit and bundle digest, and its release-tier verdict is passed.",
           "check": "independent-accuracy-current",
           "status": "blocked",
-          "detail": "the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+          "detail": "the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
           "evidencePath": null
         },
         {
@@ -2317,7 +2317,7 @@
           "blocker": "pilot repositories not selected; maintainer not named"
         }
       ],
-      "nextAction": "root-cause-sweep:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)"
+      "nextAction": "root-cause-sweep:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)"
     },
     {
       "capabilityId": "federation",
@@ -3707,17 +3707,17 @@
       "eval-lab: owner unassigned (role security evaluation lead)",
       "release-assurance: 1/5 acceptance records passed (in-progress); next: release-assurance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself",
       "release-assurance: owner unassigned (role assurance engineer)",
-      "deterministic-scan: 2/7 acceptance records passed (blocked); next: deterministic-scan:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+      "deterministic-scan: 2/7 acceptance records passed (blocked); next: deterministic-scan:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
       "deterministic-scan: owner unassigned (role security evaluation lead)",
       "dependency-risk: 2/5 acceptance records passed (in-progress); next: dependency-risk:GA-01-001: owner unassigned",
       "dependency-risk: owner unassigned (role language/supply-chain lead)",
-      "taint-and-reachability: 2/7 acceptance records passed (blocked); next: taint-and-reachability:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+      "taint-and-reachability: 2/7 acceptance records passed (blocked); next: taint-and-reachability:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
       "taint-and-reachability: owner unassigned (role security evaluation lead)",
-      "falsification: 2/7 acceptance records passed (blocked); next: falsification:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+      "falsification: 2/7 acceptance records passed (blocked); next: falsification:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
       "falsification: owner unassigned (role security evaluation lead)",
       "exploit-proof: 2/5 acceptance records passed (in-progress); next: exploit-proof:GA-01-001: owner unassigned",
       "exploit-proof: owner unassigned (role platform security engineer)",
-      "root-cause-sweep: 2/7 acceptance records passed (blocked); next: root-cause-sweep:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)",
+      "root-cause-sweep: 2/7 acceptance records passed (blocked); next: root-cause-sweep:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)",
       "root-cause-sweep: owner unassigned (role security evaluation lead)",
       "federation: 2/6 acceptance records passed (in-progress); next: federation:GA-01-001: owner unassigned",
       "federation: owner unassigned (role graph/analysis lead)",

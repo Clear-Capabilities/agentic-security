@@ -43,12 +43,12 @@ Status is the rollup of the acceptance records: `passed` only when every require
 | `strategic-metrics` | Preview | unassigned (assurance engineer) | in-progress | 2 / 6 | strategic-metrics:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `eval-lab` | Preview | unassigned (security evaluation lead) | in-progress | 2 / 8 | eval-lab:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
 | `release-assurance` | Preview | unassigned (assurance engineer) | in-progress | 1 / 5 | release-assurance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself |
-| `deterministic-scan` | GA | unassigned (security evaluation lead) | blocked | 2 / 7 | deterministic-scan:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| `deterministic-scan` | GA | unassigned (security evaluation lead) | blocked | 2 / 7 | deterministic-scan:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | `dependency-risk` | GA | unassigned (language/supply-chain lead) | in-progress | 2 / 5 | dependency-risk:GA-01-001: owner unassigned |
-| `taint-and-reachability` | GA | unassigned (security evaluation lead) | blocked | 2 / 7 | taint-and-reachability:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
-| `falsification` | GA | unassigned (security evaluation lead) | blocked | 2 / 7 | falsification:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| `taint-and-reachability` | GA | unassigned (security evaluation lead) | blocked | 2 / 7 | taint-and-reachability:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
+| `falsification` | GA | unassigned (security evaluation lead) | blocked | 2 / 7 | falsification:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | `exploit-proof` | GA | unassigned (platform security engineer) | in-progress | 2 / 5 | exploit-proof:GA-01-001: owner unassigned |
-| `root-cause-sweep` | GA | unassigned (security evaluation lead) | blocked | 2 / 7 | root-cause-sweep:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| `root-cause-sweep` | GA | unassigned (security evaluation lead) | blocked | 2 / 7 | root-cause-sweep:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | `federation` | GA | unassigned (graph/analysis lead) | in-progress | 2 / 6 | federation:GA-01-001: owner unassigned |
 | `runtime-corroboration` | GA | unassigned (graph/analysis lead) | in-progress | 2 / 6 | runtime-corroboration:GA-01-001: owner unassigned |
 | `blast-radius` | GA | unassigned (graph/analysis lead) | in-progress | 2 / 6 | blast-radius:GA-01-001: owner unassigned |
@@ -106,7 +106,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | agentic-discovery:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | agentic-discovery:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.208.0 at d9b22cc6051e, bundle 7087d205d405 |
-| agentic-discovery:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| agentic-discovery:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | agentic-discovery:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | agentic-discovery:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | agentic-discovery:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
@@ -119,7 +119,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | context-intelligence:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | context-intelligence:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.208.0 at d9b22cc6051e, bundle 7087d205d405 |
-| context-intelligence:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| context-intelligence:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | context-intelligence:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | context-intelligence:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | context-intelligence:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -132,7 +132,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | language-depth-haskell-nix:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | language-depth-haskell-nix:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.208.0 at d9b22cc6051e, bundle 7087d205d405 |
-| language-depth-haskell-nix:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| language-depth-haskell-nix:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | language-depth-haskell-nix:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | language-depth-haskell-nix:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | language-depth-haskell-nix:GA-04-001 | manual | GA-04 | not-started | fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved |
@@ -145,7 +145,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | model-validation:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | model-validation:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.208.0 at d9b22cc6051e, bundle 7087d205d405 |
-| model-validation:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| model-validation:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | model-validation:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | model-validation:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | model-validation:GA-06-001 | manual | GA-06 | not-started | real-model hardware not reserved |
@@ -195,7 +195,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | code-boundaries:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | code-boundaries:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.208.0 at d9b22cc6051e, bundle 7087d205d405 |
-| code-boundaries:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| code-boundaries:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | code-boundaries:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | code-boundaries:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | code-boundaries:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -223,7 +223,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | graph-precision:REG-BAR | mechanical |  | not-started | Preview row; the GA bar still needs nothing but the promotion itself |
 | graph-precision:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.208.0 at d9b22cc6051e, bundle 7087d205d405 |
-| graph-precision:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| graph-precision:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | graph-precision:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | graph-precision:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | graph-precision:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -317,7 +317,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | deterministic-scan:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate corpus-gate) |
 | deterministic-scan:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.208.0 at d9b22cc6051e, bundle 7087d205d405 |
-| deterministic-scan:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| deterministic-scan:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | deterministic-scan:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | deterministic-scan:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | deterministic-scan:GA-04-001 | manual | GA-04 | not-started | fresh independently adjudicated real projects not acquired; hosted toolchain capacity not reserved |
@@ -339,7 +339,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | taint-and-reachability:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate layer-recall-gate) |
 | taint-and-reachability:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.208.0 at d9b22cc6051e, bundle 7087d205d405 |
-| taint-and-reachability:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| taint-and-reachability:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | taint-and-reachability:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | taint-and-reachability:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | taint-and-reachability:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -351,7 +351,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | falsification:REG-BAR | mechanical |  | passed | GA bar met (since 0.178.0, gate mutation-gate) |
 | falsification:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.208.0 at d9b22cc6051e, bundle 7087d205d405 |
-| falsification:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| falsification:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | falsification:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | falsification:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | falsification:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -373,7 +373,7 @@ Mechanical records are computed from committed artifacts; manual records carry t
 |---|---|---|---|---|
 | root-cause-sweep:REG-BAR | mechanical |  | passed | GA bar met (since 0.181.0, gate sibling-sweep-gate) |
 | root-cause-sweep:EVIDENCE-IDENTITY | mechanical |  | passed | clean measurement of 0.208.0 at d9b22cc6051e, bundle 7087d205d405 |
-| root-cause-sweep:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical) |
+| root-cause-sweep:INDEP-ACCURACY | mechanical |  | blocked | the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical) |
 | root-cause-sweep:GA-01-001 | manual | GA-01 | in-progress | owner unassigned |
 | root-cause-sweep:GA-02-001 | manual | GA-02 | not-started | independent real-project population not acquired; current-engine independent accuracy unmeasured (scorecard measurement.currentEngineIndependentAccuracy) |
 | root-cause-sweep:GA-03-001 | manual | GA-03 | not-started | depends on the GA-02 protocol and population |
@@ -628,17 +628,17 @@ Mechanical records are computed from committed artifacts; manual records carry t
 - eval-lab: owner unassigned (role security evaluation lead)
 - release-assurance: 1/5 acceptance records passed (in-progress); next: release-assurance:REG-BAR: Preview row; the GA bar still needs nothing but the promotion itself
 - release-assurance: owner unassigned (role assurance engineer)
-- deterministic-scan: 2/7 acceptance records passed (blocked); next: deterministic-scan:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)
+- deterministic-scan: 2/7 acceptance records passed (blocked); next: deterministic-scan:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)
 - deterministic-scan: owner unassigned (role security evaluation lead)
 - dependency-risk: 2/5 acceptance records passed (in-progress); next: dependency-risk:GA-01-001: owner unassigned
 - dependency-risk: owner unassigned (role language/supply-chain lead)
-- taint-and-reachability: 2/7 acceptance records passed (blocked); next: taint-and-reachability:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)
+- taint-and-reachability: 2/7 acceptance records passed (blocked); next: taint-and-reachability:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)
 - taint-and-reachability: owner unassigned (role security evaluation lead)
-- falsification: 2/7 acceptance records passed (blocked); next: falsification:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)
+- falsification: 2/7 acceptance records passed (blocked); next: falsification:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)
 - falsification: owner unassigned (role security evaluation lead)
 - exploit-proof: 2/5 acceptance records passed (in-progress); next: exploit-proof:GA-01-001: owner unassigned
 - exploit-proof: owner unassigned (role platform security engineer)
-- root-cause-sweep: 2/7 acceptance records passed (blocked); next: root-cause-sweep:INDEP-ACCURACY: the latest independent run (7f60b3bb47f7) measured engine 0.207.0, not 0.208.0 (historical)
+- root-cause-sweep: 2/7 acceptance records passed (blocked); next: root-cause-sweep:INDEP-ACCURACY: the latest independent run (83df9f624d98) measured engine 0.195.32, not 0.208.0 (historical)
 - root-cause-sweep: owner unassigned (role security evaluation lead)
 - federation: 2/6 acceptance records passed (in-progress); next: federation:GA-01-001: owner unassigned
 - federation: owner unassigned (role graph/analysis lead)
