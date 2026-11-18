@@ -1,0 +1,15 @@
+{
+  "schema": "agentic-security/repair-profile",
+  "schemaVersion": "1.0.0",
+  "application": { "entry": "src/server.mjs", "export": "buildServer", "files": ["src/server.mjs"], "runtime": "node" },
+  "database": { "engine": "sqlite", "schemaSql": "CREATE TABLE members (email TEXT PRIMARY KEY, secret_hash TEXT NOT NULL, created INTEGER NOT NULL DEFAULT 0);", "seed": [] },
+  "actors": [ { "id": "visitor", "tenant": "t1", "role": "member", "headers": {} } ],
+  "passwords": {
+    "actor": "visitor",
+    "table": "members", "userColumn": "email", "hashColumn": "secret_hash",
+    "legacy": { "digest": "sha256", "users": [ { "name": "early@member.test", "password": "early-member-pass" }, { "name": "second@member.test", "password": "second-member-pass" } ] },
+    "register": { "method": "POST", "path": "/signup", "body": { "email": "{{user}}", "secret": "{{password}}" }, "expectStatus": [201] },
+    "login": { "method": "POST", "path": "/session", "body": { "email": "{{user}}", "secret": "{{password}}" }, "expectStatus": [200], "denyStatus": [403] },
+    "approved": { "format": "scrypt", "minN": 16384, "minR": 8, "minSaltBytes": 16, "minKeyBytes": 32 }
+  }
+}

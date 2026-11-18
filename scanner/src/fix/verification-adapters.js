@@ -34,7 +34,7 @@ export function recordFromVerifyFix(v, ctx) {
 
   const rescanId = v.rescan ? add('rescan-result', v.rescan, 'verifyFix rescan leg') : null;
   const securityAfter = !v.rescan ? leg('not_run', { reason: 'the route returned no rescan result' })
-    : v.rescan.ok ? leg('passed', { evidenceIds: [rescanId] }) : leg('failed', { evidenceIds: [rescanId], reason: `the original finding is still present (${v.rescan.reason})` });
+    : v.rescan.ok ? leg('passed', { evidenceIds: [rescanId], ...(v.rescan.retainedForMigration ? { reason: `the original finding's legacy check is kept for migration (${v.rescan.retainedForMigration.length} instance(s)); storage, legacy login and migration were each proved by an executed application check` } : {}) }) : leg('failed', { evidenceIds: [rescanId], reason: `the original finding is still present (${v.rescan.reason})` });
   if (ctx.persistence?.status === 'failed') {
     const id = add('secret-persistence', ctx.persistence, 'the original secret literal searched for in the patched source');
     securityAfter.status = 'failed'; securityAfter.evidenceIds = [...securityAfter.evidenceIds, id]; securityAfter.reason = ctx.persistence.reason;

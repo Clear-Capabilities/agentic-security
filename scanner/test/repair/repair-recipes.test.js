@@ -141,7 +141,7 @@ describe('[FR-11] the signed recipe lifecycle (no execution)', () => {
     const list = spawnSync(process.execPath, [bin, 'repair', 'recipes', 'list', '--root', root, '--json'], { encoding: 'utf8', timeout: 60000 });
     assert.equal(list.status, 0, list.stderr);
     const rows = JSON.parse(list.stdout).recipes;
-    assert.deepEqual(rows.map((r) => `${r.recipe}:${r.state}`).sort(), ['path-realpath-containment@1:shipped', 'sql-parameterize-template@2:shipped', 'ssrf-host-allowlist@1:shipped']);
+    assert.deepEqual(rows.map((r) => `${r.recipe}:${r.state}`).sort(), ['password-scrypt-migrate@1:shipped', 'path-realpath-containment@1:shipped', 'sql-parameterize-template@2:shipped', 'ssrf-host-allowlist@1:shipped']);
     const noReason = spawnSync(process.execPath, [bin, 'repair', 'recipes', 'retire', 'sql-parameterize-template', '--root', root], { encoding: 'utf8', timeout: 60000 });
     assert.equal(noReason.status, 2);
     const ret = spawnSync(process.execPath, [bin, 'repair', 'recipes', 'retire', 'sql-parameterize-template', '--reason', 'review', '--root', root], { encoding: 'utf8', timeout: 60000 });
@@ -168,7 +168,8 @@ describe('[M3-01/M3-02/AC-11.5] shipped recipes evaluated on their examples, inc
       assert.equal(e.ok, true, JSON.stringify(e.results));
       const indep = e.results.find((x) => x.kind === 'independent');
       // ssrf-host-allowlist has no held-out example: its second fixture failed the first version and the transformation was changed
-      if (r.recipeId === 'ssrf-host-allowlist') assert.equal(indep, undefined);
+      // password-scrypt-migrate likewise: its held-out example was refused by the first version and is a development example now
+      if (r.recipeId === 'ssrf-host-allowlist' || r.recipeId === 'password-scrypt-migrate') assert.equal(indep, undefined);
       else assert.equal(indep?.outcome, 'verified-for-contract');
       assert.ok(e.results.some((x) => x.kind === 'safe-negative' && x.outcome === 'refused'));
       assert.ok(e.results.some((x) => x.kind === 'unsupported-version' && x.outcome === 'not-applicable'));

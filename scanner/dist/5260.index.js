@@ -810,7 +810,7 @@ const PROFILE_SUPPORT = Object.freeze([
   { family: 'object-authorization', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
   { family: 'ssrf', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'ssrf-host-allowlist', evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'path-traversal', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'path-realpath-containment', evidence: 'scanner/test/repair/repair-workflow.test.js' },
-  { family: 'password-storage', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-workflow.test.js' },
+  { family: 'password-storage', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: 'password-scrypt-migrate', evidence: 'scanner/test/repair/repair-workflow.test.js' },
   { family: 'password-storage', runtime: 'python', macos: 'declared', linux: 'blocked', recipe: null, evidence: null },
   { family: 'dependency', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-dependency.test.js' },
   { family: 'credential', runtime: 'node', macos: 'integration-tested', linux: 'blocked', recipe: null, evidence: 'scanner/test/repair/repair-credential.test.js' },
@@ -2100,7 +2100,7 @@ async function runRepair(o) {
         if (selected) { s.cs.status = 'passed-not-selected'; continue; }
         const { cand, cs, patched } = s;
         let verdict = 'passed';
-        const central = await centralVerify(o, plan, cand, budgets);
+        const central = await centralVerify(o, plan, cand, budgets, cs, (0,identity/* digestOf */.ol)(runFiles(patched)));
         cs.results.push(central);
         if (central.status !== 'passed') { verdict = central.status === 'failed' ? 'failed' : 'inconclusive'; if (central.status === 'failed') { record.counterexamples.push({ candidateId: cand.candidateId, obligation: 'central-verifier', property: 'central-verifier', message: central.reason }); roundFeedback.push({ candidateId: cand.candidateId, counterexample: { obligation: 'central-verifier', message: central.reason } }); } }
         if (verdict === 'passed') {
@@ -2168,13 +2168,30 @@ function promotable(contract, cs, patched) {
   return true;
 }
 
+/**
+ * A password-storage migration proof for the central verifier: every password migration obligation of the contract passed on THIS
+ * candidate, each with a live receipt (a result this coordinator's oracle run produced, never a candidate's claim). Bound to the digest of
+ * the exact files handed to the verifier, so a proof for one candidate cannot excuse another. Null for any other family.
+ */
+async function migrationProofFor(contract, cs, files, patchedDigest) {
+  if (contract?.family !== 'password-storage' || !cs) return null;
+  const { PASSWORD_MIGRATION_OBLIGATIONS, migrationFilesDigest } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 27838));
+  const passed = PASSWORD_MIGRATION_OBLIGATIONS.filter((id) => {
+    const ob = contract.obligations.find((x) => x.id === id);
+    const r = cs.results.find((x) => x.obligation === id);
+    return ob && r && r.status === 'passed' && (!ob.oracleId || (r.live && r.filesDigest === patchedDigest && r.live.request?.filesDigest === patchedDigest));
+  });
+  return passed.length === PASSWORD_MIGRATION_OBLIGATIONS.length ? { passed, filesDigest: migrationFilesDigest(files) } : null;
+}
+
 /** The project-tests obligation: the central verifier (verify-patch.js) on the exact candidate. */
-async function centralVerify(o, plan, cand, budgets) {
+async function centralVerify(o, plan, cand, budgets, cs, patchedDigest) {
   const verify = o.deps?.verifyPatch || (await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 2046))).verifyPatch;
   const finding = { id: plan.finding.id || plan.contract.findingRefs[0], stableId: plan.finding.stableId || plan.contract.findingRefs[0] };
   try {
     const files = Object.fromEntries(Object.entries(cand.files).filter(([, t]) => t !== null));
-    const r = await verify({ scanRoot: o.root, finding, files, route: 'repair', mode: 'verify', testCommand: plan.tests?.command, testTimeoutMs: budgets.testCommandMs, requiredTests: plan.tests?.required || [], flakyTests: plan.tests?.flaky || [] });
+    const migrationProof = await migrationProofFor(plan.contract, cs, files, patchedDigest);
+    const r = await verify({ scanRoot: o.root, finding, files, route: 'repair', mode: 'verify', testCommand: plan.tests?.command, testTimeoutMs: budgets.testCommandMs, requiredTests: plan.tests?.required || [], flakyTests: plan.tests?.flaky || [], ...(migrationProof ? { extra: { migrationProof } } : {}) });
     const legs = Object.fromEntries(['securityAfter', 'newFindingDelta', 'behaviorTests', 'behaviorPreservation'].map((k) => [k, r.fixVerification?.[k]?.status ?? null]));
     const ok = r.verdict?.ok === true && r.canonical?.ok === true;
     return { obligation: 'central-verifier', kind: 'project-tests', observed: ok ? 'passed' : 'failed', status: ok ? 'passed' : 'failed', reason: ok ? 'rescan, new-finding delta, footprint and test legs passed or were recorded as not run' : String(r.verdict?.summary || 'a central verification leg failed').slice(0, 400), legs, fixCompleteness: r.fixVerification?.fixCompleteness ?? null };
