@@ -361,6 +361,36 @@ function _assignTargets(left) {
 // same convention. Field names come from every `fieldDeclaration`'s
 // `variableDeclaratorList` directly under `classBody` — one declaration can
 // name several comma-separated fields (`private String inst, other;`).
+// Every token image under a CST node, in source order.
+function _tokenImages(node, out = []) {
+  if (!node || typeof node !== 'object') return out;
+  if (typeof node.image === 'string' && node.tokenType) { out.push({ image: node.image, offset: node.startOffset }); return out; }
+  for (const arr of Object.values(node.children || {})) if (Array.isArray(arr)) for (const c of arr) _tokenImages(c, out);
+  return out;
+}
+function _tokenText(node) {
+  return _tokenImages(node).sort((a, b) => a.offset - b.offset).map((t) => t.image).join(' ');
+}
+// Round six: a Spring handler (`@GetMapping` and siblings) whose String return value IS the response body
+// (`@ResponseBody` on the method, or `@RestController` / `@ResponseBody` on the class). Its returns are marked
+// `routeReturn` and read by the engine as a response write when the returned text carries markup. A mapping that
+// declares a non-HTML `produces` type is left out.
+const _SPRING_MAPPING_ANN = /^(?:RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)$/;
+function _isSpringStringResponseBody(md, methodAnnotations, classAnns) {
+  if (!methodAnnotations.some((a) => _SPRING_MAPPING_ANN.test(a))) return false;
+  if (!methodAnnotations.includes('ResponseBody') && !classAnns.some((a) => a === 'RestController' || a === 'ResponseBody')) return false;
+  const result = md.children?.methodHeader?.[0]?.children?.result?.[0];
+  const first = result ? _tokenImages(result).sort((a, b) => a.offset - b.offset)[0] : null;
+  if (!first || first.image !== 'String') return false;
+  for (const mm of md.children?.methodModifier || []) {
+    const ann = mm.children?.annotation?.[0];
+    if (!ann) continue;
+    const text = _tokenText(ann);
+    if (/\bproduces\b/.test(text) && /json|text\/plain|TEXT_PLAIN|xml|csv|octet/i.test(text)) return false;
+  }
+  return true;
+}
+
 function _classRecord(node, name) {
   const bases = [];
   const extendsIds = node.children?.classExtends?.[0]?.children?.classType?.[0]?.children?.Identifier;
@@ -1054,6 +1084,8 @@ export async function parseJavaFile(file, raw) {
   // unrelated local variable of the same name in another method. Same
   // optional per-file shape `parser-cpp.js` already attaches.
   const classes = [];
+  // Class-level annotation simple names (`@RestController`), keyed by class name, for the response-body rule below.
+  const classAnnotations = new Map();
   // Walk the CST for methodDeclaration nodes.
   function walkForMethods(node, className) {
     if (!node || !node.children) return;
@@ -1066,6 +1098,15 @@ export async function parseJavaFile(file, raw) {
             || child.children?.Identifier?.[0]?.image
             || className;
           if (newClassName) classes.push(_classRecord(child, newClassName));
+          // The modifiers sit on `classDeclaration`; the name on its `normalClassDeclaration` child.
+          const annotatedName = k === 'classDeclaration'
+            ? child.children?.normalClassDeclaration?.[0]?.children?.typeIdentifier?.[0]?.children?.Identifier?.[0]?.image : null;
+          if (annotatedName) {
+            classAnnotations.set(annotatedName, (child.children?.classModifier || []).map((cm) => {
+              const ids = cm.children?.annotation?.[0]?.children?.typeName?.[0]?.children?.Identifier;
+              return ids?.length ? ids[ids.length - 1]?.image : null;
+            }).filter(Boolean));
+          }
           walkForMethods(child, newClassName);
           continue;
         }
@@ -1154,6 +1195,9 @@ export async function parseJavaFile(file, raw) {
             const methodLine = _lineOf(md);
             const cfg = buildCfgFromBody(body);
             _applyVarTypeRewrite(cfg.nodes);
+            if (_isSpringStringResponseBody(md, methodAnnotations, classAnnotations.get(className) || [])) {
+              for (const n of Object.values(cfg.nodes || {})) if (n && n.kind === 'return' && n.value) n.routeReturn = true;
+            }
             functions.push({
               // Sibling frontends (parser-js.js) suffix the qid with `@line`
               // so overloaded/same-named methods don't collide — without it,

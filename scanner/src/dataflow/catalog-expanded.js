@@ -174,7 +174,8 @@ const PY_HTML_ESCAPE = [
   san('py', 'bleach',     'bleach.clean',     ['xss']),
   san('py', 'bleach',     'bleach.linkify',   ['xss']),
   san('py', 'lxml',       'Cleaner.clean_html', ['xss']),
-  san('py', 'django',     'mark_safe',        ['xss']),       // marker; downstream often wraps escaped content
+  // `mark_safe` is not listed: it marks a string as already-safe markup and escapes nothing (round six; it is an XSS
+  // sink in catalog-framework-models.js, and as a sanitizer it labelled `HttpResponse(mark_safe(request_value))` sanitized).
   san('py', 'django',     'format_html',      ['xss']),
   san('py', 'django',     'escape',           ['xss']),
   san('py', 'flask',      'flask.escape',     ['xss']),

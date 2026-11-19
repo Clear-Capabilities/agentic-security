@@ -686,6 +686,14 @@ def _extract_functions(tree: ast.Module, file: str) -> list[dict[str, Any]]:
         pa = _param_annotations(node, params)
         if pa:
             fn_rec["paramAnnotations"] = pa
+        # A view registered with `@<app|bp>.route("/...")` (Flask, Quart, Bottle) sends a returned str as
+        # text/html, so each of its returns is a response write. Marked on the return node; the engine reads it
+        # as a sink call only when the returned text carries markup. The verb decorators (`@app.get`) are
+        # left out: FastAPI uses the same spelling and JSON-encodes a returned str.
+        if _is_html_view(node):
+            for n in builder.nodes.values():
+                if n.get("kind") == "return" and n.get("value") is not None:
+                    n["routeReturn"] = True
         fns.append(fn_rec)
     return fns
 
@@ -809,6 +817,17 @@ def _annotation_name(ann: Any) -> Optional[str]:
     if isinstance(ann, ast.Constant) and isinstance(ann.value, str):
         return ann.value.split("[")[0].split(".")[-1]
     return None
+
+
+def _is_html_view(node: Any) -> bool:
+    """True for a function decorated with `@<x>.route("/literal-path")`."""
+    for d in getattr(node, "decorator_list", []) or []:
+        if not isinstance(d, ast.Call) or not isinstance(d.func, ast.Attribute) or d.func.attr != "route" or not d.args:
+            continue
+        first = d.args[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str) and first.value.startswith("/"):
+            return True
+    return False
 
 
 def _route_params(node: Any, params: list[str]) -> list[dict[str, Any]]:

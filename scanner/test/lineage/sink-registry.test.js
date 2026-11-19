@@ -266,7 +266,11 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
   // 63 -> 93 (round five of the framework models): 30 server-side response writers and trusted-markup constructors
   // (res.write/end, Django HttpResponse, mark_safe, Markup, HTMLResponse, Go ResponseWriter.Write, template.HTML,
   // PHP print/printf, Symfony/Laravel responses, Rails raw, Html.Raw, HtmlString), none DOM/React, all `otherCount`.
-  assert.equal(cwe79.length, 93);
+  // 93 -> 112 (round six, the XSS models of catalog-framework-models.js): 19 sinks. 11 are DOM writers
+  // (document.writeln and the ten jQuery HTML insertions, `framework: 'dom'`), so `domCount` 6 -> 17; the other 8
+  // (Hono c.html, Fastify reply.send, format_html, make_response, the Flask and Spring route returns, content_tag,
+  // fmt.Fprintf into markup) are server-side response writers, `otherCount` 81 -> 89.
+  assert.equal(cwe79.length, 112);
   let domCount = 0;
   let otherCount = 0;
   let stdoutText = 0;
@@ -289,8 +293,8 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
       assert.equal(r.kind, 'sink', e.id);
     }
   }
-  assert.equal(domCount, 6);   // 4 dom + 2 react
-  assert.equal(otherCount, 81);   // 51 -> 81 with the round-five server-side writers   // 18 -> 35 with the 17 Haskell server-side XSS sinks, 35 -> 47 with the re-exported pre-escaped constructors, 47 -> 49 with the raw WAI response writers (0.195.8)
+  assert.equal(domCount, 17);   // 4 dom + 2 react, 6 -> 17 with round six's writeln and jQuery sinks
+  assert.equal(otherCount, 89);   // 81 -> 89 with the round-six server-side writers, 51 -> 81 with the round-five server-side writers   // 18 -> 35 with the 17 Haskell server-side XSS sinks, 35 -> 47 with the re-exported pre-escaped constructors, 47 -> 49 with the raw WAI response writers (0.195.8)
   assert.equal(stdoutText, 6);
 });
 
@@ -556,12 +560,15 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // Go, PHP, Ruby and C#. Path, SQL, SSRF, redirect and XSS sinks land in modeled categories; process, code-evaluation,
   // template-source, deserialization, ReDoS and reflection sinks (CWE-78/94/95/1336/502/1333/470) are `unsupported`
   // for the same reason as every earlier entry of those CWEs. Re-measured against the live catalog.
-  assert.equal(SINKS.length, 1124);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 819);
-  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
+  // 1124 -> 1143, 819 -> 827 modeled, 6 -> 17 partial (round six, the XSS models): 19 CWE-79 sinks, of which the 11
+  // DOM writers (document.writeln, jQuery) are `client-storage`/`partial` and the 8 server-side writers `http-response`/
+  // `modeled`. Re-measured against the live catalog.
+  assert.equal(SINKS.length, 1143);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 827);
+  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 17);     // the 17 DOM/React/jQuery CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 290);
-  assert.equal(819 + 6 + 9 + 290, SINKS.length);
+  assert.equal(827 + 17 + 9 + 290, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

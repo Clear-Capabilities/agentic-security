@@ -162,7 +162,7 @@ export const CATALOG = [
   // same mechanism matchSinkOrSanitizer already uses for sinks) so a plain
   // `dict.get(...)`/`config.get(...)` elsewhere in the file does not also
   // fire.
-  { kind: 'source', id: 'py-flask-args-get',       language: 'py', framework: 'flask',   match: { type: 'call', callee: 'get', receiver: '^(?:args|form|values|headers|cookies|json|data|GET|POST|FILES|META)$', receiverBase: '^(?:request|req)$' }, label: 'request.args/form/values/headers/cookies/json/data.get() (Flask/Django)', provenance: 'url-param' },
+  { kind: 'source', id: 'py-flask-args-get',       language: 'py', framework: 'flask',   match: { type: 'call', callee: 'get', receiver: '^(?:args|form|values|headers|cookies|json|data|GET|POST|FILES|META|query_params|path_params)$', receiverBase: '^(?:request|req)$' }, label: 'request.args/form/values/headers/cookies/json/data.get() (Flask/Django)', provenance: 'url-param' },
   // PRD F2.2 — the MULTI-VALUE accessors, which were missing entirely.
   //
   // `getlist` is the standard Flask/Werkzeug and Django QueryDict API for a
@@ -176,7 +176,7 @@ export const CATALOG = [
   // over `request.args.get()`, which the engine tracks end to end. The example
   // failed on its SOURCE, not on its loop, and modelling comprehensions would
   // have changed nothing while looking like a fix.
-  { kind: 'source', id: 'py-flask-args-getlist',   language: 'py', framework: 'flask',   match: { type: 'call', callee: 'getlist', receiver: '^(?:args|form|values|headers|cookies|json|data|GET|POST|FILES|META)$', receiverBase: '^(?:request|req)$' }, label: 'request.args/form/values.getlist() (Flask/Django)', provenance: 'url-param' },
+  { kind: 'source', id: 'py-flask-args-getlist',   language: 'py', framework: 'flask',   match: { type: 'call', callee: 'getlist', receiver: '^(?:args|form|values|headers|cookies|json|data|GET|POST|FILES|META|query_params|path_params)$', receiverBase: '^(?:request|req)$' }, label: 'request.args/form/values.getlist() (Flask/Django)', provenance: 'url-param' },
   { kind: 'source', id: 'py-flask-args-getall',    language: 'py', framework: 'flask',   match: { type: 'call', callee: 'getall',  receiver: '^(?:args|form|values|headers|cookies|json|data|GET|POST|FILES|META)$', receiverBase: '^(?:request|req)$' }, label: 'request.args/form/values.getall() (multidict)', provenance: 'url-param' },
 
   // PRD F2.3 — NETWORK-RESPONSE sources.
@@ -1327,7 +1327,9 @@ export const CATALOG = [
   // Taint-recall PRD (80%) Tier 3: Kotlin carried zero XSS sink entries —
   // Ktor's canonical HTML-response idiom (`call.respondText(html,
   // ContentType.Text.Html)`).
-  { kind: 'sink', id: 'kt-ktor-respondtext', language: 'kt', framework: 'ktor', match: { type: 'call', callee: 'respondText' }, argIndex: 0,
+  // `rejectArg` (round six): an explicit non-HTML content type (`ContentType.Text.Plain`, `ContentType.Application.Json`)
+  // selects the safe form of the API.
+  { kind: 'sink', id: 'kt-ktor-respondtext', language: 'kt', framework: 'ktor', match: { type: 'call', callee: 'respondText', rejectArg: { index: 1, pattern: '^ContentType\\.(?:Text\\.(?:Plain|CSV|EventStream)|Application\\.(?:Json|Xml|ProblemJson|OctetStream))$' } }, argIndex: 0,
     vuln: { name: 'Reflected XSS (Ktor call.respondText)', severity: 'high', cwe: 'CWE-79',
             remediation: 'HTML-escape user-derived content before responding, or use a templating engine with auto-escaping.' } },
   { kind: 'sink', id: 'java-spel-parseexpression', language: 'java', framework: 'spring', match: { type: 'call', callee: 'parseExpression' }, argIndex: 0,
