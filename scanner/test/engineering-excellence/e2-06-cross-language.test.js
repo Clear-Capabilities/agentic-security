@@ -68,8 +68,12 @@ test('A SANITIZED FLOW IS KEPT AND LABELLED, NOT DROPPED: PHP escapeshellarg and
   }
 });
 
-test('STATED GAP: Ruby send_file with a request-built path produces no finding (the Ruby path rules look for File/IO operations); a File.read of the same path does', async () => {
-  assert.deepEqual(await scan('a.rb', 'class C < ApplicationController\n def get\n  send_file File.join(\'/data\', params[:f])\n end\nend\n'), []);
-  assert.deepEqual(await scan('a.rb', 'class C < ApplicationController\n def get\n  send_file "/data/#{params[:f]}"\n end\nend\n'), []);
+// Was a stated gap (no finding) until the 0.211.0 framework models added Rails send_file as a request-gated path sink.
+test('Ruby send_file with a request-built path is reported, like a File.read of the same path', async () => {
+  assert.ok(has(await scan('a.rb', 'class C < ApplicationController\n def get\n  send_file File.join(\'/data\', params[:f])\n end\nend\n'), /Path Traversal/));
+  assert.ok(has(await scan('a.rb', 'class C < ApplicationController\n def get\n  send_file "/data/#{params[:f]}"\n end\nend\n'), /Path Traversal/));
   assert.ok(has(await scan('a.rb', 'class C < ApplicationController\n def get\n  render plain: File.read("/data/#{params[:f]}")\n end\nend\n'), /Path Traversal/));
+  // Reduced to its last path component: still reported (a sanitizer only labels), but labelled sanitized.
+  const based = (await scan('a.rb', 'class C < ApplicationController\n def get\n  send_file File.join(\'/data\', File.basename(params[:f].to_s))\n end\nend\n')).filter((x) => /send_file/.test(x.vuln || ''));
+  assert.ok(based.length > 0 && based.every((x) => x.sanitized === true), JSON.stringify(based.map((x) => [x.vuln, x.sanitized])));
 });

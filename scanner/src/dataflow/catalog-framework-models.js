@@ -120,7 +120,7 @@ const JS = [
   ...sinks('js-cp-program', 'js', 'node', ['execFile', 'execFileSync', 'spawn', 'spawnSync', 'execa', 'execaSync', 'execaCommand', 'execaCommandSync'], {}, 0,
     v('Command Injection (%m with a request-chosen program)', 'CWE-78', 'critical', CMD_REMEDIATION)),
   // The same calls with a literal shell as the program: the argument array is a shell script.
-  ...sinks('js-cp-shell', 'js', 'node', ['execFile', 'execFileSync', 'spawn', 'spawnSync'], { requireLiteralArg: { index: 0, pattern: SHELL_LITERAL } }, 1,
+  ...sinks('js-cp-shell', 'js', 'node', ['execFile', 'execFileSync', 'spawn', 'spawnSync'], { requireLiteralArg: { index: 0, pattern: SHELL_LITERAL }, shellScriptElement: true }, 1,
     v('Command Injection (%m through a shell interpreter)', 'CWE-78', 'critical', CMD_REMEDIATION)),
 
   // Code evaluation.
@@ -596,7 +596,20 @@ const OPERATOR_FED_PREFIXES = [
 // fetches the URL or compiles the pattern its operator passed is doing its job.
 const OPERATOR_FED_CWES = new Set(['CWE-918', 'CWE-1333']);
 
-export const FRAMEWORK_MODELS = [...JS, ...PY, ...JAVA, ...GO, ...PHP, ...RB, ...CS].map((e) => (
+// Reducing a request value to its last path component removes every directory
+// separator, so `..` can no longer climb out of the base directory. Recorded,
+// never trusted to kill taint: sanitizer-gate.js labels a path finding whose
+// value went through one of these, and the proof gate demotes it.
+const BASENAME = [
+  { kind: 'sanitizer', id: 'rb-file-basename', language: 'rb', match: { type: 'call', callee: 'basename', receiver: '^File$' }, effect: 'strip', appliesTo: ['path'] },
+  { kind: 'sanitizer', id: 'js-path-basename', language: 'js', match: { type: 'call', callee: 'basename', receiver: '^(?:path|posix|win32)$' }, effect: 'strip', appliesTo: ['path'] },
+  { kind: 'sanitizer', id: 'py-os-path-basename', language: 'py', match: { type: 'call', callee: 'basename', receiver: '^(?:os\\.path|path|posixpath|ntpath)$' }, effect: 'strip', appliesTo: ['path'] },
+  { kind: 'sanitizer', id: 'py-secure-filename', language: 'py', match: { type: 'call', callee: 'secure_filename' }, effect: 'strip', appliesTo: ['path'] },
+  { kind: 'sanitizer', id: 'php-basename', language: 'php', match: { type: 'call', callee: 'basename' }, effect: 'strip', appliesTo: ['path'] },
+  { kind: 'sanitizer', id: 'go-filepath-base', language: 'go', match: { type: 'call', callee: 'Base', receiver: '^(?:filepath|path)$' }, effect: 'strip', appliesTo: ['path'] },
+];
+
+export const FRAMEWORK_MODELS = [...JS, ...PY, ...JAVA, ...GO, ...PHP, ...RB, ...CS, ...BASENAME].map((e) => (
   e.kind === 'sink' && (OPERATOR_FED_PREFIXES.some((p) => e.id.startsWith(p)) || OPERATOR_FED_CWES.has(e.vuln && e.vuln.cwe))
     ? { ...e, match: { ...e.match, requireRequestSource: true } } : e
 ));

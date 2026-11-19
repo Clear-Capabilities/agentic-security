@@ -1243,6 +1243,13 @@ function _sanitizersForExpr(expr, callContext) {
 // SAME callee, distinguished only by this argument). Fails CLOSED: a missing
 // or non-literal arg does not satisfy the requirement, same direction every
 // other precision gate in this file takes when evidence is unavailable.
+const _SHELL_SCRIPT_FLAG = /^(?:-c|\/c|-Command|-command|\/C)$/;
+function _shellScriptElementTainted(arrExpr, state, callContext) {
+  if (!arrExpr || arrExpr.kind !== 'array' || arrExpr.spreads) return false;
+  const els = arrExpr.elements || [];
+  const i = els.findIndex((x) => x && x.kind === 'literal' && _SHELL_SCRIPT_FLAG.test(String(x.value)));
+  return i >= 0 && !!els[i + 1] && exprTaint(els[i + 1], state, callContext);
+}
 function _literalArgSatisfied(argExprs, requireLiteralArg) {
   const { index, pattern } = requireLiteralArg;
   const checkArg = (argExprs || [])[index];
@@ -1455,6 +1462,10 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
         }
         if (e.match && e.match.rejectOptionKey
           && (argExprs || []).some((a) => a && a.kind === 'object' && (a.props || []).some((p) => p && p.key === e.match.rejectOptionKey))) continue;
+        // `match.shellScriptElement`: with a literal shell as the program, only the element right after the script flag
+        // (`-c`, `/c`, `-Command`) is shell code; later elements are positional parameters (`$0`, `$1`) the script may never
+        // expand. A non-literal array, or one with no script flag, cannot be placed and is not reported (fails closed).
+        if (e.match && e.match.shellScriptElement && !_shellScriptElementTainted(taintedArgExpr, state, callContext)) continue;
         // Premortem #10: attribute the source for THIS sink to the
         // source(s) that taint the actual argument expression — not the
         // first source the worklist happened to record. We walk the
