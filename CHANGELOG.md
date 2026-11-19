@@ -9,6 +9,21 @@
 > make the history less accurate, not more.
 
 
+## 0.212.0 - XSS output models across seven languages, written from framework APIs; no change on the independent population
+
+**Measured, 0.211.0:** the first attempt stopped in the checks on hosted test failures (fixed in that release, see its precision-fix bullet); the resumed run read `TIMINGS preflight=4s push=7s pr=5s checks=1s merge=5s verify=6s tag=2s release=254s npm=454s total=738s release-clock=267s`.
+
+Every accuracy figure below was measured on the independent population (real upstream code at the vulnerable commit, labelled by public advisories), development and validation splits only; the sealed split was not touched. No advisory was read while writing this release.
+
+- **Independent accuracy, re-measured (run `2977bfd1f490`, engine at `9216dc80`, the same 223 entries as run `8cf5c42b0b69`).** Localized precision 65/68, recall 65/223, F1 0.447 (95% grouped-bootstrap interval 0.362 to 0.529). **By split:** development 63 of 180 with 1 false positive (F1 0.516), validation 2 of 43 with 2 false positives (F1 0.085), both unchanged. No entry changed verdict. The models below are correct framework behaviour with their own tests, but none of them is the shape of a cross-site scripting advisory in this population, so they do not move it. The run directory is not committed.
+- **New markup sinks.** JavaScript: Hono `c.html`, Fastify `reply.send` with an HTML body, jQuery `.html()` and its insertion methods, `document.writeln`. Python: Django `format_html` with a non-literal format, Flask `make_response` and route returns of markup. Java: Spring handlers that return markup. Ruby: `content_tag(..., false)`. Go: `fmt.Fprintf` with a markup format. PHP and C# writes of markup. A response sink reports only when the written value is markup, so a JSON or plain-text response stays silent where the parser keeps the literal (`match.htmlSkeleton`).
+- **Escaping functions.** Django `conditional_escape`, Laravel `e()`, `esc_html`, `esc_attr`, `esc_textarea`, .NET `HtmlEncoder.Default.Encode` and Go `template.HTMLEscapeString` now label an XSS flow sanitized (labelled and demoted, never removed).
+- **A sanitizer defect fixed.** Django `mark_safe` was listed as an XSS sanitizer. It escapes nothing; it marks a string as already safe. It no longer labels a flow sanitized.
+- **Parser fixes.** PHP `print(...)` statements, C# `await` statements and C# indexer assignments were dropped from the IR; each is now kept.
+- **Known precision limits, stated.** Java, Python and PHP literals keep their quotes in the IR, so the markup check passes for any concatenation there and a plain-text response such as `"Echo: " + msg` can still be reported. A content type set by a separate call earlier in a handler is not linked to the later write. Markup built into a variable before the write is not recognised as markup. Not modelled: template files (Vue, Blade, Thymeleaf, Razor), Ruby `.html_safe`, Jinja with autoescape off, Go `text/template` against `html/template`.
+- **Gates.** Full suite 13457 passed, 0 failed; mutation 464/464; CVE replay 229/229; self-scan unchanged; layer recall unchanged.
+- **Not done, with the reason.** Fix-correctness against the maintainers' fixes was not re-measured (0/11 at 0.208.0). A model proposer for repairs needs an operator endpoint and is not built.
+
 ## 0.211.0 - Framework models written from API documentation: request sources and sinks across eight languages; the first validation gain
 
 **Measured, 0.210.0:** `TIMINGS preflight=4s push=7s pr=4s checks=460s total=475s` on the first attempt, which stopped on the hosted time-to-first-finding check at 16395 ms (best of 3, limit 15030 ms); alternating local samples of main and the release candidate gave the same times (main 15544, 13106, 10779 ms; candidate 15133, 11074, 10661 ms), the re-run job measured 11766 ms, and the resumed run read `TIMINGS preflight=4s push=7s pr=4s checks=1s merge=5s verify=5s tag=2s release=284s npm=576s total=888s release-clock=296s`.
