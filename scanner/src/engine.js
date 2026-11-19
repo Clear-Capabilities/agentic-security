@@ -129,6 +129,8 @@ import { scanDatabaseRLS } from './sast/db-rls.js';
 import { scanRateLimit } from './sast/rate-limit.js';
 import { scanConventionDeviationProject } from './sast/convention-deviation.js';
 import { scanResourceExhaustion } from './sast/resource-exhaustion.js';
+import { scanRequestSizedResource } from './sast/request-sized-resource.js';
+import { scanResourceLimitDisabled } from './sast/resource-limit-disabled.js';
 import { scanRedirectToctou, scanPhpStreamRedirect } from './sast/redirect-toctou.js';
 import { scanCodegenSink } from './sast/codegen-sink.js';
 import { scanLiteralEscaping } from './sast/literal-escaping.js';
@@ -8985,7 +8987,7 @@ async function queryRegistries(components){
       _aF.push(...(runDetector(_detectorErrors,p,'scanRust',()=>scanRust(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanGoExtended',()=>scanGoExtended(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanDatabaseRLS',()=>scanDatabaseRLS(p,cc))||[]));
-      _aF.push(...(runDetector(_detectorErrors,p,'scanRateLimit',()=>scanRateLimit(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanResourceExhaustion',()=>scanResourceExhaustion(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRedirectToctou',()=>scanRedirectToctou(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanPhpStreamRedirect',()=>scanPhpStreamRedirect(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanCodegenSink',()=>scanCodegenSink(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanLiteralEscaping',()=>scanLiteralEscaping(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanFrontmatterEngine',()=>scanFrontmatterEngine(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanGitOptionInjection',()=>scanGitOptionInjection(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanOwnershipAuthz',()=>scanOwnershipAuthz(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanRateLimit',()=>scanRateLimit(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanResourceExhaustion',()=>scanResourceExhaustion(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRequestSizedResource',()=>scanRequestSizedResource(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanResourceLimitDisabled',()=>scanResourceLimitDisabled(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRedirectToctou',()=>scanRedirectToctou(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanPhpStreamRedirect',()=>scanPhpStreamRedirect(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanCodegenSink',()=>scanCodegenSink(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanLiteralEscaping',()=>scanLiteralEscaping(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanFrontmatterEngine',()=>scanFrontmatterEngine(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanGitOptionInjection',()=>scanGitOptionInjection(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanOwnershipAuthz',()=>scanOwnershipAuthz(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanAuthProvider',()=>scanAuthProvider(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanEnvHygiene',()=>scanEnvHygiene(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanWebhook',()=>scanWebhook(p,cc))||[]));

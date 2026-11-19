@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.213.0",
-    "bundleSha256": "b36eab9e98293a96def476fbc7eb4e28440c050f3ddd007453f668815670a639",
-    "commit": "657ddf2b60a8b9e1f7be727bedfb3372fcf2dc52",
+    "engineVersion": "0.214.0",
+    "bundleSha256": "d665848bcc699dd0428b30ca3f008856ab0f58ad272c75380a9134774cfe5fb8",
+    "commit": "2f3b7a294034b8d690a76523a2bf5698562d094e",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-19T15:56:36.538Z",
+    "generatedAt": "2026-11-19T21:19:56.296Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -1012,7 +1012,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 178,
+    "n": 280,
     "d": 586
   },
   "taintRecall": {
@@ -2214,8 +2214,8 @@
           "timedOut": 0
         },
         "analyzers": {
-          "numerator": 150,
-          "denominator": 150,
+          "numerator": 152,
+          "denominator": 152,
           "percent": 100,
           "failed": 0,
           "timedOut": 0,
@@ -2266,9 +2266,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.213.0",
-    "commit": "657ddf2b60a8b9e1f7be727bedfb3372fcf2dc52",
-    "bundleSha256": "b36eab9e98293a96def476fbc7eb4e28440c050f3ddd007453f668815670a639",
+    "engineVersion": "0.214.0",
+    "commit": "2f3b7a294034b8d690a76523a2bf5698562d094e",
+    "bundleSha256": "d665848bcc699dd0428b30ca3f008856ab0f58ad272c75380a9134774cfe5fb8",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",

@@ -1,6 +1,6 @@
 // A webhook relay: POST /notify with {"target": "<url>", "event": "<name>"} posts the event to the target and reports its status.
 // Written separately from the link-preview fixture: a JSON body, a POST with options, and the status (not the body) returned.
-const readBody = (req) => new Promise((resolve) => { let raw = ''; req.on('data', (d) => { raw += d; }); req.on('end', () => { try { resolve(JSON.parse(raw || '{}')); } catch { resolve({}); } }); });
+const readBody = (req) => new Promise((resolve) => { let raw = ''; req.on('data', (d) => { raw += d; if (raw.length > 1e6) req.destroy(); }); req.on('end', () => { try { resolve(JSON.parse(raw || '{}')); } catch { resolve({}); } }); });
 
 export function createApp() {
   return async (req, res) => {

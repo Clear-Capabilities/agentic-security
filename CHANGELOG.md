@@ -9,6 +9,21 @@
 > make the history less accurate, not more.
 
 
+## 0.214.0 - Request-driven resource consumption across eight languages; no change on the independent population
+
+**Measured, 0.213.0:** `TIMINGS preflight=4s push=8s pr=4s checks=370s merge=7s verify=10s tag=2s release=256s npm=90s total=751s release-clock=275s` with the npm listing not yet visible after 90 s; the resumed run confirmed it and read `npm=391s total=1052s`.
+
+Every accuracy figure below was measured on the independent population (real upstream code at the vulnerable commit, labelled by public advisories), development and validation splits only; the sealed split was not touched. No advisory was read while writing this release.
+
+- **Request-sized resources (`sast/request-sized-resource.js`).** A request value used as an allocation size (CWE-770) or a loop bound (CWE-400), and quadratic work over a request collection (CWE-407): a nested scan of the same collection, a membership test on a list built from it, or a string grown with `+=` in a loop. JavaScript and TypeScript, Python, Java, Kotlin, C#, Go, PHP and Ruby. The source must be a framework request accessor or a parameter the framework binds from the request; taint stops at any other call's result, so a database row looked up by a request id is not treated as a chosen size. A comparison with a limit, a clamp, a validate or limit call, a declared maximum (`@Max`, `[Range]`, `Query(le=...)`) or a collection size check before the use silences it.
+- **Limits disabled or never set (`sast/resource-limit-disabled.js`).** Upload and body limits turned off (Django `DATA_UPLOAD_MAX_*` of `None`, Spring and Tomcat sizes of -1, Commons FileUpload with no maximum, body-parser, multer, busboy and formidable limits of `Infinity`); a whole request body read with no cap (Go `io.ReadAll(r.Body)` without `MaxBytesReader` or `LimitReader`, Node `req.on('data')` accumulation without a size check, `getRawBody` without `limit`); a compressed or archive upload expanded with no size check; a JSON nesting limit removed; the libxml2 huge option in a file that reads request input. Silent when every server in the file listens on loopback only.
+- **Independent accuracy, re-measured (run `9f04559958b6`, engine at `ac1f0c72`, the same 223 entries).** Localized precision 65/68, recall 65/223, F1 0.447 (95% grouped-bootstrap interval 0.362 to 0.529). **By split:** development 63 of 180 with 1 false positive (F1 0.516), validation 2 of 43 with 2 false positives (F1 0.085), both unchanged. Neither new detector reported anything on the 223 trees. The run directory is not committed.
+- **Precision on unlabelled real code.** 0 findings across 155,595 files (this repository's source and dependencies, an installed Python 3.13 with site-packages, and five open-source applications with their dependencies), after four precision fixes found by earlier sweeps of the same set. A collection regex that took 24 s on a 170 KB generated parser now takes 1 ms.
+- **One fixture changed.** The repair example `ssrf-webhook` now caps its request body at 1 MB, since the new rule correctly reports its unbounded body buffer.
+- **Gates.** Full suite 13525 passed, 0 failed; mutation 464/464; CVE replay 229/229; self-scan unchanged (three findings on the new rule's own regexes were fixed in the regexes, not baselined); layer recall unchanged.
+- **Known limits.** One function at a time, so a value handed to a helper is not followed; a guard is not checked to reject; recursion over request-shaped nested data is not modelled.
+- **Not done, with the reason.** Fix-correctness against the maintainers' fixes was not re-measured (0/11 at 0.208.0). The model discovery layer and a model proposer for repairs need an operator endpoint and are not built.
+
 ## 0.213.0 - Sibling guard deviation on values, eight languages; no change on the independent population
 
 **Measured, 0.212.0:** `TIMINGS preflight=4s push=7s pr=4s checks=388s merge=8s verify=8s tag=2s release=253s npm=90s total=764s release-clock=271s` with the npm listing not yet visible after 90 s; the resumed run stopped once on a local warm-gate test that passed alone (`vuln-archaeology.test.js`, churn-corrected ranking), and after a fresh warm run passed it read `npm=1s total=675s`.
