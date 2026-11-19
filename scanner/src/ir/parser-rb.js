@@ -231,7 +231,8 @@ function _lowerExpr(text) {
   // get via exprTaint's 'object' case. The colon must immediately follow
   // the identifier (no space) so this can't mis-fire on a ternary's
   // `cond ? a : b` (space before its colon).
-  const kwarg = s.match(/^([A-Za-z_]\w*):\s*(.+)$/);
+  // `(?!:)`: `Net::HTTP.get(u)` is a scoped call, not a keyword `Net:` whose value is the symbol `:HTTP...`.
+  const kwarg = s.match(/^([A-Za-z_]\w*):(?!:)\s*(.+)$/);
   if (kwarg) return _lowerExpr(kwarg[2]);
   // Call: obj.method(args) or method(args). matchBalancedCall finds the
   // paren that actually balances the FIRST '(' — not the greedy-to-end-of-
@@ -361,6 +362,11 @@ function _lowerStmt(stmt, line) {
     const value = _lowerExpr(subAssign[3]);
     return { kind: 'call', line, callee: `${receiver}.[]=`, args: [key, value] };
   }
+  // Multiple assignment (`out, status = Open3.capture2(cmd)`): the right-hand side is evaluated (so a sink there is a
+  // site) and its value is bound to the FIRST target, the conventional data slot (the rest are status values).
+  // One character class for the remaining targets, so the match is linear.
+  const multi = s.match(/^(@?\w+)\s*,[\w@\s,]*=(?!=)([\s\S]+)$/);
+  if (multi) return { kind: 'assign', line, target: multi[1], source: _lowerExpr(multi[2].trim()) };
   // Assignment: var = expr
   const assign = s.match(/^(@?\w+)\s*=\s*(.+)$/s);
   if (assign && !/^={2}/.test(assign[2])) {
@@ -758,7 +764,9 @@ export function parseRubyFile(file, code) {
     if (defLineEnd < 0) continue;
     const extracted = _extractRubyBody(code, defLineEnd + 1);
     if (!extracted) continue;
-    const startLine = _lineAt(code, m.index);
+    // m.index is the boundary newline that ends the PRECEDING line (see _defBoundaryLen); counting from it put every def
+    // not at offset 0 one line early, and every statement in its body with it.
+    const startLine = _lineAt(code, m.index + _defBoundaryLen(m.index));
     const nodes = {};
     const entry = _addNode(nodes, { kind: 'entry', line: startLine });
     const exit = _addNode(nodes, { kind: 'exit', line: startLine });

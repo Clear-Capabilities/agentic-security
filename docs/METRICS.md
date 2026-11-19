@@ -81,7 +81,7 @@ blocker.
 | go | 22 | 22 (100%) | 14 (64%) |
 | haskell | 9 | 9 (100%) | 9 (100%) |
 | java | 25 | 25 (100%) | 13 (52%) |
-| js/ts | 38 | 38 (100%) | 22 (58%) |
+| js/ts | 38 | 38 (100%) | 23 (61%) |
 | kotlin | 21 | 21 (100%) | 10 (48%) |
 | php | 23 | 23 (100%) | 15 (65%) |
 | python | 32 | 32 (100%) | 21 (66%) |
@@ -89,7 +89,9 @@ blocker.
 | rust | 5 | 5 (100%) | 5 (100%) |
 | json | 1 | 1 (100%) | 0 (0%) |
 | terraform | 1 | 1 (100%) | 0 (0%) |
-| **total** | **229** | **229 (100%)** | **135 (59%)** |
+| **total** | **229** | **229 (100%)** | **136 (59%)** |
+
+**2026-11-18: framework models (135 → 136).** The round-five request-source and sink models for common web frameworks (`scanner/src/dataflow/catalog-framework-models.js`, written from framework APIs, not from any corpus or advisory entry) moved js/ts 22 → 23; no language fell. Re-baselined with `npm run bench:layer-recall:update-baseline`.
 
 **2026-11-02: the first real Haskell advisory, and a stricter corpus predicate (134 → 135, 228 → 229 entries).** `deep/hs-keter-unknown-host-xss-HSEC-2024-0001` is
 keter's `Keter/Proxy.hs` before and after the upstream fix, unmodified (the `Host` header echoed into an HTML page; the fix escapes it). Four

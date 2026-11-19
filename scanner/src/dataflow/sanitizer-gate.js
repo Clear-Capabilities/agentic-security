@@ -38,6 +38,10 @@ const _CWE_FAMILY = {
   'CWE-79': 'xss',
   'CWE-78': 'cmd',
   'CWE-22': 'path',
+  // A pattern built from request data is neutralised by the regex escapers
+  // (re.escape, Pattern.quote, Regex.Escape, preg_quote, Regexp.escape,
+  // escapeRegExp), all tagged appliesTo:['regex'] in the catalog.
+  'CWE-1333': 'regex',
   'CWE-918': 'ssrf-host-allowlist-only',   // no catalog family — see above
   'CWE-601': 'redirect-allowlist-only',    // no catalog family — see above
 };

@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.210.0",
-    "bundleSha256": "7dca3a8d2c1827f16189409da01415192c2648e9df866240907c14addfcea59e",
-    "commit": "dddee99c0000d105e030b5b6c7be6df2027e8fd7",
+    "engineVersion": "0.211.0",
+    "bundleSha256": "cba3f2ad664e735620211cbeef190e3bda722cb15d7731eb62bd23279dc77a6a",
+    "commit": "04c2f6fb95b53f28b531a71d9d558c5615f8f535",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-18T23:30:56.276Z",
+    "generatedAt": "2026-11-19T04:15:00.281Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -1012,7 +1012,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 270,
+    "n": 271,
     "d": 586
   },
   "taintRecall": {
@@ -1058,7 +1058,7 @@
         {
           "language": "js/ts",
           "taint": {
-            "n": 22,
+            "n": 23,
             "d": 38
           }
         },
@@ -2266,9 +2266,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.210.0",
-    "commit": "dddee99c0000d105e030b5b6c7be6df2027e8fd7",
-    "bundleSha256": "7dca3a8d2c1827f16189409da01415192c2648e9df866240907c14addfcea59e",
+    "engineVersion": "0.211.0",
+    "commit": "04c2f6fb95b53f28b531a71d9d558c5615f8f535",
+    "bundleSha256": "cba3f2ad664e735620211cbeef190e3bda722cb15d7731eb62bd23279dc77a6a",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",

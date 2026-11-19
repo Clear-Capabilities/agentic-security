@@ -68,13 +68,18 @@
 import * as crypto from 'node:crypto';
 import { callSitesFromCfg } from './call-sites.js';
 import { matchBalancedCall } from './balanced-call.js';
+import { isImplicitSpringMappedParam, IMPLICIT_SPRING_PARAM } from './implicit-handler-params.js';
 
 const FUN_RE = new RegExp(
   '(?:^|[\\s;{}])(?:public|private|internal|protected|inline|suspend|tailrec|operator|infix|open|abstract|override|final|external)?' +
   '(?:\\s+(?:public|private|internal|protected|inline|suspend|tailrec|operator|infix|open|abstract|override|final|external))*' +
   '\\s*fun\\s+(?:[A-Za-z_][\\w.]*\\.)?' +              // optional receiver-type prefix
   '([A-Za-z_][\\w]*)' +                                // function name (group 1)
-  '\\s*\\(([^)]*)\\)' +                                // params (group 2)
+  // One level of nested parentheses is allowed inside the parameter list so an
+  // annotated parameter (`@RequestParam("q") q: String`) does not end the match
+  // early and drop the whole function. The two alternatives start with
+  // disjoint characters, so the repetition is linear.
+  '\\s*\\(((?:[^()]|\\([^()]*\\))*)\\)' +             // params (group 2)
   '\\s*(?::\\s*[A-Za-z_][\\w<>?,\\s.]*)?\\s*\\{', 'g'); // optional return type then '{'
 
 // R8: reused UNCHANGED by the new recursive `_buildCfg` below — this
@@ -796,9 +801,98 @@ function _stripSafeCallOperator(code) {
     }
     if (c === '"' || c === '\'') { inStr = c; out += c; continue; }
     if (c === '?' && code[i + 1] === '.') { out += '.'; i++; continue; }
+    // The not-null assertion `x!!` is a no-op for data flow (it throws or yields x); dropping it lets
+    // `call.parameters["n"]!!` and `x!!.trim()` lower like their unasserted forms.
+    if (c === '!' && code[i + 1] === '!' && /[\w)\]"]/.test(code[i - 1] || '')) { i++; continue; }
     out += c;
   }
   return out;
+}
+
+// Split a Kotlin parameter list on top-level commas (not inside parentheses,
+// angle brackets or strings), so `@RequestParam("a,b") x: Map<String, Int>`
+// stays one parameter.
+function _splitKtParams(text) {
+  const out = [];
+  let depth = 0;
+  let inStr = null;
+  let cur = '';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) { cur += c; if (c === '\\') { cur += text[++i] || ''; continue; } if (c === inStr) inStr = null; continue; }
+    if (c === '"' || c === "'") { inStr = c; cur += c; continue; }
+    if (c === '(' || c === '<' || c === '[') depth++;
+    else if ((c === ')' || c === '>' || c === ']') && depth > 0) depth--;
+    if (c === ',' && depth === 0) { out.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  if (cur.trim()) out.push(cur);
+  return out;
+}
+
+// The annotation names written immediately before a `fun` declaration
+// (`@GetMapping("/p")`, `@PostMapping`), read back to the previous statement
+// or block boundary.
+function _ktMethodAnnotations(code, funIdx) {
+  const start = Math.max(0, funIdx - 2000);
+  // String contents are blanked first: a route template (`@GetMapping("/p/{id}")`) holds braces.
+  const before = code.slice(start, funIdx + 1).replace(/"[^"\n]*"/g, '""');
+  const cut = Math.max(before.lastIndexOf('}'), before.lastIndexOf('{'), before.lastIndexOf(';'));
+  const head = cut >= 0 ? before.slice(cut + 1) : before;
+  const names = [];
+  // One character class for the dotted name (no nested quantifier); the simple name is its last segment.
+  const re = /@([A-Za-z_][\w.]*)/g;
+  let mm;
+  while ((mm = re.exec(head)) !== null) { const last = mm[1].split('.').filter(Boolean).pop(); if (last) names.push(last); }
+  return names;
+}
+
+// Kotlin parameters: `name: Type = default`, `vararg name: Type`, constructor
+// `val`/`var`, each optionally preceded by annotations (`@RequestParam`,
+// `@PathVariable("id")`, `@field:Json`). Annotation names are reported in the
+// IR's shared `paramAnnotations` side-channel, exactly as parser-java.js does
+// for the same Spring/JAX-RS annotations; the catalog decides which are sources.
+// A plain `String` parameter of a method carrying a Spring mapping annotation
+// is reported as implicitly request-bound, again mirroring parser-java.js.
+function _parseKtParams(paramsText, methodAnnotations) {
+  const params = [];
+  const paramAnnotations = [];
+  for (const raw of _splitKtParams(paramsText || '')) {
+    let t = raw.trim();
+    if (!t) continue;
+    const decorators = [];
+    // Leading annotations, each optionally with a use-site target and an argument list.
+    for (;;) {
+      const am = /^@(?:[A-Za-z_]\w*:)?([A-Za-z_][\w.]*)/.exec(t);
+      if (!am) break;
+      const simple = am[1].split('.').filter(Boolean).pop();
+      if (simple) decorators.push(simple);
+      t = t.slice(am[0].length);
+      if (t.startsWith('(')) {
+        let depth = 0;
+        let j = 0;
+        for (; j < t.length; j++) {
+          if (t[j] === '(') depth++;
+          else if (t[j] === ')') { depth--; if (depth === 0) break; }
+        }
+        t = t.slice(j + 1);
+      }
+      t = t.trimStart();
+    }
+    const cleaned = t.replace(/^(?:vararg|val|var|private|public|internal|protected|override|crossinline|noinline)\s+/g, '')
+      .replace(/^(?:val|var)\s+/, '');
+    const colon = cleaned.indexOf(':');
+    const namePart = colon > 0 ? cleaned.slice(0, colon).trim() : cleaned.trim();
+    if (!/^[A-Za-z_]\w*$/.test(namePart)) continue;
+    const idx = params.length;
+    params.push(namePart);
+    for (const d of decorators) paramAnnotations.push({ index: idx, name: namePart, decorator: d });
+    const typeText = colon > 0 ? cleaned.slice(colon + 1).split('=')[0].trim().replace(/\?$/, '') : '';
+    if (isImplicitSpringMappedParam({ methodAnnotations, paramType: typeText, decorators })) {
+      paramAnnotations.push({ index: idx, name: namePart, decorator: IMPLICIT_SPRING_PARAM });
+    }
+  }
+  return { params, paramAnnotations };
 }
 
 function _qid(file, name, line, body) {
@@ -815,15 +909,7 @@ export function parseKotlinFile(file, code) {
   while ((m = FUN_RE.exec(code)) !== null) {
     const name = m[1];
     const paramsText = m[2] || '';
-    const params = paramsText.split(',').map(p => {
-      const t = p.trim();
-      if (!t) return null;
-      // Kotlin params: `name: Type = default` or `vararg name: Type`
-      const cleaned = t.replace(/^vararg\s+/, '');
-      const colon = cleaned.indexOf(':');
-      const namePart = colon > 0 ? cleaned.slice(0, colon).trim() : cleaned.trim();
-      return /^[A-Za-z_]\w*$/.test(namePart) ? namePart : null;
-    }).filter(Boolean);
+    const { params, paramAnnotations } = _parseKtParams(paramsText, _ktMethodAnnotations(code, m.index));
     const braceIdx = code.indexOf('{', m.index + m[0].length - 1);
     if (braceIdx < 0) continue;
     const extracted = _extractBody(code, braceIdx);
@@ -854,6 +940,7 @@ export function parseKotlinFile(file, code) {
     functions.push({
       qid: _qid(file, name, startLine, extracted.body),
       name, line: startLine, params, file,
+      ...(paramAnnotations.length ? { paramAnnotations } : {}),
       cfg,
       calls: callSitesFromCfg(cfg),
     });

@@ -227,7 +227,9 @@ test('D3/preservation: every `unsupported` sink entry carries a non-empty reason
   // 134 -> 174: the post-0.173 Haskell sinks (System.Cmd, Turtle, Shelly process sinks, hint code evaluation) are `unsupported` for the same
   // reason as every other CWE-78/CWE-88/CWE-94 entry. Re-measured against the live catalog.
   // 174 -> 176 (0.195.14): typed-process `proc` as a CWE-78 (program) and a CWE-88 (arguments) sink, `unsupported` like every process sink.
-  assert.equal(unsupported.length, 176);
+  // 176 -> 290 (round five of the framework models): the process, code-evaluation, template-source, deserialization,
+  // ReDoS and reflection sinks of catalog-framework-models.js. Re-measured against the live catalog.
+  assert.equal(unsupported.length, 290);
   for (const r of unsupported) {
     assert.equal(r.kind, 'process');
     assert.ok(r.reason && r.reason.length > 0);
@@ -261,7 +263,10 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
   // 59 -> 61 (0.195.8): `Network.Wai.responseLBS`/`responseBuilder` are CWE-79 sinks judged by their content-type header; both are
   // server-side response writers, so they land in the `otherCount` bucket and `domCount` stays 6.
   // 61 -> 63 (0.195.46): Spock's `html` (Web.Spock and Web.Spock.Core) as a page sink; server-side, so `otherCount` again and `domCount` stays 6.
-  assert.equal(cwe79.length, 63);
+  // 63 -> 93 (round five of the framework models): 30 server-side response writers and trusted-markup constructors
+  // (res.write/end, Django HttpResponse, mark_safe, Markup, HTMLResponse, Go ResponseWriter.Write, template.HTML,
+  // PHP print/printf, Symfony/Laravel responses, Rails raw, Html.Raw, HtmlString), none DOM/React, all `otherCount`.
+  assert.equal(cwe79.length, 93);
   let domCount = 0;
   let otherCount = 0;
   let stdoutText = 0;
@@ -285,7 +290,7 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
     }
   }
   assert.equal(domCount, 6);   // 4 dom + 2 react
-  assert.equal(otherCount, 51);   // 18 -> 35 with the 17 Haskell server-side XSS sinks, 35 -> 47 with the re-exported pre-escaped constructors, 47 -> 49 with the raw WAI response writers (0.195.8)
+  assert.equal(otherCount, 81);   // 51 -> 81 with the round-five server-side writers   // 18 -> 35 with the 17 Haskell server-side XSS sinks, 35 -> 47 with the re-exported pre-escaped constructors, 47 -> 49 with the raw WAI response writers (0.195.8)
   assert.equal(stdoutText, 6);
 });
 
@@ -546,12 +551,17 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // typed-process `proc` as a program and an arguments sink (process execution, unsupported). Names read from Hackage; re-measured against the live catalog.
   // 607 -> 611 and 416 -> 420 modeled (0.195.46, round 10 of the Haskell work): Spock's `html` in two modules (XSS, http-response, modeled) and req's
   // `useHttpsURI`/`useHttpURI` (SSRF, modeled). Re-measured against the live catalog.
-  assert.equal(SINKS.length, 611);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 420);
+  // 611 -> 1124, 420 -> 819 modeled, 176 -> 290 unsupported (round five of the framework models,
+  // src/dataflow/catalog-framework-models.js): 513 sink entries (one per method name) for JS/TS, Python, Java/Kotlin,
+  // Go, PHP, Ruby and C#. Path, SQL, SSRF, redirect and XSS sinks land in modeled categories; process, code-evaluation,
+  // template-source, deserialization, ReDoS and reflection sinks (CWE-78/94/95/1336/502/1333/470) are `unsupported`
+  // for the same reason as every earlier entry of those CWEs. Re-measured against the live catalog.
+  assert.equal(SINKS.length, 1124);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 819);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
-  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 176);
-  assert.equal(420 + 6 + 9 + 176, SINKS.length);
+  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 290);
+  assert.equal(819 + 6 + 9 + 290, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

@@ -283,12 +283,17 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // 730 -> 731 and 117 -> 118 candidate (0.207.0): `js-src-caller-controlled-param`, a parameter of an exported JS/TS function, provenance
   // `caller-argument` (user-input, candidate: the library's caller supplies it, whether that caller passes user input is not known). Opt-in in
   // the taint engine; the lineage registry classifies every catalog source regardless. Re-measured against the live catalog.
-  assert.equal(SOURCES.length, 731);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 572);
+  // 731 -> 897 and 572 -> 738 modeled (round five of the framework models, src/dataflow/catalog-framework-models.js):
+  // 166 request sources (Fastify/Hapi/Next.js request fields and Fetch-API bodies, Express/Hono accessors, Next.js server-action
+  // parameters, Flask/FastAPI route parameters, aiohttp/Starlette/Tornado, JAX-RS/Quarkus/Micronaut annotations, servlet and Ktor
+  // accessors, net/http/gin/echo/fiber accessors, Laravel facade and CodeIgniter, Rack request fields, ASP.NET Core request
+  // fields), every one with a request provenance. Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 897);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 738);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 41);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 118);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(572 + 41 + 118, SOURCES.length);
+  assert.equal(738 + 41 + 118, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

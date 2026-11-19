@@ -1096,11 +1096,11 @@ app.get('/u', (req, res) => { const c = COLS.includes(req.query.c) ? req.query.c
   end
 end
 `, { cwe: /CWE-89/, file: 'a.rb', gap: { observedDetected: true, kind: 'false positive' } }),
-  det('gap-fn-js-readfilesync-concat', 'known-gap', true, 'fs.readFileSync with a request value concatenated into the path is path traversal; the synchronous form is not reported although readFile and sendFile are', `const fs = require('fs');
-app.get('/f', (req, res) => { res.send(fs.readFileSync('/srv/data/' + req.query.name)); });`, { cwe: /CWE-22/, gap: { observedDetected: false, kind: 'false negative' } }),
-  det('gap-fn-java-spring-jdbctemplate', 'known-gap', true, 'JdbcTemplate.queryForList with a concatenated @RequestParam is SQL injection; the Spring sink is not reported', `@RestController public class C { @Autowired JdbcTemplate jdbc;
+  det('js-readfilesync-concat', 'baseline', true, 'fs.readFileSync with a request value concatenated into the path is path traversal (a known gap until the framework models closed it)', `const fs = require('fs');
+app.get('/f', (req, res) => { res.send(fs.readFileSync('/srv/data/' + req.query.name)); });`, { cwe: /CWE-22/ }),
+  det('java-spring-jdbctemplate', 'baseline', true, 'JdbcTemplate.queryForList with a concatenated @RequestParam is SQL injection (a known gap until the framework models closed it)', `@RestController public class C { @Autowired JdbcTemplate jdbc;
  @GetMapping("/u") public Object u(@RequestParam String id) { return jdbc.queryForList("SELECT * FROM t WHERE id = " + id); } }
-`, { cwe: /CWE-89/, file: 'C.java', gap: { observedDetected: false, kind: 'false negative' } }),
+`, { cwe: /CWE-89/, file: 'C.java' }),
 ];
 
 // ── Derived: the same verdict with answer-key words around the code ───────────────────────────────────────────────────────

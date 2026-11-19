@@ -269,3 +269,21 @@ end
   assert.ok(irFindings.length >= 1,
     `expected an IR-TAINT finding through the do...end block's "code" binding, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);
 });
+
+// A def that does not start at offset 0 (inside a class, or below a comment) was numbered from the newline ending the
+// line above it, so the def and every statement in its body were reported one line early.
+test('statement lines are exact for a def below a comment and inside a class', () => {
+  const src = '# leading comment\nclass C\n  def run\n    x = params[:cmd]\n    system(x)\n  end\nend\n';
+  const ir = parseRubyFile('lib/c.rb', src);
+  const fn = ir.functions.find((f) => f.name === 'run');
+  assert.equal(fn.line, 3);
+  const lines = Object.values(fn.cfg.nodes).filter((n) => n.kind === 'call' || n.kind === 'assign').map((n) => n.line).sort();
+  assert.deepEqual(lines, [4, 5]);
+});
+
+test('a def at the very start of the file keeps line 1', () => {
+  const ir = parseRubyFile('lib/c.rb', 'def run\n  system(params[:cmd])\nend\n');
+  const fn = ir.functions.find((f) => f.name === 'run');
+  assert.equal(fn.line, 1);
+  assert.ok(Object.values(fn.cfg.nodes).some((n) => n.kind === 'call' && n.line === 2));
+});
