@@ -9,6 +9,18 @@
 > make the history less accurate, not more.
 
 
+## 0.213.0 - Sibling guard deviation on values, eight languages; no change on the independent population
+
+**Measured, 0.212.0:** `TIMINGS preflight=4s push=7s pr=4s checks=388s merge=8s verify=8s tag=2s release=253s npm=90s total=764s release-clock=271s` with the npm listing not yet visible after 90 s; the resumed run stopped once on a local warm-gate test that passed alone (`vuln-archaeology.test.js`, churn-corrected ranking), and after a fresh warm run passed it read `npm=1s total=675s`.
+
+Every accuracy figure below was measured on the independent population (real upstream code at the vulnerable commit, labelled by public advisories), development and validation splits only; the sealed split was not touched. No advisory was read while writing this release.
+
+- **A new detector: a value guard a function's siblings run and it skips.** When two or more functions in one file pass a caller-supplied value of the same role to the same call or field, and most of them first pass that value to the same check, a sibling that skips the check is reported (for example an `update` that stores a URL its `create` validates first). JavaScript and TypeScript, Python, Java, Kotlin, Go, PHP, Ruby and C# (`sast/convention-deviation-values.js`). Precision rules: the check must take the same value and run before the use, the value must come from the caller, at least two guarded siblings must form a strict majority (or a single pair must match tightly by name and argument), and test files are skipped. The CWE follows the primitive (918, 22, 78, 89 or 862), otherwise 20. These findings are exempt from the guarded-finding filter, since the missing guard is the finding.
+- **Independent accuracy, re-measured (run `d1c8555c2ad8`, engine at `c2e7626e`, the same 223 entries).** Localized precision 65/68, recall 65/223, F1 0.447 (95% grouped-bootstrap interval 0.362 to 0.529). **By split:** development 63 of 180 with 1 false positive (F1 0.516), validation 2 of 43 with 2 false positives (F1 0.085), both unchanged. The new detector reported nothing on any of the 223 trees: no new detection and no new false positive. The run directory is not committed.
+- **Precision on unlabelled real code.** 0 findings across 4,789 files (this repository, its dependencies and the CVE-replay trees); 2 low-confidence CWE-20 findings across 31,421 files of a local Python 3.13 standard library. Go, Java, Kotlin, PHP and C# were checked on fixtures only; no real code in those languages was available locally.
+- **Gates.** Full suite 13489 passed, 0 failed; mutation 464/464; CVE replay 229/229; self-scan unchanged; layer recall unchanged. The engineering-excellence regression and final reports were regenerated for the rebuilt bundle.
+- **Not done, with the reason.** Fix-correctness against the maintainers' fixes was not re-measured (0/11 at 0.208.0). A model proposer for repairs and the model discovery layer need an operator endpoint and are not built.
+
 ## 0.212.0 - XSS output models across seven languages, written from framework APIs; no change on the independent population
 
 **Measured, 0.211.0:** the first attempt stopped in the checks on hosted test failures (fixed in that release, see its precision-fix bullet); the resumed run read `TIMINGS preflight=4s push=7s pr=5s checks=1s merge=5s verify=6s tag=2s release=254s npm=454s total=738s release-clock=267s`.
