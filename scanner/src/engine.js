@@ -1757,6 +1757,12 @@ export function dropGuardedFindings(findings, fileContents, onDrop = null) {
     // Scoped to this family rather than loosening the window heuristic, which
     // is doing its job for every other CWE-22 emitter.
     if (f.family === 'sibling-guard-omission') return true;
+    // Same reasoning for the value form of convention deviation
+    // (`sast/convention-deviation-values.js`): the guard the siblings apply
+    // sits a few lines away in short functions, and the detector already
+    // treats a guard, a guarding helper or a hand-written exiting check
+    // inside the reported function as protection.
+    if (f.family === 'convention-deviation' && String(f.id || '').startsWith('convention-deviation:value-guard-omitted:')) return true;
     // The same holds for a WEAK guard (`weak-path-guard`: a bare string-prefix
     // containment test, a `Clean(p) != p` check): the finding sits on the guard
     // line, so the window check read the defective guard as protection and
