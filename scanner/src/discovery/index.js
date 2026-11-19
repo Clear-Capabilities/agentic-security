@@ -68,12 +68,12 @@ const HUNT_MAX_FILES = 2000;
  * Select and read the files a hunt over `scanRoot` examines. `overCap` true means the tree holds more source files than the
  * cap and nothing was read: the CLI refuses such a scope rather than hunting part of it.
  */
-export async function selectHuntFiles(scanRoot, { readFile = (p) => fs.readFileSync(p, 'utf8') } = {}) {
+export async function selectHuntFiles(scanRoot, { readFile = (p) => fs.promises.readFile(p, 'utf8') } = {}) {
   const rels = (await listFiles(scanRoot, { ignore: HUNT_IGNORE })).filter(f => HUNT_EXTS.test(f));
   if (rels.length > HUNT_MAX_FILES) return { rels, fileContents: {}, overCap: true, maxFiles: HUNT_MAX_FILES };
   const fileContents = {};
   for (const rel of rels) {
-    try { fileContents[rel] = readFile(path.join(scanRoot, rel)); } catch { /* unreadable: skip */ }
+    try { fileContents[rel] = await readFile(path.join(scanRoot, rel)); } catch { /* unreadable: skip */ }
   }
   return { rels, fileContents, overCap: false, maxFiles: HUNT_MAX_FILES };
 }
