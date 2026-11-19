@@ -31,6 +31,7 @@
 //     caller-controlled options into the SAME primitive receiver, so
 //     `TagReference.create(**kwargs)` is never weighed against `git.init(...)`
 import { blankComments } from './_comment-strip.js';
+import { langOf, isRelevantFile, analyseValueGuardsInFile, valueGuardFinding } from './convention-deviation-values.js';
 
 const PY_RE = /\.py$/i;
 const JS_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i;
@@ -286,9 +287,24 @@ export function scanConventionDeviationProject(fileContents) {
       for (const u of us) units.push({ ...u, file, lang: isPy ? 'py' : 'js' });
     } catch { /* per-file best-effort, same as every other detector here */ }
   }
-  if (!units.length) return [];
-  try { return analyseUnits(units).map(_finding); } catch { return []; }
+  let out = [];
+  if (units.length) { try { out = analyseUnits(units).map(_finding); } catch { out = []; } }
+  // The value form (convention-deviation-values.js): a function passing a
+  // caller-supplied value to the primitive its siblings in the same file
+  // guard first, without the guard. Eight languages, per-file populations.
+  for (const [file, raw] of Object.entries(fileContents)) {
+    if (!raw || typeof raw !== 'string' || raw.length > 500_000) continue;
+    try {
+      if (!isRelevantFile(file, raw)) continue;
+      const lang = langOf(file);
+      const src = blankComments(raw, COMMENT_LANG[lang]);
+      for (const d of analyseValueGuardsInFile(file, src, lang)) out.push(valueGuardFinding(d));
+    } catch { /* per-file best-effort, same as every other detector here */ }
+  }
+  return out;
 }
+
+const COMMENT_LANG = { py: 'py', rb: 'rb', php: 'php' };
 
 /** Single-file convenience wrapper — the project view of one file. */
 export function scanConventionDeviation(file, raw) {
