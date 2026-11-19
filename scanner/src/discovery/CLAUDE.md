@@ -51,6 +51,15 @@ The `detector-spec-synthesis` capability (Labs): a detector-spec PROPOSAL drafte
 - **Coverage is reported.** Degraded runs and their reasons appear in every
   report. A half-failed pass must never read as a clean one.
 
+## File selection and the budget seam
+
+`selectHuntFiles(scanRoot)` in `index.js` is the one definition of what `hunt` reads (languages, ignored directories, the
+2000-file cap); `cmdHunt` and the independent bench's `deep+discovery` configuration (`bench/independent/discovery.mjs`) both
+call it, so a measurement cannot select differently from the CLI. `makeBudget` now bounds a model callback resolved from
+configuration too: with no injected `llmInvoke`, `runDiscovery` passes `wrapInvoke` to `hunter.js` and `disprove.js`, which
+apply it to what they resolve. Before, only an injected callback was counted, so `hunt` driven by configuration had no call or
+wall-clock ceiling.
+
 ## Nix partitioning
 
 `partition.js` `partitionNixFiles` groups `.nix` files by their import structure (a configuration and the modules it imports are

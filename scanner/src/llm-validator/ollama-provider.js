@@ -321,6 +321,9 @@ export async function listOllamaModels({ host, timeouts } = {}) {
       quantization: m.details?.quantization_level || null,
       family: m.details?.family || null,
       modifiedAt: m.modified_at || null,
+      // A model Ollama serves from a remote host (an Ollama "cloud" model) answers on the loopback port but forwards every
+      // prompt off this machine. Reported so a caller that promises local-only inference can refuse it; null for a local model.
+      remoteHost: typeof m.remote_host === 'string' && m.remote_host ? m.remote_host : null,
     })),
   };
 }

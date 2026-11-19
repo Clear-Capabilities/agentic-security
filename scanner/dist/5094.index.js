@@ -369,7 +369,7 @@ const IGNORE_GLOBS = ['node_modules/**', '.git/**', 'dist/**', 'build/**', 'vend
 async function readSnapshot(root, { maxFiles = 3000 } = {}) {
   let rootReal;
   try { rootReal = node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(root); } catch { return { ok: false, reason: 'root-not-found' }; }
-  const rels = (await (0,_util_glob_js__WEBPACK_IMPORTED_MODULE_3__.listFiles)(rootReal, { ignore: IGNORE_GLOBS })).filter(f => SOURCE_EXTS.test(f)).sort();
+  const rels = (await (0,_util_glob_js__WEBPACK_IMPORTED_MODULE_3__/* .listFiles */ .CS)(rootReal, { ignore: IGNORE_GLOBS })).filter(f => SOURCE_EXTS.test(f)).sort();
   if (rels.length > maxFiles) return { ok: false, reason: 'too-many-files', count: rels.length, limit: maxFiles };
   const fileContents = {};
   const skipped = [];

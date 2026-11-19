@@ -69,7 +69,9 @@ export async function disproveCandidate(candidate, opts = {}) {
   // default so AGENTIC_SECURITY_LLM_MODEL_VERIFY applies, same precedence
   // (a caller-supplied opts.role still wins) hunter.js's lens routing uses.
   const role = opts.role || 'verify';
-  const { invoke: llmInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, role, purpose: 'discovery-disprove' });
+  const { invoke: resolvedInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, role, purpose: 'discovery-disprove' });
+  // The run budget's counter, applied to a configuration-resolved callback (see hunter.js).
+  const llmInvoke = typeof resolvedInvoke === 'function' && typeof opts.wrapInvoke === 'function' ? opts.wrapInvoke(resolvedInvoke) : resolvedInvoke;
 
   const votes = [];
   if (typeof llmInvoke === 'function') {
