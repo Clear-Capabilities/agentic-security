@@ -533,6 +533,22 @@ function _lowerExpr(text) {
   return { kind: 'unknown' };
 }
 
+// `( expr )` -> `expr` when the opening parenthesis closes at the very end (quotes respected); otherwise unchanged.
+function _stripWrappingParens(text) {
+  const t = String(text || '').trim();
+  if (!t.startsWith('(')) return t;
+  let depth = 0;
+  let q = null;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '\\') { i++; continue; } if (c === q) q = null; continue; }
+    if (c === '"' || c === "'") { q = c; continue; }
+    if (c === '(') depth++;
+    else if (c === ')') { depth--; if (depth === 0) return i === t.length - 1 ? t.slice(1, -1).trim() : t; }
+  }
+  return t;
+}
+
 function _splitTopLevelCommas(s) {
   const out = [];
   let buf = '';
@@ -621,7 +637,9 @@ function _lowerStmt(stmt, line) {
   // catalog sink can target it exactly like any other call-shaped sink —
   // same convention as parser-rb.js's `__ruby_backtick_exec__`.
   if (/^(?:echo|print)\b/.test(s)) {
-    const rest = s.replace(/^(?:echo|print)\s*/, '');
+    // `print("<h2>" . $t . "</h2>")` and `echo("...")`: the parentheses are a grouping, not a call, and the
+    // expression lowerer has no general parenthesised form, so a wrapped concatenation lowered to unknown.
+    const rest = _stripWrappingParens(s.replace(/^(?:echo|print)\s*/, ''));
     return { kind: 'call', line, callee: '__php_echo__', args: _splitTopLevelCommas(rest).map(_lowerExpr) };
   }
   // `include`/`require`/`include_once`/`require_once` are PHP LANGUAGE

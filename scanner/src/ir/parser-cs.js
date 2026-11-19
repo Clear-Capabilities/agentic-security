@@ -630,6 +630,9 @@ const _CAST_RE = /^\(\s*[A-Za-z_][\w.]*(?:<[^()]*>)?(?:\[\s*\])*\??\s*\)\s*(?=[A
 function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
+  // `await e` has the value of `e` for taint purposes (the header's "async/await (transparent)"); without this the
+  // awaited call lowered to unknown and `var body = await reader.ReadToEndAsync()` lost its source.
+  if (/^await\s/.test(s)) return _lowerExpr(s.replace(/^await\s+/, ''));
   const castM = s.match(_CAST_RE);
   if (castM) return _lowerExpr(s.slice(castM[0].length));
   // Parenthesised object creation starting a chain: `(new X()).M(args)`.
@@ -838,6 +841,17 @@ function _lowerStmt(stmt, line) {
   }
   // throw
   if (/^throw\b/.test(s)) return { kind: 'throw', line, value: _lowerExpr(s.replace(/^throw\s*/, '')) };
+  // `await Response.WriteAsync(html);`: the statement is the awaited call. It matched no branch below (the call
+  // regex anchors on an identifier) and was dropped whole, sink and all.
+  if (/^await\s/.test(s)) return _lowerStmt(s.replace(/^await\s+/, ''), line);
+  // Indexer assignment `ViewData["Title"] = expr;` / `dict[key] = expr;`: the target regex below admits no `[`, so the
+  // statement was dropped, and with it any sink call on the right-hand side (`Html.Raw(...)`). Lowered as a WEAK
+  // update of the container, `c = c | expr`, the same self-referencing form the compound-assignment branch below uses,
+  // so a clean element write never clears taint the container already holds.
+  const ix = s.match(/^([A-Za-z_][\w.]*)\s*\[[^\]=]*\]\s*=(?!=)\s*(.+)$/s);
+  if (ix) {
+    return { kind: 'assign', line, target: ix[1], source: { kind: 'binary', op: '|', weakUpdate: true, left: { kind: 'ident', name: ix[1] }, right: _lowerExpr(ix[2]) } };
+  }
   // compound assign: `x += y`  `x.y -= z`  etc. SARD_80_F1 W4.C11 — this
   // was previously unrecognized entirely (the plain-assign regex below
   // requires a literal `=` with nothing but `[\w.]` before it, which a

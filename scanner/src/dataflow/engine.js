@@ -1250,6 +1250,20 @@ function _shellScriptElementTainted(arrExpr, state, callContext) {
   const i = els.findIndex((x) => x && x.kind === 'literal' && _SHELL_SCRIPT_FLAG.test(String(x.value)));
   return i >= 0 && !!els[i + 1] && exprTaint(els[i + 1], state, callContext);
 }
+// The text of a literal or a dotted constant (`ContentType.Text.Plain`), tested against `pattern`; any other shape is
+// not evidence and never matches.
+function _argConstantText(a) {
+  if (!a) return null;
+  if (a.kind === 'literal') return String(a.value ?? '');
+  if (a.kind === 'ident') return a.name;
+  if (a.kind === 'member' && typeof a.prop === 'string') { const o = _argConstantText(a.object); return o === null ? null : `${o}.${a.prop}`; }
+  return null;
+}
+function _argConstantMatches(a, pattern) {
+  const t = _argConstantText(a);
+  return t !== null && new RegExp(pattern, 'i').test(t);
+}
+
 function _literalArgSatisfied(argExprs, requireLiteralArg) {
   const { index, pattern } = requireLiteralArg;
   const checkArg = (argExprs || [])[index];
@@ -1385,7 +1399,10 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
         // `.query()`-style call that may carry an unrelated string, so the literal-skeleton filter does not apply to them.
         if (e.vuln && taintedArgExpr && !e.hs && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
         // A text-output sink that is an XSS sink ONLY when the string being assembled contains markup (`putStrLn`).
-        if (e.hs && e.hs.htmlSkeleton && !(taintedArgExpr && /<[A-Za-z!\/]/.test(_literalPartsOfExpr(taintedArgExpr).join(' ')))) continue;
+        // `match.htmlSkeleton` is the same gate for a catalog entry outside Haskell (Fastify `reply.send`, jQuery
+        // `.append`, Flask `make_response`): the tainted argument must itself carry a markup literal, so a value
+        // passed whole (an object, a JSON body, a node built with `.text()`) is not read as HTML.
+        if (((e.hs && e.hs.htmlSkeleton) || (e.match && e.match.htmlSkeleton)) && !(taintedArgExpr && /<[A-Za-z!\/]/.test(_literalPartsOfExpr(taintedArgExpr).join(' ')))) continue;
         // Taint-recall PRD (80%): `match.requireLiteralArg` — a precision
         // gate for sinks whose danger depends on a SIBLING argument's
         // literal value, not the tainted one. Go's `exec.Command(path,
@@ -1462,6 +1479,10 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
         }
         if (e.match && e.match.rejectOptionKey
           && (argExprs || []).some((a) => a && a.kind === 'object' && (a.props || []).some((p) => p && p.key === e.match.rejectOptionKey))) continue;
+        // `match.rejectArg: {index, pattern}`: the positional form of rejectKeyword. A sibling argument that names a
+        // non-HTML content type (Ktor `respondText(s, ContentType.Text.Plain)`) selects the safe form of the API.
+        // Only a literal or a dotted constant (`ContentType.Application.Json`) is evidence; anything else keeps the sink.
+        if (e.match && e.match.rejectArg && _argConstantMatches((argExprs || [])[e.match.rejectArg.index], e.match.rejectArg.pattern)) continue;
         // `match.shellScriptElement`: with a literal shell as the program, only the element right after the script flag
         // (`-c`, `/c`, `-Command`) is shell code; later elements are positional parameters (`$0`, `$1`) the script may never
         // expand. A non-literal array, or one with no script flag, cannot be placed and is not reported (fails closed).
@@ -1885,6 +1906,10 @@ function step(node, stateIn, callContext) {
         // Haskell: a conditional or `case` used as a STATEMENT (not the last one) is bound to a scratch name; every branch action in it runs when its
         // branch is taken, so each is a sink site (the last statement of a block is handled by the `return` case).
         findings.push(..._nestedSinkFindings([node.source], state, callContext, node.line));
+      } else if (node.source && node.source.kind === 'binary' && node.source.weakUpdate) {
+        // An indexer write lowered as a weak update of its container (`c = c | rhs`, parser-cs.js): the right-hand
+        // side is still evaluated, so a sink call there (`ViewData["T"] = Html.Raw(x)`) is a sink site.
+        findings.push(..._nestedSinkFindings([node.source.right], state, callContext, node.line));
       }
       // PRD R13(a): the assignment TARGET can itself be a sink shape
       // (el.innerHTML = tainted) — additive to the RHS-call-sink check
@@ -2424,6 +2449,17 @@ function step(node, stateIn, callContext) {
       // is about a callee's OWN internal findings and mutated params — an
       // unrelated concern from whether this return statement's own call
       // expression is directly a sink.
+      // Round six: a return the frontend marked `routeReturn` (a Flask `@app.route` view, a Spring `@ResponseBody`
+      // String handler) is the response body. It is checked as a call to the synthetic `__route_return__` sink,
+      // whose catalog entries carry `htmlSkeleton`, so only returned text that carries markup is read as HTML. A
+      // Flask `(body, status)` tuple contributes its body.
+      if (node.routeReturn && node.value) {
+        const body = node.value.kind === 'array' && Array.isArray(node.value.elements) ? node.value.elements[0] : node.value;
+        if (body) {
+          const { cat, argTaints } = _matchCallCatalog('__route_return__', [body], state, callContext);
+          findings.push(..._sinkFindingsForCall('__route_return__', [body], cat, argTaints, state, callContext, node.line).findings);
+        }
+      }
       if (node.value && node.value.kind === 'call') {
         const { cat, argTaints } = _matchCallCatalog(node.value.callee, node.value.args, state, callContext);
         const _at = _sinkLine(node.value, node.line);

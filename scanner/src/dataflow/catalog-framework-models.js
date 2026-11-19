@@ -576,6 +576,78 @@ const CS = [
     v('ReDoS (Regex.%m with a request-built pattern)', 'CWE-1333', 'medium', REDOS_REMEDIATION)),
 ];
 
+// ─── Cross-site scripting, round six ─────────────────────────────────────
+// Where request data reaches HTML output unescaped, written from the
+// frameworks' documented APIs. Two precision rules apply throughout:
+//   - A generic text writer (Fastify `reply.send`, jQuery `.append`, Flask
+//     `make_response`, `fmt.Fprintf`) is an XSS sink only when the static text
+//     around the value is markup: `match.htmlSkeleton` (the tainted argument
+//     must carry a `<tag` literal) or `requireLiteralArg` on the format string.
+//     A value passed whole (an object, a `jsonify(...)` body, a node built with
+//     `.text()`) is not read as HTML.
+//   - An API that always produces HTML (Hono `c.html`, Django `format_html`'s
+//     format string, Rails `content_tag(..., false)`) needs no markup gate, but
+//     only the non-escaping argument is the sink.
+// The escapers these flows go through are at the end, as sanitizers.
+const HTML_LITERAL = '<[A-Za-z!/]';
+const JQUERY_RECEIVER = '^(?:\\$[\\w$]*|jQuery)$';
+const XSS = [
+  // Hono: `c.html(s)` sends `s` as text/html. Its `html` tagged-template helper escapes interpolations; a
+  // plain string concatenation does not.
+  { kind: 'sink', id: 'js-hono-html', language: 'js', framework: 'hono', match: { type: 'call', callee: 'html', receiver: '^(?:c|ctx|context)$' }, argIndex: 0,
+    vuln: v('Reflected XSS (Hono c.html with a raw HTML string)', 'CWE-79', 'high', 'Build the body with Hono\'s html`` tagged template (it escapes interpolations), or escape the value before concatenating it.') },
+  // Fastify: `reply.send(string)` defaults to text/plain; it is HTML only when the handler set an HTML type,
+  // which the markup in the body stands in for (the `.type(...)` call is not tied to the send).
+  { kind: 'sink', id: 'js-fastify-reply-send-html', language: 'js', framework: 'fastify', match: { type: 'call', callee: 'send', receiver: '^reply$', htmlSkeleton: true }, argIndex: 0,
+    vuln: v('Reflected XSS (Fastify reply.send with markup)', 'CWE-79', 'high', XSS_REMEDIATION) },
+  // jQuery: `.html(s)` parses `s` as HTML whatever it holds. (`framework: 'dom'`: the destination is the browser
+  // DOM, which is how the lineage sink registry classifies it.) The insertion methods parse a STRING argument
+  // as HTML too, but they are also passed elements (`$('<li>').text(q)`), so they require markup text.
+  { kind: 'sink', id: 'js-jquery-html', language: 'js', framework: 'dom', match: { type: 'call', callee: 'html', receiver: JQUERY_RECEIVER }, argIndex: 0,
+    vuln: v('DOM XSS (jQuery .html)', 'CWE-79', 'high', 'Use .text() for text, or sanitize the markup before .html().') },
+  ...sinks('js-jquery-insert', 'js', 'dom', ['append', 'prepend', 'after', 'before', 'replaceWith', 'wrap', 'wrapAll', 'wrapInner'], { receiver: JQUERY_RECEIVER, htmlSkeleton: true }, 0,
+    v('DOM XSS (jQuery .%m with markup)', 'CWE-79', 'high', 'Build the element with $("<tag>").text(value) and insert that, or sanitize the markup first.')),
+  { kind: 'sink', id: 'js-jquery-construct', language: 'js', framework: 'dom', match: { type: 'call', callee: '$', receiverExclude: '.', htmlSkeleton: true }, argIndex: 0,
+    vuln: v('DOM XSS ($(markup) builds elements from request data)', 'CWE-79', 'high', 'Create the element from a literal tag and set the value with .text() or .attr().') },
+  // `document.writeln` is `document.write` plus a newline (same receiver rule as the base js-document-write).
+  { kind: 'sink', id: 'js-document-writeln', language: 'js', framework: 'dom',
+    match: { type: 'call', callee: 'writeln', receiver: '^(?:[A-Za-z_$][\\w$]*[Dd]ocument|document|doc|window|win|top|parent|self|frames|iframe|frame)$' }, argIndex: 0,
+    vuln: v('XSS (document.writeln)', 'CWE-79', 'high', 'Build the content with DOM APIs and textContent; never write request data as markup.') },
+
+  // Django `format_html(format_string, *args)` escapes the ARGUMENTS; a format string built from request data
+  // is emitted as markup (the base catalogs list format_html as a sanitizer, which is right for the arguments).
+  { kind: 'sink', id: 'py-django-format-html-format', language: 'py', framework: 'django', match: { type: 'call', callee: 'format_html' }, argIndex: 0,
+    vuln: v('XSS (format_html with a request-built format string)', 'CWE-79', 'high', 'Keep the format string literal and pass the value as an argument: format_html("<p>{}</p>", value).') },
+  // Flask `make_response(body)`: a str body is sent as text/html. Usually its argument is `jsonify(...)` or a
+  // rendered template, so only a body that carries markup text is read as HTML.
+  { kind: 'sink', id: 'py-flask-make-response-html', language: 'py', framework: 'flask', match: { type: 'call', callee: 'make_response', htmlSkeleton: true }, argIndex: 0,
+    vuln: v('Reflected XSS (make_response with markup)', 'CWE-79', 'high', XSS_REMEDIATION) },
+
+  // A Flask `@app.route` view's returned str, and a Spring `@ResponseBody` String handler's return value, is the
+  // response body (text/html). The frontends mark those returns (`routeReturn`, parser-py.helper.py and
+  // parser-java.js) and the engine checks them as this synthetic call; markup text is required.
+  { kind: 'sink', id: 'py-flask-view-return-html', language: 'py', framework: 'flask', match: { type: 'call', callee: '__route_return__', htmlSkeleton: true }, argIndex: 0,
+    vuln: v('Reflected XSS (Flask view returns markup built from request data)', 'CWE-79', 'high', 'Render a template (Jinja escapes by default) or escape the value with markupsafe.escape before building the markup.') },
+  { kind: 'sink', id: 'java-spring-responsebody-html', language: 'java', framework: 'spring', match: { type: 'call', callee: '__route_return__', htmlSkeleton: true }, argIndex: 0,
+    vuln: v('Reflected XSS (@ResponseBody String with markup built from request data)', 'CWE-79', 'high', 'Return a view rendered by an escaping template engine, or escape the value with HtmlUtils.htmlEscape before building the markup.') },
+
+  // Rails `content_tag(name, content, options, escape)`: `escape = false` emits `content` unescaped.
+  { kind: 'sink', id: 'rb-content-tag-unescaped', language: 'rb', framework: 'rails', match: { type: 'call', callee: 'content_tag', requireLiteralArg: { index: 3, pattern: '^false$' } }, argIndex: 1,
+    vuln: v('XSS (content_tag with escape = false)', 'CWE-79', 'high', 'Drop the `false` escape argument so content_tag escapes the content.') },
+
+  // Go `fmt.Fprintf(w, "<p>%s</p>", v)`: the base go-fmt-fprintf entry covers a request-built FORMAT string
+  // (argument 1); this one covers a value formatted into a literal markup format string.
+  { kind: 'sink', id: 'go-fmt-fprintf-markup', language: 'go', framework: 'fmt', match: { type: 'call', callee: 'Fprintf', receiver: '^fmt$', requireLiteralArg: { index: 1, pattern: HTML_LITERAL } }, argIndex: 'all',
+    vuln: v('Reflected XSS (fmt.Fprintf into an HTML format string)', 'CWE-79', 'high', 'Render HTML with html/template, or escape the value with html.EscapeString / template.HTMLEscapeString.') },
+
+  // Escapers missing from the base and expanded catalogs. Scoped by receiver where the method name is generic.
+  { kind: 'sanitizer', id: 'py-django-conditional-escape', language: 'py', match: { type: 'call', callee: 'conditional_escape' }, effect: 'strip', appliesTo: ['xss'] },
+  { kind: 'sanitizer', id: 'php-laravel-e', language: 'php', match: { type: 'call', callee: 'e', receiverExclude: '.' }, effect: 'strip', appliesTo: ['xss'] },
+  ...['esc_html', 'esc_attr', 'esc_textarea'].map((c) => ({ kind: 'sanitizer', id: `php-wp-${c.replace(/_/g, '-')}`, language: 'php', match: { type: 'call', callee: c }, effect: 'strip', appliesTo: ['xss'] })),
+  { kind: 'sanitizer', id: 'cs-htmlencoder-encode', language: 'cs', match: { type: 'call', callee: 'Encode', receiver: '^_?[Hh]tmlEncoder$' }, effect: 'strip', appliesTo: ['xss'] },
+  ...['HTMLEscapeString', 'HTMLEscaper'].map((c) => ({ kind: 'sanitizer', id: `go-template-${c.toLowerCase()}`, language: 'go', match: { type: 'call', callee: c, receiver: '^template$' }, effect: 'strip', appliesTo: ['xss'] })),
+];
+
 // Filesystem and program-selection sinks that command-line and library code
 // routinely feed from its own environment, arguments and configuration. They
 // carry `match.requireRequestSource`: engine.js reports them only when a
@@ -609,7 +681,7 @@ const BASENAME = [
   { kind: 'sanitizer', id: 'go-filepath-base', language: 'go', match: { type: 'call', callee: 'Base', receiver: '^(?:filepath|path)$' }, effect: 'strip', appliesTo: ['path'] },
 ];
 
-export const FRAMEWORK_MODELS = [...JS, ...PY, ...JAVA, ...GO, ...PHP, ...RB, ...CS, ...BASENAME].map((e) => (
+export const FRAMEWORK_MODELS = [...JS, ...PY, ...JAVA, ...GO, ...PHP, ...RB, ...CS, ...XSS, ...BASENAME].map((e) => (
   e.kind === 'sink' && (OPERATOR_FED_PREFIXES.some((p) => e.id.startsWith(p)) || OPERATOR_FED_CWES.has(e.vuln && e.vuln.cwe))
     ? { ...e, match: { ...e.match, requireRequestSource: true } } : e
 ));

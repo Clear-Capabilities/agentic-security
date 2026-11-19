@@ -78,10 +78,15 @@ function fixturesWithVulnerableTree() {
     .filter((name) => fs.existsSync(path.join(FIXTURES, name, 'vulnerable')));
 }
 
-async function findingCount(dir) {
+// Fixtures of the deep taint engine's catalog models (`test/xss-models-r6.test.js`) whose only detector is that
+// engine: no syntactic rule covers their shape, so they are scanned in deep mode, the mode the engine runs in.
+// Still required to produce a finding; only the scan mode differs.
+const DEEP_ONLY = new Set(['r6-xss-go']);
+
+async function findingCount(dir, opts = {}) {
   setStateWritesEnabled(false);
   try {
-    const { scan } = await runScan(dir);
+    const { scan } = await runScan(dir, opts);
     return [...(scan.findings || []), ...(scan.secrets || []), ...(scan.logicVulns || [])].length;
   } finally {
     setStateWritesEnabled(true);
@@ -96,7 +101,7 @@ test('every rule fixture still produces a finding THROUGH runScan, not just in i
   const dark = [];
   for (const name of names) {
     if (KNOWN_DARK.has(name) || OPT_IN.has(name)) continue;
-    const n = await findingCount(path.join(FIXTURES, name, 'vulnerable'));
+    const n = await findingCount(path.join(FIXTURES, name, 'vulnerable'), DEEP_ONLY.has(name) ? { deep: true, deepInCi: true } : {});
     if (n === 0) dark.push(name);
   }
 
