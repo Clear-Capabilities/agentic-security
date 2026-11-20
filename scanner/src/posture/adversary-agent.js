@@ -28,6 +28,7 @@ import * as crypto from 'node:crypto';
 import { evaluateEgress } from '../egress/policy.js';
 import { modelFetch } from '../egress/transport.js';
 import { resolveProvider } from '../llm-validator/providers.js';
+import { verifyLocalPresetModel } from '../llm-validator/ollama-provider.js';
 
 const MAX_CALLS_DEFAULT = 50;
 const MAX_WALL_MS_DEFAULT = 15 * 60 * 1000;
@@ -112,6 +113,8 @@ export async function defaultLlmInvoke(transcript) {
   if (!provider) return null;
   const { endpoint } = provider;
   const model = provider.model || 'gpt-4o-mini';
+  // the `local` preset's loopback endpoint may be Ollama's own API: refuse a model it would forward off this machine
+  if (provider.provider === 'local' && !(await verifyLocalPresetModel({ endpoint, model })).ok) return null;
   const apiKey = provider.apiKey || '';
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;

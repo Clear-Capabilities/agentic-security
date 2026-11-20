@@ -80,7 +80,7 @@ import { evaluateEgress } from '../egress/policy.js';
 import { recordEgressCall, payloadMetrics } from '../egress/audit.js';
 import { modelFetch } from '../egress/transport.js';
 import { MODEL_STATUS, summarizeModelStatus } from './model-status.js';
-import { callOllamaChat } from './ollama-provider.js';
+import { callOllamaChat, verifyLocalPresetModel } from './ollama-provider.js';
 
 // The output cap we request. Shared with the cost estimate so the ceiling
 // charges exactly what we permit the model to produce.
@@ -396,9 +396,17 @@ async function callEndpoint(endpoint, apiKey, model, prompt, preset = null, shap
         ? { connectTimeoutMs: ollamaConfig.connectTimeoutMs, requestTimeoutMs: ollamaConfig.requestTimeoutMs }
         : undefined,
       signal: signal || undefined, // GA-06 §3 (0.195.31): a caller's cancellation reaches the transport
+      shortAnswer: true, // the verdict is one schema-bound JSON object
     });
     if (!r.ok) return { ok: false, error: r.reason || r.code, errorCode: r.code };
+    // A verdict about a prompt the server cut (silently, from the front) is not a verdict about the finding: unavailable, kept.
+    if (r.result.promptTruncated) return { ok: false, error: `prompt truncated to the loaded model's ${r.result.contextLength}-token context window`, errorCode: 'ollama-context-overflow' };
     return { ok: true, text: String(r.result.text || ''), usage: r.result.usage || null };
+  }
+  // The `local` preset's loopback endpoint is often Ollama's own OpenAI-compatible API: refuse a model it would forward elsewhere.
+  if (provider === 'local') {
+    const v = await verifyLocalPresetModel({ endpoint, model, signal: signal || undefined });
+    if (!v.ok) return { ok: false, error: v.reason, errorCode: v.code };
   }
 
   const { headers, body, extractText, extractUsage } = buildRequest(model, prompt, preset, shape);

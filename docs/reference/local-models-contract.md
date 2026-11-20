@@ -94,9 +94,11 @@ Every Ollama failure carries exactly one of these codes, never free text alone.
 | `ollama-tool-call-invalid` | A tool call from the model was not valid |
 | `ollama-tool-loop-limit` | The tool loop hit its step limit |
 | `ollama-version-unsupported` | The server is older than the supported range |
+| `ollama-remote-model-refused` | The model would forward prompts off this machine: a cloud-tagged name, or a model the loopback server's listing marks with a remote host. Refused before any prompt is sent |
 
 ## Guarantees
 
+- **A model that runs elsewhere is never called.** Under `local` or `ollama`, a model the loopback Ollama server forwards to a remote host (a cloud model) is refused by name at resolution and by the server's listing before each request; under `ollama` a model the listing cannot confirm as local is refused too.
 - **A refused endpoint is never called.** A non-loopback host under the `local` or `ollama` preset is refused before a prompt is built. No network request is made, and the finding is `unvalidated` with the status `policy-blocked`.
 - **There is no fallback to a cloud provider.** An unreachable server, a missing model, a timeout or a malformed reply leaves the finding as detected, with the model stage marked `unavailable`, `malformed` or `disabled`. It never moves to another provider. Another local model is used only if you configured it.
 - **An absent server is normal.** A local server that is not running leaves the scan complete and the findings `unvalidated`, with the reason in the report.

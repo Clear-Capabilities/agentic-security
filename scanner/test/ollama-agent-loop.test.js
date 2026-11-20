@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runAgentLoop, AGENT_LOOP_ERROR, DEFAULT_MAX_TOOL_ITERATIONS } from '../src/llm-validator/agent-loop.js';
+import { answerLocalTags, registerLocalTestModel } from './helpers/fake-ollama-tags.js';
 
 function withEnv(vars, fn) {
   const prev = {};
@@ -28,7 +29,9 @@ function startFakeOllama(routes) {
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
       const parsed = body ? JSON.parse(body) : null;
+      if (!routes[req.url] && answerLocalTags(req, res)) return;
       const handler = routes[req.url] || routes.default;
+      if (!handler) { res.writeHead(404); res.end('{}'); return; }
       handler(req, res, parsed);
     });
   });
@@ -297,6 +300,7 @@ test('runAgentLoop: a model with a prior recorded OOM on this machine gets prior
   const { recordOOMEvent, _internals: oomInternals } = await import('../src/llm-validator/oom-feedback.js');
   const fsMod = await import('node:fs');
   const model = 'agent-loop-oom-test-model:unique-' + Date.now();
+  registerLocalTestModel(model);
   const root = mkFixture();
   const { server, host } = await startFakeOllama({
     '/api/show': (req, res) => json(res, { capabilities: ['completion', 'tools'] }),
@@ -328,7 +332,7 @@ test('runAgentLoop: a model with NO prior OOM history has no warning field, and 
     '/api/chat': (req, res) => json(res, { message: { content: 'done' }, done: true }),
   });
   try {
-    await withEnv({ AGENTIC_SECURITY_LLM_PRESET: 'ollama', AGENTIC_SECURITY_OLLAMA_HOST: host, AGENTIC_SECURITY_LLM_MODEL: 'agent-loop-oom-clean-model:unique-' + Date.now() }, async () => {
+    await withEnv({ AGENTIC_SECURITY_LLM_PRESET: 'ollama', AGENTIC_SECURITY_OLLAMA_HOST: host, AGENTIC_SECURITY_LLM_MODEL: registerLocalTestModel('agent-loop-oom-clean-model:unique-' + Date.now()) }, async () => {
       const r = await runAgentLoop({ goal: 'x', scanRoot: root, statePath: fakeStatePath });
       assert.equal(r.priorOOMWarning, undefined);
     });

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as http from 'node:http';
 import { buildPocPrompt, proposeOllamaPoc, POC_PROPOSAL_ERROR } from '../src/llm-validator/poc-proposal.js';
+import { answerLocalTags } from './helpers/fake-ollama-tags.js';
 
 function withEnv(vars, fn) {
   const prev = {};
@@ -21,7 +22,7 @@ function startFakeOllama(handler) {
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => { body += c; });
-    req.on('end', () => handler(req, res, body ? JSON.parse(body) : null));
+    req.on('end', () => { if (answerLocalTags(req, res)) return; handler(req, res, body ? JSON.parse(body) : null); });
   });
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {

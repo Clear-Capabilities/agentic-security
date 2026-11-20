@@ -269,6 +269,29 @@ Timeouts are split so a dead Ollama port fails in ~3 seconds while a
 cold-loading model still gets its full generation budget — see
 `AGENTIC_SECURITY_OLLAMA_CONNECT_TIMEOUT_MS` / `AGENTIC_SECURITY_LLM_TIMEOUT_MS`.
 
+**The server's context window, and silent truncation.** Ollama loads a model
+with the server's context length (`OLLAMA_CONTEXT_LENGTH`; on Ollama 0.24 the
+default is derived from available memory, 4096 tokens on a 16 GB machine) and
+cuts a longer prompt from the front without an error. Measured: a 101 428
+character prompt was evaluated as exactly 4096 tokens and answered. After each
+call the client compares the evaluated prompt tokens with the context length the
+server reports for the loaded model (`GET /api/ps`); when the prompt filled the
+window the result carries `promptTruncated: true` and `contextLength`. Discovery
+turns that into a degraded hunter run with the reason, and the validator into an
+unavailable verdict, instead of trusting an answer to a prompt whose
+instructions were cut off. Start the server with a larger
+`OLLAMA_CONTEXT_LENGTH` (for example 32768 for discovery's 60 000 character
+hunter prompts) when memory allows.
+
+**Thinking models and short answers.** Where the caller wants one short
+structured answer (discovery's hunter and refutation prompts, the validator's
+verdict, every schema-bound proposal), the request sets Ollama's documented
+`think: false` for a model whose `/api/show` capabilities include `thinking`.
+Measured with `qwen3.5:4b`: the same one-line JSON answer took 12.1 seconds and
+1026 characters of thinking by default, 0.4 seconds with `think: false`. A
+caller that sets `think` itself keeps its choice, and a model without the
+capability is sent no `think` field.
+
 ## 8. Offline behavior — read this carefully
 
 **"Offline" here means one specific thing:** LLM inference requests are
@@ -293,6 +316,31 @@ remote inference, or use http://127.0.0.1:11434 for local inference.
 A self-hosted remote Ollama server is a legitimate thing to want, but it must
 be an explicit opt-in — `AGENTIC_SECURITY_OLLAMA_ALLOW_REMOTE=1` — and every
 report from that configuration says `egress: remote`, never "loopback-only".
+
+### Cloud models on a loopback port
+
+A loopback host is not, on its own, proof that inference is local. Ollama also
+serves "cloud" models: they appear in `ollama list` beside the local ones (with
+no size), answer on the same loopback port, and forward every prompt to a
+remote service. Under the `ollama` and `local` presets such a model is refused,
+in two places:
+
+- when the provider is resolved, a model name ending in `cloud`
+  (`<name>:cloud`, `<name>-cloud`) is refused before any prompt is built;
+- before each request, the server's own model listing (`GET /api/tags`) is read,
+  and a model it marks with a remote host is refused whatever its name. Under
+  `ollama` this check fails closed: a model the listing does not contain, or a
+  listing that cannot be read, is refused too (`ollama-model-not-installed`,
+  `ollama-unreachable`). Under `local`, a loopback server that does not answer
+  the Ollama listing is another local runtime and only the name check applies.
+
+The refusal names the model and why (`ollama-remote-model-refused`). The
+refusal applies to discovery (`hunt`), the validator, the fix, PoC and
+explanation proposals, the agent loop and the consensus list (a refused preset
+refuses the whole list). With `AGENTIC_SECURITY_OLLAMA_ALLOW_REMOTE=1` and a
+non-loopback host the operator has already chosen remote inference, and neither
+check applies. Running the server with `OLLAMA_NO_CLOUD=1` is a second,
+server-side guard.
 
 ## 9. No-cloud-fallback guarantee
 

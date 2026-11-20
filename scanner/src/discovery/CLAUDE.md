@@ -60,6 +60,26 @@ configuration too: with no injected `llmInvoke`, `runDiscovery` passes `wrapInvo
 apply it to what they resolve. Before, only an injected callback was counted, so `hunt` driven by configuration had no call or
 wall-clock ceiling.
 
+## When taint evidence overrules the panel (confirmation tiers)
+
+`makeTaintProbe` sets `taint-confirmed` only when a taint finding in the same file, within two lines of the cited line, is the
+same class of weakness the candidate claims (`confirm.js` `taintCorroborates`: injection, access control or cryptography,
+grouped by CWE; a lens CWE and the taint finding's CWE must fall in the same class). A nearby flow of another class, or any
+flow next to a claim no flow can establish (business logic CWE-840, feature abuse CWE-799, chained CWE-1173, wildcard
+CWE-710), is `sink-adjacent`. Mechanical precedence (`disprove.js`: a refuting majority does not remove a `taint-confirmed`
+candidate, it marks the refutation `overridden`) therefore applies only to a candidate the taint finding actually corroborates.
+Why: a panel voted 3-0 against a wildcard "Potential Vulnerability in Anthropic API" candidate and it survived as confirmed with
+high severity because a SQL-injection flow sat on the same line. The two-line window is kept because a hunter cites the start
+of a statement whose sink may be a line or two below. Pinned in `test/discovery-corroboration.test.js`.
+
+## Unvetted survivors
+
+Silence never refutes (above), so a candidate whose panel cast no vote (a spent budget, a dead model) still reaches `fresh`. It
+is marked: `judge.js` sets `unvetted: true` and `confidenceTier: 'very-low'` on any finding whose panel ran and was
+`undecided`, after the stable id is computed (so the id does not change), and `hunt` prints `UNVETTED` beside it. A candidate
+that never went to a panel (context intelligence's deterministic findings) has no missing verdict and is not marked. Severity
+stays evidence-derived. The coverage block already says when the panel returned no votes at all.
+
 ## Nix partitioning
 
 `partition.js` `partitionNixFiles` groups `.nix` files by their import structure (a configuration and the modules it imports are

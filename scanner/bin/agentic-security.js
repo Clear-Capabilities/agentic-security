@@ -2827,7 +2827,8 @@ async function cmdHunt(args) {
     console.log(`${report.fresh.length} new candidate finding(s):`);
     for (const f of report.fresh) {
       console.log(`  [${f.severity}] ${f.file}:${f.line}  ${f.vuln}`);
-      console.log(`      lens=${f.discovery.lens} confirmation=${f.discovery.confirmation?.tier || 'unknown'}`);
+      console.log(`      lens=${f.discovery.lens} confirmation=${f.discovery.confirmation?.tier || 'unknown'}` +
+        (f.unvetted ? '  UNVETTED: the refutation panel cast no vote; this survived by default, not on scrutiny' : ''));
     }
   }
   if (report.duplicates.length || report.suppressed.length || report.refutedCandidates.length) {

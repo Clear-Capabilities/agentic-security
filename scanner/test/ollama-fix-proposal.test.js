@@ -12,6 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { buildFixPrompt, proposeOllamaFix, FIX_PROPOSAL_ERROR } from '../src/llm-validator/fix-proposal.js';
+import { answerLocalTags } from './helpers/fake-ollama-tags.js';
 
 function withEnv(vars, fn) {
   const prev = {};
@@ -29,7 +30,7 @@ function startFakeOllama(handler) {
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => { body += c; });
-    req.on('end', () => handler(req, res, body ? JSON.parse(body) : null));
+    req.on('end', () => { if (answerLocalTags(req, res)) return; handler(req, res, body ? JSON.parse(body) : null); });
   });
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {

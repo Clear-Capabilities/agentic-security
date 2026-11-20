@@ -32,6 +32,7 @@
 
 import { localEndpointConfig } from './local-endpoint.js';
 import { ollamaEndpointConfig, DEFAULT_OLLAMA_MODEL } from './ollama-provider.js';
+import { isCloudModelName, remoteModelRefusal } from './cloud-model.js';
 
 // Roles the pipeline dispatches under. Closed set on purpose — see above.
 export const ROLES = Object.freeze([
@@ -148,6 +149,9 @@ export function resolveProvider({ role = 'validate', env = process.env } = {}) {
   if (explicit === 'local') {
     const r = localEndpointConfig(env);
     if (!r.ok) return { ok: false, reason: r.reason };
+    // A loopback endpoint is not enough: a cloud-tagged Ollama model answers on it and forwards the prompt (cloud-model.js).
+    const localModel = model || r.config.model;
+    if (isCloudModelName(localModel)) return { ok: false, reason: remoteModelRefusal('local', localModel, 'cloud model tag'), code: 'remote-model-refused' };
     return {
       ok: true,
       config: {
@@ -170,6 +174,13 @@ export function resolveProvider({ role = 'validate', env = process.env } = {}) {
   if (explicit === 'ollama') {
     const r = ollamaEndpointConfig(env);
     if (!r.ok) return { ok: false, reason: r.reason, code: r.code };
+    // On a loopback host the preset promises local inference, so a cloud-tagged model is refused here, before any caller can
+    // build a prompt. An operator who opted into a remote Ollama host (AGENTIC_SECURITY_OLLAMA_ALLOW_REMOTE=1) already gave that
+    // promise up, and the name is not checked. The server's own listing is checked again before each request (ollama-provider.js).
+    const ollamaModel = model || DEFAULT_OLLAMA_MODEL;
+    if (r.config.egress === 'loopback-only' && isCloudModelName(ollamaModel)) {
+      return { ok: false, reason: remoteModelRefusal('ollama', ollamaModel, 'cloud model tag'), code: 'ollama-remote-model-refused' };
+    }
     return {
       ok: true,
       config: {

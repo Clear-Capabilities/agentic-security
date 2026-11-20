@@ -10,6 +10,7 @@ import {
   capabilitiesFromShowMetadata, probeStructuredOutput, probeToolCalling,
   getModelCapabilities, _internals,
 } from '../src/llm-validator/model-probe.js';
+import { answerLocalTags, registerLocalTestModel } from './helpers/fake-ollama-tags.js';
 
 function startFakeOllama(routes) {
   const server = http.createServer((req, res) => {
@@ -17,7 +18,9 @@ function startFakeOllama(routes) {
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
       const parsed = body ? JSON.parse(body) : null;
+      if (!routes[req.url] && answerLocalTags(req, res)) return;
       const handler = routes[req.url] || routes.default;
+      if (!handler) { res.writeHead(404); res.end('{}'); return; }
       handler(req, res, parsed);
     });
   });
@@ -118,7 +121,7 @@ test('getModelCapabilities: probe:false (default) never calls /api/chat, only /a
 });
 
 test('getModelCapabilities: probe:true runs both probes, merges as runtimeProbe, and writes a cache entry keyed by version+digest+name', async () => {
-  const model = 'probe-cache-test-model:unique-' + Date.now();
+  const model = registerLocalTestModel('probe-cache-test-model:unique-' + Date.now());
   const { server, host } = await startFakeOllama({
     '/api/show': (req, res) => json(res, { capabilities: ['completion'], details: { digest: 'sha256:cache-test-digest' } }),
     '/api/version': (req, res) => json(res, { version: '0.9.9-test' }),
@@ -168,7 +171,7 @@ test('getModelCapabilities: probe:true runs both probes, merges as runtimeProbe,
 // ~/.claude/agentic-security/. Two independent, separately-tested fixes.
 
 test('getModelCapabilities: a cache entry older than ttlMs is treated as a miss and re-probed', async () => {
-  const model = 'probe-ttl-test-model:unique-' + Date.now();
+  const model = registerLocalTestModel('probe-ttl-test-model:unique-' + Date.now());
   let chatCalls = 0;
   const { server, host } = await startFakeOllama({
     '/api/show': (req, res) => json(res, { capabilities: ['completion'], details: { digest: 'sha256:ttl-test-digest' } }),
@@ -192,7 +195,7 @@ test('getModelCapabilities: a cache entry older than ttlMs is treated as a miss 
 });
 
 test('getModelCapabilities: an entry within ttlMs is still trusted (the TTL is a backstop, not a replacement for the key)', async () => {
-  const model = 'probe-ttl-fresh-model:unique-' + Date.now();
+  const model = registerLocalTestModel('probe-ttl-fresh-model:unique-' + Date.now());
   let chatCalls = 0;
   const { server, host } = await startFakeOllama({
     '/api/show': (req, res) => json(res, { capabilities: ['completion'], details: { digest: 'sha256:ttl-fresh-digest' } }),
@@ -211,7 +214,7 @@ test('getModelCapabilities: an entry within ttlMs is still trusted (the TTL is a
 });
 
 test('getModelCapabilities: force:true always re-probes, even with a fresh cache entry', async () => {
-  const model = 'probe-force-test-model:unique-' + Date.now();
+  const model = registerLocalTestModel('probe-force-test-model:unique-' + Date.now());
   let chatCalls = 0;
   const { server, host } = await startFakeOllama({
     '/api/show': (req, res) => json(res, { capabilities: ['completion'], details: { digest: 'sha256:force-test-digest' } }),
@@ -235,7 +238,7 @@ test('getModelCapabilities: force:true always re-probes, even with a fresh cache
 });
 
 test('getModelCapabilities: a pre-TTL cache file (bare result, no probedAt envelope) is still read as fresh — backward compatible', async () => {
-  const model = 'probe-legacy-cache-model:unique-' + Date.now();
+  const model = registerLocalTestModel('probe-legacy-cache-model:unique-' + Date.now());
   let chatCalls = 0;
   const { server, host } = await startFakeOllama({
     '/api/show': (req, res) => json(res, { capabilities: ['completion'], details: { digest: 'sha256:legacy-digest' } }),

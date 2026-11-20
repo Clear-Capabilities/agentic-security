@@ -13,7 +13,7 @@ import { listFiles } from '../util/glob.js';
 import { partitionCallGraph, partitionNixFiles } from './partition.js';
 import { LENSES, lensByKey, invariantProposalFor } from './lenses.js';
 import { runHunter } from './hunter.js';
-import { confirmAll } from './confirm.js';
+import { confirmAll, taintCorroborates } from './confirm.js';
 import { disprovePanel } from './disprove.js';
 import { judgeCandidates } from './judge.js';
 import { loadMemory, saveMemory, rememberRun, previouslyRefuted, nextWavePlan, forgetRefuted } from './memory.js';
@@ -37,10 +37,14 @@ export function makeTaintProbe(perFileIR, callGraph) {
       const deep = await cache;
       if (!Array.isArray(deep)) return null;
       const hits = deep.filter(f => f.file === candidate.file);
-      const exact = hits.find(f => Math.abs((f.line ?? -1) - candidate.line) <= 2);
+      const near = hits.filter(f => Math.abs((f.line ?? -1) - candidate.line) <= 2);
+      // Confirmation needs the taint finding to be about the SAME kind of weakness (confirm.js `taintCorroborates`): a flow to
+      // an unrelated sink on the cited line is proximity, not corroboration, and earns only `sink-adjacent`.
+      const exact = near.find(f => taintCorroborates(candidate.cwe, f.cwe));
       if (exact) {
-        return { tier: 'taint-confirmed', evidence: { matchedFinding: exact.id ?? null, line: exact.line, vuln: exact.vuln ?? null } };
+        return { tier: 'taint-confirmed', evidence: { matchedFinding: exact.id ?? null, line: exact.line, vuln: exact.vuln ?? null, cwe: exact.cwe ?? null } };
       }
+      if (near.length) return { tier: 'sink-adjacent', evidence: { nearbyUnrelatedFindings: near.length, cwes: [...new Set(near.map(f => f.cwe).filter(Boolean))].sort() } };
       return hits.length ? { tier: 'sink-adjacent', evidence: { sameFileFindings: hits.length } } : null;
     } catch {
       return null;
