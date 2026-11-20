@@ -77,6 +77,7 @@ export const ANALYZER_NAMES = Object.freeze([
   'scanJsMarkupMarkSafe', 'scanJsMixedTextMarkup', 'scanJsIncompleteRegexEscape', 'scanJsExecParamInterpolation', 'scanPythonRunWrittenCode',
   'scanPhpHtmlAttrInterpolation',
   'scanSourceTargetAuthz', 'scanOAuthEmailAccountLink', 'scanAccountExistenceOracle',
+  'scanRequestSizedResource', 'scanResourceLimitDisabled',
 ]);
 
 // File-extension applicability gates -- an analyzer NOT in this map is
