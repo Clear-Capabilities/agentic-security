@@ -84,7 +84,11 @@ export function toolchain(cwd = REPO_ROOT) {
 export function configSnapshot(env = process.env) {
   const knobs = {};
   for (const k of Object.keys(env).filter((x) => x.startsWith('AGENTIC_SECURITY_')).sort()) knobs[k] = SECRETISH.test(k) ? '<set>' : String(env[k]).slice(0, 80);
-  const endpoint = env.AGENTIC_SECURITY_LLM_ENDPOINT || '';
+  // The `ollama` and `local` presets name a model without AGENTIC_SECURITY_LLM_ENDPOINT; their host (default loopback) decides the mode.
+  const preset = String(env.AGENTIC_SECURITY_LLM_PRESET || '').toLowerCase();
+  const presetHost = preset === 'ollama' ? (env.AGENTIC_SECURITY_OLLAMA_HOST || 'http://127.0.0.1:11434')
+    : preset === 'local' ? 'http://127.0.0.1:11434' : '';
+  const endpoint = env.AGENTIC_SECURITY_LLM_ENDPOINT || presetHost;
   let modelEndpointMode = 'none';
   if (endpoint) {
     try {
@@ -92,7 +96,7 @@ export function configSnapshot(env = process.env) {
       modelEndpointMode = h === 'localhost' || h === '::1' || /^127\./.test(h) ? 'loopback' : 'remote';
     } catch { modelEndpointMode = 'unparseable'; }
   }
-  return { knobs, modelEndpointMode, modelValidatorEnabled: modelEndpointMode !== 'none' && env.AGENTIC_SECURITY_LLM_VALIDATE !== '0' };
+  return { knobs, modelEndpointMode, ...(preset ? { modelPreset: preset, model: String(env.AGENTIC_SECURITY_LLM_MODEL || '').slice(0, 80) || null } : {}), modelValidatorEnabled: modelEndpointMode !== 'none' && env.AGENTIC_SECURITY_LLM_VALIDATE !== '0' };
 }
 
 export function checkoutState(root = REPO_ROOT) {

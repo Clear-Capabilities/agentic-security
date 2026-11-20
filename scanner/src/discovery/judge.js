@@ -60,9 +60,16 @@ export function toFindingShape(candidate) {
     // snippet collapses distinct findings of the same lens in the same file onto one id.
     snippet: candidate.sink || candidate.entryPoint || candidate.title || '',
   };
+  // SILENCE NEVER REFUTES (disprove.js), so a candidate whose panel ran and cast no vote (an exhausted budget, a dead model)
+  // survives. Surviving is not being vetted: such a finding says so in a field every consumer can read, and carries the lowest
+  // confidence tier, whatever its evidence-derived severity. A candidate that never went to a panel (another producer's
+  // deterministic evidence, such as context intelligence) has no panel verdict to be missing and is not marked. The flag is
+  // added after the stable id, which therefore does not change.
+  const unvetted = candidate?.refutation?.undecided === true;
   return {
     ...base,
     stableId: computeStableId(base),
+    ...(unvetted ? { unvetted: true, confidenceTier: 'very-low' } : {}),
     discovery: {
       lens: candidate.lens,
       focusAreaId: candidate.focusAreaId,

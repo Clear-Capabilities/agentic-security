@@ -16,6 +16,7 @@
 import { evaluateEgress } from '../egress/policy.js';
 import { modelFetch } from '../egress/transport.js';
 import { resolveProvider, buildProviderRequest } from '../llm-validator/providers.js';
+import { verifyLocalPresetModel } from '../llm-validator/ollama-provider.js';
 
 const TEMPLATES = {
   'sql-injection': (f) =>
@@ -73,6 +74,8 @@ async function _renderLlm(f, scanRoot) {
   // FR-601: evaluated before the prompt below is built.
   const egressDecision = evaluateEgress({ scanRoot, purpose: 'flow-narration', endpoint });
   if (!egressDecision.allowed) return null;
+  // the `local` preset's loopback endpoint may be Ollama's own API: refuse a model it would forward off this machine
+  if (provider.config.provider === 'local' && !(await verifyLocalPresetModel({ endpoint, model: provider.config.model })).ok) return null;
   const prompt = `You are explaining a security finding to a developer in one paragraph.
 Vuln: ${f.vuln}
 CWE: ${f.cwe}

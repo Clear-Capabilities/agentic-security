@@ -2759,28 +2759,20 @@ async function cmdCalibrationReport(args) {
 // Languages the Layer-1 IR parses. Anything else cannot be partitioned into a
 // call-graph focus area, so feeding it to a hunter would spend tokens on files
 // the confirmation gate can never corroborate.
-const HUNT_EXTS = /\.(?:js|jsx|mjs|cjs|ts|tsx|py|java|cs|kt|go|php|rb|l?hs|nix)$/i;
-const HUNT_IGNORE = ['node_modules/**', '.git/**', 'dist/**', 'build/**', 'vendor/**', '**/.agentic-security/**', 'dist-newstyle/**', '.stack-work/**', '.direnv/**'];
-const HUNT_MAX_FILES = 2000;
-
 async function cmdHunt(args) {
   const scanRoot = path.resolve(args.flags.root || args._[1] || '.');
-  const { listFiles } = await import('../src/util/glob.js');
   const { buildProjectIR } = await import('../src/ir/index.js');
-  const { runDiscovery } = await import('../src/discovery/index.js');
+  const { runDiscovery, selectHuntFiles } = await import('../src/discovery/index.js');
   const { LENSES } = await import('../src/discovery/lenses.js');
 
-  const rels = (await listFiles(scanRoot, { ignore: HUNT_IGNORE })).filter(f => HUNT_EXTS.test(f));
-  if (rels.length > HUNT_MAX_FILES) {
-    console.error(`agentic-security: ${rels.length} source files exceeds the ${HUNT_MAX_FILES}-file hunt cap.`);
+  // File selection (languages, ignored directories, the file cap) lives in discovery/index.js so a measurement of `hunt`
+  // selects exactly what the CLI does.
+  const { rels, fileContents, overCap, maxFiles } = await selectHuntFiles(scanRoot);
+  if (overCap) {
+    console.error(`agentic-security: ${rels.length} source files exceeds the ${maxFiles}-file hunt cap.`);
     console.error('Narrow the scope with --root <subdir>. Discovery is token-expensive and');
     console.error('unbounded fan-out on a large repository is the wrong default.');
     return 2;
-  }
-
-  const fileContents = {};
-  for (const rel of rels) {
-    try { fileContents[rel] = fs.readFileSync(path.join(scanRoot, rel), 'utf8'); } catch { /* unreadable — skip */ }
   }
 
   const { perFile, callGraph } = buildProjectIR(fileContents);
@@ -2835,7 +2827,8 @@ async function cmdHunt(args) {
     console.log(`${report.fresh.length} new candidate finding(s):`);
     for (const f of report.fresh) {
       console.log(`  [${f.severity}] ${f.file}:${f.line}  ${f.vuln}`);
-      console.log(`      lens=${f.discovery.lens} confirmation=${f.discovery.confirmation?.tier || 'unknown'}`);
+      console.log(`      lens=${f.discovery.lens} confirmation=${f.discovery.confirmation?.tier || 'unknown'}` +
+        (f.unvetted ? '  UNVETTED: the refutation panel cast no vote; this survived by default, not on scrutiny' : ''));
     }
   }
   if (report.duplicates.length || report.suppressed.length || report.refutedCandidates.length) {

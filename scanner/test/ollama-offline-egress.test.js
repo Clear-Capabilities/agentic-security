@@ -22,6 +22,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { validateOne } from '../src/llm-validator/index.js';
 import { defaultLlmInvoke, resolveLlmInvoke, resolveLlmInvokeWithDecision } from '../src/discovery/llm-invoke.js';
+import { answerLocalTags } from './helpers/fake-ollama-tags.js';
 
 function withPatchedFetch(fn) {
   const calls = [];
@@ -73,6 +74,7 @@ test('offline egress sentinel: validateOne DOES call the endpoint for a genuine 
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
+      if (answerLocalTags(req, res)) return;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         message: { content: JSON.stringify({ challenge: 'x', file: 'app.js', line: 5, verdict: 'escalate', confidence: 0.5, reasoning: 'test' }) },
@@ -121,6 +123,7 @@ test('offline egress sentinel: defaultLlmInvoke NEVER calls fetch for a non-loop
 
 test('offline egress sentinel: defaultLlmInvoke DOES call the endpoint for a genuine loopback Ollama host', async () => {
   const server = http.createServer((req, res) => {
+    if (answerLocalTags(req, res)) return;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ message: { content: 'hunt-response' }, done: true }));
   });
@@ -173,6 +176,7 @@ test('resolveLlmInvokeWithDecision: a non-loopback Ollama host resolves invoke:n
 
 test('resolveLlmInvoke: the actual function hunter.js/disprove.js call resolves and successfully calls a loopback Ollama server', async () => {
   const server = http.createServer((req, res) => {
+    if (answerLocalTags(req, res)) return;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ message: { content: 'resolved-invoke-result' }, done: true }));
   });
@@ -212,6 +216,7 @@ test('runHunter: the business-logic lens routes through role=logic, honoring AGE
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
+      if (answerLocalTags(req, res)) return;
       receivedModel = JSON.parse(body).model;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ message: { content: '{"candidates":[]}' }, done: true }));
@@ -244,6 +249,7 @@ test('runHunter: a non-logic lens keeps using the global model, not the logic-sp
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
+      if (answerLocalTags(req, res)) return;
       receivedModel = JSON.parse(body).model;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ message: { content: '{"candidates":[]}' }, done: true }));
@@ -277,6 +283,7 @@ test('disproveCandidate: the refutation panel routes through role=verify, honori
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
+      if (answerLocalTags(req, res)) return;
       receivedModel = JSON.parse(body).model;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ message: { content: '{"refuted":false,"reason":"cannot refute"}' }, done: true }));
@@ -302,6 +309,7 @@ test('disproveCandidate: the refutation panel routes through role=verify, honori
 
 test('offline egress sentinel: the explicit remote escape hatch still calls fetch (opt-in works) but is never mislabeled loopback', async () => {
   const server = http.createServer((req, res) => {
+    if (answerLocalTags(req, res)) return;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ message: { content: 'remote-ok' }, done: true }));
   });

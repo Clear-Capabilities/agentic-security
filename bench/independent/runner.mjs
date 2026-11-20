@@ -32,6 +32,7 @@ import { snapshotTree, assertTreeUnchanged, disableStateWrites } from '../_lib/t
 import { withEntryTimeout, entryTimeoutMs } from '../_lib/watchdog.mjs';
 import { loadSplits } from './splits.mjs';
 import { scorePopulation, headline } from './scorer.mjs';
+import { discoveryOptionsFromArgv, configurationName, configurationTag, preflightDiscovery, discoverTree, discoveryTotals } from './discovery.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const MANIFEST = path.join(HERE, 'manifest.json');
@@ -456,7 +457,13 @@ async function main() {
   // was never once exercised by the benchmark built to measure it.
   const deep = process.argv.includes('--deep');
   if (deep) process.env.AGENTIC_SECURITY_DEEP = '1';
-  const configuration = deep ? 'deep' : 'pattern-only';
+  // --discovery: the product's LLM candidate discovery over each tree after its deterministic scan, with a LOCAL Ollama model
+  // (discovery.mjs states what it may and may not do). The configuration name, the RESULT file name and a `discovery`
+  // identity block all say so, so a discovery run can never be read as, or merged with, a deterministic one.
+  const { DEFAULT_OLLAMA_MODEL } = await import(path.join(REPO, 'scanner', 'src', 'llm-validator', 'ollama-provider.js'));
+  const discoveryOpts = discoveryOptionsFromArgv(process.argv, process.env, DEFAULT_OLLAMA_MODEL);
+  const discoveryIdentity = discoveryOpts ? await preflightDiscovery(discoveryOpts) : null;
+  const configuration = configurationName(deep, !!discoveryOpts);
 
   const perEntry = [];
   const unscored = [];
@@ -547,7 +554,26 @@ async function main() {
       continue;
     }
 
+    // Discovery sees the tree and the deterministic findings for it, never the entry `e` (its files, CWE or lines). Both
+    // sides are hunted: a discovery finding in post/ is a false positive exactly like a deterministic one, and hunting only
+    // pre/ would credit recall while hiding the precision cost.
+    let discoveryRow = null;
+    if (discoveryOpts) {
+      try {
+        const dPre = await discoverTree(path.join(dir, 'pre'), preFindings, discoveryOpts);
+        const dPost = await discoverTree(path.join(dir, 'post'), postFindings, discoveryOpts);
+        preFindings = preFindings.concat(dPre.findings);
+        postFindings = postFindings.concat(dPost.findings);
+        discoveryRow = { pre: dPre.summary, post: dPost.summary };
+      } catch (err) {
+        progress(e.id, `unscored: discovery failed: ${err.message}`);
+        unscored.push({ id: e.id, reason: `discovery failed: ${err.message}` });
+        continue;
+      }
+    }
+
     const row = rowFor(e, preFindings, postFindings, rangesFromTrees(dir));
+    if (discoveryRow) row.discovery = discoveryRow;
     perEntry.push(row);
     const { matchedParser } = row;
     const hitPreLocal = row.tpLocal === 1;
@@ -673,8 +699,9 @@ async function main() {
   // it was would let a deep chunk silently overwrite a pattern-only one — the
   // merge would then refuse (it checks) or, worse, a half-replaced set would
   // look complete.
+  const tag = configurationTag(deep, !!discoveryOpts);
   const RESULT_FILE = chunked
-    ? path.join(outDirArg || HERE, `RESULT-chunk-${deep ? 'deep' : 'pattern'}-${String(offset).padStart(5, '0')}.json`)
+    ? path.join(outDirArg || HERE, `RESULT-chunk-${tag}-${String(offset).padStart(5, '0')}.json`)
     : path.join(HERE, deep ? 'RESULT-deep.json' : 'RESULT.json');
   let engineVersion = null;
   try { engineVersion = JSON.parse(fs.readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8')).version; } catch { /* leave null */ }
@@ -685,6 +712,7 @@ async function main() {
     measuredAt: new Date().toISOString().slice(0, 10),
     engineVersion,
     configuration,
+    ...(discoveryIdentity ? { discovery: { identity: discoveryIdentity, totals: discoveryTotals(perEntry) } } : {}),
     population: {
       totalEntries: manifest.entries.length,
       // A chunked run measured a SLICE. Reporting the manifest total here would
@@ -746,6 +774,11 @@ async function main() {
       '    numbers can be quoted. Grow the population before drawing a conclusion.\n');
   }
   out.write(`  configuration: ${configuration}` + (deep ? '' : '  (pass --deep to measure the taint engine)') + '\n');
+  if (report.discovery) {
+    const t = report.discovery.totals;
+    out.write(`  discovery: ${report.discovery.identity.model} via loopback Ollama, ${Math.round(report.discovery.identity.budgetMs / 60000)} min per tree; ` +
+      `${t.incompleteTrees}/${t.trees} trees incomplete (${t.budgetExhaustedTrees} budget, ${t.timedOutTrees} hard stop), ${t.fresh} discovery findings\n`);
+  }
 
   out.write('\n  ── LOCALIZED (the claim) — the finding landed on code the fix changed ──\n');
   out.write('    precision  ' + pct(localized.precision) + '\n');

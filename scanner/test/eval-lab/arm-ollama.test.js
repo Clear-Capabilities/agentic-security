@@ -8,12 +8,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { mkTestTmp } from '../helpers/tmp.js';
 import { runArmTask, validateArm } from '../../src/posture/evaluation/lab/arms.js';
+import { answerLocalTags } from '../helpers/fake-ollama-tags.js';
 
 async function ollama(handler) {
   const seen = [];
   const server = http.createServer((req, res) => {
     let b = ''; req.on('data', (d) => { b += d; });
-    req.on('end', () => { const body = b ? JSON.parse(b) : null; seen.push({ url: req.url, body }); handler(req, res, body); });
+    req.on('end', () => { if (answerLocalTags(req, res)) return; const body = b ? JSON.parse(b) : null; seen.push({ url: req.url, body }); handler(req, res, body); });
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   return { host: `http://127.0.0.1:${server.address().port}`, seen, close: () => new Promise((r) => { server.closeAllConnections?.(); server.close(r); }) };

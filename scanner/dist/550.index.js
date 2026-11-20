@@ -6,6 +6,7 @@ export const modules = {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   YF: () => (/* binding */ taintCorroborates),
 /* harmony export */   iX: () => (/* binding */ confirmAll)
 /* harmony export */ });
 /* unused harmony exports CONFIRMATION_TIERS, confirmCandidate */
@@ -26,6 +27,32 @@ export const modules = {
 // verdict. Refutation is `disprove.js`'s job, and it must be argued, not
 // inferred from silence.
 const CONFIRMATION_TIERS = Object.freeze(['taint-confirmed', 'sink-adjacent', 'unconfirmed']);
+
+// WHEN A TAINT FINDING CORROBORATES A CANDIDATE. A taint finding near the cited line proves that tainted data reaches SOME
+// modelled sink there; it corroborates the candidate only when that sink is the kind of weakness the candidate claims. The
+// classes below group the CWEs the taint engine reports with the CWE each lens claims; a pair corroborates when both fall in
+// the same class. A lens whose claim is not a data-flow-to-sink weakness (business logic, feature abuse, chained, wildcard:
+// CWE-840, 799, 1173, 710) is in no class and is never corroborated by a taint hit, because a flow to an unrelated sink says
+// nothing about it. Measured reason for the rule: a refutation panel voted 3-0 against "Potential Vulnerability in Anthropic
+// API" (wildcard lens) and the candidate survived as confirmed because a SQL-injection taint finding sat on the same line.
+const CORROBORATION_CLASSES = Object.freeze({
+  // injection: the lens brief names SQL, shell, template, XPath, LDAP and deserialization
+  injection: ['CWE-74', 'CWE-77', 'CWE-78', 'CWE-79', 'CWE-80', 'CWE-88', 'CWE-89', 'CWE-90', 'CWE-91', 'CWE-93', 'CWE-94', 'CWE-95', 'CWE-96', 'CWE-97', 'CWE-113', 'CWE-117', 'CWE-502', 'CWE-564', 'CWE-643', 'CWE-652', 'CWE-917', 'CWE-943', 'CWE-1236', 'CWE-1336'],
+  'access-control': ['CWE-284', 'CWE-285', 'CWE-639', 'CWE-862', 'CWE-863', 'CWE-915'],
+  crypto: ['CWE-295', 'CWE-326', 'CWE-327', 'CWE-328', 'CWE-329', 'CWE-330', 'CWE-331', 'CWE-338', 'CWE-347', 'CWE-759', 'CWE-760', 'CWE-916'],
+});
+const CLASS_OF = new Map(Object.entries(CORROBORATION_CLASSES).flatMap(([cls, cwes]) => cwes.map((c) => [c, cls])));
+
+/** The corroboration class of a CWE, or null when a taint finding cannot corroborate a claim of that CWE. */
+function corroborationClass(cwe) {
+  return CLASS_OF.get(String(cwe || '').toUpperCase().trim()) || null;
+}
+
+/** Does a taint finding with CWE `findingCwe` corroborate a candidate claiming `candidateCwe`? */
+function taintCorroborates(candidateCwe, findingCwe) {
+  const a = corroborationClass(candidateCwe);
+  return a !== null && a === corroborationClass(findingCwe);
+}
 
 function unconfirmed(probedBy, reason) {
   return { tier: 'unconfirmed', evidence: null, probedBy, reason: reason || null };
@@ -139,7 +166,9 @@ async function disproveCandidate(candidate, opts = {}) {
   // default so AGENTIC_SECURITY_LLM_MODEL_VERIFY applies, same precedence
   // (a caller-supplied opts.role still wins) hunter.js's lens routing uses.
   const role = opts.role || 'verify';
-  const { invoke: llmInvoke, decision: egressDecision } = (0,_llm_invoke_js__WEBPACK_IMPORTED_MODULE_0__/* .resolveLlmInvokeWithDecision */ .st)({ ...opts, role, purpose: 'discovery-disprove' });
+  const { invoke: resolvedInvoke, decision: egressDecision } = (0,_llm_invoke_js__WEBPACK_IMPORTED_MODULE_0__/* .resolveLlmInvokeWithDecision */ .st)({ ...opts, role, purpose: 'discovery-disprove' });
+  // The run budget's counter, applied to a configuration-resolved callback (see hunter.js).
+  const llmInvoke = typeof resolvedInvoke === 'function' && typeof opts.wrapInvoke === 'function' ? opts.wrapInvoke(resolvedInvoke) : resolvedInvoke;
 
   const votes = [];
   if (typeof llmInvoke === 'function') {
@@ -248,9 +277,16 @@ function toFindingShape(candidate) {
     // snippet collapses distinct findings of the same lens in the same file onto one id.
     snippet: candidate.sink || candidate.entryPoint || candidate.title || '',
   };
+  // SILENCE NEVER REFUTES (disprove.js), so a candidate whose panel ran and cast no vote (an exhausted budget, a dead model)
+  // survives. Surviving is not being vetted: such a finding says so in a field every consumer can read, and carries the lowest
+  // confidence tier, whatever its evidence-derived severity. A candidate that never went to a panel (another producer's
+  // deterministic evidence, such as context intelligence) has no panel verdict to be missing and is not marked. The flag is
+  // added after the stable id, which therefore does not change.
+  const unvetted = candidate?.refutation?.undecided === true;
   return {
     ...base,
     stableId: (0,_posture_stable_id_js__WEBPACK_IMPORTED_MODULE_0__/* .computeStableId */ ._)(base),
+    ...(unvetted ? { unvetted: true, confidenceTier: 'very-low' } : {}),
     discovery: {
       lens: candidate.lens,
       focusAreaId: candidate.focusAreaId,
@@ -360,6 +396,8 @@ async function defaultLlmInvoke(prompt, opts = {}) {
           ? { connectTimeoutMs: oc.connectTimeoutMs, requestTimeoutMs: oc.requestTimeoutMs }
           : { connectTimeoutMs: 3000, requestTimeoutMs: timeoutMs },
         signal: opts.signal, // GA-06 §3 (0.195.31): a caller's cancellation reaches the transport
+        // hunter and panel replies are one JSON object: a reasoning model's thinking only spends the run's wall clock
+        shortAnswer: true,
       });
       // PRD §23.4: never fall back to a cloud provider on failure — throwing
       // here is exactly what the pre-existing raw-fetch path already does on
@@ -367,6 +405,11 @@ async function defaultLlmInvoke(prompt, opts = {}) {
       // treat a thrown/rejected llmInvoke as "this voter did not answer",
       // never as "try something else".
       if (!r.ok) throw new Error(`ollama ${r.code}: ${r.reason || 'request failed'}`);
+      // Ollama cuts an over-long prompt silently, from the front, where the instructions are. An answer to the remainder is not
+      // an answer to the question asked, so it degrades the run with a reason instead of being parsed as one.
+      if (r.result.promptTruncated) {
+        throw new Error(`ollama prompt truncated: ${r.result.usage?.inputTokens} prompt tokens filled the loaded model's ${r.result.contextLength}-token context window; raise the server's context length (OLLAMA_CONTEXT_LENGTH) or narrow the scope`);
+      }
       return r.result.text;
     }
   }
@@ -515,6 +558,10 @@ function resolveLlmInvokeWithDecision(opts = {}) {
     let voters = multi;
     const presetDecisions = [];
     const provider = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_2__.resolveProvider)({ role: opts.role || 'hunt' });
+    // A preset that was configured and refused (a non-loopback host, a model that would forward prompts off the machine) refuses
+    // the consensus list too. Without this, a refused `ollama` or `local` preset made `preset` below null, and the voter list was
+    // then called without the loopback restriction the preset exists to keep.
+    if (!provider?.ok && provider?.reason) return { invoke: null, decision: { allowed: false, reason: provider.reason }, decisions: [] };
     const preset = provider?.ok && (provider.config?.provider === 'local' || provider.config?.provider === 'ollama') ? provider.config.provider : null;
     if (preset === 'local' || preset === 'ollama') {
       const kept = [];

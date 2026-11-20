@@ -15,6 +15,7 @@ export const modules = {
 /* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(45712);
 /* harmony import */ var _egress_transport_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(73785);
 /* harmony import */ var _llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(38947);
+/* harmony import */ var _llm_validator_ollama_provider_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(23837);
 // LLM-assisted vulnerable function extraction for SCA findings.
 //
 // For CVEs without OSV ecosystem_specific data or GHSA fix commits,
@@ -22,6 +23,7 @@ export const modules = {
 //
 // Gated behind AGENTIC_SECURITY_LLM_SCA=1 (opt-in).
 // Uses the same LLM endpoint config as the SAST validator.
+
 
 
 
@@ -62,11 +64,13 @@ function isLlmScaEnabled() {
 function _endpointConfig(env = process.env) {
   const r = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_5__.resolveProvider)({ role: 'validate', env });
   if (!r.ok || r.config.provider === 'ollama') return null;
-  return { endpoint: r.config.endpoint, apiKey: r.config.apiKey, model: r.config.model || 'unknown', shape: r.config.shape };
+  return { endpoint: r.config.endpoint, apiKey: r.config.apiKey, model: r.config.model || 'unknown', shape: r.config.shape, provider: r.config.provider };
 }
 
 async function _askLlm(prompt, config) {
   const req = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_5__/* .buildProviderRequest */ .Z$)(config, prompt, 256);
+  // the `local` preset's loopback endpoint may be Ollama's own API: refuse a model it would forward off this machine
+  if (config.provider === 'local' && !(await (0,_llm_validator_ollama_provider_js__WEBPACK_IMPORTED_MODULE_6__/* .verifyLocalPresetModel */ .dY)({ endpoint: config.endpoint, model: config.model })).ok) return null;
   const resp = await (0,_egress_transport_js__WEBPACK_IMPORTED_MODULE_4__/* .modelFetch */ .Ye)(config.endpoint, {
     method: 'POST',
     headers: req.headers,

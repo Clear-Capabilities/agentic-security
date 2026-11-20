@@ -34,6 +34,7 @@
 import { isLoopbackUrl } from './local-endpoint.js';
 import { modelFetch } from '../egress/transport.js';
 import { recordOOMEvent } from './oom-feedback.js';
+import { isCloudModelName, remoteModelRefusal } from './cloud-model.js';
 
 export const DEFAULT_OLLAMA_HOST = 'http://127.0.0.1:11434';
 export const DEFAULT_OLLAMA_MODEL = 'qwen3.5:4b';
@@ -61,6 +62,7 @@ export const OLLAMA_ERROR_CODES = Object.freeze([
   'ollama-tool-call-invalid',
   'ollama-tool-loop-limit',
   'ollama-version-unsupported',
+  'ollama-remote-model-refused',
 ]);
 
 function _err(code, reason) {
@@ -218,8 +220,18 @@ async function _fetchOllama(url, init, { connectTimeoutMs, requestTimeoutMs, sig
  * that means (deterministic-only, another explicitly-configured local model,
  * or an explicit error), exactly as PRD §23.4 requires.
  */
-export async function callOllamaChat({ host, model, messages, maxTokens, schema, tools, think, keepAlive, timeouts, signal }) {
-  const body = buildOllamaChatBody({ model, messages, maxTokens, schema, tools, think, keepAlive });
+export async function callOllamaChat({ host, model, messages, maxTokens, schema, tools, think, keepAlive, timeouts, signal, shortAnswer = false }) {
+  // A loopback host promises local inference; refuse a model the server forwards elsewhere before any prompt is sent.
+  const local = await verifyLocalOllamaModel({ host, model, timeouts, signal });
+  if (!local.ok) return local;
+  // A caller that wants a short structured answer turns a reasoning model's thinking off, where the model supports it
+  // (Ollama's documented `think` field on /api/chat). An explicit `think` from the caller always wins.
+  let effectiveThink = think;
+  if (effectiveThink === undefined && shortAnswer && local.checked) {
+    const caps = await _capabilitiesOf(host, model, timeouts);
+    if (Array.isArray(caps) && caps.includes('thinking')) effectiveThink = false;
+  }
+  const body = buildOllamaChatBody({ model, messages, maxTokens, schema, tools, think: effectiveThink, keepAlive });
   const r = await _fetchOllama(`${host}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -256,7 +268,117 @@ export async function callOllamaChat({ host, model, messages, maxTokens, schema,
   }
   if (json?.error) return _err('ollama-model-load-failed', String(json.error));
 
-  return { ok: true, result: parseOllamaChatResponse(json, model) };
+  const result = parseOllamaChatResponse(json, model);
+  // Ollama truncates a prompt longer than the loaded context window without saying so; the evaluated prompt token count then
+  // equals the window. Compare against the window the server reports for the loaded model and say so on the result.
+  const contextLength = result.usage?.inputTokens >= 256 ? await _loadedContextLength(host, model, timeouts) : null;
+  if (contextLength && result.usage.inputTokens >= contextLength - 1) {
+    result.promptTruncated = true;
+    result.contextLength = contextLength;
+  }
+  return { ok: true, result };
+}
+
+// ── local-only enforcement and per-model metadata ─────────────────────────────────────────────────────────────────────────────
+// Listings are cached briefly per host so a pipeline of many calls does not double its request count; only a successful listing
+// is cached, so a refusal or an outage is re-checked on the next call.
+const LISTING_TTL_MS = 30 * 1000;
+const _tagsCache = new Map();
+const _capsCache = new Map();
+const _psCache = new Map();
+const _notOllama = new Map();
+
+async function _rawTags(host, timeouts, signal) {
+  const hit = _tagsCache.get(host);
+  if (hit && Date.now() - hit.at < LISTING_TTL_MS) return { ok: true, models: hit.models };
+  const r = await _fetchOllama(`${host}/api/tags`, { method: 'GET' },
+    // the caller's connect setting as given (the chat it precedes uses the same), with the listing's own shorter deadline
+    timeouts ? { connectTimeoutMs: timeouts.connectTimeoutMs, requestTimeoutMs: Math.min(10000, timeouts.requestTimeoutMs ?? 10000), signal }
+      : { connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS, requestTimeoutMs: 10000, signal });
+  if (!r.ok) return r;
+  if (!r.res.ok) return { ..._err('ollama-unreachable', `the model listing (GET /api/tags) answered HTTP ${r.res.status}`), status: r.res.status };
+  let json;
+  try { json = await r.res.json(); } catch (e) { return _err('ollama-malformed-response', `the model listing was not JSON: ${e?.message || e}`); }
+  const models = Array.isArray(json?.models) ? json.models : [];
+  _tagsCache.set(host, { at: Date.now(), models });
+  return { ok: true, models };
+}
+
+/**
+ * Before a prompt is sent to a model on a LOOPBACK host, confirm from the server's own listing that the model runs here.
+ * Fails closed: a model the listing marks remote, a cloud-tagged name, a model the listing does not contain, and a listing that
+ * cannot be read are all refused. A non-loopback host (reachable only with AGENTIC_SECURITY_OLLAMA_ALLOW_REMOTE=1) is remote
+ * inference by the operator's explicit choice and is not checked. Returns `{ok:true, checked}` or an error result.
+ */
+export async function verifyLocalOllamaModel({ host, model, timeouts, signal } = {}) {
+  if (!isLoopbackUrl(host)) return { ok: true, checked: false };
+  if (isCloudModelName(model)) return _err('ollama-remote-model-refused', remoteModelRefusal('ollama', model, 'cloud model tag'));
+  const listing = await _rawTags(host, timeouts, signal);
+  if (!listing.ok) {
+    // a cancellation, a deadline and a malformed reply keep their own codes; anything else is an unreachable server
+    const code = ['ollama-cancelled', 'ollama-timeout', 'ollama-malformed-response'].includes(listing.code) ? listing.code : 'ollama-unreachable';
+    return _err(code, `could not confirm that model '${model}' runs on this machine: ${listing.reason}`);
+  }
+  const want = String(model || '');
+  const entry = listing.models.find((m) => {
+    const name = m?.name || m?.model || '';
+    return name === want || (!want.includes(':') && name === `${want}:latest`);
+  });
+  if (!entry) return _err('ollama-model-not-installed', `Model '${model}' is not installed in this Ollama server, so it cannot be confirmed to run on this machine.`);
+  if (entry.remote_host || entry.remote_model) {
+    return _err('ollama-remote-model-refused', remoteModelRefusal('ollama', entry.name || model, `remote host ${entry.remote_host || 'reported by Ollama'}`));
+  }
+  return { ok: true, checked: true };
+}
+
+/**
+ * The legacy `local` preset speaks an OpenAI-compatible shape to a loopback endpoint, which is often Ollama's own `/v1` API.
+ * When the endpoint's server answers Ollama's listing, the same check applies; a loopback server that does not (another local
+ * runtime) has no remote models to report, and only the name check (already applied in providers.js) holds.
+ */
+export async function verifyLocalPresetModel({ endpoint, model, timeouts, signal } = {}) {
+  if (isCloudModelName(model)) return _err('ollama-remote-model-refused', remoteModelRefusal('local', model, 'cloud model tag'));
+  let origin;
+  try { origin = new URL(endpoint).origin; } catch { return { ok: true, checked: false }; }
+  if (!isLoopbackUrl(origin)) return { ok: true, checked: false };
+  const known = _notOllama.get(origin);
+  if (known && Date.now() - known < LISTING_TTL_MS) return { ok: true, checked: false };
+  const listing = await _rawTags(origin, timeouts, signal);
+  if (!listing.ok) {
+    // A caller's cancellation is not evidence about the server: stop here rather than go on to send the prompt.
+    if (signal?.aborted || listing.code === 'ollama-cancelled') return _err('ollama-cancelled', 'the request was cancelled by its caller');
+    // A server that answers but has no Ollama listing is another local runtime; remember it so each call does not ask again.
+    if (listing.status) _notOllama.set(origin, Date.now());
+    return { ok: true, checked: false };
+  }
+  const entry = listing.models.find((m) => (m?.name || m?.model) === model || (m?.name || m?.model) === `${model}:latest`);
+  if (entry && (entry.remote_host || entry.remote_model)) {
+    return _err('ollama-remote-model-refused', remoteModelRefusal('local', entry.name || model, `remote host ${entry.remote_host || 'reported by Ollama'}`));
+  }
+  return { ok: true, checked: !!entry };
+}
+
+async function _capabilitiesOf(host, model, timeouts) {
+  const key = `${host}\0${model}`;
+  if (_capsCache.has(key)) return _capsCache.get(key);
+  const r = await showOllamaModel({ host, model, timeouts: { connectTimeoutMs: timeouts?.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS, requestTimeoutMs: 10000 } });
+  const caps = r.ok ? r.capabilities : null;
+  if (r.ok) _capsCache.set(key, caps);
+  return caps;
+}
+
+async function _loadedContextLength(host, model, timeouts) {
+  const key = `${host}\0${model}`;
+  const hit = _psCache.get(key);
+  if (hit && Date.now() - hit.at < LISTING_TTL_MS) return hit.contextLength;
+  const r = await _fetchOllama(`${host}/api/ps`, { method: 'GET' }, { connectTimeoutMs: timeouts?.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS, requestTimeoutMs: 5000 });
+  if (!r.ok || !r.res.ok) return null;
+  let json;
+  try { json = await r.res.json(); } catch { return null; }
+  const entry = (Array.isArray(json?.models) ? json.models : []).find((m) => (m?.name || m?.model) === model || (m?.name || m?.model) === `${model}:latest`);
+  const contextLength = Number.isInteger(entry?.context_length) && entry.context_length > 0 ? entry.context_length : null;
+  if (contextLength) _psCache.set(key, { at: Date.now(), contextLength });
+  return contextLength;
 }
 
 /**
@@ -281,7 +403,7 @@ export async function callOllamaStructured({ host, model, messages, schema, vali
     const attemptMessages = attempt === 0
       ? messages
       : [...messages, { role: 'system', content: 'Your previous reply did not match the required JSON schema. Reply again with ONLY a single JSON object matching the schema — no prose, no markdown fence.' }];
-    const r = await callOllamaChat({ host, model, messages: attemptMessages, schema, maxTokens, keepAlive, timeouts });
+    const r = await callOllamaChat({ host, model, messages: attemptMessages, schema, maxTokens, keepAlive, timeouts, shortAnswer: true });
     if (!r.ok) return r; // a transport/model error is not a schema-retry case — surface it immediately
     let parsed;
     try { parsed = JSON.parse(r.result.text); } catch { parsed = null; }
@@ -321,6 +443,9 @@ export async function listOllamaModels({ host, timeouts } = {}) {
       quantization: m.details?.quantization_level || null,
       family: m.details?.family || null,
       modifiedAt: m.modified_at || null,
+      // A model Ollama serves from a remote host (an Ollama "cloud" model) answers on the loopback port but forwards every
+      // prompt off this machine. Reported so a caller that promises local-only inference can refuse it; null for a local model.
+      remoteHost: typeof m.remote_host === 'string' && m.remote_host ? m.remote_host : null,
     })),
   };
 }
@@ -379,4 +504,4 @@ export async function getOllamaVersion({ host, timeouts } = {}) {
   return { ok: true, version: typeof json?.version === 'string' ? json.version : 'unknown' };
 }
 
-export const _internals = { _fetchOllama };
+export const _internals = { _fetchOllama, resetModelCaches: () => { _tagsCache.clear(); _capsCache.clear(); _psCache.clear(); _notOllama.clear(); } };

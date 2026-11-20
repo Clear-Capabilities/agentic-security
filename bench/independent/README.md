@@ -211,6 +211,32 @@ Fetched source is cached under `bench/independent/cache/` and is **gitignored**:
 this repository does not vendor other people's code. The manifest pins exact
 commit SHAs, so a run is reproducible as long as upstream keeps its history.
 
+## The `deep+discovery` configuration (opt-in, local model only)
+
+`runner.mjs --deep --discovery [--discovery-model=<ollama model>] [--discovery-budget-min=10]` (and
+`independent-baseline.mjs --run --discovery --discovery-model <model>`) adds the product's LLM candidate discovery, the engine
+behind `hunt`, after the deterministic scan of every tree. Code lives in `discovery.mjs`; the rules it keeps:
+
+- **No label steers it.** Discovery is handed a tree and that tree's deterministic findings. File selection
+  (`selectHuntFiles`, shared with the CLI), focus areas, lenses and the call and candidate ceilings are the product's
+  defaults. The only setting is the per-tree wall clock, which is recorded.
+- **Both sides are hunted.** A discovery finding in `post/` is a false positive like any other; hunting only `pre/` would
+  credit recall and hide the precision cost. Findings are the union of both layers and the scorer is unchanged, so credit
+  depends on the lens CWE (injection `CWE-74`, authorization `CWE-285`, cryptography `CWE-327`, others outside the
+  `CWE_PARENT` table) reaching the label through the localized metric's hierarchy.
+- **The model is local or nothing runs.** The product's `ollama` preset refuses a non-loopback host, and the preflight
+  refuses an Ollama model served from a remote host (a "cloud" model answers on the loopback port and forwards the prompt).
+  Start the server with `OLLAMA_NO_CLOUD=1` as a second guard, and with `OLLAMA_CONTEXT_LENGTH` large enough for the
+  hunter prompt (up to 60 000 characters); the server default of 4096 tokens truncates it.
+- **The deterministic half is unchanged.** The preset is set only while discovery runs, with every inherited model
+  variable removed, so each deep scan runs exactly as in the `deep` configuration.
+- **Incomplete is recorded, not hidden.** Each row carries a `discovery` block per side (calls, degraded and unparseable
+  runs, refuted, `freshUnvetted` for findings whose panel cast no vote, budget exhaustion, hard stop), and the report's
+  `discovery.totals` counts incomplete trees. An incomplete tree is scored with what discovery produced before it stopped.
+- **It never mixes with a deterministic run.** The configuration is `deep+discovery`, chunk files are
+  `RESULT-chunk-deep-discovery-*.json` (not matched by `merge-chunks.mjs`), the driver's run id hashes the model and budget,
+  and its merge refuses a chunk whose configuration disagrees with the plan.
+
 ## The frozen protocol (QA-001 to QA-003), and what it does not do
 
 `npm run evaluation -- <command>` (`scripts/evaluation.mjs`, modules in

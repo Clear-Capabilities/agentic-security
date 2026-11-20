@@ -58,6 +58,8 @@ export async function defaultLlmInvoke(prompt, opts = {}) {
           ? { connectTimeoutMs: oc.connectTimeoutMs, requestTimeoutMs: oc.requestTimeoutMs }
           : { connectTimeoutMs: 3000, requestTimeoutMs: timeoutMs },
         signal: opts.signal, // GA-06 §3 (0.195.31): a caller's cancellation reaches the transport
+        // hunter and panel replies are one JSON object: a reasoning model's thinking only spends the run's wall clock
+        shortAnswer: true,
       });
       // PRD §23.4: never fall back to a cloud provider on failure — throwing
       // here is exactly what the pre-existing raw-fetch path already does on
@@ -65,6 +67,11 @@ export async function defaultLlmInvoke(prompt, opts = {}) {
       // treat a thrown/rejected llmInvoke as "this voter did not answer",
       // never as "try something else".
       if (!r.ok) throw new Error(`ollama ${r.code}: ${r.reason || 'request failed'}`);
+      // Ollama cuts an over-long prompt silently, from the front, where the instructions are. An answer to the remainder is not
+      // an answer to the question asked, so it degrades the run with a reason instead of being parsed as one.
+      if (r.result.promptTruncated) {
+        throw new Error(`ollama prompt truncated: ${r.result.usage?.inputTokens} prompt tokens filled the loaded model's ${r.result.contextLength}-token context window; raise the server's context length (OLLAMA_CONTEXT_LENGTH) or narrow the scope`);
+      }
       return r.result.text;
     }
   }
@@ -213,6 +220,10 @@ export function resolveLlmInvokeWithDecision(opts = {}) {
     let voters = multi;
     const presetDecisions = [];
     const provider = resolveProvider({ role: opts.role || 'hunt' });
+    // A preset that was configured and refused (a non-loopback host, a model that would forward prompts off the machine) refuses
+    // the consensus list too. Without this, a refused `ollama` or `local` preset made `preset` below null, and the voter list was
+    // then called without the loopback restriction the preset exists to keep.
+    if (!provider?.ok && provider?.reason) return { invoke: null, decision: { allowed: false, reason: provider.reason }, decisions: [] };
     const preset = provider?.ok && (provider.config?.provider === 'local' || provider.config?.provider === 'ollama') ? provider.config.provider : null;
     if (preset === 'local' || preset === 'ollama') {
       const kept = [];

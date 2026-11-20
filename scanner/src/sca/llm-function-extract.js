@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import { evaluateEgress } from '../egress/policy.js';
 import { modelFetch } from '../egress/transport.js';
 import { resolveProvider, buildProviderRequest } from '../llm-validator/providers.js';
+import { verifyLocalPresetModel } from '../llm-validator/ollama-provider.js';
 
 const CACHE_DIR = process.env.XDG_CONFIG_HOME
   ? path.join(process.env.XDG_CONFIG_HOME, 'agentic-security', 'llm-sca-cache')
@@ -45,11 +46,13 @@ export function isLlmScaEnabled() {
 function _endpointConfig(env = process.env) {
   const r = resolveProvider({ role: 'validate', env });
   if (!r.ok || r.config.provider === 'ollama') return null;
-  return { endpoint: r.config.endpoint, apiKey: r.config.apiKey, model: r.config.model || 'unknown', shape: r.config.shape };
+  return { endpoint: r.config.endpoint, apiKey: r.config.apiKey, model: r.config.model || 'unknown', shape: r.config.shape, provider: r.config.provider };
 }
 
 async function _askLlm(prompt, config) {
   const req = buildProviderRequest(config, prompt, 256);
+  // the `local` preset's loopback endpoint may be Ollama's own API: refuse a model it would forward off this machine
+  if (config.provider === 'local' && !(await verifyLocalPresetModel({ endpoint: config.endpoint, model: config.model })).ok) return null;
   const resp = await modelFetch(config.endpoint, {
     method: 'POST',
     headers: req.headers,

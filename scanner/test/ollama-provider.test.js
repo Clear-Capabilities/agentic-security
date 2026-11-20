@@ -12,6 +12,7 @@ import {
   OLLAMA_ERROR_CODES,
 } from '../src/llm-validator/ollama-provider.js';
 import { resolveProvider, buildProviderRequest, _internals as providerInternals } from '../src/llm-validator/providers.js';
+import { answerLocalTags, registerLocalTestModel } from './helpers/fake-ollama-tags.js';
 
 // ── ollamaEndpointConfig — loopback enforcement ─────────────────────────────
 
@@ -156,6 +157,7 @@ function startFakeOllama(handlers) {
     req.on('end', () => {
       const key = `${req.method} ${req.url}`;
       const handler = handlers[key];
+      if (!handler && answerLocalTags(req, res)) return;
       if (!handler) { res.writeHead(404); res.end('{}'); return; }
       handler(req, res, body ? JSON.parse(body) : null);
     });
@@ -218,7 +220,7 @@ test('callOllamaChat: model-not-installed maps to ollama-model-not-installed, ne
 test('callOllamaChat: an out-of-memory response is recorded via oom-feedback.js, keyed by model', async () => {
   const { priorOOMFor, _internals: oomInternals } = await import('../src/llm-validator/oom-feedback.js');
   const fs = await import('node:fs');
-  const model = 'oom-provider-test-model:unique-' + Date.now();
+  const model = registerLocalTestModel('oom-provider-test-model:unique-' + Date.now());
   const { server, host } = await startFakeOllama({
     'POST /api/chat': (req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });

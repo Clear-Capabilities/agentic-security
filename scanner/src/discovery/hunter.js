@@ -107,7 +107,10 @@ export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
   // `opts.role` still wins over both, same precedence resolveProvider
   // already documents.
   const role = opts.role || (lensKey === 'business-logic' ? 'logic' : 'hunt');
-  const { invoke: llmInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, role, purpose: 'discovery-hunter' });
+  const { invoke: resolvedInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, role, purpose: 'discovery-hunter' });
+  // `wrapInvoke` is the run budget's counter (index.js makeBudget). runDiscovery passes it when no llmInvoke was injected, so a
+  // callback resolved from configuration is counted and bounded exactly like an injected one.
+  const llmInvoke = typeof resolvedInvoke === 'function' && typeof opts.wrapInvoke === 'function' ? opts.wrapInvoke(resolvedInvoke) : resolvedInvoke;
 
   if (typeof llmInvoke !== 'function') {
     // FR-601: distinguish "policy denied a configured endpoint" from "nothing

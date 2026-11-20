@@ -7,10 +7,13 @@
 // planned versus hunted and how many runs degraded, with reasons. A discovery
 // pass that half failed and reports "no findings" is indistinguishable from a
 // clean codebase unless it says so.
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { listFiles } from '../util/glob.js';
 import { partitionCallGraph, partitionNixFiles } from './partition.js';
 import { LENSES, lensByKey, invariantProposalFor } from './lenses.js';
 import { runHunter } from './hunter.js';
-import { confirmAll } from './confirm.js';
+import { confirmAll, taintCorroborates } from './confirm.js';
 import { disprovePanel } from './disprove.js';
 import { judgeCandidates } from './judge.js';
 import { loadMemory, saveMemory, rememberRun, previouslyRefuted, nextWavePlan, forgetRefuted } from './memory.js';
@@ -34,10 +37,14 @@ export function makeTaintProbe(perFileIR, callGraph) {
       const deep = await cache;
       if (!Array.isArray(deep)) return null;
       const hits = deep.filter(f => f.file === candidate.file);
-      const exact = hits.find(f => Math.abs((f.line ?? -1) - candidate.line) <= 2);
+      const near = hits.filter(f => Math.abs((f.line ?? -1) - candidate.line) <= 2);
+      // Confirmation needs the taint finding to be about the SAME kind of weakness (confirm.js `taintCorroborates`): a flow to
+      // an unrelated sink on the cited line is proximity, not corroboration, and earns only `sink-adjacent`.
+      const exact = near.find(f => taintCorroborates(candidate.cwe, f.cwe));
       if (exact) {
-        return { tier: 'taint-confirmed', evidence: { matchedFinding: exact.id ?? null, line: exact.line, vuln: exact.vuln ?? null } };
+        return { tier: 'taint-confirmed', evidence: { matchedFinding: exact.id ?? null, line: exact.line, vuln: exact.vuln ?? null, cwe: exact.cwe ?? null } };
       }
+      if (near.length) return { tier: 'sink-adjacent', evidence: { nearbyUnrelatedFindings: near.length, cwes: [...new Set(near.map(f => f.cwe).filter(Boolean))].sort() } };
       return hits.length ? { tier: 'sink-adjacent', evidence: { sameFileFindings: hits.length } } : null;
     } catch {
       return null;
@@ -52,6 +59,27 @@ async function runDeepAnalysisSafe(perFileIR, callGraph) {
   } catch {
     return null;
   }
+}
+
+// What `hunt` reads: source files in the languages the IR and the lenses cover, outside dependency, build and state
+// directories, up to a file cap. One definition, shared by the CLI and by anything that measures the CLI's behaviour (the
+// independent bench), so a measurement can never select differently from the product it claims to measure.
+const HUNT_EXTS = /\.(?:js|jsx|mjs|cjs|ts|tsx|py|java|cs|kt|go|php|rb|l?hs|nix)$/i;
+const HUNT_IGNORE = ['node_modules/**', '.git/**', 'dist/**', 'build/**', 'vendor/**', '**/.agentic-security/**', 'dist-newstyle/**', '.stack-work/**', '.direnv/**'];
+const HUNT_MAX_FILES = 2000;
+
+/**
+ * Select and read the files a hunt over `scanRoot` examines. `overCap` true means the tree holds more source files than the
+ * cap and nothing was read: the CLI refuses such a scope rather than hunting part of it.
+ */
+export async function selectHuntFiles(scanRoot, { readFile = (p) => fs.promises.readFile(p, 'utf8') } = {}) {
+  const rels = (await listFiles(scanRoot, { ignore: HUNT_IGNORE })).filter(f => HUNT_EXTS.test(f));
+  if (rels.length > HUNT_MAX_FILES) return { rels, fileContents: {}, overCap: true, maxFiles: HUNT_MAX_FILES };
+  const fileContents = {};
+  for (const rel of rels) {
+    try { fileContents[rel] = await readFile(path.join(scanRoot, rel)); } catch { /* unreadable: skip */ }
+  }
+  return { rels, fileContents, overCap: false, maxFiles: HUNT_MAX_FILES };
 }
 
 // ctx = { perFileIR, callGraph, fileContents, priorScan, triageFeedback }
@@ -152,8 +180,13 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   let memory = opts.scanRoot ? loadMemory(opts.scanRoot) : null;
   // `--forget-refuted`: a model, a ruleset or the code changed, so what an earlier run refuted is worth examining again.
   if (memory && opts.forgetRefuted) memory = forgetRefuted(memory);
-  // Every LLM call in this pipeline goes through this one wrapped callback.
-  const llmInvoke = budget.wrap(opts.llmInvoke);
+  // Every LLM call in this pipeline is counted against the budget. An injected callback is wrapped here; with none injected, each
+  // hunter and panel resolves its own from configuration (role and egress decision per call site) and applies `wrapInvoke` to
+  // it. Previously only the injected case was wrapped, so `hunt` driven by configuration ran with no call or wall-clock
+  // ceiling at all.
+  const injected = typeof opts.llmInvoke === 'function';
+  const llmInvoke = injected ? budget.wrap(opts.llmInvoke) : undefined;
+  const wrapInvoke = injected ? undefined : budget.wrap;
 
   // An explicit array (including an empty one) is honoured exactly — a caller
   // narrowing a run to no lenses must get no lenses, not a silent fallback to
@@ -183,7 +216,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   for (const area of areas) {
     let areaDegradedCount = 0;
     for (const lens of lenses) {
-      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot }, { llmInvoke, scanRoot: opts.scanRoot });
+      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot }, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot });
       runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
       if (run.discarded > 0) reasons.push(`${area.label} × ${lens.key}: ${run.discarded} proposed candidate(s) had no usable file and line and were discarded`);
@@ -252,7 +285,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
         '(clear with --forget-refuted if a model, ruleset or the code has changed since)');
     }
   }
-  const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke, scanRoot: opts.scanRoot });
+  const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot });
   const { fresh, duplicates, suppressed } = judgeCandidates(survivors, ctx.priorScan, ctx.triageFeedback);
 
   // A spent budget is a coverage gap, stated once at the top level rather than
