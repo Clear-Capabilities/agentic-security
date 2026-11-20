@@ -29,9 +29,23 @@ test('detects (.*a){10} nested quantifier', () => {
   assert.ok(r.unsafe, 'expected unsafe');
 });
 
-test('detects (\\w+\\s+)+ nested quantifier via {n,}', () => {
-  const r = isUnsafeRegex('(\\w+\\s+)+');
-  assert.ok(r.unsafe, 'expected unsafe');
+// `(\w+\s+)+` was pinned as unsafe by a rule that reported every syntactic nesting. Its runs are disjoint and each is required,
+// so a string has exactly one split into iterations: linear. The exponential form makes the separator optional.
+test('detects (\\w+\\s?)+ nested quantifier (optional separator lets a word run split across iterations)', () => {
+  assert.ok(isUnsafeRegex('(\\w+\\s?)+$').unsafe, 'expected unsafe');
+});
+
+test('safe: (\\w+\\s+)+ (disjoint, required runs: one split)', () => {
+  assert.ok(!isUnsafeRegex('(\\w+\\s+)+').unsafe);
+});
+
+test('safe: a quoted run closed by its delimiter inside a repetition', () => {
+  assert.ok(!isUnsafeRegex('[^,\\s"](?:[^,"]|"[^"]*")*').unsafe);
+});
+
+test('lookaround is zero-width: a possessive run idiom fixes a nested quantifier', () => {
+  assert.ok(isUnsafeRegex('(?:[^\\*]|\\*{2,})+?').unsafe);
+  assert.ok(!isUnsafeRegex('(?:[^\\*]|\\*{2,}(?!\\*))+?').unsafe);
 });
 
 // ── isUnsafeRegex: known-safe patterns ──────────────────────────────────────
@@ -121,4 +135,56 @@ test('a string literal with many escapes does not stall the Kotlin, Java, C#, Go
   scanRegexReDoS('app.js', `const p = "${esc}"; new RegExp("${esc}"); s.match(/${esc}/);`);
   scanRegexReDoS('app.php', `$p = preg_match("/${esc}/", $s);`);
   assert.ok(Date.now() - t0 < 2000, `extractors took ${Date.now() - t0} ms`);
+});
+
+// ── Quadratic backtracking under an unanchored search, and regex constants ─────
+// Independently authored examples (no advisory or benchmark tree).
+import { quadraticSearchRisk, scanRegexReDoS as scanQ } from '../src/sast/redos-nfa.js';
+
+test('quadratic: a leading run before a character it excludes, or before the end anchor', () => {
+  assert.ok(quadraticSearchRisk('\\s*,\\s*').risk);
+  assert.ok(quadraticSearchRisk('\\s+$').risk);
+  assert.ok(!quadraticSearchRisk(',\\s*').risk, 'starts with the required character');
+  assert.ok(!quadraticSearchRisk('^\\s*,').risk, 'anchored');
+  assert.ok(!quadraticSearchRisk('\\s+').risk, 'nothing required after the run');
+  assert.ok(!quadraticSearchRisk('a*a').risk, 'the run can supply the requirement');
+  assert.ok(!quadraticSearchRisk('.*x').risk, 'a dot run is not claimed');
+});
+
+test('Ruby: a regex constant is analysed; the separator-first rewrite is not reported', () => {
+  const pre = 'module M\n  SEP = /\\s*;\\s*q="?/\n  def parse(h)\n    h.index(SEP)\n  end\nend\n';
+  const post = 'module M\n  SEP = /;\\s*q="?/\n  def parse(h)\n    h.index(SEP)\n  end\nend\n';
+  assert.deepEqual(scanQ('lib/m.rb', pre).map((f) => [f.line, f.id.split(':')[0]]), [[2, 'redos-poly']]);
+  assert.deepEqual(scanQ('lib/m.rb', post), []);
+});
+
+test('Python: a raw-string constant used by name is analysed for exponential ambiguity', () => {
+  const pre = "STRONG = r'(\\*)((?:[^\\*]|\\*{2,})+?)(\\*)'\nclass P:\n    pattern = STRONG\n";
+  const post = "STRONG = r'(\\*)((?:[^\\*]|\\*{2,}(?!\\*))+?)(\\*)'\nclass P:\n    pattern = STRONG\n";
+  assert.equal(scanQ('pkg/em.py', pre).length, 1);
+  assert.equal(scanQ('pkg/em.py', post).length, 0);
+  assert.equal(scanQ('pkg/once.py', "UNUSED = r'(a+)+'\n").length, 0, 'a constant never referenced again is not assumed to be a regex');
+});
+
+test('Python: the quadratic rule needs search-mode evidence; re.match is anchored', () => {
+  assert.equal(scanQ('a.py', "import re\nre.search(r'\\s*;', s)\n").length, 1);
+  assert.equal(scanQ('a.py', "import re\nre.match(r'\\s*;', s)\n").length, 0);
+  assert.equal(scanQ('a.py', "import re\nP = re.compile(r'\\s*;')\nP.split(s)\n").length, 1);
+});
+
+test('JavaScript: a division is not a regex literal for the quadratic rule; the sticky flag anchors', () => {
+  assert.equal(scanQ('a.js', 'const parts = s.split(/\\s*,\\s*/);\n').length, 1);
+  assert.equal(scanQ('a.js', 'const r = /\\s*,/y;\n').length, 0);
+  assert.equal(scanQ('a.js', 'const x = a /\\s*,/ b;\n').length, 0);
+});
+
+test('fixture pair redos-quadratic: vulnerable fires, clean is silent', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'redos-quadratic');
+  for (const f of ['accept.rb', 'emphasis.py']) {
+    assert.ok(scanQ(f, fs.readFileSync(path.join(dir, 'vulnerable', f), 'utf8')).length >= 1, `vulnerable/${f}`);
+    assert.deepEqual(scanQ(f, fs.readFileSync(path.join(dir, 'clean', f), 'utf8')), [], `clean/${f}`);
+  }
 });

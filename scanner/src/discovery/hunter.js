@@ -10,7 +10,8 @@
 // rate limit, or unparseable output yields `degraded:true` with a reason. A
 // discovery pass that cannot run must leave the rest of the scan intact.
 import * as crypto from 'node:crypto';
-import { buildHunterPrompt } from './lenses.js';
+import { buildHunterPromptWithMap } from './lenses.js';
+import { classifyCandidate } from './classification.js';
 import { resolveLlmInvokeWithDecision } from './llm-invoke.js';
 
 function appendEntry(transcript, entry) {
@@ -46,6 +47,20 @@ function candidateId(focusAreaId, lensKey, file, line, title) {
 // A model that names a file outside the area, or a line past the end, has not cited evidence; such a candidate is discarded and
 // counted (`citationsDiscarded`), never scored or shown. A leading `./` is tolerated; nothing else is normalised, so a path that
 // differs from what the hunter was shown is a miss, not a match.
+//
+// Since the prompt shows numbered lines (lenses.js `buildHunterPromptWithMap`), a citation is also checked against what the hunter
+// was SHOWN, when the run knows that (`ctx._shown`):
+//   * the line must be inside the shown range of that file (`line-not-shown`): a line in a truncated-away part was never seen;
+//   * a `code` anchor, when given, must match the cited line's shown text, compared with whitespace collapsed. If it matches a
+//     line within two of the cited one instead, and only that one, the citation moves there (the anchor is evidence from the
+//     scanned snapshot, nothing else is consulted); if it matches none (`anchor-mismatch`) or several nearby lines but not the
+//     cited one (`anchor-ambiguous`), the candidate is discarded. An anchor shorter than 4 characters proves nothing and is
+//     treated as absent. A candidate with no anchor is kept and marked `anchored: false`.
+const squash = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+function anchorMatches(lineText, anchor) {
+  const a = squash(anchor); const l = squash(lineText);
+  return a.length >= 4 && l.length > 0 && (l === a || l.includes(a) || (a.includes(l) && l.length >= 8));
+}
 function resolveCitation(c, focusArea, ctx) {
   const raw = typeof c?.file === 'string' ? c.file.trim() : '';
   const file = raw.replace(/^\.\//, '');
@@ -54,11 +69,35 @@ function resolveCitation(c, focusArea, ctx) {
   const known = (Array.isArray(focusArea?.files) && focusArea.files.includes(file)) || (ctx?.fileContents && Object.prototype.hasOwnProperty.call(ctx.fileContents, file));
   if (!known) return { ok: false, reason: 'file-not-in-scope' };
   const text = ctx?.fileContents ? ctx.fileContents[file] : undefined;
+  let lines = null;
   if (typeof text === 'string') {
-    const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-    if (line > Math.max(1, lines)) return { ok: false, reason: 'line-past-end' };
+    lines = text.split('\n'); if (text.endsWith('\n')) lines.pop();
+    if (line > Math.max(1, lines.length)) return { ok: false, reason: 'line-past-end' };
   }
-  return { ok: true, file, line };
+  const shown = ctx?._shown ? ctx._shown[file] : undefined;
+  if (ctx?._shown && !shown) return { ok: false, reason: 'file-not-shown' };
+  if (shown && shown.lineMapped && (line < shown.from || line > shown.to)) return { ok: false, reason: 'line-not-shown' };
+  // The text to check an anchor against: what was shown when line numbers map, else the snapshot itself.
+  const textAt = (n) => (shown && shown.lineMapped ? shown.lines[n - 1] : lines ? lines[n - 1] : undefined);
+  const anchor = typeof c?.code === 'string' && squash(c.code).length >= 4 ? c.code : null;
+  if (!anchor || (!shown && !lines)) return { ok: true, file, line, anchored: false };
+  if (anchorMatches(textAt(line), anchor)) return { ok: true, file, line, anchored: true };
+  const lo = Math.max(shown && shown.lineMapped ? shown.from : 1, line - 2);
+  const hi = Math.min(shown && shown.lineMapped ? shown.to : (lines ? lines.length : line), line + 2);
+  const near = [];
+  for (let n = lo; n <= hi; n++) if (n !== line && anchorMatches(textAt(n), anchor)) near.push(n);
+  if (near.length === 1) return { ok: true, file, line: near[0], anchored: true, movedFrom: line };
+  return { ok: false, reason: near.length ? 'anchor-ambiguous' : 'anchor-mismatch' };
+}
+
+/** The shown (or snapshot) text of the cited line and the two after it: where a statement's operation sits. */
+function evidenceLinesAt(file, line, ctx) {
+  const shown = ctx?._shown ? ctx._shown[file] : undefined;
+  let src = null;
+  if (shown && shown.lineMapped) src = shown.lines;
+  else if (typeof ctx?.fileContents?.[file] === 'string') src = ctx.fileContents[file].split('\n');
+  if (!src) return [];
+  return src.slice(line - 1, line + 2);
 }
 
 function candidatesFromParsed(parsed, focusArea, lens, ctx = {}, stats = null) {
@@ -67,11 +106,17 @@ function candidatesFromParsed(parsed, focusArea, lens, ctx = {}, stats = null) {
   for (const c of list) {
     const cite = resolveCitation(c, focusArea, ctx);
     if (!cite.ok) {
-      if (stats) { stats.discarded += 1; if (cite.reason !== 'no-location') stats.citationsDiscarded += 1; }
+      if (stats) {
+        stats.discarded += 1; if (cite.reason !== 'no-location') stats.citationsDiscarded += 1;
+        (stats.byReason ||= {})[cite.reason] = (stats.byReason[cite.reason] || 0) + 1;
+      }
       continue;
     }
     const { file, line } = cite;
+    if (stats) { if (cite.anchored) stats.anchored = (stats.anchored || 0) + 1; else stats.unanchored = (stats.unanchored || 0) + 1; }
     const title = typeof c?.title === 'string' && c.title ? c.title : `${lens.title} candidate`;
+    const cls = classifyCandidate(lens, c?.cwe, evidenceLinesAt(file, line, ctx));
+    if (stats && cls.cweRejected) stats.cweRejected = (stats.cweRejected || 0) + 1;
     out.push({
       id: candidateId(focusArea.id, lens.key, file, line, title),
       focusAreaId: focusArea.id,
@@ -80,7 +125,13 @@ function candidatesFromParsed(parsed, focusArea, lens, ctx = {}, stats = null) {
       file,
       line,
       family: lens.family,
-      cwe: lens.cwe,
+      cwe: cls.cwe,
+      // How the CWE was decided (classification.js): 'lens' (the broad class), 'operation-checked' or 'model-proposed'.
+      cweBasis: cls.cweBasis,
+      lensCwe: cls.lensCwe,
+      ...(cls.proposedCwe && cls.proposedCwe !== cls.cwe ? { proposedCwe: cls.proposedCwe, cweRejected: cls.cweRejected || null } : {}),
+      anchored: !!cite.anchored,
+      ...(cite.movedFrom ? { citedLine: cite.movedFrom } : {}),
       rationale: typeof c?.rationale === 'string' ? c.rationale : '',
       entryPoint: typeof c?.entryPoint === 'string' ? c.entryPoint : '',
       sink: typeof c?.sink === 'string' ? c.sink : '',
@@ -122,16 +173,17 @@ export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
     return { ...base, candidates: [], degraded: true, reason, egressDecision };
   }
 
-  let prompt;
+  let prompt; let built = null;
   try {
-    prompt = buildHunterPrompt(focusArea, lens, ctx);
+    built = buildHunterPromptWithMap(focusArea, lens, ctx);
+    prompt = built.prompt;
   } catch (err) {
     const reason = `failed to build hunter prompt: ${err?.message || String(err)}`;
     appendEntry(transcript, { phase: 'prompt_error', reason });
     return { ...base, candidates: [], degraded: true, reason };
   }
 
-  appendEntry(transcript, { phase: 'prompt', promptChars: prompt.length, files: focusArea.files.length });
+  appendEntry(transcript, { phase: 'prompt', promptChars: prompt.length, files: focusArea.files.length, filesShown: Object.keys(built.shown).length, filesOmitted: built.omittedFiles });
 
   let raw;
   try {
@@ -150,10 +202,11 @@ export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
   }
 
   const stats = { discarded: 0, citationsDiscarded: 0 };
-  const candidates = candidatesFromParsed(parsed, focusArea, lens, ctx, stats);
+  const candidates = candidatesFromParsed(parsed, focusArea, lens, { ...ctx, _shown: built ? built.shown : undefined }, stats);
   // A proposed candidate with no file and line has nowhere to point and is dropped, and one whose citation does not resolve
   // (a file the hunter was not shown, a line past the file's end) is dropped too; say how many of each, so a reply full of
   // them does not read as a reply that found nothing.
-  appendEntry(transcript, { phase: 'result', candidateCount: candidates.length, discarded: stats.discarded, citationsDiscarded: stats.citationsDiscarded });
-  return { ...base, candidates, degraded: false, reason: null, discarded: stats.discarded, citationsDiscarded: stats.citationsDiscarded };
+  const citation = { anchored: stats.anchored || 0, unanchored: stats.unanchored || 0, discardedByReason: stats.byReason || {}, cweRejected: stats.cweRejected || 0 };
+  appendEntry(transcript, { phase: 'result', candidateCount: candidates.length, discarded: stats.discarded, citationsDiscarded: stats.citationsDiscarded, citation });
+  return { ...base, candidates, degraded: false, reason: null, discarded: stats.discarded, citationsDiscarded: stats.citationsDiscarded, citation };
 }

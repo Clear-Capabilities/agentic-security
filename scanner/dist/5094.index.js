@@ -2087,8 +2087,8 @@ async function runOllamaArm({ arm, task, request, workspaceDir, terms = [], time
 var files = __webpack_require__(72873);
 // EXTERNAL MODULE: ./src/ir/index.js + 11 modules
 var src_ir = __webpack_require__(98297);
-// EXTERNAL MODULE: ./src/discovery/index.js + 4 modules
-var discovery = __webpack_require__(99579);
+// EXTERNAL MODULE: ./src/discovery/index.js + 5 modules
+var discovery = __webpack_require__(47764);
 ;// CONCATENATED MODULE: ./src/posture/evaluation/lab/arm-hunt.js
 // The `deterministic + hunt` arm (GA-06 §5, 0.195.31): the deterministic scanner on the staged workspace, then the existing
 // discovery pipeline (`discovery/index.js` `runDiscovery`) over the same files with a LOCAL model, and one merged finding list.

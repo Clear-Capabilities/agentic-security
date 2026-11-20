@@ -3018,6 +3018,9 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // DAG-05 begin
   if (_replay) { _replay.recordExitStates(exitStateByQid); _replay.noteConverged(_fpConverged); }
   // DAG-05 end
+  // The pre-pass summaries are an under-approximation when the rounds ran out while a summary was still changing: say so rather than
+  // let the result read as complete (a deadline already records its own reason).
+  if (!_fpConverged && Date.now() <= deadlineMs) _noteIncomplete('prepass-nonconverged', `still changing after ${MAX_FP_ITERS} rounds`);
   // Class-field cross-taint pass (SARD_80_F1_SCANNER_PRD.md — Juliet flow
   // variants 45/65-68: a method writes a tainted value to a static or
   // instance field and a SIBLING method of the same class reads it into a
