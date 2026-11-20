@@ -1172,7 +1172,7 @@ async function cmdReview(root, args, format) {
   let priorScan = null, triageFeedback = null;
   try { priorScan = JSON.parse(external_node_fs_.readFileSync((0,state_dir.statePath)(built.root, 'last-scan.json'), 'utf8')); } catch { /* none */ }
   try { triageFeedback = JSON.parse(external_node_fs_.readFileSync((0,state_dir.statePath)(built.root, 'triage-feedback.json'), 'utf8')); } catch { /* none */ }
-  const { makeTaintProbe } = await __webpack_require__.e(/* import() */ 9579).then(__webpack_require__.bind(__webpack_require__, 99579));
+  const { makeTaintProbe } = await __webpack_require__.e(/* import() */ 7764).then(__webpack_require__.bind(__webpack_require__, 47764));
   const adj = await (0,context_intelligence_candidates/* adjudicate */.p)(candidates, { taintProbe: makeTaintProbe(built.ir.perFile, built.ir.callGraph), priorScan, triageFeedback, scanRoot: built.root, refute: truthy(flag(args, 'refute')) ? {} : null });
 
   const cov = result.coverage;
@@ -1214,7 +1214,7 @@ async function cmdContext(args) {
     case 'export': return cmdExport(root, args, format);
     case 'cleanup': return cmdCleanup(root, args, format);
     case 'eval': {
-      const { cmdEval } = await Promise.all(/* import() */[__webpack_require__.e(9579), __webpack_require__.e(7405)]).then(__webpack_require__.bind(__webpack_require__, 67405));
+      const { cmdEval } = await Promise.all(/* import() */[__webpack_require__.e(7764), __webpack_require__.e(7405)]).then(__webpack_require__.bind(__webpack_require__, 67405));
       return cmdEval(root, args, format);
     }
     default:

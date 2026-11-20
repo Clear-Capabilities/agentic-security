@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-17T19:04:20.980Z",
-  "commit": "41f666d3d22e66644fac96be154c82218b2d34b8",
+  "generatedAt": "2026-11-20T15:56:26.123Z",
+  "commit": "6a5ba15a7512b62e0203f2e76662dc6bd922cc9b",
   "targets": {
     "hooks": {
       "total": 20,
@@ -17,7 +17,7 @@
       }
     },
     "scripts": {
-      "total": 105,
+      "total": 104,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -47,7 +47,7 @@
         "loop-engineering/lib/claude.mjs": 1,
         "loop-engineering/lib/controller.mjs": 4,
         "loop-engineering/lib/server.mjs": 5,
-        "nist-compliance/scan.py": 8,
+        "nist-compliance/scan.py": 7,
         "owasp-llm-top10/scan.py": 1,
         "release-check.mjs": 1,
         "release-closure.mjs": 1,

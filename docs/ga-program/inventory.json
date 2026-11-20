@@ -16,7 +16,7 @@
       "slash-command": 17,
       "ticket-provider": 3
     },
-    "environmentVariables": 234
+    "environmentVariables": 235
   },
   "surfaces": [
     {
@@ -1241,6 +1241,7 @@
     "AGENTIC_SECURITY_AUDIT_WEBHOOK",
     "AGENTIC_SECURITY_BACKWARD_SLICE",
     "AGENTIC_SECURITY_BACKWARD_SLICE_BUDGET_MS",
+    "AGENTIC_SECURITY_BENCH_PROGRESS",
     "AGENTIC_SECURITY_BENCH_SHAPE",
     "AGENTIC_SECURITY_BINARY_SCA",
     "AGENTIC_SECURITY_BLIND_BENCH",

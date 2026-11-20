@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // A fresh, checkpointed measurement of the current engine on the independent population (E1-04).
 //   node independent-baseline.mjs --plan  [--per-language 30] [--splits dev,validation] [--chunk 20]
-//   node independent-baseline.mjs --run   [--run <id>] [--per-language 30] [--chunk 20] [--chunk-timeout-min 90]
+//   node independent-baseline.mjs --run   [--run <id>] [--per-language 30] [--splits dev] [--population-of <run id>] [--chunk 20] [--chunk-timeout-min 90]
+//   --splits restricts the selection (default dev,validation); --population-of reuses an earlier run's entries in those splits, so a
+//   development-only comparison runs on the baseline's development population rather than a fresh, different sample.
 //   node independent-baseline.mjs --merge --run <id>
 //   node independent-baseline.mjs --status --run <id>
 //   add `--discovery --discovery-model <ollama model> [--discovery-budget-min 10]` to --plan / --run for the `deep+discovery`
@@ -58,25 +60,75 @@ function identityEnv(config) {
 async function imp(root, rel) { return import(`file://${join(root, rel)}`); }
 let discoveryTotalsOf = () => null;
 
-/** Choose the entries and write the plan. Deterministic: the same splits file and parameters give the same selection and the same run id. */
-export async function planRun(root, { perLanguage = 30, splitNames = ['dev', 'validation'], chunk = 20, config = CONFIG_DEEP } = {}) {
+/**
+ * The scan-affecting environment a run is measured under: every AGENTIC_SECURITY_* knob except the driver's own progress switch and
+ * anything that could be a credential or an address. A threat-model knob (AGENTIC_SECURITY_LIBRARY_SOURCES) changes what a scan
+ * reports, so two runs that differ only in it must never share a run id or resume each other's chunks.
+ */
+const NON_SCAN_KNOBS = new Set(['AGENTIC_SECURITY_BENCH_PROGRESS']);
+const SECRETISH_KNOB = /KEY|TOKEN|SECRET|PASS|ENDPOINT|HOST|URL|AUTH/i;
+export function scanKnobs(env = process.env) {
+  const out = {};
+  for (const k of Object.keys(env).filter((x) => x.startsWith('AGENTIC_SECURITY_') && !NON_SCAN_KNOBS.has(x)).sort()) out[k] = SECRETISH_KNOB.test(k) ? '<set>' : String(env[k]).slice(0, 80);
+  return out;
+}
+
+/** Parse `--splits dev,validation`. Unknown names and `sealed` are refused here and again by stratifiedSample. */
+export function parseSplitNames(value) {
+  if (value == null) return ['dev', 'validation'];
+  const names = String(value).split(',').map((x) => x.trim()).filter(Boolean);
+  if (!names.length) throw new Error('--splits needs at least one split name');
+  for (const n of names) if (n !== 'dev' && n !== 'validation') throw new Error(`--splits may name dev or validation, not ${n}`);
+  return [...new Set(names)];
+}
+
+/**
+ * Choose the entries and write the plan. Deterministic: the same splits file and parameters give the same selection and the same run id.
+ *
+ * `populationOf` restricts the selection to the entries of an earlier run's selection that fall in `splitNames`. A fresh per-language
+ * sample over a smaller pool is a DIFFERENT population (a language capped at 30 over dev+validation keeps fewer dev entries than one
+ * capped at 30 over dev alone), so a paired before/after comparison on one split must reuse the baseline's population, not resample it.
+ */
+export async function planRun(root, { perLanguage = 30, splitNames = ['dev', 'validation'], chunk = 20, config = CONFIG_DEEP, populationOf = null, env = process.env } = {}) {
   const splitsMod = await imp(root, 'bench/independent/splits.mjs');
   const manifest = readJson(join(root, 'bench/independent/manifest.json'));
   const splits = splitsMod.loadSplits(join(root, 'bench/independent/splits.json'));
   if (!splits) throw new Error('bench/independent/splits.json is missing; build the frozen splits first (E1-02)');
-  const sel = splitsMod.stratifiedSample(manifest.entries, splits, { perLanguage, splitNames });
+  let sel;
+  if (populationOf) {
+    const prior = readJson(join(RUNS_DIR(root), populationOf, 'selection.json')) || readJson(populationOf);
+    if (!prior || !Array.isArray(prior.ids)) throw new Error(`--population-of ${populationOf}: no selection.json found (a run id under bench/independent/runs, or a path)`);
+    for (const n of splitNames) if (n === 'sealed') throw new Error('a selection may name dev or validation, not sealed');
+    const byId = new Map(manifest.entries.map((e) => [e.id, e]));
+    const ids = prior.ids.filter((id) => byId.has(id) && splitNames.includes(splits.assignment[id])).sort();
+    const counts = {};
+    for (const id of ids) counts[byId.get(id).language] = (counts[byId.get(id).language] || 0) + 1;
+    sel = { ids, splitNames, perLanguage: prior.perLanguage ?? perLanguage, salt: prior.salt, counts, poolSize: prior.ids.length, populationOf: { source: String(populationOf), priorEntries: prior.ids.length, priorSplitNames: prior.splitNames || null } };
+  } else {
+    sel = splitsMod.stratifiedSample(manifest.entries, splits, { perLanguage, splitNames });
+  }
   const head = measurementIdentity(root, { corpus: { id: 'independent-selection', files: ['bench/independent/manifest.json', 'bench/independent/splits.json'] } });
-  // The deterministic configuration hashes exactly as before, so existing run ids stay valid.
-  const runId = sha(JSON.stringify({ commit: head.sourceCommit, ids: sel.ids, config, chunk })).slice(0, 12);
+  const knobs = scanKnobs(env);
+  // The deterministic configuration with no scan knobs set hashes exactly as before, so existing run ids stay valid.
+  const idInput = { commit: head.sourceCommit, ids: sel.ids, config, chunk };
+  if (Object.keys(knobs).length) idInput.knobs = knobs;
+  const runId = sha(JSON.stringify(idInput)).slice(0, 12);
   const dir = join(RUNS_DIR(root), runId);
   mkdirSync(join(dir, 'chunks'), { recursive: true }); mkdirSync(join(dir, 'logs'), { recursive: true });
   const selection = { schema: 'agentic-security/independent-selection@1', ...sel, splitsProtocolHash: splits.protocolHash, manifestSha256: digestOfFiles(root, ['bench/independent/manifest.json']) };
   atomicWriteJson(join(dir, 'selection.json'), selection);
   const chunks = [];
   for (let offset = 0; offset < sel.ids.length; offset += chunk) chunks.push({ index: chunks.length, offset, limit: Math.min(chunk, sel.ids.length - offset) });
-  const plan = { schema: 'agentic-security/independent-run-plan@1', runId, plannedAt: nowIso(), config, chunkSize: chunk, chunks, selection: { entries: sel.ids.length, counts: sel.counts, splitNames, perLanguage }, plannedAtCommit: head.sourceCommit };
+  const plan = { schema: 'agentic-security/independent-run-plan@1', runId, plannedAt: nowIso(), config, chunkSize: chunk, chunks, selection: { entries: sel.ids.length, counts: sel.counts, splitNames, perLanguage, ...(sel.populationOf ? { populationOf: sel.populationOf } : {}) }, scanKnobs: knobs, plannedAtCommit: head.sourceCommit };
   if (!existsSync(join(dir, 'plan.json'))) atomicWriteJson(join(dir, 'plan.json'), plan);
   return { runId, dir, plan: readJson(join(dir, 'plan.json')), selection };
+}
+
+/** A resumed run must be measured under the knobs it was planned with; a mismatch would merge chunks from two configurations. */
+export function assertKnobsMatch(plan, env = process.env) {
+  if (!plan || !plan.scanKnobs) return;
+  const now = JSON.stringify(scanKnobs(env)); const then = JSON.stringify(plan.scanKnobs);
+  if (now !== then) throw new Error(`run ${plan.runId} was planned with scan knobs ${then} but this invocation has ${now}; set the same environment or plan a new run`);
 }
 
 const chunkFile = (dir, offset, config = CONFIG_DEEP) => join(dir, 'chunks', `RESULT-chunk-${configTag(config)}-${String(offset).padStart(5, '0')}.json`);
@@ -200,13 +252,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const root = a.includes('--root') ? resolve(arg(a, '--root')) : REPO_ROOT;
   (async () => {
     const config = configFromArgs(a);
-    if (a.includes('--plan')) { const p = await planRun(root, { perLanguage: Number(arg(a, '--per-language', 30)), chunk: Number(arg(a, '--chunk', 20)), config }); console.log(`run ${p.runId}: ${p.plan.selection.entries} entries in ${p.plan.chunks.length} chunks; ${JSON.stringify(p.plan.selection.counts)}`); return 0; }
+    const planOpts = { perLanguage: Number(arg(a, '--per-language', 30)), chunk: Number(arg(a, '--chunk', 20)), config, splitNames: parseSplitNames(arg(a, '--splits')), populationOf: arg(a, '--population-of') };
+    if (a.includes('--plan')) { const p = await planRun(root, planOpts); console.log(`run ${p.runId}: ${p.plan.selection.entries} entries (splits ${p.plan.selection.splitNames.join(',')}${p.plan.selection.populationOf ? `, population of ${p.plan.selection.populationOf.source}` : ''}) in ${p.plan.chunks.length} chunks; ${JSON.stringify(p.plan.selection.counts)}`); return 0; }
     if (a.includes('--status')) { console.log(JSON.stringify(statusOf(root, arg(a, '--run')), null, 2)); return 0; }
     if (a.includes('--merge')) { const r = await mergeRun(root, arg(a, '--run')); console.log(JSON.stringify({ coverage: r.coverage, headline: r.headline }, null, 2)); return 0; }
     if (a.includes('--run')) {
       let id = arg(a, '--run');
-      if (!id || id.startsWith('--')) { id = (await planRun(root, { perLanguage: Number(arg(a, '--per-language', 30)), chunk: Number(arg(a, '--chunk', 20)), config })).runId; }
+      if (!id || id.startsWith('--')) { id = (await planRun(root, planOpts)).runId; }
       const planned = readJson(join(RUNS_DIR(root), id, 'plan.json'));
+      assertKnobsMatch(planned);
       const chunkTimeoutMs = arg(a, '--chunk-timeout-min') ? Number(arg(a, '--chunk-timeout-min')) * 60000 : defaultChunkTimeoutMs(planned?.config, planned?.chunkSize || Number(arg(a, '--chunk', 20)));
       const progress = await runChunks(root, id, { chunkTimeoutMs, onChunk: (c, r) => console.log(`chunk ${c.index} ${r.state} (${c.offset}+${c.limit})`), maxMinutes: Number(arg(a, '--max-minutes', 0)) || null });
       const merged = await mergeRun(root, id);

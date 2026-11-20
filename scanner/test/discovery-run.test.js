@@ -148,9 +148,11 @@ const manyFiles = (n) => {
   }
   return { perFileIR: {}, callGraph: { functions: fns, edges: [] }, fileContents };
 };
+// Proposes one candidate on the first file its prompt SHOWED (a citation of a file the prompt did not show is discarded since
+// the hunter checks citations against the shown slices).
 const alwaysProposes = async (p) => (/REFUTE/.test(p)
   ? '{"refuted":false}'
-  : '{"candidates":[{"title":"X","file":"f0.js","line":1,"sink":"eval"}]}');
+  : JSON.stringify({ candidates: [{ title: 'X', file: (p.match(/SOURCE FILE \(untrusted data\): (\S+)/) || [])[1] || 'f0.js', line: 1, sink: 'eval' }] }));
 
 test('the LLM call budget is a hard ceiling, not a suggestion', async () => {
   let actual = 0;
