@@ -1,5 +1,6 @@
 // Layer 2 entry point.
 import { runTaintEngine } from './engine.js';
+import { libraryMode, withLibrarySourcesSuppressed, mergeLibraryDifferential, hasCallerControlledParams } from './library-sources.js';
 import { annotateProvenClean } from './proven-clean.js';
 import { CATALOG, matchSource, matchSinkOrSanitizer, _catalogSize } from './catalog.js';
 import { applyPathFeasibility, buildConstantFnMap } from './path-feasibility.js';
@@ -78,12 +79,18 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // DAG-05: the session decides warm or cold from content fingerprints (it needs the
   // call graph and class hierarchy built above) and restores typed contexts.
   const incrementalSession = beginIncrementalSession({ enabled: incrementalEnabled, opts, perFileIR, callGraph, cha: classHierarchy });
+  // Narrowed library model (library-sources.js): a first pass with the library source held off says which findings exist without it. It
+  // gets a fresh summary cache and no incremental hooks, so it cannot disturb the cached state of the real pass below.
+  const libraryBase = (libraryMode() === 'narrow' && hasCallerControlledParams(callGraph.functions.values()))
+    ? withLibrarySourcesSuppressed(() => runTaintEngine(perFileIR, callGraph, { ...opts, onProgress: undefined, _pointsTo: pointsToGraph || undefined, _cha: classHierarchy || undefined }))
+    : null;
   let findings = runTaintEngine(perFileIR, callGraph, {
     ...opts,
     ...engineOptionsFor(incrementalSession),
     _pointsTo: pointsToGraph || undefined,
     _cha: classHierarchy || undefined,
   });
+  if (libraryBase) mergeLibraryDifferential(libraryBase, findings);
   const engineOutput = findings;
   // DAG-05: provenance + persistence happen right after the engine, on the engine's own array.
   const incrementalStats = finishIncrementalSession(incrementalSession, engineOutput);

@@ -11,6 +11,8 @@
 //
 // The rule does not decide whether a caller passes attacker text; the finding says so.
 
+import { libraryMode, isByDesignParamName, isRoleParamName } from '../dataflow/library-sources.js';
+
 const FILE_RE = /\.(?:[cm]?[jt]s)$/i;
 const EXEC_CALL = /(?<![\w$.])(?:(?:child_process|cp|childProcess)\.)?(exec|execSync)\s*\(\s*/g;
 const SANITIZED = /sanitiz|escape|quote|shellEscape|parseInt|parseFloat|Number\s*\(|encodeURIComponent|basename|replace\s*\(\s*\/\[\^/i;
@@ -37,8 +39,12 @@ function interpolatedNames(tpl) {
 
 // A parameter of a library function is caller input, not attacker input, unless the operator says the library's callers are
 // untrusted: the same opt-in as the taint engine's caller-controlled source (`js-src-caller-controlled-param`), read per call.
+// Under the narrowed model (`1`/`narrow`, dataflow/library-sources.js) a parameter that is the command by its name (`cmd`, `args`, `script`)
+// or code/a callback by design is not reported here; engine.js (`_dropLibraryPurposeFindings`) then removes the findings of a package whose
+// own manifest or main export says it runs commands, since only the engine holds the manifests.
 export function scanJsExecParamInterpolation(fp, src) {
-  if (process.env.AGENTIC_SECURITY_LIBRARY_SOURCES !== '1') return [];
+  const mode = libraryMode();
+  if (mode === 'off') return [];
   if (!FILE_RE.test(fp) || typeof src !== 'string' || src.length > 800_000 || !/\bexec(?:Sync)?\s*\(/.test(src)) return [];
   if (/(?:^|\/)(?:__tests__|tests?|spec|fixtures?|scripts?|bin)\//i.test(fp) || /\.(?:test|spec)\.[cm]?[jt]s$/i.test(fp)) return [];
   if (!/child_process/.test(src)) return [];
@@ -61,10 +67,14 @@ export function scanJsExecParamInterpolation(fp, src) {
       }
     }
     if (!tpl || tpl.includes('\n')) continue;
-    const bad = interpolatedNames(tpl).filter((n) => fn.params.includes(n))
+    let bad = interpolatedNames(tpl).filter((n) => fn.params.includes(n))
       .filter((n) => !new RegExp(`\\b${n.replace(/\$/g, '\\$')}\\s*=(?!=)[^;\\n]*(?:${SANITIZED.source})`, 'i').test(body))
       .filter((n) => !new RegExp(`(?:${SANITIZED.source})[\\w$.]*\\s*\\(\\s*${n.replace(/\$/g, '\\$')}\\b`, 'i').test(body));
     if (!bad.length) continue;
+    if (mode === 'narrow') {
+      bad = bad.filter((n) => !isByDesignParamName(n) && !isRoleParamName(n, 'cmd'));
+      if (!bad.length) continue;
+    }
     const line = lineOf(src, tplAt);
     const id = `js-exec-param-interpolation:${fp}:${line}`;
     if (seen.has(id)) continue;

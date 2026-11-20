@@ -355,10 +355,47 @@ function collectExports(program, out) {
   }
 }
 // A parameter whose declared type cannot carry text (a TypeScript number, boolean, or a function type) is not an injection carrier.
-const NON_TEXT_TS = new Set(['TSNumberKeyword', 'TSBooleanKeyword', 'TSFunctionType', 'TSBigIntKeyword', 'TSSymbolKeyword', 'TSVoidKeyword', 'TSNeverKeyword']);
-function callerControllable(ident) {
+// The same holds for a JSDoc `@param {Function} name` (or `{function(...)}`, an arrow type, `{number}`, `{boolean}`) written on the function, and
+// for a TypeScript reference to the global `Function` type or a union every member of which is one of these.
+const NON_TEXT_TS = new Set(['TSNumberKeyword', 'TSBooleanKeyword', 'TSFunctionType', 'TSBigIntKeyword', 'TSSymbolKeyword', 'TSVoidKeyword', 'TSNeverKeyword', 'TSConstructorType']);
+const nonTextTs = (t) => !!t && (NON_TEXT_TS.has(t.type)
+  || (t.type === 'TSTypeReference' && t.typeName?.type === 'Identifier' && /^(?:Function|CallableFunction|NewableFunction)$/.test(t.typeName.name))
+  || (t.type === 'TSParenthesizedType' && nonTextTs(t.typeAnnotation))
+  || (t.type === 'TSUnionType' && (t.types || []).length > 0 && t.types.every((u) => nonTextTs(u) || u.type === 'TSUndefinedKeyword' || u.type === 'TSNullKeyword') && t.types.some(nonTextTs)));
+const NON_TEXT_JSDOC = /^(?:\(?\s*)?(?:Function|function\s*\(.*|\(.*\)\s*=>.*|number|boolean|bigint|symbol|Number|Boolean)(?:\s*\))?$/;
+function nonTextJsdoc(type) {
+  const parts = String(type || '').replace(/^\s*[?!]/, '').split('|').map((x) => x.trim()).filter((x) => x && !/^(?:null|undefined|void)$/.test(x));
+  return parts.length > 0 && parts.every((x) => NON_TEXT_JSDOC.test(x));
+}
+// `@param {Type} name` tags of the JSDoc block nearest above a function (on the function itself, or on the declaration, export, assignment or
+// property that holds it). Returns a Map name -> type text, or null.
+function jsdocParamTypes(fnPath) {
+  let p = fnPath; let comments = null;
+  for (let i = 0; p && i < 4 && !comments; i++, p = p.parentPath) {
+    const lc = p.node?.leadingComments;
+    if (Array.isArray(lc) && lc.length) { const last = lc[lc.length - 1]; if (last.type === 'CommentBlock' && last.value.startsWith('*')) comments = last.value; }
+    if (p.node && /Statement$|Declaration$|^ObjectProperty$|^ObjectMethod$|^ClassMethod$/.test(p.node.type) && p !== fnPath && !comments) break;
+  }
+  if (!comments) return null;
+  const out = new Map();
+  // A balanced-brace scan rather than a nested-quantifier pattern: `{function(): {a: string}}` nests.
+  for (const tag of comments.matchAll(/@(?:param|arg|argument)\b/g)) {
+    let i = tag.index + tag[0].length;
+    while (i < comments.length && /\s/.test(comments[i])) i++;
+    if (comments[i] !== '{') continue;
+    let depth = 0; let j = i;
+    for (; j < comments.length; j++) { if (comments[j] === '{') depth++; else if (comments[j] === '}' && --depth === 0) break; }
+    if (depth !== 0) continue;
+    const name = /^\s+\[?([A-Za-z_$][\w$]*)/.exec(comments.slice(j + 1, j + 200));
+    if (name) out.set(name[1], comments.slice(i + 1, j));
+  }
+  return out.size ? out : null;
+}
+function callerControllable(ident, jsdocTypes = null) {
   const t = ident.typeAnnotation?.typeAnnotation;
-  return !(t && NON_TEXT_TS.has(t.type));
+  if (nonTextTs(t)) return false;
+  if (jsdocTypes && jsdocTypes.has(ident.name) && nonTextJsdoc(jsdocTypes.get(ident.name))) return false;
+  return true;
 }
 
 function fnQid(file, scopeName, name, line) {
@@ -388,9 +425,10 @@ export function parseJsFile(file, code) {
     }
     return !!name && exportsOf.names.has(name) && node._topLevel === true;
   };
-  const enterFn = (name, scopeName, node, params) => {
+  const enterFn = (name, scopeName, node, params, fnPath = null) => {
     const line = node.loc?.start?.line || 1;
     const exported = isExportedFunction(node, name);
+    const jsdocTypes = exported ? jsdocParamTypes(fnPath) : null;
     const serverAction = (exported && exportsOf.useServer === true)
       || ((node?.body?.directives || []).some((d) => d.value?.value === 'use server'));
     const qid = fnQid(file, scopeName, name, line);
@@ -439,7 +477,7 @@ export function parseJsFile(file, code) {
         }
         // A parameter of a function the module EXPORTS is supplied by whoever calls the library: the weak caller-controlled source (the same
         // fact the Haskell IR states as `hs:caller-controlled`). The IR states the fact; the catalog decides whether it is a source.
-        if (exported && resolvedIdent?.type === 'Identifier' && callerControllable(resolvedIdent)) {
+        if (exported && resolvedIdent?.type === 'Identifier' && callerControllable(resolvedIdent, jsdocTypes)) {
           paramAnnotations.push({ index: idx, name: resolvedIdent.name, decorator: 'js:caller-controlled' });
         }
         // Next.js server actions: a function exported from a 'use server' module, or one whose own body starts with the
@@ -551,7 +589,7 @@ export function parseJsFile(file, code) {
         FunctionDeclaration: {
           enter(path) {
             const parentName = stack[stack.length - 1]?.name || '';
-            enterFn(path.node.id?.name || 'anon', parentName, path.node, path.node.params || []);
+            enterFn(path.node.id?.name || 'anon', parentName, path.node, path.node.params || [], path);
           },
           exit() { exitFn(); },
         },
@@ -565,7 +603,7 @@ export function parseJsFile(file, code) {
             }
             if (!name && parent?.type === 'ObjectProperty' && parent.key) name = parent.key.name || String(parent.key.value);
             const parentName = stack[stack.length - 1]?.name || '';
-            enterFn(name || 'anon', parentName, path.node, path.node.params || []);
+            enterFn(name || 'anon', parentName, path.node, path.node.params || [], path);
           },
           exit() { exitFn(); },
         },
@@ -579,7 +617,7 @@ export function parseJsFile(file, code) {
             }
             if (!name && parent?.type === 'ObjectProperty' && parent.key) name = parent.key.name || String(parent.key.value);
             const parentName = stack[stack.length - 1]?.name || '';
-            enterFn(name || 'anon', parentName, path.node, path.node.params || []);
+            enterFn(name || 'anon', parentName, path.node, path.node.params || [], path);
           },
           exit(path) {
             // An arrow with an EXPRESSION body (`(req) => req.query.c`) returns that expression. It has no ReturnStatement, so the function used to
@@ -602,7 +640,7 @@ export function parseJsFile(file, code) {
             path.node._ownerClass = cls;
             const className = cls?.id?.name || 'anon';
             const methodName = path.node.key?.name || 'anon';
-            enterFn(methodName, className, path.node, path.node.params || []);
+            enterFn(methodName, className, path.node, path.node.params || [], path);
           },
           exit() { exitFn(); },
         },
@@ -610,7 +648,7 @@ export function parseJsFile(file, code) {
           enter(path) {
             const methodName = path.node.key?.name || 'anon';
             const parentName = stack[stack.length - 1]?.name || '';
-            enterFn(methodName, parentName, path.node, path.node.params || []);
+            enterFn(methodName, parentName, path.node, path.node.params || [], path);
           },
           exit() { exitFn(); },
         },

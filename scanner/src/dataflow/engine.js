@@ -43,6 +43,10 @@
 // treats a sanitizer call as clearing the tainted path on its own.
 
 import { matchSource, matchSinkOrSanitizer, matchMemberWriteSink, matchAnnotationParams, matchAnnotationParamSources, CATALOG as _CATALOG_ENTRIES } from './catalog.js';
+import { libraryMode, createLibraryPolicy, judgeLibraryFinding } from './library-sources.js';
+import { sanitizerCoversFinding } from './sanitizer-gate.js';
+// The narrowed library model's per-scan policy (package purpose cache), set at the start of runTaintEngine; null unless the mode is `narrow`.
+let _libraryPolicy = null;
 import { functionRecord } from '../ir/callgraph.js';
 import { accessPathOf, isCoveredBy, hasTaintedDescendant, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual, pathIsCoveredByPrefix } from './access-paths.js';
 import { aliasesForVar } from './points-to.js';
@@ -1282,6 +1286,16 @@ function _leadingLiteral(expr) {
   if (expr.kind === 'tpl') { const p0 = (expr.parts || [])[0]; return p0 && p0.kind === 'literal' ? String(p0.value ?? '') : null; }
   return null;
 }
+// The leftmost piece of a concatenation or template (an empty leading literal skipped), or the expression itself.
+function _leadingPiece(expr) {
+  if (!expr) return null;
+  if (expr.kind === 'binary') return _leadingPiece(expr.left);
+  if (expr.kind === 'tpl') {
+    const parts = (expr.parts || []).filter((p) => !(p && p.kind === 'literal' && (p.value === '' || p.value == null)));
+    return parts.length ? _leadingPiece(parts[0]) : null;
+  }
+  return expr;
+}
 function _staticPrefixSatisfied(argExprs, requireStaticPrefix) {
   const { index, pattern } = requireStaticPrefix;
   const lead = _leadingLiteral((argExprs || [])[index]);
@@ -1521,6 +1535,9 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
           line,
           argIndex: taintedArgIdx,
           callee: calleeExpr,
+          // The shape of the tainted argument, read by the narrowed library model (library-sources.js): is it a concatenation or template
+          // (the value embedded in a larger string) and is its leftmost piece tainted (who chooses the start of a URL or a path).
+          _argShape: { composite: !!taintedArgExpr && (taintedArgExpr.kind === 'binary' || taintedArgExpr.kind === 'tpl'), leadTainted: (() => { const lp = _leadingPiece(taintedArgExpr); return !!lp && lp.kind !== 'literal' && exprTaint(lp, state, callContext); })() },
           sourceProvenance: (traceForThisFinding[0]?.provenance) || null,
           trace: traceForThisFinding,
         });
@@ -1840,7 +1857,9 @@ function _mergeSummaryFindings(callContext, callerQid, sum, via, callSite) {
     const key = _findingKey(f);
     if (callContext._findingKeys.has(key)) continue;
     callContext._findingKeys.add(key);
-    let out = { ...f, _funcQid: callerQid || null, _via: via };
+    // `_hops`: the functions the finding has been merged through, starting at the one holding the sink. The narrowed library model
+    // (library-sources.js `callDistance`) reads it to place the sink relative to the exported function a parameter belongs to.
+    let out = { ...f, _funcQid: callerQid || null, _via: via, _hops: [...(Array.isArray(f._hops) && f._hops.length ? f._hops : [f._funcQid || null]), callerQid || null].slice(0, 32) };
     const tr = Array.isArray(f.trace) ? f.trace : [];
     if (tr.some((t) => t && (t.isParam || (t.from && t.from.length)))) {
       const resolved = _resolveParams(tr, callSite ? inherited() : []).slice(0, 5);
@@ -2642,7 +2661,7 @@ function analyzeFunction(fn, entryState, callContext) {
   // origin like any other source read: record it, so the evidence chain of a finding that rests on it names where the value came from.
   if (callContext && Array.isArray(callContext._taintSources) && Array.isArray(fn.paramAnnotations) && fn.paramAnnotations.length) {
     for (const r of matchAnnotationParamSources(fn.paramAnnotations, fn.file)) {
-      if (!callContext._taintSources.some((x) => x.varName === r.name && x.sourceId === r.id)) callContext._taintSources.push({ varName: r.name, sourceId: r.id, sourceLabel: r.label, provenance: r.provenance, line: fn.line || 0, file: fn.file || null, annotation: true });
+      if (!callContext._taintSources.some((x) => x.varName === r.name && x.sourceId === r.id)) callContext._taintSources.push({ varName: r.name, sourceId: r.id, sourceLabel: r.label, provenance: r.provenance, line: fn.line || 0, file: fn.file || null, annotation: true, fnQid: fn.qid, paramName: r.name });
     }
   }
   const deadlineMs = (callContext && typeof callContext.deadlineMs === 'number') ? callContext.deadlineMs : Infinity;
@@ -2844,6 +2863,7 @@ export const INCOMPLETE_REASONS = Object.freeze({
 
 export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   _incomplete = new Map();
+  _libraryPolicy = libraryMode() === 'narrow' ? createLibraryPolicy({ fileContents: opts.fileContents || null, manifestContents: opts.manifestContents || null }) : null;
   const all = [];
   const seen = new Set();
   const fnLimit = opts.fnLimit || 5000;
@@ -3451,7 +3471,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // the gate that gives their findings a chance to be reported only once a
   // genuine caller is established.
   function _collectFindings(attributedFn, srcFindings) {
-    for (const f of srcFindings) {
+    for (let f of srcFindings) {
       // SARD_80_F1 W4.C21/C22 — prefer the finding's OWN `file` (now stamped
       // at discovery time inside analyzeFunction, using the function that
       // ACTUALLY produced it) over `attributedFn.file`. `attributedFn` here
@@ -3466,6 +3486,12 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       // this fix.
       const file = f.file || attributedFn.file;
       if (!_hasRequestOrigin(f)) continue;
+      // Narrowed library model: a finding resting only on caller-controlled parameters is reported only when library-sources.js keeps it.
+      if (_libraryPolicy) {
+        const lib = judgeLibraryFinding(f, file, { mode: 'narrow', policy: _libraryPolicy, sanitizerCovers: sanitizerCoversFinding });
+        if (lib.library && !lib.keep) continue;
+        if (lib.library) f = { ...f, _librarySource: true, _libraryParam: lib.param || null };
+      }
       const key = `${f.sinkId}:${file}:${f.line}${f.siteKey ? ':' + f.siteKey : ''}`;
       // DAG-05: a duplicate is still part of what THIS function contributed (the first
       // collector may be a function that later changes), so it is recorded; it is not re-emitted.
@@ -3508,6 +3534,8 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         // backward-slice annotation was permanently a no-op regardless of
         // AGENTIC_SECURITY_BACKWARD_SLICE.
         ...(f._funcQid ? { _funcQid: f._funcQid } : {}),
+        // The narrowed library model's mark for a finding it judged and kept (library-sources.js `mergeLibraryDifferential` reads it).
+        ...(f._librarySource === true ? { _librarySource: true, _libraryParam: f._libraryParam || null } : {}),
         // argIndex: which sink argument is the tainted one (a number, or the
         // literal 'all'/'rhs') — set upstream at the finding's creation site
         // but, exactly like `_funcQid`/`callee` above, silently dropped by
