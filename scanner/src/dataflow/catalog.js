@@ -257,9 +257,10 @@ export const CATALOG = [
   // matchAnnotationParams, which is called once per function against the IR's
   // paramAnnotations side-channel.
   // A parameter of a function a JavaScript/TypeScript module exports (parser-js.js states it as `js:caller-controlled`): the library's caller
-  // supplies it. Weaker than request input, and OFF unless AGENTIC_SECURITY_LIBRARY_SOURCES=1 (`optIn`): measured on the independent population's
-  // development split before it is turned on by default.
-  { kind: 'source', id: 'js-src-caller-controlled-param', language: 'js', framework: 'library', match: { type: 'annotation', name: 'js:caller-controlled' }, label: 'parameter of an exported function (caller-controlled)', provenance: 'caller-argument', optIn: 'AGENTIC_SECURITY_LIBRARY_SOURCES' },
+  // supplies it. Weaker than request input, and OFF unless AGENTIC_SECURITY_LIBRARY_SOURCES is set (`optIn`, `optInValues`): `1`/`narrow` is the
+  // narrowed model of library-sources.js (`narrowParams`: a parameter that is code or a callback by its name is not seeded at all, and the
+  // engine judges every finding resting only on this source); `broad` is the original every-parameter, every-sink model.
+  { kind: 'source', id: 'js-src-caller-controlled-param', language: 'js', framework: 'library', match: { type: 'annotation', name: 'js:caller-controlled' }, label: 'parameter of an exported function (caller-controlled)', provenance: 'caller-argument', optIn: 'AGENTIC_SECURITY_LIBRARY_SOURCES', optInValues: ['1', 'narrow', 'broad'], narrowParams: true },
   { kind: 'source', id: 'java-spring-requestparam',  language: 'java', framework: 'spring', match: { type: 'annotation', name: 'RequestParam' },  label: '@RequestParam (Spring)' },
   { kind: 'source', id: 'java-spring-pathvariable',  language: 'java', framework: 'spring', match: { type: 'annotation', name: 'PathVariable' },  label: '@PathVariable (Spring)' },
   { kind: 'source', id: 'java-spring-requestbody',   language: 'java', framework: 'spring', match: { type: 'annotation', name: 'RequestBody' },   label: '@RequestBody (Spring)' },
@@ -2209,6 +2210,7 @@ import { EXPANDED_SANITIZERS } from './catalog-expanded.js';
 import { HASKELL_CATALOG } from './catalog-haskell.js';
 import { FRAMEWORK_MODELS } from './catalog-framework-models.js';
 import { cppExtRe } from '../ir/parser-cpp.js';
+import { libraryMode, isByDesignParamName, librarySourcesSuppressed } from './library-sources.js';
 
 // Language-scope guard. `file` is optional — when absent, behavior is
 // unchanged from before this guard existed (every entry is allowed).
@@ -2747,7 +2749,9 @@ export function matchMemberWriteSink(targetPath, file, receiverType) {
 // consulted once per function, against the IR's paramAnnotations side-channel,
 // by engine.js's _unionAnnotationTaint before each analyzeFunction call.
 // An entry carrying `optIn` matches only while that environment variable is exactly '1' (read per call, so a scan can turn it on or off).
-const _optedIn = (h) => !h.optIn || process.env[h.optIn] === '1';
+const _optedIn = (h) => !h.optIn || (!(h.narrowParams && librarySourcesSuppressed()) && (Array.isArray(h.optInValues) ? h.optInValues.includes(process.env[h.optIn]) : process.env[h.optIn] === '1'));
+// `narrowParams`: under the narrowed library model a parameter that is code, a command or a callback by its name (library-sources.js) is not a source.
+const _paramAllowed = (h, name) => !h.narrowParams || libraryMode() !== 'narrow' || !isByDesignParamName(name);
 
 export function matchAnnotationParams(paramAnnotations, file) {
   const tainted = new Set();
@@ -2756,7 +2760,7 @@ export function matchAnnotationParams(paramAnnotations, file) {
     const raw = ANNOTATION_INDEX.get(pa.decorator);
     if (!raw) continue;
     const hits = filterByProvenance(raw)
-      .filter(h => _languageAllowed(h, file) && _optedIn(h))
+      .filter(h => _languageAllowed(h, file) && _optedIn(h) && _paramAllowed(h, pa.name))
       .filter(h => h.kind === 'source');
     if (hits.length) {
       tainted.add(pa.name);
@@ -2773,7 +2777,7 @@ export function matchAnnotationParamSources(paramAnnotations, file) {
   for (const pa of paramAnnotations) {
     const raw = ANNOTATION_INDEX.get(pa.decorator);
     if (!raw) continue;
-    const hit = filterByProvenance(raw).filter(h => _languageAllowed(h, file) && _optedIn(h)).find(h => h.kind === 'source');
+    const hit = filterByProvenance(raw).filter(h => _languageAllowed(h, file) && _optedIn(h) && _paramAllowed(h, pa.name)).find(h => h.kind === 'source');
     if (hit) out.push({ name: pa.name, id: hit.id, label: hit.label || pa.decorator, provenance: hit.provenance || null });
   }
   return out;

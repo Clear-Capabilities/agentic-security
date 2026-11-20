@@ -81,6 +81,14 @@ function _sanitizerIndex() {
   return _index;
 }
 
+/** Does any of these observed sanitizer callees neutralise the finding's threat class? (Used by the narrowed library model.) */
+export function sanitizerCoversFinding(names, f) {
+  const fam = familyOfFinding(f);
+  if (!fam || !Array.isArray(names)) return false;
+  const index = _sanitizerIndex();
+  return names.some((n) => { const fams = index.get(n); return !!fams && (fams.has(fam) || fams.has('*')); });
+}
+
 export function _sanitizerFamilies() {
   const out = new Set();
   for (const fams of _sanitizerIndex().values()) for (const f of fams) out.add(f);

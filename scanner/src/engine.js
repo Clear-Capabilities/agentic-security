@@ -165,6 +165,7 @@ import { scanJsMarkupMarkSafe } from './sast/js-markup-mark-safe.js';
 import { scanJsMixedTextMarkup } from './sast/js-mixed-text-markup.js';
 import { scanJsIncompleteRegexEscape } from './sast/js-incomplete-regex-escape.js';
 import { scanJsExecParamInterpolation } from './sast/js-exec-param-interpolation.js';
+import { dropLibraryPurposeFindings } from './dataflow/library-sources.js';
 import { scanPythonRunWrittenCode } from './sast/python-run-written-code.js';
 import { scanSourceTargetAuthz } from './sast/source-target-authz.js';
 import { scanOAuthEmailAccountLink } from './sast/oauth-email-account-link.js';
@@ -9445,6 +9446,8 @@ function _deterministicFileTimings(timings) {
   setProgress({current:i,total:files.length,file:"Config file cross-ref...",phase:"Linking"});aLogic.push(...(runDetector(_detectorErrors,'<project>','scanConfigFiles',()=>scanConfigFiles(fc))||[]));
   setProgress({current:i,total:files.length,file:"OSV vulnerability database...",phase:"SCA"});
   const allFileContents={...fc, ...depFileContents};
+  // Narrowed library model: the shell-interpolation rule's findings in a package that exists to run commands (dataflow/library-sources.js).
+  dropLibraryPurposeFindings(aF, { fileContents: fc, manifestContents: depFileContents });
   // The opt-in live advisory feeds are fetched HERE, as soon as the manifests are in hand, not after the expensive passes: a scan that is
   // killed or times out later still has its feed data on disk (the lookup used to run ~1447 s into a 1460 s scan, so an early kill looked like
   // "feed unavailable"). The inputs are the file contents only, so the result is the same as when this ran at the end.
@@ -9760,6 +9763,8 @@ function _deterministicFileTimings(timings) {
         // v0.69 — incremental cache inputs (used when AGENTIC_SECURITY_INCREMENTAL=1).
         scanRoot,
         fileContents: fc,
+        // The package.json files of the scan (the narrowed library model reads each package's own purpose from them).
+        manifestContents: depFileContents,
         // Live per-function progress from the engine's own dominant loop
         // (dataflow/engine.js's runTaintEngine) — the pre-passes before it
         // (fixed-point pre-pass, class-field pass, k=2 pass) aren't
