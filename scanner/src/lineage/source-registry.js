@@ -92,6 +92,7 @@ export const AGENT_TOOL_REFINEMENT = Object.freeze({
   'js-mcp-call-args':         Object.freeze({ category: 'ai-model-output',       status: 'partial', why: 'as py-mcp-tool' }),
   'js-mcp-request-params':    Object.freeze({ category: 'ai-model-output',       status: 'partial', why: 'as py-mcp-tool' }),
   'js-mcp-extra-args':        Object.freeze({ category: 'ai-model-output',       status: 'partial', why: 'as py-mcp-tool' }),
+  'js-mcp-tool-handler-args': Object.freeze({ category: 'ai-model-output',       status: 'partial', why: 'as py-mcp-tool' }),
   'js-mcp-tool-result':       Object.freeze({ category: 'ai-tool-result',        status: 'modeled', why: 'literally a tool result' }),
   'py-mcp-tool-result':       Object.freeze({ category: 'ai-tool-result',        status: 'modeled', why: 'literally a tool result' }),
   'js-mcp-resource-contents': Object.freeze({ category: 'ai-retrieved-document', status: 'modeled', why: 'an MCP resource IS a retrieved document' }),

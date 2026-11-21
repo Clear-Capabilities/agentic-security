@@ -1,0 +1,559 @@
+@@@ weak-password-hash | vulnerable | src/Ferry/Accounts/Register.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Ferry.Accounts.Register (registerRoutes) where
+
+import Web.Scotty
+import Crypto.Hash (hashWith, SHA256(..))
+import Database.PostgreSQL.Simple
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteArray.Encoding as BA
+import qualified Data.ByteString as BS
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+
+registerRoutes :: Connection -> ScottyM ()
+registerRoutes conn = post "/accounts" $ do
+  email <- param "email" :: ActionM T.Text
+  password <- param "password" :: ActionM T.Text
+  let digest = hashWith SHA256 (TE.encodeUtf8 password)  --@@
+      stored = TE.decodeUtf8 (BA.convertToBase BA.Base16 digest :: BS.ByteString)
+  _ <- liftIO (execute conn "INSERT INTO passengers (email, password_hash) VALUES (?, ?)" (email, stored))
+  text "account created"
+
+@@@ weak-password-hash | safe | src/Ferry/Accounts/Signup.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Ferry.Accounts.Signup (signupRoutes) where
+
+import Web.Scotty
+import Crypto.BCrypt (hashPasswordUsingPolicy, slowerBcryptHashingPolicy)
+import Database.PostgreSQL.Simple
+import Network.HTTP.Types.Status (status500)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+
+signupRoutes :: Connection -> ScottyM ()
+signupRoutes conn = post "/accounts" $ do
+  email <- param "email" :: ActionM T.Text
+  password <- param "password" :: ActionM T.Text
+  hashed <- liftIO (hashPasswordUsingPolicy slowerBcryptHashingPolicy (TE.encodeUtf8 password))  --@@
+  case hashed of
+    Nothing -> status status500 >> text "could not store the password"
+    Just stored -> do
+      _ <- liftIO (execute conn "INSERT INTO passengers (email, password_hash) VALUES (?, ?)" (email, TE.decodeUtf8 stored))
+      text "account created"
+
+@@@ weak-password-hash | vulnerable | src/Ferry/Crew/Credentials.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, DeriveGeneric #-}
+module Ferry.Crew.Credentials (CrewAPI, crewServer) where
+
+import Servant
+import Crypto.Hash (Digest, MD5, hash)
+import Database.SQLite.Simple
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import GHC.Generics (Generic)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+
+data NewCrew = NewCrew { badge :: T.Text, passphrase :: T.Text } deriving Generic
+instance FromJSON NewCrew
+
+type CrewAPI = "crew" :> ReqBody '[JSON] NewCrew :> Post '[JSON] NoContent
+
+crewServer :: Connection -> Server CrewAPI
+crewServer conn newCrew = do
+  let digest = hash (TE.encodeUtf8 (passphrase newCrew)) :: Digest MD5  --@@
+  liftIO (execute conn "INSERT INTO crew (badge, passphrase_hash) VALUES (?, ?)" (badge newCrew, show digest))
+  pure NoContent
+
+@@@ weak-password-hash | safe | src/Ferry/Crew/Onboard.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, DeriveGeneric #-}
+module Ferry.Crew.Onboard (OnboardAPI, onboardServer) where
+
+import Servant
+import Crypto.Scrypt (encryptPassIO, defaultParams, Pass(..), getEncryptedPass)
+import Database.SQLite.Simple
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import GHC.Generics (Generic)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+
+data NewCrew = NewCrew { badge :: T.Text, passphrase :: T.Text } deriving Generic
+instance FromJSON NewCrew
+
+type OnboardAPI = "crew" :> ReqBody '[JSON] NewCrew :> Post '[JSON] NoContent
+
+onboardServer :: Connection -> Server OnboardAPI
+onboardServer conn newCrew = do
+  encrypted <- liftIO (encryptPassIO defaultParams (Pass (TE.encodeUtf8 (passphrase newCrew))))  --@@
+  liftIO (execute conn "INSERT INTO crew (badge, passphrase_hash) VALUES (?, ?)" (badge newCrew, TE.decodeUtf8 (getEncryptedPass encrypted)))
+  pure NoContent
+
+@@@ weak-password-hash | vulnerable | src/Ferry/Admin/SetPassword.hs
+module Ferry.Admin.SetPassword (main) where
+
+import qualified Crypto.Hash.SHA1 as SHA1
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as BC
+import System.Environment (getArgs)
+import System.IO (hSetEcho, hGetLine, stdin)
+
+operatorsFile :: FilePath
+operatorsFile = "/etc/ferry/operators"
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [username] -> do
+      hSetEcho stdin False
+      secret <- hGetLine stdin
+      hSetEcho stdin True
+      let digest = SHA1.hash (BC.pack secret)  --@@
+      BC.appendFile operatorsFile (BC.pack username <> ":" <> B16.encode digest <> "\n")
+    _ -> putStrLn "usage: ferry-set-password <username>"
+
+@@@ weak-password-hash | safe | src/Ferry/Admin/Operators.hs
+module Ferry.Admin.Operators (main) where
+
+import Crypto.KDF.PBKDF2 (fastPBKDF2_SHA256, Parameters(..))
+import Crypto.Random (getRandomBytes)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as BC
+import System.Environment (getArgs)
+import System.IO (hSetEcho, hGetLine, stdin)
+
+operatorsFile :: FilePath
+operatorsFile = "/etc/ferry/operators"
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [username] -> do
+      hSetEcho stdin False
+      secret <- hGetLine stdin
+      hSetEcho stdin True
+      salt <- getRandomBytes 16 :: IO BS.ByteString
+      let digest = fastPBKDF2_SHA256 (Parameters 310000 32) (BC.pack secret) salt :: BS.ByteString  --@@
+      BC.appendFile operatorsFile (BC.pack username <> ":" <> B16.encode salt <> ":" <> B16.encode digest <> "\n")
+    _ -> putStrLn "usage: ferry-set-password <username>"
+
+@@@ weak-randomness | vulnerable | src/Tides/Portal/ResetCode.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Tides.Portal.ResetCode (resetRoutes) where
+
+import Web.Scotty
+import System.Random (randomRIO)
+import Control.Monad (replicateM)
+import Control.Monad.IO.Class (liftIO)
+import Data.IORef
+import qualified Data.Map.Strict as Map
+import qualified Data.Text.Lazy as TL
+
+type PendingResets = IORef (Map.Map TL.Text String)
+
+resetRoutes :: PendingResets -> (TL.Text -> String -> IO ()) -> ScottyM ()
+resetRoutes pending sendResetMail = post "/portal/reset" $ do
+  email <- param "email" :: ActionM TL.Text
+  code <- liftIO (replicateM 8 (randomRIO ('0', '9')))  --@@
+  liftIO (modifyIORef' pending (Map.insert email code))
+  liftIO (sendResetMail email code)
+  text "a reset code has been sent"
+
+@@@ weak-randomness | safe | src/Tides/Portal/Recovery.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Tides.Portal.Recovery (recoveryRoutes) where
+
+import Web.Scotty
+import Crypto.Random (getRandomBytes)
+import Control.Monad.IO.Class (liftIO)
+import Data.IORef
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.Map.Strict as Map
+import qualified Data.Text.Lazy as TL
+
+type PendingResets = IORef (Map.Map TL.Text String)
+
+recoveryRoutes :: PendingResets -> (TL.Text -> String -> IO ()) -> ScottyM ()
+recoveryRoutes pending sendResetMail = post "/portal/reset" $ do
+  email <- param "email" :: ActionM TL.Text
+  raw <- liftIO (getRandomBytes 6 :: IO BS.ByteString)  --@@
+  let code = BC.unpack (B16.encode raw)
+  liftIO (modifyIORef' pending (Map.insert email code))
+  liftIO (sendResetMail email code)
+  text "a reset code has been sent"
+
+@@@ weak-randomness | vulnerable | src/Tides/Portal/Session.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, DeriveGeneric #-}
+module Tides.Portal.Session (SessionAPI, sessionServer) where
+
+import Servant
+import System.Random (mkStdGen, randomRs)
+import Data.Time.Clock.POSIX (getPOSIXTime)
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import GHC.Generics (Generic)
+import qualified Data.Text as T
+
+data Login = Login { station :: T.Text, password :: T.Text } deriving Generic
+instance FromJSON Login
+
+type SessionAPI = "portal" :> "session" :> ReqBody '[JSON] Login :> Post '[JSON] T.Text
+
+sessionServer :: (T.Text -> T.Text -> IO Bool) -> (T.Text -> T.Text -> IO ()) -> Server SessionAPI
+sessionServer verify remember login = do
+  ok <- liftIO (verify (station login) (password login))
+  if not ok
+    then throwError err401
+    else do
+      now <- liftIO getPOSIXTime
+      let sessionId = T.pack (take 32 (randomRs ('a', 'z') (mkStdGen (floor (now * 1000)))))  --@@
+      liftIO (remember (station login) sessionId)
+      pure sessionId
+
+@@@ weak-randomness | safe | src/Tides/Portal/Login.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, DeriveGeneric #-}
+module Tides.Portal.Login (LoginAPI, loginServer) where
+
+import Servant
+import Crypto.Random (getRandomBytes)
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import GHC.Generics (Generic)
+import qualified Data.ByteArray.Encoding as BA
+import qualified Data.ByteString as BS
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+
+data Login = Login { station :: T.Text, password :: T.Text } deriving Generic
+instance FromJSON Login
+
+type LoginAPI = "portal" :> "session" :> ReqBody '[JSON] Login :> Post '[JSON] T.Text
+
+loginServer :: (T.Text -> T.Text -> IO Bool) -> (T.Text -> T.Text -> IO ()) -> Server LoginAPI
+loginServer verify remember login = do
+  ok <- liftIO (verify (station login) (password login))
+  if not ok
+    then throwError err401
+    else do
+      raw <- liftIO (getRandomBytes 24 :: IO BS.ByteString)  --@@
+      let sessionId = TE.decodeUtf8 (BA.convertToBase BA.Base64URLUnpadded raw)
+      liftIO (remember (station login) sessionId)
+      pure sessionId
+
+@@@ weak-randomness | vulnerable | src/Tides/Stations/ApiToken.hs
+module Tides.Stations.ApiToken (main) where
+
+import System.Random.MWC (createSystemRandom, uniformR)
+import Control.Monad (replicateM)
+import Data.Word (Word8)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as BC
+import System.Environment (getArgs)
+
+tokenFile :: FilePath
+tokenFile = "/etc/tides/station-tokens"
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [stationName] -> do
+      gen <- createSystemRandom
+      bytes <- replicateM 24 (uniformR (0, 255 :: Word8) gen)  --@@
+      let token = B16.encode (BS.pack bytes)
+      BC.appendFile tokenFile (BC.pack stationName <> " " <> token <> "\n")
+      BC.putStrLn token
+    _ -> putStrLn "usage: tides-issue-token <station>"
+
+@@@ weak-randomness | safe | src/Tides/Stations/IssueToken.hs
+module Tides.Stations.IssueToken (main) where
+
+import Crypto.Random (getRandomBytes)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as BC
+import System.Environment (getArgs)
+
+tokenFile :: FilePath
+tokenFile = "/etc/tides/station-tokens"
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [stationName] -> do
+      bytes <- getRandomBytes 24 :: IO BS.ByteString  --@@
+      let token = B16.encode bytes
+      BC.appendFile tokenFile (BC.pack stationName <> " " <> token <> "\n")
+      BC.putStrLn token
+    _ -> putStrLn "usage: tides-issue-token <station>"
+
+@@@ sensitive-logging | vulnerable | src/Vineyard/Payroll/Login.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Vineyard.Payroll.Login (loginRoutes) where
+
+import Web.Scotty
+import System.Log.FastLogger (LoggerSet, pushLogStrLn, toLogStr)
+import Network.HTTP.Types.Status (status401)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+loginRoutes :: LoggerSet -> (T.Text -> T.Text -> IO Bool) -> ScottyM ()
+loginRoutes logger verifyPicker = post "/payroll/login" $ do
+  picker <- param "picker" :: ActionM T.Text
+  password <- param "password" :: ActionM T.Text
+  liftIO (pushLogStrLn logger (toLogStr ("login attempt picker=" <> picker <> " password=" <> password)))  --@@
+  ok <- liftIO (verifyPicker picker password)
+  if ok then text "welcome back" else status status401 >> text "try again"
+
+@@@ sensitive-logging | safe | src/Vineyard/Payroll/SignIn.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Vineyard.Payroll.SignIn (signInRoutes) where
+
+import Web.Scotty
+import System.Log.FastLogger (LoggerSet, pushLogStrLn, toLogStr)
+import Network.HTTP.Types.Status (status401)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+signInRoutes :: LoggerSet -> (T.Text -> T.Text -> IO Bool) -> ScottyM ()
+signInRoutes logger verifyPicker = post "/payroll/login" $ do
+  picker <- param "picker" :: ActionM T.Text
+  password <- param "password" :: ActionM T.Text
+  liftIO (pushLogStrLn logger (toLogStr ("login attempt picker=" <> picker)))  --@@
+  ok <- liftIO (verifyPicker picker password)
+  if ok then text "welcome back" else status status401 >> text "try again"
+
+@@@ sensitive-logging | vulnerable | src/Vineyard/Payroll/Export.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module Vineyard.Payroll.Export (ExportAPI, exportServer) where
+
+import Servant
+import Control.Monad.Logger (runStdoutLoggingT, logInfoN)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+type ExportAPI =
+  "payroll" :> "export"
+    :> Header' '[Required] "Authorization" T.Text
+    :> QueryParam' '[Required] "period" T.Text
+    :> Get '[JSON] [T.Text]
+
+exportServer :: (T.Text -> IO Bool) -> (T.Text -> IO [T.Text]) -> Server ExportAPI
+exportServer tokenAllowed loadPeriod authorization period = do
+  liftIO (runStdoutLoggingT (logInfoN ("payroll export period=" <> period <> " authorization=" <> authorization)))  --@@
+  allowed <- liftIO (tokenAllowed authorization)
+  if allowed then liftIO (loadPeriod period) else throwError err401
+
+@@@ sensitive-logging | safe | src/Vineyard/Payroll/Extract.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module Vineyard.Payroll.Extract (ExtractAPI, extractServer) where
+
+import Servant
+import Control.Monad.Logger (runStdoutLoggingT, logInfoN)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+type ExtractAPI =
+  "payroll" :> "export"
+    :> Header' '[Required] "Authorization" T.Text
+    :> QueryParam' '[Required] "period" T.Text
+    :> Get '[JSON] [T.Text]
+
+extractServer :: (T.Text -> IO Bool) -> (T.Text -> IO [T.Text]) -> Server ExtractAPI
+extractServer tokenAllowed loadPeriod authorization period = do
+  liftIO (runStdoutLoggingT (logInfoN ("payroll export period=" <> period <> " token_prefix=" <> T.take 4 authorization <> "...")))  --@@
+  allowed <- liftIO (tokenAllowed authorization)
+  if allowed then liftIO (loadPeriod period) else throwError err401
+
+@@@ sensitive-logging | vulnerable | src/Vineyard/Payroll/Payout.hs
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+module Vineyard.Payroll.Payout (startPayoutWorker) where
+
+import Network.AMQP
+import Data.Aeson (FromJSON, eitherDecode)
+import GHC.Generics (Generic)
+import System.Log.Logger (infoM, warningM)
+import qualified Data.Text as T
+
+data Payout = Payout { pickerId :: Int, cardNumber :: T.Text, amountCents :: Int } deriving Generic
+instance FromJSON Payout
+
+startPayoutWorker :: Channel -> (Payout -> IO ()) -> IO ()
+startPayoutWorker chan settle = do
+  _ <- consumeMsgs chan "payroll.payouts" Ack (handlePayout settle)
+  pure ()
+
+handlePayout :: (Payout -> IO ()) -> (Message, Envelope) -> IO ()
+handlePayout settle (msg, env) =
+  case eitherDecode (msgBody msg) of
+    Left err -> warningM "payroll.payout" ("rejected payout message: " ++ err) >> rejectEnv env False
+    Right payout -> do
+      infoM "payroll.payout" ("settling picker " ++ show (pickerId payout) ++ " card " ++ T.unpack (cardNumber payout) ++ " cents " ++ show (amountCents payout))  --@@
+      settle payout
+      ackEnv env
+
+@@@ sensitive-logging | safe | src/Vineyard/Payroll/Settle.hs
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+module Vineyard.Payroll.Settle (startSettleWorker) where
+
+import Network.AMQP
+import Data.Aeson (FromJSON, eitherDecode)
+import GHC.Generics (Generic)
+import System.Log.Logger (infoM, warningM)
+import qualified Data.Text as T
+
+data Payout = Payout { pickerId :: Int, cardNumber :: T.Text, amountCents :: Int } deriving Generic
+instance FromJSON Payout
+
+startSettleWorker :: Channel -> (Payout -> IO ()) -> IO ()
+startSettleWorker chan settle = do
+  _ <- consumeMsgs chan "payroll.payouts" Ack (handlePayout settle)
+  pure ()
+
+handlePayout :: (Payout -> IO ()) -> (Message, Envelope) -> IO ()
+handlePayout settle (msg, env) =
+  case eitherDecode (msgBody msg) of
+    Left err -> warningM "payroll.payout" ("rejected payout message: " ++ err) >> rejectEnv env False
+    Right payout -> do
+      infoM "payroll.payout" ("settling picker " ++ show (pickerId payout) ++ " card ending " ++ T.unpack (T.takeEnd 4 (cardNumber payout)) ++ " cents " ++ show (amountCents payout))  --@@
+      settle payout
+      ackEnv env
+
+@@@ session-cookie | vulnerable | src/Rota/Keepers/Login.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Rota.Keepers.Login (loginRoutes) where
+
+import Web.Scotty
+import Web.Cookie
+import Network.HTTP.Types.Status (status401)
+import Control.Monad.IO.Class (liftIO)
+import Data.ByteString.Builder (toLazyByteString)
+import qualified Data.ByteString as BS
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
+
+loginRoutes :: (TL.Text -> TL.Text -> IO (Maybe BS.ByteString)) -> ScottyM ()
+loginRoutes authenticate = post "/rota/login" $ do
+  keeper <- param "keeper" :: ActionM TL.Text
+  password <- param "password" :: ActionM TL.Text
+  result <- liftIO (authenticate keeper password)
+  case result of
+    Nothing -> status status401 >> text "bad credentials"
+    Just sessionId -> do
+      let cookie = defaultSetCookie { setCookieName = "rota_session", setCookieValue = sessionId, setCookiePath = Just "/" }  --@@
+      setHeader "Set-Cookie" (TLE.decodeUtf8 (toLazyByteString (renderSetCookie cookie)))
+      text "signed in"
+
+@@@ session-cookie | safe | src/Rota/Keepers/SignIn.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Rota.Keepers.SignIn (signInRoutes) where
+
+import Web.Scotty
+import Web.Cookie
+import Network.HTTP.Types.Status (status401)
+import Control.Monad.IO.Class (liftIO)
+import Data.ByteString.Builder (toLazyByteString)
+import qualified Data.ByteString as BS
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
+
+signInRoutes :: (TL.Text -> TL.Text -> IO (Maybe BS.ByteString)) -> ScottyM ()
+signInRoutes authenticate = post "/rota/login" $ do
+  keeper <- param "keeper" :: ActionM TL.Text
+  password <- param "password" :: ActionM TL.Text
+  result <- liftIO (authenticate keeper password)
+  case result of
+    Nothing -> status status401 >> text "bad credentials"
+    Just sessionId -> do
+      let cookie = defaultSetCookie { setCookieName = "rota_session", setCookieValue = sessionId, setCookiePath = Just "/", setCookieHttpOnly = True, setCookieSecure = True, setCookieSameSite = Just sameSiteStrict, setCookieMaxAge = Just 3600 }  --@@
+      setHeader "Set-Cookie" (TLE.decodeUtf8 (toLazyByteString (renderSetCookie cookie)))
+      text "signed in"
+
+@@@ session-cookie | vulnerable | src/Rota/Keepers/Session.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Rota.Keepers.Session (sessionApp) where
+
+import Network.Wai
+import Network.HTTP.Types (status200, status401)
+import qualified Data.ByteString as BS
+
+sessionApp :: (Request -> IO (Maybe BS.ByteString)) -> Application
+sessionApp issueToken req respond = do
+  issued <- issueToken req
+  case issued of
+    Nothing -> respond (responseLBS status401 [] "sign in failed")
+    Just token ->
+      respond (responseLBS status200 [("Set-Cookie", "keeper_auth=" <> token <> "; Path=/; Max-Age=31536000")] "signed in")  --@@
+
+@@@ session-cookie | safe | src/Rota/Keepers/Token.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Rota.Keepers.Token (tokenApp) where
+
+import Network.Wai
+import Network.HTTP.Types (status200, status401)
+import qualified Data.ByteString as BS
+
+tokenApp :: (Request -> IO (Maybe BS.ByteString)) -> Application
+tokenApp issueToken req respond = do
+  issued <- issueToken req
+  case issued of
+    Nothing -> respond (responseLBS status401 [] "sign in failed")
+    Just token ->
+      respond (responseLBS status200 [("Set-Cookie", "keeper_auth=" <> token <> "; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=Strict")] "signed in")  --@@
+
+@@@ session-cookie | vulnerable | src/Rota/Lamps/Portal.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Rota.Lamps.Portal (lampLogin) where
+
+import Snap.Core
+import Control.Monad.IO.Class (liftIO)
+import Data.Time (getCurrentTime, addUTCTime)
+import qualified Data.ByteString as BS
+
+lampLogin :: (BS.ByteString -> BS.ByteString -> IO (Maybe BS.ByteString)) -> Snap ()
+lampLogin authenticate = method POST $ do
+  keeper <- getPostParam "keeper"
+  password <- getPostParam "password"
+  outcome <- case (keeper, password) of
+    (Just k, Just p) -> liftIO (authenticate k p)
+    _ -> pure Nothing
+  case outcome of
+    Nothing -> modifyResponse (setResponseStatus 401 "Unauthorized")
+    Just sessionId -> do
+      now <- liftIO getCurrentTime
+      let cookie = Cookie { cookieName = "lamp_session", cookieValue = sessionId, cookieExpires = Just (addUTCTime (365 * 24 * 3600) now), cookieDomain = Nothing, cookiePath = Just "/", cookieSecure = False, cookieHttpOnly = False }  --@@
+      modifyResponse (addResponseCookie cookie)
+      writeBS "signed in"
+
+@@@ session-cookie | safe | src/Rota/Lamps/Access.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Rota.Lamps.Access (lampAccess) where
+
+import Snap.Core
+import Control.Monad.IO.Class (liftIO)
+import Data.Time (getCurrentTime, addUTCTime)
+import qualified Data.ByteString as BS
+
+lampAccess :: (BS.ByteString -> BS.ByteString -> IO (Maybe BS.ByteString)) -> Snap ()
+lampAccess authenticate = method POST $ do
+  keeper <- getPostParam "keeper"
+  password <- getPostParam "password"
+  outcome <- case (keeper, password) of
+    (Just k, Just p) -> liftIO (authenticate k p)
+    _ -> pure Nothing
+  case outcome of
+    Nothing -> modifyResponse (setResponseStatus 401 "Unauthorized")
+    Just sessionId -> do
+      now <- liftIO getCurrentTime
+      let cookie = Cookie { cookieName = "lamp_session", cookieValue = sessionId, cookieExpires = Just (addUTCTime 3600 now), cookieDomain = Nothing, cookiePath = Just "/", cookieSecure = True, cookieHttpOnly = True }  --@@
+      modifyResponse (addResponseCookie cookie)
+      writeBS "signed in"

@@ -320,6 +320,10 @@ export const CATALOG = [
   { kind: 'source', id: 'js-mcp-call-args', language: 'js', framework: 'mcp', match: { type: 'member', object: 'params', prop: 'arguments' }, label: 'MCP tool call arguments', provenance: 'agent-tool' },
   { kind: 'source', id: 'js-mcp-request-params', language: 'js', framework: 'mcp', match: { type: 'member', object: 'request', prop: 'params' }, label: 'MCP request.params', provenance: 'agent-tool' },
   { kind: 'source', id: 'js-mcp-extra-args', language: 'js', framework: 'mcp', match: { type: 'member', object: 'extra', prop: 'arguments' }, label: 'MCP tool callback arguments', provenance: 'agent-tool' },
+  // The high-level SDK: `server.tool(name, schema, async ({ city }) => ...)` / `server.registerTool(name, config, handler)` hand the
+  // tool's arguments to the handler's first parameter (parser-js.js states it as `js:mcp-tool-handler`). The dominant way a
+  // TypeScript MCP server is written; the member forms above cover only the low-level request handler.
+  { kind: 'source', id: 'js-mcp-tool-handler-args', language: 'js', framework: 'mcp', match: { type: 'annotation', name: 'js:mcp-tool-handler' }, label: 'MCP tool handler arguments', provenance: 'agent-tool' },
 
   // TOOL OUTPUT is the other half of F5.3's shape (tool output -> model context
   // -> tool invocation). Content returned by ANOTHER tool or an MCP resource is
@@ -470,6 +474,15 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-stmt-executeQuery',  language: 'java', framework: 'jdbc',     match: { type: 'call', callee: 'executeQuery' },  argIndex: 0,
     vuln: { name: 'SQL Injection (Statement.executeQuery)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use PreparedStatement + setX(N, value). Never concatenate user input into the SQL string.' } },
+  // PostgreSQL JDBC bulk copy: the COPY statement is a SQL string the driver sends verbatim; there is no
+  // parameter binding for it, so a caller-controlled column or table name concatenated into it is injection.
+  // Receiver-scoped to the CopyManager idiom (`copyManager`, `getCopyAPI()`) so an unrelated copyOut() is not a sink.
+  { kind: 'sink', id: 'java-pg-copymanager-copyOut', language: 'java', framework: 'jdbc', match: { type: 'call', callee: 'copyOut', receiver: '(?:[Cc]opy|getCopyAPI)' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (PostgreSQL CopyManager.copyOut)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Build the COPY statement from fixed text; quote any identifier with the driver\'s quoting helper and never concatenate caller-controlled names into it.' } },
+  { kind: 'sink', id: 'java-pg-copymanager-copyIn', language: 'java', framework: 'jdbc', match: { type: 'call', callee: 'copyIn', receiver: '(?:[Cc]opy|getCopyAPI)' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (PostgreSQL CopyManager.copyIn)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Build the COPY statement from fixed text; quote any identifier with the driver\'s quoting helper and never concatenate caller-controlled names into it.' } },
   { kind: 'sink', id: 'java-stmt-executeUpdate', language: 'java', framework: 'jdbc',     match: { type: 'call', callee: 'executeUpdate' }, argIndex: 0,
     vuln: { name: 'SQL Injection (Statement.executeUpdate)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use PreparedStatement + setX(N, value).' } },

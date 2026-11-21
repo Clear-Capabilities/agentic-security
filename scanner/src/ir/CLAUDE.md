@@ -279,3 +279,65 @@ down enterprise runners sometimes don't. Targets for retirement:
 
 An additive, typed, versioned view over this IR: `Symbol`, `CallSite`, `Allocation`, `FieldAccess`, `ValueOrigin`, plus the schema-only lists `ServiceBoundary`, `StorageEdge`, `Sanitizer`, `Guard`. Ids are content-derived and never include a line, so a blank line above a function moves no id. It reads the CFG (the one structure every language's IR shares; `writes` exists for JavaScript only). Nothing on the scan path imports it, so findings and `chain[]` cannot change; a test pins that. Columns are `null` (the IR has lines only) and say `locationPrecision: "line"`. Contract and the measured per-language construct matrix: `docs/engineering-excellence/IR_CONTRACT.md` (regenerate with `node scripts/engineering-excellence/ir-matrix.mjs`). Do not add a `site` field: IR site ids come from a process-global counter and are not stable across builds.
 
+## Java service-layer shapes and the JavaScript size cap (0.219.0)
+
+Found by tracing one development entry of the independent bench whose SQL flow the engine lost three times on the way from the
+resource to the sink (none of the changes is keyed on it; it still does not score, because its JAX-RS interface is not in the
+cached tree):
+
+- **Field types.** `parser-java.js` `_classRecord` records `fieldTypes` (`protected final AssetService assetService;` gives
+  `{ assetService: 'AssetService' }`) beside `fields`. `class-hierarchy.js` keeps them per class, and `classOfVar` falls back to
+  the enclosing class's field type (walking `extends`) when the function neither declares nor receives the name: `localNames`
+  (parameters and assignment targets per function, typed or not) refuses the fallback for a shadowing local, so an untyped local
+  of the same name never resolves through the field. A call on a field whose declared type is a project class now resolves through
+  the existing `_resolveMemberCalleeViaCHA` path; a library type resolves to nothing, as before.
+- **Overloads by arity.** `callgraph.js` keeps every definition behind a name (`allByName`, `classMethodsAll`, `bareTailAllInFile`)
+  and `_resolveImpl` takes an `argCount`: among several same-named definitions the one whose parameter count equals the call's
+  argument count wins when exactly one does; otherwise the previous answer stands (last-indexed for `classMethods`, refused for a
+  same-file bare collision). `engine.js` passes the call's argument count from every site that has one. Before, a two-overload
+  class resolved to whichever overload was indexed last, so the result depended on declaration order.
+- **Lambda bodies.** `buildCfgFromBody` lowers a lambda's block or expression body INTO the enclosing method's CFG right after the
+  statement that contains it (`walkLambdaBodies`, hooked on expression statements, local declarations and returns). The body reads
+  the enclosing scope, so a captured tainted value reaching a sink inside it is a real flow; a lambda's own parameters stay unbound,
+  so `xs.forEach(s -> sink(s))` fabricates nothing. Nested class bodies are not entered.
+- **JavaScript size cap.** `parser-js.js` refused any file over 500,000 characters and recorded nothing. The cap is now
+  `JS_MAX_CHARS` (1,500,000, the module resolver's limit) and a skip is recorded in `jsOversizeSkips()`. Across the 180
+  development trees, 25 JavaScript or TypeScript files sat between the two caps (editor and chart bundles, a generated schema);
+  Babel parses a 520 KB bundle in about 60 ms.
+
+Tests: `test/java-field-receiver-taint.test.js` (each positive with a refusing twin), `test/parser-js-size-cap.test.js`.
+
+## Python classes and TypeScript casts (0.219.0)
+
+- **Python class awareness (`parser-py.helper.py`).** The helper emits `classes` (name, bases, the attributes a class assigns and their declared
+  or constructed types: `self.svc = Service()`, `self.svc = svc` with `svc: Service` in the signature, `svc: Service = ...`, class-level
+  `svc = Service()`), a method's qid carries its class (`file::Class::method@line#hash`, the shape `callgraph.js` and `class-hierarchy.js` read
+  for Java and C#) while `name` stays bare, `paramTypes` from type hints (`Optional[X]` and `X | None` give `X`), and `declaredType` on a
+  local bound to a constructor call or an annotated assignment. A capitalised callee is a constructor by convention; the hierarchy honours only
+  a project class, so a library name resolves to nothing. With these, `s.update(name)`, `Service().update(name)`, a module-level instance, a
+  field, a typed parameter, `self.helper(name)` (own class or an ancestor, class-aware: two view classes defining `post` never cross) and
+  `self.svc.update(name)` all reach the callee. Before, no Python instance-method call resolved at all.
+- **The receiver parameter is not an argument slot (`engine.js` `_callParams`, `callgraph.js` arity).** A Python method's `self`/`cls` is
+  supplied by the receiver; arguments map onto the parameters after it. Before, `s.update(name)` bound `name` to `self`.
+- **Module-level instances (`class-hierarchy.js` `moduleVars`).** A module-level binding with a declared or constructed type is the type of
+  that name in every function of the file that does not bind the name itself; two module-level types for one name refuse.
+- **TypeScript wrappers (`parser-js.js`).** `x as T`, `x!`, `<T>x`, `x satisfies T`, `f<T>` and a parenthesised expression lower to the
+  wrapped expression (they lowered to `unknown`, so `req.query.name as string`, the ordinary typed-handler read, cut every flow). In a `.ts`
+  file the React preset is off, because `<T>expr` is a type assertion there and parsed as JSX before; `.js`, `.jsx` and `.tsx` keep JSX.
+
+- **TypeScript classes and types (`parser-js.js`).** Read before the preset strips them: `fn.paramTypes` from parameter annotations
+  (`svc: ItemService`, `Svc | null` gives `Svc`), `declaredType` on a local with an annotation or a `new X()` initialiser, and
+  `ir.classes` for every class in the file (name, base, fields with types from annotations, constructor parameter properties, and
+  constructor assignments `this.x = new Y()` or `this.x = p` with `p` typed). The engine's hierarchy path resolves `this.svc.find(name)`
+  through the field's type and `this.helper(name)` to the own class or an ancestor. NestJS-style injected services never resolved before.
+- **Destructured parameters bind their names (`parser-js.js`).** `async ({ city, units: u, ...rest }) => ...` emits `city = <obj>.city`,
+  `u = <obj>.units`, `rest = <obj>` at function entry, so a source marked on the parameter reaches the fields. Before, the names were unbound.
+  The engine side of this is `_entryOpts` in `dataflow/engine.js`: an object literal argument enters the callee by field, so a tainted
+  `decision` does not make a destructured sibling `root` tainted (six such flows appeared on this repository's own code the day the
+  bindings landed).
+- **MCP tool handlers (`parser-js.js`, `catalog.js`).** The function passed last to `server.tool(name, [description,] schema, handler)` or
+  `server.registerTool(name, config, handler)` with at least three arguments carries `js:mcp-tool-handler` on its first parameter; the catalog's
+  `js-mcp-tool-handler-args` makes it an agent-tool source. The two-argument `tool(name, handler)` has no schema and is not marked; an unrelated
+  `.tool(` whose handler reads nothing from its parameter produces nothing.
+
+Tests: `test/python-class-taint.test.js`, `test/parser-js-ts-casts.test.js`, `test/ts-class-mcp-taint.test.js` (each positive with a refusing twin).

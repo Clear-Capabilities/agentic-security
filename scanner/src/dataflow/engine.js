@@ -290,9 +290,24 @@ function _resolveMemberCalleeViaCHA(calleeExpr, callContext) {
   if (!callContext || !callContext._cha) return null;
   let receiverName, methodName;
   if (calleeExpr && calleeExpr.kind === 'member' && typeof calleeExpr.prop === 'string') {
-    if (!calleeExpr.object || calleeExpr.object.kind !== 'ident' || calleeExpr.object.name === '_this_') return null;
-    receiverName = calleeExpr.object.name;
-    methodName = calleeExpr.prop;
+    const obj = calleeExpr.object;
+    const isThis = (e) => e && e.kind === 'ident' && (e.name === '_this_' || e.name === 'this');
+    if (obj && obj.kind === 'member' && typeof obj.prop === 'string' && isThis(obj.object)) {
+      // `this.svc.find(...)` (JavaScript/TypeScript lowers `this` to `_this_`): the receiver is a field of the current class,
+      // typed by classOfVar from the class record (a constructor parameter property, a typed field, a `new X()` in the constructor).
+      receiverName = obj.prop;
+      methodName = calleeExpr.prop;
+    } else if (obj && isThis(obj)) {
+      // `this.helper(...)`: the method of the function's own class or an ancestor.
+      const own = /::(\w+)::/.exec(callContext._currentFnQid || '');
+      if (!own) return null;
+      const viaOwn = resolveMethod(callContext._cha, own[1], calleeExpr.prop);
+      return viaOwn ? `${viaOwn.className}.${viaOwn.methodName}` : null;
+    } else {
+      if (!obj || obj.kind !== 'ident' || obj.name === '_this_') return null;
+      receiverName = obj.name;
+      methodName = calleeExpr.prop;
+    }
   } else if (typeof calleeExpr === 'string') {
     // PRD W2.5 (SARD_80_F1_EXECUTION_PRD.md) — the hand-rolled parsers
     // (Java/C#/Go/PHP/Ruby/Kotlin) emit a FLAT dotted-string callee
@@ -303,10 +318,23 @@ function _resolveMemberCalleeViaCHA(calleeExpr, callContext) {
     // chain this function has no way to walk without an AST, and guessing
     // would risk exactly the fabricated-edge failure mode this function's
     // own header comment warns about; refuse rather than guess.
-    const dot = calleeExpr.indexOf('.');
-    if (dot <= 0 || calleeExpr.indexOf('.', dot + 1) !== -1) return null;
-    receiverName = calleeExpr.slice(0, dot);
-    methodName = calleeExpr.slice(dot + 1);
+    // `self.field.method(...)` / `this.field.method(...)`: the receiver is a field of the current class, which
+    // classOfVar types from the class record. A bare `self.method` is the call graph's same-class rule, not a receiver type.
+    let name = calleeExpr;
+    const headed = /^(?:this|self)\.(\w+\.\w+)$/.exec(name);
+    if (headed) name = headed[1];
+    const dot = name.indexOf('.');
+    if (dot <= 0 || name.indexOf('.', dot + 1) !== -1) return null;
+    receiverName = name.slice(0, dot);
+    methodName = name.slice(dot + 1);
+    if (receiverName === 'self' || receiverName === 'cls') {
+      // Python `self.method(...)`: the method of the class this function belongs to (its qid carries the class), or
+      // of an ancestor. Class-aware, so two view classes defining `post` in one file never cross.
+      const own = /::(\w+)::/.exec(callContext._currentFnQid || '');
+      if (!own) return null;
+      const viaOwn = resolveMethod(callContext._cha, own[1], methodName);
+      return viaOwn ? `${viaOwn.className}.${viaOwn.methodName}` : null;
+    }
     if (receiverName === '_this_' || receiverName === 'this') return null;
   } else {
     return null;
@@ -343,7 +371,17 @@ function _resolveMemberCalleeViaCHA(calleeExpr, callContext) {
 // bare-name/pre-flattened-string callee is the ONLY case handled here for
 // now — Task 4 (PRD R11) extends this function's body to add a second,
 // CHA-gated resolution path for member-expression callees.
-function _resolveCalleeForSummary(calleeExpr, callContext) {
+// The parameters a call's arguments map onto. A Python method's first parameter is the receiver (`self`, `cls`),
+// supplied by the call's receiver and not by its argument list, so it is skipped: before, `s.update(name)` bound
+// `name` to `self` and the real parameter stayed clean.
+function _callParams(fn) {
+  if (!fn || !Array.isArray(fn.params)) return [];
+  const p = fn.params;
+  if (p.length && (p[0] === 'self' || p[0] === 'cls') && /\.py$/i.test(fn.file || '') && (fn.className || /::\w+::/.test(fn.qid || ''))) return p.slice(1);
+  return p;
+}
+
+function _resolveCalleeForSummary(calleeExpr, callContext, argCount) {
   if (!callContext || !callContext._callGraph || !callContext._callGraph.resolveKnownCallee) return null;
   const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
   // E2-02: a member call through an IMPORTED MODULE (`const svc = require('./service'); svc.run(x)`) is resolved by following the import,
@@ -356,7 +394,7 @@ function _resolveCalleeForSummary(calleeExpr, callContext) {
   }
   const _resolvableName = _resolvableCalleeName(calleeExpr);
   if (_resolvableName) {
-    const resolved = callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile);
+    const resolved = callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile, argCount);
     const fn = functionRecord(callContext._callGraph, resolved);
     const qid = resolved && (resolved.qid || resolved);
     if (typeof qid === 'string') return { qid, fn };
@@ -371,7 +409,7 @@ function _resolveCalleeForSummary(calleeExpr, callContext) {
   // over-approximating CHA/RTA lookup.
   const _chaName = _resolveMemberCalleeViaCHA(calleeExpr, callContext);
   if (!_chaName) return null;
-  const resolved = callContext._callGraph.resolveKnownCallee(_chaName, _callerFile);
+  const resolved = callContext._callGraph.resolveKnownCallee(_chaName, _callerFile, argCount);
   const fn = functionRecord(callContext._callGraph, resolved);
   const qid = resolved && (resolved.qid || resolved);
   return typeof qid === 'string' ? { qid, fn } : null;
@@ -387,12 +425,12 @@ function _resolveCalleeForSummary(calleeExpr, callContext) {
 // call sites use, via the Task 3/4 shared _resolveCalleeForSummary.
 function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext, argTaint) {
   if (!callContext || !callContext._summaryCache) return false;
-  const target = _resolveCalleeForSummary(calleeExpr, callContext);
+  const target = _resolveCalleeForSummary(calleeExpr, callContext, Array.isArray(argExprs) ? argExprs.length : undefined);
   if (!target) return false;
   const { qid, fn } = target;
-  const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
+  const paramNames = _callParams(fn);
   const entry = _withCapturedTaint(paramNames.length
-    ? entryStateFromCall(paramNames, argExprs || [], state, argTaint || ((a) => exprTaint(a, state, callContext)), { fieldPaths: _isHsFile(_currentFile) })
+    ? entryStateFromCall(paramNames, argExprs || [], state, argTaint || ((a) => exprTaint(a, state, callContext)), _entryOpts(state, callContext))
     : new Set(), fn, state, callContext);
   let sum = callContext._summaryCache.get(qid, entry);
   if (!sum && fn && fn.cfg) {
@@ -894,6 +932,17 @@ function _arrayLiteralTaint(expr, prefix, state, callContext, bracket = false) {
 
 const _isHsFile = (file) => /\.l?hs$/i.test(file || '');
 
+// The options every call-site entry state is built with: Haskell records enter by field (round 10), and in a JavaScript or TypeScript file an
+// object literal argument enters by field too (`_objectLiteralTaint` under the parameter's name), so `f({ root, decision: tainted })` taints
+// `<obj>.decision` in the callee and not `root`. Found on this repository's own code: six flows from a clean sibling of a tainted field.
+// The plain-call site (a call that is a statement) never seeded Haskell records by field; `hsFields` keeps that site as it was measured.
+function _entryOpts(state, callContext, hsFields = true) {
+  return {
+    fieldPaths: hsFields && _isHsFile(_currentFile),
+    literalFields: _isJsFile(_currentFile) ? (arg, name) => _objectLiteralTaint(arg, name, state, callContext) : undefined,
+  };
+}
+
 function _objectLiteralTaint(expr, prefix, state, callContext) {
   const out = { whole: false, paths: [] };
   for (const p of expr.props || []) {
@@ -963,7 +1012,7 @@ function _recordCallbackInvocations(node, state, callContext) {
     if (exprTaint(callee.object, state, callContext)) push(node.args[0], callee.prop === 'reduce' || callee.prop === 'reduceRight' ? 1 : 0, `receiver:${callee.prop}`);
   }
   // 2. project function that invokes its own callback parameter
-  const target = _resolveCalleeForSummary(node.callee, callContext);
+  const target = _resolveCalleeForSummary(node.callee, callContext, Array.isArray(node.args) ? node.args.length : undefined);
   const fn = target && target.fn;
   if (!fn || !Array.isArray(fn.params) || !Array.isArray(fn.calls)) return;
   node.args.forEach((cb, i) => {
@@ -1984,7 +2033,7 @@ function step(node, stateIn, callContext) {
         ? _flattenCalleeName(node.source.callee) : null;
       if (target && calleeName && callContext._summaryCache && callContext._callGraph) {
         const _resolvedTarget = node.source && node.source.kind === 'call'
-          ? _resolveCalleeForSummary(node.source.callee, callContext) : null;
+          ? _resolveCalleeForSummary(node.source.callee, callContext, Array.isArray(node.source.args) ? node.source.args.length : undefined) : null;
         const fn  = _resolvedTarget && _resolvedTarget.fn;
         const qid = _resolvedTarget && _resolvedTarget.qid;
         if (typeof qid === 'string') {
@@ -1995,9 +2044,9 @@ function step(node, stateIn, callContext) {
           // user input" FN class.
           const callerTainted = newState;
           const callArgs = (node.source.args || []);
-          const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
+          const paramNames = _callParams(fn);
           const entry = _withCapturedTaint(paramNames.length
-            ? entryStateFromCall(paramNames, callArgs, callerTainted, (a) => exprTaint(a, callerTainted, callContext), { fieldPaths: _isHsFile(_currentFile) })
+            ? entryStateFromCall(paramNames, callArgs, callerTainted, (a) => exprTaint(a, callerTainted, callContext), _entryOpts(callerTainted, callContext))
             : new Set(), fn, callerTainted, callContext);
           let sum = callContext._summaryCache.get(qid, entry);
           if (!sum && fn && fn.cfg) {
@@ -2208,13 +2257,13 @@ function step(node, stateIn, callContext) {
       // Object.assign(target, tainted) → target becomes tainted in caller.
       const _plainCallCalleeName = _flattenCalleeName(node.callee);
       if (callContext._summaryCache && callContext._callGraph && _plainCallCalleeName) {
-        const _resolvedTarget = _resolveCalleeForSummary(node.callee, callContext);
+        const _resolvedTarget = _resolveCalleeForSummary(node.callee, callContext, Array.isArray(node.args) ? node.args.length : undefined);
         const fn  = _resolvedTarget && _resolvedTarget.fn;
         const qid = _resolvedTarget && _resolvedTarget.qid;
         if (typeof qid === 'string' && fn && Array.isArray(fn.params)) {
-          const paramNames = fn.params;
+          const paramNames = _callParams(fn);
           const entry = _withCapturedTaint(paramNames.length
-            ? entryStateFromCall(paramNames, node.args || [], state, (a) => exprTaint(a, state, callContext))
+            ? entryStateFromCall(paramNames, node.args || [], state, (a) => exprTaint(a, state, callContext), _entryOpts(state, callContext, false))
             : new Set(), fn, state, callContext);
           let sum = callContext._summaryCache.get(qid, entry);
           // FR-SEM-2: context-sensitive lazy compute at the plain-call site,

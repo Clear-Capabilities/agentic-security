@@ -359,6 +359,14 @@ export function entryStateFromCall(paramNames, callArgs, callerTaintedVars, isAr
       const fields = [...callerTaintedVars].filter((v) => typeof v === 'string' && v.startsWith(prefix));
       if (fields.length) { for (const v of fields) out.add(`${paramNames[i]}${v.slice(arg.name.length)}`); continue; }
     }
+    // `opts.literalFields` (JavaScript and TypeScript): an object LITERAL argument (`f({ root, decision: tainted })`) enters the callee as its
+    // tainted fields (`<obj>.decision`), never as a tainted whole, so a destructured sibling (`root`) stays clean. The closure returns
+    // `{ whole, paths }` for the literal under the parameter's name; a spread or computed key that cannot be placed sets `whole`, and the
+    // widening below then applies as before. A literal with no tainted field is clean, as it always was.
+    if (typeof opts.literalFields === 'function' && arg.kind === 'object') {
+      const lit = opts.literalFields(arg, paramNames[i]);
+      if (lit && !lit.whole) { for (const p of lit.paths || []) out.add(p); continue; }
+    }
     // Each check is independent — arg SHAPE (ident vs. member) selecting a
     // branch must not skip the fallback when that branch's own membership
     // check comes back false. An earlier version used if/else-if keyed on

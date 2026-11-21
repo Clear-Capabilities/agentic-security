@@ -507,7 +507,16 @@ class CfgBuilder:
                 cur = self._add({"kind": "assign", "target": tgt if isinstance(tgt, str) else None, "source": src, "line": line})
                 self._link(tail, cur)
                 return cur
-            cur = self._add({"kind": "assign", "target": tgt, "source": src, "line": line})
+            node_rec: dict[str, Any] = {"kind": "assign", "target": tgt, "source": src, "line": line}
+            # The declared or constructed type of a plain local (`s: Service = ...`, `s = Service()`), for
+            # receiver typing; a container or library name matches no project class and is inert.
+            if isinstance(tgt, str) and isinstance(stmt, (ast.Assign, ast.AnnAssign)):
+                dt = _annotation_name(stmt.annotation) if isinstance(stmt, ast.AnnAssign) else None
+                if not dt:
+                    dt = _ctor_class_name(stmt.value)
+                if dt:
+                    node_rec["declaredType"] = dt
+            cur = self._add(node_rec)
             self._link(prev, cur)
             return cur
         if isinstance(stmt, ast.If):
@@ -654,13 +663,127 @@ class CfgBuilder:
 # ─── Function extraction ─────────────────────────────────────────────────────
 
 
-def _extract_functions(tree: ast.Module, file: str) -> list[dict[str, Any]]:
-    """Walk the module, capturing every function (top-level or nested) into
-    a flat list. Each function's body is lowered into a CFG."""
-    fns: list[dict[str, Any]] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+def _annotation_name(ann: Any) -> "str | None":
+    """The simple class name a type annotation names: `Service`, `pkg.Service`, `"Service"`,
+    `Optional[Service]`. Containers keep their own name (`list`), which no project class matches."""
+    if ann is None:
+        return None
+    if isinstance(ann, ast.Name):
+        return ann.id
+    if isinstance(ann, ast.Attribute):
+        return ann.attr
+    if isinstance(ann, ast.Constant) and isinstance(ann.value, str):
+        return ann.value.split(".")[-1] or None
+    if isinstance(ann, ast.Subscript):
+        base = _annotation_name(ann.value)
+        if base in ("Optional", "Union", "Annotated", "Final", "ClassVar"):
+            sl = ann.slice
+            if isinstance(sl, ast.Tuple) and sl.elts:
+                return _annotation_name(sl.elts[0])
+            return _annotation_name(sl)
+        return base
+    if isinstance(ann, ast.BinOp) and isinstance(ann.op, ast.BitOr):
+        return _annotation_name(ann.left)
+    return None
+
+
+def _ctor_class_name(value: Any) -> "str | None":
+    """`Service()` / `pkg.Service(...)`: a capitalised callee is a constructor by Python convention. The class
+    hierarchy only honours a name that is a class of the project, so a library name resolves to nothing."""
+    if not isinstance(value, ast.Call):
+        return None
+    f = value.func
+    nm = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else None)
+    if nm and nm[:1].isupper() and not nm.isupper():
+        return nm
+    return None
+
+
+def _param_types(node: Any) -> dict[str, str]:
+    out: dict[str, str] = {}
+    args = node.args
+    for a in list(getattr(args, "posonlyargs", [])) + list(args.args) + list(args.kwonlyargs):
+        if a.arg in ("self", "cls"):
             continue
+        t = _annotation_name(a.annotation)
+        if t:
+            out[a.arg] = t
+    return out
+
+
+def _extract_classes(tree: ast.Module, file: str) -> list[dict[str, Any]]:
+    """One record per class: name, bases, the instance and class attributes it assigns, and the declared or
+    constructed type of each where one is visible (`self.svc = Service()`, `self.svc = svc` with `svc: Service`
+    in the signature, `svc: Service = ...`). The IR states the facts; class-hierarchy.js types receivers from them."""
+    out: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        bases: list[str] = []
+        for b in node.bases:
+            nm = b.id if isinstance(b, ast.Name) else (b.attr if isinstance(b, ast.Attribute) else None)
+            if nm:
+                bases.append(nm)
+        fields: list[str] = []
+        field_types: dict[str, str] = {}
+
+        def note(name: str, t: "str | None") -> None:
+            if name not in fields:
+                fields.append(name)
+            if t and name not in field_types:
+                field_types[name] = t
+
+        for stmt in node.body:
+            if isinstance(stmt, ast.Assign):
+                for tg in stmt.targets:
+                    if isinstance(tg, ast.Name):
+                        note(tg.id, _ctor_class_name(stmt.value))
+            elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                note(stmt.target.id, _annotation_name(stmt.annotation) or _ctor_class_name(stmt.value))
+            elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                ptypes = _param_types(stmt)
+                for sub in ast.walk(stmt):
+                    pairs: list[tuple[Any, Any, Any]] = []
+                    if isinstance(sub, ast.Assign):
+                        pairs = [(tg, sub.value, None) for tg in sub.targets]
+                    elif isinstance(sub, ast.AnnAssign):
+                        pairs = [(sub.target, sub.value, sub.annotation)]
+                    for tg, val, ann in pairs:
+                        if isinstance(tg, ast.Attribute) and isinstance(tg.value, ast.Name) and tg.value.id == "self":
+                            t = _annotation_name(ann) if ann is not None else None
+                            if not t:
+                                t = _ctor_class_name(val)
+                            if not t and isinstance(val, ast.Name):
+                                t = ptypes.get(val.id)
+                            note(tg.attr, t)
+        rec: dict[str, Any] = {"name": node.name, "line": node.lineno or 0, "bases": bases, "fields": fields}
+        if field_types:
+            rec["fieldTypes"] = field_types
+        out.append(rec)
+    return out
+
+
+def _extract_functions(tree: ast.Module, file: str) -> list[dict[str, Any]]:
+    """Walk the module, capturing every function (top-level, nested, or a method) into a flat list with its
+    enclosing class when it has one. Each function's body is lowered into a CFG."""
+    fns: list[dict[str, Any]] = []
+
+    def visit(parent: Any, cls: "str | None") -> None:
+        for child in ast.iter_child_nodes(parent):
+            if isinstance(child, ast.ClassDef):
+                visit(child, child.name)
+            elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                fns.append(_function_record(child, file, cls))
+                visit(child, None)
+            else:
+                visit(child, cls)
+
+    visit(tree, None)
+    return fns
+
+
+def _function_record(node: Any, file: str, cls: "str | None") -> dict[str, Any]:
+    if True:
         params = [a.arg for a in node.args.args]
         if node.args.vararg:
             params.append(node.args.vararg.arg)
@@ -671,8 +794,11 @@ def _extract_functions(tree: ast.Module, file: str) -> list[dict[str, Any]]:
         line = node.lineno or 0
         builder = CfgBuilder(node.name)
         builder.lower(node.body)
+        # A method's qid carries its class (`file::Class::method@line#hash`), the shape class-hierarchy.js and
+        # callgraph.js read class membership from for Java and C#; `name` stays the bare name every Python
+        # consumer matches on.
         fn_rec = {
-            "qid": _qid(file, node.name, line),
+            "qid": _qid(file, f"{cls}::{node.name}" if cls else node.name, line),
             "name": node.name,
             "line": line,
             "params": params,
@@ -683,6 +809,11 @@ def _extract_functions(tree: ast.Module, file: str) -> list[dict[str, Any]]:
                 "nodes": builder.nodes,
             },
         }
+        if cls:
+            fn_rec["className"] = cls
+        ptypes = _param_types(node)
+        if ptypes:
+            fn_rec["paramTypes"] = ptypes
         pa = _param_annotations(node, params)
         if pa:
             fn_rec["paramAnnotations"] = pa
@@ -694,8 +825,7 @@ def _extract_functions(tree: ast.Module, file: str) -> list[dict[str, Any]]:
             for n in builder.nodes.values():
                 if n.get("kind") == "return" and n.get("value") is not None:
                     n["routeReturn"] = True
-        fns.append(fn_rec)
-    return fns
+        return fn_rec
 
 
 def _decorator_names(node: Any) -> list[str]:
@@ -933,7 +1063,7 @@ def _process_one(file: str, content: str) -> dict[str, Any]:
                 "nodes": mod_builder.nodes,
             },
         })
-    return {"file": file, "functions": fns, "topLevel": top_level_qid}
+    return {"file": file, "functions": fns, "classes": _extract_classes(tree, file), "topLevel": top_level_qid}
 
 
 def main() -> int:

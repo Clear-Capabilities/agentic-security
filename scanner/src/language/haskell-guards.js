@@ -29,6 +29,39 @@ const NOT_ELEM = new Set(['Data.List.notElem', 'Prelude.notElem', 'notElem', 'Da
 const IS_MEMBER = /^Data\.(?:Set|HashSet|Map|Map\.Strict|HashMap\.Strict)\.member$/;
 const NOT_MEMBER = /^Data\.(?:Set|HashSet|Map|Map\.Strict|HashMap\.Strict)\.notMember$/;
 const CHARCLASS = new Set(['Data.Char.isAlphaNum', 'Data.Char.isAlpha', 'Data.Char.isDigit', 'Data.Char.isAscii', 'isAlphaNum', 'isAlpha', 'isDigit']);
+const ALL_FNS = new Set(['all', 'Prelude.all', 'Data.List.all', 'Data.Foldable.all', 'Data.Text.all', 'Data.Text.Lazy.all', 'Data.ByteString.Char8.all', 'Data.ByteString.Lazy.Char8.all']);
+// Constant characters a character-class predicate may admit beside letters and digits and still name one file or one argument: a dash
+// or an underscore. A dot would admit "..", a slash a directory, and anything the shell reads is out.
+const SAFE_CONST_CHAR = /^[-_]$/;
+/**
+ * Is `p` a predicate that admits only letters, digits and safe constant characters? A character-class function by name
+ * (`isAlphaNum`), or a lambda or one-expression helper (`\\c -> isAlphaNum c || c == '-'`) whose body is a disjunction of
+ * class checks on its parameter and equalities of the parameter with a safe constant, or `elem c "-_"`.
+ */
+function charClassPredicate(p, resolve, depth = 0) {
+  if (!p || depth > 2) return false;
+  if (p.kind === 'ident' && CHARCLASS.has(p.name)) return true;
+  const ref = p.kind === 'ident' && p.hs && p.hs.functionRef;
+  if (!ref || typeof resolve !== 'function') return false;
+  const fn = resolve(ref);
+  if (!fn || !Array.isArray(fn.params) || fn.params.length !== 1 || !fn.cfg || !fn.cfg.nodes) return false;
+  const nodes = Object.values(fn.cfg.nodes).filter((n) => n && n.kind !== 'entry' && n.kind !== 'exit' && n.kind !== 'noop');
+  if (nodes.length !== 1 || nodes[0].kind !== 'return' || !nodes[0].value) return false;
+  const c = fn.params[0];
+  const admits = (e, d) => {
+    if (!e || typeof e !== 'object' || d > 12) return false;
+    if ((e.kind === 'logical' && e.op === 'or') || (e.kind === 'binary' && e.op === '||')) return admits(e.left, d + 1) && admits(e.right, d + 1);
+    if (e.kind === 'call' && CHARCLASS.has(e.callee) && e.args && e.args.length === 1 && e.args[0].kind === 'ident' && e.args[0].name === c) return true;
+    if (e.kind === 'binary' && (e.op === '==' || e.op === '===')) {
+      const [l, r] = [e.left, e.right];
+      const lit = (x) => x && x.kind === 'literal' && typeof x.value === 'string' && SAFE_CONST_CHAR.test(x.value);
+      return (l.kind === 'ident' && l.name === c && lit(r)) || (r.kind === 'ident' && r.name === c && lit(l));
+    }
+    if (e.kind === 'call' && IS_ELEM.has(e.callee) && e.args && e.args[0] && e.args[0].kind === 'ident' && e.args[0].name === c && isStr(e.args[1]) && /^[-_]+$/.test(e.args[1].value)) return true;
+    return false;
+  };
+  return admits(nodes[0].value, 0);
+}
 
 const FAMILY_BY_CWE = { 'CWE-22': 'path', 'CWE-918': 'url', 'CWE-78': 'cmd', 'CWE-88': 'cmd', 'CWE-89': 'sql', 'CWE-79': 'xss', 'CWE-601': 'redirect', 'CWE-94': 'code', 'CWE-1427': 'prompt' };
 
@@ -68,14 +101,16 @@ export function inlinePredicate(c, resolve, depth = 0) {
   return clone(nodes[0].value, 0);
 }
 
-export function classifyCondition(c, vars, derived = new Set(), resolve = null) {
-  if (!c || typeof c !== 'object') return null;
-  if (c.kind === 'call' && c.hs && c.hs.target && resolve) { const body = inlinePredicate(c, resolve); if (body) return classifyCondition(body, vars, derived, null); }
+export function classifyCondition(c, vars, derived = new Set(), resolve = null, locals = null, depth = 0) {
+  if (!c || typeof c !== 'object' || depth > 8) return null;
+  // `let inside = base \`isPrefixOf\` requested` then `if inside && exists`: a local bound once to a Bool stands for its definition.
+  if (c.kind === 'ident' && locals && locals.has(c.name)) { const def = locals.get(c.name); return def ? classifyCondition(def, vars, derived, resolve, locals, depth + 1) : null; }
+  if (c.kind === 'call' && c.hs && c.hs.target && resolve) { const body = inlinePredicate(c, resolve); if (body) return classifyCondition(body, vars, derived, resolve, locals, depth + 1); }
   // The IR lowers `&&` / `||` to a `logical` node (`and` / `or`); a `binary` node is kept for the same operators from other lowerings.
-  if (c.kind === 'logical' && (c.op === 'and' || c.op === 'or')) return classifyCondition({ kind: 'binary', op: c.op === 'and' ? '&&' : '||', left: c.left, right: c.right }, vars, derived, resolve);
+  if (c.kind === 'logical' && (c.op === 'and' || c.op === 'or')) return classifyCondition({ kind: 'binary', op: c.op === 'and' ? '&&' : '||', left: c.left, right: c.right }, vars, derived, resolve, locals, depth + 1);
   if (c.kind === 'binary') {
-    if (c.op === '&&') { const a = classifyCondition(c.left, vars, derived, resolve); const b = classifyCondition(c.right, vars, derived, resolve); return [a, b].find((x) => x && x.safeWhen === true) || null; }
-    if (c.op === '||') { const a = classifyCondition(c.left, vars, derived, resolve); const b = classifyCondition(c.right, vars, derived, resolve); return [a, b].find((x) => x && x.safeWhen === false) || null; }
+    if (c.op === '&&') { const a = classifyCondition(c.left, vars, derived, resolve, locals, depth + 1); const b = classifyCondition(c.right, vars, derived, resolve, locals, depth + 1); return [a, b].find((x) => x && x.safeWhen === true) || null; }
+    if (c.op === '||') { const a = classifyCondition(c.left, vars, derived, resolve, locals, depth + 1); const b = classifyCondition(c.right, vars, derived, resolve, locals, depth + 1); return [a, b].find((x) => x && x.safeWhen === false) || null; }
     if (c.op === '==' || c.op === '===') {
       const pair = (l, r) => l && l.kind === 'call' && /(?:^|\.)takeFileName$/.test(l.callee || '') && l.args && l.args[0] && r && r.kind === 'ident' && l.args[0].kind === 'ident' && l.args[0].name === r.name && vars.has(r.name);
       if (pair(c.left, c.right) || pair(c.right, c.left)) return { safeWhen: true, kind: 'bare-filename', families: ['path'], subject: (c.left.kind === 'ident' ? c.left : c.right).name };
@@ -85,7 +120,7 @@ export function classifyCondition(c, vars, derived = new Set(), resolve = null) 
   if (c.kind !== 'call') return null;
   const name = c.callee || '';
   const a = c.args || [];
-  if (name === 'not' || name === 'Prelude.not') { const inner = classifyCondition(a[0], vars, derived, resolve); return inner ? { ...inner, safeWhen: !inner.safeWhen } : null; }
+  if (name === 'not' || name === 'Prelude.not') { const inner = classifyCondition(a[0], vars, derived, resolve, locals, depth + 1); return inner ? { ...inner, safeWhen: !inner.safeWhen } : null; }
   if (name === 'Data.List.isInfixOf' && isStr(a[0]) && a[0].value.includes('..') && a[1] && a[1].kind === 'ident' && vars.has(a[1].name)) {
     return { safeWhen: false, kind: 'traversal-check', families: ['path'], subject: a[1].name };
   }
@@ -116,7 +151,7 @@ export function classifyCondition(c, vars, derived = new Set(), resolve = null) 
   if ((IS_MEMBER.test(name) || NOT_MEMBER.test(name)) && a[0] && a[0].kind === 'ident' && vars.has(a[0].name) && !mentions(a[1], vars)) {
     return { safeWhen: IS_MEMBER.test(name), kind: 'allow-list', families: ['*'], subject: a[0].name };
   }
-  if ((name === 'all' || name === 'Prelude.all' || name === 'Data.List.all') && a[0] && a[0].kind === 'ident' && CHARCLASS.has(a[0].name) && a[1] && a[1].kind === 'ident' && vars.has(a[1].name)) {
+  if (ALL_FNS.has(name) && a[1] && a[1].kind === 'ident' && vars.has(a[1].name) && charClassPredicate(a[0], resolve)) {
     return { safeWhen: true, kind: 'character-class', families: ['*'], subject: a[1].name };
   }
   return null;
@@ -152,7 +187,7 @@ export function findSites(fn, callee, line) {
   const named = typeof callee === 'string' ? (c) => c === callee : (c) => typeof c === 'string' && callee.test(c);
   const visit = (e, nodeId, facts, depth) => {
     if (!e || typeof e !== 'object' || depth > 60) return;
-    if (e.kind === 'call' && named(e.callee) && (e.line === line || nodeLine(nodeId) === line)) sites.push({ nodeId, facts, call: e });
+    if (e.kind === 'call' && named(e.callee) && (line == null || e.line === line || nodeLine(nodeId) === line)) sites.push({ nodeId, facts, call: e });
     if (e.kind === 'union') {
       const bc = e.hs && e.hs.branchConds;
       e.branches.forEach((b, i) => visit(b, nodeId, bc && bc[i] ? [...facts, bc[i]] : facts, depth + 1));
@@ -162,7 +197,7 @@ export function findSites(fn, callee, line) {
   };
   const nodeLine = (id) => (fn.cfg.nodes[id] ? fn.cfg.nodes[id].line : -1);
   for (const n of nodeList(fn)) {
-    if (n.kind === 'call' && named(n.callee) && n.line === line) sites.push({ nodeId: n.id, facts: [], call: { kind: 'call', callee: n.callee, args: n.args || [] } });
+    if (n.kind === 'call' && named(n.callee) && (line == null || n.line === line)) sites.push({ nodeId: n.id, facts: [], call: { kind: 'call', callee: n.callee, args: n.args || [] } });
     for (const k of ['source', 'value', 'cond']) if (n[k]) visit(n[k], n.id, [], 0);
     if (Array.isArray(n.args) && n.kind === 'call') for (const a of n.args) visit(a, n.id, [], 0);
   }
@@ -293,9 +328,14 @@ export function consolidateFlowSinks(findings, perFile) {
   return drop.size;
 }
 
+const LIFTS = new Set(['liftIO', 'Control.Monad.IO.Class.liftIO', 'lift', 'Control.Monad.Trans.Class.lift', 'UnliftIO.liftIO']);
+// `requested <- liftIO (canonicalizePath p)`: the lift is transparent, the value is the canonical path.
+const unlift = (e) => { let x = e; for (let i = 0; i < 3 && x && x.kind === 'call' && LIFTS.has(x.callee) && x.args && x.args.length === 1; i++) x = x.args[0]; return x; };
 function isCanonical(fn, name) {
   for (const n of nodeList(fn)) {
-    if (n.kind === 'assign' && n.target === name && n.source && n.source.kind === 'call' && CANON_CALLS.has(n.source.callee)) return true;
+    if (n.kind !== 'assign' || n.target !== name || !n.source) continue;
+    const src = unlift(n.source);
+    if (src && src.kind === 'call' && CANON_CALLS.has(src.callee)) return true;
   }
   return false;
 }
@@ -497,9 +537,12 @@ export function judgeFinding(f, perFile) {
       if (calls.length && allUsesEscaped(fn, argExpr, escapers)) refuted = { kind: 'html-escaper', line: calls[0].line || fn.line, subject: calls[0].callee };
     }
     const resolve = (qid) => ir.functions.find((x) => x.qid === qid) || null;
+    // locals bound exactly once in this function (a name bound twice is refused: which binding the condition reads is not decided here)
+    const locals = new Map();
+    for (const n of nodeList(fn)) if (n.kind === 'assign' && typeof n.target === 'string' && n.source) locals.set(n.target, locals.has(n.target) ? null : n.source);
     for (const fact of facts) {
       if (refuted) break;
-      const cls = classifyCondition(fact.cond, vars, derived, resolve);
+      const cls = classifyCondition(fact.cond, vars, derived, resolve, locals);
       if (!cls || cls.safeWhen !== fact.when) continue;
       if (!(cls.families.includes('*') || cls.families.includes(fam))) continue;          // wrong-context control
       if (cls.needsCanon && !isCanonical(fn, cls.subject)) { weak = { kind: cls.kind, line: fact.line || fn.line, reason: 'containment check on a path that was not canonicalised' }; continue; }
@@ -538,7 +581,9 @@ export function optionTerminator(f, perFile) {
 
 const SHELLS = /^(?:\/(?:usr\/)?(?:local\/)?bin\/)?(?:sh|bash|zsh|dash|ksh|ash|fish|csh|tcsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh)$/i;
 const SHELL_C = /^(?:-[a-z]*c[a-z]*|\/[ck]|-command|-encodedcommand)$/i;
-const PROCESS_FNS = new Set(['System.Process.callProcess', 'System.Process.spawnProcess', 'System.Process.readProcess', 'System.Process.readProcessWithExitCode', 'System.Process.proc']);
+// Program at argument 0, argument list at argument 1: System.Process and Shelly's runners share the shape.
+const PROCESS_FNS = new Set(['System.Process.callProcess', 'System.Process.spawnProcess', 'System.Process.readProcess', 'System.Process.readProcessWithExitCode', 'System.Process.proc',
+  'Shelly.run', 'Shelly.run_', 'Shelly.command', 'Shelly.command_', 'Shelly.runFoldLines', 'Shelly.Lifted.run', 'Shelly.Lifted.run_', 'System.Process.Typed.proc']);
 
 /**
  * `callProcess "sh" ["-c", script]` runs `script` through a shell: tainted text in the script is command injection (CWE-78),
@@ -549,9 +594,21 @@ const PROCESS_FNS = new Set(['System.Process.callProcess', 'System.Process.spawn
 export function promoteShellInterpreter(f, perFile) {
   if (!f || f.cwe !== 'CWE-88' || !PROCESS_FNS.has(f.callee)) return false;
   const ir = perFile && perFile[f.file];
-  const fn = ir && f._funcQid && ir.functions.find((x) => x.qid === f._funcQid);
-  if (!fn) return false;
-  for (const site of findSites(fn, f.callee, f.line)) {
+  if (!ir) return false;
+  const direct = f._funcQid && ir.functions.find((x) => x.qid === f._funcQid);
+  const cands = [direct, ...ir.functions.filter((x) => x !== direct)].filter(Boolean);
+  let sites = [];
+  for (const cand of cands) { sites = findSites(cand, f.callee, f.line); if (sites.length) break; }
+  if (!sites.length) {
+    // A finding merged from a callee's summary sits at the CALLER's line (`mapM_ moveRobot ...`); the sink call is in the callee. Every
+    // site of this callee in the file must have the shell shape, or nothing is promoted.
+    const all = cands.flatMap((cand) => findSites(cand, f.callee, null));
+    if (!all.length) return false;
+    const shellShaped = (site) => { const [prog, list] = site.call.args || []; return isStr(prog) && SHELLS.test(prog.value) && list && list.kind === 'array' && list.elements.some((e) => isStr(e) && SHELL_C.test(e.value)); };
+    if (!all.every(shellShaped)) return false;
+    sites = all;
+  }
+  for (const site of sites) {
     const [prog, list] = site.call.args || [];
     if (!isStr(prog) || !SHELLS.test(prog.value) || !list || list.kind !== 'array') continue;
     const flag = list.elements.findIndex((e) => isStr(e) && SHELL_C.test(e.value));

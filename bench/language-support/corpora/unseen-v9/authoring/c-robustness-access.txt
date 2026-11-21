@@ -1,0 +1,597 @@
+@@@ resource-limits | vulnerable | src/Orchard/Drones/Upload.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Orchard.Drones.Upload (uploadApp) where
+
+import Network.Wai
+import Network.HTTP.Types (status201, status405)
+import qualified Data.ByteString.Lazy as BL
+
+uploadApp :: (BL.ByteString -> IO ()) -> Application
+uploadApp storeFrame req respond
+  | requestMethod req /= "PUT" = respond (responseLBS status405 [] "frames are uploaded with PUT")
+  | otherwise = do
+      frame <- strictRequestBody req  --@@
+      storeFrame frame
+      respond (responseLBS status201 [] "frame stored")
+
+@@@ resource-limits | safe | src/Orchard/Drones/Ingest.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Orchard.Drones.Ingest (ingestApp) where
+
+import Network.Wai
+import Network.HTTP.Types (status201, status405, status413)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
+
+maxFrameBytes :: Int
+maxFrameBytes = 8 * 1024 * 1024
+
+readCapped :: Int -> Request -> IO (Maybe BL.ByteString)
+readCapped limit req = go 0 []
+  where
+    go total acc = do
+      chunk <- getRequestBodyChunk req
+      if BS.null chunk
+        then pure (Just (BL.fromChunks (reverse acc)))
+        else
+          let total' = total + BS.length chunk
+          in if total' > limit then pure Nothing else go total' (chunk : acc)
+
+ingestApp :: (BL.ByteString -> IO ()) -> Application
+ingestApp storeFrame req respond
+  | requestMethod req /= "PUT" = respond (responseLBS status405 [] "frames are uploaded with PUT")
+  | otherwise = do
+      body <- readCapped maxFrameBytes req  --@@
+      case body of
+        Nothing -> respond (responseLBS status413 [] "frame larger than 8 MiB")
+        Just frame -> do
+          storeFrame frame
+          respond (responseLBS status201 [] "frame stored")
+
+@@@ resource-limits | vulnerable | src/Orchard/Imagery/Inflate.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Orchard.Imagery.Inflate (startTileWorker) where
+
+import Network.AMQP
+import qualified Codec.Compression.GZip as GZip
+import qualified Data.ByteString.Lazy as BL
+
+startTileWorker :: Channel -> (BL.ByteString -> IO ()) -> IO ()
+startTileWorker chan storeTile = do
+  _ <- declareQueue chan newQueue { queueName = "imagery.tiles" }
+  _ <- consumeMsgs chan "imagery.tiles" Ack (handleTile storeTile)
+  pure ()
+
+handleTile :: (BL.ByteString -> IO ()) -> (Message, Envelope) -> IO ()
+handleTile storeTile (msg, env) = do
+  let inflated = GZip.decompress (msgBody msg)  --@@
+  storeTile inflated
+  ackEnv env
+
+@@@ resource-limits | safe | src/Orchard/Imagery/Unpack.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Orchard.Imagery.Unpack (startUnpackWorker) where
+
+import Network.AMQP
+import qualified Codec.Compression.GZip as GZip
+import qualified Data.ByteString.Lazy as BL
+import Data.Int (Int64)
+
+maxTileBytes :: Int64
+maxTileBytes = 32 * 1024 * 1024
+
+startUnpackWorker :: Channel -> (BL.ByteString -> IO ()) -> IO ()
+startUnpackWorker chan storeTile = do
+  _ <- declareQueue chan newQueue { queueName = "imagery.tiles" }
+  _ <- consumeMsgs chan "imagery.tiles" Ack (handleTile storeTile)
+  pure ()
+
+handleTile :: (BL.ByteString -> IO ()) -> (Message, Envelope) -> IO ()
+handleTile storeTile (msg, env) = do
+  let inflated = BL.take (maxTileBytes + 1) (GZip.decompress (msgBody msg))  --@@
+  if BL.length inflated > maxTileBytes
+    then rejectEnv env False
+    else do
+      storeTile inflated
+      ackEnv env
+
+@@@ resource-limits | vulnerable | src/Orchard/Flights/Plan.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, DeriveGeneric #-}
+module Orchard.Flights.Plan (PlanAPI, planServer) where
+
+import Servant
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import GHC.Generics (Generic)
+import qualified Data.ByteString as BS
+
+data PlanRequest = PlanRequest { orchardId :: Int, gridWidth :: Int, gridHeight :: Int } deriving Generic
+instance FromJSON PlanRequest
+
+type PlanAPI = "flights" :> "plan" :> ReqBody '[JSON] PlanRequest :> Post '[JSON] Int
+
+planServer :: (Int -> BS.ByteString -> IO Int) -> Server PlanAPI
+planServer saveCoverageMask req = do
+  let mask = BS.replicate (gridWidth req * gridHeight req) 0  --@@
+  liftIO (saveCoverageMask (orchardId req) mask)
+
+@@@ resource-limits | safe | src/Orchard/Flights/Grid.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, DeriveGeneric #-}
+module Orchard.Flights.Grid (GridAPI, gridServer) where
+
+import Servant
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import GHC.Generics (Generic)
+import qualified Data.ByteString as BS
+
+data GridRequest = GridRequest { orchardId :: Int, gridWidth :: Int, gridHeight :: Int } deriving Generic
+instance FromJSON GridRequest
+
+type GridAPI = "flights" :> "plan" :> ReqBody '[JSON] GridRequest :> Post '[JSON] Int
+
+maxCells :: Int
+maxCells = 4096 * 4096
+
+gridServer :: (Int -> BS.ByteString -> IO Int) -> Server GridAPI
+gridServer saveCoverageMask req
+  | gridWidth req < 1 || gridHeight req < 1 = throwError err400 { errBody = "grid dimensions must be positive" }
+  | gridWidth req > 4096 || gridHeight req > 4096 || gridWidth req * gridHeight req > maxCells =
+      throwError err413 { errBody = "grid exceeds 4096 x 4096 cells" }
+  | otherwise = do
+      let mask = BS.replicate (gridWidth req * gridHeight req) 0  --@@
+      liftIO (saveCoverageMask (orchardId req) mask)
+
+@@@ parser-safety | vulnerable | src/Cave/Humidity/Readings.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Cave.Humidity.Readings (readingRoutes) where
+
+import Web.Scotty
+import Control.Monad.IO.Class (liftIO)
+
+readingRoutes :: (Int -> IO [Double]) -> ScottyM ()
+readingRoutes loadSensor = get "/cave/readings" $ do
+  sensorText <- param "sensor" :: ActionM String
+  let sensorId = read sensorText :: Int  --@@
+  values <- liftIO (loadSensor sensorId)
+  json values
+
+@@@ parser-safety | safe | src/Cave/Humidity/Samples.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Cave.Humidity.Samples (sampleRoutes) where
+
+import Web.Scotty
+import Network.HTTP.Types.Status (status400)
+import Control.Monad.IO.Class (liftIO)
+import Text.Read (readMaybe)
+
+sampleRoutes :: (Int -> IO [Double]) -> ScottyM ()
+sampleRoutes loadSensor = get "/cave/readings" $ do
+  sensorText <- param "sensor" :: ActionM String
+  case readMaybe sensorText :: Maybe Int of  --@@
+    Nothing -> status status400 >> text "sensor must be a number"
+    Just sensorId -> do
+      values <- liftIO (loadSensor sensorId)
+      json values
+
+@@@ parser-safety | vulnerable | src/Cave/Vents/Control.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Cave.Vents.Control (ventSocket) where
+
+import qualified Network.WebSockets as WS
+import Control.Monad (forever)
+import Text.Read (readMaybe)
+import qualified Data.Text as T
+
+ventSocket :: (T.Text -> Int -> IO ()) -> WS.ServerApp
+ventSocket setVent pending = do
+  conn <- WS.acceptRequest pending
+  forever $ do
+    msg <- WS.receiveData conn :: IO T.Text
+    let parts = T.words msg
+        command = head parts  --@@
+        arguments = drop 1 parts
+    case (command, arguments) of
+      ("set", [vent, percentText]) | Just percent <- readMaybe (T.unpack percentText) -> do
+        setVent vent percent
+        WS.sendTextData conn ("ok " <> vent)
+      _ -> WS.sendTextData conn ("unrecognised command" :: T.Text)
+
+@@@ parser-safety | safe | src/Cave/Vents/Commands.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Cave.Vents.Commands (commandSocket) where
+
+import qualified Network.WebSockets as WS
+import Control.Monad (forever)
+import Text.Read (readMaybe)
+import qualified Data.Text as T
+
+commandSocket :: (T.Text -> Int -> IO ()) -> WS.ServerApp
+commandSocket setVent pending = do
+  conn <- WS.acceptRequest pending
+  forever $ do
+    msg <- WS.receiveData conn :: IO T.Text
+    case T.words msg of  --@@
+      ["set", vent, percentText] | Just percent <- readMaybe (T.unpack percentText) -> do
+        setVent vent percent
+        WS.sendTextData conn ("ok " <> vent)
+      _ -> WS.sendTextData conn ("unrecognised command" :: T.Text)
+
+@@@ parser-safety | vulnerable | src/Cave/Wheels/Intake.hs
+{-# LANGUAGE DeriveGeneric #-}
+module Cave.Wheels.Intake (watchIntake) where
+
+import System.FSNotify
+import Data.Aeson (FromJSON, decode)
+import Data.Maybe (fromJust)
+import GHC.Generics (Generic)
+import Control.Concurrent (threadDelay)
+import Control.Monad (forever)
+import qualified Data.ByteString.Lazy as BL
+
+data Wheel = Wheel { wheelId :: Int, targetHumidity :: Double } deriving Generic
+instance FromJSON Wheel
+
+watchIntake :: FilePath -> (Wheel -> IO ()) -> IO ()
+watchIntake intakeDir register = withManager $ \mgr -> do
+  _ <- watchDir mgr intakeDir (const True) $ \event -> do
+    contents <- BL.readFile (eventPath event)
+    let wheel = fromJust (decode contents) :: Wheel  --@@
+    register wheel
+  forever (threadDelay 1000000)
+
+@@@ parser-safety | safe | src/Cave/Wheels/Watch.hs
+{-# LANGUAGE DeriveGeneric #-}
+module Cave.Wheels.Watch (watchWheels) where
+
+import System.FSNotify
+import Data.Aeson (FromJSON, decode)
+import GHC.Generics (Generic)
+import Control.Concurrent (threadDelay)
+import Control.Monad (forever)
+import System.IO (hPutStrLn, stderr)
+import qualified Data.ByteString.Lazy as BL
+
+data Wheel = Wheel { wheelId :: Int, targetHumidity :: Double } deriving Generic
+instance FromJSON Wheel
+
+watchWheels :: FilePath -> (Wheel -> IO ()) -> IO ()
+watchWheels intakeDir register = withManager $ \mgr -> do
+  _ <- watchDir mgr intakeDir (const True) $ \event -> do
+    contents <- BL.readFile (eventPath event)
+    case decode contents :: Maybe Wheel of  --@@
+      Nothing -> hPutStrLn stderr ("ignoring unreadable wheel file " ++ eventPath event)
+      Just wheel -> register wheel
+  forever (threadDelay 1000000)
+
+@@@ route-authentication | vulnerable | src/Planetarium/Shows/Admin.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Planetarium.Shows.Admin (adminRoutes, ShowStore(..)) where
+
+import Web.Scotty
+import Network.HTTP.Types.Status (status401)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+
+data ShowStore = ShowStore
+  { createShow :: TL.Text -> IO Int
+  , cancelShow :: Int -> IO ()
+  , listShows :: IO [TL.Text]
+  }
+
+requireStaff :: (TL.Text -> IO Bool) -> ActionM () -> ActionM ()
+requireStaff isStaffToken action = do
+  token <- header "X-Staff-Token"
+  allowed <- maybe (pure False) (liftIO . isStaffToken) token
+  if allowed then action else status status401 >> text "staff token required"
+
+adminRoutes :: (TL.Text -> IO Bool) -> ShowStore -> ScottyM ()
+adminRoutes isStaffToken store = do
+  get "/shows" $ do
+    names <- liftIO (listShows store)
+    json names
+  post "/shows" $ requireStaff isStaffToken $ do
+    title <- param "title"
+    showId <- liftIO (createShow store title)
+    json showId
+  delete "/shows/:id" $ do
+    showId <- param "id"
+    liftIO (cancelShow store showId)  --@@
+    text "show cancelled"
+
+@@@ route-authentication | safe | src/Planetarium/Shows/Manage.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Planetarium.Shows.Manage (manageRoutes, ShowStore(..)) where
+
+import Web.Scotty
+import Network.HTTP.Types.Status (status401)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+
+data ShowStore = ShowStore
+  { createShow :: TL.Text -> IO Int
+  , cancelShow :: Int -> IO ()
+  , listShows :: IO [TL.Text]
+  }
+
+requireStaff :: (TL.Text -> IO Bool) -> ActionM () -> ActionM ()
+requireStaff isStaffToken action = do
+  token <- header "X-Staff-Token"
+  allowed <- maybe (pure False) (liftIO . isStaffToken) token
+  if allowed then action else status status401 >> text "staff token required"
+
+manageRoutes :: (TL.Text -> IO Bool) -> ShowStore -> ScottyM ()
+manageRoutes isStaffToken store = do
+  get "/shows" $ do
+    names <- liftIO (listShows store)
+    json names
+  post "/shows" $ requireStaff isStaffToken $ do
+    title <- param "title"
+    showId <- liftIO (createShow store title)
+    json showId
+  delete "/shows/:id" $ requireStaff isStaffToken $ do
+    showId <- param "id"
+    liftIO (cancelShow store showId)  --@@
+    text "show cancelled"
+
+@@@ route-authentication | vulnerable | src/Planetarium/Projector/Control.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module Planetarium.Projector.Control (ControlAPI, Projector(..), controlServer) where
+
+import Servant
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+type ControlAPI =
+       "projector" :> "status" :> Get '[JSON] T.Text
+  :<|> "projector" :> "calibrate" :> Header' '[Required] "Authorization" T.Text :> Post '[JSON] NoContent
+  :<|> "projector" :> "shutdown" :> Post '[JSON] NoContent
+
+data Projector = Projector
+  { lampStatus :: IO T.Text
+  , runCalibration :: IO ()
+  , powerOff :: IO ()
+  }
+
+controlServer :: (T.Text -> IO Bool) -> Projector -> Server ControlAPI
+controlServer isOperatorToken projector = statusHandler :<|> calibrateHandler :<|> shutdownHandler
+  where
+    statusHandler = liftIO (lampStatus projector)
+    calibrateHandler authorization = do
+      allowed <- liftIO (isOperatorToken authorization)
+      if allowed
+        then liftIO (runCalibration projector) >> pure NoContent
+        else throwError err401
+    shutdownHandler = do
+      liftIO (powerOff projector)  --@@
+      pure NoContent
+
+@@@ route-authentication | safe | src/Planetarium/Projector/Console.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module Planetarium.Projector.Console (ConsoleAPI, Projector(..), consoleServer) where
+
+import Servant
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+type ConsoleAPI =
+       "projector" :> "status" :> Get '[JSON] T.Text
+  :<|> "projector" :> "calibrate" :> Header' '[Required] "Authorization" T.Text :> Post '[JSON] NoContent
+  :<|> "projector" :> "shutdown" :> Header' '[Required] "Authorization" T.Text :> Post '[JSON] NoContent
+
+data Projector = Projector
+  { lampStatus :: IO T.Text
+  , runCalibration :: IO ()
+  , powerOff :: IO ()
+  }
+
+consoleServer :: (T.Text -> IO Bool) -> Projector -> Server ConsoleAPI
+consoleServer isOperatorToken projector = statusHandler :<|> calibrateHandler :<|> shutdownHandler
+  where
+    statusHandler = liftIO (lampStatus projector)
+    calibrateHandler authorization = do
+      allowed <- liftIO (isOperatorToken authorization)
+      if allowed
+        then liftIO (runCalibration projector) >> pure NoContent
+        else throwError err401
+    shutdownHandler authorization = do
+      allowed <- liftIO (isOperatorToken authorization)
+      if not allowed
+        then throwError err401
+        else do
+          liftIO (powerOff projector)  --@@
+          pure NoContent
+
+@@@ route-authentication | vulnerable | src/Planetarium/Dome/Hatch.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Planetarium.Dome.Hatch (domeRoutes, Dome(..)) where
+
+import Happstack.Server
+import Control.Monad (msum, unless)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as BC
+
+data Dome = Dome
+  { openHatch :: IO ()
+  , closeHatch :: IO ()
+  , hatchState :: IO String
+  }
+
+requireOperator :: (BC.ByteString -> IO Bool) -> ServerPart ()
+requireOperator isOperator = do
+  req <- askRq
+  allowed <- maybe (pure False) (liftIO . isOperator) (getHeader "X-Operator-Token" req)
+  unless allowed $ do
+    refusal <- unauthorized (toResponse ("operator token required" :: String))
+    finishWith refusal
+
+domeRoutes :: (BC.ByteString -> IO Bool) -> Dome -> ServerPart Response
+domeRoutes isOperator dome = msum
+  [ dir "dome" $ dir "state" $ method GET >> (liftIO (hatchState dome) >>= ok . toResponse)
+  , dir "dome" $ dir "close" $ method POST >> requireOperator isOperator >> liftIO (closeHatch dome) >> ok (toResponse ("closing" :: String))
+  , dir "dome" $ dir "open" $ method POST >> liftIO (openHatch dome) >> ok (toResponse ("opening" :: String))  --@@
+  ]
+
+@@@ route-authentication | safe | src/Planetarium/Dome/Shutter.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Planetarium.Dome.Shutter (shutterRoutes, Dome(..)) where
+
+import Happstack.Server
+import Control.Monad (msum, unless)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as BC
+
+data Dome = Dome
+  { openHatch :: IO ()
+  , closeHatch :: IO ()
+  , hatchState :: IO String
+  }
+
+requireOperator :: (BC.ByteString -> IO Bool) -> ServerPart ()
+requireOperator isOperator = do
+  req <- askRq
+  allowed <- maybe (pure False) (liftIO . isOperator) (getHeader "X-Operator-Token" req)
+  unless allowed $ do
+    refusal <- unauthorized (toResponse ("operator token required" :: String))
+    finishWith refusal
+
+shutterRoutes :: (BC.ByteString -> IO Bool) -> Dome -> ServerPart Response
+shutterRoutes isOperator dome = msum
+  [ dir "dome" $ dir "state" $ method GET >> (liftIO (hatchState dome) >>= ok . toResponse)
+  , dir "dome" $ dir "close" $ method POST >> requireOperator isOperator >> liftIO (closeHatch dome) >> ok (toResponse ("closing" :: String))
+  , dir "dome" $ dir "open" $ method POST >> requireOperator isOperator >> liftIO (openHatch dome) >> ok (toResponse ("opening" :: String))  --@@
+  ]
+
+@@@ object-authorization | vulnerable | src/Kennel/Dogs/VetRecord.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Kennel.Dogs.VetRecord (vetRecordRoutes) where
+
+import Web.Scotty
+import Database.PostgreSQL.Simple
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+vetRecordRoutes :: Connection -> ActionM Int -> ScottyM ()
+vetRecordRoutes conn requireMusher = get "/dogs/:id/vet-record" $ do
+  _musherId <- requireMusher
+  dogId <- param "id" :: ActionM Int
+  rows <- liftIO (query conn "SELECT visited_on, notes FROM vet_records WHERE dog_id = ? ORDER BY visited_on DESC" (Only dogId)) :: ActionM [(T.Text, T.Text)]  --@@
+  json rows
+
+@@@ object-authorization | safe | src/Kennel/Dogs/Health.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Kennel.Dogs.Health (healthRoutes) where
+
+import Web.Scotty
+import Database.PostgreSQL.Simple
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+healthRoutes :: Connection -> ActionM Int -> ScottyM ()
+healthRoutes conn requireMusher = get "/dogs/:id/vet-record" $ do
+  musherId <- requireMusher
+  dogId <- param "id" :: ActionM Int
+  rows <- liftIO (query conn "SELECT visited_on, notes FROM vet_records WHERE dog_id = ? AND musher_id = ? ORDER BY visited_on DESC" (dogId, musherId)) :: ActionM [(T.Text, T.Text)]  --@@
+  json rows
+
+@@@ object-authorization | vulnerable | src/Kennel/Teams/Roster.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, TemplateHaskell, QuasiQuotes, TypeFamilies, GADTs, GeneralizedNewtypeDeriving, MultiParamTypeClasses, FlexibleContexts, FlexibleInstances, DerivingStrategies, StandaloneDeriving, UndecidableInstances #-}
+module Kennel.Teams.Roster (RosterAPI, rosterServer) where
+
+import Servant
+import Database.Persist
+import Database.Persist.Sqlite
+import Database.Persist.TH
+import Control.Monad.IO.Class (liftIO)
+import Data.Int (Int64)
+import Data.Text (Text)
+
+share [mkPersist sqlSettings] [persistLowerCase|
+Team
+    musherId Int64
+    name Text
+    leadDog Text
+|]
+
+type RosterAPI = "teams" :> Capture "teamId" Int64 :> Header' '[Required] "Authorization" Text :> Get '[JSON] Text
+
+rosterServer :: ConnectionPool -> (Text -> IO (Maybe Int64)) -> Server RosterAPI
+rosterServer pool musherForToken teamId authorization = do
+  musher <- liftIO (musherForToken authorization)
+  case musher of
+    Nothing -> throwError err401
+    Just _musherId -> do
+      found <- liftIO (runSqlPool (get (toSqlKey teamId)) pool)  --@@
+      maybe (throwError err404) (pure . teamLeadDog) found
+
+@@@ object-authorization | safe | src/Kennel/Teams/Lineup.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, TemplateHaskell, QuasiQuotes, TypeFamilies, GADTs, GeneralizedNewtypeDeriving, MultiParamTypeClasses, FlexibleContexts, FlexibleInstances, DerivingStrategies, StandaloneDeriving, UndecidableInstances #-}
+module Kennel.Teams.Lineup (LineupAPI, lineupServer) where
+
+import Servant
+import Database.Persist
+import Database.Persist.Sqlite
+import Database.Persist.TH
+import Control.Monad.IO.Class (liftIO)
+import Data.Int (Int64)
+import Data.Text (Text)
+
+share [mkPersist sqlSettings] [persistLowerCase|
+Team
+    musherId Int64
+    name Text
+    leadDog Text
+|]
+
+type LineupAPI = "teams" :> Capture "teamId" Int64 :> Header' '[Required] "Authorization" Text :> Get '[JSON] Text
+
+lineupServer :: ConnectionPool -> (Text -> IO (Maybe Int64)) -> Server LineupAPI
+lineupServer pool musherForToken teamId authorization = do
+  musher <- liftIO (musherForToken authorization)
+  case musher of
+    Nothing -> throwError err401
+    Just musherId -> do
+      found <- liftIO (runSqlPool (selectFirst [TeamId ==. toSqlKey teamId, TeamMusherId ==. musherId] []) pool)  --@@
+      maybe (throwError err404) (pure . teamLeadDog . entityVal) found
+
+@@@ object-authorization | vulnerable | src/Kennel/Sleds/Inventory.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Kennel.Sleds.Inventory (sledRoutes, Session(..)) where
+
+import Web.Spock
+import Database.MySQL.Simple
+import Network.HTTP.Types.Status (status401)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+data Session = Session { sessionMusherId :: Int, sessionKennel :: T.Text }
+
+sledRoutes :: Connection -> SpockM () (Maybe Session) () ()
+sledRoutes conn = get ("sleds" <//> var) $ \sledId -> do
+  session <- readSession
+  case session of
+    Nothing -> setStatus status401 >> text "sign in first"
+    Just _musher -> do
+      rows <- liftIO (query conn "SELECT model, runner_length_cm FROM sleds WHERE id = ?" (Only (sledId :: Int)))  --@@
+      json (rows :: [(T.Text, Int)])
+
+@@@ object-authorization | safe | src/Kennel/Sleds/Fleet.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Kennel.Sleds.Fleet (fleetRoutes, Session(..)) where
+
+import Web.Spock
+import Database.MySQL.Simple
+import Network.HTTP.Types.Status (status401)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+data Session = Session { sessionMusherId :: Int, sessionKennel :: T.Text }
+
+fleetRoutes :: Connection -> SpockM () (Maybe Session) () ()
+fleetRoutes conn = get ("sleds" <//> var) $ \sledId -> do
+  session <- readSession
+  case session of
+    Nothing -> setStatus status401 >> text "sign in first"
+    Just musher -> do
+      rows <- liftIO (query conn "SELECT model, runner_length_cm FROM sleds WHERE id = ? AND musher_id = ?" (sledId :: Int, sessionMusherId musher))  --@@
+      json (rows :: [(T.Text, Int)])
