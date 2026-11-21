@@ -253,3 +253,32 @@ test('jsUnits reports a 1-based line number for each unit', () => {
   assert.equal(unit.name, 'target');
   assert.equal(unit.line, 3);
 });
+
+test('pythonUnits keeps a nested def inside the enclosing method, so a forwarding call after a local helper is still the method\'s', () => {
+  const src = [
+    'class Repo:',
+    '    def checkout(self, paths=None, **kwargs):',
+    '        args = ["--index"]',
+    '        def handle_stderr(proc):',
+    '            return proc',
+    '        proc = self.repo.git.checkout_index(args, **kwargs)',
+    '        return proc',
+    '    def other(self):',
+    '        return 1',
+    '',
+  ].join('\n');
+  const units = pythonUnits(src);
+  assert.deepEqual(units.map(u => u.name), ['checkout', 'other']);
+  assert.match(units[0].body, /checkout_index\(args, \*\*kwargs\)/);
+  // The real consequence: among guarded siblings, the method whose only forwarding call follows a nested def is reported.
+  const r = repo({ guarded: 4, unguarded: [] });
+  const withNested = r.replace(/\n$/, '') + '\n' + [
+    '    def checkout(self, paths=None, **kwargs):',
+    '        def handle_stderr(proc):',
+    '            return proc',
+    '        return self.repo.git.checkout_index(paths, **kwargs)',
+    '',
+  ].join('\n');
+  const found = scanConventionDeviation('git/index/base.py', withNested);
+  assert.ok(found.some(f => /checkout\(\)/.test(f.vuln)), JSON.stringify(found.map(f => f.vuln)));
+});
