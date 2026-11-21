@@ -563,12 +563,13 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // 1124 -> 1143, 819 -> 827 modeled, 6 -> 17 partial (round six, the XSS models): 19 CWE-79 sinks, of which the 11
   // DOM writers (document.writeln, jQuery) are `client-storage`/`partial` and the 8 server-side writers `http-response`/
   // `modeled`. Re-measured against the live catalog.
-  assert.equal(SINKS.length, 1143);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 827);
+  // 1143 -> 1145, 827 -> 829 modeled (0.219.0): PostgreSQL CopyManager.copyOut/copyIn, CWE-89, receiver-scoped. Re-measured against the live catalog.
+  assert.equal(SINKS.length, 1145);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 829);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 17);     // the 17 DOM/React/jQuery CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 290);
-  assert.equal(827 + 17 + 9 + 290, SINKS.length);
+  assert.equal(829 + 17 + 9 + 290, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

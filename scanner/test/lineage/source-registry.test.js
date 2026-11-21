@@ -288,12 +288,14 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // parameters, Flask/FastAPI route parameters, aiohttp/Starlette/Tornado, JAX-RS/Quarkus/Micronaut annotations, servlet and Ktor
   // accessors, net/http/gin/echo/fiber accessors, Laravel facade and CodeIgniter, Rack request fields, ASP.NET Core request
   // fields), every one with a request provenance. Re-measured against the live catalog.
-  assert.equal(SOURCES.length, 897);
+  // 897 -> 898 and 41 -> 42 partial (0.219.0): the MCP tool-handler arguments source (`js:mcp-tool-handler`), refined as the other
+  // agent-tool sources are. Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 898);
   assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 738);
-  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 41);
+  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 42);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 118);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(738 + 41 + 118, SOURCES.length);
+  assert.equal(738 + 42 + 118, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
