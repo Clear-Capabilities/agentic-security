@@ -9,6 +9,14 @@
 > make the history less accurate, not more.
 
 
+## 0.218.1 - Nested Python functions no longer split the method that contains them in the convention-deviation detector
+
+**Measured, 0.218.0:** `TIMINGS preflight=4s push=7s pr=4s checks=425s merge=5s verify=18s tag=2s release=162s npm=514s total=1141s release-clock=187s` (the first merge attempt was refused by the base branch policy a second after the checks turned green and succeeded on resume; the npm phase waited 514 s for the registry listing).
+
+- **`convention-deviation.js`, Python unit splitter.** A `def` indented deeper than the open unit is a nested helper and now stays inside the enclosing method; before, every `def` opened a new unit, so a method's forwarding calls after a local helper were attributed to the helper, which declares no option bag and was never compared with its siblings. The shape is GitPython's `checkout()`, whose two `git.checkout_index(..., **kwargs)` calls follow a nested `handle_stderr()`. Measured project-scoped on the 28 Python development entries of the independent bench, old module against new, with the bench's own scorer helpers: the one localized detection kept (GHSA-9rj7-rf2p-w77r), findings on the vulnerable trees 45 to 22 and on the fixed trees 54 to 25; the whole drop is GitPython, where the correctly joined units show that the guard is not a convention in that class, so the detector goes quiet there instead of reporting `move()` and `from_tree()` on both revisions. No development or validation accuracy change is claimed; no full run was made for this release. Test: `test/convention-deviation.test.js`.
+- **Round 14 scouting, recorded in the lessons document (untracked).** Of the 113 development misses, 19 have a right-CWE finding in the right file outside the localization window; in 15 the count is identical on both revisions, so the finding is another site of the same class. The 15 "attribution" misses are findings of another family inside fixed functions hundreds of lines long. Two fit-half entries with no finding at all have sparsely cached trees (8 and 50 files). None of this is actionable without relabelling or changing the frozen bench data, both refused.
+- **Gates.** Full suite 13,606 of 13,645 tests passed, 0 in the release tree (38 skipped; the pre-validation run in a dirty analysis worktree failed only the scorecard identity test, which names the committed measurement) failed; mutation 464 of 464 verdict flips correct; CVE replay 229 of 229 baselined entries, no drift; layer recall equal to the baseline; self-scan no per-file drift.
+
 ## 0.218.0 - An authorization-step detector, a C# fixed-offset read detector, a development-internal holdout
 
 **Measured, 0.217.0:** `TIMINGS preflight=4s push=7s pr=5s checks=464s merge=6s verify=7s tag=2s release=285s npm=668s total=1448s release-clock=300s`.
