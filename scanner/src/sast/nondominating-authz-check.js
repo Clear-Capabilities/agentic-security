@@ -1,4 +1,7 @@
-// Authorization check that does not dominate the action it protects: CWE-862.
+// Authorization check that does not dominate the action it protects: CWE-863.
+//
+// CWE-863 (Incorrect Authorization), not CWE-862 (Missing Authorization): the handler DOES perform a check, and performs it
+// incorrectly, on some paths only. CWE-862 is for a handler with no check at all. Reported as 862 until 0.218.0.
 //
 // THE SHAPE (Python). A handler checks the caller's permission on an object, but the check sits inside a branch on a property of the
 // DATA (a plugin flag, a format, a content type), and the action on the object runs after that branch on every path:
@@ -93,7 +96,7 @@ export function scanNondominatingAuthzCheck(file, code) {
           file, line: i + 1,
           vuln: 'Authorization check runs only on one branch; the action it protects runs on every path',
           severity: 'high',
-          cwe: 'CWE-862',
+          cwe: 'CWE-863',
           family: 'broken-access-control',
           stride: 'Elevation of Privilege',
           description: `The permission check at line ${i + 1} only runs when \`${cond.trim()}\` (line ${h + 1}) holds, a property of the data rather than of the caller. Line ${r + 1} acts on \`${used}\` after that branch on every path, so when the data takes the other branch the action runs with no permission check at all.`,

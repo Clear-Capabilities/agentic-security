@@ -1,4 +1,4 @@
-// Authorization check nested under a data branch while the action runs on every path (CWE-862), src/sast/nondominating-authz-check.js.
+// Authorization check nested under a data branch while the action runs on every path (CWE-863: the check exists and is wrong on some paths), src/sast/nondominating-authz-check.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -14,7 +14,7 @@ test('a check under a data branch, with the protected data used after the branch
   const code = read('vulnerable');
   const out = scan('views.py', code);
   assert.deepEqual(out.map((f) => f.line), [lineOf(code, 'if not perm.can():')]);
-  assert.equal(out[0].cwe, 'CWE-862');
+  assert.equal(out[0].cwe, 'CWE-863');
 });
 
 test('the fixed version, which reads the protected data only on the checked branch, is silent', () => {

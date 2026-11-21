@@ -128,6 +128,7 @@ import { scanGoExtended } from './sast/go-extended.js';
 import { scanDatabaseRLS } from './sast/db-rls.js';
 import { scanRateLimit } from './sast/rate-limit.js';
 import { scanConventionDeviationProject } from './sast/convention-deviation.js';
+import { scanAuthzStepDeviation } from './sast/authz-step-deviation.js';
 import { scanResourceExhaustion } from './sast/resource-exhaustion.js';
 import { scanRequestSizedResource } from './sast/request-sized-resource.js';
 import { scanResourceLimitDisabled } from './sast/resource-limit-disabled.js';
@@ -9434,6 +9435,9 @@ function _deterministicFileTimings(timings) {
   // property of the codebase, not of one file (see convention-deviation.js).
   _tel.record('cross-file-linking', Date.now() - _tLink);
   aF.push(...(runDetector(_detectorErrors,'<project>','scanConventionDeviationProject',()=>scanConventionDeviationProject(fc))||[]));
+  // Authorization step deviation (`sast/authz-step-deviation.js`): a handler that authenticates and skips the permission check its directory's
+  // handlers make. Project-scoped: the siblings and the authentication wrapper they call live in other files.
+  aF.push(...(runDetector(_detectorErrors,'<project>','scanAuthzStepDeviation',()=>scanAuthzStepDeviation(fc))||[]));
   aF.push(...(runDetector(_detectorErrors,'<project>','scanApiBrokenAuthz',()=>scanApiBrokenAuthz(aR))||[]));
   // R22 (PRD §5): cross-service edges inferred from code (client call → matched route).
   aF.push(...(runDetector(_detectorErrors,'<project>','scanCrossService',()=>scanCrossService(aR,fc))||[]));
