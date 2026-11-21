@@ -494,6 +494,27 @@ export function parseJsFile(file, code) {
       const args = call.arguments || [];
       return args.length >= 3 && args[args.length - 1] === node;
     })();
+    // tRPC: the resolver handed to .query/.mutation/.subscription on a chain that carries .input(schema) receives { input, ctx }. The IR marks
+    // the `input` field of the first parameter (named or destructured); the catalog's js:trpc-procedure-handler source reads it as client input.
+    const trpcHandler = (() => {
+      const pp = fnPath && fnPath.parentPath;
+      const call = pp && pp.node;
+      if (!call || call.type !== 'CallExpression' || fnPath.listKey !== 'arguments') return false;
+      const callee = call.callee;
+      const prop = callee && callee.type === 'MemberExpression' && !callee.computed && callee.property && callee.property.name;
+      if (prop !== 'query' && prop !== 'mutation' && prop !== 'subscription') return false;
+      if ((call.arguments || []).length !== 1 || call.arguments[0] !== node) return false;
+      let cur = callee.object;
+      for (let d = 0; cur && d < 12; d++) {
+        if (cur.type === 'CallExpression') {
+          const c = cur.callee;
+          if (c && c.type === 'MemberExpression' && !c.computed && c.property && c.property.name === 'input') return true;
+          cur = c && c.type === 'MemberExpression' ? c.object : null;
+        } else if (cur.type === 'MemberExpression') cur = cur.object;
+        else break;
+      }
+      return false;
+    })();
     const fn = {
       qid, name: name || 'anon', line,
       // Plain strings, per the IR shape contract (ir/CLAUDE.md: "params:
@@ -544,6 +565,10 @@ export function parseJsFile(file, code) {
         // the catalog's `js:server-action` source decides that it is request input.
         if (serverAction && resolvedIdent?.type === 'Identifier' && callerControllable(resolvedIdent)) {
           paramAnnotations.push({ index: idx, name: resolvedIdent.name, decorator: 'js:server-action' });
+        }
+        if (trpcHandler && idx === 0) {
+          const nm = resolvedIdent?.type === 'Identifier' ? resolvedIdent.name : (resolvedIdent?.type === 'ObjectPattern' ? '<obj>' : null);
+          if (nm) paramAnnotations.push({ index: idx, name: `${nm}.input`, decorator: 'js:trpc-procedure-handler' });
         }
         if (mcpHandler && idx === 0) {
           // the arguments object, named or destructured (`async ({ city, units }) => ...`: the pattern's bindings read off `<obj>`)

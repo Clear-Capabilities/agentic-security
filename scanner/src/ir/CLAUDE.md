@@ -341,3 +341,26 @@ Tests: `test/java-field-receiver-taint.test.js` (each positive with a refusing t
   `.tool(` whose handler reads nothing from its parameter produces nothing.
 
 Tests: `test/python-class-taint.test.js`, `test/parser-js-ts-casts.test.js`, `test/ts-class-mcp-taint.test.js` (each positive with a refusing twin).
+
+## 0.220.0: Python framework shapes, call chains, tRPC
+
+- **A chained call keeps its inner call (`parser-py.helper.py`, `_inner_calls`).** `cur.execute(q).fetchall()` still lowers to the dotted callee
+  `cur.execute.fetchall` with the merged argument list (every consumer of that form is unchanged), and now also carries `innerCalls`: the call
+  the callee is built on, lowered on its own with its own arguments and line. The engine gives each inner call a sink site
+  (`_chainSinkFindings`), which the merged form cannot: `obj.exec.run(x)` (a member chain) and `obj.exec().run(x)` (a call chain) flatten to
+  the same string. Both the expression lowering and the statement-level call node carry it.
+- **`await f(x)` as a statement is the call f(x).** It lowered to a noop before; `await asyncio.create_subprocess_shell(cmd)` had no node.
+- **`with X() as c` types `c` (`declaredType`)** as a plain assignment does, so `receiverTypeIn` can confirm a sink on a short name
+  (`c.get(url)` with `c` an httpx Client).
+- **FastAPI dependencies.** A parameter whose default is `Depends(fn)` or `Security(fn)` is stated as `name = fn()` at the top of the body
+  (the engine resolves `fn` and reads its return taint), and every function referenced that way has its own text parameters marked
+  `py:route-param` (`_route_params(..., assume_route=True)`): FastAPI fills them from the request exactly as it fills a route handler's.
+  `Depends(get_db)` returning a session states nothing tainted; an `int` parameter is skipped as on a route.
+- **Django URL captures (`urlCaptures`, linked by `ir/index.js` `linkDjangoUrlCaptures`).** `path("a/<name>/", views.v)`, `re_path(r"(?P<name>\\w+)", v)`
+  and the old `url(...)` are recorded per file with the view's name, its module when written `views.v`, and the text captures (`str`, `slug`,
+  `path` or no converter; a named group whose pattern is not digit-only). After all files are parsed the view is found by name in the named
+  module beside the urls file (any file of that name when there is exactly one), or in the urls file's directory for a bare name, and the
+  matching parameters get `py:django-url-capture`; a class-based `V.as_view()` is not linked. Numeric converters, methods and ambiguity refuse.
+- **tRPC (`parser-js.js`).** The resolver passed to `.query`, `.mutation` or `.subscription` on a chain that carries `.input(schema)` gets
+  `js:trpc-procedure-handler` on the `input` field of its first parameter (`<obj>.input` when destructured, `opts.input` when named); `ctx`
+  is not marked, and a procedure with no `.input` marks nothing.

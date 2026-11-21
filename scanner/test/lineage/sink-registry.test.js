@@ -229,7 +229,7 @@ test('D3/preservation: every `unsupported` sink entry carries a non-empty reason
   // 174 -> 176 (0.195.14): typed-process `proc` as a CWE-78 (program) and a CWE-88 (arguments) sink, `unsupported` like every process sink.
   // 176 -> 290 (round five of the framework models): the process, code-evaluation, template-source, deserialization,
   // ReDoS and reflection sinks of catalog-framework-models.js. Re-measured against the live catalog.
-  assert.equal(unsupported.length, 290);
+  assert.equal(unsupported.length, 292);
   for (const r of unsupported) {
     assert.equal(r.kind, 'process');
     assert.ok(r.reason && r.reason.length > 0);
@@ -564,12 +564,16 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // DOM writers (document.writeln, jQuery) are `client-storage`/`partial` and the 8 server-side writers `http-response`/
   // `modeled`. Re-measured against the live catalog.
   // 1143 -> 1145, 827 -> 829 modeled (0.219.0): PostgreSQL CopyManager.copyOut/copyIn, CWE-89, receiver-scoped. Re-measured against the live catalog.
-  assert.equal(SINKS.length, 1145);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 829);
+  // 1145 -> 1158, 829 -> 840 modeled, 290 -> 292 unsupported (0.220.0): TypeORM query-builder fragments (5, CWE-89) and mongoose
+  // `$where` filter keys (6, CWE-943) are modeled; asyncio.create_subprocess_shell (CWE-78) and Template(source) (CWE-1336) are
+  // unsupported like every entry of those CWEs. Re-measured against the live catalog.
+  // 1158 -> 1160, 840 -> 842 modeled (0.220.0, Haskell round 12): hasql's Statement constructor and Session.sql (CWE-89). Re-measured against the live catalog.
+  assert.equal(SINKS.length, 1160);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 842);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 17);     // the 17 DOM/React/jQuery CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
-  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 290);
-  assert.equal(829 + 17 + 9 + 290, SINKS.length);
+  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 292);
+  assert.equal(842 + 17 + 9 + 292, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

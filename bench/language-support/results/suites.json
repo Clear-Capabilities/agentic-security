@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/language-support-suites@1",
-  "ranAt": "2026-11-04",
+  "ranAt": "2026-11-21",
   "node": "v24.20.0",
   "tools": {
     "ghc": true,
@@ -165,8 +165,8 @@
     "nix-eval-isolation.test.js": {
       "name": "nix-eval-isolation.test.js",
       "file": "test/nix/nix-eval-isolation.test.js",
-      "tests": 8,
-      "pass": 8,
+      "tests": 9,
+      "pass": 9,
       "fail": 0,
       "skipped": 0,
       "cancelled": 0,

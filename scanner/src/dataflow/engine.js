@@ -899,6 +899,7 @@ function _isInternalModuleCall(calleeExpr, callContext) {
   let text = null;
   if (calleeExpr && calleeExpr.kind === 'member' && typeof calleeExpr.prop === 'string' && calleeExpr.object && calleeExpr.object.kind === 'ident') text = `${calleeExpr.object.name}.${calleeExpr.prop}`;
   else if (calleeExpr && calleeExpr.kind === 'ident' && typeof calleeExpr.name === 'string') text = calleeExpr.name; // `const { exec } = require('./util'); exec(c)`
+  else if (typeof calleeExpr === 'string') text = calleeExpr; // the Python frontend's dotted callee: a call of the module's own `post(..)` is not a library sink
   if (!text) return false;
   const mi = callContext && callContext._callGraph && callContext._callGraph.moduleIndex;
   if (!mi || !_currentFile) return false;
@@ -1450,17 +1451,28 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
   const findings = [];
   if (cat) {
     for (const e of cat) {
+      // `argKey`: the sink is one KEY of an object literal argument (`Model.find({ $where: s })`). The argument counts as tainted
+      // only when the literal names that key with a tainted value, so `find({ name: s })` stays the parameterised query it is.
+      let keyProp = null;
+      let taints = argTaints;
+      if (e.kind === 'sink' && e.argKey && typeof e.argIndex === 'number') {
+        const a = (argExprs || [])[e.argIndex];
+        keyProp = a && a.kind === 'object' && Array.isArray(a.props) ? (a.props.find((q) => q && !q.spread && q.key === e.argKey) || null) : null;
+        taints = argTaints.map((t, i) => (i === e.argIndex ? !!(keyProp && exprTaint(keyProp.value, state, callContext)) : false));
+      }
       if (e.kind === 'sink' && (
-        e.argIndex === 'all' ? argTaints.some(Boolean) :
-        (typeof e.argIndex === 'number' && argTaints[e.argIndex])
+        e.argIndex === 'all' ? taints.some(Boolean) :
+        (typeof e.argIndex === 'number' && taints[e.argIndex])
       )) {
         const taintedArgIdx = e.argIndex === 'all'
-          ? argTaints.findIndex(Boolean) : e.argIndex;
-        const taintedArgExpr = (argExprs || [])[taintedArgIdx];
+          ? taints.findIndex(Boolean) : e.argIndex;
+        const taintedArgExpr = keyProp ? keyProp.value : (argExprs || [])[taintedArgIdx];
         // String content analysis: skip if literal skeleton doesn't match injection family
         // Haskell entries are import-qualified, API-specific sinks (`preEscapedToHtml`, `callCommand`), never a generic
         // `.query()`-style call that may carry an unrelated string, so the literal-skeleton filter does not apply to them.
-        if (e.vuln && taintedArgExpr && !e.hs && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
+        // `skipSkeleton`: a sink that takes a FRAGMENT (a TypeORM condition, a `$where` expression) never shows the statement
+        // keywords the skeleton check looks for, and the receiver scoping of such an entry is what makes it a sink.
+        if (e.vuln && taintedArgExpr && !e.hs && !e.skipSkeleton && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
         // A text-output sink that is an XSS sink ONLY when the string being assembled contains markup (`putStrLn`).
         // `match.htmlSkeleton` is the same gate for a catalog entry outside Haskell (Fastify `reply.send`, jQuery
         // `.append`, Flask `make_response`): the tainted argument must itself carry a markup literal, so a value
@@ -1618,6 +1630,38 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
 // Haskell only: a call written on its own line inside a larger expression (`get "/r" $ do ... liftIO (callCommand c)`) carries that line, while the node that
 // finally executes it sits on the line the handler starts. The sink is where the call is written. Other IRs lower nested calls differently and keep the node's line.
 const _sinkLine = (call, fallback) => (/\.(?:hs|lhs)$/i.test(_currentFile || '') && call && Number.isInteger(call.line) && call.line >= 1 ? call.line : fallback);
+
+// A sink call may sit under a member read of its result or under a further call on it (`return requests.get(u).text`,
+// `rows = client.get(u).json()`): the inner call runs when the statement runs, so it is a sink site of its own. Walks the
+// `member.object` and `call.callee` chain below the statement's own expression; the top-level call is the caller's business.
+// Not for JavaScript, whose frontend already emits a standalone call node for every nested call.
+function _receiverChainCalls(expr) {
+  const out = [];
+  let cur = expr && expr.kind === 'member' ? expr.object
+    : (expr && expr.kind === 'call' && expr.callee && typeof expr.callee === 'object' ? expr.callee : null);
+  for (let d = 0; cur && typeof cur === 'object' && d < 8; d++) {
+    if (cur.kind === 'call') { out.push(cur); cur = cur.callee && typeof cur.callee === 'object' ? cur.callee : null; continue; }
+    if (cur.kind === 'member') { cur = cur.object; continue; }
+    break;
+  }
+  return out;
+}
+function _chainSinkFindings(expr, state, callContext, line) {
+  const findings = [];
+  if (_isJsFile(_currentFile)) return findings;
+  // A frontend that flattens a call chain to one dotted callee (parser-py.helper.py) states the calls the callee is built on in
+  // `innerCalls`, each with its own arguments; they are sink sites too (`cur.execute(q).fetchall()`).
+  const calls = _receiverChainCalls(expr);
+  const walk = (c, d) => { if (!c || d > 6 || !Array.isArray(c.innerCalls)) return; for (const ic of c.innerCalls) { calls.push(ic); walk(ic, d + 1); } };
+  walk(expr, 0);
+  for (const c of [...calls]) walk(c, 1);
+  for (const c of calls) {
+    const { cat, argTaints } = _matchCallCatalog(c.callee, c.args, state, callContext);
+    findings.push(..._sinkFindingsForCall(c.callee, c.args, cat, argTaints, state, callContext, c.line || line, c.kwargs).findings);
+    findings.push(..._nestedSinkFindings(c.args, state, callContext, c.line || line));
+  }
+  return findings;
+}
 
 function _nestedSinkFindings(argExprs, state, callContext, line) {
   const findings = [];
@@ -1963,6 +2007,7 @@ function step(node, stateIn, callContext) {
       // 'call'` computes its own cat/argTaints before its mutation passes —
       // and pushed into the shared `findings` array so it survives every
       // return path below, including the early interprocedural returns.
+      if (node.source && (node.source.kind === 'call' || node.source.kind === 'member')) findings.push(..._chainSinkFindings(node.source, state, callContext, node.line));
       if (node.source && node.source.kind === 'call') {
         const { cat: _sinkCat, argTaints: _sinkArgTaints } =
           _matchCallCatalog(node.source.callee, node.source.args, state, callContext);
@@ -2253,6 +2298,7 @@ function step(node, stateIn, callContext) {
       // reflects the pre-mutation state, exactly as before this logic was
       // extracted into _matchCallCatalog/_sinkFindingsForCall.
       const { cat, argTaints } = _matchCallCatalog(node.callee, node.args, state, callContext);
+      findings.push(..._chainSinkFindings(node, state, callContext, node.line));
       // v0.66 — apply mutated-param taint at plain (non-assign) call sites.
       // Object.assign(target, tainted) → target becomes tainted in caller.
       const _plainCallCalleeName = _flattenCalleeName(node.callee);
@@ -2528,6 +2574,7 @@ function step(node, stateIn, callContext) {
           findings.push(..._sinkFindingsForCall('__route_return__', [body], cat, argTaints, state, callContext, node.line).findings);
         }
       }
+      if (node.value && (node.value.kind === 'call' || node.value.kind === 'member')) findings.push(..._chainSinkFindings(node.value, state, callContext, node.line));
       if (node.value && node.value.kind === 'call') {
         const { cat, argTaints } = _matchCallCatalog(node.value.callee, node.value.args, state, callContext);
         const _at = _sinkLine(node.value, node.line);

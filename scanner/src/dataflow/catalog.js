@@ -324,6 +324,12 @@ export const CATALOG = [
   // tool's arguments to the handler's first parameter (parser-js.js states it as `js:mcp-tool-handler`). The dominant way a
   // TypeScript MCP server is written; the member forms above cover only the low-level request handler.
   { kind: 'source', id: 'js-mcp-tool-handler-args', language: 'js', framework: 'mcp', match: { type: 'annotation', name: 'js:mcp-tool-handler' }, label: 'MCP tool handler arguments', provenance: 'agent-tool' },
+  // tRPC: the function given to .query/.mutation/.subscription after an .input(schema) receives the parsed client input as `input`
+  // (parser-js.js states it as `js:trpc-procedure-handler` on the `input` field of the first parameter; `ctx` is not marked).
+  { kind: 'source', id: 'js-trpc-procedure-input', language: 'js', framework: 'trpc', match: { type: 'annotation', name: 'js:trpc-procedure-handler' }, label: 'tRPC procedure input', provenance: 'http-body' },
+  // Django: a view's extra parameters are the URL captures of the path()/re_path() that routes to it; the link from urls.py to the
+  // view is made in ir/index.js (linkDjangoUrlCaptures), numeric converters and digit-only groups are left out there.
+  { kind: 'source', id: 'py-django-url-capture', language: 'py', framework: 'django', match: { type: 'annotation', name: 'py:django-url-capture' }, label: 'URL capture of a Django view', provenance: 'path-param' },
 
   // TOOL OUTPUT is the other half of F5.3's shape (tool output -> model context
   // -> tool invocation). Content returned by ANOTHER tool or an MCP resource is
@@ -1116,6 +1122,18 @@ export const CATALOG = [
             remediation: 'encoding/xml does not expand external entities by default — audit for Strict=false or a custom Entity map before treating this as safe; prefer a hardened parser for untrusted XML.' } },
 
   // ─── SINKS (NoSQL) ────────────────────────────────────────────────────────
+  // The `$where` operator inside a query document runs server-side JavaScript; the filter object itself is a parameterised query
+  // (`argKey`: only a tainted `$where` value fires, `find({ name: s })` does not).
+  ...['find', 'findOne', 'countDocuments', 'updateMany', 'deleteMany', 'findOneAndUpdate'].map((m) => ({
+    kind: 'sink', id: `js-mongo-${m.toLowerCase()}-where-key`, language: 'js', framework: 'mongo', match: { type: 'call', callee: m }, argIndex: 0, argKey: '$where', skipSkeleton: true,
+    vuln: { name: `NoSQL Injection (${m} with $where)`, severity: 'critical', cwe: 'CWE-943',
+            remediation: 'Never build a $where string from user input; express the condition with query operators.' } })),
+  // TypeORM's query builder takes SQL fragments as strings: a concatenated condition or sort expression is injected as written.
+  // Scoped to a chain that starts at createQueryBuilder(); a bare .where(...) on anything else (knex, Sequelize objects) is not this sink.
+  ...['where', 'andWhere', 'orWhere', 'having', 'orderBy'].map((m) => ({
+    kind: 'sink', id: `js-typeorm-qb-${m.toLowerCase()}`, language: 'js', framework: 'typeorm', match: { type: 'call', callee: m, receiver: '^createQueryBuilder$' }, argIndex: 0, skipSkeleton: true,
+    vuln: { name: `SQL Injection (TypeORM QueryBuilder.${m})`, severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Write the condition with named parameters: .where("t.n = :n", { n }); never concatenate a value into the fragment.' } })),
   { kind: 'sink', id: 'js-mongo-where', language: 'js', framework: 'mongo', match: { type: 'call', callee: '$where' }, argIndex: 0,
     vuln: { name: 'NoSQL Injection ($where)', severity: 'critical', cwe: 'CWE-943',
             remediation: 'Never build a $where string from user input — it runs server-side JavaScript.' } },
@@ -1288,6 +1306,15 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-sqlalchemy-text', language: 'py', framework: 'sqlalchemy', match: { type: 'call', callee: 'text' }, argIndex: 0,
     vuln: { name: 'SQL Injection (sqlalchemy.text)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'sqlalchemy.text() does not parameterize. Use bindparam() or Core expressions for any untrusted input.' } },
+  // asyncio's shell runner takes one command string, as subprocess.run(shell=True) does; the exec form takes an argument list.
+  { kind: 'sink', id: 'py-asyncio-subprocess-shell', language: 'py', framework: 'asyncio', match: { type: 'call', callee: 'create_subprocess_shell' }, argIndex: 0,
+    vuln: { name: 'Command Injection (asyncio.create_subprocess_shell)', severity: 'critical', cwe: 'CWE-78',
+            remediation: 'Use asyncio.create_subprocess_exec with an argument list; never build a shell command string from input.' } },
+  // A template compiled from request text (jinja2.Template, django.template.Template): the text is code. string.Template substitutes
+  // placeholders only and is excluded by receiver; a bare `Template(x)` with no receiver is the ordinary `from jinja2 import Template` form.
+  { kind: 'sink', id: 'py-template-source', language: 'py', framework: 'jinja2', match: { type: 'call', callee: 'Template', receiverExclude: '^string$' }, argIndex: 0,
+    vuln: { name: 'Server-Side Template Injection (Template(source))', severity: 'critical', cwe: 'CWE-1336',
+            remediation: 'Load templates from files and pass request values as context variables; never compile request text as a template.' } },
   { kind: 'sink', id: 'py-django-raw', language: 'py', framework: 'django', match: { type: 'call', callee: 'raw' }, argIndex: 0,
     vuln: { name: 'SQL Injection (Model.objects.raw)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use Django ORM Q-objects or parameterized raw(): Model.objects.raw("SELECT ... %s", [val]).' } },
@@ -1381,7 +1408,9 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-requests-get-v2',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$', receiverTypeIn: ['requests|session|client|http'] },  argIndex: 0,
     vuln: { name: 'SSRF (requests.get)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the host first, reject 169.254.169.254 / RFC1918 / localhost; or proxy through a server-side allow-list.' } },
-  { kind: 'sink', id: 'py-requests-post-v2', language: 'py', framework: 'requests', match: { type: 'call', callee: 'post' }, argIndex: 0,
+  // Receiver-scoped like its `get` twin: a project's own `post(url, payload)` helper is not requests.post (found on this repository's
+  // scripts/daily-checkin.py once the tuple-unpacked call `ok, msg = post(..)` had a sink site).
+  { kind: 'sink', id: 'py-requests-post-v2', language: 'py', framework: 'requests', match: { type: 'call', callee: 'post', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$', receiverTypeIn: ['requests|session|client|http'] }, argIndex: 0,
     vuln: { name: 'SSRF (requests.post)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the host first and reject metadata-endpoint addresses.' } },
   { kind: 'sink', id: 'py-urllib-urlopen', language: 'py', framework: 'std', match: { type: 'call', callee: 'urlopen' }, argIndex: 0,

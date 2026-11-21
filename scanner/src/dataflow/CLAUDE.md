@@ -258,3 +258,20 @@ section documents the fixes (field types in `classOfVar`, arity among overloads,
 `java-pg-copymanager-copyOut` and `copyIn` (PostgreSQL JDBC bulk copy: the COPY statement is sent verbatim, receiver-scoped to
 the CopyManager idiom). Measured taint-only (IR plus `runDeepAnalysis`, the bench's own `rowFor`) on the development entries,
 engine at 0.218.1 against this one: Java, 21 entries (the two apache/camel entries skipped for time): 0 localized detections before and after (the Java detections of the bench come from pattern rules), total findings on the vulnerable trees 408 to 444 and on the fixed trees 408 to 444, the whole difference in one project (keycloak: 36 XML parsers in its SAML module, reported on both revisions). Python, 28 entries: 0 localized detections and 1 localized false positive before and after; total findings 289 to 355 on the vulnerable trees and 292 to 364 on the fixed trees, the new ones in GitPython (path operations reached through instance methods), datamodel-code-generator (XML parsers reached through methods), lemur, django-cms and MobSF. One tree read 0 findings in the batch run and 11 alone, twice: the Python helper subprocess fails under load and the scan degrades; the number here is the batch run's. JavaScript and TypeScript, 48 entries: 0 localized detections before and after, total findings 310 to 371 on the vulnerable trees and 311 to 371 on the fixed trees.
+
+## 0.220.0: sink sites under chains, object-key sinks, fragment sinks
+
+- **`_chainSinkFindings` (assign, return and statement sites, not JavaScript).** The calls a statement's expression is built on are sink sites:
+  the `member.object` / `call.callee` chain below the expression (`return requests.get(u).text`) and the frontend-stated `innerCalls` of a
+  flattened Python chain (`rows = cur.execute(q).fetchall()`, `Popen(cmd, shell=True).communicate()`). JavaScript is left out because Babel
+  already emits a standalone call node for every nested call.
+- **`argKey` on a sink entry.** The sink is one key of an object-literal argument: `Model.find({ $where: s })` fires only when the literal names
+  `$where` with a tainted value; `find({ name: s })` is the parameterised query it is. The key's value is the tainted expression for the
+  skeleton and evidence.
+- **`skipSkeleton` on a sink entry.** A fragment sink (TypeORM `createQueryBuilder().where(fragment)`, a `$where` expression) never shows the
+  statement keywords `literalSkeletonMatchesFamily` looks for; the receiver or key scoping of such an entry is what makes it a sink.
+- **New sources:** `js-trpc-procedure-input` (annotation `js:trpc-procedure-handler`, http-body) and `py-django-url-capture` (annotation
+  `py:django-url-capture`, path-param). **New sinks:** `py-asyncio-subprocess-shell` (CWE-78), `py-template-source` (`Template(source)`,
+  CWE-1336, `string.Template` excluded by receiver), `js-typeorm-qb-{where,andWhere,orWhere,having,orderBy}` (CWE-89, receiver
+  `createQueryBuilder`), `js-mongo-{find,findOne,countDocuments,updateMany,deleteMany,findOneAndUpdate}-where-key` (CWE-943, `argKey: '$where'`).
+  Tests: `test/python-framework-taint.test.js`, the last three cases of `test/ts-class-mcp-taint.test.js`.

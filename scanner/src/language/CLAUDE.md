@@ -246,3 +246,15 @@ unseen-v8 as a development set, 0.195.46 to this tree: taint 12 TP / 2 FP / 3 FN
 engine's model (their flows are reported at info), the authors of unseen-v7 and unseen-v8 both wrote them as vulnerable. Real-code precision
 gate (`bench:haskell-precision:check`, stored and live) and `test:haskell` (with `test/haskell/haskell-round11-taint.test.js`, each
 positive with a refusing twin) are the regression evidence. unseen-v9 at the end of the round, measured once: overall F1 77.8% to 78.9%, taint 80.0% to 82.8% (12 TP / 3 FP / 3 FN to 12 / 2 / 3: one path-traversal safe form that had been reported is now refuted; no vulnerable form changed), pattern layer unchanged at 76.2% (`results/unseen-v9-after-0.219.0.md`, aggregate and per-family tables read only).
+
+## Round 12 (0.220.0): framework shapes probed, hasql modelled, constructor sinks given a call site
+
+A battery of 17 Haskell framework shapes (Servant Capture/QueryParam/ReqBody records, Scotty param/jsonData, Yesod lookupGetParam/runInputPost,
+Spock param', WAI queryString and an aeson body, http-conduit and wreq SSRF, blaze preEscapedToHtml, readProcess "sh" ["-c", ..], hasql) was
+scanned once; 16 fired and the integer Capture refused. The miss, hasql, had no model. `haskell-models.js` now registers the `hasql` package
+(untested versions, like the other round-eleven additions) with `Hasql.Statement.Statement` (argIndex 0, the statement text) and
+`Hasql.Session.sql` as SQL sinks. That exposed an older gap: `haskell-ir.js` lowered every library constructor application to a positional
+record (`array`, `hs.con`), so a constructor the models name as a sink, postgresql-simple's `Query bytes` included, never had a call site.
+A library constructor that `isKnownApi` knows is now applied as a call to its qualified name (`hs.con` kept); every other library constructor
+and every project constructor are lowered as before. Tests: `test/haskell/haskell-round12-taint.test.js` (positives, the parameterised
+twin, and the IR facts). The language-support registry was re-promoted because the package list is part of it.
