@@ -65,7 +65,11 @@ export function pythonUnits(code) {
   let cur = null;
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(/^(\s{0,200})(?:async\s{1,8})?def\s{1,8}(\w{1,80})\s{0,8}\(/);
-    if (m) {
+    // A def indented deeper than the open unit's is a nested function: it stays in the enclosing
+    // unit's body, so a method's forwarding calls after a local helper are still the method's.
+    // Before, every def opened a unit, and GitPython's checkout() lost its two forwarding calls to
+    // the nested handle_stderr() (which declares no option bag and so was never compared).
+    if (m && !(cur && m[1].length > cur.indent)) {
       if (cur) units.push(cur);
       // Capture the signature across continuation lines by paren balance.
       let j = i, depth = 0, sig = '';
