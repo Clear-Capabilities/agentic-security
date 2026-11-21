@@ -430,7 +430,7 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext, argT
   const { qid, fn } = target;
   const paramNames = _callParams(fn);
   const entry = _withCapturedTaint(paramNames.length
-    ? entryStateFromCall(paramNames, argExprs || [], state, argTaint || ((a) => exprTaint(a, state, callContext)), { fieldPaths: _isHsFile(_currentFile) })
+    ? entryStateFromCall(paramNames, argExprs || [], state, argTaint || ((a) => exprTaint(a, state, callContext)), _entryOpts(state, callContext))
     : new Set(), fn, state, callContext);
   let sum = callContext._summaryCache.get(qid, entry);
   if (!sum && fn && fn.cfg) {
@@ -931,6 +931,17 @@ function _arrayLiteralTaint(expr, prefix, state, callContext, bracket = false) {
 }
 
 const _isHsFile = (file) => /\.l?hs$/i.test(file || '');
+
+// The options every call-site entry state is built with: Haskell records enter by field (round 10), and in a JavaScript or TypeScript file an
+// object literal argument enters by field too (`_objectLiteralTaint` under the parameter's name), so `f({ root, decision: tainted })` taints
+// `<obj>.decision` in the callee and not `root`. Found on this repository's own code: six flows from a clean sibling of a tainted field.
+// The plain-call site (a call that is a statement) never seeded Haskell records by field; `hsFields` keeps that site as it was measured.
+function _entryOpts(state, callContext, hsFields = true) {
+  return {
+    fieldPaths: hsFields && _isHsFile(_currentFile),
+    literalFields: _isJsFile(_currentFile) ? (arg, name) => _objectLiteralTaint(arg, name, state, callContext) : undefined,
+  };
+}
 
 function _objectLiteralTaint(expr, prefix, state, callContext) {
   const out = { whole: false, paths: [] };
@@ -2035,7 +2046,7 @@ function step(node, stateIn, callContext) {
           const callArgs = (node.source.args || []);
           const paramNames = _callParams(fn);
           const entry = _withCapturedTaint(paramNames.length
-            ? entryStateFromCall(paramNames, callArgs, callerTainted, (a) => exprTaint(a, callerTainted, callContext), { fieldPaths: _isHsFile(_currentFile) })
+            ? entryStateFromCall(paramNames, callArgs, callerTainted, (a) => exprTaint(a, callerTainted, callContext), _entryOpts(callerTainted, callContext))
             : new Set(), fn, callerTainted, callContext);
           let sum = callContext._summaryCache.get(qid, entry);
           if (!sum && fn && fn.cfg) {
@@ -2252,7 +2263,7 @@ function step(node, stateIn, callContext) {
         if (typeof qid === 'string' && fn && Array.isArray(fn.params)) {
           const paramNames = _callParams(fn);
           const entry = _withCapturedTaint(paramNames.length
-            ? entryStateFromCall(paramNames, node.args || [], state, (a) => exprTaint(a, state, callContext))
+            ? entryStateFromCall(paramNames, node.args || [], state, (a) => exprTaint(a, state, callContext), _entryOpts(state, callContext, false))
             : new Set(), fn, state, callContext);
           let sum = callContext._summaryCache.get(qid, entry);
           // FR-SEM-2: context-sensitive lazy compute at the plain-call site,

@@ -245,4 +245,4 @@ unseen-v8 as a development set, 0.195.46 to this tree: taint 12 TP / 2 FP / 3 FN
 17 / 0 / 7. The two taint misses left are policy, not mechanism: standard input and command-line arguments are operator-controlled in this
 engine's model (their flows are reported at info), the authors of unseen-v7 and unseen-v8 both wrote them as vulnerable. Real-code precision
 gate (`bench:haskell-precision:check`, stored and live) and `test:haskell` (with `test/haskell/haskell-round11-taint.test.js`, each
-positive with a refusing twin) are the regression evidence; unseen-v9 is measured again at the end of the round, once.
+positive with a refusing twin) are the regression evidence. unseen-v9 at the end of the round, measured once: overall F1 77.8% to 78.9%, taint 80.0% to 82.8% (12 TP / 3 FP / 3 FN to 12 / 2 / 3: one path-traversal safe form that had been reported is now refuted; no vulnerable form changed), pattern layer unchanged at 76.2% (`results/unseen-v9-after-0.219.0.md`, aggregate and per-family tables read only).

@@ -53,3 +53,28 @@ test('MCP tool handler arguments are a source: destructured, renamed, or a named
   assert.deepEqual(await sqli({ 'mcp.ts': sdk + `server.tool("ping", async (extra) => {\n  ${SINK('extra.sessionId')}\n});\n` }), [], 'no schema, no arguments');
   assert.deepEqual(await sqli({ 'app.ts': `thing.on("event", ({ name }) => { ${SINK('name')} });\n` }), [], 'an unrelated callback is not a tool handler');
 });
+
+// An object literal argument enters the callee by field: a tainted field taints that field of the destructured (or plain) parameter and no
+// sibling. Found on this repository's own code, where `record({ root, decision: tainted })` made the clean `root` a path-traversal source.
+const REC = (params, use) => `import express from "express";\nfunction rec(${params}) { ${SINK(use)} }\nexport function h(req, res) { BODY }\n`;
+const withBody = (src, body) => src.replace('BODY', body);
+test('an object literal argument taints only the field that is tainted: the destructured sibling stays clean', async () => {
+  const src = REC('{ root, decision }', 'root');
+  assert.deepEqual(await sqli({ 'a.js': withBody(src, 'rec({ root: "fixed", decision: req.query.d });') }), []);
+  assert.deepEqual(await sqli({ 'a.js': withBody(src, 'rec({ root: req.query.p, decision: 1 });') }), ['a.js:2']);
+  assert.deepEqual(await sqli({ 'a.js': withBody(src, 'const root = "fixed"; rec({ root, decision: req.query.d });') }), []);
+});
+test('... the same for a plain parameter read by field, and for a literal nested one level down', async () => {
+  const plain = REC('o', 'o.root');
+  assert.deepEqual(await sqli({ 'a.js': withBody(plain, 'rec({ root: "fixed", decision: req.query.d });') }), []);
+  assert.deepEqual(await sqli({ 'a.js': withBody(plain, 'rec({ root: req.query.p });') }), ['a.js:2']);
+  const nested = REC('{ opts }', 'opts.path');
+  assert.deepEqual(await sqli({ 'a.js': withBody(nested, 'rec({ opts: { path: req.query.p } });') }), ['a.js:2']);
+  assert.deepEqual(await sqli({ 'a.js': withBody(nested, 'rec({ opts: { path: "fixed" }, other: req.query.p });') }), []);
+});
+test('STILL WIDENS: a tainted object passed whole, a spread of one, and a value whose shape is unknown', async () => {
+  const src = REC('{ root, decision }', 'root');
+  assert.deepEqual(await sqli({ 'a.js': withBody(src, 'rec(req.body);') }), ['a.js:2']);
+  assert.deepEqual(await sqli({ 'a.js': withBody(src, 'rec({ ...req.body });') }), ['a.js:2']);
+  assert.deepEqual(await sqli({ 'a.js': withBody(src, 'const o = req.body; rec(o);') }), ['a.js:2']);
+});

@@ -332,6 +332,9 @@ Tests: `test/java-field-receiver-taint.test.js` (each positive with a refusing t
   through the field's type and `this.helper(name)` to the own class or an ancestor. NestJS-style injected services never resolved before.
 - **Destructured parameters bind their names (`parser-js.js`).** `async ({ city, units: u, ...rest }) => ...` emits `city = <obj>.city`,
   `u = <obj>.units`, `rest = <obj>` at function entry, so a source marked on the parameter reaches the fields. Before, the names were unbound.
+  The engine side of this is `_entryOpts` in `dataflow/engine.js`: an object literal argument enters the callee by field, so a tainted
+  `decision` does not make a destructured sibling `root` tainted (six such flows appeared on this repository's own code the day the
+  bindings landed).
 - **MCP tool handlers (`parser-js.js`, `catalog.js`).** The function passed last to `server.tool(name, [description,] schema, handler)` or
   `server.registerTool(name, config, handler)` with at least three arguments carries `js:mcp-tool-handler` on its first parameter; the catalog's
   `js-mcp-tool-handler-args` makes it an agent-tool source. The two-argument `tool(name, handler)` has no schema and is not marked; an unrelated
