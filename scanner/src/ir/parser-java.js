@@ -401,16 +401,23 @@ function _classRecord(node, name) {
     if (Array.isArray(ids) && ids.length) bases.push(ids[ids.length - 1].image);
   }
   const fields = [];
+  // Declared field TYPES (`protected final AssetService assetService;`), the same CST path the local-variable
+  // walk below uses. A call on a field (`assetService.export(refs)`) is the dominant shape of a Java service
+  // layer, and without the field's type the receiver's class is unknown and the call never resolves.
+  const fieldTypes = {};
   const classBody = node.children?.classBody?.[0];
   for (const cbd of classBody?.children?.classBodyDeclaration || []) {
     const fd = cbd.children?.classMemberDeclaration?.[0]?.children?.fieldDeclaration?.[0];
     const declarators = fd?.children?.variableDeclaratorList?.[0]?.children?.variableDeclarator || [];
+    const ftIds = fd?.children?.unannType?.[0]?.children?.unannReferenceType?.[0]?.children?.unannClassOrInterfaceType?.[0]
+      ?.children?.unannClassType?.[0]?.children?.Identifier;
+    const ftype = Array.isArray(ftIds) && ftIds.length ? ftIds[ftIds.length - 1]?.image : undefined;
     for (const d of declarators) {
       const fname = d.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image;
-      if (fname) fields.push(fname);
+      if (fname) { fields.push(fname); if (ftype) fieldTypes[fname] = ftype; }
     }
   }
-  return { name, line: _lineOf(node), bases, fields };
+  return { name, line: _lineOf(node), bases, fields, ...(Object.keys(fieldTypes).length ? { fieldTypes } : {}) };
 }
 
 // W2 (SARD_80_F1_EXECUTION_PRD.md) — exception-message taint (was the
@@ -694,6 +701,40 @@ function buildCfgFromBody(bodyNode) {
 
   walkStmts(bodyNode);
 
+  // Lambda bodies are lowered INTO the enclosing method's CFG, in statement order, after the statement that
+  // contains them. `executor.schedule(() -> { String q = build(refs); run(q); })` used to lower to one opaque
+  // call: the block's statements, with their sinks, were never walked. Inlining is an over-approximation in
+  // time (the body may run later or never) but not in data: the body reads the enclosing scope's variables,
+  // so a captured tainted value reaching a sink inside it is a real flow. A lambda's own parameters are
+  // unbound names here (`xs.forEach(s -> sink(s))` does not taint `s`), so nothing is fabricated. Does not
+  // descend into a nested class body (its own scope) and stops at the first lambda level: a lambda inside a
+  // lambda body is reached when that body's own statements are walked.
+  function walkLambdaBodies(cst) {
+    const found = [];
+    (function find(n, depth) {
+      if (!n || typeof n !== 'object' || depth > 80) return;
+      if (n.name === 'classDeclaration') return;
+      if (n.name === 'lambdaExpression') { found.push(n); return; }
+      for (const k of Object.keys(n.children || {})) {
+        const arr = n.children[k];
+        if (Array.isArray(arr)) for (const c of arr) find(c, depth + 1);
+      }
+    })(cst, 0);
+    for (const l of found) {
+      const body = l.children?.lambdaBody?.[0];
+      if (body?.children?.block) {
+        for (const b of body.children.block) walkStmts(b);
+      } else if (body?.children?.expression) {
+        const e = body.children.expression[0];
+        const expr = exprFromCst(e);
+        const line = _lineOf(e);
+        if (expr.kind === 'call') emit({ ...expr, line, succ: [] });
+        else if (_isAssignment(expr)) emitAssignment(expr, line);
+        walkLambdaBodies(e);
+      }
+    }
+  }
+
   function walkStmts(stmtNode) {
     if (!stmtNode || !stmtNode.children) return;
     const kids = stmtNode.children;
@@ -741,6 +782,7 @@ function buildCfgFromBody(bodyNode) {
             }
           }
         }
+        walkLambdaBodies(lv);
       }
     }
     if (kids.statement) {
@@ -756,12 +798,14 @@ function buildCfgFromBody(bodyNode) {
         const line = _lineOf(kids.expressionStatement[0]);
         if (expr.kind === 'call') emit({ ...expr, line, succ: [] });
         else if (_isAssignment(expr)) emitAssignment(expr, line);
+        walkLambdaBodies(e);
       }
     }
     if (kids.returnStatement) {
       const r = kids.returnStatement[0];
       const expr = r.children?.expression?.[0];
       emit({ kind: 'return', value: expr ? exprFromCst(expr) : null, line: _lineOf(r), succ: [] });
+      if (expr) walkLambdaBodies(expr);
     }
     if (kids.throwStatement) {
       const t = kids.throwStatement[0];

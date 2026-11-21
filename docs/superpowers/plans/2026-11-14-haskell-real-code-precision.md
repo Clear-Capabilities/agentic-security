@@ -233,3 +233,16 @@ the strict precision line is unchanged). unseen-v7 (development from this round 
 Left as misses on unseen-v7: a CLI argument into SQL (the operator-controlled policy), a read sized by a count parsed from a socket handle a caller
 opened, a Spock PUT with a session check and no ownership scope, and the raw insertion of a field of a record outside the split. Real-code (fresh)
 precision: in the changelog entry.
+
+## Round 11 (0.219.0): unseen-v9 frozen, unseen-v8 read, three guard mechanisms
+
+Order kept as in rounds 7 and 10: a new blind split first (`unseen-v9`, 78 forms, author given only the family names, the CWE meanings, the
+authoring format and a library list; copied in unread, digest-frozen, measured once at 0.218.1: overall F1 77.8%, taint 80.0%, pattern 76.2%),
+then unseen-v8's misses and strays read as a development set. Taint: three misses (an AMQP message through a record and `mapM_` into Shelly's
+`run_ "sh" ["-c", ..]`, reported as CWE-88 because the promotion looked only at the caller's line; a stdin barcode into a file path; CLI
+arguments into SQL) and two strays (a let-bound containment Bool in a conjunction over a `liftIO (canonicalizePath ..)` path; a top-level
+character-allowlist predicate with a lambda under `Data.Text.all`). Mechanisms (`haskell-guards.js`): shell promotion through the callee's
+site with Shelly in the process set; once-bound locals read in guards and lifts seen through by the canonicalisation check; character-class
+predicates as lambdas or helpers over Text/ByteString `all`. Result on unseen-v8: taint 12/2/3 to 13/0/2 (F1 82.8% to 92.9%), pattern layer
+unchanged (17/0/7; its seven misses are the next pattern round's list). The two taint misses left are the stdin and CLI policy (see rounds 9
+and 10). unseen-v9 is measured again once at the end of the round and recorded here.

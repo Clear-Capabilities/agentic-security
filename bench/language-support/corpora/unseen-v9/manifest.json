@@ -1,0 +1,12 @@
+{
+ "split": "unseen-v9",
+ "ecosystem": "haskell",
+ "frozenOn": "2026-11-21",
+ "cases": 78,
+ "perFamily": 3,
+ "role": "generalisation",
+ "developmentSince": null,
+ "sourcesSha256": "aee3d45e441d42eda24d61224a169e0ef424344be7caf60a9cd332151166405b",
+ "labelsSha256": "fe5bc5e60ed2a91582fa774578bf52232abbeb0df4a4f44ab5051a202ce87be9",
+ "note": "sourcesSha256 = sha256 over \"id:sha256(source)\" lines in id order; labelsSha256 = sha256 of the exact JSON array of cases (canonical build order); role is generalisation until USE-LOG.md records a use that changed the engine"
+}

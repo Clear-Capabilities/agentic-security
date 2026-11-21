@@ -1,0 +1,677 @@
+@@@ sql-injection | vulnerable | src/Museum/Loans/Search.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.Loans.Search (searchRoutes) where
+
+import Web.Scotty
+import Database.PostgreSQL.Simple
+import Control.Monad.IO.Class (liftIO)
+import Data.String (fromString)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+
+data LoanRow = LoanRow Int T.Text T.Text
+
+instance FromRow LoanRow where
+  fromRow = LoanRow <$> field <*> field <*> field
+
+renderLoan :: LoanRow -> TL.Text
+renderLoan (LoanRow loanId objectName borrower) =
+  TL.fromStrict (T.pack (show loanId) <> "  " <> objectName <> "  lent to " <> borrower)
+
+searchRoutes :: Connection -> ScottyM ()
+searchRoutes conn = get "/loans/search" $ do
+  borrower <- param "borrower" :: ActionM String
+  let sql = "SELECT id, object_name, borrower FROM loans WHERE borrower = '" ++ borrower ++ "' ORDER BY due_at"
+  rows <- liftIO (query_ conn (fromString sql)) :: ActionM [LoanRow]  --@@
+  text (TL.unlines (map renderLoan rows))
+
+@@@ sql-injection | safe | src/Museum/Loans/Lookup.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.Loans.Lookup (lookupRoutes) where
+
+import Web.Scotty
+import Database.PostgreSQL.Simple
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+
+data LoanRow = LoanRow Int T.Text T.Text
+
+instance FromRow LoanRow where
+  fromRow = LoanRow <$> field <*> field <*> field
+
+renderLoan :: LoanRow -> TL.Text
+renderLoan (LoanRow loanId objectName borrower) =
+  TL.fromStrict (T.pack (show loanId) <> "  " <> objectName <> "  lent to " <> borrower)
+
+lookupRoutes :: Connection -> ScottyM ()
+lookupRoutes conn = get "/loans/search" $ do
+  borrower <- param "borrower" :: ActionM T.Text
+  rows <- liftIO (query conn "SELECT id, object_name, borrower FROM loans WHERE borrower = ? ORDER BY due_at" (Only borrower)) :: ActionM [LoanRow]  --@@
+  text (TL.unlines (map renderLoan rows))
+
+@@@ sql-injection | vulnerable | src/Museum/Loans/Return.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module Museum.Loans.Return (ReturnAPI, returnServer) where
+
+import Servant
+import Database.SQLite.Simple
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+type ReturnAPI = "loans" :> Capture "reference" T.Text :> "return" :> Post '[JSON] NoContent
+
+returnServer :: Connection -> Server ReturnAPI
+returnServer conn reference = do
+  let stmt = Query ("UPDATE loans SET returned_at = CURRENT_TIMESTAMP WHERE reference = '" <> reference <> "'")
+  liftIO (execute_ conn stmt)  --@@
+  pure NoContent
+
+@@@ sql-injection | safe | src/Museum/Loans/Receive.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module Museum.Loans.Receive (ReceiveAPI, receiveServer) where
+
+import Servant
+import Database.SQLite.Simple
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text as T
+
+type ReceiveAPI = "loans" :> Capture "reference" T.Text :> "return" :> Post '[JSON] NoContent
+
+receiveServer :: Connection -> Server ReceiveAPI
+receiveServer conn reference = do
+  liftIO (execute conn "UPDATE loans SET returned_at = CURRENT_TIMESTAMP WHERE reference = ?" (Only reference))  --@@
+  pure NoContent
+
+@@@ sql-injection | vulnerable | src/Museum/Loans/Overdue.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.Loans.Overdue (main) where
+
+import qualified Hasql.Connection as Connection
+import qualified Hasql.Session as Session
+import qualified Hasql.Statement as Statement
+import qualified Hasql.Decoders as D
+import qualified Hasql.Encoders as E
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+
+overdueInGallery :: String -> Statement.Statement () [T.Text]
+overdueInGallery gallery =
+  Statement.Statement (BC.pack ("SELECT object_name FROM loans WHERE gallery = '" ++ gallery ++ "' AND due_at < now()")) E.noParams objectNames True  --@@
+  where
+    objectNames = D.rowList (D.column (D.nonNullable D.text))
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [gallery] -> do
+      acquired <- Connection.acquire (Connection.settings "localhost" 5432 "museum" "museum" "loans")
+      case acquired of
+        Left err -> print err >> exitFailure
+        Right conn -> do
+          result <- Session.run (Session.statement () (overdueInGallery gallery)) conn
+          either print (mapM_ TIO.putStrLn) result
+    _ -> putStrLn "usage: museum-overdue <gallery>" >> exitFailure
+
+@@@ sql-injection | safe | src/Museum/Loans/Due.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Museum.Loans.Due (main) where
+
+import qualified Hasql.Connection as Connection
+import qualified Hasql.Session as Session
+import qualified Hasql.Statement as Statement
+import qualified Hasql.Decoders as D
+import qualified Hasql.Encoders as E
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+
+overdueInGallery :: Statement.Statement T.Text [T.Text]
+overdueInGallery =
+  Statement.Statement "SELECT object_name FROM loans WHERE gallery = $1 AND due_at < now()" (E.param (E.nonNullable E.text)) objectNames True  --@@
+  where
+    objectNames = D.rowList (D.column (D.nonNullable D.text))
+
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [gallery] -> do
+      acquired <- Connection.acquire (Connection.settings "localhost" 5432 "museum" "museum" "loans")
+      case acquired of
+        Left err -> print err >> exitFailure
+        Right conn -> do
+          result <- Session.run (Session.statement (T.pack gallery) overdueInGallery) conn
+          either print (mapM_ TIO.putStrLn) result
+    _ -> putStrLn "usage: museum-overdue <gallery>" >> exitFailure
+
+@@@ command-injection | vulnerable | src/Fleet/Robots/Reboot.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.Robots.Reboot (rebootRoutes) where
+
+import Web.Scotty
+import System.Process (callCommand)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+
+rebootRoutes :: ScottyM ()
+rebootRoutes = post "/robots/reboot" $ do
+  robotName <- param "robot" :: ActionM TL.Text
+  liftIO (callCommand ("fleetctl reboot --robot " ++ TL.unpack robotName))  --@@
+  text ("reboot requested for " <> robotName)
+
+@@@ command-injection | safe | src/Fleet/Robots/Restart.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.Robots.Restart (restartRoutes) where
+
+import Web.Scotty
+import System.Process (callProcess)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.Lazy as TL
+
+restartRoutes :: ScottyM ()
+restartRoutes = post "/robots/reboot" $ do
+  robotName <- param "robot" :: ActionM TL.Text
+  liftIO (callProcess "fleetctl" ["reboot", "--robot", TL.unpack robotName])  --@@
+  text ("reboot requested for " <> robotName)
+
+@@@ command-injection | vulnerable | src/Fleet/Docks/Firmware.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.Docks.Firmware (startFirmwareWorker) where
+
+import Network.AMQP
+import System.Process.Typed (runProcess_, shell)
+import qualified Data.ByteString.Lazy.Char8 as BL
+
+startFirmwareWorker :: Channel -> IO ()
+startFirmwareWorker chan = do
+  _ <- declareQueue chan newQueue { queueName = "dock.firmware" }
+  _ <- consumeMsgs chan "dock.firmware" Ack handleFlash
+  pure ()
+
+handleFlash :: (Message, Envelope) -> IO ()
+handleFlash (msg, env) = do
+  let dockId = BL.unpack (msgBody msg)
+  runProcess_ (shell ("dockflash --target " ++ dockId ++ " /opt/firmware/dock.bin"))  --@@
+  ackEnv env
+
+@@@ command-injection | safe | src/Fleet/Docks/Flash.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.Docks.Flash (startFlashWorker) where
+
+import Network.AMQP
+import System.Process.Typed (runProcess_, proc)
+import qualified Data.ByteString.Lazy.Char8 as BL
+
+startFlashWorker :: Channel -> IO ()
+startFlashWorker chan = do
+  _ <- declareQueue chan newQueue { queueName = "dock.firmware" }
+  _ <- consumeMsgs chan "dock.firmware" Ack handleFlash
+  pure ()
+
+handleFlash :: (Message, Envelope) -> IO ()
+handleFlash (msg, env) = do
+  let dockId = BL.unpack (msgBody msg)
+  runProcess_ (proc "dockflash" ["--target", dockId, "/opt/firmware/dock.bin"])  --@@
+  ackEnv env
+
+@@@ command-injection | vulnerable | src/Fleet/Telemetry/Probe.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.Telemetry.Probe (probeRobot) where
+
+import Turtle
+
+probeRobot :: IO ()
+probeRobot = do
+  configured <- need "ROBOT_HOST"
+  case configured of
+    Nothing -> die "ROBOT_HOST is not set"
+    Just robotHost -> do
+      shells ("ping -c 3 " <> robotHost) empty  --@@
+      echo "robot reachable"
+
+@@@ command-injection | safe | src/Fleet/Telemetry/Reach.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Fleet.Telemetry.Reach (reachRobot) where
+
+import Turtle
+
+reachRobot :: IO ()
+reachRobot = do
+  configured <- need "ROBOT_HOST"
+  case configured of
+    Nothing -> die "ROBOT_HOST is not set"
+    Just robotHost -> do
+      procs "ping" ["-c", "3", robotHost] empty  --@@
+      echo "robot reachable"
+
+@@@ path-traversal | vulnerable | src/Apiary/Ledger/Export.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Apiary.Ledger.Export (ledgerApp) where
+
+import Network.Wai
+import Network.HTTP.Types (status200, status400)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as BC
+import System.FilePath ((</>))
+
+ledgerRoot :: FilePath
+ledgerRoot = "/var/lib/apiary/ledgers"
+
+ledgerApp :: Application
+ledgerApp req respond =
+  case lookup "hive" (queryString req) of
+    Just (Just hive) -> do
+      body <- BL.readFile (ledgerRoot </> BC.unpack hive)  --@@
+      respond (responseLBS status200 [("Content-Type", "text/csv")] body)
+    _ -> respond (responseLBS status400 [] "missing hive")
+
+@@@ path-traversal | safe | src/Apiary/Ledger/Download.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Apiary.Ledger.Download (ledgerApp) where
+
+import Network.Wai
+import Network.HTTP.Types (status200, status400, status403)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as BC
+import Data.List (isPrefixOf)
+import System.Directory (canonicalizePath)
+import System.FilePath ((</>))
+
+ledgerRoot :: FilePath
+ledgerRoot = "/var/lib/apiary/ledgers"
+
+ledgerApp :: Application
+ledgerApp req respond =
+  case lookup "hive" (queryString req) of
+    Just (Just hive) -> do
+      resolved <- canonicalizePath (ledgerRoot </> BC.unpack hive)
+      rootResolved <- canonicalizePath ledgerRoot
+      if (rootResolved ++ "/") `isPrefixOf` resolved
+        then do
+          body <- BL.readFile resolved  --@@
+          respond (responseLBS status200 [("Content-Type", "text/csv")] body)
+        else respond (responseLBS status403 [] "ledger not available")
+    _ -> respond (responseLBS status400 [] "missing hive")
+
+@@@ path-traversal | vulnerable | src/Apiary/Inspections/Photos.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module Apiary.Inspections.Photos (PhotoAPI, photoServer) where
+
+import Servant
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString as BS
+import qualified Data.Text as T
+import System.FilePath ((</>))
+
+type PhotoAPI =
+  "inspections" :> Capture "hive" Int :> "photo"
+    :> QueryParam' '[Required] "name" T.Text
+    :> ReqBody '[OctetStream] BS.ByteString
+    :> Put '[JSON] NoContent
+
+photoDir :: FilePath
+photoDir = "/srv/apiary/photos"
+
+photoServer :: Server PhotoAPI
+photoServer hiveId name bytes = do
+  liftIO (BS.writeFile (photoDir </> show hiveId </> T.unpack name) bytes)  --@@
+  pure NoContent
+
+@@@ path-traversal | safe | src/Apiary/Inspections/Images.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings #-}
+module Apiary.Inspections.Images (ImageAPI, imageServer) where
+
+import Servant
+import Control.Monad.IO.Class (liftIO)
+import Data.Char (isAlphaNum)
+import qualified Data.ByteString as BS
+import qualified Data.Text as T
+import System.FilePath ((</>), (<.>))
+
+type ImageAPI =
+  "inspections" :> Capture "hive" Int :> "photo"
+    :> QueryParam' '[Required] "name" T.Text
+    :> ReqBody '[OctetStream] BS.ByteString
+    :> Put '[JSON] NoContent
+
+photoDir :: FilePath
+photoDir = "/srv/apiary/photos"
+
+plainName :: T.Text -> Bool
+plainName name = not (T.null name) && T.all (\c -> isAlphaNum c || c == '-' || c == '_') name
+
+imageServer :: Server ImageAPI
+imageServer hiveId name bytes
+  | plainName name = do
+      liftIO (BS.writeFile (photoDir </> show hiveId </> T.unpack name <.> "jpg") bytes)  --@@
+      pure NoContent
+  | otherwise = throwError err400 { errBody = "photo name may only contain letters, digits, - and _" }
+
+@@@ path-traversal | vulnerable | src/Apiary/Archive/Purge.hs
+module Apiary.Archive.Purge (main) where
+
+import System.Directory (removeFile, doesFileExist)
+import System.FilePath ((</>))
+import Control.Monad (forM_, when)
+
+archiveDir :: FilePath
+archiveDir = "/var/lib/apiary/archive"
+
+main :: IO ()
+main = do
+  entries <- lines <$> getContents
+  forM_ entries $ \entry -> do
+    let target = archiveDir </> entry
+    exists <- doesFileExist target
+    when exists $ removeFile target  --@@
+
+@@@ path-traversal | safe | src/Apiary/Archive/Expire.hs
+module Apiary.Archive.Expire (main) where
+
+import System.Directory (removeFile, doesFileExist)
+import System.FilePath ((</>))
+import System.IO (hPutStrLn, stderr)
+import Control.Monad (forM_, when)
+import Text.Read (readMaybe)
+
+archiveDir :: FilePath
+archiveDir = "/var/lib/apiary/archive"
+
+main :: IO ()
+main = do
+  entries <- lines <$> getContents
+  forM_ entries $ \entry ->
+    case readMaybe entry :: Maybe Int of
+      Nothing -> hPutStrLn stderr ("skipping entry that is not a hive number: " ++ entry)
+      Just hiveNumber -> do
+        let target = archiveDir </> ("hive-" ++ show hiveNumber ++ ".csv")
+        exists <- doesFileExist target
+        when exists $ removeFile target  --@@
+
+@@@ ssrf | vulnerable | src/Timetable/Feeds/Import.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Timetable.Feeds.Import (importRoutes) where
+
+import Web.Scotty
+import Network.HTTP.Client
+import Network.HTTP.Client.TLS (newTlsManager)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text.Lazy as TL
+
+importRoutes :: ScottyM ()
+importRoutes = post "/feeds/import" $ do
+  feedUrl <- param "url" :: ActionM TL.Text
+  manager <- liftIO newTlsManager
+  request <- liftIO (parseRequest (TL.unpack feedUrl))
+  response <- liftIO (httpLbs request manager)  --@@
+  text (TL.pack (show (BL.length (responseBody response))) <> " bytes imported")
+
+@@@ ssrf | safe | src/Timetable/Feeds/Fetch.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Timetable.Feeds.Fetch (fetchRoutes) where
+
+import Web.Scotty
+import Network.HTTP.Client
+import Network.HTTP.Client.TLS (newTlsManager)
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Lazy as TL
+
+fetchRoutes :: ScottyM ()
+fetchRoutes = post "/feeds/import" $ do
+  school <- param "school" :: ActionM T.Text
+  manager <- liftIO newTlsManager
+  base <- liftIO (parseRequest "https://calendar.district.example/ical")
+  let request = setQueryString [("school", Just (TE.encodeUtf8 school))] base
+  response <- liftIO (httpLbs request manager)  --@@
+  text (TL.pack (show (BL.length (responseBody response))) <> " bytes imported")
+
+@@@ ssrf | vulnerable | src/Timetable/Rooms/Sync.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, DeriveGeneric #-}
+module Timetable.Rooms.Sync (SyncAPI, syncServer) where
+
+import Servant
+import qualified Network.Wreq as W
+import Control.Lens ((^.), (&), (.~))
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import GHC.Generics (Generic)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
+
+data SyncRequest = SyncRequest { buildingApi :: T.Text, term :: T.Text } deriving Generic
+instance FromJSON SyncRequest
+
+type SyncAPI = "rooms" :> "sync" :> ReqBody '[JSON] SyncRequest :> Post '[JSON] Int
+
+syncServer :: Server SyncAPI
+syncServer req = do
+  let opts = W.defaults & W.param "term" .~ [term req]
+  r <- liftIO (W.getWith opts (T.unpack (buildingApi req) ++ "/rooms"))  --@@
+  pure (fromIntegral (BL.length (r ^. W.responseBody)))
+
+@@@ ssrf | safe | src/Timetable/Rooms/Refresh.hs
+{-# LANGUAGE DataKinds, TypeOperators, OverloadedStrings, DeriveGeneric #-}
+module Timetable.Rooms.Refresh (RefreshAPI, refreshServer) where
+
+import Servant
+import qualified Network.Wreq as W
+import Control.Lens ((^.), (&), (.~))
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (FromJSON)
+import GHC.Generics (Generic)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
+
+data RefreshRequest = RefreshRequest { buildingApi :: T.Text, term :: T.Text } deriving Generic
+instance FromJSON RefreshRequest
+
+type RefreshAPI = "rooms" :> "sync" :> ReqBody '[JSON] RefreshRequest :> Post '[JSON] Int
+
+knownBuildingApis :: [T.Text]
+knownBuildingApis =
+  [ "https://rooms.north-campus.example"
+  , "https://rooms.south-campus.example"
+  , "https://rooms.sports-hall.example"
+  ]
+
+refreshServer :: Server RefreshAPI
+refreshServer req
+  | buildingApi req `elem` knownBuildingApis = do
+      let opts = W.defaults & W.param "term" .~ [term req]
+      r <- liftIO (W.getWith opts (T.unpack (buildingApi req) ++ "/rooms"))  --@@
+      pure (fromIntegral (BL.length (r ^. W.responseBody)))
+  | otherwise = throwError err400 { errBody = "unknown building api" }
+
+@@@ ssrf | vulnerable | src/Timetable/Substitutes/Live.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Timetable.Substitutes.Live (substituteSocket) where
+
+import qualified Network.WebSockets as WS
+import Network.HTTP.Conduit (simpleHttp)
+import Control.Monad (forever)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
+
+substituteSocket :: WS.ServerApp
+substituteSocket pending = do
+  conn <- WS.acceptRequest pending
+  forever $ do
+    msg <- WS.receiveData conn :: IO T.Text
+    case T.stripPrefix "calendar " msg of
+      Just calendarUrl -> do
+        body <- simpleHttp (T.unpack calendarUrl)  --@@
+        WS.sendTextData conn (T.pack (show (BL.length body)) <> " bytes of calendar")
+      Nothing -> WS.sendTextData conn ("unknown command" :: T.Text)
+
+@@@ ssrf | safe | src/Timetable/Substitutes/Socket.hs
+{-# LANGUAGE OverloadedStrings #-}
+module Timetable.Substitutes.Socket (substituteSocket) where
+
+import qualified Network.WebSockets as WS
+import Network.HTTP.Conduit (simpleHttp)
+import Network.HTTP.Types.URI (urlEncode)
+import Control.Monad (forever)
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+
+substituteSocket :: WS.ServerApp
+substituteSocket pending = do
+  conn <- WS.acceptRequest pending
+  forever $ do
+    msg <- WS.receiveData conn :: IO T.Text
+    case T.stripPrefix "calendar " msg of
+      Just teacherId -> do
+        let encoded = BC.unpack (urlEncode True (TE.encodeUtf8 teacherId))
+        body <- simpleHttp ("https://staff.district.example/calendar.ics?teacher=" ++ encoded)  --@@
+        WS.sendTextData conn (T.pack (show (BL.length body)) <> " bytes of calendar")
+      Nothing -> WS.sendTextData conn ("unknown command" :: T.Text)
+
+@@@ html-injection | vulnerable | src/BoxOffice/Shows/Page.hs
+{-# LANGUAGE OverloadedStrings #-}
+module BoxOffice.Shows.Page (showRoutes) where
+
+import Web.Scotty
+import Text.Blaze.Html5 ((!))
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
+import Text.Blaze.Html.Renderer.Text (renderHtml)
+import qualified Data.Text.Lazy as TL
+
+showRoutes :: ScottyM ()
+showRoutes = get "/shows/search" $ do
+  needle <- param "q" :: ActionM TL.Text
+  html $ renderHtml $ H.docTypeHtml $ do
+    H.head (H.title "Box office search")
+    H.body $ do
+      H.h1 "Results"
+      H.p ! A.class_ "query" $ do
+        "You searched for "
+        H.preEscapedToHtml needle  --@@
+
+@@@ html-injection | safe | src/BoxOffice/Shows/Results.hs
+{-# LANGUAGE OverloadedStrings #-}
+module BoxOffice.Shows.Results (resultRoutes) where
+
+import Web.Scotty
+import Text.Blaze.Html5 ((!))
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
+import Text.Blaze.Html.Renderer.Text (renderHtml)
+import qualified Data.Text.Lazy as TL
+
+resultRoutes :: ScottyM ()
+resultRoutes = get "/shows/search" $ do
+  needle <- param "q" :: ActionM TL.Text
+  html $ renderHtml $ H.docTypeHtml $ do
+    H.head (H.title "Box office search")
+    H.body $ do
+      H.h1 "Results"
+      H.p ! A.class_ "query" $ do
+        "You searched for "
+        H.toHtml needle  --@@
+
+@@@ html-injection | vulnerable | src/BoxOffice/Guestbook/Wall.hs
+{-# LANGUAGE OverloadedStrings #-}
+module BoxOffice.Guestbook.Wall (guestbookRoutes) where
+
+import Web.Spock
+import qualified Data.Text as T
+
+pageAround :: T.Text -> T.Text
+pageAround inner = "<html><body><h2>Thanks for signing our wall</h2>" <> inner <> "</body></html>"
+
+guestbookRoutes :: SpockM () () () ()
+guestbookRoutes = post "guestbook" $ do
+  signature <- param' "signature"
+  html (pageAround ("<p class=\"signature\">" <> signature <> "</p>"))  --@@
+
+@@@ html-injection | safe | src/BoxOffice/Guestbook/Board.hs
+{-# LANGUAGE OverloadedStrings #-}
+module BoxOffice.Guestbook.Board (boardRoutes) where
+
+import Web.Spock
+import qualified Data.Text as T
+
+pageAround :: T.Text -> T.Text
+pageAround inner = "<html><body><h2>Thanks for signing our wall</h2>" <> inner <> "</body></html>"
+
+escapeHtml :: T.Text -> T.Text
+escapeHtml = T.concatMap escapeChar
+  where
+    escapeChar '<' = "&lt;"
+    escapeChar '>' = "&gt;"
+    escapeChar '&' = "&amp;"
+    escapeChar '"' = "&quot;"
+    escapeChar '\'' = "&#39;"
+    escapeChar c = T.singleton c
+
+boardRoutes :: SpockM () () () ()
+boardRoutes = post "guestbook" $ do
+  signature <- param' "signature"
+  html (pageAround ("<p class=\"signature\">" <> escapeHtml signature <> "</p>"))  --@@
+
+@@@ html-injection | vulnerable | src/BoxOffice/Reviews/Submit.hs
+{-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell, TypeFamilies #-}
+module BoxOffice.Reviews.Submit where
+
+import Yesod
+import Text.Blaze (preEscapedToMarkup)
+
+data Reviews = Reviews
+
+mkYesod "Reviews" [parseRoutes|
+/reviews/preview PreviewR POST
+|]
+
+instance Yesod Reviews
+
+instance RenderMessage Reviews FormMessage where
+  renderMessage _ _ = defaultFormMessage
+
+postPreviewR :: Handler Html
+postPreviewR = do
+  body <- runInputPost (ireq textField "body")
+  let rendered = preEscapedToMarkup body :: Html  --@@
+  defaultLayout [whamlet|
+    <h2>Preview of your review
+    <blockquote .review>#{rendered}
+  |]
+
+@@@ html-injection | safe | src/BoxOffice/Reviews/Preview.hs
+{-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell, TypeFamilies #-}
+module BoxOffice.Reviews.Preview where
+
+import Yesod
+import Text.Blaze (toMarkup)
+
+data Reviews = Reviews
+
+mkYesod "Reviews" [parseRoutes|
+/reviews/preview PreviewR POST
+|]
+
+instance Yesod Reviews
+
+instance RenderMessage Reviews FormMessage where
+  renderMessage _ _ = defaultFormMessage
+
+postPreviewR :: Handler Html
+postPreviewR = do
+  body <- runInputPost (ireq textField "body")
+  let rendered = toMarkup body :: Html  --@@
+  defaultLayout [whamlet|
+    <h2>Preview of your review
+    <blockquote .review>#{rendered}
+  |]

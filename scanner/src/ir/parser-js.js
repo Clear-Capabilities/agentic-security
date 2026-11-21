@@ -82,9 +82,41 @@ function resolveObjectKey(p) {
 }
 
 // Compact a Babel AST node into our exprDesc.
+// The simple class name a TypeScript annotation names: `Svc`, `ns.Svc`, `Svc | null`, `Svc | undefined`. Arrays, unions of
+// several classes, literals and primitives give null; the class hierarchy honours only a project class, so a library name is inert.
+function tsTypeName(ann) {
+  let t = ann && ann.type === 'TSTypeAnnotation' ? ann.typeAnnotation : ann;
+  if (!t) return null;
+  if (t.type === 'TSUnionType') {
+    const members = (t.types || []).filter((m) => !/^(?:TSNullKeyword|TSUndefinedKeyword|TSVoidKeyword)$/.test(m.type));
+    return members.length === 1 ? tsTypeName(members[0]) : null;
+  }
+  if (t.type === 'TSTypeReference') {
+    const tn = t.typeName;
+    if (!tn) return null;
+    if (tn.type === 'Identifier') return tn.name;
+    if (tn.type === 'TSQualifiedName' && tn.right && tn.right.type === 'Identifier') return tn.right.name;
+  }
+  return null;
+}
+// `new Svc(...)` names its class; anything else gives null.
+function ctorClassName(init) {
+  return init && init.type === 'NewExpression' && init.callee && init.callee.type === 'Identifier' ? init.callee.name : null;
+}
+
 function exprOf(n) {
   if (!n) return { kind: 'unknown' };
   switch (n.type) {
+    // TypeScript wrappers carry no runtime value of their own: `req.query.name as string`, `x!`, `<T>x`,
+    // `x satisfies T`, `f<T>`. They lowered to `unknown`, so a cast on a request value, the ordinary way a typed
+    // Express or Fastify handler reads one, cut every flow at the cast. Lower to the wrapped expression.
+    case 'TSAsExpression':
+    case 'TSNonNullExpression':
+    case 'TSTypeAssertion':
+    case 'TSSatisfiesExpression':
+    case 'TSInstantiationExpression':
+    case 'ParenthesizedExpression':
+      return exprOf(n.expression);
     case 'Identifier':       return { kind: 'ident', name: n.name };
     case 'NumericLiteral':
     case 'StringLiteral':
@@ -247,6 +279,7 @@ function _findDangerouslySetInnerHTML(jsxElement) {
 
 // Reduce a Babel LHS node to a string path used as a dataflow variable key.
 function lhsPath(n) {
+  while (n && (n.type === 'TSAsExpression' || n.type === 'TSNonNullExpression' || n.type === 'TSTypeAssertion' || n.type === 'TSSatisfiesExpression' || n.type === 'ParenthesizedExpression')) n = n.expression;
   if (!n) return null;
   if (n.type === 'Identifier') return n.name;
   if (n.type === 'ThisExpression') return '_this_';
@@ -405,10 +438,20 @@ function fnQid(file, scopeName, name, line) {
 }
 
 // ── Main entry ──────────────────────────────────────────────────────────────
+export const JS_MAX_CHARS = 1_500_000;
+const _oversize = [];
+/** Files parseJsFile refused for size in this process: [{ file, chars }]. */
+export function jsOversizeSkips() { return _oversize.slice(); }
+export function _resetJsOversizeSkips() { _oversize.length = 0; }
 export function parseJsFile(file, code) {
   if (!/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(file)) return null;
-  if (!code || code.length > 500_000) return null;
+  // Files above the cap are skipped, and the skip is recorded (`jsOversizeSkips`) so coverage can say so.
+  // The cap was 500,000 characters, which silently dropped ordinary application bundles of 0.5 to 1.5 MB
+  // (Babel parses a 520 KB editor bundle in about 60 ms); it now matches the module resolver's 1.5 MB.
+  if (!code) return null;
+  if (code.length > JS_MAX_CHARS) { _oversize.push({ file, chars: code.length }); return null; }
   const functions = [];
+  const classes = [];      // one record per class: name, line, bases, fields, fieldTypes (TypeScript annotations and `new X()` in the constructor)
 
   // Scope stack: each entry is a function being built.
   const stack = [];
@@ -435,6 +478,22 @@ export function parseJsFile(file, code) {
     const entryId = nextNodeId();
     const exitId  = nextNodeId();
     const paramAnnotations = [];
+    const paramTypes = {};
+    // An MCP tool handler: the function literal passed last to `server.tool(name, [description,] schema, handler)` or
+    // `server.registerTool(name, config, handler)`. Its first parameter is the tool's arguments, filled by a model acting on untrusted
+    // content: the agent-tool trust boundary the catalog already names for `request.params.arguments`. The IR states the fact
+    // (`js:mcp-tool-handler`); the catalog decides it is a source. A two-argument `tool(name, handler)` has no schema and its
+    // handler receives only the call context, so it is not marked.
+    const mcpHandler = (() => {
+      const pp = fnPath && fnPath.parentPath;
+      const call = pp && pp.node;
+      if (!call || call.type !== 'CallExpression' || fnPath.listKey !== 'arguments') return false;
+      const callee = call.callee;
+      const prop = callee && callee.type === 'MemberExpression' && !callee.computed && callee.property && callee.property.name;
+      if (prop !== 'tool' && prop !== 'registerTool') return false;
+      const args = call.arguments || [];
+      return args.length >= 3 && args[args.length - 1] === node;
+    })();
     const fn = {
       qid, name: name || 'anon', line,
       // Plain strings, per the IR shape contract (ir/CLAUDE.md: "params:
@@ -486,6 +545,19 @@ export function parseJsFile(file, code) {
         if (serverAction && resolvedIdent?.type === 'Identifier' && callerControllable(resolvedIdent)) {
           paramAnnotations.push({ index: idx, name: resolvedIdent.name, decorator: 'js:server-action' });
         }
+        if (mcpHandler && idx === 0) {
+          // the arguments object, named or destructured (`async ({ city, units }) => ...`: the pattern's bindings read off `<obj>`)
+          const mcpName = resolvedIdent?.type === 'Identifier' ? resolvedIdent.name : (resolvedIdent?.type === 'ObjectPattern' ? '<obj>' : null);
+          if (mcpName) paramAnnotations.push({ index: idx, name: mcpName, decorator: 'js:mcp-tool-handler' });
+        }
+        {
+          // TypeScript: a parameter's declared class (`svc: ItemService`), for receiver typing (class-hierarchy.js typeOfVar).
+          const tIdent = p.type === 'TSParameterProperty' ? p.parameter : resolvedIdent;
+          const base = tIdent && tIdent.type === 'AssignmentPattern' ? tIdent.left : tIdent;
+          const tname = base && base.type === 'Identifier' ? tsTypeName(base.typeAnnotation) : null;
+          if (tname) paramTypes[base.name] = tname;
+        }
+        if (p.type === 'TSParameterProperty' && p.parameter) { const b = p.parameter.type === 'AssignmentPattern' ? p.parameter.left : p.parameter; if (b && b.type === 'Identifier') return b.name; }
         if (p.type === 'Identifier') return p.name;
         if (p.type === 'ObjectPattern') return '<obj>';
         if (p.type === 'ArrayPattern') return '<arr>';
@@ -503,10 +575,31 @@ export function parseJsFile(file, code) {
       file,
       _cursor: entryId, // current node ID — next addNode() links from here
       ...(paramAnnotations.length ? { paramAnnotations } : {}),
+      ...(Object.keys(paramTypes).length ? { paramTypes } : {}),
     };
     fn.cfg.nodes.set(entryId, { id: entryId, kind: 'entry', succ: [], pred: [], line });
     fn.cfg.nodes.set(exitId,  { id: exitId,  kind: 'exit',  succ: [], pred: [], line });
     stack.push(fn);
+    // A destructured parameter (`async ({ city, units }) => ...`) binds its names off the `<obj>` placeholder the params list carries:
+    // `city = <obj>.city`, `{ a: b }` gives `b = <obj>.a`, a rest element takes the whole object. Without these the names were unbound,
+    // so a source marked on the parameter (an MCP tool handler's arguments) never reached a use of a field.
+    (params || []).forEach((p, idx) => {
+      const pat = p && p.type === 'ObjectPattern' ? p : (p && p.type === 'AssignmentPattern' && p.left && p.left.type === 'ObjectPattern' ? p.left : null);
+      if (!pat) return;
+      const holder = fn.params[idx] === '<obj>' ? '<obj>' : null;
+      if (!holder) return;
+      for (const prop of pat.properties || []) {
+        let target = null, source = null;
+        if (prop.type === 'RestElement' && prop.argument && prop.argument.type === 'Identifier') { target = prop.argument.name; source = { kind: 'ident', name: holder }; }
+        else if (prop.type === 'ObjectProperty' && prop.key && prop.key.type === 'Identifier') {
+          const v = prop.value && prop.value.type === 'AssignmentPattern' ? prop.value.left : prop.value;
+          if (v && v.type === 'Identifier') { target = v.name; source = { kind: 'member', object: { kind: 'ident', name: holder }, prop: prop.key.name }; }
+        }
+        if (!target) continue;
+        const nid = nextNodeId();
+        addNode(fn, { id: nid, kind: 'assign', target, source, line, succ: [], pred: [] });
+      }
+    });
     return fn;
   };
   const exitFn = () => {
@@ -653,6 +746,44 @@ export function parseJsFile(file, code) {
           exit() { exitFn(); },
         },
 
+        // One record per class, read before the TypeScript preset strips the annotations: the class's name and base, its
+        // declared fields with their types, constructor parameter properties (`constructor(private readonly svc: Svc)`), and
+        // fields the constructor assigns from a typed parameter or a `new X()`. The IR states the facts; class-hierarchy.js
+        // types `this.svc` from them. Every class is listed, so callgraph.js's known-class set for the file is complete.
+        'ClassDeclaration|ClassExpression'(path) {
+          const node = path.node;
+          let cname = node.id && node.id.name;
+          if (!cname && path.parent && path.parent.type === 'VariableDeclarator' && path.parent.id && path.parent.id.type === 'Identifier') cname = path.parent.id.name;
+          if (!cname) return;
+          const bases = node.superClass && node.superClass.type === 'Identifier' ? [node.superClass.name] : [];
+          const fields = []; const fieldTypes = {};
+          const note = (n, t) => { if (!n) return; if (!fields.includes(n)) fields.push(n); if (t && !fieldTypes[n]) fieldTypes[n] = t; };
+          for (const m of (node.body && node.body.body) || []) {
+            if ((m.type === 'ClassProperty' || m.type === 'ClassPrivateProperty' || m.type === 'PropertyDefinition') && m.key) {
+              const n = m.key.type === 'Identifier' ? m.key.name : (m.key.type === 'PrivateName' && m.key.id ? m.key.id.name : null);
+              note(n, tsTypeName(m.typeAnnotation) || ctorClassName(m.value));
+            }
+            if (m.type === 'ClassMethod' && m.kind === 'constructor') {
+              const ptypes = {};
+              for (const p of m.params || []) {
+                const inner = p.type === 'TSParameterProperty' ? p.parameter : p;
+                const b = inner && inner.type === 'AssignmentPattern' ? inner.left : inner;
+                if (!b || b.type !== 'Identifier') continue;
+                const t = tsTypeName(b.typeAnnotation);
+                if (t) ptypes[b.name] = t;
+                if (p.type === 'TSParameterProperty') note(b.name, t);
+              }
+              for (const st of (m.body && m.body.body) || []) {
+                const e = st.type === 'ExpressionStatement' ? st.expression : null;
+                if (!e || e.type !== 'AssignmentExpression' || e.operator !== '=' || !e.left || e.left.type !== 'MemberExpression' || e.left.computed) continue;
+                if (!e.left.object || e.left.object.type !== 'ThisExpression' || !e.left.property || e.left.property.type !== 'Identifier') continue;
+                const t = ctorClassName(e.right) || (e.right && e.right.type === 'Identifier' ? ptypes[e.right.name] : null) || null;
+                note(e.left.property.name, t);
+              }
+            }
+          }
+          classes.push({ name: cname, line: node.loc ? node.loc.start.line : 0, bases, fields, ...(Object.keys(fieldTypes).length ? { fieldTypes } : {}) });
+        },
         VariableDeclarator(path) {
           const fn = currentFn(); if (!fn) return;
           // PRD R13(b): `for (const item of tainted)` is, structurally, also
@@ -690,7 +821,9 @@ export function parseJsFile(file, code) {
           const line = path.node.loc?.start?.line || 0;
           if (typeof id === 'string') {
             const nodeId = nextNodeId();
-            addNode(fn, { id: nodeId, kind: 'assign', target: id, source: initExpr, line, succ: [], pred: [] });
+            // the declared (`const s: Svc = ...`) or constructed (`const s = new Svc()`) class, for receiver typing
+            const dt = (path.node.id && path.node.id.type === 'Identifier' ? tsTypeName(path.node.id.typeAnnotation) : null) || ctorClassName(path.node.init);
+            addNode(fn, { id: nodeId, kind: 'assign', target: id, source: initExpr, line, succ: [], pred: [], ...(dt ? { declaredType: dt } : {}) });
             recordWrite(fn, id, initExpr, nodeId);
             return;
           }
@@ -975,7 +1108,9 @@ export function parseJsFile(file, code) {
       // is the documented replacement: parse every file with the same TS grammar
       // regardless of extension. JSX stays enabled via preset-react, so .js files
       // containing JSX still parse — which .isTSX/.allExtensions guaranteed before.
-      presets: [presetReact, [presetTypescript, { ignoreExtensions: true }]],
+      // JSX is not legal in a .ts file, where `<T>expr` is a type assertion; with the React preset on, the angle
+      // cast parsed as a JSX element and the whole expression lowered to `unknown`. .js/.jsx/.tsx keep JSX.
+      presets: /\.ts$/i.test(file) ? [[presetTypescript, { ignoreExtensions: true }]] : [presetReact, [presetTypescript, { ignoreExtensions: true }]],
       // Decorators are SYNTAX we must accept, never transform — without them the
       // parser rejects the whole file and every finding in it silently disappears.
       // Measured on one real target: 201 JS files unparseable, all decorator-using
@@ -997,5 +1132,5 @@ export function parseJsFile(file, code) {
     fn.writes = Object.fromEntries(fn.writes);
     fn.cfg.nodes = Object.fromEntries(fn.cfg.nodes);
   }
-  return { file, functions, topLevel: functions.find(f => f.name === '<module>')?.qid || null };
+  return { file, functions, ...(classes.length ? { classes } : {}), topLevel: functions.find(f => f.name === '<module>')?.qid || null };
 }

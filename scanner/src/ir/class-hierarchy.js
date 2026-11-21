@@ -63,9 +63,11 @@ export function buildClassHierarchy(perFileIR, callGraph) {
   // `test/catalog-cs-p1.test.js`'s existing ambiguity-refusal regression
   // test the moment that extension shipped.
   const ambiguousVarKeys = new Set();
+  const localNames = new Map();    // fn qid -> the names it binds (parameters, assignment targets)
+  const moduleVars = new Map();    // file -> Map(var -> className) for module-level declared or constructed types
 
   if (!perFileIR || typeof perFileIR !== 'object') {
-    return { classes, methodOwners, typeOfVar };
+    return { classes, methodOwners, typeOfVar, localNames, moduleVars };
   }
 
   for (const [file, ir] of Object.entries(perFileIR)) {
@@ -78,7 +80,7 @@ export function buildClassHierarchy(perFileIR, callGraph) {
         if (!c || !c.name) continue;
         let cls = classes.get(c.name);
         if (!cls) {
-          cls = { name: c.name, file, line: c.line || 0, methods: new Set(), extends: null, bases: [], fields: new Set() };
+          cls = { name: c.name, file, line: c.line || 0, methods: new Set(), extends: null, bases: [], fields: new Set(), fieldTypes: new Map() };
           classes.set(c.name, cls);
         }
         if (!cls.bases) cls.bases = [];
@@ -108,6 +110,10 @@ export function buildClassHierarchy(perFileIR, callGraph) {
         // emits one `ir.classes` entry per method's enclosing file).
         if (Array.isArray(c.fields)) {
           for (const f of c.fields) if (f) cls.fields.add(f);
+        }
+        if (!cls.fieldTypes) cls.fieldTypes = new Map();
+        if (c.fieldTypes && typeof c.fieldTypes === 'object') {
+          for (const [f, t] of Object.entries(c.fieldTypes)) if (f && t && !cls.fieldTypes.has(f)) cls.fieldTypes.set(f, t);
         }
       }
     }
@@ -260,11 +266,23 @@ export function buildClassHierarchy(perFileIR, callGraph) {
     // capture, same field name and rationale).
     for (const fn of ir.functions) {
       if (!fn.cfg || !fn.cfg.nodes) continue;
+      // Every name the function binds itself (parameters and assignment targets), typed or not: the field
+      // fallback in classOfVar must not apply to a name the function shadows.
+      const bound = new Set((fn.params || []).map((p) => (typeof p === 'string' ? p : p && p.name)).filter(Boolean));
       for (const node of Object.values(fn.cfg.nodes)) {
+        if (node.kind === 'assign' && typeof node.target === 'string' && !node.target.includes('.')) bound.add(node.target);
         if (node.kind !== 'assign' || !node.declaredType || typeof node.target !== 'string' || node.target.includes('.')) continue;
         const key = `${file}::${fn.qid}::${node.target}`;
         if (!typeOfVar.has(key) && !ambiguousVarKeys.has(key)) typeOfVar.set(key, node.declaredType);
+        if (fn.name === '<module>') {
+          // A module-level `svc = Service()` is read by every function of the file that does not bind the name itself.
+          if (!moduleVars.has(file)) moduleVars.set(file, new Map());
+          const mv = moduleVars.get(file);
+          if (mv.has(node.target) && mv.get(node.target) !== node.declaredType) mv.set(node.target, null); // two types: refuse
+          else if (!mv.has(node.target)) mv.set(node.target, node.declaredType);
+        }
       }
+      if (bound.size) localNames.set(fn.qid, bound);
     }
   }
 
@@ -420,7 +438,7 @@ export function buildClassHierarchy(perFileIR, callGraph) {
     }
   }
 
-  return { classes, methodOwners, typeOfVar };
+  return { classes, methodOwners, typeOfVar, localNames, moduleVars };
 }
 
 /**
@@ -429,7 +447,31 @@ export function buildClassHierarchy(perFileIR, callGraph) {
  */
 export function classOfVar(cha, file, fnQid, varName) {
   if (!cha || !cha.typeOfVar || !varName) return null;
-  return cha.typeOfVar.get(`${file}::${fnQid}::${varName}`) || null;
+  const local = cha.typeOfVar.get(`${file}::${fnQid}::${varName}`);
+  if (local) return local;
+  // A name the function neither declares nor receives is a field of the enclosing class (or an ancestor):
+  // use its declared type. A local or parameter of the same name, even an untyped one, shadows the field
+  // and refuses this fallback rather than guess a flow through the field's class.
+  if (cha.localNames && cha.localNames.get(fnQid)?.has(varName)) return null;
+  const m = /::(\w+)::/.exec(fnQid || '');
+  if (!m) {
+    // Not a method: a module-level binding of the name, typed at module scope, is what the function reads.
+    const mv = cha.moduleVars && cha.moduleVars.get(file);
+    return (mv && mv.get(varName)) || null;
+  }
+  if (!cha.classes) return null;
+  let cur = m[1];
+  const seen = new Set();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const cls = cha.classes.get(cur);
+    if (!cls) break;
+    const t = cls.fieldTypes && cls.fieldTypes.get(varName);
+    if (t) return t;
+    cur = cls.extends || null;
+  }
+  const mv = cha.moduleVars && cha.moduleVars.get(file);
+  return (mv && mv.get(varName)) || null;
 }
 
 /**

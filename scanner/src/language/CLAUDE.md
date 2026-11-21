@@ -219,3 +219,30 @@ the alias's call-graph edge is kept via `inlinedCalls`; arguments are lowered in
 `haskell-project-models.js` loads `.agentic-security/haskell-models.json` (schema `haskell-project-models/1`). A model declares a source, sink or sanitizer by module and function name and is accepted only with provenance (reviewer, date, reason), an argument position for a sink, an explicit family list for a sanitizer (`*` is refused), and a paired positive and negative test file that exists inside the project. A rejected model is a scan-health condition and has no effect. Accepted models are registered into the taint catalog for one scan (`registerProjectCatalogEntries`, tagged `source: 'project'`) and removed when `runFullScan` returns or throws. Each scan runs in its own owner scope (`scanOwner`, an AsyncLocalStorage in `dataflow/catalog.js`), so overlapping scans of different roots in one process never match each other's project entries.
 
 `haskell-budget-state.js` reads operator parse budgets from `AGENTIC_SECURITY_HASKELL_PARSE_BUDGETS` (`name=value,...`, parser budget names only; anything else is refused as a condition), and writes `.agentic-security/haskell-budget.json` with the effective budgets and every remaining file plus a content digest. The next scan reports `budget.sinceLast` (completed, still remaining on the same inputs, still remaining after a change, gone, newly remaining). It records work left; it does not resume, because the assurance pass parses every eligible file on every scan.
+
+## Round 11 (0.219.0): three guard mechanisms from unseen-v8, with unseen-v9 frozen first
+
+unseen-v9 (`bench/language-support/corpora/unseen-v9`, 78 forms by a separate agent session that could not see this repository) was frozen
+and measured once at 0.218.1 before any change of this round: overall F1 77.8% (precision 84.8, recall 71.8), taint 80.0% (12 TP, 3 FP, 3 FN),
+pattern layer 76.2% (`results/unseen-v9-baseline.md`; per-case lists never read). It is the generalisation measure from here on. unseen-v8's
+per-case misses and strays were then read (its USE-LOG and manifest record the development role from 2026-11-21) and three general causes fixed in
+`haskell-guards.js`:
+
+- **A shell interpreter reached through a callee.** `promoteShellInterpreter` found the sink only at the finding's own line; a finding merged
+  from a callee's summary sits at the caller's line (`mapM_ moveRobot ...`) while `run_ "sh" ["-c", cmd]` is in `moveRobot`. When no site is at
+  the line, every site of that callee in the file is examined and promotion needs all of them to have the shell shape. Shelly's `run`/`run_`/
+  `command` and typed-process's `proc` joined the program-plus-argument-list set. CWE-88 medium became CWE-78 critical on the message-queue form.
+- **A let-bound Bool in a guard, and a lift around the canonicalisation.** `classifyCondition` takes the function's once-bound locals: `let
+  inside = base \`isPrefixOf\` requested` then `if inside && exists` reads as the containment check (a name bound twice is refused), and
+  `isCanonical` sees through `liftIO`/`lift` so `requested <- liftIO (canonicalizePath p)` is a canonical path. The read is reported as
+  dominated by the guard, never dropped.
+- **Character-class predicates.** `Data.Text.all`, `Data.Text.Lazy.all` and `Data.ByteString.Char8.all` count beside `all`; the predicate may
+  be a lambda or a one-expression helper whose body is a disjunction of class checks on its parameter and equalities with a dash or an
+  underscore (or `elem c "-_"`); a dot or a slash disqualifies it (a dot admits `..`). An inlined predicate's body is now classified with the
+  resolver still available, so a lambda inside it can be read.
+
+unseen-v8 as a development set, 0.195.46 to this tree: taint 12 TP / 2 FP / 3 FN (F1 82.8%) to 13 / 0 / 2 (92.9%); pattern layer unchanged at
+17 / 0 / 7. The two taint misses left are policy, not mechanism: standard input and command-line arguments are operator-controlled in this
+engine's model (their flows are reported at info), the authors of unseen-v7 and unseen-v8 both wrote them as vulnerable. Real-code precision
+gate (`bench:haskell-precision:check`, stored and live) and `test:haskell` (with `test/haskell/haskell-round11-taint.test.js`, each
+positive with a refusing twin) are the regression evidence; unseen-v9 is measured again at the end of the round, once.

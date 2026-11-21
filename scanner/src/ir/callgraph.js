@@ -34,6 +34,10 @@ export function buildCallGraph(perFileIR, fileContents) {
   const functions = new Map();
   const byNameInFile = new Map();
   const classMethods = new Map();
+  // Every definition behind a `Class.method` key, so an overloaded method can be chosen by arity instead of
+  // by whichever overload was indexed last (`classMethods` keeps that last-wins entry as the fallback).
+  const classMethodsAll = new Map();
+  const bareTailAllInFile = new Map();
   // Re-export resolution: track `export { x } from './y'` and `module.exports = require('./y')`
   const reexportMap = new Map();
   if (fileContents) {
@@ -86,6 +90,7 @@ export function buildCallGraph(perFileIR, fileContents) {
     if (!ir || !ir.functions) continue;
     byNameInFile.set(file, new Map());
     bareTailInFile.set(file, new Map());
+    bareTailAllInFile.set(file, new Map());
     const knownClasses = knownClassNamesByFile.get(file);
     for (const fn of ir.functions) {
       functions.set(fn.qid, fn);
@@ -93,11 +98,19 @@ export function buildCallGraph(perFileIR, fileContents) {
       const m = fn.qid.match(/::(\w+)::(\w+)@/);
       if (m) {
         const isRealClass = knownClasses ? knownClasses.has(m[1]) : /^[A-Z]/.test(m[1]);
-        if (isRealClass) classMethods.set(`${m[1]}.${m[2]}`, fn.qid);
+        if (isRealClass) {
+          const key = `${m[1]}.${m[2]}`;
+          classMethods.set(key, fn.qid);
+          if (!classMethodsAll.has(key)) classMethodsAll.set(key, []);
+          classMethodsAll.get(key).push(fn.qid);
+        }
       }
       if (fn.name && fn.name.includes('.')) {
         const tail = fn.name.split('.').pop();
         const fileMap = bareTailInFile.get(file);
+        const allMap = bareTailAllInFile.get(file);
+        if (!allMap.has(tail)) allMap.set(tail, []);
+        allMap.get(tail).push(fn.qid);
         if (fileMap.has(tail)) {
           const cur = fileMap.get(tail);
           if (cur !== null && cur !== fn.qid) fileMap.set(tail, null); // ambiguous — refuse to guess
@@ -279,6 +292,14 @@ export function buildCallGraph(perFileIR, fileContents) {
   // only the tables that hold the name, in the same order, returns the same
   // first usable candidate.
   const qidsByName = new Map();
+  // Every definition per name, overloads included (the per-file tables above keep one qid per name), used only
+  // to choose among overloads by arity; the first-match walks below keep reading the per-file tables.
+  const allByName = new Map();
+  for (const fn of functions.values()) {
+    if (!fn || !fn.name) continue;
+    if (!allByName.has(fn.name)) allByName.set(fn.name, []);
+    allByName.get(fn.name).push(fn.qid);
+  }
   for (const m of byNameInFile.values()) {
     for (const [nm, q] of m) {
       let l = qidsByName.get(nm);
@@ -325,7 +346,16 @@ export function buildCallGraph(perFileIR, fileContents) {
   // recurred once already: two dataflow call sites reintroduced the guess
   // that `dataflow/engine.js` had already been fixed to avoid, simply
   // because the guard lived only in that one file's helper instead of here).
-  function _resolveImpl(name, callerFile, allowTailGuess) {
+  // Among several definitions of one name (overloads), the one whose parameter count equals the call's
+  // argument count, when exactly one does. Varargs and same-arity overloads leave this undecided (null).
+  function byArity(cands, argCount) {
+    if (!Array.isArray(cands) || cands.length < 2 || typeof argCount !== 'number') return null;
+    // A Python method's `self`/`cls` is supplied by the receiver, not the argument list.
+    const arity = (f) => { const p = f.params; const recv = p.length && (p[0] === 'self' || p[0] === 'cls') && /\.py$/i.test(f.file || '') && /::\w+::/.test(f.qid || ''); return p.length - (recv ? 1 : 0); };
+    const exact = cands.filter((q) => { const f = functions.get(q); return f && Array.isArray(f.params) && arity(f) === argCount; });
+    return exact.length === 1 ? exact[0] : null;
+  }
+  function _resolveImpl(name, callerFile, allowTailGuess, argCount) {
     if (!name || typeof name !== 'string') return null;
     {
       const imp = viaImport(callerFile, name);
@@ -353,6 +383,8 @@ export function buildCallGraph(perFileIR, fileContents) {
       if (!name.includes('.')) {
         const tail = bareTailInFile.get(callerFile)?.get(name);
         if (tail) return tail;
+        // Same-file overloads were refused as ambiguous; the call's arity may settle it.
+        if (tail === null) { const pick = byArity(bareTailAllInFile.get(callerFile)?.get(name), argCount); if (pick) return pick; }
       }
       // `this.method(...)` same-instance call — see the identical branch
       // and its full rationale in the `edges` loop above. Exact match, same
@@ -365,11 +397,15 @@ export function buildCallGraph(perFileIR, fileContents) {
         if (viaThis) return viaThis;
       }
     }
-    for (const q of qidsByName.get(name) || []) {
+    const named = qidsByName.get(name) || [];
+    // Overloads share a name; the call's arity picks among them before the first-indexed one is taken.
+    const namedByArity = byArity(allByName.get(name), argCount);
+    if (namedByArity && !isCrossLanguageUnsafe(namedByArity, callerFile)) return namedByArity;
+    for (const q of named) {
       if (!isCrossLanguageUnsafe(q, callerFile)) return q;
     }
     if (classMethods.has(name) && !isCrossLanguageUnsafe(classMethods.get(name), callerFile)) {
-      return classMethods.get(name);
+      return byArity(classMethodsAll.get(name), argCount) || classMethods.get(name);
     }
     if (allowTailGuess && name.includes('.')) {
       const tail = name.split('.').slice(-1)[0];
@@ -401,8 +437,8 @@ export function buildCallGraph(perFileIR, fileContents) {
   }
   // Permissive: includes the bare-tail guess. Existing callers that already
   // accept that tradeoff (or pre-date this split) keep this name.
-  function resolve(name, callerFile) {
-    return _resolveImpl(name, callerFile, true);
+  function resolve(name, callerFile, argCount) {
+    return _resolveImpl(name, callerFile, true, argCount);
   }
   // Safe-by-default: every match is exact or explicitly qualified; never
   // invents an edge by guessing from a dotted name's last segment. This is
@@ -410,8 +446,8 @@ export function buildCallGraph(perFileIR, fileContents) {
   // callee purely to build/query a reverse call graph (who calls whom) has
   // no use for a guessed edge, since a wrong one fabricates a dataflow path
   // that does not exist.
-  function resolveKnownCallee(name, callerFile) {
-    return _resolveImpl(name, callerFile, false);
+  function resolveKnownCallee(name, callerFile, argCount) {
+    return _resolveImpl(name, callerFile, false, argCount);
   }
   return { functions, edges, callersOf, resolve, resolveKnownCallee, moduleIndex };
 }
