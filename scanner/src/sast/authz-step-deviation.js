@@ -37,8 +37,8 @@ const { callsIn } = _valueInternals;
 
 const TEST_PATH_RE = /(?:^|[\\/])(?:tests?|specs?|__tests__|__mocks__|testdata|fixtures?|examples?|e2e)[\\/]|[._-](?:test|spec|stories)\.[a-z]{1,4}$|Tests?\.(?:java|kt|cs)$|_test\.go$|(?:^|[\\/])test_\w{1,80}\.py$/i;
 
-export const MIN_STEPPED = 3;
-export const MIN_SHARED = 3;
+const MIN_STEPPED = 3;
+const MIN_SHARED = 3;
 
 // A permission step: a verb, then the thing being checked.
 const PERM_NOUN_RE = /scope|permission|privilege|role|polic|acl|capabilit|entitle|abilit|grant/i;

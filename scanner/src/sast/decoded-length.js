@@ -186,7 +186,15 @@ function scanCSharp(file, code, lines) {
 // method is the off switch; so is a try around the body (the exception is then handled where it is thrown) and a writer
 // (the array is an output buffer). A lone `[0]` or `[1]` read is not reported: a parser reading one or two bytes is the
 // common case of a length the caller already proved, and the real defects read well past that.
-const CS_SIG = /^\s*(?:\[[^\]\n]*\]\s*)*(public|internal|protected)\b(?![^(\n]*\b(?:class|struct|interface|enum|delegate|event|operator)\b)[^;=(\n]*?\b(\w+)\s*\(([^)\n]*)\)/;
+// Attributes (\`[Obsolete] public ...\`) are removed by csStripAttributes before this is applied: a repeated attribute group
+// inside the pattern would be a nested quantifier, which this project's own ReDoS rule rightly reports.
+const CS_SIG = /^\s*(public|internal|protected)\b(?![^(\n]*\b(?:class|struct|interface|enum|delegate|event|operator)\b)[^;=(\n]*?\b(\w+)\s*\(([^)\n]*)\)/;
+const CS_ATTR = /^(\s*)\[[^\]\n]*\]\s*/;
+function csStripAttributes(line) {
+  let s = line;
+  for (let n = 0; n < 8; n++) { const m = CS_ATTR.exec(s); if (!m) break; s = m[1] + s.slice(m[0].length); }
+  return s;
+}
 const CS_WRITER_NAME = /^(?:Write|To|Serialize|Serialise|Encode|Copy|Fill|Put|Set|Emit)/;
 const CS_OUTPUT_PARAM = /^(?:dest|destination|dst|out\w*|output|target|buffer|buf|sink)$/i;
 const CS_READ_WIDTH = { Int16: 2, UInt16: 2, Int32: 4, UInt32: 4, Int64: 8, UInt64: 8, Single: 4, Double: 8, Char: 2, Boolean: 1 };
@@ -206,7 +214,7 @@ function scanCSharpIndex(file, code, lines) {
   const out = [];
   if (!/\bbyte\s*\[\]/.test(code)) return out;
   for (let i = 0; i < lines.length; i++) {
-    const sig = lines[i].match(CS_SIG);
+    const sig = csStripAttributes(lines[i]).match(CS_SIG);
     if (!sig) continue;
     const [, , name, params] = sig;
     if (CS_WRITER_NAME.test(name)) continue;

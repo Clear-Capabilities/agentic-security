@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-20T20:18:34.175Z",
+  "generatedAt": "2026-11-21T12:31:01.280Z",
   "requiredFacts": [
     "sourceProject",
     "commitBefore",
