@@ -1,4 +1,4 @@
-// Authorization check nested under a data branch while the action runs on every path (CWE-862), src/sast/nondominating-authz-check.js.
+// Authorization check nested under a data branch while the action runs on every path (CWE-862: the action runs with no check on the other branch), src/sast/nondominating-authz-check.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

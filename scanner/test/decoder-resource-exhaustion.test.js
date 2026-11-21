@@ -56,6 +56,13 @@ describe('decoded-length', () => {
     assert.deepEqual(run(scanDecodedLength, 'decoded-length', 'clean', 'Record.cs'), []);
   });
 
+  test('C#: a public member reading a byte[] parameter at fixed offsets with no length check (cs-index, CWE-20)', () => {
+    // The constructor (span read at 2, bytes 4..7) and the static reader (ToUInt32 at 8); not the two-byte reader.
+    assert.deepEqual(sig(run(scanDecodedLength, 'decoded-length', 'vulnerable', 'Address.cs')), ['12:CWE-20', '18:CWE-20']);
+    // Length check, try, a writer, a parameter offset, a private helper and a two-byte read are all silent.
+    assert.deepEqual(run(scanDecodedLength, 'decoded-length', 'clean', 'Address.cs'), []);
+  });
+
   test('Java: 1 << n in an int with a guard admitting 31; range check adding two ints', () => {
     assert.deepEqual(sig(run(scanDecodedLength, 'decoded-length', 'vulnerable', 'Work.java')), ['13:CWE-129', '6:CWE-190']);
     assert.deepEqual(run(scanDecodedLength, 'decoded-length', 'clean', 'Work.java'), []);

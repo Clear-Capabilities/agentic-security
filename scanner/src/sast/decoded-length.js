@@ -22,6 +22,12 @@
 //                ToUInt16`) drives a `for` loop that reads that same buffer,
 //                with no `if` on the count (or on a value computed from it)
 //                before the loop. CWE-125.
+//   cs-index     a public method or constructor takes a `byte[]` and reads it
+//                at fixed offsets (`value[4]`, `value.AsSpan(2)`, `BitConverter.
+//                ToUInt32(value, 8)`) with no `.Length` check of that array
+//                anywhere in the method and no try around the reads. A caller
+//                handing it a shorter array (a truncated attribute from the
+//                wire) throws out of the parser. CWE-20.
 //   int-shift    `int x = 1 << n` (Java, C#) where the guard on `n` admits 31:
 //                `1 << 31` is negative in a 32-bit int, so a loop bounded by
 //                it runs zero times. CWE-190.
@@ -34,13 +40,13 @@
 
 const TEST_PATH = /(?:^|[\\/])(?:test|tests|spec|__tests__|testdata|fixtures?)[\\/]|_test\.go$|Tests?\.(?:java|cs)$/i;
 
-function finding(file, lines, line, rule, cwe, vuln, description, remediation, parser) {
+function finding(file, lines, line, rule, cwe, vuln, description, remediation, parser, family = 'resource-exhaustion') {
   return {
     id: `decoded-length:${rule}:${file}:${line}`,
     file, line, vuln,
     severity: 'medium',
     cwe,
-    family: 'resource-exhaustion',
+    family,
     stride: 'Denial of Service',
     description, remediation,
     snippet: (lines[line - 1] || '').trim().slice(0, 200),
@@ -173,6 +179,80 @@ function scanCSharp(file, code, lines) {
   return out;
 }
 
+// ---------------------------------------------------------------- C#: fixed-offset reads of a byte[] parameter
+// A method or constructor that is reachable from outside its class (public, internal, protected) takes a byte array and
+// reads it at literal offsets. Protocol attribute parsers look exactly like this, and the array is whatever the sender put
+// on the wire. The fix is always the same statement, `if (value.Length < N) ...`, so any `.Length` of that array in the
+// method is the off switch; so is a try around the body (the exception is then handled where it is thrown) and a writer
+// (the array is an output buffer). A lone `[0]` or `[1]` read is not reported: a parser reading one or two bytes is the
+// common case of a length the caller already proved, and the real defects read well past that.
+// Attributes (\`[Obsolete] public ...\`) are removed by csStripAttributes before this is applied: a repeated attribute group
+// inside the pattern would be a nested quantifier, which this project's own ReDoS rule rightly reports.
+const CS_SIG = /^\s*(public|internal|protected)\b(?![^(\n]*\b(?:class|struct|interface|enum|delegate|event|operator)\b)[^;=(\n]*?\b(\w+)\s*\(([^)\n]*)\)/;
+const CS_ATTR = /^(\s*)\[[^\]\n]*\]\s*/;
+function csStripAttributes(line) {
+  let s = line;
+  for (let n = 0; n < 8; n++) { const m = CS_ATTR.exec(s); if (!m) break; s = m[1] + s.slice(m[0].length); }
+  return s;
+}
+const CS_WRITER_NAME = /^(?:Write|To|Serialize|Serialise|Encode|Copy|Fill|Put|Set|Emit)/;
+const CS_OUTPUT_PARAM = /^(?:dest|destination|dst|out\w*|output|target|buffer|buf|sink)$/i;
+const CS_READ_WIDTH = { Int16: 2, UInt16: 2, Int32: 4, UInt32: 4, Int64: 8, UInt64: 8, Single: 4, Double: 8, Char: 2, Boolean: 1 };
+
+function csBodyRange(lines, i) {
+  // The body opens at the first `{` at or after the signature; `: base(...)` / `: this(...)` may sit between. An
+  // expression-bodied member (`=>`) or a declaration ending in `;` has no body to judge.
+  for (let k = i; k < Math.min(lines.length, i + 6); k++) {
+    if (/=>/.test(lines[k]) || (k > i && /^\s*(?:public|private|protected|internal)\b/.test(lines[k]))) return null;
+    if (/\{/.test(lines[k])) return [k, blockEnd(lines, k)];
+    if (/;\s*$/.test(lines[k])) return null;
+  }
+  return null;
+}
+
+function scanCSharpIndex(file, code, lines) {
+  const out = [];
+  if (!/\bbyte\s*\[\]/.test(code)) return out;
+  for (let i = 0; i < lines.length; i++) {
+    const sig = csStripAttributes(lines[i]).match(CS_SIG);
+    if (!sig) continue;
+    const [, , name, params] = sig;
+    if (CS_WRITER_NAME.test(name)) continue;
+    const arrays = [...params.matchAll(/\bbyte\s*\[\]\s+(\w+)/g)].map((m) => m[1]).filter((p) => !CS_OUTPUT_PARAM.test(p));
+    if (!arrays.length) continue;
+    const range = csBodyRange(lines, i);
+    if (!range) continue;
+    const [open, close] = range;
+    const body = lines.slice(open, close + 1);
+    const bodyText = body.join('\n');
+    if (/\btry\b/.test(bodyText)) { i = close; continue; }
+    for (const a of arrays) {
+      const n = esc(a);
+      // The off switch: any length of this array, or a check call taking it, anywhere in the method.
+      if (new RegExp(`\\b${n}\\s*\\??\\.\\s*(?:Length|LongLength|Count\\s*\\()|\\b(?:Check|Validate|Ensure|Require|Guard|Assert)\\w*\\s*\\([^)\\n]*\\b${n}\\b`).test(bodyText)) continue;
+      const idxRe = new RegExp(`\\b${n}\\s*\\[\\s*(\\d+)\\s*\\](?!\\s*(?:=[^=]|\\+\\+|--|[-+*/|&^%]=))`, 'g');
+      const spanRe = new RegExp(`\\b(?:Read(Int16|UInt16|Int32|UInt32|Int64|UInt64|Single|Double)\\w*\\s*\\(\\s*)?${n}\\s*\\.\\s*AsSpan\\s*\\(\\s*(\\d+)\\s*[,)]`, 'g');
+      const convRe = new RegExp(`\\bBitConverter\\s*\\.\\s*To(Int16|UInt16|Int32|UInt32|Int64|UInt64|Single|Double|Char|Boolean)\\s*\\(\\s*${n}\\s*,\\s*0*(\\d+)\\s*\\)`, 'g');
+      let need = 0; let first = -1;
+      for (let k = open; k <= close; k++) {
+        const l = lines[k];
+        let m;
+        for (m of l.matchAll(idxRe)) { need = Math.max(need, Number(m[1]) + 1); if (first < 0) first = k; }
+        for (m of l.matchAll(spanRe)) { need = Math.max(need, Number(m[2]) + (CS_READ_WIDTH[m[1]] || 1)); if (first < 0) first = k; }
+        for (m of l.matchAll(convRe)) { need = Math.max(need, Number(m[2]) + (CS_READ_WIDTH[m[1]] || 1)); if (first < 0) first = k; }
+      }
+      if (first < 0 || need < 3) continue;
+      out.push(finding(file, lines, first + 1, 'cs-index', 'CWE-20',
+        'Byte array read at fixed offsets with no length check',
+        `\`${name}\` reads \`${a}\` at fixed offsets up to byte ${need - 1} and never checks \`${a}.Length\`. The array is whatever the caller received, so a shorter one (a truncated field from the wire) throws an IndexOutOfRangeException or ArgumentOutOfRangeException out of the parser instead of being rejected as malformed; where the parser runs inside a receive loop that is the end of the connection.`,
+        `Check \`${a}.Length >= ${need}\` (or the length the field declares) at the top of \`${name}\` and reject or skip the value when it is too short.`,
+        'CS-LENGTH', 'input-validation'));
+    }
+    i = close;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- Java / C#: shift overflow
 function scanShift(file, code, lines, parser) {
   const out = [];
@@ -232,7 +312,7 @@ export function scanDecodedLength(file, code) {
   if (TEST_PATH.test(f)) return [];
   const lines = code.split('\n');
   if (/\.go$/i.test(f)) return scanGo(f, code, lines);
-  if (/\.cs$/i.test(f)) return [...scanCSharp(f, code, lines), ...scanShift(f, code, lines, 'CS-LENGTH')];
+  if (/\.cs$/i.test(f)) return [...scanCSharp(f, code, lines), ...scanCSharpIndex(f, code, lines), ...scanShift(f, code, lines, 'CS-LENGTH')];
   if (/\.java$/i.test(f)) return [...scanShift(f, code, lines, 'JAVA-LENGTH'), ...scanJavaRange(f, code, lines)];
   return [];
 }
