@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-20T15:56:26.123Z",
-  "commit": "6a5ba15a7512b62e0203f2e76662dc6bd922cc9b",
+  "generatedAt": "2026-11-22T02:59:49.945Z",
+  "commit": "6a8b76281222c30a7ae9b1ea4c6f92bfb47cd10d",
   "targets": {
     "hooks": {
       "total": 20,
@@ -17,9 +17,9 @@
       }
     },
     "scripts": {
-      "total": 104,
+      "total": 96,
       "byFile": {
-        "_compliance_lib.py": 2,
+        "_compliance_lib.py": 1,
         "apply-command-trim.mjs": 2,
         "assurance-review-example.mjs": 1,
         "calibration-expand.mjs": 2,
@@ -47,8 +47,7 @@
         "loop-engineering/lib/claude.mjs": 1,
         "loop-engineering/lib/controller.mjs": 4,
         "loop-engineering/lib/server.mjs": 5,
-        "nist-compliance/scan.py": 7,
-        "owasp-llm-top10/scan.py": 1,
+        "nist-compliance/scan.py": 1,
         "release-check.mjs": 1,
         "release-closure.mjs": 1,
         "rotate-key-auto.py": 1,
@@ -61,7 +60,7 @@
       }
     },
     "scanner/src": {
-      "total": 704,
+      "total": 698,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -111,8 +110,8 @@
         "fix/test-commands.js": 2,
         "fix/verify-patch.js": 1,
         "history-scan.js": 1,
-        "integrations/index.js": 10,
-        "integrations/tickets.js": 8,
+        "integrations/index.js": 8,
+        "integrations/tickets.js": 7,
         "ir/chrome-probe.mjs": 1,
         "ir/cpp-preprocessor.js": 1,
         "ir/ir-stats.js": 1,
@@ -167,7 +166,7 @@
         "llm-validator/model-probe.js": 1,
         "llm-validator/oom-feedback.js": 1,
         "lsp/server.js": 3,
-        "mcp/audit.js": 8,
+        "mcp/audit.js": 7,
         "mcp/portfolio-tools.js": 1,
         "mcp/server.js": 1,
         "mcp/tools.js": 7,
@@ -239,7 +238,7 @@
         "posture/execution-proof.js": 1,
         "posture/exploitability-probability.js": 3,
         "posture/feature-flags.js": 3,
-        "posture/federated-learning.js": 8,
+        "posture/federated-learning.js": 6,
         "posture/findings-memory.js": 1,
         "posture/fix-history.js": 7,
         "posture/fix-metrics.js": 1,

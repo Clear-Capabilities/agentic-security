@@ -241,6 +241,16 @@ export const CHECKS = [
       're-record with `npm run bench:haskell-precision:update`; never edit bench/haskell-precision/baseline.json by hand.',
   },
   {
+    // Real-code Python and TypeScript precision (bench/realcode-precision, the Haskell gate's sibling, 0.220.0): what the engine reports at every
+    // hand-labelled site of bench/dag/dev-realcode, compared for equality. The stored-measurement half is instant and runs everywhere; the live half
+    // (a default scan of the 16 pinned projects, minutes) runs only where the pinned clones exist, and says so when it does not.
+    id: 'realcode-precision-gate',
+    title: 'Python and TypeScript real-code precision matches its recorded baseline',
+    npmScript: 'bench:realcode-precision:check',
+    remedy: 'Run `npm run bench:realcode-precision:check` in scanner/ and read which labelled site changed. If the change is deliberate and reviewed, ' +
+      're-record with `npm run bench:realcode-precision:update`; never edit bench/realcode-precision/baseline.json by hand.',
+  },
+  {
     // X-208: the STATIC half of the oracle conformance contract (class scope, budgets, negative controls, evidence logic,
     // pinned fixtures). Measured well under a second and it executes nothing, so it fits the pre-push budget; the execution
     // half (~19s, needs the trust boundary) runs in the release gate.
@@ -280,6 +290,7 @@ export const HOSTED_COVERS = Object.freeze({
 /** Self-scan measures this repository's own scripts, hooks and engine source, so it runs locally whenever a change touches any of them (a hosted failure costs a 35 minute round trip; the local run costs about two minutes). */
 export const SELF_SCAN_RELEVANT = /^(scripts\/|hooks\/|scanner\/src\/|scanner\/bin\/|bench\/self-scan\/)/;
 export const HASKELL_RELEVANT = /^(scanner\/src\/(language|dataflow|ir|posture\/relevance)\/|scanner\/src\/engine\.js|bench\/haskell-precision\/|bench\/dag\/(dev-haskell|independent-haskell)\/|examples\/haskell-app\/)/;
+export const REALCODE_RELEVANT = /^(scanner\/src\/(sast|dataflow|ir|posture)\/|scanner\/src\/engine\.js|bench\/realcode-precision\/|bench\/dag\/dev-realcode\/)/;
 
 export function planChecks({ checks, tier = 'fast', selection = null, changed = null }) {
   if (tier === 'full') return { checks: checks.slice(), skipped: [] };
@@ -302,6 +313,10 @@ export function planChecks({ checks, tier = 'fast', selection = null, changed = 
       continue;
     }
     if (c.id === 'haskell-precision-gate' && Array.isArray(changed) && !changed.some((f) => HASKELL_RELEVANT.test(f))) {
+      skipped.push({ id: c.id, title: c.title, reason: 'not run locally: nothing this change touches decides its result (the hosted "bench-gates" job checks the stored result on the pull request)' });
+      continue;
+    }
+    if (c.id === 'realcode-precision-gate' && Array.isArray(changed) && !changed.some((f) => REALCODE_RELEVANT.test(f))) {
       skipped.push({ id: c.id, title: c.title, reason: 'not run locally: nothing this change touches decides its result (the hosted "bench-gates" job checks the stored result on the pull request)' });
       continue;
     }

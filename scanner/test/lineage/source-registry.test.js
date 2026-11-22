@@ -292,12 +292,14 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // agent-tool sources are. Re-measured against the live catalog.
   // 898 -> 900 and 738 -> 740 modeled (0.220.0): tRPC procedure input (`js:trpc-procedure-handler`, http-body) and the Django URL
   // capture (`py:django-url-capture`, path-param). Re-measured against the live catalog.
-  assert.equal(SOURCES.length, 900);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 740);
+  // 900 -> 921 and 740 -> 761 modeled (0.220.0): the tRPC, Django view, GraphQL, gRPC, route-module and 15 h3 sources; the two Celery annotation
+  // sources were added and removed within the round (the dispatch edge carries a task's arguments). Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 921);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 761);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 42);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 118);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(740 + 42 + 118, SOURCES.length);
+  assert.equal(761 + 42 + 118, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

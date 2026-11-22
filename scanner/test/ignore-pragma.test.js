@@ -131,10 +131,12 @@ async function scanDeep(name, content) {
 // yields exactly `ir-taint:d.js:2:js-fetch` (CWE-918) with `parser: 'IR-TAINT'`.
 // An earlier attempt at this fixture used a command-injection shape and
 // produced only REGEX findings, which would have made the test pass for the
-// wrong reason — hence the explicit parser assertion below.
+// wrong reason — hence the explicit parser assertion below. Since 0.220.0 the URL
+// must come from the request: the earlier `fetch(process.env.MY_ENDPOINT, ..)` is an
+// operator-configured destination and is no longer reported.
 const deepFile = (suffix = '') => [
-  'export async function call(prompt) {',
-  `  const res = await fetch(process.env.MY_ENDPOINT, { method: 'POST', body: prompt });${suffix}`,
+  'export async function call(req) {',
+  `  const res = await fetch(req.query.url, { method: 'POST' });${suffix}`,
   '  return res.json();',
   '}',
 ].join('\n');

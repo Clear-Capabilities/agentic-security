@@ -1,6 +1,6 @@
 {
   "name": "06-multi-sink-args",
-  "construct": "sinks whose tainted argument index matters",
+  "construct": "sinks whose tainted argument index matters (insertAdjacentHTML reads its second argument; res.setHeader, the earlier example, is no longer a sink because Node validates header values)",
   "expect": [
     {
       "file": "app.js",

@@ -29,8 +29,8 @@ The steps, as the implementation printed them:
 <!-- capture: e2e-steps -->
 ```text
 [start] copied examples/assurance-demo (10 files) to a scratch directory; offline mode on; every attempt to open a network connection is refused and counted
-[scan] 9 findings (8 medium or above); scan health complete
-[triage] 4 of 4 expected true positives were reported; 1 of 3 expected false positives were reported and marked by the reviewer; 3 reported finding(s) have no recorded decision
+[scan] 8 findings (7 medium or above); scan health complete
+[triage] 4 of 4 expected true positives were reported; 0 of 3 expected false positives were reported and marked by the reviewer; 3 reported finding(s) have no recorded decision
 [validate] 3 candidate(s) from cross-route consistency and the tenant invariant; 3 became findings, 1 of them proven by an executed attacker request; 0 refuted. SQL injection and command injection stay taint findings: nothing was executed for them
 [patch] 3 candidate patches applied to scratch copies (2 correct, 1 false fix)
 [verify] 2 of 3 patches fully verified; the false fix passed the security re-analysis and the attack replay and was refused on behaviour (owner-can-update-own-note)

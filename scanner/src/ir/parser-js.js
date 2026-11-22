@@ -104,6 +104,50 @@ function ctorClassName(init) {
   return init && init.type === 'NewExpression' && init.callee && init.callee.type === 'Identifier' ? init.callee.name : null;
 }
 
+// The names a file binds, at its top level, to a constant collection of literals (`const COLS = ['name', 'age']`, `new Set([...])`): set per
+// parse by parseJsFile, read by allowlistChoice.
+let _constCollections = new Set();
+const _isLiteralNode = (e) => !!e && (e.type === 'StringLiteral' || e.type === 'NumericLiteral' || e.type === 'BooleanLiteral' || (e.type === 'TemplateLiteral' && !(e.expressions || []).length));
+const _isLiteralArray = (e) => !!e && e.type === 'ArrayExpression' && (e.elements || []).length > 0 && e.elements.every(_isLiteralNode);
+function collectConstCollections(program) {
+  const out = new Set();
+  for (const st of program.body || []) {
+    const decl = st.type === 'ExportNamedDeclaration' ? st.declaration : st;
+    if (!decl || decl.type !== 'VariableDeclaration' || decl.kind !== 'const') continue;
+    for (const d of decl.declarations || []) {
+      if (!d.id || d.id.type !== 'Identifier' || !d.init) continue;
+      const init = d.init.type === 'TSAsExpression' ? d.init.expression : d.init;
+      if (_isLiteralArray(init) || (init.type === 'NewExpression' && init.callee?.type === 'Identifier' && init.callee.name === 'Set' && _isLiteralArray(init.arguments?.[0]))) out.add(d.id.name);
+    }
+  }
+  return out;
+}
+// The branch to keep of a conditional whose test is an allowlist membership of one branch's own value, or null.
+function allowlistChoice(n) {
+  const unwrap = (e) => (e && (e.type === 'TSAsExpression' || e.type === 'TSNonNullExpression' || e.type === 'ParenthesizedExpression') ? unwrap(e.expression) : e);
+  let test = unwrap(n.test);
+  let negated = false;
+  if (test && test.type === 'UnaryExpression' && test.operator === '!') { negated = true; test = unwrap(test.argument); }
+  let member = null;
+  if (test && test.type === 'BinaryExpression' && /^(!==|!=|>=|>)$/.test(test.operator)) {
+    // indexOf(v) !== -1 / >= 0 / > -1
+    const l = unwrap(test.left); const r = unwrap(test.right);
+    const num = r && r.type === 'NumericLiteral' ? r.value : (r && r.type === 'UnaryExpression' && r.operator === '-' && r.argument.type === 'NumericLiteral' ? -r.argument.value : null);
+    const ok = (test.operator === '!==' || test.operator === '!=') ? num === -1 : test.operator === '>=' ? num === 0 : num === -1;
+    if (ok && l && l.type === 'CallExpression' && l.callee.type === 'MemberExpression' && !l.callee.computed && l.callee.property.name === 'indexOf') member = l;
+  } else if (test && test.type === 'CallExpression' && test.callee.type === 'MemberExpression' && !test.callee.computed && /^(includes|has)$/.test(test.callee.property.name || '')) member = test;
+  if (!member || (member.arguments || []).length !== 1) return null;
+  const coll = unwrap(member.callee.object);
+  const constant = (coll.type === 'Identifier' && _constCollections.has(coll.name)) || _isLiteralArray(coll);
+  if (!constant) return null;
+  const v = unwrap(member.arguments[0]);
+  const same = (a, b) => { try { return JSON.stringify(exprOf(a)) === JSON.stringify(exprOf(b)); } catch { return false; } };
+  const kept = negated ? n.consequent : n.alternate;       // the branch taken when the value is NOT in the allowlist
+  const chosen = negated ? n.alternate : n.consequent;     // the branch that is the value itself
+  if (!same(unwrap(chosen), v)) return null;
+  return kept;
+}
+
 function exprOf(n) {
   if (!n) return { kind: 'unknown' };
   switch (n.type) {
@@ -144,7 +188,18 @@ function exprOf(n) {
       try { return { kind: 'literal', value: new RegExp(n.pattern, n.flags || ''), isRegex: true }; }
       catch { return { kind: 'unknown' }; }
     }
-    case 'TemplateLiteral':   return { kind: 'tpl', parts: (n.expressions || []).map(exprOf) };
+    case 'TemplateLiteral': {
+      // The literal chunks ride along in source order beside the expressions (empty chunks left out), so the engine can read what a
+      // template begins with (`https://host/${p}` places the input in the path) and which keywords its constant text carries.
+      const parts = [];
+      const qs = n.quasis || [], es = n.expressions || [];
+      for (let i = 0; i < qs.length; i++) {
+        const s = qs[i] && qs[i].value ? (qs[i].value.cooked ?? qs[i].value.raw) : '';
+        if (typeof s === 'string' && s.length) parts.push({ kind: 'literal', value: s });
+        if (i < es.length) parts.push(exprOf(es[i]));
+      }
+      return { kind: 'tpl', parts };
+    }
     case 'MemberExpression':  return {
       kind: 'member',
       object: exprOf(n.object),
@@ -174,9 +229,14 @@ function exprOf(n) {
     case 'AssignmentExpression': return { kind: 'assign-expr', target: lhsPath(n.left), source: exprOf(n.right) };
     case 'AwaitExpression':   return exprOf(n.argument);
     case 'YieldExpression':   return exprOf(n.argument);
-    case 'ConditionalExpression':
-      // Treat as union of consequent + alternate — both may be tainted.
+    case 'ConditionalExpression': {
+      // `COLS.includes(v) ? v : 'name'`: when the test is membership of `v` in a constant collection of literals and the chosen branch is
+      // `v` itself, the value is one of the constants, so only the other branch is carried (the same for `!COLS.includes(v) ? 'name' : v`
+      // and `COLS.indexOf(v) !== -1`). Otherwise the union of both branches, as before: either may be tainted.
+      const chosen = allowlistChoice(n);
+      if (chosen) return { kind: 'union', branches: [exprOf(chosen)], allowlist: true };
       return { kind: 'union', branches: [exprOf(n.consequent), exprOf(n.alternate)] };
+    }
     case 'ObjectExpression':  return {
       kind: 'object',
       // Round-5 lineage-engine finding: for a COMPUTED property
@@ -474,6 +534,18 @@ export function parseJsFile(file, code) {
     const jsdocTypes = exported ? jsdocParamTypes(fnPath) : null;
     const serverAction = (exported && exportsOf.useServer === true)
       || ((node?.body?.directives || []).some((d) => d.value?.value === 'use server'));
+    // Route modules whose exported handlers receive the request as their first argument: Remix `loader`/`action` under a routes directory
+    // (`{ params, request }`), SvelteKit `load` in +page/+layout(.server) files (`{ params, url, request }`) and the verb exports of a
+    // +server file (`event.params`, `event.url`, `event.request`). The IR marks those fields of the first parameter; the catalog's
+    // js:route-module-handler source reads them as request input.
+    const routeFields = (() => {
+      if (!exported || !name) return null;
+      const base = String(file).split('/').pop();
+      if (/(^|\/)routes\//.test(file) && (name === 'loader' || name === 'action' || name === 'clientLoader' || name === 'clientAction')) return ['params', 'request'];
+      if (/^\+(?:page|layout)(?:\.server)?\.[cm]?[jt]s$/.test(base) && name === 'load') return ['params', 'url', 'request'];
+      if (/^\+server\.[cm]?[jt]s$/.test(base) && /^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|fallback)$/.test(name)) return ['params', 'url', 'request'];
+      return null;
+    })();
     const qid = fnQid(file, scopeName, name, line);
     const entryId = nextNodeId();
     const exitId  = nextNodeId();
@@ -565,6 +637,10 @@ export function parseJsFile(file, code) {
         // the catalog's `js:server-action` source decides that it is request input.
         if (serverAction && resolvedIdent?.type === 'Identifier' && callerControllable(resolvedIdent)) {
           paramAnnotations.push({ index: idx, name: resolvedIdent.name, decorator: 'js:server-action' });
+        }
+        if (routeFields && idx === 0) {
+          const nm = resolvedIdent?.type === 'Identifier' ? resolvedIdent.name : (resolvedIdent?.type === 'ObjectPattern' ? '<obj>' : null);
+          if (nm) for (const fld of routeFields) paramAnnotations.push({ index: idx, name: `${nm}.${fld}`, decorator: 'js:route-module-handler' });
         }
         if (trpcHandler && idx === 0) {
           const nm = resolvedIdent?.type === 'Identifier' ? resolvedIdent.name : (resolvedIdent?.type === 'ObjectPattern' ? '<obj>' : null);
@@ -701,7 +777,7 @@ export function parseJsFile(file, code) {
     return {
       visitor: {
         Program: {
-          enter(path) { collectExports(path.node, exportsOf); exportsOf.useServer = (path.node.directives || []).some((d) => d.value?.value === 'use server'); enterFn('<module>', '', path.node, []); },
+          enter(path) { collectExports(path.node, exportsOf); _constCollections = collectConstCollections(path.node); exportsOf.useServer = (path.node.directives || []).some((d) => d.value?.value === 'use server'); enterFn('<module>', '', path.node, []); },
           exit() { exitFn(); },
         },
         FunctionDeclaration: {

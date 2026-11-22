@@ -112,7 +112,7 @@
         "expects": "kind:binary|tpl"
       },
       "closure-as-own-function": {
-        "state": "not-modelled",
+        "state": "modelled",
         "probe": "def f(x):\n    g = lambda y: sink(y + x)\n    g(1)\n",
         "expects": "fnCount:2"
       },

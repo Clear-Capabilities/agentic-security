@@ -233,7 +233,10 @@ function _lowerExpr(text) {
   // `cond ? a : b` (space before its colon).
   // `(?!:)`: `Net::HTTP.get(u)` is a scoped call, not a keyword `Net:` whose value is the symbol `:HTTP...`.
   const kwarg = s.match(/^([A-Za-z_]\w*):(?!:)\s*(.+)$/);
-  if (kwarg) return _lowerExpr(kwarg[2]);
+  // Lowered as a one-key record (`{ id: <value> }`) rather than the bare value: the value's taint still reaches the call (an object with a
+  // tainted field is tainted), and a sink that is only dangerous for a STRING argument (`where("id = " + x)` against `where(id: x)`,
+  // which ActiveRecord parameterises) can tell the two apart through `argNotObject`.
+  if (kwarg) return { kind: 'object', props: [{ key: kwarg[1], value: _lowerExpr(kwarg[2]) }] };
   // Call: obj.method(args) or method(args). matchBalancedCall finds the
   // paren that actually balances the FIRST '(' — not the greedy-to-end-of-
   // string match the old `/\((.*)\)\s*$/` used, which corrupted the

@@ -19,7 +19,7 @@ Each cell is one minimal probe through `buildProjectIRAsync`. `modelled` means t
 |---|---|---|---|---|---|---|---|
 | javascript | modelled | modelled | modelled | modelled | modelled | modelled | modelled |
 | typescript | modelled | modelled | modelled | modelled | modelled | modelled | modelled |
-| python | modelled | modelled | modelled | modelled | modelled | not-modelled | modelled |
+| python | modelled | modelled | modelled | modelled | modelled | modelled | modelled |
 | java | modelled | modelled | modelled | modelled | modelled | not-modelled | modelled |
 | go | modelled | modelled | modelled | modelled | modelled | not-modelled | modelled |
 | ruby | modelled | modelled | modelled | modelled | modelled | not-modelled | modelled |
@@ -28,7 +28,7 @@ Each cell is one minimal probe through `buildProjectIRAsync`. `modelled` means t
 | kotlin | modelled | modelled | modelled | modelled | modelled | not-modelled | modelled |
 | rust | modelled | modelled | modelled | modelled | modelled | not-modelled | modelled |
 
-62 of 70 probes modelled, 8 not modelled, 0 errored. Languages not probed: C and C++ (their IR is a separate preprocessor-driven path), Solidity, Swift and Dart (tree-sitter sink matching only, no IR).
+63 of 70 probes modelled, 7 not modelled, 0 errored. Languages not probed: C and C++ (their IR is a separate preprocessor-driven path), Solidity, Swift and Dart (tree-sitter sink matching only, no IR).
 
 ## Known structural gaps in Layer 1 (observed, not inferred)
 

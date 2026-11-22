@@ -94,8 +94,10 @@ test('engine: an object-shaped (JS) callee still resolves for interprocedural ta
 // test guards needs a fixture where the source is genuinely catalogued for
 // the language it's tagged as.
 test('engine: a call-shaped source returned from a helper taints the caller (Blocker B)', () => {
-  const code = 'def read_env():\n    return os.getenv("CMD")\n\n'
-    + 'def run_it():\n    cmd = read_env()\n    __import__("os").system(cmd)\n';
+  // the helper's call-shaped source is request input (an environment read is the operator's and os.system no longer reports an
+  // operator-only origin, see catalog.js operatorOriginNotReported)
+  const code = 'from flask import request\n\ndef read_cmd():\n    return request.args.get("cmd")\n\n'
+    + 'def run_it():\n    cmd = read_cmd()\n    __import__("os").system(cmd)\n';
   const { perFile, callGraph } = buildProjectIR({ 'app.py': code });
   const findings = runTaintEngine(perFile, callGraph, { fnLimit: 5000, deadlineMs: Date.now() + 30000 });
   const ir = findings.filter(f => (f.parser || '') === 'IR-TAINT');

@@ -72,10 +72,12 @@ export const CATALOG = [
 
   // ─── SINKS (JS/TS) ─────────────────────────────────────────────────────────
   // SQL.
-  { kind: 'sink', id: 'js-sql-query',  language: 'js', framework: 'sql', match: { type: 'call', callee: 'query', receiverTypeIn: ['db|pool|conn(?:ection)?|client|sql|database|pg|mysql|sequelize|knex|prisma'] }, argIndex: 0,
+  // `receiverExclude`: a method named query/execute on a service, runner, handler or client of some API is that object's, not a database's
+  // (`this.createOneQueryRunnerService.execute(..)`, `coreApiClient.query(..)`: bench/dag/dev-realcode, typescript set).
+  { kind: 'sink', id: 'js-sql-query',  language: 'js', framework: 'sql', match: { type: 'call', callee: 'query', receiverExclude: '(?:Service|Runner|Handler|Resolver|Gateway|Repository|Store|Controller|Manager|Factory|ApiClient|GraphqlClient)$', receiverTypeIn: ['db|pool|conn(?:ection)?|client|sql|database|pg|mysql|sequelize|knex|prisma'] }, argIndex: 0,
     vuln: { name: 'SQL Injection (db.query)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterized queries: db.query("SELECT * FROM t WHERE id = ?", [id]). Never interpolate untrusted strings into SQL.' } },
-  { kind: 'sink', id: 'js-sql-execute', language: 'js', framework: 'sql', match: { type: 'call', callee: 'execute', receiverTypeIn: ['db|pool|conn(?:ection)?|client|sql|database|pg|mysql|sequelize|knex|prisma'] }, argIndex: 0,
+  { kind: 'sink', id: 'js-sql-execute', language: 'js', framework: 'sql', match: { type: 'call', callee: 'execute', receiverExclude: '(?:Service|Runner|Handler|Resolver|Gateway|Repository|Store|Controller|Manager|Factory|ApiClient|GraphqlClient)$', receiverTypeIn: ['db|pool|conn(?:ection)?|client|sql|database|pg|mysql|sequelize|knex|prisma'] }, argIndex: 0,
     vuln: { name: 'SQL Injection (db.execute)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterized queries: db.execute("SELECT * FROM t WHERE id = ?", [id]).' } },
   // OS command.
@@ -103,7 +105,7 @@ export const CATALOG = [
     vuln: { name: 'XSS (document.write)', severity: 'high', cwe: 'CWE-79',
             remediation: 'document.write is universally unsafe — use textContent or a typed templating engine.' } },
   // SSRF / HTTP-client sinks: matched by callee; rich-CWE classification in engine.
-  { kind: 'sink', id: 'js-fetch',     language: 'js', framework: 'browser', match: { type: 'call', callee: 'fetch'   }, argIndex: 0,
+  { kind: 'sink', id: 'js-fetch',     language: 'js', framework: 'browser', match: { type: 'call', callee: 'fetch', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'SSRF (fetch)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the target host first and reject RFC1918 / metadata-endpoint addresses before fetching.' } },
   // File system sinks.
@@ -197,7 +199,7 @@ export const CATALOG = [
   { kind: 'source', id: 'js-axios-data',   language: 'js', framework: 'axios', match: { type: 'member', object: 'response', prop: 'data' }, label: 'axios response.data', provenance: 'network' },
   { kind: 'source', id: 'py-requests-text', language: 'py', framework: 'requests', match: { type: 'member', object: 'resp', prop: 'text' }, label: 'requests response .text', provenance: 'network' },
   { kind: 'source', id: 'py-requests-json', language: 'py', framework: 'requests', match: { type: 'call', callee: 'json', receiverBase: '^(?:resp|response|r)$' }, label: 'requests response .json()', provenance: 'network' },
-  { kind: 'source', id: 'py-urlopen-read',  language: 'py', framework: 'urllib',   match: { type: 'call', callee: 'read', receiverBase: '^(?:resp|response|r|f)$' }, label: 'urlopen read() [urllib]', provenance: 'network' },
+  { kind: 'source', id: 'py-urlopen-read',  language: 'py', framework: 'urllib',   match: { type: 'call', callee: 'read', receiverBase: '^(?:resp|response|res|http_response|urlopen_response)$' }, label: 'urlopen read() [urllib]', provenance: 'network' },
   { kind: 'source', id: 'py-fastapi-request-query',language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Query'                  }, label: 'fastapi.Query()' },
   { kind: 'source', id: 'py-fastapi-request-body', language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Body'                   }, label: 'fastapi.Body()' },
   { kind: 'source', id: 'py-fastapi-form',         language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Form'                   }, label: 'fastapi.Form()' },
@@ -330,6 +332,24 @@ export const CATALOG = [
   // Django: a view's extra parameters are the URL captures of the path()/re_path() that routes to it; the link from urls.py to the
   // view is made in ir/index.js (linkDjangoUrlCaptures), numeric converters and digit-only groups are left out there.
   { kind: 'source', id: 'py-django-url-capture', language: 'py', framework: 'django', match: { type: 'annotation', name: 'py:django-url-capture' }, label: 'URL capture of a Django view', provenance: 'path-param' },
+  // Class-based views: a method's parameters after (self, request) and `self.kwargs` are the URL captures (parser-py.helper.py marks the
+  // parameters and lowers self.kwargs to the synthetic call below while a View subclass is lowered).
+  { kind: 'source', id: 'py-django-view-kwarg',  language: 'py', framework: 'django', match: { type: 'annotation', name: 'py:django-view-kwarg' }, label: 'URL capture parameter of a class-based view', provenance: 'path-param' },
+  { kind: 'source', id: 'py-django-view-kwargs', language: 'py', framework: 'django', match: { type: 'call', callee: 'django_view.kwargs' }, label: 'self.kwargs of a class-based view', provenance: 'path-param' },
+  // Task queues: a task's arguments are what its producer enqueued, so the taint comes through the dispatch call (`task.delay(x)`,
+  // `apply_async`, `enqueue`: parser-py.helper.py states the call `task(x)`), not from an annotation on the task; three of three sampled
+  // sites with a bare task-argument source were administrator configuration (bench/dag/dev-realcode, python set).
+  // GraphQL resolvers receive the client's arguments: graphene's `resolve_x(self, info, **args)` (parser-py.helper.py marks the arguments
+  // after info) and strawberry's `@strawberry.field` methods.
+  { kind: 'source', id: 'py-graphql-resolver-arg', language: 'py', framework: 'graphql', match: { type: 'annotation', name: 'py:graphql-resolver-arg' }, label: 'GraphQL resolver argument (graphene)', provenance: 'http-body' },
+  { kind: 'source', id: 'py-strawberry-field',     language: 'py', framework: 'graphql', match: { type: 'annotation', name: 'strawberry.field' },       label: 'GraphQL field argument (strawberry)',  provenance: 'http-body' },
+  // gRPC: the request message of a servicer method is the client's.
+  { kind: 'source', id: 'py-grpc-request', language: 'py', framework: 'grpc', match: { type: 'annotation', name: 'py:grpc-request' }, label: 'gRPC request message (servicer method)', provenance: 'http-body' },   // a remote client's request, not a server's reply
+  // Route modules: Remix loader/action and SvelteKit load / verb handlers receive params, url and request (parser-js.js marks the fields).
+  { kind: 'source', id: 'js-route-module-handler', language: 'js', framework: 'route-module', match: { type: 'annotation', name: 'js:route-module-handler' }, label: 'route module handler input (params, url, request)', provenance: 'url-param' },
+  // Nuxt / h3 event helpers (auto-imported, called bare).
+  ...[['getQuery', 'url-param'], ['getValidatedQuery', 'url-param'], ['getRouterParam', 'path-param'], ['getRouterParams', 'path-param'], ['getValidatedRouterParams', 'path-param'], ['readBody', 'http-body'], ['readValidatedBody', 'http-body'], ['readRawBody', 'http-body'], ['readMultipartFormData', 'http-body'], ['readFormData', 'http-body'], ['getHeader', 'header'], ['getHeaders', 'header'], ['getRequestHeader', 'header'], ['getCookie', 'cookie'], ['parseCookies', 'cookie']].map(([fn, prov]) => ({
+    kind: 'source', id: `js-h3-${fn.toLowerCase()}`, language: 'js', framework: 'h3', match: { type: 'call', callee: fn }, label: `${fn}(event) (h3 / Nuxt)`, provenance: prov })),
 
   // TOOL OUTPUT is the other half of F5.3's shape (tool output -> model context
   // -> tool invocation). Content returned by ANOTHER tool or an MCP resource is
@@ -458,10 +478,11 @@ export const CATALOG = [
   { kind: 'source', id: 'php-getenv', language: 'php', framework: 'core', match: { type: 'call', callee: 'getenv' }, label: 'getenv()', provenance: 'env' },
 
   // ─── SINKS (SQL — Python) ─────────────────────────────────────────────────
-  { kind: 'sink', id: 'py-cursor-execute',     language: 'py', framework: 'dbapi',      match: { type: 'call', callee: 'execute' }, argIndex: 0,
+  // `argNotCallee`: a SQLAlchemy/SQLModel statement construct (`session.execute(select(T).where(T.id == x))`) binds its values; only SQL text is injectable.
+  { kind: 'sink', id: 'py-cursor-execute',     language: 'py', framework: 'dbapi',      match: { type: 'call', callee: 'execute' }, argIndex: 0, argNotCallee: ['select', 'delete', 'update', 'insert', 'exists', 'union', 'union_all', 'case', 'and_', 'or_', 'not_', 'literal', 'bindparam', 'values', 'join', 'outerjoin', 'alias', 'lambda_stmt', 'Select', 'Delete', 'Update', 'Insert'],
     vuln: { name: 'SQL Injection (cursor.execute)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterised execute: `cur.execute("SELECT * FROM t WHERE id = %s", (id,))`.' } },
-  { kind: 'sink', id: 'py-cursor-executemany', language: 'py', framework: 'dbapi',      match: { type: 'call', callee: 'executemany' }, argIndex: 0,
+  { kind: 'sink', id: 'py-cursor-executemany', language: 'py', framework: 'dbapi',      match: { type: 'call', callee: 'executemany' }, argIndex: 0, argNotCallee: ['select', 'delete', 'update', 'insert', 'exists', 'union', 'union_all', 'case', 'and_', 'or_', 'not_', 'literal', 'bindparam', 'values', 'join', 'outerjoin', 'alias', 'lambda_stmt', 'Select', 'Delete', 'Update', 'Insert'],
     vuln: { name: 'SQL Injection (cursor.executemany)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterised executemany with a list of tuples.' } },
   { kind: 'sink', id: 'py-sa-text',            language: 'py', framework: 'sqlalchemy', match: { type: 'call', callee: 'text' }, argIndex: 0,
@@ -638,7 +659,7 @@ export const CATALOG = [
             remediation: 'Pass the command as an array (argv form) instead of a shell string.' } },
 
   // ─── SINKS (SQL/CMD — Ruby) ───────────────────────────────────────────────
-  { kind: 'sink', id: 'rb-ar-where-string', language: 'rb', framework: 'rails',   match: { type: 'call', callee: 'where' },         argIndex: 0,
+  { kind: 'sink', id: 'rb-ar-where-string', language: 'rb', framework: 'rails',   match: { type: 'call', callee: 'where' },         argIndex: 0, argNotObject: true, skipSkeleton: true,
     vuln: { name: 'SQL Injection (ActiveRecord where string)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use hash conditions: User.where(name: params[:name]).' } },
   { kind: 'sink', id: 'rb-ar-find-by-sql', language: 'rb', framework: 'rails',    match: { type: 'call', callee: 'find_by_sql' },   argIndex: 0,
@@ -747,12 +768,12 @@ export const CATALOG = [
             remediation: 'Escape user-derived HTML before assigning to ctx.body, or use ctx.body = { ... } for a JSON response.' } },
 
   // ─── SINKS (HTTP outbound / SSRF) ─────────────────────────────────────────
-  { kind: 'sink', id: 'py-requests-get',   language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$', receiverTypeIn: ['requests|session|client|http'] },   argIndex: 0,
+  { kind: 'sink', id: 'py-requests-get',   language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$', receiverTypeIn: ['requests|session|client|http'], operatorOriginNotReported: true },   argIndex: 0,
     vuln: { name: 'SSRF (requests.get)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the URL host and reject RFC1918 + metadata endpoints before fetching. Use an allow-list.' } },
   { kind: 'sink', id: 'py-requests-post',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'post', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$' },  argIndex: 0,
     vuln: { name: 'SSRF (requests.post)', severity: 'high', cwe: 'CWE-918', remediation: 'Validate the URL host before posting.' } },
-  { kind: 'sink', id: 'py-urlopen',        language: 'py', framework: 'urllib',   match: { type: 'call', callee: 'urlopen' }, argIndex: 0,
+  { kind: 'sink', id: 'py-urlopen',        language: 'py', framework: 'urllib',   match: { type: 'call', callee: 'urlopen', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'SSRF (urllib.request.urlopen)', severity: 'high', cwe: 'CWE-918', remediation: 'Validate the URL host before opening.' } },
   { kind: 'sink', id: 'go-http-get',       language: 'go', framework: 'net/http', match: { type: 'call', callee: 'Get' },   argIndex: 0,
     vuln: { name: 'SSRF (http.Get)', severity: 'high', cwe: 'CWE-918', remediation: 'Validate the URL host before fetching; reject RFC1918 + metadata endpoints.' } },
@@ -827,7 +848,7 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-subprocess-run',      language: 'py', framework: 'subprocess', match: { type: 'call', callee: 'run', requireKeyword: { name: 'shell', pattern: '^(?:true|True|1)$' } }, argIndex: 0,
     vuln: { name: 'Command Injection (subprocess.run shell=True)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Pass argv as a list; never pass a single string with shell=True.' } },
-  { kind: 'sink', id: 'py-os-system',           language: 'py', framework: 'os',         match: { type: 'call', callee: 'system' }, argIndex: 0,
+  { kind: 'sink', id: 'py-os-system',           language: 'py', framework: 'os',         match: { type: 'call', callee: 'system', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'Command Injection (os.system)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'os.system invokes /bin/sh -c; use subprocess.run([...]) with an argv list.' } },
   { kind: 'sink', id: 'java-runtime-exec',      language: 'java', framework: 'stdlib',   match: { type: 'call', callee: 'exec' }, argIndex: 0,
@@ -873,7 +894,7 @@ export const CATALOG = [
   // already uses. Cost: a `from yaml import load; load(x)` import-style call no
   // longer matches (no receiver segment); that is the accepted trade, and the
   // dotted form is by far the dominant shape in real code.
-  { kind: 'sink', id: 'py-pickle-loads',  language: 'py', framework: 'pickle', match: { type: 'call', callee: 'loads', receiver: '^(?:pickle|cPickle|_pickle|dill|jsonpickle)$' },     argIndex: 0,
+  { kind: 'sink', id: 'py-pickle-loads',  language: 'py', framework: 'pickle', match: { type: 'call', callee: 'loads', receiver: '^(?:pickle|cPickle|_pickle|dill|jsonpickle)$', operatorOriginNotReported: true },     argIndex: 0,
     vuln: { name: 'Insecure Deserialization (pickle.loads)', severity: 'critical', cwe: 'CWE-502',
             remediation: 'Never pickle-load attacker-controlled data. Use JSON / msgpack with an explicit schema.' } },
   { kind: 'sink', id: 'py-yaml-load',     language: 'py', framework: 'pyyaml', match: { type: 'call', callee: 'load', receiver: '^(?:yaml|ruamel)$' },      argIndex: 0,
@@ -902,7 +923,10 @@ export const CATALOG = [
     vuln: { name: 'SSTI (Handlebars.compile)', severity: 'high', cwe: 'CWE-94', remediation: 'Compile only known templates; never compile a user-supplied string.' } },
 
   // ─── SINKS (file paths / traversal) ───────────────────────────────────────
-  { kind: 'sink', id: 'py-open',          language: 'py', framework: 'stdlib', match: { type: 'call', callee: 'open' }, argIndex: 0,
+  // `operatorOriginNotReported`: a path whose every recorded origin is the operator's (command line, environment, a file the program chose) is
+  // not reported (a build script opening the file it was given: five of five such sites in bench/dag/dev-realcode's python set were tooling);
+  // a flow with request evidence, a parameter still to be resolved, or no origin record at all is reported as before.
+  { kind: 'sink', id: 'py-open',          language: 'py', framework: 'stdlib', match: { type: 'call', callee: 'open', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'Path Traversal (open)', severity: 'high', cwe: 'CWE-22',
             remediation: 'Canonicalize the path with os.path.realpath + verify it stays within an allow-list of base directories.' } },
   // Taint-recall PRD (80%): "terminal segment shift" — the same pattern
@@ -1090,7 +1114,8 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-DocumentBuilder-parse', language: 'java', framework: 'jaxp', match: { type: 'call', callee: 'parse' }, argIndex: 'all',
     vuln: { name: 'XXE (DocumentBuilder.parse)', severity: 'high', cwe: 'CWE-611',
             remediation: 'Disable DTDs: dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true).' } },
-  { kind: 'sink', id: 'py-etree-parse', language: 'py', framework: 'lxml', match: { type: 'call', callee: 'parse' }, argIndex: 0,
+  // Scoped to the XML parser modules: `sqlparse.parse`, `dateparser.parse`, a project's own `parser.parse` share the name (bench/dag/dev-realcode, python set).
+  { kind: 'sink', id: 'py-etree-parse', language: 'py', framework: 'lxml', match: { type: 'call', callee: 'parse', receiver: '^(?:etree|ET|ElementTree|lxml|minidom|sax|xml|objectify|html|expat|pulldom|xmltodict|defusedxml|cElementTree)$' }, argIndex: 0,
     vuln: { name: 'XXE (lxml.etree.parse)', severity: 'high', cwe: 'CWE-611',
             remediation: 'Use defusedxml.ElementTree or pass resolve_entities=False.' } },
   { kind: 'sink', id: 'kt-documentbuilder-parse', language: 'kt', framework: 'jaxp', match: { type: 'call', callee: 'parse' }, argIndex: 'all',
@@ -1297,10 +1322,10 @@ export const CATALOG = [
 
   // ─── SINKS (Python) ────────────────────────────────────────────────────────
   // SQL.
-  { kind: 'sink', id: 'py-cursor-execute-v2', language: 'py', framework: 'db', match: { type: 'call', callee: 'execute' },     argIndex: 0,
+  { kind: 'sink', id: 'py-cursor-execute-v2', language: 'py', framework: 'db', match: { type: 'call', callee: 'execute' },     argIndex: 0, argNotCallee: ['select', 'delete', 'update', 'insert', 'exists', 'union', 'union_all', 'case', 'and_', 'or_', 'not_', 'literal', 'bindparam', 'values', 'join', 'outerjoin', 'alias', 'lambda_stmt', 'Select', 'Delete', 'Update', 'Insert'],
     vuln: { name: 'SQL Injection (cursor.execute)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterized queries: cursor.execute("SELECT * FROM t WHERE id = %s", (id,)). Never %-format or f-string the SQL with untrusted input.' } },
-  { kind: 'sink', id: 'py-cursor-executemany-v2', language: 'py', framework: 'db', match: { type: 'call', callee: 'executemany' }, argIndex: 0,
+  { kind: 'sink', id: 'py-cursor-executemany-v2', language: 'py', framework: 'db', match: { type: 'call', callee: 'executemany' }, argIndex: 0, argNotCallee: ['select', 'delete', 'update', 'insert', 'exists', 'union', 'union_all', 'case', 'and_', 'or_', 'not_', 'literal', 'bindparam', 'values', 'join', 'outerjoin', 'alias', 'lambda_stmt', 'Select', 'Delete', 'Update', 'Insert'],
     vuln: { name: 'SQL Injection (executemany)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterized queries with executemany; never concatenate user input.' } },
   { kind: 'sink', id: 'py-sqlalchemy-text', language: 'py', framework: 'sqlalchemy', match: { type: 'call', callee: 'text' }, argIndex: 0,
@@ -1319,7 +1344,7 @@ export const CATALOG = [
     vuln: { name: 'SQL Injection (Model.objects.raw)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use Django ORM Q-objects or parameterized raw(): Model.objects.raw("SELECT ... %s", [val]).' } },
   // Command execution.
-  { kind: 'sink', id: 'py-os-system-v2',     language: 'py', framework: 'std', match: { type: 'call', callee: 'system'     }, argIndex: 0,
+  { kind: 'sink', id: 'py-os-system-v2',     language: 'py', framework: 'std', match: { type: 'call', callee: 'system', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'Command Injection (os.system)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Replace os.system with subprocess.run([...]) using an argv array; never feed untrusted strings to a shell.' } },
   { kind: 'sink', id: 'py-os-popen',      language: 'py', framework: 'std', match: { type: 'call', callee: 'popen'      }, argIndex: 0,
@@ -1338,10 +1363,11 @@ export const CATALOG = [
     vuln: { name: 'Command Injection (commands.getoutput)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'commands module is deprecated and shell-based; switch to subprocess with argv.' } },
   // Code evaluation.
-  { kind: 'sink', id: 'py-eval', language: 'py', framework: 'std', match: { type: 'call', callee: 'eval' }, argIndex: 0,
+  // The builtins are called bare; `session.exec(stmt)` (SQLModel) and `obj.eval(expr)` (pandas) are other methods (bench/dag/dev-realcode, python set).
+  { kind: 'sink', id: 'py-eval', language: 'py', framework: 'std', match: { type: 'call', callee: 'eval', receiverExclude: '^(?!builtins$).' }, argIndex: 0,
     vuln: { name: 'Code Injection (eval)', severity: 'critical', cwe: 'CWE-95',
             remediation: 'Never eval user input. Use ast.literal_eval for trusted literal forms; reject otherwise.' } },
-  { kind: 'sink', id: 'py-exec', language: 'py', framework: 'std', match: { type: 'call', callee: 'exec' }, argIndex: 0,
+  { kind: 'sink', id: 'py-exec', language: 'py', framework: 'std', match: { type: 'call', callee: 'exec', receiverExclude: '^(?!builtins$).' }, argIndex: 0,
     vuln: { name: 'Code Injection (exec)', severity: 'critical', cwe: 'CWE-95',
             remediation: 'Never exec user-controlled code.' } },
   // CWE-94 (Code Injection), not the more specific CWE-95 (Eval Injection) /
@@ -1395,17 +1421,17 @@ export const CATALOG = [
   // Deserialization.
   // Receiver-pinned for the same reason as the base-catalog pyyaml/pickle
   // entries above — see the comment there.
-  { kind: 'sink', id: 'py-pickle-loads-v2', language: 'py', framework: 'std', match: { type: 'call', callee: 'loads', receiver: '^(?:pickle|cPickle|_pickle|dill|jsonpickle)$' }, argIndex: 0,
+  { kind: 'sink', id: 'py-pickle-loads-v2', language: 'py', framework: 'std', match: { type: 'call', callee: 'loads', receiver: '^(?:pickle|cPickle|_pickle|dill|jsonpickle)$', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'Unsafe Deserialization (pickle.loads)', severity: 'critical', cwe: 'CWE-502',
             remediation: 'pickle.loads on untrusted data is RCE. Use JSON / msgpack with explicit schema.' } },
-  { kind: 'sink', id: 'py-pickle-load', language: 'py', framework: 'std', match: { type: 'call', callee: 'load', receiver: '^(?:pickle|cPickle|_pickle|dill|jsonpickle)$' }, argIndex: 0,
+  { kind: 'sink', id: 'py-pickle-load', language: 'py', framework: 'std', match: { type: 'call', callee: 'load', receiver: '^(?:pickle|cPickle|_pickle|dill|jsonpickle)$', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'Unsafe Deserialization (pickle.load)', severity: 'critical', cwe: 'CWE-502',
             remediation: 'pickle.load on untrusted streams is RCE.' } },
   { kind: 'sink', id: 'py-yaml-load-v2', language: 'py', framework: 'yaml', match: { type: 'call', callee: 'load', receiver: '^(?:yaml|ruamel)$' }, argIndex: 0,
     vuln: { name: 'Unsafe Deserialization (yaml.load)', severity: 'high', cwe: 'CWE-502',
             remediation: 'Use yaml.safe_load instead of yaml.load on untrusted YAML.' } },
   // SSRF / HTTP-out.
-  { kind: 'sink', id: 'py-requests-get-v2',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$', receiverTypeIn: ['requests|session|client|http'] },  argIndex: 0,
+  { kind: 'sink', id: 'py-requests-get-v2',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$', receiverTypeIn: ['requests|session|client|http'], operatorOriginNotReported: true },  argIndex: 0,
     vuln: { name: 'SSRF (requests.get)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the host first, reject 169.254.169.254 / RFC1918 / localhost; or proxy through a server-side allow-list.' } },
   // Receiver-scoped like its `get` twin: a project's own `post(url, payload)` helper is not requests.post (found on this repository's
@@ -1413,7 +1439,7 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-requests-post-v2', language: 'py', framework: 'requests', match: { type: 'call', callee: 'post', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$', receiverTypeIn: ['requests|session|client|http'] }, argIndex: 0,
     vuln: { name: 'SSRF (requests.post)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the host first and reject metadata-endpoint addresses.' } },
-  { kind: 'sink', id: 'py-urllib-urlopen', language: 'py', framework: 'std', match: { type: 'call', callee: 'urlopen' }, argIndex: 0,
+  { kind: 'sink', id: 'py-urllib-urlopen', language: 'py', framework: 'std', match: { type: 'call', callee: 'urlopen', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'SSRF (urllib.urlopen)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve and validate the URL host before opening.' } },
   // File system sinks.
@@ -1440,9 +1466,9 @@ export const CATALOG = [
   // is a subscript-assignment; parser-py.helper.py now lowers that shape as a
   // synthetic `<receiver>.__setitem__(key, value)` call so the existing
   // argument-based sink machinery applies — argIndex 1 is the header value.
-  { kind: 'sink', id: 'py-response-setitem', language: 'py', framework: 'django/flask', match: { type: 'call', callee: '__setitem__', receiver: '^(?:response|resp|headers)$' }, argIndex: 1,
-    vuln: { name: 'HTTP Response Splitting / CRLF Injection (response header set from tainted value)', severity: 'high', cwe: 'CWE-113',
-            remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header. Prefer an allow-listed set of header values.' } },
+  // (removed in 0.220.0) `response["X"] = value` in Django raises BadHeaderError and werkzeug's Headers raises ValueError on a value that contains
+  // CR or LF, so a header assignment in those frameworks is not a response-splitting sink; six of six sampled sites on real projects were this
+  // (bench/dag/dev-realcode, python set). The Ruby entry above stays: Rack does not validate header values.
   { kind: 'source', id: 'py-flask-request-get-data', language: 'py', framework: 'flask', match: { type: 'call', callee: 'get_data' }, label: 'request.get_data() (Flask raw body)', provenance: 'http-body' },
   { kind: 'source', id: 'py-django-request-body',    language: 'py', framework: 'django', match: { type: 'member', object: 'request', prop: 'body' }, label: 'request.body (Django raw body)', provenance: 'http-body' },
   // QA-006: header("Location: " . $x) is an open redirect, not only header injection. The CRLF entry below still applies to the same call.
@@ -1452,9 +1478,8 @@ export const CATALOG = [
   { kind: 'sink', id: 'php-header', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'header' }, argIndex: 0,
     vuln: { name: 'HTTP Response Splitting / CRLF Injection (header())', severity: 'high', cwe: 'CWE-113',
             remediation: 'Strip/validate CR/LF from any user-controlled value before passing it to header().' } },
-  { kind: 'sink', id: 'js-response-setheader', language: 'js', framework: 'express', match: { type: 'call', callee: 'setHeader', receiver: '^res$' }, argIndex: 1,
-    vuln: { name: 'HTTP Response Splitting / CRLF Injection (res.setHeader)', severity: 'high', cwe: 'CWE-113',
-            remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header (Node itself rejects raw CR/LF since 10.x, but do not rely on that alone).' } },
+  // (removed in 0.220.0) Node's http.ServerResponse.setHeader throws ERR_INVALID_CHAR on a value with CR or LF (since 10.x), so a header set
+  // through it cannot split a response; six of six sampled sites on real projects were this (bench/dag/dev-realcode, typescript set).
   { kind: 'sink', id: 'java-servlet-setheader', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'setHeader' }, argIndex: 1,
     vuln: { name: 'HTTP Response Splitting / Header Injection (HttpServletResponse.setHeader)', severity: 'high', cwe: 'CWE-113',
             remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header value.' } },

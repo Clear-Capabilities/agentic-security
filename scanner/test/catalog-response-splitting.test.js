@@ -54,7 +54,7 @@ echo "ok";
     `expected Response Splitting, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
 
-test('js-response-setheader: res.setHeader(name, req.query.x) fires HTTP Response Splitting via IR-TAINT', async () => {
+test('res.setHeader(name, req.query.x) is NOT a response-splitting sink: Node\'s ServerResponse.setHeader throws on a value with CR or LF (the entry was removed in 0.220.0)', async () => {
   const dir = mkTmp('js', 'handler.js', `
 const express = require('express');
 const app = express();
@@ -64,8 +64,8 @@ app.get('/h', (req, res) => {
 });
 `);
   const taint = await taintFindings(dir);
-  assert.ok(taint.some(f => /header|splitting|crlf/i.test(f.vuln)),
-    `expected Response Splitting, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+  assert.ok(!taint.some(f => /splitting|crlf/i.test(f.vuln)),
+    `Node refuses CR/LF in header values, so no response-splitting finding is due; got: ${taint.map(f => f.vuln).join(', ')}`);
 });
 
 test('cs-headers-add: Response.Headers.Add(name, tainted) fires Header Injection via IR-TAINT (distinct API from AddHeader)', async () => {

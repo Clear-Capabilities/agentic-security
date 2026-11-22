@@ -18,7 +18,9 @@ const scan = async (file, code) => (await runFullScan({ fileContents: { [file]: 
 const flagged = async (file, code, re) => (await scan(file, code)).some((f) => re.test(f.vuln));
 
 const MODELS = [
-  { name: 'JS SQL injection', file: 'a.js', re: /SQL Injection/, patternOnlyNearMiss: true,
+  // 0.220.0: the taint layer records a sink site whose argument is closed (a literal-bound variable) as clean and the structural SQL finding
+  // there is dropped, so the near miss is silent in every layer.
+  { name: 'JS SQL injection', file: 'a.js', re: /SQL Injection/, patternOnlyNearMiss: false,
     vuln: "const express = require('express'); const app = express(); const db = require('mysql').createConnection({});\napp.get('/u', (req, res) => { const id = req.query.id; db.query('SELECT * FROM t WHERE id=' + id); res.end(); });\n",
     fixed: "const express = require('express'); const app = express(); const db = require('mysql').createConnection({});\napp.get('/u', (req, res) => { const id = req.query.id; db.query('SELECT * FROM t WHERE id=?', [id]); res.end(); });\n",
     mutated: "// look up a user\nconst express = require('express'); const app = express(); const db = require('mysql').createConnection({});\n\napp.get('/u', (request, response) => {\n  const userKey = request.query.id; /* raw */\n  db.query('SELECT * FROM t WHERE id=' + userKey);\n\n  response.end();\n});\n",

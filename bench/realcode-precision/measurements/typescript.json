@@ -1,0 +1,317 @@
+{
+ "set": "typescript",
+ "sites": {
+  "0": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": false,
+   "severity": null
+  },
+  "1": {
+   "label": "FP",
+   "half": "verification",
+   "reported": false,
+   "severity": null
+  },
+  "2": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": false,
+   "severity": null
+  },
+  "3": {
+   "label": "FP",
+   "half": "verification",
+   "reported": false,
+   "severity": null
+  },
+  "4": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": false,
+   "severity": null
+  },
+  "5": {
+   "label": "FP",
+   "half": "verification",
+   "reported": false,
+   "severity": null
+  },
+  "6": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "medium"
+  },
+  "7": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "low"
+  },
+  "8": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "high"
+  },
+  "9": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "high"
+  },
+  "10": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": false,
+   "severity": null
+  },
+  "11": {
+   "label": "FP",
+   "half": "verification",
+   "reported": false,
+   "severity": null
+  },
+  "12": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": false,
+   "severity": null
+  },
+  "13": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "medium"
+  },
+  "14": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "medium"
+  },
+  "15": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "medium"
+  },
+  "16": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "medium"
+  },
+  "17": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "medium"
+  },
+  "18": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "high"
+  },
+  "19": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "medium"
+  },
+  "20": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "medium"
+  },
+  "21": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "low"
+  },
+  "22": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "medium"
+  },
+  "23": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "low"
+  },
+  "24": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "low"
+  },
+  "25": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "high"
+  },
+  "26": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "critical"
+  },
+  "27": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "high"
+  },
+  "28": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "high"
+  },
+  "29": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "high"
+  },
+  "30": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "high"
+  },
+  "31": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "critical"
+  },
+  "32": {
+   "label": "FP",
+   "half": "verification",
+   "reported": false,
+   "severity": null
+  },
+  "33": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "medium"
+  },
+  "34": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "medium"
+  },
+  "35": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "medium"
+  },
+  "36": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "medium"
+  },
+  "37": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "high"
+  },
+  "38": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "medium"
+  },
+  "39": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "high"
+  },
+  "40": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "high"
+  },
+  "41": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": false,
+   "severity": null
+  },
+  "42": {
+   "label": "FP",
+   "half": "verification",
+   "reported": false,
+   "severity": null
+  },
+  "43": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": false,
+   "severity": null
+  },
+  "44": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "high"
+  },
+  "45": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "high"
+  },
+  "46": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "medium"
+  },
+  "47": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": false,
+   "severity": null
+  },
+  "48": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "medium"
+  },
+  "49": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": false,
+   "severity": null
+  },
+  "50": {
+   "label": "FP",
+   "half": "verification",
+   "reported": true,
+   "severity": "low"
+  },
+  "51": {
+   "label": "FP",
+   "half": "tuning",
+   "reported": true,
+   "severity": "medium"
+  }
+ }
+}

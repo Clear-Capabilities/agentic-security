@@ -1,0 +1,15 @@
+{
+  "set": "typescript",
+  "language": "js",
+  "note": "Pinned on 2026-11-21 from each repository's default branch (git ls-remote HEAD); acquire.mjs fetches exactly these commits and never substitutes a project. None of these repositories is a population repository of bench/independent.",
+  "projects": [
+    { "id": "documenso", "url": "https://github.com/documenso/documenso", "commit": "80550e78b3e4852f87e9968e24b1984c427e4430", "role": "Next.js application with tRPC and Prisma" },
+    { "id": "formbricks", "url": "https://github.com/formbricks/formbricks", "commit": "845176cf3e72b68493e03b4350534b52a6defa07", "role": "Next.js application with server actions and Prisma" },
+    { "id": "umami", "url": "https://github.com/umami-software/umami", "commit": "aad2c4cedd5c0b3bc4d361843830a0bb47cf79c4", "role": "Next.js analytics with raw SQL" },
+    { "id": "ghostfolio", "url": "https://github.com/ghostfolio/ghostfolio", "commit": "541832d471a3245a6eb43b156947ae4df8dd1cf7", "role": "NestJS application with Prisma" },
+    { "id": "hoppscotch", "url": "https://github.com/hoppscotch/hoppscotch", "commit": "55908a76a1d0555c9bbb5d74244c14173df95b06", "role": "NestJS backend with Prisma" },
+    { "id": "vendure", "url": "https://github.com/vendure-ecommerce/vendure", "commit": "e5009d69f9062184eb7bafa1765b2c38997b71b8", "role": "NestJS commerce framework with TypeORM" },
+    { "id": "directus", "url": "https://github.com/directus/directus", "commit": "db8d476e87e74056c69d681671d875c2bc11e1a3", "role": "Node/TypeScript API with knex" },
+    { "id": "twenty", "url": "https://github.com/twentyhq/twenty", "commit": "b1a99792c30f0d8873bf5b0e75394d64e645a502", "role": "NestJS CRM with TypeORM" }
+  ]
+}

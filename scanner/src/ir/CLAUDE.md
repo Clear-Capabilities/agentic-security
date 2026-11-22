@@ -364,3 +364,28 @@ Tests: `test/python-class-taint.test.js`, `test/parser-js-ts-casts.test.js`, `te
 - **tRPC (`parser-js.js`).** The resolver passed to `.query`, `.mutation` or `.subscription` on a chain that carries `.input(schema)` gets
   `js:trpc-procedure-handler` on the `input` field of its first parameter (`<obj>.input` when destructured, `opts.input` when named); `ctx`
   is not marked, and a procedure with no `.input` marks nothing.
+
+## 0.220.0, second half: resolution, more sources, Python bodies, allowlists
+
+- **Module resolution (`module-resolver.js`).** `tsconfig.json`/`jsconfig.json` `compilerOptions.paths` and `baseUrl` are read (leniently: comments
+  and trailing commas stripped; the file nearest the root wins; `extends` is not followed): `@/lib/db` maps through its pattern, `lib/db`
+  under baseUrl. A specifier an alias pattern names but no file answers is `unresolved` (never guessed from a bare name). Python absolute
+  imports are tried from the repository root, `src/`, and the importer's package parents (a module three packages deep under `src/`
+  importing `app.svc`), and `from . import svc` binds the sibling submodule `svc` so `svc.find()` resolves.
+- **Python (`parser-py.helper.py`).** A statement-level comprehension binds its loop variable to an element of the iterable and emits its head
+  call as a call node; `f = lambda h: ...` is a function record named `f` (a later `f(x)` resolves to it); a function's return annotation is
+  `returnType` (class-hierarchy.js types `s = make()` from `def make() -> Service`); `task.delay(a)`, `task.apply_async(args=[a])`,
+  `queue.enqueue(fn, a)` and `executor.submit(fn, a)` emit the call `fn(a)` beside the dispatch (`dispatch` names the form). Class bases decide
+  three parameter facts (`_class_param_annotations`): a `*Servicer` method's `request` (`py:grpc-request`), a `resolve_x(self, info, ...)`
+  method's arguments after info (`py:graphql-resolver-arg`), and a View-like class's verb-method parameters after (self, request)
+  (`py:django-view-kwarg`); inside such a class `self.kwargs` lowers to the synthetic call `django_view.kwargs`, a catalog source.
+- **JavaScript (`parser-js.js`).** Route modules: an exported Remix `loader`/`action` under a routes directory, a SvelteKit `load` in a
+  +page/+layout(.server) file and the verb exports of a +server file get `js:route-module-handler` on the `params`, `url` and `request`
+  fields of their first parameter. An allowlist ternary (`COLS.includes(v) ? v : 'name'`, also `.has`, `indexOf(v) !== -1` and the negated
+  form) over a constant collection of literals (a top-level `const` array or Set, or an inline literal array) lowers to the fallback branch
+  alone: the value is one of the constants.
+- **Ruby (`parser-rb.js`).** A keyword argument lowers to a one-key record (`{ id: <value> }`), so a string-only sink can refuse the
+  parameterised form (`where(id: x)`) while the value's taint still reaches the call.
+- **Template literals carry their text (`parser-js.js`, 0.220.0).** `\`https://h/${a}/x/${b}\`` lowers to `tpl` parts
+  `['https://h/', a, '/x/', b]` (empty chunks left out), so the engine can read what a URL begins with and which keywords a template's
+  constant text carries. Before, only the expressions were kept.

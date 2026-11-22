@@ -41,7 +41,7 @@ protocol sha256:6e8477f6e0486819431fa342d584f22867174cdf6dcf25ed8b65dfa468ffae1d
 
 layer               completed  e2e recall  e2e precision  e2e F1   conditional F1  real-code gates
 deterministic-only   5/5           100.0%          66.7%    80.0%           80.0%   insufficient-population
-deep-taint           5/5           100.0%          66.7%    80.0%           80.0%   insufficient-population
+deep-taint           5/5           100.0%         100.0%   100.0%          100.0%   insufficient-population
 model-assisted       0/5             0.0%            n/a     0.0%             n/a   insufficient-population
 ```
 
@@ -55,12 +55,12 @@ npm run reproduce:mini
 ```text
 PUBLIC MINIATURE REPRODUCTION (offline, no sealed labels). Three authored files: figures exercise the path, not the engine.
 protocol sha256:6e8477f6e0486819431fa342d584f22867174cdf6dcf25ed8b65dfa468ffae1d
-engine (deep-taint): recall 100.0%, precision 66.7%, completion 100.0%; 95% interval on F1: unmeasured
+engine (deep-taint): recall 100.0%, precision 100.0%, completion 100.0%; 95% interval on F1: unmeasured
 real-code gates: insufficient-population
 
 negative controls:
   ok   null-engine      null recall 0.0% vs engine 100.0%
-  ok   flag-everything  flood false positives 3 vs engine 1
+  ok   flag-everything  flood false positives 3 vs engine 0
   ok   shuffled-labels  recall against moved labels 0.0% vs 100.0%
   ok   planted-leak     1 workspace(s) quarantined, leak gate fail
   ok   gates-need-data  real-code gates on the public suite: insufficient-population

@@ -310,7 +310,6 @@ test('representative real entries produce the stated (kind, category, coverageSt
     ['js-fetch',                       'external', 'external-api',    'modeled'],
     ['js-fs-readFile',                 'store',    'file',            'modeled'],
     ['js-res-redirect',                'sink',     'http-response',   'modeled'],
-    ['js-response-setheader',          'sink',     'http-response',   'modeled'],
     ['js-innerHTML-assign',            'store',    'client-storage',  'partial'],
     ['js-express-res-send',            'sink',     'http-response',   'modeled'],
     ['java-ldap-search',               'store',    'database',        'candidate'],
@@ -568,12 +567,14 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // `$where` filter keys (6, CWE-943) are modeled; asyncio.create_subprocess_shell (CWE-78) and Template(source) (CWE-1336) are
   // unsupported like every entry of those CWEs. Re-measured against the live catalog.
   // 1158 -> 1160, 840 -> 842 modeled (0.220.0, Haskell round 12): hasql's Statement constructor and Session.sql (CWE-89). Re-measured against the live catalog.
-  assert.equal(SINKS.length, 1160);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 842);
+  // 1160 -> 1158, 842 -> 840 modeled (0.220.0, the real-code sets): py-response-setitem and js-response-setheader removed (Django, werkzeug and
+  // Node's ServerResponse reject CR/LF in header values).
+  assert.equal(SINKS.length, 1158);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 840);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 17);     // the 17 DOM/React/jQuery CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 292);
-  assert.equal(842 + 17 + 9 + 292, SINKS.length);
+  assert.equal(840 + 17 + 9 + 292, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

@@ -74,6 +74,8 @@ test('planChecks: the full tier changes nothing; the fast tier drops exactly the
   assert.ok(fast.checks.some((c) => c.id === 'bundle-matches-source') && fast.checks.some((c) => c.id === 'ci-parity'), 'the cheap whole-repo checks stay');
   const docsOnly = planChecks({ checks: CHECKS, tier: 'fast', changed: ['docs/guides/haskell.md'] });
   assert.ok(!docsOnly.checks.some((c) => c.id === 'haskell-precision-gate'), 'a docs-only change does not run the live precision check');
+  assert.ok(planChecks({ checks: CHECKS, tier: 'fast', changed: ['scanner/src/ir/parser-py.helper.py'] }).checks.some((c) => c.id === 'realcode-precision-gate'), 'a change to a frontend runs the real-code precision check');
+  assert.ok(!docsOnly.checks.some((c) => c.id === 'realcode-precision-gate'), 'a docs-only change does not run the real-code precision check');
   assert.ok(!docsOnly.checks.some((c) => c.id === 'self-scan-gate'), 'a docs-only change is not scanned by self-scan');
   for (const f of ['scripts/ship/run.mjs', 'hooks/x.js', 'scanner/src/engine.js']) {
     assert.ok(planChecks({ checks: CHECKS, tier: 'fast', changed: [f] }).checks.some((c) => c.id === 'self-scan-gate'), `${f} is scanned by self-scan, so it runs locally`);

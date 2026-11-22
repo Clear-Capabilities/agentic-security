@@ -9803,6 +9803,16 @@ function _deterministicFileTimings(timings) {
         f.unvalidated = true;
         f.validator_verdict = 'unvalidated';
       }
+      // A pattern-layer SQL finding at a call the taint engine examined and found clean (the sink matched, no argument carried taint:
+      // `db.query('SELECT ' + col)` with `col` drawn from a constant allowlist) is that layer's over-approximation; the deeper layer
+      // answered the same question at the same site, so the structural finding is dropped. Only sites the walk reached are in the set.
+      if (irFindings.cleanSinkSites instanceof Set && irFindings.cleanSinkSites.size) {
+        const clean = irFindings.cleanSinkSites;
+        for (let i = aF.length - 1; i >= 0; i--) {
+          const f = aF[i];
+          if (f && f.parser === 'JS-FW' && /^js-fw-sqli:/.test(String(f.id || '')) && clean.has(`${f.file}:${f.line}:${f.cwe}`)) aF.splice(i, 1);
+        }
+      }
       try { applyHaskellGuards(irFindings, perFile, fc); applyTrustBoundary(irFindings, perFile); try { applyHaskellReachability(irFindings, perFile); } catch (_) { /* the verdict is metadata; the finding stands without it */ } consolidateFlowSinks(irFindings, perFile); annotateUnresolvedTargets(irFindings, perFile); attachEvidenceChains(irFindings, perFile); annotateHaskellFindings(irFindings, fc); annotateHaskellLlm(irFindings, fc); } catch (_) { /* metadata only; the finding stands without it */ }
       aF.push(...irFindings);
     } catch (e) {

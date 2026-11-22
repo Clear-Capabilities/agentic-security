@@ -27,7 +27,7 @@ copied examples/assurance-demo (10 files) to a scratch directory; offline mode o
 
 ## Scan
 
-9 findings (8 medium or above); scan health complete.
+8 findings (7 medium or above); scan health complete.
 
 ```json
 {
@@ -39,13 +39,6 @@ copied examples/assurance-demo (10 files) to a scratch directory; offline mode o
       "line": 11,
       "parser": "IR-TAINT",
       "vuln": "SQL Injection (db.query)"
-    },
-    {
-      "severity": "critical",
-      "file": "services/api/app.js",
-      "line": 24,
-      "parser": "JS-FW",
-      "vuln": "SQL Injection — query built with template literal / concat (JS/TS)"
     },
     {
       "severity": "high",
@@ -95,7 +88,7 @@ copied examples/assurance-demo (10 files) to a scratch directory; offline mode o
 
 ## Triage
 
-4 of 4 expected true positives were reported; 1 of 3 expected false positives were reported and marked by the reviewer; 3 reported finding(s) have no recorded decision.
+4 of 4 expected true positives were reported; 0 of 3 expected false positives were reported and marked by the reviewer; 3 reported finding(s) have no recorded decision.
 
 ```json
 {
@@ -117,10 +110,8 @@ copied examples/assurance-demo (10 files) to a scratch directory; offline mode o
       "class": "sql-injection",
       "label": "false_positive",
       "reason": "the only operand is a constant string; no request value reaches the statement",
-      "reported": true,
-      "reportedBy": [
-        "JS-FW"
-      ]
+      "reported": false,
+      "reportedBy": []
     },
     {
       "id": "sqli-lookup-bound",

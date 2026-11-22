@@ -81,15 +81,17 @@ blocker.
 | go | 22 | 22 (100%) | 14 (64%) |
 | haskell | 9 | 9 (100%) | 9 (100%) |
 | java | 25 | 25 (100%) | 13 (52%) |
-| js/ts | 38 | 38 (100%) | 23 (61%) |
+| js/ts | 38 | 38 (100%) | 22 (58%) |
 | kotlin | 21 | 21 (100%) | 10 (48%) |
 | php | 23 | 23 (100%) | 15 (65%) |
-| python | 32 | 32 (100%) | 22 (69%) |
+| python | 32 | 32 (100%) | 21 (66%) |
 | ruby | 20 | 20 (100%) | 11 (55%) |
 | rust | 5 | 5 (100%) | 5 (100%) |
 | json | 1 | 1 (100%) | 0 (0%) |
 | terraform | 1 | 1 (100%) | 0 (0%) |
-| **total** | **229** | **229 (100%)** | **137 (60%)** |
+| **total** | **229** | **229 (100%)** | **135 (59%)** |
+
+**2026-11-21, later: header assignment is not response splitting (137 → 135).** The `js-response-setheader` and `py-response-setitem` sinks were removed: Node's `ServerResponse.setHeader` throws on a CR or LF in the value and Django and werkzeug raise on one, so a request value written to a header through them is not a split response (twelve of twelve sampled sites in the Python and TypeScript real-code sets were this shape). The two response-splitting corpus entries are still detected, by the pattern layer, so the corpus gate is unchanged; the taint layer no longer claims them (js/ts 23 → 22, python 22 → 21). A deliberate loss, re-baselined with `npm run bench:layer-recall:update-baseline`.
 
 **2026-11-21: Python call chains keep their sink sites (136 → 137).** The Python frontend states the call a chained callee is built on (`cur.execute(q).fetchall()` carries `cur.execute(q)` as an inner call with its own arguments) and the engine reads it as a sink site at every statement kind, so one Python entry whose sink was reached only through a chained call is now attributed to the taint layer; no language fell. Re-baselined with `npm run bench:layer-recall:update-baseline`.
 

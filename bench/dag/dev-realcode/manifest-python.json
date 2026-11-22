@@ -1,0 +1,15 @@
+{
+  "set": "python",
+  "language": "py",
+  "note": "Pinned on 2026-11-21 from each repository's default branch (git ls-remote HEAD); acquire.mjs fetches exactly these commits and never substitutes a project. None of these repositories is a population repository of bench/independent.",
+  "projects": [
+    { "id": "healthchecks", "url": "https://github.com/healthchecks/healthchecks", "commit": "ac59dec93c5179cdff471894704f360d6ee5e02a", "role": "Django monitoring service" },
+    { "id": "redash", "url": "https://github.com/getredash/redash", "commit": "f561a53dc55eeb3f20615be951560dc78bb23f4c", "role": "Flask BI application with SQL query runners" },
+    { "id": "mealie", "url": "https://github.com/mealie-recipes/mealie", "commit": "f64f63cf2735de3893aec17384be0e6f4cd81ea8", "role": "FastAPI application with dependencies and SQLAlchemy" },
+    { "id": "paperless-ngx", "url": "https://github.com/paperless-ngx/paperless-ngx", "commit": "4973be8499bc61dc4f791a609d0d31e9ac9ccd41", "role": "Django document manager with file handling and subprocesses" },
+    { "id": "netbox", "url": "https://github.com/netbox-community/netbox", "commit": "85a9f8076cb63e6870ad2f7e582d04516d028180", "role": "Django IPAM with class-based views and REST" },
+    { "id": "wger", "url": "https://github.com/wger-project/wger", "commit": "882c5968f72b4b79adf8d693806ddee18aeacdb4", "role": "Django fitness manager" },
+    { "id": "pgadmin4", "url": "https://github.com/pgadmin-org/pgadmin4", "commit": "ccabf7e310a24785d252177734aedde4bc67f88f", "role": "Flask database administration tool" },
+    { "id": "full-stack-fastapi-template", "url": "https://github.com/fastapi/full-stack-fastapi-template", "commit": "77e550a73bb49dd2967622c5ed11bf7a49603c93", "role": "FastAPI reference application" }
+  ]
+}

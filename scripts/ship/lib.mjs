@@ -161,7 +161,7 @@ export function staleVersionArtifacts({ version, readFile }) {
  */
 export const PROVEN_BY_PRE_PUSH = Object.freeze([
   'test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'provenance-gate',
-  'fix-verification-gate', 'layer-recall-gate', 'language-support-gate', 'haskell-precision-gate', 'verification-conformance-gate',
+  'fix-verification-gate', 'layer-recall-gate', 'language-support-gate', 'haskell-precision-gate', 'realcode-precision-gate', 'verification-conformance-gate',
 ]);
 
 /**
@@ -191,7 +191,7 @@ export function scratchEnv(dir) {
  * repeat them. Keep this list equal to what .github/workflows/ci.yml really runs; scanner/test/ship.test.js pins it against the workflow.
  */
 export const CI_COVERED = Object.freeze([
-  'test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'fix-verification-gate', 'layer-recall-gate', 'haskell-precision-gate', 'contract-conformance',
+  'test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'fix-verification-gate', 'layer-recall-gate', 'haskell-precision-gate', 'realcode-precision-gate', 'contract-conformance',
 ]);
 
 /** Release-gate checks that can only be judged after the merge: they look at origin/main and at the hosted run for the released commit. */

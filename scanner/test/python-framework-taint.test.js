@@ -65,3 +65,42 @@ test('Template(source) compiles request text; string.Template and a literal temp
   assert.deepEqual(await hits(FL('import string', `    return string.Template(u).substitute(a=1)\n`), 'CWE-1336'), []);
   assert.deepEqual(await hits(FL('from jinja2 import Template', `    return Template("Hello {{ name }}").render(name=u)\n`), 'CWE-1336'), []);
 });
+
+// The second half of the round: class-based views, task dispatch, GraphQL resolvers, gRPC servicers, comprehension and lambda bodies,
+// a return-type-hinted factory and an element read of a call result.
+const SH = (imports, body) => ({ 'app.py': `from flask import Flask, request\nimport os\n${imports}\napp = Flask(__name__)\n@app.get("/r")\ndef r():\n    n = request.args.get("n")\n${body}` });
+test('Django class-based views: a method parameter after (self, request) and self.kwargs are URL captures; a plain class is not a view', { skip: !py }, async () => {
+  assert.deepEqual(await hits({ 'views.py': `from django.views import View\nclass V(View):\n    def get(self, request, name):\n        return HttpResponse(open("/d/" + name).read())\n` }, 'CWE-22'), ['views.py:4']);
+  assert.deepEqual(await hits({ 'views.py': `from rest_framework.views import APIView\nclass V(APIView):\n    def get(self, request, *args, **kwargs):\n        return HttpResponse(open("/d/" + self.kwargs["name"]).read())\n` }, 'CWE-22'), ['views.py:4']);
+  assert.deepEqual(await hits({ 'views.py': `class Helper:\n    def get(self, request, name):\n        return open("/d/" + name).read()\n    def other(self):\n        return open("/d/" + self.kwargs["x"]).read()\n` }, 'CWE-22'), []);
+});
+test('task dispatch: task.delay(x), task.apply_async(args=[x]) and queue.enqueue(fn, x) run the function with x; a task with no producer in the scan is not a source by itself', { skip: !py }, async () => {
+  // the argument is whatever the producer enqueued: without a producer the task states nothing (the real sets showed bare task-argument
+  // sources landing on administrator configuration)
+  assert.deepEqual(await hits({ 'tasks.py': `from celery import shared_task\nimport os\n@shared_task\ndef ping(host):\n    os.system("ping " + host)\n` }, 'CWE-78'), []);
+  assert.deepEqual(await hits(SH('', `    ping.delay(n)\ndef ping(host):\n    os.system("ping " + host)\n`), 'CWE-78'), ['app.py:10']);
+  assert.deepEqual(await hits(SH('', `    ping.apply_async(args=[n])\ndef ping(host):\n    os.system("ping " + host)\n`), 'CWE-78'), ['app.py:10']);
+  assert.deepEqual(await hits(SH('from rq import Queue\nq = Queue()', `    job = q.enqueue(ping, n, job_timeout=30)\ndef ping(host):\n    os.system("ping " + host)\n`), 'CWE-78'), ['app.py:11']);
+  assert.deepEqual(await hits(SH('', `    ping.delay("localhost")\ndef ping(host):\n    os.system("ping " + host)\n`), 'CWE-78'), []);
+  const ir = await buildProjectIRAsync({ 't.py': `def r(n):\n    ping.delay(n)\n    q.enqueue(ping, n, job_timeout=30)\n` });
+  const calls = Object.values(ir.perFile['t.py'].functions[0].cfg.nodes).filter((x) => x.kind === 'call').map((x) => [x.callee, x.args.length, x.dispatch || null]);
+  assert.deepEqual(calls, [['ping.delay', 1, null], ['ping', 1, 'delay'], ['q.enqueue', 3, null], ['ping', 1, 'enqueue']]);
+});
+test('GraphQL and gRPC: graphene resolve_x arguments after info, strawberry field arguments, and a servicer method\'s request are input', { skip: !py }, async () => {
+  assert.deepEqual(await hits({ 'schema.py': `import graphene\nclass Q(graphene.ObjectType):\n    def resolve_user(self, info, name):\n        return db.execute("SELECT * FROM u WHERE n = '" + name + "'")\n` }, 'CWE-89'), ['schema.py:4']);
+  assert.deepEqual(await hits({ 'schema.py': `import strawberry\n@strawberry.type\nclass Query:\n    @strawberry.field\n    def user(self, name: str) -> str:\n        return db.execute("SELECT * FROM u WHERE n = '" + name + "'")\n` }, 'CWE-89'), ['schema.py:6']);
+  assert.deepEqual(await hits({ 'server.py': `import os\nimport svc_pb2_grpc\nclass Servicer(svc_pb2_grpc.PingServicer):\n    def Ping(self, request, context):\n        os.system("ping " + request.host)\n` }, 'CWE-78'), ['server.py:5']);
+  // not a resolver (no info parameter), not a servicer
+  assert.deepEqual(await hits({ 'schema.py': `class Q:\n    def resolve_user(self, name):\n        return db.execute("SELECT * FROM u WHERE n = '" + name + "'")\n` }, 'CWE-89'), []);
+  assert.deepEqual(await hits({ 'server.py': `import os\nclass Handler:\n    def Ping(self, request, context):\n        os.system("ping " + request.host)\n` }, 'CWE-78'), []);
+});
+test('comprehension and lambda bodies are analysed, a return-type hint types a factory\'s result, and an element of a tainted split is tainted', { skip: !py }, async () => {
+  assert.deepEqual(await hits(SH('', `    [os.system("ping " + h) for h in n.split(",")]\n`), 'CWE-78'), ['app.py:8']);
+  assert.deepEqual(await hits(SH('', `    outs = [os.popen("ping " + h).read() for h in n.split(",")]\n`), 'CWE-78'), ['app.py:8']);
+  assert.deepEqual(await hits(SH('', `    f = lambda h: os.system("ping " + h)\n    f(n)\n`), 'CWE-78'), ['app.py:8']);
+  assert.deepEqual(await hits(SH('', `    f = lambda h: os.system("ping " + h)\n    f("localhost")\n`), 'CWE-78'), []);
+  assert.deepEqual(await hits(SH('', `    h = n.split(",")[0]\n    os.system("ping " + h)\n`), 'CWE-78'), ['app.py:9']);
+  assert.deepEqual(await hits({ 'app.py': `from flask import Flask, request\napp = Flask(__name__)\nfrom svc import Service, make\n@app.get("/r")\ndef r():\n    n = request.args.get("n")\n    s = make()\n    s.update(n)\n`, 'svc.py': `import sqlite3\nclass Service:\n    def update(self, name):\n        cur = sqlite3.connect("d").cursor()\n        cur.execute("SELECT * FROM t WHERE n = '" + name + "'")\ndef make() -> Service:\n    return Service()\n` }, 'CWE-89'), ['svc.py:5']);
+  const ir = await buildProjectIRAsync({ 'svc.py': `class Service:\n    pass\ndef make() -> Service:\n    return Service()\n` });
+  assert.equal(ir.perFile['svc.py'].functions.find((f) => f.name === 'make').returnType, 'Service');
+});

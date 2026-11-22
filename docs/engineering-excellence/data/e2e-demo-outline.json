@@ -8,11 +8,11 @@
     },
     {
       "id": "scan",
-      "summary": "9 findings (8 medium or above); scan health complete"
+      "summary": "8 findings (7 medium or above); scan health complete"
     },
     {
       "id": "triage",
-      "summary": "4 of 4 expected true positives were reported; 1 of 3 expected false positives were reported and marked by the reviewer; 3 reported finding(s) have no recorded decision"
+      "summary": "4 of 4 expected true positives were reported; 0 of 3 expected false positives were reported and marked by the reviewer; 3 reported finding(s) have no recorded decision"
     },
     {
       "id": "validate",
@@ -59,7 +59,7 @@
     ],
     [
       "sqli-report-constant",
-      true
+      false
     ],
     [
       "sqli-lookup-bound",

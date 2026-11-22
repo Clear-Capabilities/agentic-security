@@ -87,6 +87,10 @@ def _lower_expr(node: ast.AST) -> dict[str, Any]:
     if isinstance(node, ast.Name):
         return {"kind": "ident", "name": node.id}
     if isinstance(node, ast.Attribute):
+        # Django class-based views: `self.kwargs` is the URL captures dict. Lowered to a call the catalog names as a source
+        # (`django_view.kwargs`) while a View subclass's method is being lowered; elsewhere `self.kwargs` is an ordinary field.
+        if _LOWER_CTX.get("view_class") and node.attr == "kwargs" and isinstance(node.value, ast.Name) and node.value.id == "self":
+            return {"kind": "call", "callee": "django_view.kwargs", "args": [], "line": getattr(node, "lineno", 0) or 0}
         return {"kind": "member", "object": _lower_expr(node.value), "prop": node.attr}
     if isinstance(node, ast.Subscript):
         # Surface as a member-with-slice; downstream taint treats it like member access.
@@ -180,6 +184,36 @@ def _lower_expr(node: ast.AST) -> dict[str, Any]:
     if isinstance(node, ast.YieldFrom):
         return _lower_expr(node.value)
     return {"kind": "unknown"}
+
+
+_LOWER_CTX: dict[str, Any] = {"view_class": False}
+
+_RQ_OPTION_KWARGS = {"job_timeout", "result_ttl", "ttl", "failure_ttl", "depends_on", "job_id", "at_front", "meta", "retry", "on_success", "on_failure", "description", "timeout"}
+
+
+def _dispatch_call(call: ast.Call, line: int) -> "dict[str, Any] | None":
+    """A task or job dispatch runs the named function with the given arguments on a worker: `task.delay(a, b)` and
+    `task.apply_async(args=[a, b], kwargs={...})` (Celery), `queue.enqueue(fn, a, b)` (RQ), `executor.submit(fn, a, b)`.
+    The IR states the call `fn(a, b)` beside the dispatch so the function's body is analysed with those arguments."""
+    f = call.func
+    if not isinstance(f, ast.Attribute):
+        return None
+    if f.attr == "delay" and isinstance(f.value, (ast.Name, ast.Attribute)):
+        return {"kind": "call", "callee": _flatten_callee(f.value), "args": [_lower_expr(a) for a in call.args] + [_lower_expr(k.value) for k in call.keywords if k.arg], "line": line, "dispatch": "delay"}
+    if f.attr == "apply_async" and isinstance(f.value, (ast.Name, ast.Attribute)):
+        args: list[dict[str, Any]] = []
+        if call.args and isinstance(call.args[0], (ast.List, ast.Tuple)):
+            args += [_lower_expr(a) for a in call.args[0].elts]
+        for k in call.keywords:
+            if k.arg == "args" and isinstance(k.value, (ast.List, ast.Tuple)):
+                args += [_lower_expr(a) for a in k.value.elts]
+            elif k.arg == "kwargs" and isinstance(k.value, ast.Dict):
+                args += [_lower_expr(v) for v in k.value.values]
+        return {"kind": "call", "callee": _flatten_callee(f.value), "args": args, "line": line, "dispatch": "apply_async"}
+    if f.attr in ("enqueue", "enqueue_call", "submit") and call.args and isinstance(call.args[0], (ast.Name, ast.Attribute)):
+        args = [_lower_expr(a) for a in call.args[1:]] + [_lower_expr(k.value) for k in call.keywords if k.arg and k.arg not in _RQ_OPTION_KWARGS]
+        return {"kind": "call", "callee": _flatten_callee(call.args[0]), "args": args, "line": line, "dispatch": f.attr}
+    return None
 
 
 def _lower_call_chain(node: ast.Call) -> dict[str, Any]:
@@ -418,6 +452,24 @@ class CfgBuilder:
             # dispatch shape). For everything else, noop. `await f(x)` as a
             # statement is the call f(x): the await adds nothing the engine reads.
             val = stmt.value.value if isinstance(stmt.value, ast.Await) else stmt.value
+            if isinstance(val, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
+                # `[os.system(c) for c in cmds]` as a statement: the loop variable is an element of the iterable and the head runs per element,
+                # so the head call is a call node of its own (an assigned comprehension is handled below with its filters).
+                tail = prev
+                for gen in val.generators:
+                    loop_tgt = _assign_target(gen.target)
+                    if isinstance(loop_tgt, str):
+                        la = self._add({"kind": "assign", "target": loop_tgt, "source": {"kind": "member", "object": _lower_expr(gen.iter), "prop": "[]"}, "line": line})
+                        self._link(tail, la)
+                        tail = la
+                if isinstance(val.elt, ast.Call):
+                    head = _lower_call_chain(val.elt)
+                    head["line"] = line
+                    cur = self._add(head)
+                else:
+                    cur = self._add({"kind": "noop", "line": line})
+                self._link(tail, cur)
+                return cur
             if isinstance(val, ast.Call):
                 _node = {
                     "kind": "call",
@@ -438,6 +490,11 @@ class CfgBuilder:
                 if _inner:
                     _node["innerCalls"] = _inner
                 cur = self._add(_node)
+                _d = _dispatch_call(val, line)
+                if _d:
+                    self._link(prev, cur)
+                    prev = cur
+                    cur = self._add(_d)
             elif isinstance(stmt.value, ast.NamedExpr):
                 cur = self._add({
                     "kind": "assign",
@@ -541,6 +598,11 @@ class CfgBuilder:
                 if dt:
                     node_rec["declaredType"] = dt
             cur = self._add(node_rec)
+            _d = _dispatch_call(stmt.value, line) if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call) else None
+            if _d:
+                self._link(prev, cur)
+                prev = cur
+                cur = self._add(_d)
             self._link(prev, cur)
             return cur
         if isinstance(stmt, ast.If):
@@ -799,18 +861,69 @@ def _extract_functions(tree: ast.Module, file: str) -> list[dict[str, Any]]:
     fns: list[dict[str, Any]] = []
     dependency_targets = _dependency_targets(tree)
 
-    def visit(parent: Any, cls: "str | None") -> None:
+    def visit(parent: Any, cls: "str | None", bases: "list[str] | None") -> None:
         for child in ast.iter_child_nodes(parent):
             if isinstance(child, ast.ClassDef):
-                visit(child, child.name)
+                visit(child, child.name, _base_names(child))
             elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                fns.append(_function_record(child, file, cls, child.name in dependency_targets))
-                visit(child, None)
+                fns.append(_function_record(child, file, cls, child.name in dependency_targets, bases))
+                visit(child, None, None)
+            elif isinstance(child, ast.Assign) and len(child.targets) == 1 and isinstance(child.targets[0], ast.Name) and isinstance(child.value, ast.Lambda):
+                # `f = lambda h: run(h)`: a function named f with the lambda's parameters and a single return, so a later `f(x)`
+                # resolves to it and its body is analysed with x.
+                lam = child.value
+                fd = ast.FunctionDef(name=child.targets[0].id, args=lam.args, body=[ast.Return(value=lam.body)], decorator_list=[], returns=None)
+                if hasattr(fd, "type_params"):
+                    fd.type_params = []
+                ast.copy_location(fd, child)
+                ast.fix_missing_locations(fd)
+                fns.append(_function_record(fd, file, cls, False, bases))
+                visit(child, cls, bases)
             else:
-                visit(child, cls)
+                visit(child, cls, bases)
 
-    visit(tree, None)
+    visit(tree, None, None)
     return fns
+
+
+def _base_names(node: ast.ClassDef) -> list[str]:
+    out: list[str] = []
+    for b in node.bases:
+        nm = b.id if isinstance(b, ast.Name) else (b.attr if isinstance(b, ast.Attribute) else None)
+        if nm:
+            out.append(nm)
+    return out
+
+
+_HTTP_VERBS = {"get", "post", "put", "patch", "delete", "head", "options", "trace", "dispatch"}
+_VIEW_LIKE_RE = re.compile(r"(?:View|ViewSet|Mixin)$")
+
+
+def _is_view_class(bases: "list[str] | None") -> bool:
+    """A Django or DRF class-based view: a base named like a view (View, TemplateView, APIView, ModelViewSet, ...). The URL captures
+    reach it as the method's extra parameters and as self.kwargs."""
+    return bool(bases) and any(_VIEW_LIKE_RE.search(b) for b in bases)
+
+
+def _class_param_annotations(node: Any, params: list[str], bases: "list[str] | None") -> list[dict[str, Any]]:
+    """Request-filled parameters a class's base decides: a gRPC servicer method's `request`, a graphene resolver's arguments
+    after (self, info), a Django view method's URL captures after (self, request). The IR states the fact; the catalog names the source."""
+    out: list[dict[str, Any]] = []
+    if not bases:
+        return out
+    name = node.name
+    if any(b.endswith("Servicer") for b in bases) and len(params) >= 2 and params[1] == "request":
+        out.append({"index": 1, "name": "request", "decorator": "py:grpc-request"})
+    if name.startswith("resolve_") and len(params) >= 2 and params[1] == "info":
+        for i, p in enumerate(params[2:], start=2):
+            out.append({"index": i, "name": p, "decorator": "py:graphql-resolver-arg"})
+    if _is_view_class(bases) and name in _HTTP_VERBS and len(params) >= 2:
+        vararg = node.args.vararg.arg if node.args.vararg else None
+        for i, p in enumerate(params[2:], start=2):
+            if p == vararg:
+                continue
+            out.append({"index": i, "name": p, "decorator": "py:django-view-kwarg"})
+    return out
 
 
 def _dependency_targets(tree: ast.Module) -> set[str]:
@@ -851,7 +964,7 @@ def _dependency_assigns(node: Any) -> list[ast.stmt]:
     return out
 
 
-def _function_record(node: Any, file: str, cls: "str | None", dependency_target: bool = False) -> dict[str, Any]:
+def _function_record(node: Any, file: str, cls: "str | None", dependency_target: bool = False, bases: "list[str] | None" = None) -> dict[str, Any]:
     if True:
         params = [a.arg for a in node.args.args]
         if node.args.vararg:
@@ -862,7 +975,11 @@ def _function_record(node: Any, file: str, cls: "str | None", dependency_target:
             params.append(a.arg)
         line = node.lineno or 0
         builder = CfgBuilder(node.name)
-        builder.lower(_dependency_assigns(node) + list(node.body))
+        _LOWER_CTX["view_class"] = _is_view_class(bases)
+        try:
+            builder.lower(_dependency_assigns(node) + list(node.body))
+        finally:
+            _LOWER_CTX["view_class"] = False
         # A method's qid carries its class (`file::Class::method@line#hash`), the shape class-hierarchy.js and
         # callgraph.js read class membership from for Java and C#; `name` stays the bare name every Python
         # consumer matches on.
@@ -883,11 +1000,15 @@ def _function_record(node: Any, file: str, cls: "str | None", dependency_target:
         ptypes = _param_types(node)
         if ptypes:
             fn_rec["paramTypes"] = ptypes
-        pa = _param_annotations(node, params)
+        pa = _param_annotations(node, params) + _class_param_annotations(node, params, bases)
         if dependency_target:
             pa = pa + _route_params(node, params, assume_route=True)
         if pa:
             fn_rec["paramAnnotations"] = pa
+        if getattr(node, "returns", None) is not None:
+            rt = _annotation_name(node.returns)
+            if rt:
+                fn_rec["returnType"] = rt
         # A view registered with `@<app|bp>.route("/...")` (Flask, Quart, Bottle) sends a returned str as
         # text/html, so each of its returns is a response write. Marked on the return node; the engine reads it
         # as a sink call only when the returned text carries markup. The verb decorators (`@app.get`) are
