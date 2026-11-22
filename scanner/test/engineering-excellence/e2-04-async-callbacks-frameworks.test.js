@@ -57,8 +57,8 @@ test('an expression-bodied arrow now records its return; block bodies are unchan
   assert.ok(calls.indexOf('call') < calls.indexOf('return'), 'the return follows the call it contains');
 });
 
-test('known gaps are stated as gaps, not hidden: Promise.all destructuring and EventEmitter hand-off are not followed', async () => {
-  assert.equal(await cmdi(route("  const [c] = await Promise.all([Promise.resolve(req.query.c)]);\n  exec('x ' + c);")), false);
+test('Promise.all destructuring is followed (0.220.0: an element read off a call result is as tainted as the result); the EventEmitter hand-off stays a stated gap', async () => {
+  assert.equal(await cmdi(route("  const [c] = await Promise.all([Promise.resolve(req.query.c)]);\n  exec('x ' + c);")), true);
   assert.equal(await cmdi("const EventEmitter = require('events');\nconst bus = new EventEmitter();\nbus.on('cmd', (c) => exec('x ' + c));\napp.get('/a', (req, res) => { bus.emit('cmd', req.query.c); });\n"), false);
 });
 

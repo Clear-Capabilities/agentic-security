@@ -572,11 +572,11 @@
         "payloadSchema": "agentic-security/scan-health",
         "payloadVersion": "1.0.0",
         "payloadId": null,
-        "payloadDigest": "sha256:ae9709e70d13dba21bac2d0932ac1195553c94d40487ececcbbaeab016431f82",
+        "payloadDigest": "sha256:9fbbbbfbeb924d7305793762c1742eb26e0b5fb36c487a83622b96e208818bb9",
         "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
         "snapshotImmutable": true,
         "restsOn": [],
-        "digest": "sha256:96883089e2d084604a7d397954ed8294affaf73a82615862f3710d21374051c5"
+        "digest": "sha256:97e0a2bbf529824b59dcc380587cdd6e66498f69b15f36f49a8706e99414d42f"
       },
       "payload": {
         "schemaVersion": 1,
@@ -589,8 +589,8 @@
           "timedOut": 0
         },
         "analyzers": {
-          "expected": 120,
-          "completed": 120,
+          "expected": 152,
+          "completed": 152,
           "failed": 0,
           "timedOut": 0,
           "skippedByPolicy": 0
@@ -617,7 +617,8 @@
             "ageDays": null,
             "stale": null,
             "entries": 0,
-            "meaning": "KEV membership escalates severity. A stale catalog omits recently-added CVEs, so it understates risk rather than overstating it."
+            "meaning": "KEV membership escalates severity. A stale catalog omits recently-added CVEs, so it understates risk rather than overstating it.",
+            "consulted": 0
           },
           "epss": {
             "source": "not-loaded",
@@ -626,11 +627,17 @@
             "cvesChecked": 0
           },
           "calibration": {
-            "generatedAt": "2026-05-18T19:15:00-07:00",
-            "ageDays": 150,
+            "generatedAt": "2026-11-15T02:50:05.702Z",
+            "ageDays": 7,
             "stale": false
           },
-          "compliance": null
+          "compliance": null,
+          "advisories": {
+            "source": "none-needed",
+            "componentsChecked": 0,
+            "answered": 0,
+            "unanswered": 0
+          }
         },
         "conditions": []
       }
@@ -714,7 +721,7 @@
     "sha256:9427c26d5ca384e1c84739c8fc2a932863ff221687287295c91b6487f4259a71",
     "sha256:4ac47698c56c380d4711741d6575deb50c4640c13b3beb7665ef010f58c61025",
     "sha256:5b03d3bf1225e07ed3005f66df6a5f18022409625233f37c4c4c038b99d895e7",
-    "sha256:96883089e2d084604a7d397954ed8294affaf73a82615862f3710d21374051c5",
+    "sha256:97e0a2bbf529824b59dcc380587cdd6e66498f69b15f36f49a8706e99414d42f",
     "sha256:b26127e0218f6647b80a26da640cc3b3781d0fd5484fd2cded7c37eab315ae26",
     "sha256:fe89b4c31761d51149b10143115eed675aa598b83a4491c4ac061b4a376b2f97"
   ],
@@ -763,7 +770,7 @@
     "scanStatus": "complete",
     "conditions": [],
     "verdict": "complete",
-    "source": "sha256:96883089e2d084604a7d397954ed8294affaf73a82615862f3710d21374051c5"
+    "source": "sha256:97e0a2bbf529824b59dcc380587cdd6e66498f69b15f36f49a8706e99414d42f"
   },
   "policy": {
     "decisions": [
@@ -782,7 +789,7 @@
       "status": "supported",
       "reason": null,
       "evidence": [
-        "sha256:96883089e2d084604a7d397954ed8294affaf73a82615862f3710d21374051c5"
+        "sha256:97e0a2bbf529824b59dcc380587cdd6e66498f69b15f36f49a8706e99414d42f"
       ]
     }
   ],
@@ -793,12 +800,12 @@
     "independentlyCertified": false,
     "statement": "Signed by a key this install generated for itself. It proves the bundle is unmodified since this key signed it. It is NOT independent third-party certification: whoever controls this install controls the key.",
     "issuer": {
-      "keyFingerprint": "099fa3fbdf976e40920f40bf640442a238c193524dd44b708c9afcddf923e89c"
+      "keyFingerprint": "9adf121a8d1093b71d90d4daf3ed0a82a0395828ee79c842b4d6d8901651bf85"
     }
   },
   "signature": {
     "algorithm": "ed25519",
     "domain": "agentic-security/release-package@1",
-    "value": "amF2o+YESnUxvRA5aURn1XlCNEbZnoapB+l/Fl1sIs3dSn7wvnm0Dh47/BgAWYYOvUJqZD3/Xwg69rn4oZAyBQ=="
+    "value": "qcuXYtDzFXZpgVxBHRzQAg4dDWVlILUp3iJZb33EduBlW4n5iTvexzmDGma2i7muX194Oa7WNyPakWIGa5ytAQ=="
   }
 }

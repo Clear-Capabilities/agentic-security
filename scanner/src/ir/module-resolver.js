@@ -166,8 +166,50 @@ export function extractPyFacts(file, code) {
  * @param {Record<string,string>} fileContents repository-relative path -> source
  * @param {Record<string,{functions:object[]}>} perFile the IR's perFile map
  */
+// tsconfig.json / jsconfig.json `compilerOptions.baseUrl` and `paths`, read leniently (comments and trailing commas stripped). The file nearest
+// the repository root wins; `extends` is not followed. Returns null when there is none, and the resolver then behaves as before.
+function readTsPaths(fileContents) {
+  const names = Object.keys(fileContents || {}).map(posix).filter((f) => /(^|\/)(tsconfig|jsconfig)\.json$/.test(f)).sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b));
+  for (const f of names) {
+    try {
+      const text = String(fileContents[f]).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/,(\s*[}\]])/g, '$1');
+      const co = JSON.parse(text).compilerOptions || {};
+      const dir = dirOf(f);
+      const baseUrl = typeof co.baseUrl === 'string' ? co.baseUrl : null;
+      const paths = [];
+      for (const [pat, targets] of Object.entries(co.paths || {})) {
+        if (!Array.isArray(targets)) continue;
+        const star = pat.indexOf('*');
+        paths.push({ prefix: star < 0 ? pat : pat.slice(0, star), suffix: star < 0 ? null : pat.slice(star + 1), exact: star < 0, targets: targets.filter((t) => typeof t === 'string') });
+      }
+      if (baseUrl === null && !paths.length) continue;
+      return { dir, baseUrl, paths };
+    } catch { /* not JSON we can read: try the next */ }
+  }
+  return null;
+}
+
 export function buildModuleIndex(fileContents, perFile) {
   const files = new Set(Object.keys(fileContents || {}).map(posix));
+  const tsPaths = readTsPaths(fileContents);
+  // the stems a non-relative specifier maps to through tsconfig paths (first) and baseUrl (second), repository-relative, extension-less
+  const tsStemsFor = (spec) => {
+    if (!tsPaths) return [];
+    const out = [];
+    const base = tsPaths.baseUrl ? `${tsPaths.dir ? tsPaths.dir + '/' : ''}${tsPaths.baseUrl}` : tsPaths.dir;
+    for (const p of tsPaths.paths) {
+      let star = null;
+      if (p.exact) { if (spec !== p.prefix) continue; } else { if (!spec.startsWith(p.prefix) || !spec.endsWith(p.suffix) || spec.length < p.prefix.length + p.suffix.length) continue; star = spec.slice(p.prefix.length, spec.length - p.suffix.length); }
+      for (const t of p.targets) out.push(normalize(`${base ? base + '/' : ''}${star === null ? t : t.replace('*', star)}`));
+    }
+    if (tsPaths.baseUrl && !out.length) out.push(normalize(`${base ? base + '/' : ''}${spec}`));
+    return out.filter((s) => s !== null && s !== '');
+  };
+  const probeJs = (stem) => {
+    const noExt = stem.replace(/\.(m|c)?js$/, '');
+    for (const c of [stem, ...JS_EXT.map((e) => stem + e), noExt + '.ts', noExt + '.tsx', noExt + '.mts', noExt + '.cts', ...JS_EXT.map((e) => `${stem}/index${e}`)]) if (files.has(c)) return c;
+    return null;
+  };
   const facts = new Map();
   for (const [f, code] of Object.entries(fileContents || {})) {
     if (typeof code !== 'string' || code.length > MAX_FILE_BYTES) continue;
@@ -185,11 +227,23 @@ export function buildModuleIndex(fileContents, perFile) {
       let baseDir; let dotted;
       if (rel) { baseDir = dirOf(from); for (let i = 1; i < rel[1].length; i++) baseDir = dirOf(baseDir); dotted = rel[2]; } else { baseDir = ''; dotted = spec; }
       const rest = dotted ? dotted.split('.').join('/') : '';
+      if (!rel) {
+        // An absolute import is resolved from sys.path: the repository root, a `src/` layout, or the importer's own package parents
+        // (`src/app/web/views.py` importing `app.svc` finds `src/app/svc.py`). The first root that holds the module wins.
+        const roots = ['', 'src'];
+        for (let d = dirOf(from); d; d = dirOf(d)) roots.push(d);
+        for (const r of roots) {
+          const st = normalize(r ? `${r}/${rest}` : rest);
+          if (st === null || st === '') continue;
+          for (const c of [`${st}.py`, `${st}/__init__.py`]) if (files.has(c)) return { kind: 'file', file: c };
+        }
+        return { kind: 'external', reason: 'not a module of this repository' };
+      }
       const stem = normalize(baseDir ? (rest ? `${baseDir}/${rest}` : baseDir) : rest);
       if (stem === null) return { kind: 'unresolved', reason: 'path leaves the repository' };
       for (const c of [`${stem}.py`, `${stem}/__init__.py`]) if (stem !== '' && files.has(c)) return { kind: 'file', file: c };
       if (stem === '' && files.has('__init__.py')) return { kind: 'file', file: '__init__.py' };
-      return rel ? { kind: 'unresolved', reason: `relative module ${spec} not found` } : { kind: 'external', reason: 'not a module of this repository' };
+      return { kind: 'unresolved', reason: `relative module ${spec} not found` };
     }
     if (spec.startsWith('node:') || BUILTINS.has(spec.split('/')[0])) return { kind: 'external', reason: 'node builtin' };
     if (spec.startsWith('.') || spec.startsWith('/')) {
@@ -200,7 +254,14 @@ export function buildModuleIndex(fileContents, perFile) {
       for (const c of cands) if (files.has(c)) return { kind: 'file', file: c };
       return { kind: 'unresolved', reason: `${spec} not found in the repository` };
     }
-    if (/^(@\/|~\/|#|\$)/.test(spec)) return { kind: 'unresolved', reason: 'path alias: tsconfig paths and bundler aliases are not read' };
+    {
+      // tsconfig paths and baseUrl: `@/lib/db` -> `src/lib/db`, `lib/db` under baseUrl. A specifier an alias pattern names but no file
+      // answers stays unresolved (never guessed from a bare name); a specifier no pattern names falls through to the rules below.
+      const stems = tsStemsFor(spec);
+      for (const st of stems) { const c = probeJs(st); if (c) return { kind: 'file', file: c }; }
+      if (stems.length && tsPaths.paths.some((p) => (p.exact ? spec === p.prefix : spec.startsWith(p.prefix) && spec.endsWith(p.suffix)))) return { kind: 'unresolved', reason: `tsconfig path alias ${spec} names no file of the repository` };
+    }
+    if (/^(@\/|~\/|#|\$)/.test(spec)) return { kind: 'unresolved', reason: 'path alias: no tsconfig/jsconfig paths entry maps it' };
     return { kind: 'external', reason: 'package import' };
   }
 
@@ -303,6 +364,12 @@ export function buildModuleIndex(fileContents, perFile) {
       if (spec.kind === 'external') return { status: 'external', hops: [], reason: spec.reason, source: imp.source };
       if (spec.kind !== 'file') return { status: 'unresolved-import', hops: [], reason: spec.reason, source: imp.source };
       return resolveExport(spec.file, parts[parts.length - 1], [{ file: caller, via: `import ${imp.source}` }], visited);
+    }
+    // Python: `from . import svc` / `from app import services` binds a SUBMODULE when the package has one of that name; `svc.find()` is then
+    // the module's function. Tried first because a package's __init__ rarely defines the name itself.
+    if (f.language === 'py' && imp.kind === 'py-from' && parts.length === 2) {
+      const sub = resolveSpecifier(caller, imp.source.endsWith('.') ? `${imp.source}${imp.imported}` : `${imp.source}.${imp.imported}`, 'py');
+      if (sub.kind === 'file') return resolveExport(sub.file, parts[1], [{ file: caller, via: `from ${imp.source} import ${imp.imported}` }], visited);
     }
     // `x.y()` where x is a named/default import: a method on an imported value, not a module member. If the import is an external
     // package that is still the answer that matters (`axios.get` is the package's, not ours).

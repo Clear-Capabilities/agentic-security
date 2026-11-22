@@ -1055,11 +1055,11 @@ jobs:
         working-directory: scanner
         run: npm run build
         timeout-minutes: 10
-      - name: Bench gates (mutation, fix verification, layer recall, Haskell precision)
+      - name: Bench gates (mutation, fix verification, layer recall, Haskell and real-code precision)
         working-directory: scanner
         env:
           AGENTIC_SECURITY_GATE_NO_CACHE: '1'
-        run: node ../scripts/release-check.mjs --no-cache --only mutation-gate,fix-verification-gate,layer-recall-gate,haskell-precision-gate,contract-conformance
+        run: node ../scripts/release-check.mjs --no-cache --only mutation-gate,fix-verification-gate,layer-recall-gate,haskell-precision-gate,realcode-precision-gate,contract-conformance
 
   corpus:
     runs-on: ubuntu-latest

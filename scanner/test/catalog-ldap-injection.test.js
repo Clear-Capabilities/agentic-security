@@ -155,7 +155,9 @@ end
   const fn = ir.functions.find(f => f.name === 'f');
   const call = Object.values(fn.cfg.nodes).find(n => n.kind === 'call' && n.callee === 'conn.search');
   assert.ok(call, 'expected the conn.search call node');
-  assert.deepEqual(call.args.map(a => a.kind), ['ident', 'ident']);
-  assert.equal(call.args[0].name, 'a');
-  assert.equal(call.args[1].name, 'b');
+  // 0.220.0: a keyword argument is a one-key record (`{ base: a }`), so a string-only sink can refuse the parameterised form; the value is the field.
+  assert.deepEqual(call.args.map(a => a.kind), ['object', 'object']);
+  assert.deepEqual(call.args.map(a => a.props[0].key), ['base', 'filter']);
+  assert.equal(call.args[0].props[0].value.name, 'a');
+  assert.equal(call.args[1].props[0].value.name, 'b');
 });

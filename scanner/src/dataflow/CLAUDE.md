@@ -258,3 +258,84 @@ section documents the fixes (field types in `classOfVar`, arity among overloads,
 `java-pg-copymanager-copyOut` and `copyIn` (PostgreSQL JDBC bulk copy: the COPY statement is sent verbatim, receiver-scoped to
 the CopyManager idiom). Measured taint-only (IR plus `runDeepAnalysis`, the bench's own `rowFor`) on the development entries,
 engine at 0.218.1 against this one: Java, 21 entries (the two apache/camel entries skipped for time): 0 localized detections before and after (the Java detections of the bench come from pattern rules), total findings on the vulnerable trees 408 to 444 and on the fixed trees 408 to 444, the whole difference in one project (keycloak: 36 XML parsers in its SAML module, reported on both revisions). Python, 28 entries: 0 localized detections and 1 localized false positive before and after; total findings 289 to 355 on the vulnerable trees and 292 to 364 on the fixed trees, the new ones in GitPython (path operations reached through instance methods), datamodel-code-generator (XML parsers reached through methods), lemur, django-cms and MobSF. One tree read 0 findings in the batch run and 11 alone, twice: the Python helper subprocess fails under load and the scan degrades; the number here is the batch run's. JavaScript and TypeScript, 48 entries: 0 localized detections before and after, total findings 310 to 371 on the vulnerable trees and 311 to 371 on the fixed trees.
+
+## 0.220.0: sink sites under chains, object-key sinks, fragment sinks
+
+- **`_chainSinkFindings` (assign, return and statement sites, not JavaScript).** The calls a statement's expression is built on are sink sites:
+  the `member.object` / `call.callee` chain below the expression (`return requests.get(u).text`) and the frontend-stated `innerCalls` of a
+  flattened Python chain (`rows = cur.execute(q).fetchall()`, `Popen(cmd, shell=True).communicate()`). JavaScript is left out because Babel
+  already emits a standalone call node for every nested call.
+- **`argKey` on a sink entry.** The sink is one key of an object-literal argument: `Model.find({ $where: s })` fires only when the literal names
+  `$where` with a tainted value; `find({ name: s })` is the parameterised query it is. The key's value is the tainted expression for the
+  skeleton and evidence.
+- **`skipSkeleton` on a sink entry.** A fragment sink (TypeORM `createQueryBuilder().where(fragment)`, a `$where` expression) never shows the
+  statement keywords `literalSkeletonMatchesFamily` looks for; the receiver or key scoping of such an entry is what makes it a sink.
+- **New sources:** `js-trpc-procedure-input` (annotation `js:trpc-procedure-handler`, http-body) and `py-django-url-capture` (annotation
+  `py:django-url-capture`, path-param). **New sinks:** `py-asyncio-subprocess-shell` (CWE-78), `py-template-source` (`Template(source)`,
+  CWE-1336, `string.Template` excluded by receiver), `js-typeorm-qb-{where,andWhere,orWhere,having,orderBy}` (CWE-89, receiver
+  `createQueryBuilder`), `js-mongo-{find,findOne,countDocuments,updateMany,deleteMany,findOneAndUpdate}-where-key` (CWE-943, `argKey: '$where'`).
+  Tests: `test/python-framework-taint.test.js`, the last three cases of `test/ts-class-mcp-taint.test.js`.
+
+## 0.220.0, second half: field paths for variables, element reads, clean sink sites
+
+- **`fieldPaths` for JavaScript and TypeScript (`_entryOpts`).** An object passed as a VARIABLE now enters the callee by its tainted fields too
+  (`const o = { root: 'x', decision: tainted }; rec(o)` taints `<obj>.decision` only); the PRD W2 widening stays for the other languages.
+- **Element reads of a call result (`exprTaint`, case member).** `x.split(",")[0]`: any read off a call result is as tainted as the result;
+  off a member that is not an access path, a named field only (as before).
+- **`argNotObject` on a sink entry.** A sink dangerous only for a string argument skips a record argument (`rb-ar-where-string`:
+  `where(id: x)` is parameterised; `where("id = " + x)` is not, and `skipSkeleton` lets the fragment through the SQL-keyword check).
+- **Nested sinks under records and chains.** `_nestedSinkFindings` walks a record argument's field values (`render plain: File.read(p)`) and
+  the receiver chain / inner calls of a nested call (`[os.popen(c).read() for c in cmds]`), outside JavaScript.
+- **Clean sink sites (`cleanSinkSites`, read by `engine.js`).** A catalog sink the walk matched whose argument is CLOSED (`_closedExpr`: a
+  literal, a template or concatenation of closed parts, a union of closed branches such as the lowered allowlist ternary, or a variable the
+  function bound to one, `callContext._constVars`, kept per walk) is recorded as `file:line:cwe`; the scan assembly drops a structural
+  `js-fw-sqli` finding at such a site. A site whose argument is a parameter or an unattributed read is NOT recorded: no source reached it,
+  which proves nothing, and the structural finding stands (`run(id) { db.query('..' + id) }`). Only sites the walk reached are in the set.
+- **New sources:** `py-django-view-kwarg`, `py-django-view-kwargs` (synthetic call), `py-celery-shared-task`/`py-celery-task`,
+  `py-graphql-resolver-arg`, `py-strawberry-field`, `py-grpc-request`, `js-route-module-handler`, 15 h3/Nuxt helpers (`js-h3-*`).
+  Tests: `test/taint-round-0220.test.js`, the second half of `test/python-framework-taint.test.js`.
+
+## 0.220.0, third part: what the real-code sets changed (Python)
+
+The first reading of `bench/dag/dev-realcode`'s python set (64 sampled taint-layer sites across eight applications) found 2 true positives
+(user-supplied regular expressions compiled server-side). The other 62 fell into classes the engine can tell apart, each fixed generally:
+
+- **Name collisions at sinks.** `session.exec(stmt)` (SQLModel) is not Python's `exec`; `sqlparse.parse`, `dateparser.parse` and a project's
+  `parser.parse` are not `lxml.etree.parse`; `db.session.delete(obj)` and a typed ORM `session.delete(obj)` are not `requests.delete`.
+  The `eval`/`exec` entries exclude every receiver but `builtins`; the XML parse entry is scoped to XML parser modules; the Python HTTP verb
+  entries exclude ORM receivers by name (`db`, `repo`, `models`) and by declared type (`receiverTypeExclude`: Session, SessionDep, AsyncSession).
+- **Statement constructs are not SQL text (`argNotCallee`).** `session.execute(select(T).where(T.id == x))` binds its values; the four Python
+  execute sinks skip an argument that is a call of a SQLAlchemy/SQLModel statement builder (`select`, `delete`, `update`, `insert`, ...), also
+  when the builder sits under a chained `.where(...)`.
+- **Operator-controlled origins (`operatorOriginNotReported`).** `open`, `os.system` and the pickle loaders are not reported when every recorded
+  origin of the value is the operator's (command line, environment, a file the program chose); request evidence, a pending parameter or no
+  origin record at all keep the finding. The stronger `requireRequestSource` (drop unless request evidence) exists but is not used by the
+  catalog: a container flow can carry no origin record and would be lost.
+- **Header assignment is not response splitting in Django or werkzeug.** `response["X"] = v` raises on CR or LF in both; the `py-response-setitem`
+  sink is removed (six of six sampled sites). The Ruby entry stays: Rack does not validate.
+- **`f.read()` is a file read, not a network read.** `py-urlopen-read`'s receiver base no longer accepts `f` or `r`.
+- **Celery task arguments.** The two annotation sources added earlier in this round were removed again: a task's arguments are what the producer
+  enqueued, and the dispatch lowering (`task.delay(x)` stated as `task(x)`) already carries that; a bare task-argument source landed on
+  administrator configuration three times out of three.
+
+## 0.220.0, fourth part: what the real-code sets changed (TypeScript, and the Python classes that needed a second pass)
+
+The typescript set's first reading (52 sampled taint-layer sites, 0 true positives) and the Python sites still flagged after the first fixes:
+
+- **Node validates header values.** `ServerResponse.setHeader` throws ERR_INVALID_CHAR on CR or LF, so `js-response-setheader` is removed as the
+  Python entry was (six of six sampled sites).
+- **A fixed host is not SSRF.** For every CWE-918 sink the engine reads what the URL expression begins with (`_leftmostLiteral`): a literal
+  scheme and host (`\`https://api.example/${p}\``) or a same-origin path (`"/api/" + id`, not `"//"`) puts the input in the path or query, which
+  is not a request to another host. The JavaScript IR now carries a template literal's text chunks beside its expressions, in source order
+  (`parser-js.js`, case TemplateLiteral), which is what makes the prefix readable and gives the skeleton check the template's constant text.
+- **Operator-configured base URLs.** `js-fetch`, the axios and http-client verb sinks, `py-requests-get` and `py-urlopen` carry
+  `operatorOriginNotReported`: `fetch(process.env.API_URL + "/items")` is the operator's destination.
+- **A service, runner or handler's `execute`/`query` is not a database.** `js-sql-query`/`js-sql-execute` exclude receivers named
+  `*Service`, `*Runner`, `*Handler`, `*Resolver`, `*Gateway`, `*Repository`, `*Store`, `*Controller`, `*Manager`, `*Factory`, `*ApiClient`,
+  `*GraphqlClient`; a client named `client`/`db`/`pool` still is.
+- **A RegExp name is judged per function first (`_regexNamesByFn`).** `const separator = /[ ,]/g` in one function is a RegExp there even when
+  another function of the file binds `separator` to a number; the file-wide set stays as the fallback.
+- **Operator-only origins through a helper.** `_hasRequestOrigin` applies the `operator-drop` mode at collect time too, on the merged evidence
+  chain, so `read_lock(a.lock)` (argparse in the caller, `open` in the callee) is judged once the parameter has resolved.
+- **Statement-builder variables (`_builderVars`).** `stmt = delete(T).where(..); session.execute(stmt)`: the assignment of a builder call
+  marks the variable for the sinks' `argNotCallee` check; a later re-assignment clears it.

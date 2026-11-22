@@ -51,9 +51,26 @@ export function scanJsFrameworkStructural(fp, raw) {
   // SQL Injection: db.query/.execute/.raw with template-literal ${} or concat.
   // (TypeORM Connection.query, mysql connection.query, etc.)
   const SQL_RE = /\.(?:query|execute|raw|prepare)\s*\(\s*(?:`[^`\n]*\$\{|"[^"\n]*"\s*\+|'[^'\n]*'\s*\+|"[^"\n]*\$\{)/g;
+  // Names the file binds to a constant string (`const TABLE = 'users'`): a query that interpolates or concatenates only such names and
+  // literals carries no value from anywhere (the mutation gate's `fp-js-constant-concat`). Collected once per file.
+  const constStrings = new Set();
+  for (const cm of code.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*(?:'[^'\n]*'|"[^"\n]*"|`[^`$\n]*`)\s*;?/g)) constStrings.add(cm[1]);
+  const _onlyConstantParts = (from) => {
+    const open = code.indexOf('(', from); if (open < 0) return false;
+    let depth = 0, end = -1;
+    for (let i = open; i < code.length && i < open + 2000; i++) { const ch = code[i]; if (ch === '(') depth++; else if (ch === ')') { depth--; if (depth === 0) { end = i; break; } } else if (ch === '\n' && depth === 1 && false) break; }
+    if (end < 0) return false;
+    const call = code.slice(open + 1, end);
+    const parts = [];
+    for (const t of call.matchAll(/\$\{([^}]*)\}/g)) parts.push(t[1]);
+    const stripped = call.replace(/`(?:[^`\\]|\\.)*`|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g, '""');
+    for (const seg of stripped.split('+')) { const s = seg.trim(); if (s && s !== '""') parts.push(s); }
+    return parts.length > 0 && parts.every((p) => { const s = p.trim(); return /^[A-Za-z_$][\w$]*$/.test(s) ? constStrings.has(s) : /^\d+$/.test(s); });
+  };
   let m;
   while ((m = SQL_RE.exec(code))) {
     if (_insideStringLiteral(m.index)) continue;
+    if (_onlyConstantParts(m.index)) continue;
     emit('sqli', lineOf(code, m.index), {
       vuln: 'SQL Injection — query built with template literal / concat (JS/TS)',
       severity: 'critical', cwe: 'CWE-89', family: 'sql-injection', confidence: 0.75,

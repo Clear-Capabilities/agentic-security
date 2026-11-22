@@ -58,6 +58,7 @@ export const HS_PACKAGES = Object.freeze({
   process_legacy: { modules: ['System.Cmd'], tested: [] },
   turtle: { modules: ['Turtle'], tested: [] },
   shelly: { modules: ['Shelly', 'Shelly.Lifted'], tested: [] },
+  hasql: { modules: ['Hasql.Session', 'Hasql.Statement'], tested: [] },
   hint: { modules: ['Language.Haskell.Interpreter'], tested: [] },
   HDBC: { modules: ['Database.HDBC'], tested: [] },
   'direct-sqlite': { modules: ['Database.SQLite3'], tested: [] },
@@ -268,6 +269,9 @@ sink('Database.PostgreSQL.Simple.Types', ['Query'], { ...SQL, argIndex: 0, packa
 sink('Database.MySQL.Simple', ['query', 'execute', 'executeMany', 'query_', 'execute_'], { ...SQL, package: 'mysql-simple' });
 sink('Database.SQLite.Simple', ['query', 'execute', 'executeMany', 'query_', 'execute_', 'executeNamed', 'queryNamed', 'fold', 'fold_'], { ...SQL, package: 'sqlite-simple' });
 sink('Database.Persist.Sql', ['rawSql', 'rawExecute', 'rawQuery'], { ...SQL, argIndex: 0, package: 'persistent', vuln: 'SQL Injection (raw SQL text)' });
+// hasql: the SQL text is the first field of the `Statement` constructor (encoders carry the parameters) and the whole argument of `Session.sql`.
+sink('Hasql.Statement', ['Statement'], { ...SQL, argIndex: 0, package: 'hasql', vuln: 'SQL Injection (statement text)', remediation: 'Keep the statement text constant and bind values through the encoder: `Statement "… WHERE id = $1" (E.param …) decoder True`.' });
+sink('Hasql.Session', ['sql'], { ...SQL, argIndex: 0, package: 'hasql', vuln: 'SQL Injection (session SQL text)', remediation: 'Use a prepared `Statement` with encoded parameters instead of `sql` with concatenated text.' });
 
 // CWE-918. The URL (or request spec built from it) is the sink.
 const SSRF = { family: 'url', cwe: 'CWE-918', severity: 'high', argIndex: 0, vuln: 'Server-Side Request Forgery', remediation: 'Parse the URL, require an allow-listed scheme and host, and reject private or link-local addresses after DNS resolution.' };

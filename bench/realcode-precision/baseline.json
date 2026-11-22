@@ -1,0 +1,93 @@
+{
+  "recordedAt": "2026-11-22",
+  "sets": {
+    "python": {
+      "digests": {
+        "labels": "2101d60010792addabc15351c8fcd0f05fd00fc57cb610bd48148123c416c3c8",
+        "sample": "27f72af8da5bfa346104c0abe2aae96d8ee0cdd30a4dec52e81e81d6fcae47ec"
+      },
+      "aggregates": {
+        "tuning": {
+          "labelled": 33,
+          "tpLabelled": 1,
+          "flagged": 14,
+          "tp": 1,
+          "fp": 13,
+          "precision": 0.0714,
+          "wilson95": [
+            0.0127,
+            0.3147
+          ]
+        },
+        "verification": {
+          "labelled": 31,
+          "tpLabelled": 1,
+          "flagged": 15,
+          "tp": 1,
+          "fp": 14,
+          "precision": 0.0667,
+          "wilson95": [
+            0.0119,
+            0.2982
+          ]
+        },
+        "all": {
+          "labelled": 64,
+          "tpLabelled": 2,
+          "flagged": 29,
+          "tp": 2,
+          "fp": 27,
+          "precision": 0.069,
+          "wilson95": [
+            0.0191,
+            0.2196
+          ]
+        }
+      }
+    },
+    "typescript": {
+      "digests": {
+        "labels": "d7f66e3a30d70637fc252405047b496e154374ad7bca45159406f05014ed8d87",
+        "sample": "01212cbb7d7ae0f0e4c164046ddea9f39ae412accf1a22f314a70a468da3f602"
+      },
+      "aggregates": {
+        "tuning": {
+          "labelled": 27,
+          "tpLabelled": 0,
+          "flagged": 18,
+          "tp": 0,
+          "fp": 18,
+          "precision": 0,
+          "wilson95": [
+            0,
+            0.1759
+          ]
+        },
+        "verification": {
+          "labelled": 25,
+          "tpLabelled": 0,
+          "flagged": 19,
+          "tp": 0,
+          "fp": 19,
+          "precision": 0,
+          "wilson95": [
+            0,
+            0.1682
+          ]
+        },
+        "all": {
+          "labelled": 52,
+          "tpLabelled": 0,
+          "flagged": 37,
+          "tp": 0,
+          "fp": 37,
+          "precision": 0,
+          "wilson95": [
+            0,
+            0.0941
+          ]
+        }
+      }
+    }
+  }
+}

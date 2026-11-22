@@ -192,7 +192,7 @@ Besides direct calls, binds and the usual combinators, the engine follows these 
   on the index in that function covers it, as an emptiness test covers the list.
 
 <!-- generated:hs-models:start -->
-The model registry (`scanner/src/language/haskell-models.js`) holds 224 sources, 297 sinks and 84 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
+The model registry (`scanner/src/language/haskell-models.js`) holds 224 sources, 299 sinks and 84 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
 | Sink family | CWE | APIs modelled | Examples |
 | --- | --- | --- | --- |
@@ -202,7 +202,7 @@ The model registry (`scanner/src/language/haskell-models.js`) holds 224 sources,
 | `llm-prompt` | CWE-1427 | 5 | `Network.HTTP.Conduit.setRequestBodyJSON`, `Network.HTTP.Conduit.setRequestBodyLBS`, `Network.HTTP.Simple.setRequestBodyJSON`, ... |
 | `path` | CWE-22 | 64 | `Data.ByteString.Char8.appendFile`, `Data.ByteString.Char8.readFile`, `Data.ByteString.Char8.writeFile`, ... |
 | `redirect` | CWE-601 | 13 | `Happstack.Server.movedPermanently`, `Happstack.Server.seeOther`, `Happstack.Server.tempRedirect`, ... |
-| `sql` | CWE-89 | 53 | `Database.Esqueleto.Experimental.rawExecute`, `Database.Esqueleto.Experimental.rawSql`, `Database.Esqueleto.Legacy.rawExecute`, ... |
+| `sql` | CWE-89 | 55 | `Database.Esqueleto.Experimental.rawExecute`, `Database.Esqueleto.Experimental.rawSql`, `Database.Esqueleto.Legacy.rawExecute`, ... |
 | `url` | CWE-918 | 61 | `Network.HTTP.Client.Conduit.http`, `Network.HTTP.Client.Conduit.httpLbs`, `Network.HTTP.Client.Conduit.httpNoBody`, ... |
 | `xss` | CWE-79 | 39 | `Data.Text.IO.putStr`, `Data.Text.IO.putStrLn`, `Lucid.Base.toHtmlRaw`, ... |
 

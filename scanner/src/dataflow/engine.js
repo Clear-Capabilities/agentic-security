@@ -174,7 +174,8 @@ function _receiverTypeFor(calleeExpr, callContext) {
   // regex is a RegExp (see _regexNamesForFile). Checked before CHA, which
   // cannot see a module-scope const from inside the handler that uses it.
   if (calleeExpr && calleeExpr.kind === 'member' && calleeExpr.object && calleeExpr.object.kind === 'ident'
-      && _currentFile && _regexNamesByFile.get(_currentFile)?.has(calleeExpr.object.name)) return 'RegExp';
+      && ((_currentFile && _regexNamesByFile.get(_currentFile)?.has(calleeExpr.object.name))
+        || (callContext && callContext._currentFnQid && _regexNamesByFn.get(callContext._currentFnQid)?.has(calleeExpr.object.name)))) return 'RegExp';
   if (!callContext || !callContext._cha) return null;
   const flat = _fullyFlattenMemberChain(calleeExpr);
   if (!flat || !flat.includes('.')) return null;
@@ -217,6 +218,12 @@ function _receiverTypeFor(calleeExpr, callContext) {
 // bound by an import or a destructuring that lowers to no assign node, AND
 // also assigned a regex in an unrelated scope of the same file.
 const _regexNamesByFile = new Map();
+// file -> Set of names every assignment in the file binds to a CLOSED expression (`const TABLE = 'audit_log'` at module scope) and
+// that no function takes as a parameter; read by `_closedExpr` for the clean-site record. Built beside the regex names.
+const _constNamesByFile = new Map();
+// The same fact per FUNCTION: a name this function binds only to regexes is a RegExp inside it even when another function of the file
+// binds the same name to something else (`const separator = text.indexOf("&")` in one function, `const separator = /[ ,]/g` in another).
+const _regexNamesByFn = new Map();
 
 function _isRegexInit(src) {
   if (!src || typeof src !== 'object') return false;
@@ -226,22 +233,41 @@ function _isRegexInit(src) {
 
 function _buildRegexNames(fns) {
   _regexNamesByFile.clear();
+  _regexNamesByFn.clear();
+  _constNamesByFile.clear();
+  const constByFile = new Map();   // file -> Map(name -> boolean allClosed)
   const byFile = new Map();   // file -> Map(name -> boolean allRegex)
   for (const fn of fns) {
     if (!fn || !fn.file || !fn.cfg || !fn.cfg.nodes) continue;
     let names = byFile.get(fn.file);
     if (!names) { names = new Map(); byFile.set(fn.file, names); }
     for (const p of fn.params || []) if (typeof p === 'string') names.set(p, false);
+    let consts = constByFile.get(fn.file);
+    if (!consts) { consts = new Map(); constByFile.set(fn.file, consts); }
+    for (const p of fn.params || []) if (typeof p === 'string') consts.set(p, false);
+    const own = new Map();
+    for (const p of fn.params || []) if (typeof p === 'string') own.set(p, false);
     for (const n of Object.values(fn.cfg.nodes)) {
       if (!n || n.kind !== 'assign' || typeof n.target !== 'string' || n.target.includes('.')) continue;
       const prev = names.get(n.target);
       names.set(n.target, (prev === undefined || prev === true) && _isRegexInit(n.source));
+      const prevConst = consts.get(n.target);
+      consts.set(n.target, (prevConst === undefined || prevConst === true) && !n.weakUpdate && _closedExpr(n.source, null));
+      const prevOwn = own.get(n.target);
+      own.set(n.target, (prevOwn === undefined || prevOwn === true) && _isRegexInit(n.source));
     }
+    const okOwn = new Set(); for (const [name, allRegex] of own) if (allRegex) okOwn.add(name);
+    if (okOwn.size && typeof fn.qid === 'string') _regexNamesByFn.set(fn.qid, okOwn);
   }
   for (const [file, names] of byFile) {
     const ok = new Set();
     for (const [name, allRegex] of names) if (allRegex) ok.add(name);
     if (ok.size) _regexNamesByFile.set(file, ok);
+  }
+  for (const [file, names] of constByFile) {
+    const ok = new Set();
+    for (const [name, allClosed] of names) if (allClosed) ok.add(name);
+    if (ok.size) _constNamesByFile.set(file, ok);
   }
 }
 
@@ -710,9 +736,11 @@ function exprTaint(expr, state, callContext) {
     // access path of `u`; without this case the inline form silently dropped it.
     case 'member':
       if (/\.(?:hs|lhs)$/i.test(_currentFile || '')) return exprTaint(expr.object, state, callContext);
-      // A named field only: an element read (`[]`, how the Python IR lowers `a, b = f(x)`) keeps its old meaning.
+      // Off a call RESULT any read is as tainted as the result, an element too (`x.split(",")[0]`, `parts[1]` of a tainted split: the
+      // parts of a tainted string are tainted). Off a member that is not an access path, a named field only.
+      if (expr.object && expr.object.kind === 'call') return exprTaint(expr.object, state, callContext);
       if (typeof expr.prop !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(expr.prop)) return false;
-      return !!(expr.object && (expr.object.kind === 'call' || expr.object.kind === 'member')) && exprTaint(expr.object, state, callContext);
+      return !!(expr.object && expr.object.kind === 'member') && exprTaint(expr.object, state, callContext);
     default:                  return false;
   }
 }
@@ -899,6 +927,7 @@ function _isInternalModuleCall(calleeExpr, callContext) {
   let text = null;
   if (calleeExpr && calleeExpr.kind === 'member' && typeof calleeExpr.prop === 'string' && calleeExpr.object && calleeExpr.object.kind === 'ident') text = `${calleeExpr.object.name}.${calleeExpr.prop}`;
   else if (calleeExpr && calleeExpr.kind === 'ident' && typeof calleeExpr.name === 'string') text = calleeExpr.name; // `const { exec } = require('./util'); exec(c)`
+  else if (typeof calleeExpr === 'string') text = calleeExpr; // the Python frontend's dotted callee: a call of the module's own `post(..)` is not a library sink
   if (!text) return false;
   const mi = callContext && callContext._callGraph && callContext._callGraph.moduleIndex;
   if (!mi || !_currentFile) return false;
@@ -938,7 +967,9 @@ const _isHsFile = (file) => /\.l?hs$/i.test(file || '');
 // The plain-call site (a call that is a statement) never seeded Haskell records by field; `hsFields` keeps that site as it was measured.
 function _entryOpts(state, callContext, hsFields = true) {
   return {
-    fieldPaths: hsFields && _isHsFile(_currentFile),
+    // JavaScript and TypeScript too: an object passed as a variable enters the callee by its tainted fields (the W2 widening stays for the
+    // languages whose benchmark shapes read fields back through getters the access-path lattice cannot see).
+    fieldPaths: (hsFields && _isHsFile(_currentFile)) || _isJsFile(_currentFile),
     literalFields: _isJsFile(_currentFile) ? (arg, name) => _objectLiteralTaint(arg, name, state, callContext) : undefined,
   };
 }
@@ -1450,17 +1481,54 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
   const findings = [];
   if (cat) {
     for (const e of cat) {
+      // `argKey`: the sink is one KEY of an object literal argument (`Model.find({ $where: s })`). The argument counts as tainted
+      // only when the literal names that key with a tainted value, so `find({ name: s })` stays the parameterised query it is.
+      let keyProp = null;
+      let taints = argTaints;
+      if (e.kind === 'sink' && e.argKey && typeof e.argIndex === 'number') {
+        const a = (argExprs || [])[e.argIndex];
+        keyProp = a && a.kind === 'object' && Array.isArray(a.props) ? (a.props.find((q) => q && !q.spread && q.key === e.argKey) || null) : null;
+        taints = argTaints.map((t, i) => (i === e.argIndex ? !!(keyProp && exprTaint(keyProp.value, state, callContext)) : false));
+      }
+      // A site is recorded clean only when the matched argument is CLOSED (`_closedExpr`): a parameter or an unattributed read is not
+      // proof of anything, and the structural layer's finding at such a site stands.
+      if (e.kind === 'sink' && e.vuln && e.vuln.cwe && typeof line === 'number' && _currentFile
+          && !(e.argIndex === 'all' ? taints.some(Boolean) : (typeof e.argIndex === 'number' && taints[e.argIndex]))) {
+        const closed = e.argIndex === 'all'
+          ? (argExprs || []).length > 0 && (argExprs || []).every((a) => _closedExpr(a, callContext))
+          : (typeof e.argIndex === 'number' && _closedExpr(keyProp ? keyProp.value : (argExprs || [])[e.argIndex], callContext));
+        if (closed) _cleanSinkSites.add(`${_currentFile}:${line}:${e.vuln.cwe}`);
+      }
       if (e.kind === 'sink' && (
-        e.argIndex === 'all' ? argTaints.some(Boolean) :
-        (typeof e.argIndex === 'number' && argTaints[e.argIndex])
+        e.argIndex === 'all' ? taints.some(Boolean) :
+        (typeof e.argIndex === 'number' && taints[e.argIndex])
       )) {
         const taintedArgIdx = e.argIndex === 'all'
-          ? argTaints.findIndex(Boolean) : e.argIndex;
-        const taintedArgExpr = (argExprs || [])[taintedArgIdx];
+          ? taints.findIndex(Boolean) : e.argIndex;
+        const taintedArgExpr = keyProp ? keyProp.value : (argExprs || [])[taintedArgIdx];
         // String content analysis: skip if literal skeleton doesn't match injection family
         // Haskell entries are import-qualified, API-specific sinks (`preEscapedToHtml`, `callCommand`), never a generic
         // `.query()`-style call that may carry an unrelated string, so the literal-skeleton filter does not apply to them.
-        if (e.vuln && taintedArgExpr && !e.hs && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
+        // `argNotCallee`: the argument is a call of a statement builder (`select(...)`, `delete(...)`), or a variable the function bound to one
+        // (`stmt = delete(T).where(...); session.execute(stmt)`): its values are bound, not spliced.
+        if (Array.isArray(e.argNotCallee) && taintedArgExpr && taintedArgExpr.kind === 'ident' && callContext && callContext._builderVars && callContext._builderVars.has(taintedArgExpr.name)) continue;
+        if (Array.isArray(e.argNotCallee) && taintedArgExpr && taintedArgExpr.kind === 'call') {
+          const cn = typeof taintedArgExpr.callee === 'string' ? taintedArgExpr.callee.slice(taintedArgExpr.callee.lastIndexOf('.') + 1) : (taintedArgExpr.callee && taintedArgExpr.callee.kind === 'member' ? taintedArgExpr.callee.prop : (taintedArgExpr.callee && taintedArgExpr.callee.kind === 'ident' ? taintedArgExpr.callee.name : null));
+          const inner = (c) => { let x = c; for (let d = 0; x && x.kind === 'call' && d < 8; d++) { const k = typeof x.callee === 'string' ? x.callee.slice(x.callee.lastIndexOf('.') + 1) : (x.callee && x.callee.kind === 'member' ? x.callee.prop : (x.callee && x.callee.kind === 'ident' ? x.callee.name : null)); if (k && e.argNotCallee.includes(k)) return true; x = Array.isArray(x.innerCalls) && x.innerCalls[0] ? x.innerCalls[0] : (x.callee && x.callee.kind === 'member' && x.callee.object && x.callee.object.kind === 'call' ? x.callee.object : null); } return false; };
+          if ((cn && e.argNotCallee.includes(cn)) || inner(taintedArgExpr)) continue;
+        }
+        // SSRF needs the HOST: a URL whose leftmost part is a literal scheme and host (`\`https://api.example/${path}\``) or a
+        // same-origin path (`"/api/" + id`, not `"//"`) places the input in the path or query, which is not a request to another host.
+        if (e.vuln && e.vuln.cwe === 'CWE-918' && taintedArgExpr) {
+          const head = _leftmostLiteral(taintedArgExpr);
+          if (typeof head === 'string' && /^(?:https?:\/\/[^\/\s?#'"\`]+|\/(?!\/))/.test(head)) continue;
+        }
+        // `argNotObject`: a sink dangerous only for a string argument (`where("id = " + x)`); a record argument (`where(id: x)`) is the
+        // parameterised form and is not reported.
+        if (e.argNotObject && taintedArgExpr && taintedArgExpr.kind === 'object') continue;
+        // `skipSkeleton`: a sink that takes a FRAGMENT (a TypeORM condition, a `$where` expression) never shows the statement
+        // keywords the skeleton check looks for, and the receiver scoping of such an entry is what makes it a sink.
+        if (e.vuln && taintedArgExpr && !e.hs && !e.skipSkeleton && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
         // A text-output sink that is an XSS sink ONLY when the string being assembled contains markup (`putStrLn`).
         // `match.htmlSkeleton` is the same gate for a catalog entry outside Haskell (Fastify `reply.send`, jQuery
         // `.append`, Flask `make_response`): the tainted argument must itself carry a markup literal, so a value
@@ -1539,6 +1607,14 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
           if (k.req) _reqGate = { _reqOrigin: true };
           else if (k.param) _reqGate = { _reqPending: true };
           else continue;
+        }
+        // `match.operatorOriginNotReported`: the weaker gate. A flow whose EVERY recorded origin is the operator's (command line, environment,
+        // a file the program chose, a server's reply) is not reported at this sink (`open(args.path)` in a build script); a flow with request
+        // evidence, one still waiting on a parameter, or one with no origin record at all (a container the engine could not attribute) is
+        // reported as before. Found on bench/dag/dev-realcode's python set, where every operator-origin path and shell site was tooling.
+        if (e.match && e.match.operatorOriginNotReported) {
+          const k = _originKinds(taintedArgExpr, callContext);
+          if (k.op && !k.req && !k.param) continue;
         }
         if (e.match && e.match.rejectOptionKey
           && (argExprs || []).some((a) => a && a.kind === 'object' && (a.props || []).some((p) => p && p.key === e.match.rejectOptionKey))) continue;
@@ -1619,6 +1695,78 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
 // finally executes it sits on the line the handler starts. The sink is where the call is written. Other IRs lower nested calls differently and keep the node's line.
 const _sinkLine = (call, fallback) => (/\.(?:hs|lhs)$/i.test(_currentFile || '') && call && Number.isInteger(call.line) && call.line >= 1 ? call.line : fallback);
 
+// A sink call may sit under a member read of its result or under a further call on it (`return requests.get(u).text`,
+// `rows = client.get(u).json()`): the inner call runs when the statement runs, so it is a sink site of its own. Walks the
+// `member.object` and `call.callee` chain below the statement's own expression; the top-level call is the caller's business.
+// Not for JavaScript, whose frontend already emits a standalone call node for every nested call.
+function _receiverChainCalls(expr) {
+  const out = [];
+  let cur = expr && expr.kind === 'member' ? expr.object
+    : (expr && expr.kind === 'call' && expr.callee && typeof expr.callee === 'object' ? expr.callee : null);
+  for (let d = 0; cur && typeof cur === 'object' && d < 8; d++) {
+    if (cur.kind === 'call') { out.push(cur); cur = cur.callee && typeof cur.callee === 'object' ? cur.callee : null; continue; }
+    if (cur.kind === 'member') { cur = cur.object; continue; }
+    break;
+  }
+  return out;
+}
+function _chainSinkFindings(expr, state, callContext, line) {
+  const findings = [];
+  if (_isJsFile(_currentFile)) return findings;
+  // A frontend that flattens a call chain to one dotted callee (parser-py.helper.py) states the calls the callee is built on in
+  // `innerCalls`, each with its own arguments; they are sink sites too (`cur.execute(q).fetchall()`).
+  const calls = _receiverChainCalls(expr);
+  const walk = (c, d) => { if (!c || d > 6 || !Array.isArray(c.innerCalls)) return; for (const ic of c.innerCalls) { calls.push(ic); walk(ic, d + 1); } };
+  walk(expr, 0);
+  for (const c of [...calls]) walk(c, 1);
+  for (const c of calls) {
+    const { cat, argTaints } = _matchCallCatalog(c.callee, c.args, state, callContext);
+    findings.push(..._sinkFindingsForCall(c.callee, c.args, cat, argTaints, state, callContext, c.line || line, c.kwargs).findings);
+    findings.push(..._nestedSinkFindings(c.args, state, callContext, c.line || line));
+  }
+  return findings;
+}
+
+// The statement-builder names every argNotCallee sink lists, gathered once from the catalog.
+let _builderNames = null;
+function _isBuilderCall(expr) {
+  if (!_builderNames) { _builderNames = new Set(); for (const e of _CATALOG_ENTRIES) if (e && Array.isArray(e.argNotCallee)) for (const n of e.argNotCallee) _builderNames.add(n); }
+  if (!_builderNames.size) return false;
+  let x = expr;
+  for (let d = 0; x && x.kind === 'call' && d < 8; d++) {
+    const k = typeof x.callee === 'string' ? x.callee.slice(x.callee.lastIndexOf('.') + 1) : (x.callee && x.callee.kind === 'member' ? x.callee.prop : (x.callee && x.callee.kind === 'ident' ? x.callee.name : null));
+    if (k && _builderNames.has(k)) return true;
+    x = Array.isArray(x.innerCalls) && x.innerCalls[0] ? x.innerCalls[0] : (x.callee && x.callee.kind === 'member' && x.callee.object && x.callee.object.kind === 'call' ? x.callee.object : null);
+  }
+  return false;
+}
+
+// The literal a string expression begins with (`"/api/" + id`, `\`https://h/${p}\``), or null when it begins with a value.
+function _leftmostLiteral(expr, depth = 0) {
+  if (!expr || depth > 12) return null;
+  if (expr.kind === 'literal') return typeof expr.value === 'string' ? expr.value.replace(/^['"\`]|['"\`]$/g, '') : null;
+  if (expr.kind === 'binary' || expr.kind === 'logical') return _leftmostLiteral(expr.left, depth + 1);
+  if (expr.kind === 'tpl' && Array.isArray(expr.parts) && expr.parts.length) return _leftmostLiteral(expr.parts[0], depth + 1);
+  return null;
+}
+
+// A CLOSED expression carries no value from outside the function's own text: a literal, a template or concatenation of closed parts,
+// a union whose every branch is closed (the allowlist ternary the front end lowers), or a variable this function bound to a closed
+// expression and never rebound (`callContext._constVars`, kept per walk). A sink site whose matched argument is closed was PROVED clean;
+// one whose argument is a parameter or an unattributed read was merely not reached by a source, and the structural layer keeps its say.
+function _closedExpr(expr, callContext, depth = 0) {
+  if (!expr || typeof expr !== 'object' || depth > 24) return false;
+  switch (expr.kind) {
+    case 'literal': return true;
+    case 'binary': case 'logical': return _closedExpr(expr.left, callContext, depth + 1) && _closedExpr(expr.right, callContext, depth + 1);
+    case 'tpl': return (expr.parts || []).every((p) => _closedExpr(p, callContext, depth + 1));
+    case 'union': return Array.isArray(expr.branches) && expr.branches.length > 0 && expr.branches.every((b) => _closedExpr(b, callContext, depth + 1));
+    case 'ident': return !!((callContext && callContext._constVars && callContext._constVars.has(expr.name))
+      || (_currentFile && _constNamesByFile.get(_currentFile)?.has(expr.name)));
+    default: return false;
+  }
+}
+
 function _nestedSinkFindings(argExprs, state, callContext, line) {
   const findings = [];
   for (const arg of (argExprs || [])) {
@@ -1642,16 +1790,30 @@ function _nestedSinkFindings(argExprs, state, callContext, line) {
     // argument is a `member` read of the query's result), or under a concatenation (`"n=" <> show (sink x)`). Each of those evaluates the
     // call it holds, so the call is a sink site; the other IRs never nest a sink call this way (round 8 of the Haskell real-code work: a
     // Servant handler written as one expression, `liftIO (map fromOnly <$> query_ conn ..)`, had no site while the `do` form did).
+    // Python (and the other hand-rolled frontends): a list or comprehension value holds the calls it was built from (`rows = [cur.execute(q) for q in qs]`
+    // lowers to an array of the head call); each ran when the value was built. JavaScript's frontend emits standalone call nodes instead.
+    if (arg && arg.kind === 'array' && Array.isArray(arg.elements) && !_isJsFile(_currentFile) && !/\.(?:hs|lhs)$/i.test(_currentFile || '')) {
+      findings.push(..._nestedSinkFindings(arg.elements, state, callContext, line));
+      continue;
+    }
     if (arg && /\.(?:hs|lhs)$/i.test(_currentFile || '')) {
       if (arg.kind === 'array' && Array.isArray(arg.elements)) { findings.push(..._nestedSinkFindings(arg.elements, state, callContext, line)); continue; }
       if (arg.kind === 'member' && arg.object && typeof arg.object === 'object') { findings.push(..._nestedSinkFindings([arg.object], state, callContext, line)); continue; }
       if (arg.kind === 'binary' && arg.hs && arg.hs.concat) { findings.push(..._nestedSinkFindings([arg.left, arg.right], state, callContext, line)); continue; }
+    }
+    // A record argument's field values ran when the record was built (`render plain: File.read(p)`, Ruby's keyword arguments as records;
+    // a Python dict literal). JavaScript's frontend emits standalone call nodes instead.
+    if (arg && arg.kind === 'object' && Array.isArray(arg.props) && !_isJsFile(_currentFile)) {
+      findings.push(..._nestedSinkFindings(arg.props.map((p) => p && p.value).filter(Boolean), state, callContext, line));
+      continue;
     }
     if (!arg || arg.kind !== 'call') continue;
     const { cat, argTaints } = _matchCallCatalog(arg.callee, arg.args, state, callContext);
     const at = _sinkLine(arg, line);
     findings.push(..._sinkFindingsForCall(arg.callee, arg.args, cat, argTaints, state, callContext, at).findings);
     findings.push(..._nestedSinkFindings(arg.args, state, callContext, at));
+    // the calls the nested call is built on (`[os.popen(c).read() for c in cmds]`: the inner popen is the sink)
+    findings.push(..._chainSinkFindings(arg, state, callContext, at));
   }
   return findings;
 }
@@ -1840,21 +2002,35 @@ function _originKinds(expr, callContext, out = { req: false, op: false, param: f
   return out;
 }
 function _requiresRequestOrigin(sinkId) {
-  if (!_requireRequestSinkIds) {
-    _requireRequestSinkIds = new Set();
-    for (const e of _CATALOG_ENTRIES) if (e && e.kind === 'sink' && e.match && e.match.requireRequestSource) _requireRequestSinkIds.add(e.id);
+  return _originGateFor(sinkId) === 'require';
+}
+// 'require' (match.requireRequestSource), 'operator-drop' (match.operatorOriginNotReported) or null.
+let _originGateIds = null;
+function _originGateFor(sinkId) {
+  if (!_originGateIds) {
+    _originGateIds = new Map();
+    for (const e of _CATALOG_ENTRIES) {
+      if (!e || e.kind !== 'sink' || !e.match) continue;
+      if (e.match.requireRequestSource) _originGateIds.set(e.id, 'require');
+      else if (e.match.operatorOriginNotReported) _originGateIds.set(e.id, 'operator-drop');
+    }
   }
-  return _requireRequestSinkIds.has(sinkId);
+  return _originGateIds.get(sinkId) || null;
 }
 // Collect time: a gated finding is reported when request evidence was seen at the sink or at a call site that
 // merged it (`_reqOrigin`), or when its resolved evidence chain names a remote origin. A finding still waiting on
 // a parameter (`_reqPending`) that no caller resolved to request input is not reported.
 function _hasRequestOrigin(f) {
-  if (!f || !_requiresRequestOrigin(f.sinkId)) return true;
+  if (!f) return true;
+  const mode = _originGateFor(f.sinkId);
+  if (!mode) return true;
   if (f._reqOrigin) return true;
   const kinds = { req: false, op: false, param: false };
   for (const r of f.trace || []) _classifyOriginRecord(r, kinds);
-  return kinds.req;
+  if (mode === 'require') return kinds.req;
+  // operator-drop, judged on the merged evidence chain (a callee's parameter resolved to the caller's argparse value): every recorded
+  // origin the operator's and nothing pending means not reported; no record at all keeps it.
+  return !(kinds.op && !kinds.req && !kinds.param);
 }
 // Merge time: a callee finding waiting on its parameter is judged against the arguments this call site passes.
 // Returns null to drop it, or the (possibly updated) finding.
@@ -1963,6 +2139,19 @@ function step(node, stateIn, callContext) {
       // 'call'` computes its own cat/argTaints before its mutation passes —
       // and pushed into the shared `findings` array so it survives every
       // return path below, including the early interprocedural returns.
+      if (node.source && (node.source.kind === 'call' || node.source.kind === 'member')) findings.push(..._chainSinkFindings(node.source, state, callContext, node.line));
+      if (node.source && node.source.kind === 'array' && !_isJsFile(_currentFile) && !_isHsFile(_currentFile)) findings.push(..._nestedSinkFindings([node.source], state, callContext, node.line));
+      // a variable bound to a statement builder (`stmt = select(T).where(..)`), for the sinks' argNotCallee check
+      if (typeof node.target === 'string' && node.source && node.source.kind === 'call' && callContext) {
+        if (_isBuilderCall(node.source)) (callContext._builderVars ||= new Set()).add(node.target);
+        else if (callContext._builderVars) callContext._builderVars.delete(node.target);
+      }
+      // a variable bound to a CLOSED expression (`const id = 7`, `const col = ok ? c : 'id'` lowered to a union of literals), for the
+      // clean-site record in `_sinkFindingsForCall`; a later binding to anything else clears it
+      if (typeof node.target === 'string' && node.source && callContext && !node.weakUpdate) {
+        if (_closedExpr(node.source, callContext)) (callContext._constVars ||= new Set()).add(node.target);
+        else if (callContext._constVars) callContext._constVars.delete(node.target);
+      }
       if (node.source && node.source.kind === 'call') {
         const { cat: _sinkCat, argTaints: _sinkArgTaints } =
           _matchCallCatalog(node.source.callee, node.source.args, state, callContext);
@@ -2253,6 +2442,7 @@ function step(node, stateIn, callContext) {
       // reflects the pre-mutation state, exactly as before this logic was
       // extracted into _matchCallCatalog/_sinkFindingsForCall.
       const { cat, argTaints } = _matchCallCatalog(node.callee, node.args, state, callContext);
+      findings.push(..._chainSinkFindings(node, state, callContext, node.line));
       // v0.66 — apply mutated-param taint at plain (non-assign) call sites.
       // Object.assign(target, tainted) → target becomes tainted in caller.
       const _plainCallCalleeName = _flattenCalleeName(node.callee);
@@ -2528,6 +2718,8 @@ function step(node, stateIn, callContext) {
           findings.push(..._sinkFindingsForCall('__route_return__', [body], cat, argTaints, state, callContext, node.line).findings);
         }
       }
+      if (node.value && (node.value.kind === 'call' || node.value.kind === 'member')) findings.push(..._chainSinkFindings(node.value, state, callContext, node.line));
+      if (node.value && node.value.kind === 'array' && !_isJsFile(_currentFile) && !_isHsFile(_currentFile)) findings.push(..._nestedSinkFindings([node.value], state, callContext, node.line));
       if (node.value && node.value.kind === 'call') {
         const { cat, argTaints } = _matchCallCatalog(node.value.callee, node.value.args, state, callContext);
         const _at = _sinkLine(node.value, node.line);
@@ -2701,6 +2893,12 @@ function analyzeFunction(fn, entryState, callContext) {
   inStates.set(fn.cfg.entry, new Set(entryState));
   work.push(fn.cfg.entry);
   _currentFile = fn.file || null;
+  // The function being walked, for the per-function facts (_regexNamesByFn): a callee analysed for its summary gets a fresh context
+  // without it, so it is set here for every walk and restored with the file below.
+  const _prevFnQid = callContext ? callContext._currentFnQid : undefined;
+  const _prevConstVars = callContext ? callContext._constVars : undefined;
+  if (callContext) callContext._constVars = new Set();
+  if (callContext && typeof fn.qid === 'string') callContext._currentFnQid = fn.qid;
   // v0.70 #2 — points-to context for the step() transfer. Setting it here
   // (instead of plumbing through step's signature) keeps the worklist loop
   // unchanged and lets `step` consult `aliasesForVar` when callContext._pointsTo
@@ -2868,7 +3066,7 @@ function analyzeFunction(fn, entryState, callContext) {
     callContext._summaryCache.setCallerContext(_prevCallerCtx);
   }
   // W4.C21/C22: restore _currentFile — see the save at this function's start.
-  _currentFile = _prevFile;
+  _currentFile = _prevFile; if (callContext) { callContext._currentFnQid = _prevFnQid; callContext._constVars = _prevConstVars; }
   return exit;
 }
 
@@ -2910,8 +3108,14 @@ export const INCOMPLETE_REASONS = Object.freeze({
   'incremental-empty-entry-reuse': 'a summary restored from a previous scan stood in for a tainted call context',
 });
 
+// Sink call sites the engine examined and found CLEAN (a catalog sink matched, its argument carried no taint), keyed `file:line:cwe`.
+// Read by the scan assembly to drop a pattern-layer finding of the same class at the same site: the deeper layer answered there.
+let _cleanSinkSites = new Set();
+export function cleanSinkSites() { return _cleanSinkSites; }
+
 export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   _incomplete = new Map();
+  _cleanSinkSites = new Set();
   _libraryPolicy = libraryMode() === 'narrow' ? createLibraryPolicy({ fileContents: opts.fileContents || null, manifestContents: opts.manifestContents || null }) : null;
   const all = [];
   const seen = new Set();

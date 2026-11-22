@@ -137,7 +137,7 @@ const JS = [
     v('Server-Side Template Injection (%m with a request-built template)', 'CWE-1336', 'critical', CODE_REMEDIATION)),
 
   // SSRF: common HTTP clients.
-  ...sinks('js-axios', 'js', 'axios', ['post', 'put', 'patch', 'delete', 'head', 'options', 'request'], { receiver: '^axios$' }, 0,
+  ...sinks('js-axios', 'js', 'axios', ['post', 'put', 'patch', 'delete', 'head', 'options', 'request'], { receiver: '^axios$', operatorOriginNotReported: true }, 0,
     v('SSRF (axios.%m)', 'CWE-918', 'high', SSRF_REMEDIATION)),
   { kind: 'sink', id: 'js-axios-call', language: 'js', framework: 'axios', match: { type: 'call', callee: 'axios', receiverExclude: '.' }, argIndex: 0,
     vuln: v('SSRF (axios(config))', 'CWE-918', 'high', SSRF_REMEDIATION) },
@@ -146,7 +146,7 @@ const JS = [
   { kind: 'sink', id: 'js-ky-call', language: 'js', framework: 'ky', match: { type: 'call', callee: 'ky', receiverExclude: '.' }, argIndex: 0,
     vuln: v('SSRF (ky)', 'CWE-918', 'high', SSRF_REMEDIATION) },
   ...sinks('js-http-client', 'js', 'http-clients', ['get', 'post', 'put', 'patch', 'delete', 'del', 'head', 'stream', 'request', 'fetch'],
-    { receiver: '^(?:got|ky|undici|superagent|needle|https?)$' }, 0, v('SSRF (%m)', 'CWE-918', 'high', SSRF_REMEDIATION)),
+    { receiver: '^(?:got|ky|undici|superagent|needle|https?)$', operatorOriginNotReported: true }, 0, v('SSRF (%m)', 'CWE-918', 'high', SSRF_REMEDIATION)),
 
   // SQL: raw-query escape hatches of the common query builders and ORMs.
   ...sinks('js-sql-raw', 'js', 'knex/prisma/sequelize', ['$queryRawUnsafe', '$executeRawUnsafe', 'whereRaw', 'orWhereRaw', 'havingRaw', 'orderByRaw', 'groupByRaw', 'joinRaw', 'fromRaw', 'selectRaw'], {}, 0,
@@ -187,7 +187,7 @@ const PY = [
     v('Command Injection (%m)', 'CWE-78', 'critical', CMD_REMEDIATION)),
 
   // SSRF.
-  ...sinks('py-http-verb', 'py', 'requests/httpx', ['put', 'patch', 'delete', 'head', 'options'], { receiver: '^(?:requests|httpx|session|Session|client|Client|aiohttp|ClientSession|AsyncClient|PoolManager)$' }, 0,
+  ...sinks('py-http-verb', 'py', 'requests/httpx', ['put', 'patch', 'delete', 'head', 'options'], { receiver: '^(?:requests|httpx|session|Session|client|Client|aiohttp|ClientSession|AsyncClient|PoolManager)$', receiverExclude: '^(?:db|database|orm|repo|repository|models?|objects|queryset|store|storage)$', receiverTypeExclude: ['Session$', 'SessionDep', 'AsyncSession', 'scoped_session', 'SQLAlchemy', 'Repository'] }, 0,
     v('SSRF (%m)', 'CWE-918', 'high', SSRF_REMEDIATION)),
   ...sinks('py-http-async-client', 'py', 'httpx/aiohttp', ['get', 'post'], { receiver: '^(?:aiohttp|ClientSession|AsyncClient|PoolManager)$' }, 0,
     v('SSRF (%m)', 'CWE-918', 'high', SSRF_REMEDIATION)),

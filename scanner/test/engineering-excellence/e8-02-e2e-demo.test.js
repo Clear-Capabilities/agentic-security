@@ -30,7 +30,9 @@ test('EVERY STAGE IS THERE, IN ORDER: start, scan, triage, validate, patch, veri
 test('THE SCENARIOS BEHAVE AS LABELLED: expected true positives reported, a false fix refused on behaviour, one dependency reached and one not, runtime off until opted in', () => {
   const triage = Object.fromEntries(outline.triage); for (const id of ['sqli-search', 'command-convert', 'idor-notes-put', 'tenant-invoice-lines']) assert.equal(triage[id], true, id);
   assert.equal(triage['command-probe-list'], false, 'the argument-list lookalike is not reported'); assert.equal(triage['sqli-lookup-bound'], false, 'the bound-parameter lookalike is not reported');
-  assert.equal(triage['sqli-report-constant'], true, 'the constant lookalike IS reported by a pattern detector (a known gap), and the reviewer marks it a false positive');
+  // 0.220.0: the taint layer records a sink site whose argument is closed (a constant) as clean and the structural SQL finding there is dropped,
+  // so the constant lookalike is no longer reported by any layer (it was a stated gap of the pattern layer before).
+  assert.equal(triage['sqli-report-constant'], false, 'the constant lookalike is not reported');
   const verified = Object.fromEntries(outline.verified); assert.equal(verified['notes-owner-scope'], true); assert.equal(verified['notes-deny-all'], false); assert.equal(verified['invoice-lines-tenant-scope'], true);
   const sca = Object.fromEntries(outline.sca); assert.equal(sca['acme-xml-lite'], true); assert.equal(sca['acme-img-tools'], false);
   assert.match(md, /collection is off until a policy file switches it on \(first attempt: refused\)/);

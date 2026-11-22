@@ -808,6 +808,17 @@ class FnLowerer {
       const cons = this.mod.cons.get(f.name) || this.proj.findCon(f.name);
       const elements = argAsts.map((a) => this.lowerExpr(a, ln));
       if (cons && cons.fields) return { kind: 'object', props: cons.fields.map((k, i) => ({ key: k, value: elements[i] || unknownExpr() })), hs: { con: f.name } };
+      // A library constructor the models name (hasql's `Statement sql enc dec prepared`, postgresql-simple's `Query bytes`) is applied like
+      // the function it is: a call to its qualified name, which the catalog matches as a sink. Every other library constructor stays a
+      // positional record (`array`, `hs.con`), and a project constructor is never a library API.
+      if (!cons) {
+        const r = resolveGlobal(this.proj, this.mod, f.name, f.qual || null);
+        if (r && r.kind === 'external') {
+          const api = libraryName(r, f.name, f.qual).name;
+          const dot = api.lastIndexOf('.');
+          if (dot > 0 && isKnownApi(api.slice(0, dot), api.slice(dot + 1))) return { kind: 'call', callee: api, args: elements, line: ln, hs: { status: 'external', certain: true, con: f.name } };
+        }
+      }
       return { kind: 'array', elements, hs: { con: f.name } };
     }
     // Function-valued conditional/let/case etc.: the target is not statically known.

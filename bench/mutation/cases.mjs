@@ -1086,16 +1086,19 @@ def f():
   },
 
   // ── KNOWN GAPS: measured today, held by the gate until they are fixed and promoted ─────────────────────────────────────
-  det('gap-fp-js-constant-concat', 'known-gap', false, 'concatenating a constant table name into a query involves no request value; the structural JS layer still reports it', `const TABLE = 'users';
-app.get('/u', (req, res) => { db.query('SELECT * FROM ' + TABLE + ' WHERE active = 1'); res.send('ok'); });`, { cwe: /CWE-89/, gap: { observedDetected: true, kind: 'false positive' } }),
-  det('gap-fp-js-allowlist-ternary', 'known-gap', false, 'a column name chosen from a fixed list (includes() with a constant fallback) cannot carry an injection; the flow is reported unsanitized', `const COLS = ['name', 'age'];
-app.get('/u', (req, res) => { const c = COLS.includes(req.query.c) ? req.query.c : 'name'; db.query('SELECT ' + c + ' FROM users'); res.send('ok'); });`, { cwe: /CWE-89/, gap: { observedDetected: true, kind: 'false positive' } }),
-  det('gap-fp-ruby-where-hash', 'known-gap', false, 'where(id: params[:id]) is a hash condition that ActiveRecord parameterizes; it is reported as SQL injection', `class UsersController < ApplicationController
+  // Promoted out of known-gap in 0.220.0: the structural JS layer now reads a query that interpolates only constant string names as constant.
+  det('fp-js-constant-concat', 'adversarial', false, 'concatenating a constant table name into a query involves no request value', `const TABLE = 'users';
+app.get('/u', (req, res) => { db.query('SELECT * FROM ' + TABLE + ' WHERE active = 1'); res.send('ok'); });`, { cwe: /CWE-89/ }),
+  // Promoted out of known-gap in 0.220.0: a ternary whose test is membership of the value in a constant collection carries only the other branch.
+  det('fp-js-allowlist-ternary', 'adversarial', false, 'a column name chosen from a fixed list (includes() with a constant fallback) cannot carry an injection', `const COLS = ['name', 'age'];
+app.get('/u', (req, res) => { const c = COLS.includes(req.query.c) ? req.query.c : 'name'; db.query('SELECT ' + c + ' FROM users'); res.send('ok'); });`, { cwe: /CWE-89/ }),
+  // Promoted out of known-gap in 0.220.0: a keyword argument lowers to a record and the where-string sink refuses a record argument.
+  det('fp-ruby-where-hash', 'adversarial', false, 'where(id: params[:id]) is a hash condition that ActiveRecord parameterizes', `class UsersController < ApplicationController
   def show
     User.where(id: params[:id])
   end
 end
-`, { cwe: /CWE-89/, file: 'a.rb', gap: { observedDetected: true, kind: 'false positive' } }),
+`, { cwe: /CWE-89/, file: 'a.rb' }),
   det('js-readfilesync-concat', 'baseline', true, 'fs.readFileSync with a request value concatenated into the path is path traversal (a known gap until the framework models closed it)', `const fs = require('fs');
 app.get('/f', (req, res) => { res.send(fs.readFileSync('/srv/data/' + req.query.name)); });`, { cwe: /CWE-22/ }),
   det('java-spring-jdbctemplate', 'baseline', true, 'JdbcTemplate.queryForList with a concatenated @RequestParam is SQL injection (a known gap until the framework models closed it)', `@RestController public class C { @Autowired JdbcTemplate jdbc;

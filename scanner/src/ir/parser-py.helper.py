@@ -87,6 +87,10 @@ def _lower_expr(node: ast.AST) -> dict[str, Any]:
     if isinstance(node, ast.Name):
         return {"kind": "ident", "name": node.id}
     if isinstance(node, ast.Attribute):
+        # Django class-based views: `self.kwargs` is the URL captures dict. Lowered to a call the catalog names as a source
+        # (`django_view.kwargs`) while a View subclass's method is being lowered; elsewhere `self.kwargs` is an ordinary field.
+        if _LOWER_CTX.get("view_class") and node.attr == "kwargs" and isinstance(node.value, ast.Name) and node.value.id == "self":
+            return {"kind": "call", "callee": "django_view.kwargs", "args": [], "line": getattr(node, "lineno", 0) or 0}
         return {"kind": "member", "object": _lower_expr(node.value), "prop": node.attr}
     if isinstance(node, ast.Subscript):
         # Surface as a member-with-slice; downstream taint treats it like member access.
@@ -182,6 +186,36 @@ def _lower_expr(node: ast.AST) -> dict[str, Any]:
     return {"kind": "unknown"}
 
 
+_LOWER_CTX: dict[str, Any] = {"view_class": False}
+
+_RQ_OPTION_KWARGS = {"job_timeout", "result_ttl", "ttl", "failure_ttl", "depends_on", "job_id", "at_front", "meta", "retry", "on_success", "on_failure", "description", "timeout"}
+
+
+def _dispatch_call(call: ast.Call, line: int) -> "dict[str, Any] | None":
+    """A task or job dispatch runs the named function with the given arguments on a worker: `task.delay(a, b)` and
+    `task.apply_async(args=[a, b], kwargs={...})` (Celery), `queue.enqueue(fn, a, b)` (RQ), `executor.submit(fn, a, b)`.
+    The IR states the call `fn(a, b)` beside the dispatch so the function's body is analysed with those arguments."""
+    f = call.func
+    if not isinstance(f, ast.Attribute):
+        return None
+    if f.attr == "delay" and isinstance(f.value, (ast.Name, ast.Attribute)):
+        return {"kind": "call", "callee": _flatten_callee(f.value), "args": [_lower_expr(a) for a in call.args] + [_lower_expr(k.value) for k in call.keywords if k.arg], "line": line, "dispatch": "delay"}
+    if f.attr == "apply_async" and isinstance(f.value, (ast.Name, ast.Attribute)):
+        args: list[dict[str, Any]] = []
+        if call.args and isinstance(call.args[0], (ast.List, ast.Tuple)):
+            args += [_lower_expr(a) for a in call.args[0].elts]
+        for k in call.keywords:
+            if k.arg == "args" and isinstance(k.value, (ast.List, ast.Tuple)):
+                args += [_lower_expr(a) for a in k.value.elts]
+            elif k.arg == "kwargs" and isinstance(k.value, ast.Dict):
+                args += [_lower_expr(v) for v in k.value.values]
+        return {"kind": "call", "callee": _flatten_callee(f.value), "args": args, "line": line, "dispatch": "apply_async"}
+    if f.attr in ("enqueue", "enqueue_call", "submit") and call.args and isinstance(call.args[0], (ast.Name, ast.Attribute)):
+        args = [_lower_expr(a) for a in call.args[1:]] + [_lower_expr(k.value) for k in call.keywords if k.arg and k.arg not in _RQ_OPTION_KWARGS]
+        return {"kind": "call", "callee": _flatten_callee(call.args[0]), "args": args, "line": line, "dispatch": f.attr}
+    return None
+
+
 def _lower_call_chain(node: ast.Call) -> dict[str, Any]:
     """Lowers a (possibly chained) call expression, e.g. `open(x).read()` or
     `a.b(x).c(y).d(z)`, WITHOUT losing an inner call's own arguments.
@@ -252,7 +286,26 @@ def _lower_call_chain(node: ast.Call) -> dict[str, Any]:
     call: dict[str, Any] = {"kind": "call", "callee": callee, "args": all_args}
     if kwargs:
         call["kwargs"] = kwargs
+    inner = _inner_calls(node.func)
+    if inner:
+        call["innerCalls"] = inner
     return call
+
+
+def _inner_calls(func: ast.AST) -> list[dict[str, Any]]:
+    """The call a callee is built on, lowered on its own with its own arguments: `cur.execute(q).fetchall()` carries
+    `cur.execute(q)`, `Template(s).render()` carries `Template(s)`, `a.b(x).c.d(y)` carries `a.b(x)`. The dotted callee
+    and merged argument list above stay as they were (every consumer of them is unchanged); the engine reads
+    `innerCalls` to give the inner call a sink site of its own, which the merged form cannot (the chain
+    `obj.exec.run(x)` and the call chain `obj.exec().run(x)` flatten to the same string)."""
+    cur: Any = func
+    while isinstance(cur, ast.Attribute):
+        cur = cur.value
+    if not isinstance(cur, ast.Call):
+        return []
+    rec = _lower_call_chain(cur)
+    rec["line"] = getattr(cur, "lineno", 0) or 0
+    return [rec]
 
 
 def _flatten_callee(node: ast.AST) -> Any:
@@ -396,24 +449,52 @@ class CfgBuilder:
         line = getattr(stmt, "lineno", 0) or 0
         if isinstance(stmt, ast.Expr):
             # Bare expression — useful when it's a call (decorator pattern,
-            # dispatch shape). For everything else, noop.
-            if isinstance(stmt.value, ast.Call):
+            # dispatch shape). For everything else, noop. `await f(x)` as a
+            # statement is the call f(x): the await adds nothing the engine reads.
+            val = stmt.value.value if isinstance(stmt.value, ast.Await) else stmt.value
+            if isinstance(val, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
+                # `[os.system(c) for c in cmds]` as a statement: the loop variable is an element of the iterable and the head runs per element,
+                # so the head call is a call node of its own (an assigned comprehension is handled below with its filters).
+                tail = prev
+                for gen in val.generators:
+                    loop_tgt = _assign_target(gen.target)
+                    if isinstance(loop_tgt, str):
+                        la = self._add({"kind": "assign", "target": loop_tgt, "source": {"kind": "member", "object": _lower_expr(gen.iter), "prop": "[]"}, "line": line})
+                        self._link(tail, la)
+                        tail = la
+                if isinstance(val.elt, ast.Call):
+                    head = _lower_call_chain(val.elt)
+                    head["line"] = line
+                    cur = self._add(head)
+                else:
+                    cur = self._add({"kind": "noop", "line": line})
+                self._link(tail, cur)
+                return cur
+            if isinstance(val, ast.Call):
                 _node = {
                     "kind": "call",
-                    "callee": _flatten_callee(stmt.value.func),
-                    "args": [_lower_expr(a) for a in (stmt.value.args or [])]
-                          + [_lower_expr(kw.value) for kw in (stmt.value.keywords or [])],
+                    "callee": _flatten_callee(val.func),
+                    "args": [_lower_expr(a) for a in (val.args or [])]
+                          + [_lower_expr(kw.value) for kw in (val.keywords or [])],
                     "line": line,
                 }
                 # Keyword names, so a sink can tell `subprocess.run(cmd,
                 # shell=True)` from the safe argv-array form. See
                 # _lower_call_chain for the full rationale.
-                _kw = {kw.arg: _lower_expr(kw.value) for kw in (stmt.value.keywords or []) if kw.arg}
-                if any(kw.arg is None for kw in (stmt.value.keywords or [])):
+                _kw = {kw.arg: _lower_expr(kw.value) for kw in (val.keywords or []) if kw.arg}
+                if any(kw.arg is None for kw in (val.keywords or [])):
                     _kw["**"] = {"kind": "unknown"}   # see _lower_call_chain
                 if _kw:
                     _node["kwargs"] = _kw
+                _inner = _inner_calls(val.func)
+                if _inner:
+                    _node["innerCalls"] = _inner
                 cur = self._add(_node)
+                _d = _dispatch_call(val, line)
+                if _d:
+                    self._link(prev, cur)
+                    prev = cur
+                    cur = self._add(_d)
             elif isinstance(stmt.value, ast.NamedExpr):
                 cur = self._add({
                     "kind": "assign",
@@ -517,6 +598,11 @@ class CfgBuilder:
                 if dt:
                     node_rec["declaredType"] = dt
             cur = self._add(node_rec)
+            _d = _dispatch_call(stmt.value, line) if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call) else None
+            if _d:
+                self._link(prev, cur)
+                prev = cur
+                cur = self._add(_d)
             self._link(prev, cur)
             return cur
         if isinstance(stmt, ast.If):
@@ -609,10 +695,16 @@ class CfgBuilder:
             for item in stmt.items:
                 tgt = _assign_target(item.optional_vars) if item.optional_vars else None
                 if tgt is not None:
-                    a = self._add({
+                    rec = {
                         "kind": "assign", "target": tgt,
                         "source": _lower_expr(item.context_expr), "line": line,
-                    })
+                    }
+                    # `with httpx.Client() as c`: the bound name is the constructed object (its __enter__ returns self for
+                    # clients, sessions and connections), so the receiver type is known as for a plain assignment.
+                    dt = _ctor_class_name(item.context_expr)
+                    if dt:
+                        rec["declaredType"] = dt
+                    a = self._add(rec)
                     self._link(tail, a)
                     tail = a
             return self._lower_block(stmt.body, tail)
@@ -767,22 +859,112 @@ def _extract_functions(tree: ast.Module, file: str) -> list[dict[str, Any]]:
     """Walk the module, capturing every function (top-level, nested, or a method) into a flat list with its
     enclosing class when it has one. Each function's body is lowered into a CFG."""
     fns: list[dict[str, Any]] = []
+    dependency_targets = _dependency_targets(tree)
 
-    def visit(parent: Any, cls: "str | None") -> None:
+    def visit(parent: Any, cls: "str | None", bases: "list[str] | None") -> None:
         for child in ast.iter_child_nodes(parent):
             if isinstance(child, ast.ClassDef):
-                visit(child, child.name)
+                visit(child, child.name, _base_names(child))
             elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                fns.append(_function_record(child, file, cls))
-                visit(child, None)
+                fns.append(_function_record(child, file, cls, child.name in dependency_targets, bases))
+                visit(child, None, None)
+            elif isinstance(child, ast.Assign) and len(child.targets) == 1 and isinstance(child.targets[0], ast.Name) and isinstance(child.value, ast.Lambda):
+                # `f = lambda h: run(h)`: a function named f with the lambda's parameters and a single return, so a later `f(x)`
+                # resolves to it and its body is analysed with x.
+                lam = child.value
+                fd = ast.FunctionDef(name=child.targets[0].id, args=lam.args, body=[ast.Return(value=lam.body)], decorator_list=[], returns=None)
+                if hasattr(fd, "type_params"):
+                    fd.type_params = []
+                ast.copy_location(fd, child)
+                ast.fix_missing_locations(fd)
+                fns.append(_function_record(fd, file, cls, False, bases))
+                visit(child, cls, bases)
             else:
-                visit(child, cls)
+                visit(child, cls, bases)
 
-    visit(tree, None)
+    visit(tree, None, None)
     return fns
 
 
-def _function_record(node: Any, file: str, cls: "str | None") -> dict[str, Any]:
+def _base_names(node: ast.ClassDef) -> list[str]:
+    out: list[str] = []
+    for b in node.bases:
+        nm = b.id if isinstance(b, ast.Name) else (b.attr if isinstance(b, ast.Attribute) else None)
+        if nm:
+            out.append(nm)
+    return out
+
+
+_HTTP_VERBS = {"get", "post", "put", "patch", "delete", "head", "options", "trace", "dispatch"}
+_VIEW_LIKE_RE = re.compile(r"(?:View|ViewSet|Mixin)$")
+
+
+def _is_view_class(bases: "list[str] | None") -> bool:
+    """A Django or DRF class-based view: a base named like a view (View, TemplateView, APIView, ModelViewSet, ...). The URL captures
+    reach it as the method's extra parameters and as self.kwargs."""
+    return bool(bases) and any(_VIEW_LIKE_RE.search(b) for b in bases)
+
+
+def _class_param_annotations(node: Any, params: list[str], bases: "list[str] | None") -> list[dict[str, Any]]:
+    """Request-filled parameters a class's base decides: a gRPC servicer method's `request`, a graphene resolver's arguments
+    after (self, info), a Django view method's URL captures after (self, request). The IR states the fact; the catalog names the source."""
+    out: list[dict[str, Any]] = []
+    if not bases:
+        return out
+    name = node.name
+    if any(b.endswith("Servicer") for b in bases) and len(params) >= 2 and params[1] == "request":
+        out.append({"index": 1, "name": "request", "decorator": "py:grpc-request"})
+    if name.startswith("resolve_") and len(params) >= 2 and params[1] == "info":
+        for i, p in enumerate(params[2:], start=2):
+            out.append({"index": i, "name": p, "decorator": "py:graphql-resolver-arg"})
+    if _is_view_class(bases) and name in _HTTP_VERBS and len(params) >= 2:
+        vararg = node.args.vararg.arg if node.args.vararg else None
+        for i, p in enumerate(params[2:], start=2):
+            if p == vararg:
+                continue
+            out.append({"index": i, "name": p, "decorator": "py:django-view-kwarg"})
+    return out
+
+
+def _dependency_targets(tree: ast.Module) -> set[str]:
+    """Names of the functions referenced as `Depends(fn)` / `Security(fn)` defaults anywhere in the module. FastAPI
+    fills such a function's own parameters from the request exactly as it fills a route handler's, so they are
+    marked as route parameters below even though the function carries no route decorator."""
+    out: set[str] = set()
+    for n in ast.walk(tree):
+        if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for d in list(n.args.defaults) + [k for k in n.args.kw_defaults if k is not None]:
+            if isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id in ("Depends", "Security") and d.args and isinstance(d.args[0], ast.Name):
+                out.add(d.args[0].id)
+    return out
+
+
+def _dependency_assigns(node: Any) -> list[ast.stmt]:
+    """`name: str = Depends(get_name)` binds the parameter to the dependency's return value: stated as `name = get_name()`
+    at the top of the body, so the engine resolves the callee and reads its return taint. `Depends()` with no target
+    (a class dependency from the annotation) states nothing."""
+    out: list[ast.stmt] = []
+    args = node.args
+    positional = list(getattr(args, "posonlyargs", [])) + list(args.args)
+    pos_defaults = list(args.defaults)
+    offset = len(positional) - len(pos_defaults)
+    pairs = [(positional[offset + i], d) for i, d in enumerate(pos_defaults) if 0 <= offset + i < len(positional)]
+    pairs += [(a, d) for a, d in zip(args.kwonlyargs, args.kw_defaults) if d is not None]
+    for arg, d in pairs:
+        if isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id in ("Depends", "Security") and d.args and isinstance(d.args[0], ast.Name):
+            call = ast.Call(func=ast.Name(id=d.args[0].id, ctx=ast.Load()), args=[], keywords=[])
+            stmt = ast.Assign(targets=[ast.Name(id=arg.arg, ctx=ast.Store())], value=call)
+            for x in ast.walk(stmt):
+                x.lineno = node.lineno or 0
+                x.col_offset = 0
+                x.end_lineno = node.lineno or 0
+                x.end_col_offset = 0
+            out.append(stmt)
+    return out
+
+
+def _function_record(node: Any, file: str, cls: "str | None", dependency_target: bool = False, bases: "list[str] | None" = None) -> dict[str, Any]:
     if True:
         params = [a.arg for a in node.args.args]
         if node.args.vararg:
@@ -793,7 +975,11 @@ def _function_record(node: Any, file: str, cls: "str | None") -> dict[str, Any]:
             params.append(a.arg)
         line = node.lineno or 0
         builder = CfgBuilder(node.name)
-        builder.lower(node.body)
+        _LOWER_CTX["view_class"] = _is_view_class(bases)
+        try:
+            builder.lower(_dependency_assigns(node) + list(node.body))
+        finally:
+            _LOWER_CTX["view_class"] = False
         # A method's qid carries its class (`file::Class::method@line#hash`), the shape class-hierarchy.js and
         # callgraph.js read class membership from for Java and C#; `name` stays the bare name every Python
         # consumer matches on.
@@ -814,9 +1000,15 @@ def _function_record(node: Any, file: str, cls: "str | None") -> dict[str, Any]:
         ptypes = _param_types(node)
         if ptypes:
             fn_rec["paramTypes"] = ptypes
-        pa = _param_annotations(node, params)
+        pa = _param_annotations(node, params) + _class_param_annotations(node, params, bases)
+        if dependency_target:
+            pa = pa + _route_params(node, params, assume_route=True)
         if pa:
             fn_rec["paramAnnotations"] = pa
+        if getattr(node, "returns", None) is not None:
+            rt = _annotation_name(node.returns)
+            if rt:
+                fn_rec["returnType"] = rt
         # A view registered with `@<app|bp>.route("/...")` (Flask, Quart, Bottle) sends a returned str as
         # text/html, so each of its returns is a response write. Marked on the return node; the engine reads it
         # as a sink call only when the returned text carries markup. The verb decorators (`@app.get`) are
@@ -960,7 +1152,7 @@ def _is_html_view(node: Any) -> bool:
     return False
 
 
-def _route_params(node: Any, params: list[str]) -> list[dict[str, Any]]:
+def _route_params(node: Any, params: list[str], assume_route: bool = False) -> list[dict[str, Any]]:
     """`py:route-param` markers for the parameters of a web route handler.
 
     Only a decorator CALL whose attribute is a route verb and whose first
@@ -979,7 +1171,7 @@ def _route_params(node: Any, params: list[str]) -> list[dict[str, Any]]:
         first = d.args[0]
         if isinstance(first, ast.Constant) and isinstance(first.value, str) and first.value.startswith("/"):
             route_paths.append(first.value)
-    if not route_paths:
+    if not route_paths and not assume_route:
         return []
     numeric = set()
     for p in route_paths:
@@ -1063,7 +1255,52 @@ def _process_one(file: str, content: str) -> dict[str, Any]:
                 "nodes": mod_builder.nodes,
             },
         })
-    return {"file": file, "functions": fns, "classes": _extract_classes(tree, file), "topLevel": top_level_qid}
+    rec = {"file": file, "functions": fns, "classes": _extract_classes(tree, file), "topLevel": top_level_qid}
+    caps = _url_captures(tree)
+    if caps:
+        rec["urlCaptures"] = caps
+    return rec
+
+
+_PATH_CAPTURE_RE = re.compile(r"<(?:(\w+):)?(\w+)>")
+_RE_GROUP_RE = re.compile(r"\(\?P<(\w+)>((?:[^()]|\([^()]*\))*)\)")
+_TEXT_CONVERTERS = {None, "str", "slug", "path"}
+
+
+def _url_captures(tree: ast.Module) -> list[dict[str, Any]]:
+    """Django URL routes: `path("a/<name>/", views.v)`, `re_path(r"^a/(?P<name>\\w+)/$", v)` and the old `url(...)`. Each
+    gives the view's name (and its module when written `views.v`) with the text captures of the route; numeric and
+    uuid converters and digit-only groups are left out. A class-based `V.as_view()` is not a function and is skipped.
+    The IR states the route facts; ir/index.js links them to the view's parameters."""
+    out: list[dict[str, Any]] = []
+    for n in ast.walk(tree):
+        if not isinstance(n, ast.Call) or len(n.args) < 2:
+            continue
+        f = n.func
+        fname = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else None)
+        if fname not in ("path", "re_path", "url"):
+            continue
+        route, view = n.args[0], n.args[1]
+        if not (isinstance(route, ast.Constant) and isinstance(route.value, str)):
+            continue
+        if isinstance(view, ast.Name):
+            vname, module = view.id, None
+        elif isinstance(view, ast.Attribute) and isinstance(view.value, ast.Name):
+            vname, module = view.attr, view.value.id
+        else:
+            continue
+        names: list[str] = []
+        if fname == "path":
+            for conv, nm in _PATH_CAPTURE_RE.findall(route.value):
+                if (conv or None) in _TEXT_CONVERTERS and nm not in names:
+                    names.append(nm)
+        else:
+            for nm, pat in _RE_GROUP_RE.findall(route.value):
+                if not re.search(r"\\d|\[0-9|\[\\d", pat) and nm not in names:
+                    names.append(nm)
+        if names:
+            out.append({"view": vname, "module": module, "params": names, "line": n.lineno or 0})
+    return out
 
 
 def main() -> int:

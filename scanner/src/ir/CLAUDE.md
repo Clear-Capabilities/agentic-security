@@ -341,3 +341,51 @@ Tests: `test/java-field-receiver-taint.test.js` (each positive with a refusing t
   `.tool(` whose handler reads nothing from its parameter produces nothing.
 
 Tests: `test/python-class-taint.test.js`, `test/parser-js-ts-casts.test.js`, `test/ts-class-mcp-taint.test.js` (each positive with a refusing twin).
+
+## 0.220.0: Python framework shapes, call chains, tRPC
+
+- **A chained call keeps its inner call (`parser-py.helper.py`, `_inner_calls`).** `cur.execute(q).fetchall()` still lowers to the dotted callee
+  `cur.execute.fetchall` with the merged argument list (every consumer of that form is unchanged), and now also carries `innerCalls`: the call
+  the callee is built on, lowered on its own with its own arguments and line. The engine gives each inner call a sink site
+  (`_chainSinkFindings`), which the merged form cannot: `obj.exec.run(x)` (a member chain) and `obj.exec().run(x)` (a call chain) flatten to
+  the same string. Both the expression lowering and the statement-level call node carry it.
+- **`await f(x)` as a statement is the call f(x).** It lowered to a noop before; `await asyncio.create_subprocess_shell(cmd)` had no node.
+- **`with X() as c` types `c` (`declaredType`)** as a plain assignment does, so `receiverTypeIn` can confirm a sink on a short name
+  (`c.get(url)` with `c` an httpx Client).
+- **FastAPI dependencies.** A parameter whose default is `Depends(fn)` or `Security(fn)` is stated as `name = fn()` at the top of the body
+  (the engine resolves `fn` and reads its return taint), and every function referenced that way has its own text parameters marked
+  `py:route-param` (`_route_params(..., assume_route=True)`): FastAPI fills them from the request exactly as it fills a route handler's.
+  `Depends(get_db)` returning a session states nothing tainted; an `int` parameter is skipped as on a route.
+- **Django URL captures (`urlCaptures`, linked by `ir/index.js` `linkDjangoUrlCaptures`).** `path("a/<name>/", views.v)`, `re_path(r"(?P<name>\\w+)", v)`
+  and the old `url(...)` are recorded per file with the view's name, its module when written `views.v`, and the text captures (`str`, `slug`,
+  `path` or no converter; a named group whose pattern is not digit-only). After all files are parsed the view is found by name in the named
+  module beside the urls file (any file of that name when there is exactly one), or in the urls file's directory for a bare name, and the
+  matching parameters get `py:django-url-capture`; a class-based `V.as_view()` is not linked. Numeric converters, methods and ambiguity refuse.
+- **tRPC (`parser-js.js`).** The resolver passed to `.query`, `.mutation` or `.subscription` on a chain that carries `.input(schema)` gets
+  `js:trpc-procedure-handler` on the `input` field of its first parameter (`<obj>.input` when destructured, `opts.input` when named); `ctx`
+  is not marked, and a procedure with no `.input` marks nothing.
+
+## 0.220.0, second half: resolution, more sources, Python bodies, allowlists
+
+- **Module resolution (`module-resolver.js`).** `tsconfig.json` (or the jsconfig equivalent) `compilerOptions.paths` and `baseUrl` are read (leniently: comments
+  and trailing commas stripped; the file nearest the root wins; `extends` is not followed): `@/lib/db` maps through its pattern, `lib/db`
+  under baseUrl. A specifier an alias pattern names but no file answers is `unresolved` (never guessed from a bare name). Python absolute
+  imports are tried from the repository root, `src/`, and the importer's package parents (a module three packages deep under `src/`
+  importing `app.svc`), and `from . import svc` binds the sibling submodule `svc` so `svc.find()` resolves.
+- **Python (`parser-py.helper.py`).** A statement-level comprehension binds its loop variable to an element of the iterable and emits its head
+  call as a call node; `f = lambda h: ...` is a function record named `f` (a later `f(x)` resolves to it); a function's return annotation is
+  `returnType` (class-hierarchy.js types `s = make()` from `def make() -> Service`); `task.delay(a)`, `task.apply_async(args=[a])`,
+  `queue.enqueue(fn, a)` and `executor.submit(fn, a)` emit the call `fn(a)` beside the dispatch (`dispatch` names the form). Class bases decide
+  three parameter facts (`_class_param_annotations`): a `*Servicer` method's `request` (`py:grpc-request`), a `resolve_x(self, info, ...)`
+  method's arguments after info (`py:graphql-resolver-arg`), and a View-like class's verb-method parameters after (self, request)
+  (`py:django-view-kwarg`); inside such a class `self.kwargs` lowers to the synthetic call `django_view.kwargs`, a catalog source.
+- **JavaScript (`parser-js.js`).** Route modules: an exported Remix `loader`/`action` under a routes directory, a SvelteKit `load` in a
+  +page/+layout(.server) file and the verb exports of a +server file get `js:route-module-handler` on the `params`, `url` and `request`
+  fields of their first parameter. An allowlist ternary (`COLS.includes(v) ? v : 'name'`, also `.has`, `indexOf(v) !== -1` and the negated
+  form) over a constant collection of literals (a top-level `const` array or Set, or an inline literal array) lowers to the fallback branch
+  alone: the value is one of the constants.
+- **Ruby (`parser-rb.js`).** A keyword argument lowers to a one-key record (`{ id: <value> }`), so a string-only sink can refuse the
+  parameterised form (`where(id: x)`) while the value's taint still reaches the call.
+- **Template literals carry their text (`parser-js.js`, 0.220.0).** `\`https://h/${a}/x/${b}\`` lowers to `tpl` parts
+  `['https://h/', a, '/x/', b]` (empty chunks left out), so the engine can read what a URL begins with and which keywords a template's
+  constant text carries. Before, only the expressions were kept.

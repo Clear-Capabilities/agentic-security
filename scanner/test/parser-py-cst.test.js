@@ -395,7 +395,7 @@ _maybe('an ordinary dict subscript assignment still lowers cleanly (no crash, no
   assert.ok(nodes.some(n => n.kind === 'call' && n.callee === 'd.__setitem__'));
 });
 
-_maybe('end-to-end: taint flows through response["X-Trace"] = request.GET["trace"] into the new sink', async () => {
+_maybe('end-to-end: response["X-Trace"] = request.GET["trace"] lowers to __setitem__ and is NOT a response-splitting sink (Django rejects CR/LF in header values)', async () => {
   const { runScan } = await import('../src/runScan.js');
   const fs = await import('node:fs');
   const os = await import('node:os');
@@ -409,6 +409,8 @@ def trace(request):
 `);
   const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
-  assert.ok(irFindings.some(f => /response.split|crlf|header/i.test(f.vuln)),
-    `expected an IR-TAINT response-splitting finding, got: ${JSON.stringify((scan.findings || []).map(f => ({parser: f.parser, vuln: f.vuln})))}`);
+  // 0.220.0: the py-response-setitem sink was removed; Django's HttpResponse.__setitem__ raises BadHeaderError on CR or LF, as werkzeug's
+  // Headers raises ValueError, so the assignment cannot split a response. The lowering itself (a __setitem__ call) is pinned above.
+  assert.ok(!irFindings.some(f => /response.split|crlf/i.test(f.vuln)),
+    `a Django header assignment is not a response-splitting sink, got: ${JSON.stringify(irFindings.map(f => f.vuln))}`);
 });

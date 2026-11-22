@@ -1,5 +1,5 @@
 // Layer 2 entry point.
-import { runTaintEngine } from './engine.js';
+import { runTaintEngine, cleanSinkSites } from './engine.js';
 import { libraryMode, withLibrarySourcesSuppressed, mergeLibraryDifferential, hasCallerControlledParams } from './library-sources.js';
 import { annotateProvenClean } from './proven-clean.js';
 import { CATALOG, matchSource, matchSinkOrSanitizer, _catalogSize } from './catalog.js';
@@ -194,6 +194,8 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
       }
     } catch { /* prover failure should not fail the scan */ }
   }
+  // The sink sites the taint walk found clean, for the scan assembly's cross-layer check (engine.js, before the deep findings are merged).
+  try { findings.cleanSinkSites = cleanSinkSites(); } catch { /* informational */ }
   return findings;
 }
 

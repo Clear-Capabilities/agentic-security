@@ -303,6 +303,9 @@ export function buildClassHierarchy(perFileIR, callGraph) {
   // nothing, rather than picking one arbitrarily.
   function _inferredFactoryReturnClass(fn) {
     if (!fn || !fn.cfg || !fn.cfg.nodes) return null;
+    // A declared return type (`def make() -> Service`, parser-py.helper.py's `returnType`) is the author's statement of the class: taken
+    // when it names a class of the project, so `s = make(); s.update(x)` resolves the method without reading make's body.
+    if (typeof fn.returnType === 'string' && classes.has(fn.returnType)) return fn.returnType;
     let className = null;
     for (const node of Object.values(fn.cfg.nodes)) {
       if (node.kind !== 'return' || !node.value) continue;

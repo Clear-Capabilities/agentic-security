@@ -24,7 +24,9 @@ test('the new controls cover frameworks, languages, lookalikes, misleading words
   assert.ok(byClass.metamorphic >= 8);
   // 5 -> 3 in 0.211.0: the framework models closed two false-negative gaps (a concatenated readFileSync path, Spring
   // JdbcTemplate), which were promoted to baseline cases, as a closed gap must be.
-  assert.equal(byClass['known-gap'], 3);
+  // 3 -> 0 in 0.220.0: the constant-concatenation, allowlist-ternary and ActiveRecord hash-condition gaps closed (clean sink sites,
+  // `argNotObject`) and were promoted to adversarial cases, as a closed gap must be.
+  assert.equal(byClass['known-gap'] || 0, 0);
   const files = new Set(E1_CASES.map((c) => path.extname(c.file || 'app.js')));
   for (const ext of ['.js', '.ts', '.py', '.java', '.go', '.php', '.rb']) assert.ok(files.has(ext), `no case in ${ext}`);
   const ids = E1_CASES.map((c) => c.id).join(' ');
@@ -142,6 +144,6 @@ test('the gate runs end to end: every verdict correct, label invariance holds on
   const li = frac('label-invariance'); const meta = frac('metamorphic'); const adv = frac('adversarial'); const gaps = frac('known gaps');
   for (const [name, f] of [['label-invariance', li], ['metamorphic', meta], ['adversarial', adv], ['known gaps', gaps]]) { assert.ok(f, name); assert.equal(f[0], f[1], `${name} ${f}`); }
   assert.ok(li[1] >= 100, `label-invariance covers ${li[1]} derived cases`);
-  assert.equal(gaps[1], 3);
+  assert.equal(gaps[1], 0);
   assert.match(r.stdout, /every mutant verdict correct/);
 });

@@ -318,7 +318,7 @@ test('release-gate — attestation-self-check passes on a real compute/verify ro
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all thirty-three checks in order', () => {
+test('release-gate — full run plans all thirty-nine checks in order', () => {
   // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
   // slow, both were previously unreachable from every gate including this one.
   // A Stage-6 correctness follow-up added attestation-self-check +
@@ -368,7 +368,8 @@ test('release-gate — full run plans all thirty-three checks in order', () => {
   // The GA programme (0.195.21) added ga-milestone-gate (fast: it evaluates the committed ledger, registry, scorecard and independent
   // record; a warning until the milestone is declared in docs/ga-program/ledger.json, then an error per unmet reason).
   // The GA gap closure added scorecard-identity (fast: the committed scorecard must name the clean tree being released).
-  assert.equal(ids.length, 38);
+  // 0.220.0 added realcode-precision-gate (slow: the Haskell precision gate's sibling over the pinned Python and TypeScript projects).
+  assert.equal(ids.length, 39);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -393,7 +394,7 @@ test('release-gate — attestation-self-check and nist-catalog-freshness are reg
 test('release-gate — --fast skips only the slow gates, keeping every fast check', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
-  assert.equal(slowIds.length, 19);
+  assert.equal(slowIds.length, 20);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
   assert.equal(ids.length, 19);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
@@ -418,7 +419,7 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
 test('release-gate — the slow checks are the six command gates, the three measurement gates (FR-906\'s ttff/memory plus the Finding Provenance M2 provenance gate), and the registry gate', () => {
   assert.deepEqual(
     CHECKS.filter(c => c.slow).map(c => c.id),
-    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'fix-verification-gate', 'layer-recall-gate', 'language-support-gate', 'haskell-precision-gate', 'haskell-precision-sealed-gate', 'ttff-gate', 'memory-gate', 'provenance-gate', 'verification-conformance-gate', 'sca-replay-gate', 'contract-conformance', 'release-assurance-gate', 'release-closure-gate', 'dependency-currency']
+    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'fix-verification-gate', 'layer-recall-gate', 'language-support-gate', 'haskell-precision-gate', 'realcode-precision-gate', 'haskell-precision-sealed-gate', 'ttff-gate', 'memory-gate', 'provenance-gate', 'verification-conformance-gate', 'sca-replay-gate', 'contract-conformance', 'release-assurance-gate', 'release-closure-gate', 'dependency-currency']
   );
 });
 

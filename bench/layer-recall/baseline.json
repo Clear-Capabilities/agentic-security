@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-11-18",
+  "generatedAt": "2026-11-22",
   "entriesScored": 229,
   "taintByLanguage": {
-    "js/ts": 23,
+    "js/ts": 22,
     "java": 13,
     "python": 21,
     "php": 15,

@@ -147,6 +147,40 @@ function parseJsCached(file, code, irCache) {
 // Synchronous default — JS/TS + Python only. Engine.js calls this directly.
 // Java IR requires async import of java-parser; callers who want it can use
 // buildProjectIRAsync instead.
+// Django: the text captures of a urls.py route (`path("a/<name>/", views.v)`, parser-py.helper.py's `urlCaptures`) become the
+// `py:django-url-capture` annotation on the matching parameters of the view function. The view is found by name in the module the
+// route names (`views` is `views.py` beside the urls file, or any file of that name when there is exactly one), or in the urls file
+// itself and its directory for a bare name; two candidates refuse. Methods and numeric parameters are never marked.
+export function linkDjangoUrlCaptures(perFile) {
+  const dirOf = (f) => (f.includes('/') ? f.slice(0, f.lastIndexOf('/') + 1) : '');
+  const baseOf = (f) => f.slice(f.lastIndexOf('/') + 1).replace(/\.py$/i, '');
+  for (const [file, ir] of Object.entries(perFile || {})) {
+    if (!ir || !Array.isArray(ir.urlCaptures) || !ir.urlCaptures.length) continue;
+    const dir = dirOf(file);
+    for (const cap of ir.urlCaptures) {
+      if (!cap || typeof cap.view !== 'string' || !Array.isArray(cap.params)) continue;
+      const near = [], far = [];
+      for (const [f2, ir2] of Object.entries(perFile)) {
+        if (!/\.py$/i.test(f2) || !ir2 || !Array.isArray(ir2.functions)) continue;
+        const inModule = cap.module ? baseOf(f2) === cap.module : (f2 === file || dirOf(f2) === dir);
+        if (!inModule) continue;
+        for (const fn of ir2.functions) {
+          if (fn.name !== cap.view || fn.className || !Array.isArray(fn.params)) continue;
+          (dirOf(f2) === dir ? near : far).push(fn);
+        }
+      }
+      const pick = near.length === 1 ? near[0] : (near.length === 0 && far.length === 1 ? far[0] : null);
+      if (!pick) continue;
+      for (const p of cap.params) {
+        const idx = pick.params.indexOf(p);
+        if (idx < 0) continue;
+        const list = (pick.paramAnnotations ||= []);
+        if (!list.some((a) => a && a.name === p && a.decorator === 'py:django-url-capture')) list.push({ index: idx, name: p, decorator: 'py:django-url-capture' });
+      }
+    }
+  }
+}
+
 export function buildProjectIR(fileContents, opts = {}) {
   const irCache = opts && opts.irCache ? opts.irCache : null;
   const perFile = {};
@@ -204,6 +238,7 @@ export function buildProjectIR(fileContents, opts = {}) {
   // module header for the full rationale and scope.
   const hsCg = mergeHaskellIR(perFile, hsFiles, opts && opts.haskell);
   try { mergePhpIncludes(perFile); } catch {}
+  try { linkDjangoUrlCaptures(perFile); } catch {}
   if (isSSAEnabled()) {
     for (const ir of Object.values(perFile)) {
       for (const fn of (ir.functions || [])) {
@@ -309,6 +344,7 @@ export async function buildProjectIRAsync(fileContents, opts = {}) {
   // module header for the full rationale and scope.
   const hsCg = mergeHaskellIR(perFile, hsFiles, opts && opts.haskell);
   try { mergePhpIncludes(perFile); } catch {}
+  try { linkDjangoUrlCaptures(perFile); } catch {}
   if (isSSAEnabled()) {
     for (const ir of Object.values(perFile)) {
       for (const fn of (ir.functions || [])) {

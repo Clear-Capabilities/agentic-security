@@ -14,11 +14,15 @@ import { runFullScan } from '../../src/engine.js';
 import { setStateWritesEnabled } from '../../src/posture/state-dir.js';
 
 setStateWritesEnabled(false);
-const scan = async (file, code) => (await runFullScan({ fileContents: { [file]: code }, scanRoot: null, deep: true })).findings.filter((f) => f.file === file && f.severity !== 'info' && !/x-powered-by|Missing/i.test(f.vuln || ''));
+// `deepInCi`: the near-miss verdicts rest on the deep layer's clean-site record (a closed argument at the structural sink), which the
+// hosted runner's CI mode would otherwise leave out; the gate judges the engine with the layer on, as the CLI runs it outside CI.
+const scan = async (file, code) => (await runFullScan({ fileContents: { [file]: code }, scanRoot: null, deep: true, deepInCi: true })).findings.filter((f) => f.file === file && f.severity !== 'info' && !/x-powered-by|Missing/i.test(f.vuln || ''));
 const flagged = async (file, code, re) => (await scan(file, code)).some((f) => re.test(f.vuln));
 
 const MODELS = [
-  { name: 'JS SQL injection', file: 'a.js', re: /SQL Injection/, patternOnlyNearMiss: true,
+  // 0.220.0: the taint layer records a sink site whose argument is closed (a literal-bound variable) as clean and the structural SQL finding
+  // there is dropped, so the near miss is silent in every layer.
+  { name: 'JS SQL injection', file: 'a.js', re: /SQL Injection/, patternOnlyNearMiss: false,
     vuln: "const express = require('express'); const app = express(); const db = require('mysql').createConnection({});\napp.get('/u', (req, res) => { const id = req.query.id; db.query('SELECT * FROM t WHERE id=' + id); res.end(); });\n",
     fixed: "const express = require('express'); const app = express(); const db = require('mysql').createConnection({});\napp.get('/u', (req, res) => { const id = req.query.id; db.query('SELECT * FROM t WHERE id=?', [id]); res.end(); });\n",
     mutated: "// look up a user\nconst express = require('express'); const app = express(); const db = require('mysql').createConnection({});\n\napp.get('/u', (request, response) => {\n  const userKey = request.query.id; /* raw */\n  db.query('SELECT * FROM t WHERE id=' + userKey);\n\n  response.end();\n});\n",

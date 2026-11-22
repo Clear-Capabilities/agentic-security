@@ -63,3 +63,11 @@ Both key on the SECRET-NESS of the identifier, never on the comparison or the ty
 - **Detector snippet attribution.** Don't grab `lines[matchLine - 1]` blindly — for multi-line patterns (`exec('ping' + req.body.host, …)`), the match index and the readable sink line can diverge. Premortem item — fixed in the dataflow engine; if you're regressing on it, your fix probably needs to use the actual sink expression, not the regex's match offset.
 - **Severity floor.** No detector should emit `severity: 'critical'` without strong evidence; the calibrator amplifies critical-rated findings and a flood drowns real ones. If in doubt, emit `high` and let `annotateExploitability` push it up.
 - **Family field for calibration.** If you can't tell what family your rule belongs to, that's a signal the rule covers too much. Split it.
+
+## 0.220.0: the structural SQL rule and the taint layer
+
+`js-framework-structural.js` no longer reports a `.query(..)` whose interpolated or concatenated parts are all names the file binds to
+constant strings (`const TABLE = 'users'`) or numbers: nothing in such a query comes from anywhere. Separately, `engine.js` drops a
+`js-fw-sqli` finding at a call the deep taint walk matched as a SQL sink and found clean (`cleanSinkSites` from `dataflow/engine.js`):
+the pattern layer is the fallback for sites the taint layer cannot see, not a second opinion at sites it has judged. Both were the
+mutation gate's `known-gap` cases, now promoted to adversarial cases that must stay silent.

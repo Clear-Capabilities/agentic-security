@@ -246,3 +246,11 @@ site with Shelly in the process set; once-bound locals read in guards and lifts 
 predicates as lambdas or helpers over Text/ByteString `all`. Result on unseen-v8: taint 12/2/3 to 13/0/2 (F1 82.8% to 92.9%), pattern layer
 unchanged (17/0/7; its seven misses are the next pattern round's list). The two taint misses left are the stdin and CLI policy (see rounds 9
 and 10). unseen-v9 at the end of the round, measured once on the final tree: overall F1 77.8% to 78.9%, taint 80.0% to 82.8% (12 TP / 3 FP / 3 FN to 12 / 2 / 3: one path-traversal safe form that had been reported is now refuted; no vulnerable form changed), pattern layer unchanged at 76.2% (`results/unseen-v9-after-0.219.0.md`, aggregate and per-family tables read only). The gain on the blind split is one refuted stray; the two guard mechanisms that moved unseen-v8 (shell promotion through the callee, once-bound guards) changed no unseen-v9 verdict.
+
+## Round 12 (0.220.0): hasql and constructor sinks
+
+Shape battery first (17 synthetic framework forms, not a split): 16 of 17 fire, one refusal holds, the miss is hasql. Models added for
+`Hasql.Statement.Statement` and `Hasql.Session.sql`; the IR now applies a modelled library constructor as a call (the old lowering as a
+positional record also left postgresql-simple's `Query` constructor sink without a site). unseen-v9 is not re-measured for this change:
+its forms do not use hasql (the author's unsure-spelling list named `hasql connection settings` only), and a blind split is measured at the
+end of a round, not after every model.

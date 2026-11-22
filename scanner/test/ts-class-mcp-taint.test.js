@@ -78,3 +78,30 @@ test('STILL WIDENS: a tainted object passed whole, a spread of one, and a value 
   assert.deepEqual(await sqli({ 'a.js': withBody(src, 'rec({ ...req.body });') }), ['a.js:2']);
   assert.deepEqual(await sqli({ 'a.js': withBody(src, 'const o = req.body; rec(o);') }), ['a.js:2']);
 });
+
+// tRPC procedures, TypeORM's query builder and mongoose's `$where` operator.
+const EX = (imports, body) => ({ 'a.ts': `import express from "express";\n${imports}\nconst app = express();\napp.get("/r", async (req, res) => {\n${body}\n});\n` });
+async function cwe(files, c) {
+  const ir = await buildProjectIRAsync(files);
+  const r = runDeepAnalysis(ir.perFile, ir.callGraph, { fileContents: files });
+  return [...new Set((Array.isArray(r) ? r : (r.findings || [])).filter((f) => f.cwe === c).map((f) => `${f.file}:${f.line}`))];
+}
+test('tRPC: the resolver after .input(schema) receives client input as `input`, destructured or on a named options object; ctx is not input', async () => {
+  const T = (res) => ({ 'a.ts': `import { z } from "zod";\nimport { router, publicProcedure } from "./trpc";\nexport const r = router({ g: publicProcedure.input(z.object({ n: z.string() })).query(${res}) });\n` });
+  const Q = (v) => `ctx.prisma.$queryRawUnsafe("SELECT * FROM t WHERE n = '" + ${v} + "'")`;
+  assert.deepEqual(await cwe(T(`async ({ input, ctx }) => ${Q('input.n')}`), 'CWE-89'), ['a.ts:3']);
+  assert.deepEqual(await cwe(T(`async (opts) => opts.${Q('opts.input.n')}`), 'CWE-89'), ['a.ts:3']);
+  assert.deepEqual(await cwe(T(`async ({ input, ctx }) => ${Q('ctx.user.id')}`), 'CWE-89'), []);
+  assert.deepEqual(await cwe({ 'a.ts': `import { router, publicProcedure } from "./trpc";\nexport const r = router({ g: publicProcedure.query(async (opts) => opts.ctx.prisma.$queryRawUnsafe("SELECT * FROM t WHERE n = '" + opts.input + "'")) });\n` }, 'CWE-89'), []);
+});
+test('TypeORM query builder: a concatenated fragment in .where/.andWhere is SQL injection; a parameter placeholder and a knex .where are not', async () => {
+  assert.deepEqual(await cwe(EX('import { repo } from "./ds";', `  res.json(await repo.createQueryBuilder("t").where("t.n = '" + req.query.n + "'").getMany());`), 'CWE-89'), ['a.ts:5']);
+  assert.deepEqual(await cwe(EX('import { repo } from "./ds";', `  res.json(await repo.createQueryBuilder("t").where("t.a = 1").andWhere("t.n = '" + req.query.n + "'").getMany());`), 'CWE-89'), ['a.ts:5']);
+  assert.deepEqual(await cwe(EX('import { repo } from "./ds";', `  res.json(await repo.createQueryBuilder("t").where("t.n = :n", { n: req.query.n }).getMany());`), 'CWE-89'), []);
+  assert.deepEqual(await cwe(EX('import { knex } from "./ds";', `  res.json(await knex("t").where("n", req.query.n));`), 'CWE-89'), []);
+});
+test('mongoose: a tainted $where value in the filter document is NoSQL injection; an ordinary field filter and a literal $where are not', async () => {
+  assert.deepEqual(await cwe(EX('import { Item } from "./m";', `  res.json(await Item.find({ $where: "this.n == '" + req.query.n + "'" }));`), 'CWE-943'), ['a.ts:5']);
+  assert.deepEqual(await cwe(EX('import { Item } from "./m";', `  res.json(await Item.find({ name: req.query.n }));`), 'CWE-943'), []);
+  assert.deepEqual(await cwe(EX('import { Item } from "./m";', `  res.json(await Item.find({ $where: "this.n == 1" }));`), 'CWE-943'), []);
+});
