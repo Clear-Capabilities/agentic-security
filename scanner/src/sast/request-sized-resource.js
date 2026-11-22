@@ -204,7 +204,9 @@ function matchClose(masked, i, limit = 200_000) {
 const CONTROL_WORDS = new Set(['if', 'for', 'while', 'switch', 'catch', 'foreach', 'using', 'lock', 'synchronized', 'when', 'fixed', 'elseif', 'with', 'until', 'unless', 'return', 'typeof', 'sizeof']);
 
 function headerIsFunction(lang, header) {
-  const h = header.replace(/\s+$/, '');
+  // `trimEnd`, not `.replace(/\s+$/, '')`: a header of up to 600 characters with whitespace runs made that regex quadratic (99 ms of a
+  // 10.5 s scan of this repository), and the two strip exactly the same characters.
+  const h = header.trimEnd();
   if (lang === 'go') return /\bfunc\b/.test(h);
   if (lang === 'php') return /\bfunction\b|\bfn\b/.test(h) && /\)\s*(?::\s*[?\w\\|]+)?\s*(?:use\s*\([^)]*\)\s*(?::\s*[?\w\\|]+)?)?$/.test(h);
   if (lang === 'js' && /=>$/.test(h)) return true;
@@ -219,7 +221,7 @@ function headerIsFunction(lang, header) {
     else if (h[k] === '(') { depth--; if (depth === 0) break; }
   }
   if (k < 0) return false;
-  const before = h.slice(0, k).replace(/\s+$/, '');
+  const before = h.slice(0, k).trimEnd();
   const word = (before.match(/([A-Za-z_]\w*)$/) || [])[1];
   if (!word) return lang === 'js' && /[=(,:]\s*$|^$/.test(before) ? false : false;
   if (CONTROL_WORDS.has(word)) return false;

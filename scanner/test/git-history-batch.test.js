@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { annotateGitHistory } from '../src/posture/git-history.js';
+import { annotateGitHistory, annotateGitHistoryAsync } from '../src/posture/git-history.js';
 
 function git(cwd, ...args) {
   return execFileSync('git', ['-c', 'user.name=Tester', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
@@ -41,4 +41,28 @@ test('git-history batch: per-file blame equals per-line blame, and a bad line do
   assert.equal(findings[0].introducedInMessage, 'first commit');
   assert.equal(findings[0].aiAuthored, undefined);
   assert.equal(findings[4].introducedIn, undefined, 'a line past the end of the file is skipped, not guessed');
+});
+
+test('annotateGitHistoryAsync stamps exactly what annotateGitHistory stamps, with the blames run concurrently', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-async-'));
+  git(dir, 'init', '-q');
+  git(dir, 'config', 'user.email', 't@example.com');
+  git(dir, 'config', 'user.name', 'T');
+  const files = ['a.js', 'b.js', 'c.js', 'd.js', 'e.js'];
+  for (const f of files) fs.writeFileSync(path.join(dir, f), 'one\ntwo\nthree\n');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-q', '-m', 'first commit');
+  fs.writeFileSync(path.join(dir, 'c.js'), 'one\nTWO\nthree\n');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-q', '-m', 'second commit\n\nCo-Authored-By: Claude <noreply@anthropic.com>');
+  const mk = () => files.flatMap((file) => [1, 2, 3, 99].map((line) => ({ file, line })));
+  const sync = mk(); const conc = mk();
+  const rs = annotateGitHistory(dir, sync);
+  const rc = await annotateGitHistoryAsync(dir, conc, { width: 3 });
+  assert.deepEqual(rc, rs);
+  assert.deepEqual(conc, sync);
+  assert.equal(conc.find((f) => f.file === 'c.js' && f.line === 2).aiAuthored, true);
+  assert.equal(conc.find((f) => f.file === 'a.js' && f.line === 99).introducedIn, undefined);
+  assert.equal((await annotateGitHistoryAsync(dir, [])).annotated, 0);
+  fs.rmSync(dir, { recursive: true, force: true });
 });

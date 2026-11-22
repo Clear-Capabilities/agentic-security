@@ -317,7 +317,7 @@ import { buildAIBOM, persistAIBOM } from './posture/aibom.js';
 import { annotateAttackTaxonomy, summarizeTaxonomy } from './posture/attack-taxonomy.js';
 import { suppressByPastDecisions } from './posture/triage-memory.js';
 import { suppressByIntent } from './posture/intent-context.js';
-import { annotateGitHistory } from './posture/git-history.js';
+import { annotateGitHistoryAsync } from './posture/git-history.js';
 // NOT `annotateProvenance` (sca/sigstore-verify.js's build-attestation
 // annotator) and NOT `annotateFindingProvenance` (posture/provenance.js's
 // AI-code fingerprint annotator). Both are already imported above in this
@@ -10523,7 +10523,7 @@ function _deterministicFileTimings(timings) {
     // Git history — stamp each finding with introducedBy / introducedIn /
     // originatingPrompt by running `git blame` on the finding's line.
     if (process.env.AGENTIC_SECURITY_NO_GIT_HISTORY !== '1') {
-      await _runAnnotator("annotateGitHistory", () => { annotateGitHistory(scanRoot, finalFindings); });
+      await _runAnnotator("annotateGitHistory", () => annotateGitHistoryAsync(scanRoot, finalFindings));
     }
     // Threat-model grounding — bump severity on crown-jewels, demote
     // out-of-scope, tag compliance regimes, stamp attacker profile.
