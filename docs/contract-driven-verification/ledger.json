@@ -1,0 +1,729 @@
+{
+ "schema": "agentic-security/contract-driven-verification-ledger",
+ "schemaVersion": "1.0.0",
+ "recordedAt": "2026-11-22",
+ "baseline": {
+  "commit": "f3d61312",
+  "version": "0.221.1"
+ },
+ "statusVocabulary": [
+  "not-started",
+  "in-progress",
+  "implemented-not-executed",
+  "verified-synthetic",
+  "verified-real-adapter",
+  "independently-measured",
+  "blocked"
+ ],
+ "evidenceVocabulary": [
+  "none",
+  "synthetic",
+  "historical",
+  "independent",
+  "unmeasured"
+ ],
+ "requirements": [
+  {
+   "id": "A-01",
+   "title": "Canonical contract and readable threat pack",
+   "phase": 1,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "A-02",
+   "title": "Approval and lifecycle adapters (revoke, expire, scope-bound approval)",
+   "phase": 1,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "A-03",
+   "title": "Shared consumption and cache invalidation (contractRef, invariantId across stages)",
+   "phase": 1,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "A-04",
+   "title": "Useful behaviour with missing intent (contract-gap)",
+   "phase": 1,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "B-01",
+   "title": "Context bundles supplied to hunter and refuters",
+   "phase": 1,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "B-02",
+   "title": "Structured qualification evidence",
+   "phase": 1,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "B-03",
+   "title": "Refutation as a cited blocker; candidate retention",
+   "phase": 1,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "B-04",
+   "title": "Stage attrition and corrective feedback",
+   "phase": 1,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "C-01",
+   "title": "Eval Lab frozen full run",
+   "phase": 2,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "C-02",
+   "title": "Per-vulnerability stability",
+   "phase": 2,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "C-03",
+   "title": "Localized scoring kept; semantic secondary view",
+   "phase": 2,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "C-04",
+   "title": "Real-code population and honest release gates",
+   "phase": 2,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "C-05",
+   "title": "Paired workflow arms and economics",
+   "phase": 2,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "D-01",
+   "title": "Explicit boundary federation reused",
+   "phase": 3,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "D-02",
+   "title": "Identity and authorization propagation",
+   "phase": 3,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "D-03",
+   "title": "Contradictions and controls",
+   "phase": 3,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "E-01",
+   "title": "Supported determinism boundary",
+   "phase": 4,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "E-02",
+   "title": "Security fault plans",
+   "phase": 4,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "E-03",
+   "title": "Reference-model and metamorphic checks",
+   "phase": 4,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "E-04",
+   "title": "Fault testing applied to the harness",
+   "phase": 4,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "F-01",
+   "title": "Repair standard preserved",
+   "phase": 3,
+   "implementation": "implemented-not-executed",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "F-02",
+   "title": "Representative application profiles",
+   "phase": 3,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "F-03",
+   "title": "Linux oracle backend verified before advertised",
+   "phase": 3,
+   "implementation": "blocked",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "F-04",
+   "title": "Durable regression artifact",
+   "phase": 3,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "G-01",
+   "title": "Telemetry import reused",
+   "phase": 5,
+   "implementation": "implemented-not-executed",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "G-02",
+   "title": "Observation-to-regression workflow",
+   "phase": 5,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "G-03",
+   "title": "Isolated shadow patch comparison",
+   "phase": 5,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "H-01",
+   "title": "Semantic mutations of the application",
+   "phase": 4,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "H-02",
+   "title": "Independent oracle boundaries",
+   "phase": 4,
+   "implementation": "implemented-not-executed",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  },
+  {
+   "id": "H-03",
+   "title": "Selective model checking (optional)",
+   "phase": 6,
+   "implementation": "not-started",
+   "evidence": "none",
+   "code": [],
+   "tests": [],
+   "notes": ""
+  }
+ ],
+ "acceptance": [
+  {
+   "id": "A-AC01",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "A-AC02",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "A-AC03",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "A-AC04",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "A-AC05",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "A-AC06",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "B-AC01",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "B-AC02",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "B-AC03",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "B-AC04",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "B-AC05",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "B-AC06",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "B-AC07",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "C-AC01",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "C-AC02",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "C-AC03",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "C-AC04",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "C-AC05",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "C-AC06",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "C-AC07",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "C-AC08",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "D-AC01",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "D-AC02",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "D-AC03",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "D-AC04",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "D-AC05",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "D-AC06",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "E-AC01",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "E-AC02",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "E-AC03",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "E-AC04",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "E-AC05",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "E-AC06",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "F-AC01",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "F-AC02",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "F-AC03",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "F-AC04",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "F-AC05",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "F-AC06",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "G-AC01",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "G-AC02",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "G-AC03",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "G-AC04",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "G-AC05",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "G-AC06",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "H-AC01",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "H-AC02",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "H-AC03",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "H-AC04",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  },
+  {
+   "id": "H-AC05",
+   "status": "not-run",
+   "code": [],
+   "test": null,
+   "observed": null,
+   "artifact": null
+  }
+ ]
+}
