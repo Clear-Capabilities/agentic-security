@@ -135,6 +135,11 @@ function candidatesFromParsed(parsed, focusArea, lens, ctx = {}, stats = null) {
       rationale: typeof c?.rationale === 'string' ? c.rationale : '',
       entryPoint: typeof c?.entryPoint === 'string' ? c.entryPoint : '',
       sink: typeof c?.sink === 'string' ? c.sink : '',
+      // Contract-aware mode (B-02): the model's PROPOSED invariant and attacker assumptions, bounded and shaped here, judged later by
+      // contracts/qualification.js (an invariant id the contract does not declare is a contract gap, never accepted on the model's say).
+      ...(typeof c?.invariantId === 'string' && /^[A-Z][A-Z0-9-]{2,63}$/.test(c.invariantId) ? { invariantId: c.invariantId } : {}),
+      ...(c?.attacker && typeof c.attacker === 'object' ? { attacker: Object.fromEntries(['principal', 'role', 'tenant'].filter((k) => typeof c.attacker[k] === 'string').map((k) => [k, c.attacker[k].slice(0, 80)])) } : {}),
+      ...(Array.isArray(c?.prerequisites) ? { prerequisites: c.prerequisites.filter((x) => typeof x === 'string').slice(0, 8).map((x) => x.slice(0, 200)) } : {}),
     });
   }
   return out;

@@ -1,0 +1,29 @@
+{
+  "schema": "agentic-security/invariant",
+  "schemaVersion": "1.0.0",
+  "key": "invoices-tenant-isolation",
+  "revision": 1,
+  "name": "An actor never changes another tenant's invoice through reviseInvoice",
+  "description": "The memo of an invoice is revised only by a member of the tenant that owns it.",
+  "class": "tenant-isolation",
+  "scope": { "application": "invoices", "entry": "service.mjs", "factory": "createApp", "environment": "disposable-fixture" },
+  "tenants": [{ "id": "acme" }, { "id": "globex" }],
+  "actors": [
+    { "id": "ana", "tenant": "acme", "role": "member" },
+    { "id": "gus", "tenant": "globex", "role": "member" }
+  ],
+  "resources": [
+    { "id": "r-acme", "kind": "record", "tenant": "acme", "key": "invoices/acme-1", "marker": "ACME-PRIVATE-7" },
+    { "id": "r-globex", "kind": "record", "tenant": "globex", "key": "invoices/globex-1", "marker": "GLOBEX-PRIVATE-7" }
+  ],
+  "transitions": [
+    { "id": "own-update", "action": "reviseInvoice", "actors": ["ana"], "resource": "r-acme" },
+    { "id": "own-read", "action": "readInvoice", "actors": ["ana"], "resource": "r-acme" }
+  ],
+  "forbidden": [
+    { "id": "no-cross-tenant-write", "op": "cross-tenant-write", "prefix": "invoices/", "bind": "business-state" }
+  ],
+  "oracle": { "adapter": "business-state", "version": "1" },
+  "author": { "id": "invoices-security-owner", "kind": "human" },
+  "review": { "state": "proposed", "origin": "authored" }
+}

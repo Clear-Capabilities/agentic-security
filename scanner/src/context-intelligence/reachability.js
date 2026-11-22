@@ -158,7 +158,9 @@ export function reachFrom({ graph, fileContents, entrypoint, limits = {} }) {
 export const PROTECTION_DIMENSIONS = Object.freeze(['authentication', 'authorization-role', 'ownership']);
 
 export function evaluateProtection({ facts, unknowns, omittedWithControls = false, capped = false }) {
-  const sens = facts.filter(f => f.category === 'sensitive');
+  // An operation inside the middleware chain (a session lookup the authentication guard performs, reached through it) is the
+  // control's own work, not an operation the control must precede: it carries the chain's position (-1) and does not gate.
+  const sens = facts.filter(f => f.category === 'sensitive' && f.effLine >= 0);
   const firstSens = sens.length ? Math.min(...sens.map(f => f.effLine)) : null;
   const dims = {};
   for (const dim of PROTECTION_DIMENSIONS) {

@@ -299,8 +299,10 @@ test('the incoming index extends the canonical caller index with embedded call s
   const base = buildCallerQidIndex(p.callGraph);
   const idx = buildIncomingIndex(p.callGraph);
   const readInput = [...p.callGraph.functions.keys()].find((k) => k.includes('readInput'));
-  // `const taintedCmd = readInput(req)` is an assignment right-hand side; fn.calls does not record it
-  assert.ok(!(base.get(readInput) || []).length, 'canonical index has no edge for an embedded call');
+  // `const taintedCmd = readInput(req)` is an assignment right-hand side. Until the contract-driven verification programme the
+  // JavaScript front end left such a call out of `fn.calls`, so the canonical index had no edge for it and only this extended
+  // index found it; the front end now records it (its site is the assignment node), and both indexes agree.
+  assert.ok((base.get(readInput) || []).length >= 1, 'canonical index has the edge for an assignment-side call');
   assert.ok((idx.incoming.get(readInput) || []).length >= 1, 'extended index has it');
 });
 

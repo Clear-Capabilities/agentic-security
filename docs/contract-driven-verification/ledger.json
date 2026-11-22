@@ -27,81 +27,123 @@
    "id": "A-01",
    "title": "Canonical contract and readable threat pack",
    "phase": 1,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/contracts/schema.js",
+    "scanner/src/contracts/pack.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/contract-schema.test.js"
+   ],
+   "notes": "contract schema, digest, ref, pack reconciliation, binding view; slice fixture contract validates"
   },
   {
    "id": "A-02",
    "title": "Approval and lifecycle adapters (revoke, expire, scope-bound approval)",
    "phase": 1,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/contracts/approval.js",
+    "scanner/src/posture/invariants/lifecycle.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/contract-schema.test.js",
+    "scanner/test/invariants/invariant-lifecycle.test.js"
+   ],
+   "notes": "service-contract subjects and revoke in the one ledger; reviewer re-check; expiry from the contract policy; wrong-scope on an edited contract"
   },
   {
    "id": "A-03",
    "title": "Shared consumption and cache invalidation (contractRef, invariantId across stages)",
    "phase": 1,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/discovery/index.js",
+    "scanner/src/contracts/qualification.js",
+    "scanner/src/posture/invariants/repair.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/contract-hunt.test.js",
+    "scanner/test/invariants/invariant-repair.test.js"
+   ],
+   "notes": "contractRef and invariantId on candidates, in the report and in the regression artifact; context cache keys not yet extended (jobKeyOf settings still empty)"
   },
   {
    "id": "A-04",
    "title": "Useful behaviour with missing intent (contract-gap)",
    "phase": 1,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/contracts/qualification.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/contract-hunt.test.js"
+   ],
+   "notes": "contract-gap decision; uncovered candidates keep their evidence and reach the report"
   },
   {
    "id": "B-01",
    "title": "Context bundles supplied to hunter and refuters",
    "phase": 1,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/discovery/context-supplier.js",
+    "scanner/src/discovery/lenses.js",
+    "scanner/src/discovery/disprove.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/contract-hunt.test.js",
+    "scanner/test/contracts-driven/refutation-evidence.test.js"
+   ],
+   "notes": "verified bundles to the hunter (budgeted) and the exact span plus controls to every challenger"
   },
   {
    "id": "B-02",
    "title": "Structured qualification evidence",
    "phase": 1,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/contracts/qualification.js",
+    "scanner/src/discovery/hunter.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/contract-hunt.test.js"
+   ],
+   "notes": "qualification record with citations validated against the bundle, controls with effectiveness, unresolved, decision and reasons"
   },
   {
    "id": "B-03",
    "title": "Refutation as a cited blocker; candidate retention",
    "phase": 1,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/discovery/disprove.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/refutation-evidence.test.js"
+   ],
+   "notes": "refutation-vote/2 blocker with citations and control kind; deterministic, model-only or insufficient-evidence grounding; contested; legacy votes parsed as insufficient evidence"
   },
   {
    "id": "B-04",
    "title": "Stage attrition and corrective feedback",
    "phase": 1,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "in-progress",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/discovery/index.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/contract-hunt.test.js"
+   ],
+   "notes": "per-candidate history and attrition in the hunt report; memory learns only grounded refutations; not yet consumed by the evaluation lab (Phase 2)"
   },
   {
    "id": "C-01",
@@ -327,107 +369,107 @@
  "acceptance": [
   {
    "id": "A-AC01",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/contract-hunt.test.js",
+   "observed": "the same contractRef on the report, the qualification record and (repair.js) the regression artifact",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "A-AC02",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/contract-schema.test.js",
+   "observed": "proposed, edited (wrong-scope), expired, revoked, forged, dropped reviewer and model approvals all fail",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "A-AC03",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/contract-schema.test.js",
+   "observed": "identical content gives identical ref; review claim excluded; cache invalidation of context jobs not yet implemented",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "A-AC04",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/contract-schema.test.js",
+   "observed": "pack-digest-mismatch, pack-names-undeclared-invariant, pack-omits-invariant with both sources",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "A-AC05",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/contract-hunt.test.js",
+   "observed": "a candidate naming an undeclared invariant is contract-gap and still reported",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "A-AC06",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/contract-schema.test.js",
+   "observed": "bindingView: missing and unsupported bindings are gaps",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "B-AC01",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/contract-hunt.test.js",
+   "observed": "every challenger prompt carries the VERIFIED CONTEXT span",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "B-AC02",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/refutation-evidence.test.js",
+   "observed": "stale, out-of-bundle and uncited blockers remove nothing",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "B-AC03",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/refutation-evidence.test.js",
+   "observed": "silence undecided; legacy votes insufficient-evidence; unavailable store needs-context",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "B-AC04",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/refutation-evidence.test.js",
+   "observed": "taint-confirmed survives a grounded majority as contested with votes kept",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "B-AC05",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/refutation-evidence.test.js",
+   "observed": "a grounded majority disqualifies; refutationBasis records it",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "B-AC06",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/contract-hunt.test.js",
+   "observed": "a source comment asking for clearance, cited by a vote, changes nothing",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "B-AC07",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/contract-hunt.test.js",
+   "observed": "history[] per candidate and attrition in the report",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "C-AC01",
@@ -725,5 +767,16 @@
    "observed": null,
    "artifact": null
   }
+ ],
+ "phase": {
+  "0": "done",
+  "1": "done on the synthetic slice: contracts validate/inspect/draft, hunt --contract, scripts/contract-slice-example.mjs (exit 0 on this host); effectiveness unmeasured"
+ },
+ "defectsFixed": [
+  "ir/parser-js.js: assignment-side calls were left out of fn.calls (cross-file call graph and DCI reachability never followed const r = helper(x))",
+  "context-intelligence/graph-schema.js: two anonymous functions on one line collided in the symbol graph; the build was refused",
+  "context-intelligence/{reachability,invariants}.js: an operation inside the middleware chain counted as the first sensitive operation at the chain position",
+  "discovery/index.js: coverage.citationsDiscarded always 0; --no-memory cleared scanRoot (egress/redaction policy read from the wrong project)",
+  "posture/invariants/lifecycle.js: verifyLedger did not re-check a recorded reviewer against the current policy (now does when a policy is supplied)"
  ]
 }

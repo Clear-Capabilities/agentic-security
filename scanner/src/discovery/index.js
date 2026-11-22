@@ -15,6 +15,10 @@ import { LENSES, lensByKey, invariantProposalFor } from './lenses.js';
 import { runHunter } from './hunter.js';
 import { confirmAll, taintCorroborates } from './confirm.js';
 import { disprovePanel } from './disprove.js';
+import { refutationBasis } from './disprove.js';
+import { makeContextSupplier } from './context-supplier.js';
+import { qualifyCandidate, qualificationSummary } from '../contracts/qualification.js';
+import { contractRef } from '../contracts/schema.js';
 import { judgeCandidates } from './judge.js';
 import { loadMemory, saveMemory, rememberRun, previouslyRefuted, nextWavePlan, forgetRefuted } from './memory.js';
 import { emitVerification, headCommit } from '../posture/verification/emit.js';
@@ -161,6 +165,13 @@ export function makeBudget(opts = {}, now = Date.now) {
   };
 }
 
+/** Stage attrition: how many candidates reached each stage and how each stage decided, from the per-candidate histories. */
+function attritionOf(history) {
+  const stages = {};
+  for (const h of history.values()) for (const e of h) { const s = (stages[e.stage] ||= { entered: 0, decisions: {} }); s.entered += 1; s.decisions[e.decision] = (s.decisions[e.decision] || 0) + 1; }
+  return stages;
+}
+
 export async function runDiscovery(ctx = {}, opts = {}) {
   // Call-graph areas (every language the IR covers, Haskell included) plus Nix configuration areas, which have no call
   // graph. Together they respect the same ceiling.
@@ -177,7 +188,17 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   const budget = makeBudget(opts);
   // PRD C4 — what previous runs already judged. scanRoot absent => no memory,
   // which is the correct default for a library call with nowhere to persist.
-  let memory = opts.scanRoot ? loadMemory(opts.scanRoot) : null;
+  // `opts.memory === false` turns the cross-run memory off without unsetting `scanRoot`: the root also names the project whose
+  // egress policy and redaction configuration apply, and `--no-memory` used to clear it (so a hunt run from another directory read
+  // the wrong project's policy).
+  let memory = opts.scanRoot && opts.memory !== false ? loadMemory(opts.scanRoot) : null;
+  // Contract-aware mode (contract-driven verification, Epics A and B): the contract, its approval state and the verified context
+  // supplier are threaded to the hunter, the panel and the qualification of every candidate. Off unless the caller asks.
+  const contractMode = opts.contractMode && typeof opts.contractMode === 'object' ? opts.contractMode : null;
+  const supplier = contractMode ? (contractMode.supplier || makeContextSupplier({ scanRoot: opts.scanRoot, fileContents: ctx.fileContents || {} })) : null;
+  const contractView = contractMode?.contract ? { ref: contractRef(contractMode.contract), summary: contractMode.contract.summary, invariants: (contractMode.contract.invariants || []).map((i) => ({ id: i.id, statement: i.statement, entryPoints: i.attacker?.entryPoints || [] })) } : null;
+  const history = new Map(); // candidate id -> [{ stage, decision, reason }] (B-04: where a candidate was lost, replayable)
+  const note = (c, stage, decision, reason = null) => { if (!c?.id) return; if (!history.has(c.id)) history.set(c.id, []); history.get(c.id).push({ stage, decision, ...(reason ? { reason } : {}) }); };
   // `--forget-refuted`: a model, a ruleset or the code changed, so what an earlier run refuted is worth examining again.
   if (memory && opts.forgetRefuted) memory = forgetRefuted(memory);
   // Every LLM call in this pipeline is counted against the budget. An injected callback is wrapped here; with none injected, each
@@ -216,8 +237,11 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   for (const area of areas) {
     let areaDegradedCount = 0;
     for (const lens of lenses) {
-      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot }, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot });
-      runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
+      const verifiedContext = supplier ? { ...supplier.forArea(area.files, opts.contextChars || 24_000), contract: contractView } : null;
+      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot, ...(verifiedContext ? { verifiedContext } : {}) }, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot });
+      // `citationsDiscarded` was summed from these entries below but never copied into them, so the coverage figure was always 0.
+      runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length, discarded: run.discarded || 0, citationsDiscarded: run.citationsDiscarded || 0, citation: run.citation || null, ...(verifiedContext ? { verifiedContext: { state: verifiedContext.state, packages: verifiedContext.packages.length, omitted: verifiedContext.omitted } } : {}) });
+      for (const c of run.candidates) note(c, 'hunted', 'proposed', `${area.label} × ${lens.key}`);
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
       if (run.discarded > 0) reasons.push(`${area.label} × ${lens.key}: ${run.discarded} proposed candidate(s) had no usable file and line and were discarded`);
       if (run.degraded) areaDegradedCount += 1;
@@ -249,6 +273,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
     candidatesCapped = candidates.length - maxCandidates;
     // Deterministic: candidates arrive in a stable (area, lens) order, so the
     // cap keeps the same prefix on every run over the same inputs.
+    for (const c of candidates.slice(maxCandidates)) note(c, 'cap', 'not-examined', `candidate cap ${maxCandidates}`);
     candidates = candidates.slice(0, maxCandidates);
     reasons.push(`candidate cap: ${candidatesCapped} candidate(s) were NOT confirmed or refuted ` +
       `(cap ${maxCandidates}); they are neither findings nor cleared — they were not examined`);
@@ -272,12 +297,22 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       'every candidate is reported unconfirmed and severity is not evidence-derived');
   }
   let confirmed = await confirmAll(candidates, { taintProbe });
+  for (const c of confirmed) note(c, 'confirm', c.confirmation?.tier || 'unconfirmed');
+  // B-02: every candidate gets its qualification record in contract mode; `contract-gap` candidates keep every piece of evidence.
+  if (contractMode) {
+    for (const c of confirmed) {
+      c.qualification = qualifyCandidate(c, { contract: contractMode.contract || null, supplier, approval: contractMode.approval || null });
+      note(c, 'qualify', c.qualification.decision, c.qualification.reasons.join('; ') || null);
+    }
+  }
   // PRD C4 — drop what a previous run already refuted, BEFORE spending the panel's three calls per candidate on it again. Only
   // refutals suppress: a candidate previously judged fresh is re-reported, because it was never fixed, which is the same
   // asymmetry judge.js applies to tp/fp triage. A taint-confirmed candidate is never skipped on memory alone (GA-06 §4): the
   // engine's evidence is current, the remembered refutation was a model's opinion about an earlier, uncorroborated candidate.
   if (memory) {
     const before = confirmed.length;
+    const skipped = confirmed.filter(c => !(c?.confirmation?.tier === 'taint-confirmed' || !previouslyRefuted(memory, c)));
+    for (const c of skipped) note(c, 'memory', 'skipped', 'refuted by an earlier run');
     confirmed = confirmed.filter(c => c?.confirmation?.tier === 'taint-confirmed' || !previouslyRefuted(memory, c));
     rememberedRefutals = before - confirmed.length;
     if (rememberedRefutals > 0) {
@@ -285,8 +320,13 @@ export async function runDiscovery(ctx = {}, opts = {}) {
         '(clear with --forget-refuted if a model, ruleset or the code has changed since)');
     }
   }
-  const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot });
+  const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot, ...(supplier ? { contextSupplier: supplier } : {}) });
+  for (const c of refuted) { note(c, 'panel', 'disqualified', refutationBasis(c)); if (c.qualification) c.qualification = { ...c.qualification, decision: 'disqualified', reasons: [...c.qualification.reasons, `blocker:${refutationBasis(c)}`] }; }
+  for (const c of survivors) note(c, 'panel', c.refutation?.contested ? 'contested' : c.refutation?.undecided ? 'unvetted' : 'survived', refutationBasis(c));
   const { fresh, duplicates, suppressed } = judgeCandidates(survivors, ctx.priorScan, ctx.triageFeedback);
+  // judge.js reshapes a candidate into a finding whose id is `discovery-<lens>-<candidate id>`; the history stays keyed by the candidate.
+  const cid = (f) => ({ id: typeof f?.discovery?.candidateId === 'string' ? f.discovery.candidateId : String(f?.id || '').slice(-12) });
+  for (const c of fresh) note(cid(c), 'judge', 'fresh'); for (const c of duplicates) note(cid(c), 'judge', 'duplicate'); for (const c of suppressed) note(cid(c), 'judge', 'suppressed', 'triage');
 
   // A spent budget is a coverage gap, stated once at the top level rather than
   // left to be inferred from N identical per-run degradation reasons.
@@ -322,8 +362,11 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   // rather than a repeat. Persistence failure is non-fatal: the report is still
   // valid, it just will not inform the next run.
   if (memory && opts.scanRoot) {
+    // B-04: memory learns only from a refutation that evidence grounded. A model-only removal (the legacy panel, or a vote whose
+    // blocker no deterministic mechanism supports) is not remembered as refuted, so the next run examines the candidate again.
+    const remembered = contractMode ? refuted.filter((c) => c?.refutation?.grounded === true) : refuted;
     saveMemory(opts.scanRoot, rememberRun(memory, {
-      fresh, refutedCandidates: refuted,
+      fresh, refutedCandidates: remembered,
       areas: areas.map(a => ({ id: a.id, label: a.label, files: a.files.length, hunted: hunted.has(a.id) })),
     }));
   }
@@ -381,6 +424,13 @@ export async function runDiscovery(ctx = {}, opts = {}) {
     // would misrepresent it as one. Unlike `fresh`/`duplicates`/`suppressed`,
     // do not iterate this array as if it were finding-shaped.
     refutedCandidates: refuted,
+    // Contract-aware mode (contract-driven verification): the contract identity every candidate was judged against, every candidate
+    // with the stage history that explains where it went (B-04), and the attrition tally. Absent when the mode is off.
+    ...(contractMode ? {
+      contract: { ref: contractView?.ref ?? null, approval: contractMode.approval ? { state: contractMode.approval.state, current: contractMode.approval.current, transitionId: contractMode.approval.transitionId } : null, context: supplier ? supplier.summary() : { state: 'unavailable', reason: 'no supplier' }, qualification: qualificationSummary([...survivors, ...refuted]) },
+      candidatesAll: [...survivors, ...refuted].map((c) => ({ id: c.id, file: c.file, line: c.line, title: c.title, cwe: c.cwe, confirmation: c.confirmation?.tier ?? null, qualification: c.qualification ?? null, refutation: c.refutation ? { refuted: c.refutation.refuted, contested: c.refutation.contested ?? false, grounded: c.refutation.grounded ?? false, undecided: c.refutation.undecided, objections: c.refutation.objections ?? [] } : null, history: history.get(c.id) || [] })),
+      attrition: attritionOf(history),
+    } : {}),
     coverage: {
       areasPlanned: areas.length,
       // At least one lens run completed for the area. Does NOT mean every

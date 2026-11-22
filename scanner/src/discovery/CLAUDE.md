@@ -107,3 +107,21 @@ panel's votes, a confidence score and the confirmation tier are never inputs to 
 ## Localization and classification of candidates (round 11)
 
 `lenses.js` `buildHunterPromptWithMap` shows each file with its original line numbers (`  12| code`) and shares the character budget across the area's files by water-filling (`allotBudget`), so one large file can no longer spend the whole prompt; a file is cut at a line boundary and the prompt says which lines were shown. It returns `shown[file]` (range, truncation, the redacted line text, `lineMapped`: false when redaction changed the line count, in which case the file is shown unnumbered). `hunter.js` checks every citation against that map: a line outside the shown range (`line-not-shown`) or a file the prompt did not show (`file-not-shown`) is discarded; a `code` anchor must match the cited line's shown text (whitespace collapsed), may move the citation to the one matching line within two (recorded as `citedLine`), and is discarded when it matches none (`anchor-mismatch`) or several but not the cited one (`anchor-ambiguous`). A candidate without an anchor is kept and marked `anchored: false`. Counts are in the hunter result's `citation` block and the transcript. `classification.js` decides the CWE: the model may propose one; it is kept only when the lens can raise it (`LENS_CWES`; wildcard and chained may raise any listed one) and, for a weakness that is an operation on a value, the cited line or the two after it hold that operation (`OPERATION_EVIDENCE`): `cweBasis: 'operation-checked'`. Authorization and logic weaknesses have no syntactic operation and are kept as `model-proposed`. Anything else keeps the lens CWE (`cweBasis: 'lens'`, with `proposedCwe` and `cweRejected` when a proposal was refused). One CWE is recorded, never a list. Corroboration (`confirm.js`) is unchanged and now sees the specific CWE. Not measured end to end: no discovery run was made in this round (the local-model budget problem in the lessons document is unchanged). Tests: `test/discovery-citation.test.js`.
+
+## Contract-aware mode and the evidence-grounded panel (contract-driven verification, 0.222.0)
+
+`runDiscovery(ctx, { contractMode: { contract, approval, supplier? } })` is additive and off by default. With it, `context-supplier.js`
+reads the context-intelligence store of `scanRoot` (a verified, hash-bound bundle per entry point) and: the hunter prompt gains a
+VERIFIED CONTEXT block (the contract's invariant statements and the area's context packages, fenced as data, within a third of the
+budget) and asks for `invariantId`, `attacker` and `prerequisites` as hypotheses; every candidate gets `candidate.qualification`
+(`contracts/qualification.js`); the panel's challengers see the exact span and the recorded controls, and vote a cited blocker
+(`refutation-vote/2`, `disprove.js` header). A blocker disqualifies only when its citations resolve against the bundle AND a
+deterministic mechanism supports the control kind it names (the context layer's protection verdict on a reaching entry point, or the
+taint layer's clean-site record); a model-only majority leaves the candidate `contested`, with the objections kept; a vote without
+evidence (including every legacy Boolean vote under a supplier) never removes. The report gains `contract`, `candidatesAll` (every
+candidate with its `history[]` of stage decisions) and `attrition`. Memory remembers a refutation only when it was grounded. Without
+`contractMode` nothing above runs and the legacy panel behaves exactly as before.
+
+Two defects fixed on the way: `coverage.citationsDiscarded` was always 0 (the per-run entries never carried the hunter's count), and
+`--no-memory` cleared `scanRoot`, which also names the project whose egress policy and redaction apply; `opts.memory === false` now
+turns memory off on its own.
