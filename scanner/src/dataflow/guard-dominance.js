@@ -375,10 +375,29 @@ function tryGuardHandlersExit(lines, guardIdx, sinkIdx, gl) {
   return true;
 }
 
+/**
+ * The last line of an indentation-style conditional head that spans several lines (`if ok and allowed(\n    url,\n):`): the line on
+ * which every bracket opened since the guard line is closed again. A single-line head is its own end.
+ */
+function headEndIdx(lines, guardIdx) {
+  let depth = 0;
+  for (let i = guardIdx; i < Math.min(lines.length, guardIdx + 30); i++) {
+    for (const ch of code(lines[i])) { if (ch === '(' || ch === '[' || ch === '{') depth++; else if (ch === ')' || ch === ']' || ch === '}') depth--; }
+    if (depth <= 0) return i;
+  }
+  return guardIdx;
+}
+
 function indentDominates(lines, guardIdx, sinkIdx, gl) {
   const gi = indentOf(lines[guardIdx]);
+  // A head that continues over several lines (`if a and f(\n    x,\n):`) is part of the guard, not its body: its continuation lines are
+  // skipped below, and the `:` that opens the block is read from the line that closes the head (found on a Django view whose
+  // `url_has_allowed_host_and_scheme(` call listed its arguments one per line, so the body was read as empty).
+  const headEnd = headEndIdx(lines, guardIdx);
+  if (headEnd >= sinkIdx) return result(false, 'sink-inside-guard-head');
+  const headTail = code(lines[headEnd]);
   // The guard's block must still enclose the sink: no non-blank line between may be LESS indented than the guard.
-  for (let i = guardIdx + 1; i <= sinkIdx; i++) {
+  for (let i = headEnd + 1; i <= sinkIdx; i++) {
     if (blank(lines[i])) continue;
     if (indentOf(lines[i]) < gi) {
       return tryGuardHandlersExit(lines, guardIdx, sinkIdx, gl)
@@ -387,12 +406,12 @@ function indentDominates(lines, guardIdx, sinkIdx, gl) {
     }
   }
   if (MODIFIER_EXIT.test(gl)) return result(true, 'early-exit-on-guard-line');
-  const head = CONDITIONAL_HEAD.test(gl) || /\bif\b|\bunless\b/.test(gl) && /:\s*$/.test(gl);
+  const head = CONDITIONAL_HEAD.test(gl) || /\bif\b|\bunless\b/.test(gl) && /:\s*$/.test(headTail);
   if (!head) return result(true, 'straight-line-before-sink');
 
   // A conditional: collect the indented block that follows the header.
   const bodyLines = [];
-  for (let i = guardIdx + 1; i < lines.length; i++) {
+  for (let i = headEnd + 1; i < lines.length; i++) {
     if (blank(lines[i])) continue;
     if (indentOf(lines[i]) <= gi) break;
     bodyLines.push(i);
@@ -401,8 +420,8 @@ function indentDominates(lines, guardIdx, sinkIdx, gl) {
     return result(true, 'sink-inside-guarded-branch');
   }
   // One-liner `if not ok(x): raise ...`.
-  const afterColon = gl.slice(gl.lastIndexOf(':') + 1);
-  if (/:\s*\S/.test(gl) && TERMINATOR.test(afterColon)) return result(true, 'early-exit-on-guard-line');
+  const afterColon = headTail.slice(headTail.lastIndexOf(':') + 1);
+  if (/:\s*\S/.test(headTail) && TERMINATOR.test(afterColon)) return result(true, 'early-exit-on-guard-line');
   // Direct statements of the block (one indent level in) that exit.
   const inner = bodyLines.length ? indentOf(lines[bodyLines[0]]) : -1;
   if (bodyLines.some((i) => indentOf(lines[i]) === inner && TERMINATOR.test(code(lines[i])))) return result(true, 'failing-branch-exits');

@@ -60,6 +60,8 @@
 // WHAT A FINDING CLAIMS. Only that this site is inconsistent with its
 // neighbours, with the neighbours named. Medium severity, always.
 
+import { createStringMemo } from '../util/string-memo.js';
+
 const LANG_BY_EXT = [
   [/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i, 'js'],
   [/\.py$/i, 'py'],
@@ -157,7 +159,11 @@ export function isGuardName(name, lang) {
 
 const REGEX_PREV = new Set(['(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '~', '+', '-', '*', '%', '<', '>', '']);
 
-export function maskStrings(code, lang) {
+// Three detectors (this one, `request-sized-resource.js`, `authz-step-deviation.js`) mask the same file; the result is a pure function of
+// the text and the language, so it is computed once per distinct text (`createStringMemo`, bounded and versioned).
+export const maskStrings = createStringMemo((code, lang) => maskStringsUncached(code, lang === '' ? undefined : lang), { version: 'maskStrings@1', disableEnv: 'AGENTIC_SECURITY_NO_STRING_MEMO' });
+
+function maskStringsUncached(code, lang) {
   const out = code.split('');
   const n = code.length;
   const multiline = lang === 'rb' || lang === 'php';

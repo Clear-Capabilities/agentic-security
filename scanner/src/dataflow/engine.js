@@ -224,6 +224,142 @@ const _constNamesByFile = new Map();
 // The same fact per FUNCTION: a name this function binds only to regexes is a RegExp inside it even when another function of the file
 // binds the same name to something else (`const separator = text.indexOf("&")` in one function, `const separator = /[ ,]/g` in another).
 const _regexNamesByFn = new Map();
+// Per function: the response receivers whose content type the function set to something other than markup or script
+// (`res.setHeader('Content-Type', 'application/json')`, `res.type('json')`, Django `response['Content-Type'] = 'text/csv'`).
+// Built in `_buildRegexNames`, read by the CWE-79 gate in `_sinkFindingsForCall`.
+const _nonHtmlRespondersByFn = new Map();
+// A media type that is neither markup nor script. A short alias (`res.type('json')`) is accepted when it is not one of the markup ones.
+const _NON_HTML_TYPE_RE = /^(?!.*(?:html|xml|svg|javascript|ecmascript|xhtml)).+\/.+/i;
+const _NON_HTML_ALIAS_RE = /^(?:json|text|txt|csv|bin|pdf|png|jpe?g|gif|webp|zip|wasm)$/i;
+function _nonHtmlResponderOfCall(n, depth = 0) {
+  if (!n || n.kind !== 'call' || depth > 6) return null;
+  const c = n.callee;
+  let root = null;
+  let prop = null;
+  if (typeof c === 'string') { const parts = c.split('.'); if (parts.length < 2) return null; root = parts[0]; prop = parts[parts.length - 1]; }
+  else if (c && c.kind === 'member' && typeof c.prop === 'string') {
+    // `res.set('Content-Type', t).send(x)`: the chain's head sets the type on the same response
+    if (c.object && c.object.kind === 'call') { const inner = _nonHtmlResponderOfCall(c.object, depth + 1); if (inner) return inner; }
+    if (!c.object || c.object.kind !== 'ident') return null;
+    root = c.object.name; prop = c.prop;
+  } else return null;
+  const a = n.args || [];
+  const lit = (x) => (x && x.kind === 'literal' ? String(x.value ?? '') : null);
+  if (/^(?:setHeader|set|header|__setitem__)$/.test(prop) && a.length >= 2 && /^content-type$/i.test(lit(a[0]) || '')) {
+    const t = lit(a[1]);
+    return t !== null && _NON_HTML_TYPE_RE.test(t) ? root : null;
+  }
+  if (/^(?:type|contentType)$/.test(prop) && a.length >= 1) {
+    const t = lit(a[0]);
+    return t !== null && (_NON_HTML_TYPE_RE.test(t) || _NON_HTML_ALIAS_RE.test(t)) ? root : null;
+  }
+  if (prop === 'writeHead' && a[1] && a[1].kind === 'object') {
+    const p = (a[1].props || []).find((q) => q && /^content-type$/i.test(String(q.key || '')));
+    const t = p ? lit(p.value) : null;
+    return t !== null && _NON_HTML_TYPE_RE.test(t) ? root : null;
+  }
+  return null;
+}
+// The root receiver name of a callee (`res` for `res.send(x)`, `res.status(200).send(x)` and the string `res.send`), or null.
+function _calleeRootName(c, depth = 0) {
+  if (!c || depth > 12) return null;
+  if (typeof c === 'string') return c.includes('.') ? c.slice(0, c.indexOf('.')) : null;
+  if (c.kind === 'ident') return c.name || null;
+  if (c.kind === 'member') return c.object && c.object.kind === 'call' ? _calleeRootName(c.object.callee, depth + 1) : _calleeRootName(c.object, depth + 1);
+  return null;
+}
+// A pattern whose metacharacters were escaped before it reached `RegExp`: the `.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')` idiom (the
+// pattern literal is one character class holding the regex metacharacters, the replacement re-inserts the match behind a backslash),
+// or a call of a well-known escaper; read on the sink argument and through a chained call on the escaped value.
+function _regexEscapedExpr(expr, depth = 0) {
+  if (!expr || typeof expr !== 'object' || expr.kind !== 'call' || depth > 4) return false;
+  const c = expr.callee;
+  const leaf = typeof c === 'string' ? c.slice(c.lastIndexOf('.') + 1) : (c && c.kind === 'member' ? c.prop : (c && c.kind === 'ident' ? c.name : null));
+  if (/^(?:escapeRegExp|escapeStringRegexp|escapeRegex)$/.test(leaf || '')) return true;
+  if ((leaf === 'replace' || leaf === 'replaceAll') && Array.isArray(expr.args) && expr.args.length >= 2) {
+    const [pat, rep] = expr.args;
+    const src = pat && pat.kind === 'literal' && pat.isRegex && pat.value instanceof RegExp ? pat.value.source : null;
+    const r = rep && rep.kind === 'literal' ? String(rep.value) : null;
+    if (src && r !== null && /^\[.*\]$/.test(src) && ['*', '+', '?', '(', '\\'].every((ch) => src.includes(ch)) && /^\\\$&$/.test(r)) return true;
+  }
+  if (c && c.kind === 'member' && c.object && c.object.kind === 'call') return _regexEscapedExpr(c.object, depth + 1);
+  return false;
+}
+// `raw(text, bindings)` with a closed text: the result is bound values, not SQL text built from them (see exprTaint, case 'call').
+function _isBoundRawCall(expr, callContext) {
+  if (!expr || expr.kind !== 'call' || !Array.isArray(expr.args) || expr.args.length < 2) return false;
+  const c = expr.callee;
+  const leaf = typeof c === 'string' ? c.slice(c.lastIndexOf('.') + 1) : (c && c.kind === 'member' ? c.prop : (c && c.kind === 'ident' ? c.name : null));
+  return leaf === 'raw' && _closedExpr(expr.args[0], callContext);
+}
+// The literal items of a local mapping built in the function being walked (`opts = {}`, `opts = dict()`, `opts = {'a': 1}`, then
+// `opts['shell'] = False`, or `opts.shell = true` for a JavaScript options record), read by the `requireKeyword` gate when the mapping is
+// splatted into a call (`Popen(cmd, **opts)`). A mapping rebound to anything else, handed to a call, read through a method, written with a
+// non-literal key, or given two different literals for one key is forgotten (`closed: false`), and the gate treats the keywords as not
+// enumerable, as before. Flow-insensitive within the function, like `_builderVars`.
+function _dictItemsOnAssign(node, callContext) {
+  if (!callContext || typeof node.target !== 'string') return;
+  const m = (callContext._dictItems ||= new Map());
+  const s = node.source;
+  if (node.target.includes('.')) {
+    const [root, ...rest] = node.target.split('.');
+    const d = m.get(root);
+    if (d) {
+      if (rest.length !== 1 || !s || s.kind !== 'literal') d.closed = false;
+      else _dictItemSet(d, rest[0], s);
+    }
+    if (s) _dictItemsOnUse(s, callContext);
+    return;
+  }
+  const emptyCtor = s && s.kind === 'call' && !s.isNew && (s.callee === 'dict' || (s.callee && s.callee.kind === 'ident' && s.callee.name === 'dict')) && !(s.args || []).length;
+  if (s && s.kind === 'object' && (s.props || []).every((p) => p && !p.spread && typeof p.key === 'string')) {
+    const d = { closed: true, items: new Map() };
+    for (const p of s.props || []) _dictItemSet(d, p.key, p.value);
+    m.set(node.target, d);
+  } else if (emptyCtor) m.set(node.target, { closed: true, items: new Map() });
+  else m.delete(node.target);
+  if (s && !emptyCtor) _dictItemsOnUse(s, callContext);
+}
+function _dictItemSet(d, key, value) {
+  const prev = d.items.get(key);
+  if (prev && (prev.kind !== 'literal' || !value || value.kind !== 'literal' || String(prev.value) !== String(value.value))) d.closed = false;
+  d.items.set(key, value);
+}
+function _dictItemsOnCall(node, callContext) {
+  if (!callContext || !callContext._dictItems || !callContext._dictItems.size) return;
+  const m = callContext._dictItems;
+  const c = node.callee;
+  const flat = typeof c === 'string' ? c : (c && c.kind === 'member' && c.object && c.object.kind === 'ident' && typeof c.prop === 'string' ? `${c.object.name}.${c.prop}` : null);
+  if (flat && flat.includes('.')) {
+    const parts = flat.split('.');
+    const d = m.get(parts[0]);
+    if (d) {
+      if (parts.length === 2 && parts[1] === '__setitem__') {
+        const [k, v] = node.args || [];
+        // the Python front end keeps a subscript key's quotes in the literal (`'shell'`); a record literal's key has none
+        if (k && k.kind === 'literal' && v) _dictItemSet(d, String(k.value).replace(/^(['"])([\s\S]*)\1$/, '$2'), v); else d.closed = false;
+      } else d.closed = false;
+    }
+  }
+  _dictItemsOnCallArgs(node, callContext, 0);
+}
+// The Python front end records a keyword's value, and the splatted mapping itself, in `args` as well as in `kwargs`; the splat is the
+// gate's own consumer, not a use that hides the mapping, so an argument naming the splatted mapping is skipped.
+function _dictItemsOnCallArgs(call, callContext, depth) {
+  const splat = call.kwargs && call.kwargs['**'] && call.kwargs['**'].splat;
+  const splatName = splat && splat.kind === 'ident' ? splat.name : null;
+  for (const a of call.args || []) { if (a && a.kind === 'ident' && a.name === splatName) continue; _dictItemsOnUse(a, callContext, depth + 1); }
+  if (call.kwargs) for (const [k, v] of Object.entries(call.kwargs)) if (k !== '**' && v) _dictItemsOnUse(v, callContext, depth + 1);
+}
+function _dictItemsOnUse(expr, callContext, depth = 0) {
+  if (!expr || typeof expr !== 'object' || depth > 12 || !callContext || !callContext._dictItems || !callContext._dictItems.size) return;
+  if (expr.kind === 'ident') { const d = callContext._dictItems.get(expr.name); if (d) d.closed = false; return; }
+  for (const k of ['left', 'right', 'object', 'operand', 'value']) if (expr[k] && typeof expr[k] === 'object') _dictItemsOnUse(expr[k], callContext, depth + 1);
+  if (expr.kind === 'call') _dictItemsOnCallArgs(expr, callContext, depth);
+  for (const k of ['parts', 'branches', 'elements']) if (Array.isArray(expr[k])) for (const e of expr[k]) _dictItemsOnUse(e, callContext, depth + 1);
+  if (Array.isArray(expr.props)) for (const p of expr.props) _dictItemsOnUse(p && p.value, callContext, depth + 1);
+  if (expr.kind === 'call' && expr.callee && typeof expr.callee === 'object') _dictItemsOnUse(expr.callee.object, callContext, depth + 1);
+}
 
 function _isRegexInit(src) {
   if (!src || typeof src !== 'object') return false;
@@ -235,6 +371,17 @@ function _buildRegexNames(fns) {
   _regexNamesByFile.clear();
   _regexNamesByFn.clear();
   _constNamesByFile.clear();
+  _nonHtmlRespondersByFn.clear();
+  for (const fn of fns) {
+    if (!fn || typeof fn.qid !== 'string' || !fn.cfg || !fn.cfg.nodes) continue;
+    for (const n of Object.values(fn.cfg.nodes)) {
+      const r = n && n.kind === 'call' ? _nonHtmlResponderOfCall(n) : (n && n.kind === 'assign' && n.source && n.source.kind === 'call' ? _nonHtmlResponderOfCall(n.source) : null);
+      if (!r) continue;
+      let set = _nonHtmlRespondersByFn.get(fn.qid);
+      if (!set) { set = new Set(); _nonHtmlRespondersByFn.set(fn.qid, set); }
+      set.add(r);
+    }
+  }
   const constByFile = new Map();   // file -> Map(name -> boolean allClosed)
   const byFile = new Map();   // file -> Map(name -> boolean allRegex)
   for (const fn of fns) {
@@ -676,6 +823,9 @@ function exprTaint(expr, state, callContext) {
       // cannot un-clean itself via its own (nonexistent, since this exits
       // early) receiver/nested-return taint.
       if (_isCoercionCall(expr)) return false;
+      // `raw(text, bindings)` with a CLOSED text (knex's `raw`, Django's `.raw(sql, params)`): the driver binds the values, so the
+      // result carries no taint of theirs. A tainted text argument, or a tainted receiver, is tainted as before.
+      if (_isBoundRawCall(expr, callContext) && !_calleeReceiverTainted(expr.callee, state, callContext, expr.args)) return false;
       // The call's own arguments OR — PRD R10 — the resolved callee's own
       // return-taint summary. Taint-recall PRD (80%): this used to
       // short-circuit on args-tainted and SKIP _nestedCallReturnTainted
@@ -1163,6 +1313,12 @@ const GUARD_PREDICATES = [
     ],
     argIndex: 0,
   },
+  // URL-safety predicates: Django's `url_has_allowed_host_and_scheme(url, allowed_hosts=...)` and `is_safe_url`, ASP.NET's
+  // `Url.IsLocalUrl`, and the same-named helpers the scan assembly's text layer accepts (`_REDIRECT_GUARD_RE`). A URL that passes is
+  // this host's own. Narrowing is total, as for the numeric predicates: the one weakness class where a same-host URL still matters is
+  // open redirect, which is exactly what passing the predicate rules out.
+  { names: ['url_has_allowed_host_and_scheme', 'is_safe_url', 'IsLocalUrl', 'Url.IsLocalUrl', 'isLocalUrl', 'is_safe_redirect_url',
+    '_is_safe_redirect_url', 'isSafeRedirect', 'is_safe_redirect', 'safe_redirect', 'isSafeRedirectUrl'], argIndex: 0 },
 ];
 
 // Does `cond` (an if-statement's condition expression) recognizably guard a
@@ -1178,6 +1334,52 @@ function _guardNarrowsVar(cond, state) {
     if (path && isCoveredBy(state, path)) return path;
   }
   return null;
+}
+
+// Membership in a CLOSED collection: `ALLOWED.includes(v)` / `.has(v)` (JavaScript), `v in ALLOWED` (Python), `in_array($v, $ALLOWED)`
+// (PHP), `ALLOWED.contains(v)` (Java, Kotlin), `ALLOWED.include?(v)` (Ruby), where the collection is a literal or a name every binding in
+// the file or the function gives a closed value (`_closedExpr`: an array, Set or record of literals). A value that is in it is one of the
+// constants. Found on a Vite dev-server plugin that served only the file names of a constant list and was reported as path traversal.
+function _allowlistGuardVar(cond, state, callContext) {
+  if (!cond) return null;
+  let coll = null;
+  let val = null;
+  if (cond.kind === 'call') {
+    const c = cond.callee;
+    const leaf = typeof c === 'string' ? c.slice(c.lastIndexOf('.') + 1) : (c && c.kind === 'member' ? c.prop : (c && c.kind === 'ident' ? c.name : null));
+    const args = cond.args || [];
+    if (/^(?:includes|has|contains|include\?)$/.test(leaf || '') && args.length === 1) {
+      val = args[0];
+      coll = c && c.kind === 'member' ? c.object : (typeof c === 'string' && c.includes('.') ? { kind: 'ident', name: c.slice(0, c.lastIndexOf('.')) } : null);
+    } else if (leaf === 'in_array' && args.length >= 2) { val = args[0]; coll = args[1]; }
+  } else if (cond.kind === 'binary' && /^(?:in|In)$/.test(String(cond.op))) { val = cond.left; coll = cond.right; }
+  if (!coll || !val || !_closedExpr(coll, callContext)) return null;
+  const path = accessPathOf(val);
+  return path && isCoveredBy(state, path) ? path : null;
+}
+
+// The access paths an if-condition proves safe on its TRUE branch (`then`) and on its FALSE branch (`else`): a recognised predicate, a
+// regex test or an allowlist membership narrows the checked variable where it holds; `a && b` narrows where both hold; `!a` swaps the
+// branches; `!a || !b` narrows the false branch, where both hold. The false-branch narrowing needs no exit check: the join after an `if`
+// without `else` merges the unnarrowed then-state back in, as every other edge is merged, so `if (!ok(x)) { log(); } sink(x)` keeps
+// its finding and `if (!ok(x)) return; sink(x)` loses it. Null when the condition proves nothing.
+function _guardNarrowing(cond, state, callContext) {
+  const whenTrue = (c, depth) => {
+    if (!c || depth > 8) return [];
+    if (c.kind === 'unary') return whenFalse(c.operand, depth + 1);
+    if (c.kind === 'logical' && /^(?:&&|and)$/.test(String(c.op))) return [...whenTrue(c.left, depth + 1), ...whenTrue(c.right, depth + 1)];
+    const p = _guardNarrowsVar(c, state) || _regexTestGuardNarrowsVar(c, state) || _allowlistGuardVar(c, state, callContext);
+    return p ? [p] : [];
+  };
+  const whenFalse = (c, depth) => {
+    if (!c || depth > 8) return [];
+    if (c.kind === 'unary') return whenTrue(c.operand, depth + 1);
+    if (c.kind === 'logical' && /^(?:\|\||or)$/.test(String(c.op))) return [...whenFalse(c.left, depth + 1), ...whenFalse(c.right, depth + 1)];
+    return [];
+  };
+  const then = whenTrue(cond, 0);
+  const els = whenFalse(cond, 0);
+  return then.length || els.length ? { then, else: els } : null;
 }
 
 // Next-gen taint capability #2 — regex-validation guard narrowing (JS/TS).
@@ -1511,7 +1713,8 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
         // `.query()`-style call that may carry an unrelated string, so the literal-skeleton filter does not apply to them.
         // `argNotCallee`: the argument is a call of a statement builder (`select(...)`, `delete(...)`), or a variable the function bound to one
         // (`stmt = delete(T).where(...); session.execute(stmt)`): its values are bound, not spliced.
-        if (Array.isArray(e.argNotCallee) && taintedArgExpr && taintedArgExpr.kind === 'ident' && callContext && callContext._builderVars && callContext._builderVars.has(taintedArgExpr.name)) continue;
+        if (Array.isArray(e.argNotCallee) && taintedArgExpr && taintedArgExpr.kind === 'ident' && callContext && callContext._builderVars
+            && e.argNotCallee.includes(callContext._builderVars.get(taintedArgExpr.name))) continue;
         if (Array.isArray(e.argNotCallee) && taintedArgExpr && taintedArgExpr.kind === 'call') {
           const cn = typeof taintedArgExpr.callee === 'string' ? taintedArgExpr.callee.slice(taintedArgExpr.callee.lastIndexOf('.') + 1) : (taintedArgExpr.callee && taintedArgExpr.callee.kind === 'member' ? taintedArgExpr.callee.prop : (taintedArgExpr.callee && taintedArgExpr.callee.kind === 'ident' ? taintedArgExpr.callee.name : null));
           const inner = (c) => { let x = c; for (let d = 0; x && x.kind === 'call' && d < 8; d++) { const k = typeof x.callee === 'string' ? x.callee.slice(x.callee.lastIndexOf('.') + 1) : (x.callee && x.callee.kind === 'member' ? x.callee.prop : (x.callee && x.callee.kind === 'ident' ? x.callee.name : null)); if (k && e.argNotCallee.includes(k)) return true; x = Array.isArray(x.innerCalls) && x.innerCalls[0] ? x.innerCalls[0] : (x.callee && x.callee.kind === 'member' && x.callee.object && x.callee.object.kind === 'call' ? x.callee.object : null); } return false; };
@@ -1576,9 +1779,13 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
           // call — bench/cve-replay/deep/py-interproc-cmdi-shape exists
           // precisely to pin that case (`subprocess.call(cmd, **SHELL_OPTS)`)
           // and caught this the first time the gate was written without it.
-          const enumerable = !(callKwargs && callKwargs['**']);
+          // A splatted LOCAL mapping whose every item this function wrote with a literal key (`kwargs = {}; kwargs['shell'] = False;
+          // Popen(cmd, **kwargs)`) is enumerable after all (`_dictItemsOnAssign`/`_dictItemsOnCall`): its item answers for the keyword.
+          const splat = callKwargs && callKwargs['**'] && callKwargs['**'].splat;
+          const dict = splat && splat.kind === 'ident' && callContext && callContext._dictItems ? callContext._dictItems.get(splat.name) : null;
+          const enumerable = !(callKwargs && callKwargs['**']) || !!(dict && dict.closed);
           if (enumerable) {
-            const kw = callKwargs && callKwargs[name];
+            const kw = (callKwargs && callKwargs[name]) || (dict && dict.closed ? dict.items.get(name) : undefined);
             if (!kw || kw.kind !== 'literal' || !new RegExp(pattern).test(String(kw.value))) continue;
           }
         }
@@ -1616,6 +1823,16 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
           const k = _originKinds(taintedArgExpr, callContext);
           if (k.op && !k.req && !k.param) continue;
         }
+        // A response whose content type this function set to something other than markup or script (`res.setHeader('Content-Type',
+        // 'application/json')`, `res.type('json')`, Django `response['Content-Type'] = 'text/csv'`) is not an HTML document, so a value
+        // reflected into it is not cross-site scripting. Judged per function and per receiver name (`_nonHtmlRespondersByFn`).
+        if (e.vuln && e.vuln.cwe === 'CWE-79' && callContext && callContext._currentFnQid) {
+          const root = _calleeRootName(calleeExpr);
+          if (root && _nonHtmlRespondersByFn.get(callContext._currentFnQid)?.has(root)) continue;
+        }
+        // A pattern whose metacharacters were escaped first (`new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))`, or an escaper call)
+        // matches the text literally and cannot be made to backtrack.
+        if (e.vuln && e.vuln.cwe === 'CWE-1333' && _regexEscapedExpr(taintedArgExpr)) continue;
         if (e.match && e.match.rejectOptionKey
           && (argExprs || []).some((a) => a && a.kind === 'object' && (a.props || []).some((p) => p && p.key === e.match.rejectOptionKey))) continue;
         // `match.rejectArg: {index, pattern}`: the positional form of rejectKeyword. A sibling argument that names a
@@ -1731,14 +1948,14 @@ function _chainSinkFindings(expr, state, callContext, line) {
 let _builderNames = null;
 function _isBuilderCall(expr) {
   if (!_builderNames) { _builderNames = new Set(); for (const e of _CATALOG_ENTRIES) if (e && Array.isArray(e.argNotCallee)) for (const n of e.argNotCallee) _builderNames.add(n); }
-  if (!_builderNames.size) return false;
+  if (!_builderNames.size) return null;
   let x = expr;
   for (let d = 0; x && x.kind === 'call' && d < 8; d++) {
     const k = typeof x.callee === 'string' ? x.callee.slice(x.callee.lastIndexOf('.') + 1) : (x.callee && x.callee.kind === 'member' ? x.callee.prop : (x.callee && x.callee.kind === 'ident' ? x.callee.name : null));
-    if (k && _builderNames.has(k)) return true;
+    if (k && _builderNames.has(k)) return k;   // the builder's name, so a sink checks it against its OWN argNotCallee list
     x = Array.isArray(x.innerCalls) && x.innerCalls[0] ? x.innerCalls[0] : (x.callee && x.callee.kind === 'member' && x.callee.object && x.callee.object.kind === 'call' ? x.callee.object : null);
   }
-  return false;
+  return null;
 }
 
 // The literal a string expression begins with (`"/api/" + id`, `\`https://h/${p}\``), or null when it begins with a value.
@@ -1763,6 +1980,17 @@ function _closedExpr(expr, callContext, depth = 0) {
     case 'union': return Array.isArray(expr.branches) && expr.branches.length > 0 && expr.branches.every((b) => _closedExpr(b, callContext, depth + 1));
     case 'ident': return !!((callContext && callContext._constVars && callContext._constVars.has(expr.name))
       || (_currentFile && _constNamesByFile.get(_currentFile)?.has(expr.name)));
+    // A collection of closed values is closed (`['name', 'age']`, `{ a: 1 }`, `new Set([...])`, Python `frozenset((...))`): what the
+    // allowlist guards (`_allowlistGuardVar`) read as a constant collection.
+    case 'array': return Array.isArray(expr.elements) && expr.elements.length > 0 && expr.elements.every((e) => _closedExpr(e, callContext, depth + 1));
+    case 'object': return Array.isArray(expr.props) && expr.props.length > 0 && expr.props.every((p) => p && !p.spread && _closedExpr(p.value, callContext, depth + 1));
+    case 'unary': return _closedExpr(expr.operand, callContext, depth + 1);
+    case 'call': {
+      const c = expr.callee;
+      const name = typeof c === 'string' ? c : (c && c.kind === 'ident' ? c.name : null);
+      return /^(?:Set|Map|frozenset|set|tuple|list)$/.test(name || '') && Array.isArray(expr.args) && expr.args.length > 0
+        && expr.args.every((a) => _closedExpr(a, callContext, depth + 1));
+    }
     default: return false;
   }
 }
@@ -2143,9 +2371,12 @@ function step(node, stateIn, callContext) {
       if (node.source && node.source.kind === 'array' && !_isJsFile(_currentFile) && !_isHsFile(_currentFile)) findings.push(..._nestedSinkFindings([node.source], state, callContext, node.line));
       // a variable bound to a statement builder (`stmt = select(T).where(..)`), for the sinks' argNotCallee check
       if (typeof node.target === 'string' && node.source && node.source.kind === 'call' && callContext) {
-        if (_isBuilderCall(node.source)) (callContext._builderVars ||= new Set()).add(node.target);
+        const builder = _isBuilderCall(node.source);
+        if (builder) (callContext._builderVars ||= new Map()).set(node.target, builder);
         else if (callContext._builderVars) callContext._builderVars.delete(node.target);
       }
+      // the literal items of a local mapping (`opts = {}`, `opts['shell'] = False`), read by the requireKeyword gate on a splatted call
+      if (callContext) _dictItemsOnAssign(node, callContext);
       // a variable bound to a CLOSED expression (`const id = 7`, `const col = ok ? c : 'id'` lowered to a union of literals), for the
       // clean-site record in `_sinkFindingsForCall`; a later binding to anything else clears it
       if (typeof node.target === 'string' && node.source && callContext && !node.weakUpdate) {
@@ -2441,6 +2672,7 @@ function step(node, stateIn, callContext) {
       // Computed here (before the mutation passes below) so that argTaints
       // reflects the pre-mutation state, exactly as before this logic was
       // extracted into _matchCallCatalog/_sinkFindingsForCall.
+      if (callContext) _dictItemsOnCall(node, callContext);
       const { cat, argTaints } = _matchCallCatalog(node.callee, node.args, state, callContext);
       findings.push(..._chainSinkFindings(node, state, callContext, node.line));
       // v0.66 — apply mutated-param taint at plain (non-assign) call sites.
@@ -2685,10 +2917,13 @@ function step(node, stateIn, callContext) {
       // this codebase's established CFG convention (path-feasibility.js),
       // `succ[0]` is the THEN edge and `succ[1+]` are the ELSE/fall-through
       // edge(s).
-      const narrowedVar = _guardNarrowsVar(node.cond, state) || _regexTestGuardNarrowsVar(node.cond, state);
-      if (narrowedVar && node.succ && node.succ.length > 0) {
-        const thenState = removePathAndDescendants(state, narrowedVar);
-        return { state, findings, succOverride: new Map([[node.succ[0], thenState]]) };
+      const narrowing = _guardNarrowing(node.cond, state, callContext);
+      if (narrowing && node.succ && node.succ.length > 0) {
+        const narrow = (paths) => paths.reduce((s, p) => removePathAndDescendants(s, p), state);
+        const over = new Map();
+        if (narrowing.then.length) over.set(node.succ[0], narrow(narrowing.then));
+        if (narrowing.else.length) for (const s of node.succ.slice(1)) over.set(s, narrow(narrowing.else));
+        if (over.size) return { state, findings, succOverride: over };
       }
       return { state, findings };
     }
@@ -2897,7 +3132,8 @@ function analyzeFunction(fn, entryState, callContext) {
   // without it, so it is set here for every walk and restored with the file below.
   const _prevFnQid = callContext ? callContext._currentFnQid : undefined;
   const _prevConstVars = callContext ? callContext._constVars : undefined;
-  if (callContext) callContext._constVars = new Set();
+  const _prevDictItems = callContext ? callContext._dictItems : undefined;
+  if (callContext) { callContext._constVars = new Set(); callContext._dictItems = new Map(); }
   if (callContext && typeof fn.qid === 'string') callContext._currentFnQid = fn.qid;
   // v0.70 #2 — points-to context for the step() transfer. Setting it here
   // (instead of plumbing through step's signature) keeps the worklist loop
@@ -3066,7 +3302,7 @@ function analyzeFunction(fn, entryState, callContext) {
     callContext._summaryCache.setCallerContext(_prevCallerCtx);
   }
   // W4.C21/C22: restore _currentFile — see the save at this function's start.
-  _currentFile = _prevFile; if (callContext) { callContext._currentFnQid = _prevFnQid; callContext._constVars = _prevConstVars; }
+  _currentFile = _prevFile; if (callContext) { callContext._currentFnQid = _prevFnQid; callContext._constVars = _prevConstVars; callContext._dictItems = _prevDictItems; }
   return exit;
 }
 

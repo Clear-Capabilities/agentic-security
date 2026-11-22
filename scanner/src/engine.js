@@ -258,6 +258,7 @@ import _vm from 'node:vm';
 import { createStringMemo } from './util/string-memo.js';
 import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
+import { dropBrowserModuleServerFindings } from './dataflow/browser-module.js';
 import { buildLineageGraph } from './lineage/index.js';
 import { getRepoState, worktreeDirtyExcluding } from './posture/provenance/git-evidence.js';
 import { buildLineageGraphOwned, resolveLineageDeadlineMs } from './lineage/owned-build.js';
@@ -316,7 +317,7 @@ import { buildAIBOM, persistAIBOM } from './posture/aibom.js';
 import { annotateAttackTaxonomy, summarizeTaxonomy } from './posture/attack-taxonomy.js';
 import { suppressByPastDecisions } from './posture/triage-memory.js';
 import { suppressByIntent } from './posture/intent-context.js';
-import { annotateGitHistory } from './posture/git-history.js';
+import { annotateGitHistoryAsync } from './posture/git-history.js';
 // NOT `annotateProvenance` (sca/sigstore-verify.js's build-attestation
 // annotator) and NOT `annotateFindingProvenance` (posture/provenance.js's
 // AI-code fingerprint annotator). Both are already imported above in this
@@ -731,7 +732,7 @@ const SINK_PATTERNS=[{regex:/(?:db|database|collection|model|query|cursor|sessio
 // Rails ActiveRecord raw-SQL forms.
 {regex:/\.\s*(?:find_by_sql|exec_query|execute|connection\.execute)\s*\(/g,type:"ActiveRecord Raw SQL",severity:"high",vuln:"SQL Injection (ActiveRecord raw)",cwe:"CWE-89",stride:"Tampering",langScope:/\.rb$/i},
 // TypeORM unsafe query-builder forms — orderBy/where/andWhere with template literals.
-{regex:/\.\s*(?:createQueryBuilder|getRepository)\s*\([^)]*\)[^;]{0,200}\.\s*(?:where|andWhere|orWhere|orderBy)\s*\(\s*[`']/g,type:"TypeORM Raw Where",severity:"high",vuln:"SQL Injection (TypeORM raw clause)",cwe:"CWE-89",stride:"Tampering"},{regex:/(?:innerHTML|outerHTML)\s*=(?!=)/g,type:"DOM Write",severity:"critical",vuln:"XSS",cwe:"CWE-79",stride:"Tampering"},{regex:/dangerouslySetInnerHTML/g,type:"React Unsafe HTML",severity:"critical",vuln:"XSS",cwe:"CWE-79",stride:"Tampering"},{regex:/(?:exec|spawn|execSync|system|popen|subprocess\.(?:call|run|Popen)|child_process|shell_exec|passthru)\s*\(/g,type:"OS Command",severity:"critical",vuln:"Command Injection",cwe:"CWE-78",stride:"Elevation of Privilege"},{regex:/(?:readFile|writeFile|createReadStream|unlink|fopen|file_get_contents)\s*\(/g,type:"File Op",severity:"high",vuln:"Path Traversal",cwe:"CWE-22",stride:"Information Disclosure"},{regex:/(?:eval|new\s+Function)\s*\(/g,type:"Code Eval",severity:"critical",vuln:"Code Injection",cwe:"CWE-94",stride:"Elevation of Privilege"},{regex:/(?:res\.send|res\.write|res\.end|echo|print)\s*\(/g,type:"HTTP Response",severity:"medium",vuln:"Reflected XSS",cwe:"CWE-79",stride:"Tampering"},// SSTI sink: render WITHOUT a static string template name. `res.render('view',data)`
+{regex:/\.\s*(?:createQueryBuilder|getRepository)\s*\([^)]*\)[^;]{0,200}\.\s*(?:where|andWhere|orWhere|orderBy)\s*\(\s*[`']/g,type:"TypeORM Raw Where",severity:"high",vuln:"SQL Injection (TypeORM raw clause)",cwe:"CWE-89",stride:"Tampering"},{regex:/(?:innerHTML|outerHTML)\s*=(?!=)/g,type:"DOM Write",severity:"critical",vuln:"XSS",cwe:"CWE-79",stride:"Tampering"},{regex:/dangerouslySetInnerHTML/g,type:"React Unsafe HTML",severity:"critical",vuln:"XSS",cwe:"CWE-79",stride:"Tampering"},{regex:/(?:exec|spawn|execSync|system|popen|subprocess\.(?:call|run|Popen)|child_process|shell_exec|passthru)\s*\(/g,type:"OS Command",severity:"critical",vuln:"Command Injection",cwe:"CWE-78",stride:"Elevation of Privilege"},{regex:/(?:readFile|writeFile|createReadStream|unlink|fopen|file_get_contents)\s*\(/g,type:"File Op",severity:"high",vuln:"Path Traversal",cwe:"CWE-22",stride:"Information Disclosure"},{regex:/(?<![\w$.])eval\s*\(|\bnew\s+Function\s*\(/g,type:"Code Eval",severity:"critical",vuln:"Code Injection",cwe:"CWE-94",stride:"Elevation of Privilege"},{regex:/(?:res\.send|res\.write|res\.end|echo|print)\s*\(/g,type:"HTTP Response",severity:"medium",vuln:"Reflected XSS",cwe:"CWE-79",stride:"Tampering"},// SSTI sink: render WITHOUT a static string template name. `res.render('view',data)`
 // is fine — the data param doesn't render unless the template uses unsafe blocks.
 // Real SSTI is `res.render(req.body.tmpl)` or `res.render(\`${userInput}\`)`. We
 // only fire when the first arg is NOT a static double/single-quoted literal.
@@ -1697,6 +1698,21 @@ function _hasPathGuard(ctx) { return _guardMatchNearSinkIdentifier(ctx, _PATH_GU
 // Reflected-XSS output-encoding guard: an HTML escaper applied near the sink.
 const _XSS_ESCAPER = String.raw`(?:escapeHtml|escape_html|escape-html|sanitizeHtml|sanitize_html|DOMPurify\.sanitize|he\.encode|he\.escape|_\.escape|validator\.escape|bleach\.clean|markupsafe|htmlspecialchars|htmlentities|html\.escape|escapeHTML|encodeURIComponent|escape)\s*\(`;
 const _XSS_ESCAPE_RE = new RegExp(_XSS_ESCAPER);
+// A response typed as something other than markup or script near the sink, on the sink's own receiver: `res.setHeader('Content-Type',
+// 'application/json')`, `res.type('json')`, `res.set('Content-Type', 'text/csv')`, Django `response['Content-Type'] = 'text/plain'`.
+// A value reflected into such a response is not an HTML document. The same rule as the taint engine's `_nonHtmlRespondersByFn`, for the
+// pattern and structural layers; `_guardMatchNearSinkIdentifier` requires the line to name the sink's receiver and to dominate the sink.
+const _NON_HTML_TYPE_RE = new RegExp(
+  String.raw`\.\s*(?:setHeader|set|header|writeHead\s*\(\s*\d+\s*,\s*\{)\s*\(?\s*['"]content-type['"]\s*[,:]\s*['"](?![^'"]*(?:html|xml|svg|javascript|ecmascript))[^'"]+/[^'"]+['"]`
+  + String.raw`|\.\s*(?:type|contentType)\s*\(\s*['"](?![^'"]*(?:html|xml|svg|javascript|ecmascript))(?:[a-z]+|[^'"]+/[^'"]+)['"]\s*\)`
+  + String.raw`|\[\s*['"]Content-Type['"]\s*\]\s*=\s*['"](?![^'"]*(?:html|xml|svg|javascript))[^'"]+/[^'"]+['"]`, 'i');
+function _hasNonHtmlContentType(ctx) {
+  // The type set on the sink's own line (`res.type('json').send(x)`, a one-line handler) is the same statement run; the window helper
+  // excludes the sink line from its identifier match, so it is read here first.
+  const own = ctx.lines && ctx.lines[(ctx.line || 1) - 1];
+  if (typeof own === 'string' && _NON_HTML_TYPE_RE.test(own)) return true;
+  return _guardMatchNearSinkIdentifier(ctx, _NON_HTML_TYPE_RE);
+}
 // An escaper whose RESULT is captured (assigned / returned) — not a bare,
 // return-discarded `escapeHtml(s);` call, which does nothing for the reflected
 // value (FP-3 in smoke). Requires `… = <escaper>(` or `return <escaper>(`.
@@ -1796,6 +1812,7 @@ export function dropGuardedFindings(findings, fileContents, onDrop = null) {
     if (cwe === 'CWE-601' && _hasRedirectGuard(ctx)) return dropped('redirect-target-guard');
     if (cwe === 'CWE-601' && redirectTargetPinsOriginAt(lines, line) === true) return dropped('redirect-origin-pinned');
     if (isXss && _hasXssOutputEncoding(ctx)) return dropped('xss-output-encoding');
+    if (isXss && _hasNonHtmlContentType(ctx)) return dropped('xss-non-html-response');
     return true;
   });
 }
@@ -10068,6 +10085,13 @@ function _deterministicFileTimings(timings) {
     // QA-005.AC01: a guard-recognized drop is a suppression and goes in the ledger with the identity a later analysis needs to match it.
     _suppressionLog.push({vuln:f.vuln,file:f.file,line:why.line,snippet:f.snippet||'',reason:'guard-recognized:'+why.kind+(why.evidence?':dominates@'+why.evidence.guardLine+':'+why.evidence.dominance:''),id:f.id||null,cwe:f.cwe||null,family:f.family||null});
   });}catch(_){}}
+  // A module that runs in the browser (a `"use client"` component, a hook file, a page's own API client) issues same-origin or
+  // CORS-bound requests from the user's own browser and has no file system or shell: a server-side request forgery, path traversal,
+  // file write, command injection or regular-expression denial of service reported in it describes a server that is not there. The
+  // module's own text decides (`dataflow/browser-module.js`); each drop is a ledgered suppression like a recognized guard.
+  if(process.env.AGENTIC_SECURITY_NO_BROWSER_MODULE_SCOPE!=='1'){try{finalFindings=dropBrowserModuleServerFindings(finalFindings,fc,(f,why)=>{
+    _suppressionLog.push({vuln:f.vuln,file:f.file,line:f.line??null,snippet:f.snippet||'',reason:'browser-module:'+why.file,id:f.id||null,cwe:f.cwe||null,family:f.family||null});
+  });}catch(_){}}
   // 0.34.6: filter out Java FPs where a sanitizer pattern (argv-form ProcessBuilder,
   // parameterized prepareStatement, constant-folded dead-branch) is present.
   // applyJavaBenchSuppressions is a no-op on non-.java files.
@@ -10499,7 +10523,7 @@ function _deterministicFileTimings(timings) {
     // Git history — stamp each finding with introducedBy / introducedIn /
     // originatingPrompt by running `git blame` on the finding's line.
     if (process.env.AGENTIC_SECURITY_NO_GIT_HISTORY !== '1') {
-      await _runAnnotator("annotateGitHistory", () => { annotateGitHistory(scanRoot, finalFindings); });
+      await _runAnnotator("annotateGitHistory", () => annotateGitHistoryAsync(scanRoot, finalFindings));
     }
     // Threat-model grounding — bump severity on crown-jewels, demote
     // out-of-scope, tag compliance regimes, stamp attacker profile.

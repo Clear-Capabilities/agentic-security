@@ -10,37 +10,37 @@
         "tuning": {
           "labelled": 33,
           "tpLabelled": 1,
-          "flagged": 14,
+          "flagged": 10,
           "tp": 1,
-          "fp": 13,
-          "precision": 0.0714,
+          "fp": 9,
+          "precision": 0.1,
           "wilson95": [
-            0.0127,
-            0.3147
+            0.0179,
+            0.4042
           ]
         },
         "verification": {
           "labelled": 31,
           "tpLabelled": 1,
-          "flagged": 15,
+          "flagged": 13,
           "tp": 1,
-          "fp": 14,
-          "precision": 0.0667,
+          "fp": 12,
+          "precision": 0.0769,
           "wilson95": [
-            0.0119,
-            0.2982
+            0.0137,
+            0.3331
           ]
         },
         "all": {
           "labelled": 64,
           "tpLabelled": 2,
-          "flagged": 29,
+          "flagged": 23,
           "tp": 2,
-          "fp": 27,
-          "precision": 0.069,
+          "fp": 21,
+          "precision": 0.087,
           "wilson95": [
-            0.0191,
-            0.2196
+            0.0242,
+            0.268
           ]
         }
       }
@@ -54,37 +54,37 @@
         "tuning": {
           "labelled": 27,
           "tpLabelled": 0,
-          "flagged": 18,
+          "flagged": 12,
           "tp": 0,
-          "fp": 18,
+          "fp": 12,
           "precision": 0,
           "wilson95": [
             0,
-            0.1759
+            0.2425
           ]
         },
         "verification": {
           "labelled": 25,
           "tpLabelled": 0,
-          "flagged": 19,
+          "flagged": 17,
           "tp": 0,
-          "fp": 19,
+          "fp": 17,
           "precision": 0,
           "wilson95": [
             0,
-            0.1682
+            0.1843
           ]
         },
         "all": {
           "labelled": 52,
           "tpLabelled": 0,
-          "flagged": 37,
+          "flagged": 29,
           "tp": 0,
-          "fp": 37,
+          "fp": 29,
           "precision": 0,
           "wilson95": [
             0,
-            0.0941
+            0.117
           ]
         }
       }

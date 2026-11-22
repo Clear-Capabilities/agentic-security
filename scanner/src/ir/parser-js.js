@@ -313,6 +313,10 @@ function exprOf(n) {
       if (found) return { kind: 'call', callee: '__jsx_dangerously_set_inner_html__', args: [exprOf(found)] };
       return { kind: 'unknown' };
     }
+    // `!x` keeps its operand under a `unary` node: an if-condition `if (!ALLOWED.includes(v)) return;` is a negated guard the taint
+    // engine narrows on the fall-through edge (`_guardNarrowing`). Every other unary operator (`-x`, `typeof x`, `void x`) stays
+    // `unknown`, as before; a `unary` node is never tainted (it is a boolean) and never closed unless its operand is.
+    case 'UnaryExpression':   return n.operator === '!' ? { kind: 'unary', op: '!', operand: exprOf(n.argument) } : { kind: 'unknown' };
     default:                   return { kind: 'unknown' };
   }
 }
@@ -718,12 +722,31 @@ export function parseJsFile(file, code) {
     if (!from || !to || from === to) return;
     const f = fn.cfg.nodes.get(from); const t = fn.cfg.nodes.get(to);
     if (!f || !t) return;
+    // A `return` or `throw` leaves the function: its only successor is the exit. The cursor used to carry it on to the statement after
+    // the block it ended (`if (!ok(x)) { return; } sink(x)` joined the return into `sink(x)`), which made the state at the join a merge
+    // of the guarded path and the unguarded one, so no early-exit guard could ever narrow anything in JavaScript.
+    if ((f.kind === 'return' || f.kind === 'throw') && to !== fn.cfg.exit) return;
     if (!f.succ.includes(to)) f.succ.push(to);
     if (!t.pred.includes(from)) t.pred.push(from);
   };
   const addNode = (fn, node) => {
     if (!fn) return null;
     fn.cfg.nodes.set(node.id, node);
+    const cur = fn._cursor ? fn.cfg.nodes.get(fn._cursor) : null;
+    if (cur && (cur.kind === 'return' || cur.kind === 'throw') && node.kind !== 'return' && node.kind !== 'throw') {
+      // Babel visits a return's argument AFTER the return statement, so the standalone call node it emits for `return f(x)` (or for a
+      // call nested in the returned expression) arrives while the cursor is the return. That call runs BEFORE the return: it takes the
+      // return's predecessors and the return follows it. It used to be linked after the return and reached only through the edge a
+      // return no longer has (see linkCfg).
+      for (const p of cur.pred) {
+        const pn = fn.cfg.nodes.get(p);
+        if (pn) pn.succ = pn.succ.map((x) => (x === cur.id ? node.id : x));
+        if (!node.pred.includes(p)) node.pred.push(p);
+      }
+      cur.pred = [];
+      linkCfg(fn, node.id, cur.id);
+      return node.id;
+    }
     linkCfg(fn, fn._cursor, node.id);
     fn._cursor = node.id;
     return node.id;

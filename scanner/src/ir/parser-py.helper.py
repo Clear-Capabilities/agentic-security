@@ -136,12 +136,16 @@ def _lower_expr(node: ast.AST) -> dict[str, Any]:
     if isinstance(node, ast.List) or isinstance(node, ast.Tuple) or isinstance(node, ast.Set):
         return {"kind": "array", "elements": [_lower_expr(e) for e in (node.elts or [])]}
     if isinstance(node, ast.Dict):
-        return {
-            "kind": "object",
-            "props": [
-                {"value": _lower_expr(v)} for v in (node.values or [])
-            ],
-        }
+        # A literal string key is stated (`key`), as the JavaScript IR states an object literal's keys; `**other` is a spread.
+        props = []
+        for k, v in zip(node.keys or [], node.values or []):
+            prop = {"value": _lower_expr(v)}
+            if k is None:
+                prop["spread"] = True
+            elif isinstance(k, ast.Constant) and isinstance(k.value, str):
+                prop["key"] = k.value
+            props.append(prop)
+        return {"kind": "object", "props": props}
     if isinstance(node, ast.IfExp):
         # Ternary `a if cond else b` — surface as union of both branches.
         return {
@@ -176,7 +180,12 @@ def _lower_expr(node: ast.AST) -> dict[str, Any]:
             ],
         }
     if isinstance(node, ast.UnaryOp):
-        return _lower_expr(node.operand)
+        operand = _lower_expr(node.operand)
+        # `not x` keeps its operand under a `unary` node: `if not is_safe(x): return` is a negated guard the taint engine
+        # narrows on the fall-through edge. The other unary operators (`-x`, `~x`, `+x`) lower to the operand as before.
+        if isinstance(node.op, ast.Not):
+            return {"kind": "unary", "op": "not", "operand": operand}
+        return operand
     if isinstance(node, ast.Await):
         return _lower_expr(node.value)
     if isinstance(node, ast.Yield):
@@ -263,7 +272,9 @@ def _lower_call_chain(node: ast.Call) -> dict[str, Any]:
                 # under a reserved key so a requireKeyword gate can tell
                 # "this keyword is absent" from "we cannot see the keywords",
                 # and stay recall-preserving in the second case.
-                kwargs.setdefault("**", {"kind": "unknown"})
+                # `splat` names the mapping (`**kwargs`); the engine reads the literal items a local dict was
+                # given in the same function (`kwargs['shell'] = False`) to answer a keyword gate.
+                kwargs.setdefault("**", {"kind": "unknown", "splat": _lower_expr(kw.value)})
         func = cur.func
         if isinstance(func, ast.Attribute):
             segments.append((func.attr, args))
@@ -407,6 +418,10 @@ class CfgBuilder:
     def _link(self, src_id: str, dst_id: str) -> None:
         sn = self.nodes[src_id]
         dn = self.nodes[dst_id]
+        # A `return` or `raise` leaves the function: its only successor is the exit. The block lowering used to carry it on to the
+        # statement after the `if` that held it, which merged the guarded path into `if not ok(x): return ...; sink(x)`.
+        if sn.get("kind") in ("return", "throw") and dst_id != getattr(self, "exit", None):
+            return
         if dst_id not in sn["succ"]:
             sn["succ"].append(dst_id)
         if src_id not in dn["pred"]:
@@ -660,13 +675,13 @@ class CfgBuilder:
                 "line": line,
             })
             self._link(prev, cur)
-            # Return implicitly flows to exit. We don't link here; the outer
-            # `lower` method links the final tail to exit, and the engine
-            # treats return as terminal.
+            # A return flows to the exit and nowhere else (`_link` refuses any other successor for it).
+            self._link(cur, self.exit)
             return cur
         if isinstance(stmt, ast.Raise):
             cur = self._add({"kind": "throw", "line": line})
             self._link(prev, cur)
+            self._link(cur, self.exit)
             return cur
         if isinstance(stmt, ast.Try):
             # try body + except handlers + finally. Treat the try body as a

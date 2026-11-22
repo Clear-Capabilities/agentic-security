@@ -339,3 +339,52 @@ The typescript set's first reading (52 sampled taint-layer sites, 0 true positiv
   chain, so `read_lock(a.lock)` (argparse in the caller, `open` in the callee) is judged once the parameter has resolved.
 - **Statement-builder variables (`_builderVars`).** `stmt = delete(T).where(..); session.execute(stmt)`: the assignment of a builder call
   marks the variable for the sinks' `argNotCallee` check; a later re-assignment clears it.
+
+## 0.221.0: what the real-code sets' remaining false positives changed
+
+The tuning halves of `bench/dag/dev-realcode` (12 Python and 18 TypeScript sites still flagged after 0.220.0, every one labelled not a
+weakness) grouped into these mechanisms. Each is generic, each has a refusing twin in `test/taint-round-0221.test.js`.
+
+- **Guard narrowing on both edges (`_guardNarrowing`).** An if-condition's checked variable is narrowed on the TRUE edge where the condition
+  proves it safe, and on the FALSE edge where its negation does: `if (!ok(x)) { next(); return; } sink(x)` loses the finding,
+  `if (!ok(x)) { log(); } sink(x)` keeps it (the join merges the unnarrowed then-state back in, no exit check is needed), `a && b` narrows
+  where both hold, `!a || !b` narrows the false edge. The IR states `!x` and `not x` as a `unary` node now (they lowered to the operand, so
+  the two polarities were indistinguishable), and a `return`/`throw` links to the exit only (`parser-js.js` `linkCfg`, the Python helper's
+  `_link`): both front ends used to carry a return on to the statement after its block, which merged the guarded path into every early-exit
+  guard and made them inert.
+- **Allowlist membership (`_allowlistGuardVar`).** `ALLOWED.includes(v)` / `.has(v)`, Python `v in ALLOWED`, PHP `in_array($v, $ALLOWED)`,
+  Java/Kotlin `.contains(v)`, Ruby `.include?(v)` over a CLOSED collection narrow `v`. `_closedExpr` now closes an array, a record or a
+  `Set`/`Map`/`frozenset`/`set`/`tuple`/`list` of closed values, so a module-level `const NAMES = ['a.json', 'b.json']` is one. A collection
+  that is a parameter, a field or a call result proves nothing.
+- **URL-safety predicates.** Django's `url_has_allowed_host_and_scheme` and `is_safe_url`, ASP.NET's `Url.IsLocalUrl` and the same-named
+  helper shapes the text layer already accepted joined `GUARD_PREDICATES`; the text layer's own dominance check (`guard-dominance.js`)
+  reads a conditional head that spans several lines (`if a and f(\n    x,\n):`) as the head, not as an empty body.
+- **Framework URL builders at a redirect (`argNotCallee` on `py-redirect`/`py-flask-redirect`).** `redirect(url_for(..., next=n))`,
+  `reverse(...)`, flask-login's `get_login_url(...)`, a model's `get_absolute_url()`, and a variable bound to one: the input lands in a query
+  string or a path segment of this application's own URL. `_builderVars` now records WHICH builder a variable holds, and a sink checks it
+  against its own list (a SQL sink no longer honours a URL builder's variable).
+- **A keyword through a splatted local dict (`_dictItemsOnAssign`, `_dictItemsOnCall`).** `kwargs = dict(); kwargs['shell'] = False;
+  Popen(cmd, **kwargs)`: the items a function writes to a local mapping with literal keys answer the `requireKeyword` gate when the mapping
+  is splatted (the helper records the splat's name as `kwargs['**'].splat`). A mapping that is rebound, passed to a call, read through a
+  method (`update`, `pop`, ...), written with a computed key or given two different literals for one key is not enumerable, as before.
+  `shell=True` through the same dict is still a shell.
+- **A non-HTML response is not XSS (`_nonHtmlRespondersByFn`).** `res.setHeader('Content-Type', 'application/json')`, `res.type('json')`,
+  `res.set(...)`, `res.writeHead(200, {'Content-Type': ...})`, Django `response['Content-Type'] = 'text/csv'` anywhere in the function mark
+  the receiver; a CWE-79 sink on that receiver in that function is not reported. `text/html`, `xml`, `svg` and `javascript` keep it.
+- **An escaped regular expression cannot backtrack (`_regexEscapedExpr`).** `new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))`, or
+  `escapeRegExp`/`escapeStringRegexp`/`escapeRegex` (also catalog sanitizers, family `regex`), is a literal match.
+- **An object's own `eval` is not JavaScript's (`js-eval` `receiverExclude`).** `redis.eval(script, opts)` runs a Lua script on the server;
+  only the bare global or `window`/`globalThis`/`global`/`self`-qualified `eval` is the sink. The scan assembly's regex rule for `eval(`
+  requires no receiver for the same reason.
+- **`raw(text, bindings)` binds (`_isBoundRawCall`).** knex's `raw`, Django's `.raw(sql, params)`: with a closed text the result carries no
+  taint of the bound values; a text built from the value, or a tainted receiver, is tainted as before.
+- **Django escapers.** `format_html`, `format_html_join` and `conditional_escape` are XSS sanitizers (`appliesTo: ['xss']`).
+- **Operator origins on the file sinks.** `js-fs-readFile`, `js-fs-writeFile`, the `js-fs`/`js-fs-write` groups and `js-RegExp-new` carry
+  `operatorOriginNotReported`: a command-line tool reading the file named on its own command line is the operator's input, the rule `py-open`
+  already followed.
+- **Browser modules (`browser-module.js`, applied in the scan assembly beside guard recognition).** A module whose text carries the
+  `"use client"` directive, or imports a client UI library AND uses a browser-only API or hook, and imports no Node built-in, server
+  framework or database client, runs in the browser: its SSRF, path, file-write, command and ReDoS findings (CWE-918, 22, 73, 78, 1333)
+  describe a server that is not there and are dropped as ledgered suppressions (`browser-module:<file>`); a cross-file finding is dropped
+  when either end is such a module. XSS and redirects stay. A React server component imports `react` too and is not a browser module.
+  `AGENTIC_SECURITY_NO_BROWSER_MODULE_SCOPE=1` turns the scope off.

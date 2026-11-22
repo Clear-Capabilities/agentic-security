@@ -40,8 +40,8 @@
   "6": {
    "label": "FP",
    "half": "tuning",
-   "reported": true,
-   "severity": "medium"
+   "reported": false,
+   "severity": null
   },
   "7": {
    "label": "FP",
@@ -82,8 +82,8 @@
   "13": {
    "label": "FP",
    "half": "tuning",
-   "reported": true,
-   "severity": "medium"
+   "reported": false,
+   "severity": null
   },
   "14": {
    "label": "FP",
@@ -106,8 +106,8 @@
   "17": {
    "label": "FP",
    "half": "tuning",
-   "reported": true,
-   "severity": "medium"
+   "reported": false,
+   "severity": null
   },
   "18": {
    "label": "FP",
@@ -160,8 +160,8 @@
   "26": {
    "label": "FP",
    "half": "verification",
-   "reported": true,
-   "severity": "critical"
+   "reported": false,
+   "severity": null
   },
   "27": {
    "label": "FP",
@@ -190,8 +190,8 @@
   "31": {
    "label": "FP",
    "half": "tuning",
-   "reported": true,
-   "severity": "critical"
+   "reported": false,
+   "severity": null
   },
   "32": {
    "label": "FP",
@@ -214,8 +214,8 @@
   "35": {
    "label": "FP",
    "half": "tuning",
-   "reported": true,
-   "severity": "medium"
+   "reported": false,
+   "severity": null
   },
   "36": {
    "label": "FP",
@@ -226,8 +226,8 @@
   "37": {
    "label": "FP",
    "half": "tuning",
-   "reported": true,
-   "severity": "high"
+   "reported": false,
+   "severity": null
   },
   "38": {
    "label": "FP",
@@ -304,8 +304,8 @@
   "50": {
    "label": "FP",
    "half": "verification",
-   "reported": true,
-   "severity": "low"
+   "reported": false,
+   "severity": null
   },
   "51": {
    "label": "FP",
