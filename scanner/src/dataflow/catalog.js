@@ -88,7 +88,9 @@ export const CATALOG = [
     vuln: { name: 'Command Injection (execSync)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Use spawnSync with an argv array.' } },
   // Code evaluation.
-  { kind: 'sink', id: 'js-eval', language: 'js', framework: 'node', match: { type: 'call', callee: 'eval' }, argIndex: 0,
+  // `redis.eval(script, opts)` runs a Lua script on the server, `vm.eval`-style helpers and any other object's `eval` method are not
+  // JavaScript's `eval`; only the bare global, or a `window`/`globalThis`/`global`/`self`-qualified call, is.
+  { kind: 'sink', id: 'js-eval', language: 'js', framework: 'node', match: { type: 'call', callee: 'eval', receiverExclude: '^(?!(?:window|globalThis|global|self)$).' }, argIndex: 0,
     vuln: { name: 'Code Injection (eval)', severity: 'critical', cwe: 'CWE-95',
             remediation: 'Never eval user input. Use JSON.parse for structured data; for dispatch, use an explicit map.' } },
   { kind: 'sink', id: 'js-Function', language: 'js', framework: 'node', match: { type: 'call', callee: 'Function' }, argIndex: 'all',
@@ -109,10 +111,12 @@ export const CATALOG = [
     vuln: { name: 'SSRF (fetch)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the target host first and reject RFC1918 / metadata-endpoint addresses before fetching.' } },
   // File system sinks.
-  { kind: 'sink', id: 'js-fs-readFile',  language: 'js', framework: 'node', match: { type: 'call', callee: 'readFile'  }, argIndex: 0,
+  // `operatorOriginNotReported` on the file sinks and on RegExp: a build or command-line script reading the file named on its own command
+  // line, or a pattern built from a file the program chose, is the operator's own input (the rule `open` and `os.system` already follow).
+  { kind: 'sink', id: 'js-fs-readFile',  language: 'js', framework: 'node', match: { type: 'call', callee: 'readFile', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'Path Traversal (fs.readFile)', severity: 'high', cwe: 'CWE-22',
             remediation: 'Canonicalize the path and assert it stays within an allow-listed base directory before reading.' } },
-  { kind: 'sink', id: 'js-fs-writeFile', language: 'js', framework: 'node', match: { type: 'call', callee: 'writeFile' }, argIndex: 0,
+  { kind: 'sink', id: 'js-fs-writeFile', language: 'js', framework: 'node', match: { type: 'call', callee: 'writeFile', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'Arbitrary File Write (fs.writeFile)', severity: 'critical', cwe: 'CWE-73',
             remediation: 'Never write to a path derived from untrusted input. Generate filenames server-side from content hashes.' } },
   // Redirects.
@@ -122,6 +126,11 @@ export const CATALOG = [
 
   // ─── SANITIZERS (JS/TS) ────────────────────────────────────────────────────
   { kind: 'sanitizer', id: 'js-encodeURIComponent', language: 'js', match: { type: 'call', callee: 'encodeURIComponent' }, effect: 'strip', appliesTo: ['url'] },
+  // The regex escapers (lodash's `escapeRegExp`, the `escape-string-regexp` package, a project's `escapeRegex`) neutralise a pattern's
+  // metacharacters; the `.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')` idiom is read by the engine itself (`_regexEscapedExpr`).
+  { kind: 'sanitizer', id: 'js-escape-regexp',       language: 'js', match: { type: 'call', callee: 'escapeRegExp' },       effect: 'strip', appliesTo: ['regex'] },
+  { kind: 'sanitizer', id: 'js-escape-string-regexp', language: 'js', match: { type: 'call', callee: 'escapeStringRegexp' }, effect: 'strip', appliesTo: ['regex'] },
+  { kind: 'sanitizer', id: 'js-escape-regex',        language: 'js', match: { type: 'call', callee: 'escapeRegex' },        effect: 'strip', appliesTo: ['regex'] },
   { kind: 'sanitizer', id: 'js-html-escape',        language: 'js', match: { type: 'call', callee: 'escapeHtml'         }, effect: 'strip', appliesTo: ['xss'] },
   { kind: 'sanitizer', id: 'js-dompurify',           language: 'js', match: { type: 'call', callee: 'sanitize'            }, effect: 'strip', appliesTo: ['xss'] },
   { kind: 'sanitizer', id: 'js-shell-escape',        language: 'js', match: { type: 'call', callee: 'shellEscape'         }, effect: 'strip', appliesTo: ['cmd'] },
@@ -1098,12 +1107,15 @@ export const CATALOG = [
             remediation: 'Never concat user input into the expression string; validate/allow-list the queried attribute value instead.' } },
 
   // ─── SINKS (regex DoS / ReDoS) ────────────────────────────────────────────
-  { kind: 'sink', id: 'js-RegExp-new', language: 'js', framework: 'core', match: { type: 'call', callee: 'RegExp' }, argIndex: 0,
+  { kind: 'sink', id: 'js-RegExp-new', language: 'js', framework: 'core', match: { type: 'call', callee: 'RegExp', operatorOriginNotReported: true }, argIndex: 0,
     vuln: { name: 'ReDoS via user-controlled RegExp', severity: 'medium', cwe: 'CWE-1333',
             remediation: 'Treat user-supplied patterns as untrusted: limit length, reject nested quantifiers, time-bound the match with a watchdog. Better: don\'t accept regex from users at all.' } },
 
   // ─── SINKS (redirect) ─────────────────────────────────────────────────────
+  // `argNotCallee`: a URL the framework builds from a route name (`url_for`, Django `reverse`, flask-login's `get_login_url`, a model's
+  // `get_absolute_url`) places the input in the query string or a path segment of this application's own URL; it is not a redirect target.
   { kind: 'sink', id: 'py-redirect',   language: 'py', framework: 'flask',  match: { type: 'call', callee: 'redirect' }, argIndex: 0,
+    argNotCallee: ['url_for', 'reverse', 'reverse_lazy', 'get_login_url', 'get_absolute_url'],
     vuln: { name: 'Open Redirect (flask.redirect)', severity: 'medium', cwe: 'CWE-601',
             remediation: 'Validate the target URL against an allow-list of internal paths.' } },
   { kind: 'sink', id: 'java-sendRedirect', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'sendRedirect' }, argIndex: 0,
@@ -1167,6 +1179,10 @@ export const CATALOG = [
   { kind: 'sanitizer', id: 'py-bleach-clean',     language: 'py', match: { type: 'call', callee: 'clean' },     effect: 'strip', appliesTo: ['xss'] },
   { kind: 'sanitizer', id: 'py-html-escape',      language: 'py', match: { type: 'call', callee: 'escape' },    effect: 'strip', appliesTo: ['xss'] },
   { kind: 'sanitizer', id: 'py-markupsafe-escape',language: 'py', match: { type: 'call', callee: 'Markup' },    effect: 'strip', appliesTo: ['xss'] },
+  // Django's `format_html(fmt, *args)`, `format_html_join` and `conditional_escape` escape every value they place in the markup.
+  { kind: 'sanitizer', id: 'py-django-format-html', language: 'py', match: { type: 'call', callee: 'format_html' }, effect: 'strip', appliesTo: ['xss'] },
+  { kind: 'sanitizer', id: 'py-django-format-html-join', language: 'py', match: { type: 'call', callee: 'format_html_join' }, effect: 'strip', appliesTo: ['xss'] },
+  { kind: 'sanitizer', id: 'py-django-conditional-escape', language: 'py', match: { type: 'call', callee: 'conditional_escape' }, effect: 'strip', appliesTo: ['xss'] },
   { kind: 'sanitizer', id: 'py-shlex-quote',      language: 'py', match: { type: 'call', callee: 'quote' },     effect: 'strip', appliesTo: ['cmd'] },
   { kind: 'sanitizer', id: 'py-int',              language: 'py', match: { type: 'call', callee: 'int' },       effect: 'strip', appliesTo: ['*'] },
   { kind: 'sanitizer', id: 'py-float',            language: 'py', match: { type: 'call', callee: 'float' },     effect: 'strip', appliesTo: ['*'] },
@@ -1460,6 +1476,7 @@ export const CATALOG = [
             remediation: 'Use defusedxml.ElementTree.fromstring instead.' } },
   // Redirects.
   { kind: 'sink', id: 'py-flask-redirect', language: 'py', framework: 'flask', match: { type: 'call', callee: 'redirect' }, argIndex: 0,
+    argNotCallee: ['url_for', 'reverse', 'reverse_lazy', 'get_login_url', 'get_absolute_url'],   // as `py-redirect` above
     vuln: { name: 'Open Redirect (flask.redirect)', severity: 'medium', cwe: 'CWE-601',
             remediation: 'Validate redirect target against an allow-list; never pass req-derived strings straight to redirect.' } },
   // Response header injection. `response["X"] = tainted` / `resp.headers["X"] = tainted`

@@ -1099,6 +1099,36 @@ app.get('/u', (req, res) => { const c = COLS.includes(req.query.c) ? req.query.c
   end
 end
 `, { cwe: /CWE-89/, file: 'a.rb' }),
+  // 0.221.0: guard narrowing on the false edge, the content-type gate, the splatted keyword dict and an object's own eval. Each pair
+  // is a semantics-changing near miss of the other: the rewrite that removes the protection must bring the finding back.
+  det('fp-js-allowlist-early-exit', 'adversarial', false, 'a file name refused unless it is in a constant list, with the refusal returning, cannot traverse', `const fs = require('fs');
+const NAMES = ['data.json', 'messages.json'];
+app.get('/f', (req, res, next) => { const n = req.query.n; if (!NAMES.includes(n)) { next(); return; } res.send(fs.readFileSync('/srv/' + n)); });`, { cwe: /CWE-22/ }),
+  det('js-allowlist-check-without-exit', 'adversarial', true, 'the same check whose failing branch only logs lets the unchecked name reach the read', `const fs = require('fs');
+const NAMES = ['data.json', 'messages.json'];
+app.get('/f', (req, res) => { const n = req.query.n; if (!NAMES.includes(n)) { console.log(n); } res.send(fs.readFileSync('/srv/' + n)); });`, { cwe: /CWE-22/ }),
+  det('fp-js-json-response', 'adversarial', false, 'a value sent in a response the function typed application/json is not an HTML document', `app.get('/a', (req, res) => { res.setHeader('Content-Type', 'application/json'); res.send(req.query.q); });`),
+  det('js-html-response', 'adversarial', true, 'the same send typed text/html is reflected markup', `app.get('/a', (req, res) => { res.setHeader('Content-Type', 'text/html'); res.send(req.query.q); });`),
+  det('fp-py-popen-splat-shell-false', 'adversarial', false, 'Popen through a local dict that sets shell to False is an argv call, however the command is built', `from flask import request
+from subprocess import Popen
+
+def run():
+    cmd = request.args.get('c')
+    kwargs = {}
+    kwargs['shell'] = False
+    return Popen(cmd, **kwargs)
+`, { cwe: /CWE-78/, file: 'a.py' }),
+  det('py-popen-splat-shell-true', 'adversarial', true, 'the same dict setting shell to True is a shell', `from flask import request
+from subprocess import Popen
+
+def run():
+    cmd = request.args.get('c')
+    kwargs = {}
+    kwargs['shell'] = True
+    return Popen(cmd, **kwargs)
+`, { cwe: /CWE-78/, file: 'a.py' }),
+  det('fp-js-redis-eval', 'adversarial', false, 'a Redis client\'s eval runs a Lua script on the server, not JavaScript', `app.get('/a', async (req, res) => { res.json(await redis.eval(req.query.s, { keys: [] })); });`, { cwe: /CWE-95/ }),
+  det('js-global-eval', 'adversarial', true, 'the bare global eval of the same value is code injection', `app.get('/a', (req, res) => { res.json(eval(req.query.s)); });`, { cwe: /CWE-95/ }),
   det('js-readfilesync-concat', 'baseline', true, 'fs.readFileSync with a request value concatenated into the path is path traversal (a known gap until the framework models closed it)', `const fs = require('fs');
 app.get('/f', (req, res) => { res.send(fs.readFileSync('/srv/data/' + req.query.name)); });`, { cwe: /CWE-22/ }),
   det('java-spring-jdbctemplate', 'baseline', true, 'JdbcTemplate.queryForList with a concatenated @RequestParam is SQL injection (a known gap until the framework models closed it)', `@RestController public class C { @Autowired JdbcTemplate jdbc;

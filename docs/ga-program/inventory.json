@@ -16,7 +16,7 @@
       "slash-command": 17,
       "ticket-provider": 3
     },
-    "environmentVariables": 235
+    "environmentVariables": 236
   },
   "surfaces": [
     {
@@ -1349,6 +1349,7 @@
     "AGENTIC_SECURITY_NO_ATTACK_TAX",
     "AGENTIC_SECURITY_NO_ATTRIBUTIONS",
     "AGENTIC_SECURITY_NO_BLAME_CACHE",
+    "AGENTIC_SECURITY_NO_BROWSER_MODULE_SCOPE",
     "AGENTIC_SECURITY_NO_CLOUD_IAM",
     "AGENTIC_SECURITY_NO_COMPLIANCE",
     "AGENTIC_SECURITY_NO_CROSS_REPO",

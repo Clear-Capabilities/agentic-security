@@ -105,11 +105,13 @@ const JS = [
     label: 'server action parameter (Next.js "use server")', provenance: 'http-body' },
 
   // Path traversal / file write.
-  ...sinks('js-fs', 'js', 'node', ['readFileSync', 'createReadStream', 'readdirSync', 'unlinkSync', 'rmSync', 'rmdirSync', 'opendirSync'], {}, 0,
+  // `operatorOriginNotReported`: a script reading or writing the file named on its own command line, or under a directory from the
+  // environment, is the operator's own input (the rule `py-open` and `js-fs-readFile` follow).
+  ...sinks('js-fs', 'js', 'node', ['readFileSync', 'createReadStream', 'readdirSync', 'unlinkSync', 'rmSync', 'rmdirSync', 'opendirSync'], { operatorOriginNotReported: true }, 0,
     v('Path Traversal (fs.%m)', 'CWE-22', 'high', PATH_REMEDIATION)),
   ...sinks('js-fs-recv', 'js', 'node', ['readdir', 'unlink', 'rm', 'rmdir', 'opendir'], { receiver: '^(?:fs|fsp|fsPromises|promises|fse)$' }, 0,
     v('Path Traversal (fs.%m)', 'CWE-22', 'high', PATH_REMEDIATION)),
-  ...sinks('js-fs-write', 'js', 'node', ['writeFileSync', 'appendFile', 'appendFileSync', 'createWriteStream'], {}, 0,
+  ...sinks('js-fs-write', 'js', 'node', ['writeFileSync', 'appendFile', 'appendFileSync', 'createWriteStream'], { operatorOriginNotReported: true }, 0,
     v('Arbitrary File Write (fs.%m)', 'CWE-73', 'critical', PATH_REMEDIATION)),
   // Express res.sendFile / res.download. With a `root` option the send module
   // confines the path to that root, so that form is not modelled as a sink.

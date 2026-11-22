@@ -196,6 +196,10 @@ export function scanOpenRedirect(fp, raw) {
       if (!target) continue;
       // Literal-string target ("/home", "https://fixed") is never user-derived.
       if (/^["'`][^"'`]*["'`]$/.test(target)) continue;
+      // A URL the framework builds from a route name (`redirect(url_for(".authorize", next=request.args.get("next")))`, Django
+      // `reverse(...)`, flask-login's `get_login_url(...)`, a model's `get_absolute_url()`) places the request value in the query string
+      // or a path segment of this application's own URL: the same rule the taint catalog applies (`argNotCallee` on the redirect sinks).
+      if (/^(?:[\w.]*\.)?(?:url_for|reverse|reverse_lazy|get_login_url|get_absolute_url)\s*\(/.test(target)) continue;
       if (!TAINT_HINT_RE.test(target) &&
           !(_PARAM_LANGS.has(plang) && _isEnclosingParam(code, m.index, target))) continue;
       const line = _lineOf(raw, m.index);
