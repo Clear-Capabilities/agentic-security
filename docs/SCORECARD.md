@@ -9,9 +9,9 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.219.0 |
-| Bundle SHA-256 | `ad8dc9a27d5c2ed0a256f110672af12104adda8b84c07b9db82a619804118a3e` |
-| Commit | `da8199beb8bb8c8a7b2d519098fc61cf33a5cdd9` |
+| Engine version | 0.220.0 |
+| Bundle SHA-256 | `585a995008d9264a3bfc9ab382966b078db4056b7318e3e4d83a2a3de0f7b01f` |
+| Commit | `d9dbef3c64a48f1d5711b60a6fbc3c237f3ddade` |
 | Worktree at measurement time | clean |
 | Measurement identity | clean measurement: the commit and bundle above identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -20,7 +20,7 @@ that produced them.
 | Corpus entries | 229 (229 scored) |
 | Corpus version | `8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-11-21T22:13:16.338Z |
+| Generated (UTC) | 2026-11-22T07:37:00.450Z |
 
 ## What these numbers are, and what they are not
 
@@ -167,7 +167,7 @@ Entries scored: 229
 | go | 14/22 (63.6%) |
 | haskell | 9/9 (100.0%) |
 | java | 13/25 (52.0%) |
-| js/ts | 23/38 (60.5%) |
+| js/ts | 22/38 (57.9%) |
 | json | 0/1 (0.0%) |
 | kotlin | 10/21 (47.6%) |
 | php | 15/23 (65.2%) |
@@ -213,14 +213,14 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 20 |
-| `scripts` | 104 |
+| `scripts` | 96 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 704 |
+| `scanner/src` | 698 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -237,7 +237,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 229/586 (39.1%) |
+| 276/572 (48.3%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -251,11 +251,11 @@ Counted on a scan of examples/assurance-demo (network off). These describe one r
 | Metric | Figure | Basis |
 | --- | --- | --- |
 | Assurance Coverage | 100% (files 3/3 (100%), analyzers 152/152 (100%)) | the lower of files completed and analyzers completed |
-| Evidence Conversion | 2/11 (18.2%) | findings corroborated or stronger, over all findings |
+| Evidence Conversion | 2/10 (20%) | findings corroborated or stronger, over all findings |
 | Verified Remediation Rate | 2/3 (66.7%) | the three patches the committed end-to-end demo verified; a lower bound where a class has no attack replay |
 | Security Learning Rate | not measured | nothing measures it independently of the rule compiler's own corpus |
 
-Evidence states reached: single-signal 9, corroborated 2, taint-confirmed 0, execution-proven 0.
+Evidence states reached: single-signal 8, corroborated 2, taint-confirmed 0, execution-proven 0.
 
 ## Compliance mapping coverage
 
@@ -288,7 +288,7 @@ this run.
 
 ## Haskell and Nix/NixOS support
 
-*Committed artifact:* `docs/language-support.json`, measured 2026-11-04 on node v24.20.0. It is read here, not re-measured by this command.
+*Committed artifact:* `docs/language-support.json`, measured 2026-11-21 on node v24.20.0. It is read here, not re-measured by this command.
 
 Every row is **supported** only from passing evidence of its own metric kind. Layers are scored independently (the taint layer
 is the injection families, the SAST layer is every other family) and a finding of a different family inside a case is counted
@@ -379,7 +379,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.219.0), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.220.0), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both

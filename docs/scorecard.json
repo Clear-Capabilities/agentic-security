@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.219.0",
-    "bundleSha256": "ad8dc9a27d5c2ed0a256f110672af12104adda8b84c07b9db82a619804118a3e",
-    "commit": "da8199beb8bb8c8a7b2d519098fc61cf33a5cdd9",
+    "engineVersion": "0.220.0",
+    "bundleSha256": "585a995008d9264a3bfc9ab382966b078db4056b7318e3e4d83a2a3de0f7b01f",
+    "commit": "d9dbef3c64a48f1d5711b60a6fbc3c237f3ddade",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-21T22:13:16.338Z",
+    "generatedAt": "2026-11-22T07:37:00.450Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -623,7 +623,7 @@
         }
       },
       "scanner/src": {
-        "total": 704,
+        "total": 698,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -673,8 +673,8 @@
           "fix/test-commands.js": 2,
           "fix/verify-patch.js": 1,
           "history-scan.js": 1,
-          "integrations/index.js": 10,
-          "integrations/tickets.js": 8,
+          "integrations/index.js": 8,
+          "integrations/tickets.js": 7,
           "ir/chrome-probe.mjs": 1,
           "ir/cpp-preprocessor.js": 1,
           "ir/ir-stats.js": 1,
@@ -729,7 +729,7 @@
           "llm-validator/model-probe.js": 1,
           "llm-validator/oom-feedback.js": 1,
           "lsp/server.js": 3,
-          "mcp/audit.js": 8,
+          "mcp/audit.js": 7,
           "mcp/portfolio-tools.js": 1,
           "mcp/server.js": 1,
           "mcp/tools.js": 7,
@@ -801,7 +801,7 @@
           "posture/execution-proof.js": 1,
           "posture/exploitability-probability.js": 3,
           "posture/feature-flags.js": 3,
-          "posture/federated-learning.js": 8,
+          "posture/federated-learning.js": 6,
           "posture/findings-memory.js": 1,
           "posture/fix-history.js": 7,
           "posture/fix-metrics.js": 1,
@@ -961,9 +961,9 @@
         }
       },
       "scripts": {
-        "total": 104,
+        "total": 96,
         "byFile": {
-          "_compliance_lib.py": 2,
+          "_compliance_lib.py": 1,
           "apply-command-trim.mjs": 2,
           "assurance-review-example.mjs": 1,
           "calibration-expand.mjs": 2,
@@ -991,8 +991,7 @@
           "loop-engineering/lib/claude.mjs": 1,
           "loop-engineering/lib/controller.mjs": 4,
           "loop-engineering/lib/server.mjs": 5,
-          "nist-compliance/scan.py": 7,
-          "owasp-llm-top10/scan.py": 1,
+          "nist-compliance/scan.py": 1,
           "release-check.mjs": 1,
           "release-closure.mjs": 1,
           "rotate-key-auto.py": 1,
@@ -1012,8 +1011,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 229,
-    "d": 586
+    "n": 276,
+    "d": 572
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -1058,7 +1057,7 @@
         {
           "language": "js/ts",
           "taint": {
-            "n": 23,
+            "n": 22,
             "d": 38
           }
         },
@@ -1177,7 +1176,7 @@
     },
     "languageSupport": {
       "source": "docs/language-support.json",
-      "generatedAt": "2026-11-04",
+      "generatedAt": "2026-11-21",
       "node": "v24.20.0",
       "tools": {
         "ghc": true,
@@ -1218,7 +1217,7 @@
           },
           "measuredOn": {
             "split": "holdout",
-            "measuredAt": "2026-11-04",
+            "measuredAt": "2026-11-21",
             "corpusVersion": "qa001-v2",
             "hashes": {
               "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
@@ -1435,7 +1434,7 @@
           },
           "measuredOn": {
             "split": "holdout",
-            "measuredAt": "2026-11-04",
+            "measuredAt": "2026-11-21",
             "corpusVersion": "qa001-v2",
             "hashes": {
               "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
@@ -2227,10 +2226,10 @@
       "evidenceConversion": {
         "status": "measured",
         "numerator": 2,
-        "denominator": 11,
-        "percent": 18.2,
+        "denominator": 10,
+        "percent": 20,
         "byState": {
-          "single-signal": 9,
+          "single-signal": 8,
           "corroborated": 2,
           "taint-confirmed": 0,
           "execution-proven": 0
@@ -2266,9 +2265,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.219.0",
-    "commit": "da8199beb8bb8c8a7b2d519098fc61cf33a5cdd9",
-    "bundleSha256": "ad8dc9a27d5c2ed0a256f110672af12104adda8b84c07b9db82a619804118a3e",
+    "engineVersion": "0.220.0",
+    "commit": "d9dbef3c64a48f1d5711b60a6fbc3c237f3ddade",
+    "bundleSha256": "585a995008d9264a3bfc9ab382966b078db4056b7318e3e4d83a2a3de0f7b01f",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",
