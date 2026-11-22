@@ -14,7 +14,9 @@ import { runFullScan } from '../../src/engine.js';
 import { setStateWritesEnabled } from '../../src/posture/state-dir.js';
 
 setStateWritesEnabled(false);
-const scan = async (file, code) => (await runFullScan({ fileContents: { [file]: code }, scanRoot: null, deep: true })).findings.filter((f) => f.file === file && f.severity !== 'info' && !/x-powered-by|Missing/i.test(f.vuln || ''));
+// `deepInCi`: the near-miss verdicts rest on the deep layer's clean-site record (a closed argument at the structural sink), which the
+// hosted runner's CI mode would otherwise leave out; the gate judges the engine with the layer on, as the CLI runs it outside CI.
+const scan = async (file, code) => (await runFullScan({ fileContents: { [file]: code }, scanRoot: null, deep: true, deepInCi: true })).findings.filter((f) => f.file === file && f.severity !== 'info' && !/x-powered-by|Missing/i.test(f.vuln || ''));
 const flagged = async (file, code, re) => (await scan(file, code)).some((f) => re.test(f.vuln));
 
 const MODELS = [

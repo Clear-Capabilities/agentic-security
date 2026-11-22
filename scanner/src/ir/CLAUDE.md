@@ -367,7 +367,7 @@ Tests: `test/python-class-taint.test.js`, `test/parser-js-ts-casts.test.js`, `te
 
 ## 0.220.0, second half: resolution, more sources, Python bodies, allowlists
 
-- **Module resolution (`module-resolver.js`).** `tsconfig.json`/`jsconfig.json` `compilerOptions.paths` and `baseUrl` are read (leniently: comments
+- **Module resolution (`module-resolver.js`).** `tsconfig.json` (or the jsconfig equivalent) `compilerOptions.paths` and `baseUrl` are read (leniently: comments
   and trailing commas stripped; the file nearest the root wins; `extends` is not followed): `@/lib/db` maps through its pattern, `lib/db`
   under baseUrl. A specifier an alias pattern names but no file answers is `unresolved` (never guessed from a bare name). Python absolute
   imports are tried from the repository root, `src/`, and the importer's package parents (a module three packages deep under `src/`
