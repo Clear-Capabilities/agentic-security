@@ -1,28 +1,26 @@
 {
  "schema": "ttff/v1",
- "note": "Time-to-first-finding on a cold cache. This engine is batch, so this equals time-to-all-findings today. The top-level ms is the original CI measurement for a 209-file target and is used for local runs only; the scanned tree has since grown to about 367 files, so on the hosted runner the budget comes from the `hosted` block, measured on the current target.",
+ "note": "Time-to-first-finding on a cold cache. This engine is batch, so this equals time-to-all-findings today.",
  "target": "scanner/src/posture",
  "regressionFactor": 1.6,
- "ms": 8138,
- "findings": 257,
- "filesScanned": 209,
- "recordedAt": "2026-09-03T20:17:43.941Z",
  "hosted": {
-  "ms": 11133,
+  "ms": 13840,
   "regressionFactor": 1.35,
   "samples": [
-   7969,
-   9294,
-   9437,
-   10512,
-   10784,
-   11482,
-   12335,
-   12670,
-   12764,
-   12775
+   11252,
+   11330,
+   11473,
+   13788,
+   13891,
+   13956,
+   13961,
+   14227
   ],
-  "derivedFrom": "time-to-first-finding lines in the release workflow runs of 2026-10-25 and 2026-10-26 that passed their gate (ten runs); ms is the median, the factor is a little above the largest sample over the median (12775/11133 = 1.15). The two runs that exposed the 0.186.0 slowdown (15373, 17861 and 18521 ms) are not in the sample and exceed the limit (15030 ms).",
-  "recordedAt": "2026-10-26"
- }
+  "derivedFrom": "time-to-first-finding lines of the hosted ttff job on the 0.221.0 tree (3c831d14, engine with the concurrent git-history annotation), ubuntu-26.04 runner image 20261111.635, 2026-11-22: ci run 45032576984 (the PR #202 head) and ci run 45033132610 on main a3d902df (first attempt and seven re-runs of the job); the samples fall in two groups, about 11.3 s and about 13.9 s, which is the runner pool, not the code. ms is the median of the 8 samples; the factor is the largest sample over the median (14227/13840 = 1.03) rounded up to 0.05 plus 0.15, floor 1.35; limit 18684 ms.",
+  "recordedAt": "2026-11-22"
+ },
+ "ms": 8935,
+ "findings": 377,
+ "filesScanned": 375,
+ "recordedAt": "2026-11-22T15:49:26.721Z"
 }
