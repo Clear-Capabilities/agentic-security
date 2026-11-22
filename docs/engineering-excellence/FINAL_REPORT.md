@@ -110,6 +110,6 @@ Every command below was run in this programme. Each names the artifact it produc
 | `npm run ee:e2e-demo` | `docs/engineering-excellence/data/e2e-demo-outline.json` | `sha256:f8b769139264b180` |
 | `npm run bench:dci-real-app` | `docs/engineering-excellence/data/dci-real-app.json` | `sha256:3d3796a2a85e71f0` |
 | `npm run ee:regression-report` | `docs/engineering-excellence/REGRESSION_REPORT.md` | `sha256:8ecd4a02319c8670` |
-| `npm run ee:doc-captures` | `docs/engineering-excellence/README.md` | `sha256:efd7cf672b6392ff` |
+| `npm run ee:doc-captures` | `docs/engineering-excellence/README.md` | `sha256:c780e4045f9efbfc` |
 
 Resume from disk: `node scripts/engineering-excellence/status.mjs --resume` prints the next step, and `node scripts/engineering-excellence/status.mjs --markdown` regenerates `STATUS.md` (it carries a revision number and timestamp, so it has no digest here); `docs/engineering-excellence/STATUS.md` and `unresolved.json` hold the same state.
