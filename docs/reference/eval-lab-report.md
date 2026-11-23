@@ -19,6 +19,9 @@
 | `leakageAudit` | The result of the check that no label reached an arm (below) |
 | `complete` | `true` only when nothing was excluded, stopped or cancelled |
 | `incompleteReasons` | Why `complete` is `false`; empty when it is `true` |
+| `measurement` | The population the run measured: `synthetic` (a directory dataset: machinery, not effectiveness) or `real-code` (git pairs), with a note; `unlabelled` for a run recorded before the label existed |
+| `stability` | Per-defect detections over the SCHEDULED repetitions of each detect arm: frequency with a Wilson interval, union and stable recall, completion by status, the completed-only `validRunOnly` diagnostic, and the stage attrition the arms recorded; `null` when no detect task ran |
+| `paired` | Every model arm against every deterministic arm on the identical usable entries, per repeat: wins, losses, ties |
 | `arms` | One entry per arm (below) |
 | `notes` | Plain-language caveats attached to this report |
 

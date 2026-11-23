@@ -18,8 +18,8 @@ import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { digestOf } from '../assurance/identity.js';
 
-export const PROFILE_LIFECYCLE = Object.freeze(['provision', 'migrate', 'seed', 'serve', 'exercise', 'inspect', 'teardown']);
-export const SETUP_BLOCKERS = Object.freeze(['runtime-unavailable', 'framework-unavailable', 'database-unavailable', 'container-runtime-unavailable', 'dependency-fetch-not-authorized', 'platform-unverified']);
+const PROFILE_LIFECYCLE = Object.freeze(['provision', 'migrate', 'seed', 'serve', 'exercise', 'inspect', 'teardown']);
+const SETUP_BLOCKERS = Object.freeze(['runtime-unavailable', 'framework-unavailable', 'database-unavailable', 'container-runtime-unavailable', 'dependency-fetch-not-authorized', 'platform-unverified']);
 export const PLATFORM_STATUS = Object.freeze({ darwin: 'host-run-only', linux: 'unverified', win32: 'unsupported' });
 
 export const PROFILES = Object.freeze({

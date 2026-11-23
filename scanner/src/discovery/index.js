@@ -226,6 +226,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   }
 
   const runs = [];
+  let citationsDiscardedTotal = 0;
   let candidates = [];
   // areasHunted: areas where AT LEAST ONE lens run completed without degrading.
   const hunted = new Set();
@@ -240,7 +241,9 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       const verifiedContext = supplier ? { ...supplier.forArea(area.files, opts.contextChars || 24_000), contract: contractView } : null;
       const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot, ...(verifiedContext ? { verifiedContext } : {}) }, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot });
       // `citationsDiscarded` was summed from these entries below but never copied into them, so the coverage figure was always 0.
-      runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length, discarded: run.discarded || 0, citationsDiscarded: run.citationsDiscarded || 0, citation: run.citation || null, ...(verifiedContext ? { verifiedContext: { state: verifiedContext.state, packages: verifiedContext.packages.length, omitted: verifiedContext.omitted } } : {}) });
+      // The run entry keeps its frozen shape (docs/reference/agentic-discovery-contract.md); the discard count is summed on the side.
+      runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
+      citationsDiscardedTotal += run.citationsDiscarded || 0;
       for (const c of run.candidates) note(c, 'hunted', 'proposed', `${area.label} × ${lens.key}`);
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
       if (run.discarded > 0) reasons.push(`${area.label} × ${lens.key}: ${run.discarded} proposed candidate(s) had no usable file and line and were discarded`);
@@ -451,7 +454,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       contestedConfirmed: survivors.filter(c => c?.refutation?.overridden === true).length,
       // Candidates the hunter discarded because their citation did not resolve (a file outside the focus area or the scanned
       // tree, a line beyond the file's end); counted, never silently dropped.
-      citationsDiscarded: runs.reduce((n, r) => n + (r.citationsDiscarded || 0), 0),
+      citationsDiscarded: citationsDiscardedTotal,
       // PRD Phase 0 / C3 — what the run cost and whether the budget stopped it.
       // `budgetExhausted` true means the report is INCOMPLETE by construction:
       // work remained and was not done. Reading it as a clean result is the

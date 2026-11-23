@@ -50,6 +50,7 @@ test('C-AC02: a timed-out, blocked or cancelled repetition is a scheduled non-de
 test('C-AC02/C-AC03/C-AC07 through runEval: repetitions are independent, a cancelled run records its unstarted attempts, the run says synthetic', async () => {
   const ds = loadDatasetFile(FX);
   assert.equal(ds.ok, true);
+  ds.manifest.dataset.population = 'synthetic'; // the fixture is authored; declare it so the run labels it
   const seen = [];
   // the scripted arm finds cmdi-1 on even repeats only, and records what each call was given: no repeat sees another's findings
   const runArmTask = async ({ request }) => { seen.push(Object.keys(request).sort().join(',')); const repeat = seen.length; return { status: 'completed', output: { findings: [] }, usage: { usd: null, latencyMs: 1 }, repeat }; };

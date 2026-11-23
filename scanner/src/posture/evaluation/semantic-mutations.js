@@ -22,12 +22,12 @@ import { verifyInvariantRepair } from '../invariants/repair.js';
 import { generateScenarios } from '../invariants/scenarios.js';
 import { classifyViolation, verifyLedger } from '../invariants/lifecycle.js';
 
-export const MUTANT_OUTCOMES = Object.freeze(['killed', 'survived', 'equivalent', 'unsupported', 'invalid', 'unresolved']);
-export const MUTATION_POPULATION_VERSION = 'slice-semantic-mutants/1';
+const MUTANT_OUTCOMES = Object.freeze(['killed', 'survived', 'equivalent', 'unsupported', 'invalid', 'unresolved']);
+const MUTATION_POPULATION_VERSION = 'slice-semantic-mutants/1';
 
 // Each application mutant is a mechanical edit of the CORRECT (patched) service with a stated expectation and its justification.
 const SET_FN = 'export function setInvoiceMemo(db, principal, key, payload) {';
-export const APPLICATION_MUTANTS = Object.freeze([
+const APPLICATION_MUTANTS = Object.freeze([
   { id: 'remove-write-tenant-predicate', expect: 'killed', justification: 'the memo write reads the record without the tenant scope, so a member of another tenant reaches the write',
     edit: (s) => s.replace("export function setInvoiceMemo(db, principal, key, payload) {\n  const rec = db.findOne(key, { tenant: principal.tenant });", "export function setInvoiceMemo(db, principal, key, payload) {\n  const rec = db.findOne(key);") },
   { id: 'authorization-after-write', expect: 'killed', justification: 'the tenant check runs after the write: the response is a 404 but the forbidden durable effect has happened',

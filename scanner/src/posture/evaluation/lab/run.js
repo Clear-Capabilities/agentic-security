@@ -270,7 +270,13 @@ export async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEF
       // recall with Wilson intervals, completion by status, and the stage attrition the arms recorded. Failed and cancelled
       // repetitions stay in the denominators; the completed-only view is labelled `validRunOnly`.
       stability: tasks.includes('detect') ? stabilityReport({ armPlans, usable, attempts, mapFile: mapFileFor, policy: stabilityPolicy }) : null,
-      measurement: { population: manifest.dataset.source?.kind === 'git-pairs' ? 'real-code' : 'synthetic', split: manifest.dataset.split, note: manifest.dataset.source?.kind === 'git-pairs' ? 'real code; independence depends on how the labels were made (see the dataset provenance)' : 'synthetic machinery result: says nothing about effectiveness on real code' },
+      measurement: (() => {
+        const population = manifest.dataset.source?.kind === 'git-pairs' ? 'real-code' : (manifest.dataset.population ?? 'unlabelled');
+        const note = population === 'real-code' ? 'real code; independence depends on how the labels were made (see the dataset provenance)'
+          : population === 'synthetic' ? 'synthetic machinery result: says nothing about effectiveness on real code'
+          : 'the dataset does not declare its population; treat the figures as describing this dataset only';
+        return { population, split: manifest.dataset.split, note };
+      })(),
     };
     run.digest = digestOf({ ...run, digest: undefined });
     return { ok: true, run };

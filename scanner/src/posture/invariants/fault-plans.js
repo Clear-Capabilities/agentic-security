@@ -16,7 +16,7 @@
 import { deriveScenario, runScenario } from './scenarios.js';
 import { digestOf } from '../assurance/identity.js';
 
-export const SUPPORTED_FAULTS = Object.freeze(['duplicate-delivery', 'reorder', 'revocation-between']);
+const SUPPORTED_FAULTS = Object.freeze(['duplicate-delivery', 'reorder', 'revocation-between']);
 export const UNSUPPORTED_FAULTS = Object.freeze({
   'dependency-timeout': 'the harness offers no dependency stub, so a dependency response cannot be controlled',
   'dependency-failure': 'the harness offers no dependency stub, so a dependency response cannot be controlled',

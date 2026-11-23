@@ -245,7 +245,12 @@ test('E1/10 (item e): §16.7 Finding 2\'s enumerator is computable from path-sto
   const lossReasons = [...new Set(tight.hops.filter((h) => h.lossReason).map((h) => h.lossReason))];
   assert.deepEqual(lossReasons, ['context-cap-degraded'], 'a real context-cap degradation is reachable from real parsed code');
   const dt = degradedTerminals(tight.store);
-  assert.equal(dt.length, 1, 'exactly one truncation-terminal: a `path` node with zero out-edges whose in-edge is degraded');
+  // How MANY of `id`'s three entry contexts the cap of 2 degrades depends on the order the driver visits functions. Since 0.222.0
+  // the front end lists assignment-side calls (`const x = id(a)`) in the call summary, so the driver sees the h -> id edges and
+  // visits callee first; the tight cap then degrades two contexts instead of one. What this test pins is that the degradation is
+  // real and every degraded endpoint is a terminal the enumerator finds.
+  assert.ok(dt.length >= 1 && dt.length <= 2, `one or two truncation-terminals, got ${dt.length}`);
+  assert.equal(dt.length, tight.hops.filter((h) => h.lossReason).length, 'one terminal per degraded hop');
   assert.equal(dt[0].kind, 'path');
   assert.equal(tight.store.edgesFrom(dt[0].id).length, 0, 'zero out-edges — invisible to sinkCandidates(), which is §16.7 Finding 2 exactly');
   assert.ok(tight.store.edgesTo(dt[0].id).length > 0, 'but reachable through edgesTo()');

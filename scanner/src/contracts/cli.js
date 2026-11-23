@@ -14,6 +14,7 @@ import { validateContract, contractRef, bindingView, createContract } from './sc
 import { reconcilePack } from './pack.js';
 import { approvalState } from './approval.js';
 import { readStoreJson } from '../context-intelligence/store.js';
+import { statePath } from '../posture/state-dir.js';
 
 const SAFE = (s) => String(s ?? '').replace(/[\u0000-\u001f\u007f‎‏‪-‮⁦-⁩]/g, '?').slice(0, 300);
 
@@ -48,7 +49,7 @@ export async function loadContractForHunt({ contractPath, ledgerPath = null, sca
 // the operator did not configure, which is why a missing policy means no approval verifies.
 async function reviewerPolicyFor(scanRoot) {
   if (!scanRoot) return null;
-  const r = await readJson(path.join(scanRoot, '.agentic-security', 'reviewer-policy.json'));
+  const r = await readJson(statePath(scanRoot, 'reviewer-policy.json'));
   if (!r.ok || !r.value || !Array.isArray(r.value.reviewers)) return null;
   return { id: typeof r.value.id === 'string' ? r.value.id : 'local', reviewers: r.value.reviewers.filter((x) => typeof x === 'string') };
 }

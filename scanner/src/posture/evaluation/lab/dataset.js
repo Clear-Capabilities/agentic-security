@@ -56,6 +56,10 @@ export function validateDatasetManifest(m) {
   if (!langs.length || !langs.every((l) => typeof l === 'string' && /^[a-z][a-z0-9+#-]{0,19}$/.test(l))) bad('dataset.language must name one or more languages');
   if (!d.source || typeof d.source !== 'object' || !SOURCE_KINDS.includes(d.source.kind)) bad(`dataset.source.kind must be one of ${SOURCE_KINDS.join(', ')}`);
   if (!SPLITS.includes(d.split)) bad(`dataset.split must be one of ${SPLITS.join(', ')}`);
+  // What the population is (contract-driven verification, C-07): `synthetic` (authored to exercise machinery; the router never routes on it)
+  // or `real-code`. Git pairs are real code whatever this says; an undeclared directory dataset is `unlabelled`.
+  if (d.population !== undefined && !['synthetic', 'real-code'].includes(d.population)) bad('dataset.population must be synthetic or real-code');
+  if (d.population === 'synthetic' && d.source?.kind === 'git-pairs') bad('a git-pairs dataset is real code; it cannot be declared synthetic');
   if (typeof d.license !== 'string' || !d.license.trim()) bad('dataset.license is required');
   else if (d.source?.kind === 'git-pairs' && !PERMITTED_LICENSES.includes(d.license)) bad(`a real-code dataset needs a license that permits use (one of ${PERMITTED_LICENSES.slice(0, 6).join(', ')}, ...); "${d.license}" is not accepted`);
   if (!Array.isArray(d.cwe) || !d.cwe.length || !d.cwe.every((c) => CWE_RE.test(String(c)))) bad('dataset.cwe must list CWE ids such as CWE-89');
