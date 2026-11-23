@@ -707,6 +707,14 @@ MATRIX['CAP-128'] = {
   },
 };
 
+// CAP-129 (contracts, 0.223.0): service security contracts and contract-aware hunting are proved on JavaScript and Python fixtures only.
+MATRIX['CAP-129'] = {
+  na: {
+    reason: 'the contract-aware hunt, its qualification and the business-state scenarios run on JavaScript and Python services; there is no Haskell contract fixture and a Nix or NixOS configuration has no request path for a contract to qualify, so there is no ecosystem-specific CLI behavior to execute.',
+    behavior: 'A contract can still be validated and approved for any repository (`contracts validate|inspect`); a hunt over Haskell or Nix sources runs without contract qualification and records its context as unavailable rather than claiming coverage.',
+  },
+};
+
 // ── the matrix ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 for (const [cap, row] of Object.entries(MATRIX)) {
   for (const eco of ['haskell', 'nix']) {

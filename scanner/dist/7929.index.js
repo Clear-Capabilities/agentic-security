@@ -1,5 +1,5 @@
-export const id = 5094;
-export const ids = [5094,2199,818,642];
+export const id = 7929;
+export const ids = [7929,2199,818,642];
 export const modules = {
 
 /***/ 90642:
@@ -194,249 +194,155 @@ function* readTarEntries(buf, limits = DEFAULT_LIMITS) {
 
 /***/ }),
 
-/***/ 44652:
+/***/ 99647:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   IW: () => (/* binding */ safeLabel),
-/* harmony export */   Qz: () => (/* binding */ safeRelPath),
-/* harmony export */   bt: () => (/* binding */ cleanForTerminal),
-/* harmony export */   dj: () => (/* binding */ canonicalJson),
-/* harmony export */   fQ: () => (/* binding */ normalizeText),
-/* harmony export */   iq: () => (/* binding */ sliceLines),
-/* harmony export */   kH: () => (/* binding */ cmpCodeUnit),
-/* harmony export */   qQ: () => (/* binding */ hashOf),
-/* harmony export */   sc: () => (/* binding */ sha256),
-/* harmony export */   v6: () => (/* binding */ readRepoFile),
-/* harmony export */   w9: () => (/* binding */ snapshotHashOf)
+/* harmony export */   HR: () => (/* binding */ recallOf),
+/* harmony export */   YV: () => (/* binding */ wilsonInterval),
+/* harmony export */   ij: () => (/* binding */ precisionOf),
+/* harmony export */   jN: () => (/* binding */ groupedBootstrap),
+/* harmony export */   li: () => (/* binding */ f1Of)
 /* harmony export */ });
-/* unused harmony export HASH_ALGORITHM */
+/* unused harmony exports INTERVAL_METHODS, seededRng, seedFor */
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+// Documented 95% interval methods (QA-004.AC01).
 //
-// Canonical serialization, hashing and path/snapshot safety for Deterministic Context Intelligence.
+// Two methods, each registered by name in the protocol (`thresholds.intervalMethod`) before any result is observed:
 //
-// Everything DCI stores or compares goes through this module so that "same checkout + same config => same bytes" is
-// a property of one place. No clock, no randomness, no host path ever enters a hashed value.
-
-
-
-
-/** Bump when the canonical encoding below changes; it is mixed into every hash. */
-const HASH_ALGORITHM = 'sha256/canon-1';
-
-function sha256(text) {
-  return node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash('sha256').update(text).digest('hex');
-}
-
-/**
- * Code-unit order, independent of the host locale. `localeCompare` orders by the process locale, so the same checkout
- * could be sorted differently on two machines; every ordering that reaches a hashed value goes through this instead.
- */
-function cmpCodeUnit(a, b) {
-  const x = String(a); const y = String(b);
-  return x < y ? -1 : x > y ? 1 : 0;
-}
-
-// Control characters (C0, DEL, C1), the bidirectional override/isolate marks and the line/paragraph separators. A
-// repository controls the text of its own route strings and file names, so anything printed to a terminal or placed
-// in a prompt outside the untrusted fence must not be able to carry an escape sequence or reorder what a reader sees.
-const UNSAFE_DISPLAY = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
-
-/** Make text safe to print: unsafe characters become '?'. Newline and tab are kept; use `safeLabel` for one-line values. */
-function cleanForTerminal(text) {
-  return String(text).replace(UNSAFE_DISPLAY, '?');
-}
-
-/** A one-line, bounded, printable form of a name taken from source (a route path, a file name). */
-function safeLabel(text, max = 120) {
-  const t = String(text).replace(/[\n\r\t]+/g, ' ').replace(UNSAFE_DISPLAY, '?').replace(/ {2,}/g, ' ').trim();
-  return t.length > max ? `${t.slice(0, max - 3)}...` : t;
-}
-
-/** CRLF/CR -> LF so a Windows checkout and a Unix one produce the same spans and hashes. */
-function normalizeText(text) {
-  return String(text).replace(/\r\n?/g, '\n');
-}
-
-/**
- * JSON with object keys sorted at every depth. Arrays keep their order (callers sort them where order is not
- * meaningful). `undefined` members are dropped, exactly as JSON.stringify does, so a missing and an undefined field hash alike.
- */
-function canonicalJson(value) {
-  return JSON.stringify(sortKeys(value));
-}
-
-function sortKeys(v) {
-  if (Array.isArray(v)) return v.map(sortKeys);
-  if (v && typeof v === 'object') {
-    const out = {};
-    for (const k of Object.keys(v).sort()) {
-      if (v[k] !== undefined) out[k] = sortKeys(v[k]);
-    }
-    return out;
-  }
-  return v;
-}
-
-function hashOf(value) {
-  return sha256(`${HASH_ALGORITHM}\n${canonicalJson(value)}`);
-}
-
-/**
- * A repository-relative path in canonical form, or null. Rejects absolute paths, drive letters, NUL, backslash
- * tricks and any `..` segment: a manifest can never name a file outside the repository.
- */
-function safeRelPath(p) {
-  if (typeof p !== 'string' || p === '' || p.includes('\0')) return null;
-  const n = p.replace(/\\/g, '/');
-  if (n.startsWith('/') || /^[A-Za-z]:/.test(n)) return null;
-  const parts = n.split('/');
-  const out = [];
-  for (const seg of parts) {
-    if (seg === '' || seg === '.') continue;
-    if (seg === '..') return null;
-    out.push(seg);
-  }
-  return out.length ? out.join('/') : null;
-}
-
-/**
- * Read one repository file for analysis. Refuses a symlink and anything whose real path leaves the repository root,
- * and refuses non-regular files. Returns { ok, text } or { ok:false, reason }; never throws.
- */
-function readRepoFile(rootReal, rel, { maxBytes = 2 * 1024 * 1024 } = {}) {
-  const safe = safeRelPath(rel);
-  if (!safe) return { ok: false, reason: 'unsafe-path' };
-  const abs = node_path__WEBPACK_IMPORTED_MODULE_2__.join(rootReal, safe);
-  try {
-    const st = node_fs__WEBPACK_IMPORTED_MODULE_1__.lstatSync(abs);
-    if (st.isSymbolicLink()) return { ok: false, reason: 'symlink' };
-    if (!st.isFile()) return { ok: false, reason: 'not-a-regular-file' };
-    if (st.size > maxBytes) return { ok: false, reason: 'too-large' };
-    const real = node_fs__WEBPACK_IMPORTED_MODULE_1__.realpathSync(abs);
-    if (real !== rootReal && !real.startsWith(rootReal + node_path__WEBPACK_IMPORTED_MODULE_2__.sep)) return { ok: false, reason: 'escapes-root' };
-    return { ok: true, text: normalizeText(node_fs__WEBPACK_IMPORTED_MODULE_1__.readFileSync(abs, 'utf8')) };
-  } catch (err) {
-    return { ok: false, reason: err && err.code ? String(err.code) : 'unreadable' };
-  }
-}
-
-/** Hash of the analysed file set: sorted [path, content hash] pairs. Order of discovery never matters. */
-function snapshotHashOf(fileContents) {
-  const rows = Object.keys(fileContents).sort().map(f => [f, sha256(fileContents[f])]);
-  return hashOf(rows);
-}
-
-/** 1-based inclusive line slice of already-normalised text. */
-function sliceLines(text, startLine, endLine) {
-  const lines = text.split('\n');
-  return lines.slice(Math.max(0, startLine - 1), Math.max(0, endLine)).join('\n');
-}
-
-
-/***/ }),
-
-/***/ 72873:
-/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
-
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   RA: () => (/* binding */ readSnapshot),
-/* harmony export */   zK: () => (/* binding */ readGitSnapshot)
-/* harmony export */ });
-/* unused harmony exports SOURCE_EXTS, IGNORE_GLOBS */
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
-/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31421);
-/* harmony import */ var _util_glob_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(30397);
-/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(31174);
-/* harmony import */ var _canonical_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(44652);
+//   grouped-bootstrap-95   For F1, precision and recall, and for the micro and macro aggregates. Resamples GROUPS, not cases:
+//                          targets that share a pair, upstream, advisory, commit or template (grouping.js) are one resampling
+//                          unit, because treating near-duplicates as independent draws makes the interval narrower than the
+//                          evidence supports. The percentile method over `replicates` resamples (default 2000), driven by a
+//                          seeded generator, so the same score and protocol produce the same interval to the last digit.
+//                          The seed is derived from the protocol hash: nobody picks a seed after seeing a result.
+//   wilson-95              For a single proportion (the completion rate), where there is no group structure to resample.
 //
-// Which files DCI analyses, and how they are read. Reading goes through `readRepoFile`, so a symlink, a file that
-// resolves outside the repository, or an oversized file is skipped with a counted reason, never followed.
+// When there are too few groups for resampling to mean anything (`minGroups`, default 10), the interval is `unmeasured` with the
+// reason, never a degenerate zero-width or a made-up range. An undefined statistic in a resample (no positives drawn) is skipped
+// and counted, and a method that skips too many resamples is itself reported `unmeasured`.
+//
+// Pure: no fs, no clock, no Math.random.
 
 
 
+const INTERVAL_METHODS = Object.freeze({
+  'grouped-bootstrap-95': Object.freeze({
+    level: 0.95,
+    unit: 'target group (grouping.js union-find over pair, upstream, advisory, commit, template)',
+    estimator: 'percentile',
+    replicates: 2000,
+    minGroups: 10,
+    maxUndefinedFraction: 0.1,
+    seed: 'first 32 bits of sha256(protocolHash + "|" + statisticName)',
+  }),
+  'wilson-95': Object.freeze({ level: 0.95, unit: 'case', estimator: 'wilson-score', z: 1.959964 }),
+});
 
-
-
-
-const SOURCE_EXTS = /\.(?:js|jsx|mjs|cjs|ts|tsx|py|java|cs|kt|go|php|rb|rs|c|cc|cpp|h|hpp|l?hs|nix)$/i;
-const IGNORE_GLOBS = ['node_modules/**', '.git/**', 'dist/**', 'build/**', 'vendor/**', '**/.agentic-security/**', 'dist-newstyle/**', '.stack-work/**', '.direnv/**', 'coverage/**', '**/*.min.js'];
-
-/** Read the analysable source set. Returns { ok, fileContents, skipped, snapshotHash } or { ok:false, reason }. */
-async function readSnapshot(root, { maxFiles = 3000 } = {}) {
-  let rootReal;
-  try { rootReal = node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(root); } catch { return { ok: false, reason: 'root-not-found' }; }
-  const rels = (await (0,_util_glob_js__WEBPACK_IMPORTED_MODULE_3__/* .listFiles */ .CS)(rootReal, { ignore: IGNORE_GLOBS })).filter(f => SOURCE_EXTS.test(f)).sort();
-  if (rels.length > maxFiles) return { ok: false, reason: 'too-many-files', count: rels.length, limit: maxFiles };
-  const fileContents = {};
-  const skipped = [];
-  for (const rel of rels) {
-    const r = (0,_canonical_js__WEBPACK_IMPORTED_MODULE_5__/* .readRepoFile */ .v6)(rootReal, rel);
-    if (r.ok) fileContents[rel] = r.text;
-    else skipped.push({ file: rel, reason: r.reason });
-  }
-  for (const l of findSymlinks(rootReal)) skipped.push({ file: l, reason: 'symlink' });
-  skipped.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
-  return { ok: true, rootReal, fileContents, skipped, snapshotHash: (0,_canonical_js__WEBPACK_IMPORTED_MODULE_5__/* .snapshotHashOf */ .w9)(fileContents) };
-}
-
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_4__/* .STATE_DIR_NAME */ .Ky, 'dist-newstyle', '.stack-work', '.direnv', 'coverage']);
-
-/** Symlinked source files and directories (never followed), so they are counted as skipped instead of vanishing. */
-function findSymlinks(rootReal, limit = 5000) {
-  const found = [];
-  let seen = 0;
-  const walk = (abs, rel) => {
-    let entries;
-    try { entries = node_fs__WEBPACK_IMPORTED_MODULE_0__.readdirSync(abs, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      if (++seen > limit) return;
-      const r = rel ? `${rel}/${e.name}` : e.name;
-      if (e.isSymbolicLink()) { if (e.name.indexOf('.') === -1 || SOURCE_EXTS.test(e.name)) found.push(r); continue; }
-      if (e.isDirectory() && !SKIP_DIRS.has(e.name)) walk(node_path__WEBPACK_IMPORTED_MODULE_1__.join(abs, e.name), r);
-    }
+/** mulberry32: a small, well-distributed 32-bit generator. Deterministic for a given seed. */
+function seededRng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  walk(rootReal, '');
-  return found;
 }
 
+/** A 32-bit seed that depends only on the frozen protocol and the statistic's name. */
+function seedFor(protocolHash, statisticName) {
+  return node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash('sha256').update(`${protocolHash}|${statisticName}`).digest().readUInt32BE(0);
+}
+
+const quantile = (sorted, q) => {
+  if (!sorted.length) return null;
+  const pos = (sorted.length - 1) * q;
+  const lo = Math.floor(pos); const hi = Math.ceil(pos);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+};
+
+const ZERO = () => ({ tp: 0, fn: 0, fp: 0, tn: 0 });
+const add = (a, b) => { a.tp += b.tp; a.fn += b.fn; a.fp += b.fp; a.tn += b.tn; };
+
+const f1Of = (c) => (c.tp + c.fp + c.fn === 0 ? null : (2 * c.tp) / (2 * c.tp + c.fp + c.fn));
+const precisionOf = (c) => (c.tp + c.fp > 0 ? c.tp / (c.tp + c.fp) : null);
+const recallOf = (c) => (c.tp + c.fn > 0 ? c.tp / (c.tp + c.fn) : null);
+
 /**
- * Read the analysable source set as it was at a git ref, without touching the working tree. `ref` is passed to git as a
- * single argv element after `--end-of-options`-style validation, never through a shell. Returns the same shape as
- * `readSnapshot`, or { ok:false, reason }.
+ * Grouped percentile bootstrap.
+ * @param {object} o
+ * @param {{id: string, language: string, tp: number, fn: number, fp: number, tn: number}[]} o.units  per-target tallies
+ * @param {Object<string,string>} o.groupOf  target id -> group id (a target with no entry is its own group)
+ * @param {(agg: {total: object, byLanguage: Object<string,object>}) => (number|null)} o.statistic
+ * @param {string} o.name        the statistic's name (feeds the seed)
+ * @param {string} o.protocolHash
  */
-function readGitSnapshot(root, ref, { maxFiles = 3000 } = {}) {
-  if (typeof ref !== 'string' || !/^[A-Za-z0-9._\/~^@{}:-]{1,200}$/.test(ref) || ref.startsWith('-')) return { ok: false, reason: 'bad-ref' };
-  let rootReal;
-  try { rootReal = node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(root); } catch { return { ok: false, reason: 'root-not-found' }; }
-  const git = (args, max = 64 * 1024 * 1024) => (0,node_child_process__WEBPACK_IMPORTED_MODULE_2__.execFileSync)('git', ['-C', rootReal, ...args], { encoding: 'utf8', timeout: 30000, maxBuffer: max, stdio: ['ignore', 'pipe', 'ignore'] });
-  let commit;
-  try { commit = git(['rev-parse', '--verify', `${ref}^{commit}`]).trim(); } catch { return { ok: false, reason: 'unknown-ref' }; }
-  let names;
-  try { names = git(['ls-tree', '-r', '--name-only', '-z', commit]).split('\0').filter(Boolean); } catch { return { ok: false, reason: 'ls-tree-failed' }; }
-  const ignore = IGNORE_GLOBS.map(g => new RegExp('^' + g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*\//g, '(?:.*/)?').replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*') + '$'));
-  const rels = names.filter(f => SOURCE_EXTS.test(f) && (0,_canonical_js__WEBPACK_IMPORTED_MODULE_5__/* .safeRelPath */ .Qz)(f) === f && !ignore.some(re => re.test(f))).sort();
-  if (rels.length > maxFiles) return { ok: false, reason: 'too-many-files', count: rels.length, limit: maxFiles };
-  const fileContents = {};
-  const skipped = [];
-  for (const rel of rels) {
-    try {
-      const mode = git(['ls-tree', commit, '--', rel]).split(' ')[0];
-      if (mode === '120000' || mode === '160000') { skipped.push({ file: rel, reason: 'symlink-or-submodule' }); continue; }
-      const text = git(['show', `${commit}:${rel}`], 2 * 1024 * 1024);
-      fileContents[rel] = (0,_canonical_js__WEBPACK_IMPORTED_MODULE_5__/* .normalizeText */ .fQ)(text);
-    } catch { skipped.push({ file: rel, reason: 'unreadable-at-ref' }); }
+function groupedBootstrap({ units, groupOf = {}, statistic, name, protocolHash, replicates = INTERVAL_METHODS['grouped-bootstrap-95'].replicates, minGroups = INTERVAL_METHODS['grouped-bootstrap-95'].minGroups, level = 0.95 }) {
+  const method = 'grouped-bootstrap-95';
+  const groups = new Map();
+  for (const u of units || []) {
+    const g = groupOf[u.id] || `solo:${u.id}`;
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(u);
   }
-  return { ok: true, rootReal, fileContents, skipped, snapshotHash: (0,_canonical_js__WEBPACK_IMPORTED_MODULE_5__/* .snapshotHashOf */ .w9)(fileContents), commit };
+  const G = [...groups.keys()].sort();
+  const aggOf = (members) => {
+    const total = ZERO(); const byLanguage = {};
+    for (const u of members) {
+      add(total, u);
+      byLanguage[u.language] = byLanguage[u.language] || ZERO();
+      add(byLanguage[u.language], u);
+    }
+    return { total, byLanguage };
+  };
+  const all = aggOf(units || []);
+  const point = statistic(all);
+  const base = { method, level, replicates, groups: G.length, units: (units || []).length, point };
+  if (G.length < minGroups) {
+    return { ...base, status: 'unmeasured', low: null, high: null, reason: `${G.length} independent group${G.length === 1 ? '' : 's'}, fewer than the ${minGroups} needed for a resampling interval to mean anything` };
+  }
+  const rng = seededRng(seedFor(protocolHash, name));
+  const perGroup = G.map((g) => aggOf(groups.get(g)));
+  const draws = [];
+  let undefinedDraws = 0;
+  for (let r = 0; r < replicates; r++) {
+    const total = ZERO(); const byLanguage = {};
+    for (let i = 0; i < G.length; i++) {
+      const pick = perGroup[Math.floor(rng() * G.length)];
+      add(total, pick.total);
+      for (const [lang, c] of Object.entries(pick.byLanguage)) { byLanguage[lang] = byLanguage[lang] || ZERO(); add(byLanguage[lang], c); }
+    }
+    const v = statistic({ total, byLanguage });
+    if (v === null || v === undefined || Number.isNaN(v)) undefinedDraws++; else draws.push(v);
+  }
+  const maxUndef = INTERVAL_METHODS[method].maxUndefinedFraction;
+  if (undefinedDraws / replicates > maxUndef) {
+    return { ...base, status: 'unmeasured', low: null, high: null, undefinedDraws, reason: `the statistic was undefined in ${undefinedDraws} of ${replicates} resamples (more than ${maxUndef * 100}%), so the interval would describe a different population` };
+  }
+  draws.sort((a, b) => a - b);
+  const alpha = (1 - level) / 2;
+  return { ...base, status: 'measured', low: quantile(draws, alpha), high: quantile(draws, 1 - alpha), undefinedDraws, seed: seedFor(protocolHash, name) };
+}
+
+/** Wilson score interval for a proportion. n = 0 is unmeasured. */
+function wilsonInterval(successes, n, z = INTERVAL_METHODS['wilson-95'].z) {
+  const method = 'wilson-95';
+  if (!Number.isInteger(successes) || !Number.isInteger(n) || n <= 0 || successes < 0 || successes > n) {
+    return { method, level: 0.95, status: 'unmeasured', point: null, low: null, high: null, successes, n, reason: 'no cases' };
+  }
+  const p = successes / n; const z2 = z * z;
+  const denom = 1 + z2 / n;
+  const centre = (p + z2 / (2 * n)) / denom;
+  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom;
+  return { method, level: 0.95, status: 'measured', point: p, low: Math.max(0, centre - half), high: Math.min(1, centre + half), successes, n };
 }
 
 
 /***/ }),
 
-/***/ 5094:
+/***/ 37929:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 // ESM COMPAT FLAG
@@ -515,6 +421,10 @@ function validateDatasetManifest(m) {
   if (!langs.length || !langs.every((l) => typeof l === 'string' && /^[a-z][a-z0-9+#-]{0,19}$/.test(l))) bad('dataset.language must name one or more languages');
   if (!d.source || typeof d.source !== 'object' || !SOURCE_KINDS.includes(d.source.kind)) bad(`dataset.source.kind must be one of ${SOURCE_KINDS.join(', ')}`);
   if (!SPLITS.includes(d.split)) bad(`dataset.split must be one of ${SPLITS.join(', ')}`);
+  // What the population is (contract-driven verification, C-07): `synthetic` (authored to exercise machinery; the router never routes on it)
+  // or `real-code`. Git pairs are real code whatever this says; an undeclared directory dataset is `unlabelled`.
+  if (d.population !== undefined && !['synthetic', 'real-code'].includes(d.population)) bad('dataset.population must be synthetic or real-code');
+  if (d.population === 'synthetic' && d.source?.kind === 'git-pairs') bad('a git-pairs dataset is real code; it cannot be declared synthetic');
   if (typeof d.license !== 'string' || !d.license.trim()) bad('dataset.license is required');
   else if (d.source?.kind === 'git-pairs' && !PERMITTED_LICENSES.includes(d.license)) bad(`a real-code dataset needs a license that permits use (one of ${PERMITTED_LICENSES.slice(0, 6).join(', ')}, ...); "${d.license}" is not accepted`);
   if (!Array.isArray(d.cwe) || !d.cwe.length || !d.cwe.every((c) => CWE_RE.test(String(c)))) bad('dataset.cwe must list CWE ids such as CWE-89');
@@ -2087,8 +1997,14 @@ async function runOllamaArm({ arm, task, request, workspaceDir, terms = [], time
 var files = __webpack_require__(72873);
 // EXTERNAL MODULE: ./src/ir/index.js + 11 modules
 var src_ir = __webpack_require__(98297);
-// EXTERNAL MODULE: ./src/discovery/index.js + 5 modules
-var discovery = __webpack_require__(47764);
+// EXTERNAL MODULE: ./src/discovery/index.js + 6 modules
+var discovery = __webpack_require__(69619);
+// EXTERNAL MODULE: ./src/context-intelligence/build.js + 3 modules
+var build = __webpack_require__(70123);
+// EXTERNAL MODULE: ./src/context-intelligence/config.js
+var config = __webpack_require__(33238);
+// EXTERNAL MODULE: ./src/discovery/context-supplier.js
+var context_supplier = __webpack_require__(22289);
 ;// CONCATENATED MODULE: ./src/posture/evaluation/lab/arm-hunt.js
 // The `deterministic + hunt` arm (GA-06 §5, 0.195.31): the deterministic scanner on the staged workspace, then the existing
 // discovery pipeline (`discovery/index.js` `runDiscovery`) over the same files with a LOCAL model, and one merged finding list.
@@ -2115,6 +2031,15 @@ var discovery = __webpack_require__(47764);
 
 
 
+
+
+
+
+// The verified context for a staged workspace, built in memory from that workspace alone: no store, no state written, no model.
+async function workspaceSupplier(workspaceDir, fileContents) {
+  const built = await (0,build/* buildContext */.g)(workspaceDir, { config: (0,config/* normalizeConfig */.I6)({}).config });
+  return (0,context_supplier/* makeContextSupplier */.G)({ fileContents, built: built.ok ? built : null });
+}
 
 const DEFAULT_OLLAMA_HOST = 'http://127.0.0.1:11434';
 const HUNT_DEFAULTS = Object.freeze({ maxLlmCalls: 40, maxCandidates: 20, maxAreas: 8, maxFiles: 2000 });
@@ -2157,6 +2082,7 @@ async function runHuntArm({ arm, task, request, workspaceDir, terms = [], signal
     if (r.result?.usage) { usage.inputTokens += r.result.usage.inputTokens || 0; usage.outputTokens += r.result.usage.outputTokens || 0; }
     return r.result.text;
   };
+  const contractSupplier = arm.adapter.contract ? await workspaceSupplier(workspaceDir, snap.fileContents) : null;
   const res = await (0,state_dir/* withStateWritesDisabled */.Ao)(() => (0,discovery.runDiscovery)(
     { perFileIR: ir.perFile, callGraph: ir.callGraph, fileContents: snap.fileContents, priorScan: { findings: deterministic } },
     {
@@ -2166,10 +2092,14 @@ async function runHuntArm({ arm, task, request, workspaceDir, terms = [], signal
       maxLlmCalls: arm.adapter.maxLlmCalls ?? HUNT_DEFAULTS.maxLlmCalls,
       maxCandidates: arm.adapter.maxCandidates ?? HUNT_DEFAULTS.maxCandidates,
       maxWallMs: timeoutMs,
-      // no scanRoot: no hunt memory, so a repeat never inherits an earlier repeat's refutations
+      // no scanRoot: no hunt memory, so a repeat never inherits an earlier repeat's refutations. In contract mode the context supplier
+      // is built from the staged workspace's own context build (in memory, deterministic, no model, no state written), and the
+      // contract is the arm's, the same document for every repetition.
+      ...(contractSupplier ? { contractMode: { contract: arm.adapter.contract, approval: null, supplier: contractSupplier } } : {}),
     },
   ));
   const cov = res.coverage || {};
+  const contract = res.contract ? { ref: res.contract.ref, context: res.contract.context?.state ?? null, qualification: res.contract.qualification, attrition: res.attrition || {} } : null;
   const reported = usage.inputTokens || usage.outputTokens ? usage : undefined;
   if (blockedPrompts > 0) return { status: 'blocked', reason: `leakage guard: ${blockedPrompts} hunter prompt(s) contained a protected term; nothing from this attempt is scored`, reported };
   if (signal?.aborted) return { status: 'error', reason: 'cancelled', reported };
@@ -2188,11 +2118,14 @@ async function runHuntArm({ arm, task, request, workspaceDir, terms = [], signal
         areasPlanned: cov.areasPlanned ?? 0, areasHunted: cov.areasHunted ?? 0, degradedRuns: cov.degradedRuns ?? 0,
         llmCalls: calls, reasons: (cov.reasons || []).slice(0, 10),
       },
+      ...(contract ? { contract } : {}),
     },
     reported,
   };
 }
 
+// EXTERNAL MODULE: ./src/contracts/schema.js
+var schema = __webpack_require__(42207);
 ;// CONCATENATED MODULE: ./src/posture/evaluation/lab/arms.js
 // Arms: the things the Eval Lab measures (PRD 6). An arm is the deterministic scanner, or a model reached through a small
 // operator-supplied command, or a LOCAL Ollama server through the repository's own provider. There is deliberately no built-in client
@@ -2208,6 +2141,7 @@ async function runHuntArm({ arm, task, request, workspaceDir, terms = [], signal
 //     environment, a wall-clock timeout and cleanup of its whole process tree (`superviseSpawn`);
 //   * everything the lab sends is passed through the leakage guard first, and a hit blocks the call;
 //   * token and dollar usage are whatever the arm reports and are labelled `reported`; absent usage is `unknown`, never zero.
+
 
 
 
@@ -2261,7 +2195,11 @@ function validateArm(a) {
     for (const k of ['maxLlmCalls', 'maxCandidates', 'maxAreas', 'maxFiles']) if (ad[k] !== undefined && !(Number.isInteger(ad[k]) && ad[k] >= 1 && ad[k] <= 100_000)) bad(`adapter.${k} must be a positive integer`);
     if (ad.lenses !== undefined && !(Array.isArray(ad.lenses) && ad.lenses.length && ad.lenses.every((l) => typeof l === 'string' && /^[a-z-]+$/.test(l)))) bad('adapter.lenses must be a non-empty list of lens keys');
     if (ad.timeoutMs !== undefined && !(Number.isInteger(ad.timeoutMs) && ad.timeoutMs >= 1000 && ad.timeoutMs <= 3_600_000)) bad('adapter.timeoutMs must be between 1000 and 3600000');
+    // Contract-aware hunting (contract-driven verification): the contract every repetition hunts against. It must validate; it
+    // states intended behaviour, and the lab's leakage guard checks every prompt the hunt builds from it.
+    if (ad.type === 'hunt' && ad.contract !== undefined) { const cv = (0,schema/* validateContract */.T7)(ad.contract); if (!cv.ok) bad(`adapter.contract does not validate: ${cv.errors.slice(0, 3).map((e) => `${e.path}: ${e.message}`).join('; ')}`); }
   } else bad('adapter.type must be builtin-scanner, command, ollama or hunt');
+  if (ad && ad.promptVersion !== undefined && !(typeof ad.promptVersion === 'string' && /^[\w.@/-]{1,80}$/.test(ad.promptVersion))) bad('adapter.promptVersion must be a short identifier');
   if (a.kind === 'model') {
     const m = a.model;
     if (!m || typeof m.id !== 'string' || !m.id || typeof m.provider !== 'string' || !m.provider) bad('a model arm needs model.id and model.provider');
@@ -2556,6 +2494,113 @@ function scoreEconomics(attempts) {
   };
 }
 
+// EXTERNAL MODULE: ./src/posture/evaluation/interval.js
+var interval = __webpack_require__(99647);
+;// CONCATENATED MODULE: ./src/posture/evaluation/lab/stability.js
+// Per-vulnerability stability and stage attrition for an Eval Lab run (contract-driven verification, Epic C-02 and B-04).
+//
+// A model arm is scheduled `repeats` times over the same frozen population. For every reference defect this module records how many
+// scheduled repetitions detected it, so the run answers "how consistently is this defect rediscovered?" and not only "what was the
+// mean F1?". Denominators are the SCHEDULED repetitions: a repetition that timed out, errored, was blocked, unavailable, skipped for
+// budget or never started (cancelled) is a scheduled non-detection, never dropped. The same figures over completed repetitions only
+// are reported beside them, labelled `validRunOnly`, and never substitute for the end-to-end figures.
+//
+// `stableRecall` is the fraction of defects detected in at least `ceil(threshold * scheduled)` repetitions (the preregistered
+// descriptive threshold, 7 of 10 by default). It is a descriptive criterion: with fewer than `minRepeatsForClaim` repetitions the
+// report says so (`claim: 'descriptive-only'`), and the Wilson interval beside each frequency is the uncertainty of that frequency,
+// not a statement about an underlying detection probability. Pure: no fs, no clock.
+
+
+
+const STABILITY_SCHEMA = 'agentic-security/eval-lab-stability';
+const DEFAULT_STABILITY_POLICY = Object.freeze({ threshold: 0.7, minRepeatsForClaim: 10 });
+const ATTEMPT_STATUSES = Object.freeze(['completed', 'timeout', 'error', 'blocked', 'unavailable', 'skipped-budget', 'cancelled']);
+
+/** How many repetitions must detect a defect for it to count as stable under the policy. */
+function stableThreshold(scheduled, threshold = DEFAULT_STABILITY_POLICY.threshold) {
+  return Math.max(1, Math.ceil(threshold * scheduled));
+}
+
+/**
+ * @param {object} o
+ * @param {object[]} o.armPlans      [{ arm, repeats, tasks }]
+ * @param {object[]} o.usable        the dataset entries that were staged
+ * @param {object[]} o.attempts      every attempt record of the run (including cancelled ones)
+ * @param {function} o.mapFile       (entryId, path) -> staged path
+ * @param {object}  [o.policy]       { threshold, minRepeatsForClaim }
+ */
+function stabilityReport({ armPlans, usable, attempts, mapFile, policy = DEFAULT_STABILITY_POLICY }) {
+  const positives = usable.filter((e) => e.kind === 'vulnerable');
+  const arms = [];
+  for (const plan of armPlans.filter((p) => p.tasks.includes('detect'))) {
+    const scheduled = plan.repeats;
+    const need = stableThreshold(scheduled, policy.threshold);
+    const perRepeat = [];
+    for (let r = 0; r < scheduled; r++) {
+      const mine = attempts.filter((a) => a.armId === plan.arm.id && a.repeat === r && a.task === 'detect');
+      const byEntry = new Map(mine.map((a) => [a.entryId, a]));
+      perRepeat.push({ repeat: r, detected: detectedEntryIds({ entries: usable, attempts: byEntry, mapFile }), byEntry });
+    }
+    const perDefect = positives.map((e) => {
+      const statuses = Object.fromEntries(ATTEMPT_STATUSES.map((s) => [s, 0]));
+      let detected = 0; let started = 0; let completed = 0;
+      for (const rr of perRepeat) {
+        const a = rr.byEntry.get(e.id);
+        const status = a ? (ATTEMPT_STATUSES.includes(a.status) ? a.status : 'error') : 'cancelled';
+        statuses[status] += 1;
+        if (a && status !== 'cancelled' && status !== 'skipped-budget') started += 1;
+        if (status === 'completed') completed += 1;
+        if (rr.detected.has(e.id)) detected += 1;
+      }
+      return {
+        entryId: e.id, cwe: e.cwe ?? null, scheduled, started, completed, detected,
+        frequency: detected / scheduled, interval: (0,interval/* wilsonInterval */.YV)(detected, scheduled),
+        validRunOnly: { completed, detected, frequency: completed > 0 ? detected / completed : null },
+        stable: detected >= need, statuses,
+      };
+    });
+    const n = perDefect.length;
+    const union = perDefect.filter((d) => d.detected >= 1).length;
+    const stable = perDefect.filter((d) => d.stable).length;
+    const completion = Object.fromEntries(ATTEMPT_STATUSES.map((s) => [s, perDefect.reduce((k, d) => k + d.statuses[s], 0)]));
+    arms.push({
+      armId: plan.arm.id, kind: plan.arm.kind, scheduledRepeats: scheduled, threshold: policy.threshold, detectionsNeededForStable: need,
+      claim: plan.arm.kind === 'deterministic' ? 'deterministic-single-run' : scheduled >= policy.minRepeatsForClaim ? 'descriptive-at-preregistered-repeats' : 'descriptive-only',
+      claimNote: plan.arm.kind === 'deterministic' ? 'a deterministic arm runs once; its frequency is 0 or 1 by construction and is not a stability measurement'
+        : scheduled >= policy.minRepeatsForClaim ? `${need} of ${scheduled} is the preregistered descriptive threshold; it is not a statistical claim about an underlying detection probability`
+        : `${scheduled} repeat(s) is below the ${policy.minRepeatsForClaim} the stability policy asks for; the figures describe this run only`,
+      defects: n,
+      unionRecall: n ? union / n : null,
+      stableRecall: n ? stable / n : null,
+      unionInterval: (0,interval/* wilsonInterval */.YV)(union, n), stableInterval: (0,interval/* wilsonInterval */.YV)(stable, n),
+      completion: { scheduledAttempts: n * scheduled, ...completion },
+      perDefect,
+      validRunOnly: { note: 'completed repetitions only; a diagnostic, never the end-to-end figure', unionRecall: n ? perDefect.filter((d) => d.validRunOnly.detected >= 1).length / n : null },
+    });
+  }
+  return { schema: STABILITY_SCHEMA, policy, arms, stageAttrition: stageAttrition(attempts) };
+}
+
+/**
+ * Stage attrition from what the arms recorded: the hunt arm's counters (`output.hunt`) and, in contract mode, the hunt's own
+ * per-stage attrition (`output.contract.attrition`). Summed per arm; absent when the arm recorded nothing.
+ */
+function stageAttrition(attempts) {
+  const byArm = {};
+  for (const a of attempts) {
+    if (!a.output || (!a.output.hunt && !a.output.contract)) continue;
+    const slot = (byArm[a.armId] ||= { attempts: 0, hunt: {}, stages: {} });
+    slot.attempts += 1;
+    for (const [k, v] of Object.entries(a.output.hunt || {})) if (typeof v === 'number') slot.hunt[k] = (slot.hunt[k] || 0) + v;
+    for (const [stage, s] of Object.entries(a.output.contract?.attrition || {})) {
+      const st = (slot.stages[stage] ||= { entered: 0, decisions: {} });
+      st.entered += s.entered || 0;
+      for (const [d, c] of Object.entries(s.decisions || {})) st.decisions[d] = (st.decisions[d] || 0) + c;
+    }
+  }
+  return byArm;
+}
+
 ;// CONCATENATED MODULE: ./src/posture/evaluation/lab/run.js
 // The Eval Lab run (PRD 6): arms x repeats x tasks x dataset entries, with the leakage controls in front and the scores behind.
 //
@@ -2566,6 +2611,7 @@ function scoreEconomics(attempts) {
 // Mechanical evidence decides (the shared engineering contract): an arm's claim that its PoC works or its patch holds is never
 // taken. The lab executes the arm's reproducer in the proof fabric and replays the original exploit against the arm's patch.
 // An attempt that does not complete is recorded as such and never dropped, so a model cannot improve its score by failing.
+
 
 
 
@@ -2603,7 +2649,12 @@ function scannerIdentity() {
     const r = (0,external_node_child_process_.spawnSync)('git', ['rev-parse', 'HEAD'], { cwd: external_node_path_.dirname(new URL(import.meta.url).pathname), encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
     if (r.status === 0) commit = r.stdout.trim() || null;
   } catch { /* not a checkout */ }
-  return { version, commit };
+  let dirty = null;
+  try {
+    const r = (0,external_node_child_process_.spawnSync)('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: external_node_path_.dirname(new URL(import.meta.url).pathname), encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+    if (r.status === 0) dirty = r.stdout.trim().length > 0;
+  } catch { /* not a checkout */ }
+  return { version, commit, dirty };
 }
 
 async function pool(jobs, limit, run, signal) {
@@ -2679,7 +2730,7 @@ function pairedComparisons({ armPlans, usable, attempts, mapFile }) {
   return out;
 }
 
-async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEFAULT_REPEATS, concurrency = 2, timeoutMs = 120_000, budgetUsd = null, scanRoot = process.cwd(), signal, onProgress = () => {}, deps = {} } = {}) {
+async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEFAULT_REPEATS, concurrency = 2, timeoutMs = 120_000, budgetUsd = null, scanRoot = process.cwd(), signal, onProgress = () => {}, deps = {}, stabilityPolicy = DEFAULT_STABILITY_POLICY } = {}) {
   const now = deps.now ?? Date.now;
   const startedAt = new Date(now()).toISOString();
   const errors = [];
@@ -2729,7 +2780,14 @@ async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEFAULT_RE
         if (res.usage?.usd != null) spend.usd += res.usage.usd;
         const out = { ...rec, status: res.status, reason: res.reason ?? null, usage: res.usage };
         if (res.status === 'completed') {
-          if (task === 'detect') out.output = { findings: res.output.findings.slice(0, 200) };
+          if (task === 'detect') {
+            // Every finding is scored. A cap here used to cut at 200 silently, which could turn a true positive into a miss; the
+            // count is now recorded and the cap is generous and visible (`findingsTruncated`).
+            const all = res.output.findings || [];
+            out.output = { findings: all.slice(0, 5000), ...(all.length > 5000 ? { findingsTruncated: all.length - 5000 } : {}) };
+            if (res.output.hunt) out.output.hunt = res.output.hunt;
+            if (res.output.contract) out.output.contract = res.output.contract;
+          }
           if (task === 'falsify') out.output = { verdict: res.output.verdicts?.c1 ?? 'uncertain' };
           if (task === 'exploit') {
             const rp = res.output.reproducer;
@@ -2761,6 +2819,14 @@ async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEFAULT_RE
       } finally { give(arm); completedJobs++; onProgress({ done: completedJobs, total: jobs.length }); }
     }, signal);
 
+    // A job that never started (the run was cancelled) is a scheduled attempt with no result, recorded as such so no denominator
+    // can shrink by stopping early (C-AC02).
+    const seen = new Set(attempts.map((a) => `${a.armId}|${a.repeat}|${a.task}|${a.entryId}`));
+    for (const job of jobs) {
+      const k = `${job.arm.id}|${job.repeat}|${job.task}|${job.entry.id}`;
+      if (!seen.has(k)) attempts.push({ armId: job.arm.id, repeat: job.repeat, task: job.task, entryId: job.entry.id, entryKind: job.entry.kind, status: 'cancelled', reason: 'the run was cancelled before this attempt started', usage: { usd: null, latencyMs: 0 } });
+    }
+
     // ---- scoring: per arm, per repeat, per task
     const mapFileFor = (entryId, f) => prep.prepared.get(entryId)?.fileMap[f] ?? f;
     const results = [];
@@ -2783,7 +2849,10 @@ async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEFAULT_RE
       }
     }
     const finishedAt = new Date(now()).toISOString();
-    const config = { tasks, repeats, concurrency, timeoutMs, budgetUsd, lineTolerance: 3 };
+    // A frozen configuration (C-01): the matcher is versioned with its tolerance, the stability policy is recorded before scoring, and
+    // each model arm's prompt version is recorded where the arm declares one. A provider that exposes no immutable model version is
+    // disclosed as such (`model.version: null`), never guessed.
+    const config = { tasks, repeats, concurrency, timeoutMs, budgetUsd, lineTolerance: 3, matcherVersion: 'localized-file-cwe-line/1', stabilityPolicy, promptVersions: Object.fromEntries(arms.filter((a) => a.kind === 'model').map((a) => [a.id, a.adapter?.promptVersion ?? (a.adapter?.type === 'hunt' ? `hunt-lenses/${a.adapter.contract ? 'contract' : 'legacy'}` : null)])) };
     const armsRecord = arms.map((a) => ({ id: a.id, kind: a.kind, tasks: a.tasks, model: a.model ? { id: a.model.id, provider: a.model.provider, local: a.model.local, version: a.model.version ?? null } : null, adapter: a.adapter.type, repeats: armPlans.find((p) => p.arm.id === a.id).repeats, configDigest: (0,identity/* digestOf */.ol)({ ...a, adapter: { ...a.adapter } }) }));
     const run = {
       schema: run_RUN_SCHEMA, version: RUN_VERSION,
@@ -2791,7 +2860,7 @@ async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEFAULT_RE
       startedAt, finishedAt, scanner: scannerIdentity(), machine: machineProfile(),
       dataset: { id: manifest.dataset.id, version: manifest.dataset.version, hash: dataset.hash, split: manifest.dataset.split, language: manifest.dataset.language, license: manifest.dataset.license, entries: manifest.entries.length },
       config, arms: armsRecord, leakageAudit: prep.audit, attempts, results,
-      complete: jobs.length === attempts.length && !attempts.some((a) => a.status === 'skipped-budget') && prep.audit.status === 'clean',
+      complete: !attempts.some((a) => a.status === 'skipped-budget' || a.status === 'cancelled') && prep.audit.status === 'clean',
       incompleteReasons: [
         ...(prep.audit.status !== 'clean' ? [`leakage audit: ${prep.audit.status} (${prep.audit.quarantined.length} quarantined, ${prep.audit.unavailable.length} unavailable)`] : []),
         ...(attempts.some((a) => a.status === 'skipped-budget') ? ['budget reached; later attempts were skipped'] : []),
@@ -2801,6 +2870,17 @@ async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEFAULT_RE
       // GA-06 §5 (0.195.31): every model arm against every deterministic arm, entry by entry, on the identical usable population,
       // per repeat. A win is an entry the model arm detected and the baseline did not; a loss the reverse; a tie both or neither.
       paired: pairedComparisons({ armPlans, usable, attempts, mapFile: mapFileFor }),
+      // Contract-driven verification (C-02, B-04): per-defect detection history over every SCHEDULED repetition, union and stable
+      // recall with Wilson intervals, completion by status, and the stage attrition the arms recorded. Failed and cancelled
+      // repetitions stay in the denominators; the completed-only view is labelled `validRunOnly`.
+      stability: tasks.includes('detect') ? stabilityReport({ armPlans, usable, attempts, mapFile: mapFileFor, policy: stabilityPolicy }) : null,
+      measurement: (() => {
+        const population = manifest.dataset.source?.kind === 'git-pairs' ? 'real-code' : (manifest.dataset.population ?? 'unlabelled');
+        const note = population === 'real-code' ? 'real code; independence depends on how the labels were made (see the dataset provenance)'
+          : population === 'synthetic' ? 'synthetic machinery result: says nothing about effectiveness on real code'
+          : 'the dataset does not declare its population; treat the figures as describing this dataset only';
+        return { population, split: manifest.dataset.split, note };
+      })(),
     };
     run.digest = (0,identity/* digestOf */.ol)({ ...run, digest: undefined });
     return { ok: true, run };
@@ -2902,6 +2982,10 @@ function summarizeRun(run, { budgetUsd = 10 } = {}) {
     schema: REPORT_SCHEMA, version: 1, runId: run.runId, runDigest: run.digest, providerVariance,
     header: { scannerCommit: run.scanner?.commit ?? null, scannerVersion: run.scanner?.version ?? null, datasetId: run.dataset.id, datasetVersion: run.dataset.version, datasetHash: run.dataset.hash, split: run.dataset.split, models: run.arms.filter((a) => a.model).map((a) => `${a.model.provider}/${a.model.id}${a.model.local ? ' (local)' : ''}`), config: run.config, machine: run.machine, startedAt: run.startedAt, finishedAt: run.finishedAt },
     leakageAudit: run.leakageAudit, complete: run.complete, incompleteReasons: run.incompleteReasons, arms,
+    // contract-driven verification (C-02, C-05, C-07): stability, the paired same-population comparison, and the population label
+    measurement: run.measurement ?? { population: 'unlabelled', note: 'a run recorded before the population label existed' },
+    stability: run.stability ? { policy: run.stability.policy, arms: run.stability.arms.map(({ perDefect, ...rest }) => ({ ...rest, perDefect: perDefect.map((d) => ({ entryId: d.entryId, scheduled: d.scheduled, completed: d.completed, detected: d.detected, frequency: d.frequency, low: d.interval.low, high: d.interval.high, stable: d.stable })) })), stageAttrition: run.stability.stageAttrition } : null,
+    paired: run.paired ?? [],
     notes: arms.some((a) => Object.values(a.primary).some((s) => s && !s.representative)) ? ['At least one figure rests on fewer than three runs and is marked not representative.'] : [],
   };
 }
@@ -2924,6 +3008,7 @@ function toMarkdown(rep) {
     `* Machine: ${h.machine.platform}/${h.machine.arch}, ${h.machine.cpus} cpus, ${h.machine.memoryGb} GB, node ${h.machine.node}`,
     `* Run: ${h.startedAt} to ${h.finishedAt}`,
     `* Leakage audit: ${rep.leakageAudit.status} (${rep.leakageAudit.usable}/${rep.leakageAudit.entries} entries usable; comments ${rep.leakageAudit.stripComments ? 'stripped' : 'kept'})`,
+    `* Population: ${rep.measurement?.population ?? 'unlabelled'}${rep.measurement?.note ? ` (${rep.measurement.note})` : ''}`,
     ...(rep.complete ? [] : [`* **INCOMPLETE**: ${rep.incompleteReasons.join('; ')}`]), ''];
   for (const task of Object.keys(METRICS)) {
     const present = rep.arms.filter((a) => a.tasks[task]);
@@ -2931,6 +3016,31 @@ function toMarkdown(rep) {
     const cols = METRICS[task].map(([n]) => n);
     L.push(`## ${task}`, '', `| arm | runs | ${cols.join(' | ')} |`, `|---|---|${cols.map(() => '---').join('|')}|`);
     for (const a of present) L.push(`| ${a.id} | ${a.runs} | ${cols.map((c) => fmt(a.tasks[task][c])).join(' | ')} |`);
+    L.push('');
+  }
+  if (rep.stability?.arms?.length) {
+    L.push('## Stability (per defect, over scheduled repetitions)', '', `Stable means detected in at least the preregistered share (${Math.round(rep.stability.policy.threshold * 100)}%) of the SCHEDULED repetitions; a failed, blocked, timed-out or cancelled repetition counts as a non-detection. Intervals are Wilson 95% over the defects.`, '',
+      '| arm | scheduled repeats | needed for stable | union recall | stable recall | completed / scheduled attempts | claim |', '|---|---|---|---|---|---|---|');
+    for (const a of rep.stability.arms) {
+      const iv = (x, i) => (x == null ? 'n/a' : `${pct(x)} [${i?.low == null ? '?' : pct(i.low)}, ${i?.high == null ? '?' : pct(i.high)}]`);
+      L.push(`| ${a.armId} | ${a.scheduledRepeats} | ${a.detectionsNeededForStable} | ${iv(a.unionRecall, a.unionInterval)} | ${iv(a.stableRecall, a.stableInterval)} | ${a.completion.completed}/${a.completion.scheduledAttempts} | ${a.claim} |`);
+    }
+    L.push('');
+    for (const a of rep.stability.arms.filter((x) => x.kind === 'model')) {
+      L.push(`### ${a.armId}: detections per defect`, '', '| defect | detected / scheduled | completed | stable |', '|---|---|---|---|');
+      for (const d of a.perDefect) L.push(`| ${d.entryId} | ${d.detected}/${d.scheduled} | ${d.completed} | ${d.stable ? 'yes' : 'no'} |`);
+      L.push('');
+    }
+    const att = Object.entries(rep.stability.stageAttrition || {});
+    if (att.length) {
+      L.push('### Stage attrition (as the arms recorded it)', '', '| arm | stage | entered | decisions |', '|---|---|---|---|');
+      for (const [armId, s] of att) for (const [stage, v] of Object.entries(s.stages)) L.push(`| ${armId} | ${stage} | ${v.entered} | ${Object.entries(v.decisions).map(([d, c]) => `${d} ${c}`).join(', ')} |`);
+      L.push('');
+    }
+  }
+  if (rep.paired?.length) {
+    L.push('## Paired comparison (same entries, per repeat)', '', 'A win is a positive the model arm detected and the deterministic baseline did not; a loss is the reverse.', '', '| baseline | arm | positives | repeats | wins | losses | ties |', '|---|---|---|---|---|---|---|');
+    for (const p of rep.paired) L.push(`| ${p.baselineArmId} | ${p.armId} | ${p.positives} | ${p.repeats}${p.representative ? '' : ' (not representative)'} | ${p.perRepeat.map((r) => r.wins).join('/')} | ${p.perRepeat.map((r) => r.losses).join('/')} | ${p.perRepeat.map((r) => r.ties).join('/')} |`);
     L.push('');
   }
   L.push('## Cost, speed and reliability', '', '| arm | spend per run | median latency | p95 latency | timeouts | failures | unknown-cost attempts |', '|---|---|---|---|---|---|---|');
@@ -3098,6 +3208,8 @@ function scoreboardFromRun(run, armDefs = []) {
         medianLatencyMs: median(calls.map((a) => a.usage?.latencyMs)),
         failures: calls.filter((a) => a.status !== 'completed').length, calls: calls.length,
         evidence: { runId: run.runId, runDigest: run.digest, measuredAt: run.finishedAt },
+        // which population the quality was measured on: the router refuses to route on a synthetic one (contract-driven verification)
+        population: run.measurement?.population ?? 'unlabelled',
       });
     }
   }
@@ -3163,6 +3275,9 @@ function routeTask({ task, policy = 'balanced', scoreboard, tolerance = DEFAULT_
   for (const e of pool) {
     const why = [];
     if (e.quality.mean == null) why.push('no measured quality');
+    // A synthetic population measures the machinery, not the model: its scores never route a real task. An entry recorded before the
+    // label existed is `unlabelled` and keeps the earlier behaviour.
+    if (e.population === 'synthetic') why.push('measured only on a synthetic population; synthetic scores never route a task');
     if ((e.quality.n ?? 0) < minRuns) why.push(`only ${e.quality.n ?? 0} measured run(s); ${minRuns} are required`);
     if (policy === 'local-only' && e.local !== true) why.push('not a local model');
     if (e.local !== true && policy !== 'local-only') {
@@ -3217,6 +3332,229 @@ function explainRoute(r) {
   return L.join('\n');
 }
 
+;// CONCATENATED MODULE: ./src/posture/evaluation/lab/semantic.js
+// The semantic secondary view of a frozen run (contract-driven verification, Epic C-03). Evaluator-only: it runs after the hunt is
+// frozen, reads references the arms never saw, and NEVER changes the localized score (`score.js`), which stays the headline.
+//
+// A reference defect may carry a semantic description: the attacker capability, the violated boundary or invariant, the root cause
+// (a file and a line span) and the exploitable path's entry point. A finding matches SEMANTICALLY only when it is anchored in source
+// (file and line) inside the reference's root-cause span or on its path's entry file, AND an adjudication record says it describes
+// the same defect. A CWE match or similar prose alone never matches. A model judge may PROPOSE a match (`proposedBy: 'model'`); a
+// proposal alone is `ambiguous`, never a match. A reference counts once however many findings describe it; extra findings on an
+// already-matched reference are `duplicate-description`, not extra true positives. A finding that matches no reference is
+// `unlabelled-needs-review`, never automatically a false positive.
+
+
+const SEMANTIC_OUTCOMES = Object.freeze(['exact-localized', 'semantic-adjudicated', 'ambiguous', 'unmatched']);
+// adjudication kinds: `independent-human` (can establish a match) and `model-proposal` (cannot)
+
+const inSpan = (f, span, slack = 0) => span && f.file === span.file && Number.isInteger(f.line) && f.line >= span.startLine - slack && f.line <= span.endLine + slack;
+
+/**
+ * @param {object} o
+ * @param {object[]} o.references   [{ id, cwe, expectedSpan:{file,startLine,endLine}, semantic?: { capability, boundary, rootCause:{file,startLine,endLine}, entryFile } }]
+ * @param {object[]} o.findings     [{ id, file, line, cwe }] the frozen findings of one attempt (staged paths mapped back by the caller)
+ * @param {object[]} [o.adjudications] [{ referenceId, findingId, verdict: 'same-defect'|'different-defect', kind, reviewer }]
+ * @param {number}   [o.tolerance]  the localized tolerance, for the exact tier only
+ */
+function semanticView({ references, findings, adjudications = [], tolerance = 3 }) {
+  const out = { references: [], unlabelled: [], counts: Object.fromEntries(SEMANTIC_OUTCOMES.map((k) => [k, 0])), duplicateDescriptions: 0 };
+  const claimed = new Set();
+  for (const ref of references) {
+    const exact = findings.filter((f) => inSpan(f, ref.expectedSpan, tolerance) && normalizeCwe(f.cwe) === normalizeCwe(ref.cwe));
+    let outcome; let matched = [];
+    if (exact.length) { outcome = 'exact-localized'; matched = exact; }
+    else {
+      const anchored = findings.filter((f) => (ref.semantic?.rootCause && inSpan(f, ref.semantic.rootCause)) || (ref.semantic?.entryFile && f.file === ref.semantic.entryFile && Number.isInteger(f.line)));
+      const adj = (f) => adjudications.filter((a) => a.referenceId === ref.id && a.findingId === f.id);
+      const confirmed = anchored.filter((f) => adj(f).some((a) => a.verdict === 'same-defect' && a.kind === 'independent-human'));
+      const proposed = anchored.filter((f) => !confirmed.includes(f) && adj(f).some((a) => a.verdict === 'same-defect'));
+      if (confirmed.length) { outcome = 'semantic-adjudicated'; matched = confirmed; }
+      else if (proposed.length || anchored.length) { outcome = 'ambiguous'; matched = [...proposed, ...anchored.filter((f) => !proposed.includes(f))]; }
+      else outcome = 'unmatched';
+    }
+    out.counts[outcome] += 1;
+    if (matched.length > 1 && (outcome === 'exact-localized' || outcome === 'semantic-adjudicated')) out.duplicateDescriptions += matched.length - 1;
+    for (const f of matched) claimed.add(f.id);
+    out.references.push({ referenceId: ref.id, outcome, findings: matched.map((f) => f.id), reason: outcome === 'ambiguous' ? 'anchored near the root cause or entry, but no independent adjudication says it is the same defect' : null });
+  }
+  for (const f of findings) if (!claimed.has(f.id)) out.unlabelled.push({ findingId: f.id, status: 'unlabelled-needs-review' });
+  // A view that only an independent adjudication can raise; the localized figure is the exact tier and is reported unchanged.
+  out.semanticRecall = references.length ? (out.counts['exact-localized'] + out.counts['semantic-adjudicated']) / references.length : null;
+  out.localizedRecall = references.length ? out.counts['exact-localized'] / references.length : null;
+  return out;
+}
+
+;// CONCATENATED MODULE: ./src/posture/evaluation/lab/protected.js
+// Protected baseline defects (contract-driven verification, C-AC06).
+//
+// The aggregate no-regression gate (`evaluation/gates.js`) compares scores; a configuration can lose a defect the baseline found
+// reliably and still pass it, because a new detection elsewhere lifts the total. This gate compares DEFECTS. A defect is protected when
+// the baseline run detected it stably (at the baseline's own preregistered stability threshold; a deterministic arm's single run
+// counts as stable when it detected the defect). The current run loses it when the same arm no longer detects it stably on the same
+// population. Every loss fails the gate unless an adjudicated exception covers exactly that arm and defect; the aggregate is reported
+// beside the verdict and never changes it.
+//
+// What makes the policy "registered": it is a versioned record whose `registeredAt` precedes the current run's start, so its
+// threshold and scope cannot be chosen after the result is known. An exception is adjudicated when it names a reviewer from the
+// operator's reviewer policy (`reviewer-policy.json`), carries a reason, is bound to the current run's dataset hash, and has not
+// expired. Anything else is listed as rejected with the reason and does not excuse the loss.
+//
+// Different populations (dataset hashes differ) or a run without per-defect stability cannot be compared: `unmeasured`, never pass.
+
+
+const PROTECTED_POLICY_SCHEMA = 'agentic-security/protected-defect-policy';
+const GATE_SCHEMA = 'agentic-security/protected-defect-gate';
+const MIN_REASON = 20;
+
+const isoOk = (s) => typeof s === 'string' && !Number.isNaN(Date.parse(s));
+
+/** Validate a policy record. Returns `{ ok, errors }`. */
+function validateProtectedPolicy(p) {
+  const errors = [];
+  if (!p || typeof p !== 'object' || p.schema !== PROTECTED_POLICY_SCHEMA) return { ok: false, errors: ['not a protected-defect policy'] };
+  if (typeof p.id !== 'string' || !p.id) errors.push('policy.id is required');
+  if (!Number.isInteger(p.version) || p.version < 1) errors.push('policy.version must be a positive integer');
+  if (!isoOk(p.registeredAt)) errors.push('policy.registeredAt must be an ISO time');
+  if (p.arms !== undefined && (!Array.isArray(p.arms) || !p.arms.every((a) => typeof a === 'string'))) errors.push('policy.arms must list arm ids');
+  for (const [i, e] of (p.exceptions || []).entries()) {
+    for (const k of ['armId', 'entryId', 'reason', 'adjudicatedBy', 'datasetHash', 'expires']) if (typeof e?.[k] !== 'string' || !e[k]) errors.push(`exceptions[${i}].${k} is required`);
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+const armsOf = (run) => new Map((run?.stability?.arms || []).map((a) => [a.armId, a]));
+
+/**
+ * @param {object} o
+ * @param {object} o.baseline   a stored lab run (the reference)
+ * @param {object} o.current    a stored lab run (the configuration under test)
+ * @param {object} o.policy     a registered protected-defect policy
+ * @param {string[]} [o.reviewers]  the operator's reviewer ids
+ * @param {string} [o.now]      ISO time the gate is evaluated at
+ */
+function protectedDefectGate({ baseline, current, policy, reviewers = [], now = new Date().toISOString() }) {
+  const base = { schema: GATE_SCHEMA, policy: policy ? { id: policy.id, version: policy.version, digest: (0,identity/* digestOf */.ol)(policy) } : null, baselineRunId: baseline?.runId ?? null, currentRunId: current?.runId ?? null };
+  const v = validateProtectedPolicy(policy);
+  if (!v.ok) return { ...base, status: 'fail', reason: `the policy is not valid: ${v.errors[0]}`, lost: [], exceptions: { accepted: [], rejected: [] } };
+  if (!isoOk(current?.startedAt) || Date.parse(policy.registeredAt) > Date.parse(current.startedAt)) {
+    return { ...base, status: 'fail', reason: 'the policy was registered after the run it judges started; a policy chosen after the result is not a registered policy', lost: [], exceptions: { accepted: [], rejected: [] } };
+  }
+  if (baseline?.dataset?.hash !== current?.dataset?.hash) return { ...base, status: 'unmeasured', reason: 'the two runs measured different populations (dataset hashes differ)', lost: [], exceptions: { accepted: [], rejected: [] } };
+  if (!baseline?.stability || !current?.stability) return { ...base, status: 'unmeasured', reason: 'a run has no per-defect stability record (detect task not run)', lost: [], exceptions: { accepted: [], rejected: [] } };
+
+  const bArms = armsOf(baseline); const cArms = armsOf(current);
+  const armIds = [...bArms.keys()].filter((id) => !policy.arms || policy.arms.includes(id)).sort();
+  const lost = []; const protectedCount = {}; const aggregate = [];
+  for (const armId of armIds) {
+    const b = bArms.get(armId);
+    const prot = b.perDefect.filter((d) => d.stable);
+    protectedCount[armId] = prot.length;
+    const c = cArms.get(armId);
+    const byEntry = new Map((c?.perDefect || []).map((d) => [d.entryId, d]));
+    for (const d of prot) {
+      const now2 = byEntry.get(d.entryId);
+      if (!c) lost.push({ armId, entryId: d.entryId, cwe: d.cwe, baseline: `${d.detected}/${d.scheduled}`, current: null, why: 'arm-missing' });
+      else if (!now2 || !now2.stable) lost.push({ armId, entryId: d.entryId, cwe: d.cwe, baseline: `${d.detected}/${d.scheduled}`, current: now2 ? `${now2.detected}/${now2.scheduled}` : null, why: now2 ? 'no-longer-stable' : 'defect-missing' });
+    }
+    aggregate.push({ armId, baselineStableRecall: b.stableRecall, currentStableRecall: c?.stableRecall ?? null, improved: c ? (c.stableRecall ?? 0) > (b.stableRecall ?? 0) : false });
+  }
+
+  const reviewerSet = new Set(reviewers);
+  const accepted = []; const rejected = [];
+  for (const e of policy.exceptions || []) {
+    const why = !reviewerSet.has(e.adjudicatedBy) ? `${e.adjudicatedBy} is not a reviewer in the operator's reviewer policy`
+      : e.reason.trim().length < MIN_REASON ? `the reason is shorter than ${MIN_REASON} characters`
+      : e.datasetHash !== current.dataset.hash ? 'the exception is bound to a different population'
+      : !isoOk(e.expires) || Date.parse(e.expires) <= Date.parse(now) ? 'the exception has expired'
+      : !lost.some((l) => l.armId === e.armId && l.entryId === e.entryId) ? 'no protected defect of that arm was lost (unused)'
+      : null;
+    if (why) rejected.push({ armId: e.armId, entryId: e.entryId, why }); else accepted.push({ armId: e.armId, entryId: e.entryId, adjudicatedBy: e.adjudicatedBy, reason: e.reason, expires: e.expires });
+  }
+  const excused = (l) => accepted.some((a) => a.armId === l.armId && a.entryId === l.entryId);
+  const unexcused = lost.filter((l) => !excused(l));
+  return {
+    ...base,
+    status: unexcused.length ? 'fail' : 'pass',
+    reason: unexcused.length ? `${unexcused.length} protected defect(s) lost without an adjudicated exception` : null,
+    protected: protectedCount, lost: lost.map((l) => ({ ...l, excused: excused(l) })),
+    exceptions: { accepted, rejected },
+    aggregate, aggregateNote: 'reported beside the verdict; an improved aggregate never excuses a lost protected defect',
+  };
+}
+
+;// CONCATENATED MODULE: ./src/posture/evaluation/lab/replay.js
+// Replaying a frozen Eval Lab run (contract-driven verification, C-AC05).
+//
+// A stored run records what it was: the dataset hash, every arm's configuration digest, the frozen configuration (tasks, repeats,
+// timeout, budget, matcher version and tolerance, stability policy, prompt versions) and the scanner and machine it ran on. A replay
+// re-runs exactly that, and says how far the result can be expected to match:
+//
+//   refused       the dataset or an arm is not the one the run recorded (hash or configuration digest differs). Nothing is run.
+//   reproduced    every deterministic arm detected the same defects the same number of times, and scored the same.
+//   diverged      a deterministic arm did not (the entries are listed). With an unchanged scanner and dataset this is a defect.
+//   limited       a model arm cannot be replayed exactly: a provider without an immutable model version, or sampling the lab does
+//                 not control. Its agreement with the frozen run is reported per defect as a description, never as a verdict.
+//
+// Environment differences (scanner commit, a dirty tree, Node, platform) are listed; a deterministic divergence under a different
+// scanner is expected and labelled so, not hidden.
+
+
+const FROZEN_KEYS = ['tasks', 'repeats', 'timeoutMs', 'budgetUsd', 'lineTolerance', 'matcherVersion', 'stabilityPolicy', 'promptVersions'];
+
+/** Can `arms` and `dataset` replay `frozen`? Returns `{ ok, reasons, config }`; `config` holds the runEval arguments to use. */
+function replayPlan(frozen, { dataset, arms }) {
+  const reasons = [];
+  if (!frozen?.runId || !frozen?.config || !Array.isArray(frozen?.arms)) return { ok: false, reasons: ['not a stored lab run'] };
+  if (dataset?.hash !== frozen.dataset?.hash) reasons.push(`the dataset hash ${String(dataset?.hash).slice(-12)} is not the frozen run's ${String(frozen.dataset?.hash).slice(-12)}`);
+  const byId = new Map((arms || []).map((a) => [a.id, a]));
+  for (const rec of frozen.arms) {
+    const a = byId.get(rec.id);
+    if (!a) { reasons.push(`arm ${rec.id} is not in the arms file`); continue; }
+    if ((0,identity/* digestOf */.ol)({ ...a, adapter: { ...a.adapter } }) !== rec.configDigest) reasons.push(`arm ${rec.id} is configured differently from the frozen run`);
+  }
+  for (const a of arms || []) if (!frozen.arms.some((r) => r.id === a.id)) reasons.push(`arm ${a.id} was not in the frozen run`);
+  const c = frozen.config;
+  return { ok: reasons.length === 0, reasons, config: { tasks: c.tasks, repeats: c.repeats, concurrency: c.concurrency ?? 2, timeoutMs: c.timeoutMs, budgetUsd: c.budgetUsd ?? null, stabilityPolicy: c.stabilityPolicy } };
+}
+
+const perDefectOf = (run, armId) => new Map((run.stability?.arms || []).find((a) => a.armId === armId)?.perDefect.map((d) => [d.entryId, d]) ?? []);
+const scoresOf = (run, armId) => (run.results || []).filter((r) => r.armId === armId).sort((a, b) => a.repeat - b.repeat).map((r) => r.scores);
+
+/** Compare a replayed run with the frozen one. */
+function compareReplay(frozen, replayed) {
+  const env = [];
+  for (const [k, a, b] of [['scanner.commit', frozen.scanner?.commit, replayed.scanner?.commit], ['scanner.dirty', frozen.scanner?.dirty, replayed.scanner?.dirty], ['scanner.version', frozen.scanner?.version, replayed.scanner?.version], ['machine.node', frozen.machine?.node, replayed.machine?.node], ['machine.platform', frozen.machine?.platform, replayed.machine?.platform]]) {
+    if (JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)) env.push({ field: k, frozen: a ?? null, replay: b ?? null });
+  }
+  const configDiff = FROZEN_KEYS.filter((k) => JSON.stringify(frozen.config?.[k] ?? null) !== JSON.stringify(replayed.config?.[k] ?? null));
+  const arms = [];
+  for (const rec of frozen.arms) {
+    const f = perDefectOf(frozen, rec.id); const r = perDefectOf(replayed, rec.id);
+    const entries = [...new Set([...f.keys(), ...r.keys()])].sort();
+    const rows = entries.map((id) => ({ entryId: id, frozen: f.get(id)?.detected ?? null, replay: r.get(id)?.detected ?? null, scheduled: f.get(id)?.scheduled ?? null }));
+    const differing = rows.filter((x) => x.frozen !== x.replay);
+    if (rec.kind === 'deterministic') {
+      const sameScores = JSON.stringify(scoresOf(frozen, rec.id)) === JSON.stringify(scoresOf(replayed, rec.id));
+      arms.push({ armId: rec.id, kind: rec.kind, status: !differing.length && sameScores ? 'reproduced' : 'diverged', differing, sameScores });
+    } else {
+      const why = [];
+      if (!rec.model?.version) why.push('the provider exposes no immutable model version');
+      if (!rec.model?.local) why.push('a hosted provider may change behind the same name');
+      why.push('model sampling is not controlled by the lab');
+      const agree = rows.filter((x) => x.frozen === x.replay).length;
+      arms.push({ armId: rec.id, kind: rec.kind, status: 'limited', why, agreement: { defects: rows.length, sameCount: agree }, differing, note: 'descriptive only; agreement between two samples is not evidence that either is right' });
+    }
+  }
+  const det = arms.filter((a) => a.kind === 'deterministic');
+  const status = det.some((a) => a.status === 'diverged') ? 'diverged' : det.length ? (arms.some((a) => a.status === 'limited') ? 'reproduced-deterministic-limited-model' : 'reproduced') : 'limited';
+  return {
+    schema: 'agentic-security/eval-replay', frozenRunId: frozen.runId, replayRunId: replayed.runId, status, arms,
+    configDifferences: configDiff, environmentDifferences: env,
+    note: env.some((e) => e.field.startsWith('scanner.')) ? 'the scanner differs from the frozen run; a deterministic divergence is then expected and is a change of engine, not of the run' : null,
+  };
+}
+
 ;// CONCATENATED MODULE: ./src/posture/evaluation/lab/cli.js
 // CLI for the Eval Lab and the model router: `eval run|compare|report|list`, `models benchmark`, `models route explain`.
 // Non-interactive (nothing reads stdin), bounded (every attempt has a timeout, the run is cancellable with SIGINT), and local:
@@ -3224,6 +3562,10 @@ function explainRoute(r) {
 // is consulted for it before it runs.
 //
 // Exit codes: 0 done, 1 done but incomplete or no recommendation, 4 usage or precondition.
+
+
+
+
 
 
 
@@ -3251,7 +3593,7 @@ function readArms(file) {
   return errors.length ? { ok: false, errors } : { ok: true, arms };
 }
 
-const usageRun = () => { console.error('usage: eval run --dataset <file> --arms <file> [--tasks detect,falsify,exploit,patch] [--repeats N] [--concurrency N] [--timeout S] [--budget USD] [--allow-external]\n       eval report <run-id> [--format md|json|csv|html|chart] [--out <file>]\n       eval compare <run-id> [<other-run-id>]\n       eval list'); return 4; };
+const usageRun = () => { console.error('usage: eval run --dataset <file> --arms <file> [--tasks detect,falsify,exploit,patch] [--repeats N] [--concurrency N] [--timeout S] [--budget USD] [--allow-external]\n       eval report <run-id> [--format md|json|csv|html|chart] [--out <file>]\n       eval compare <run-id> [<other-run-id>]\n       eval semantic <run-id> --references <file> [--adjudications <file>]\n       eval gate <run-id> --baseline <run-id> --policy <file>\n       eval replay <run-id> --dataset <file> --arms <file>\n       eval list'); return 4; };
 
 async function doRun(args, root, { updateScoreboard }) {
   const f = args.flags;
@@ -3296,6 +3638,78 @@ async function cmdEval(args, root) {
     if (!runs.length) console.log('No eval runs yet. Start one with: eval run --dataset <file> --arms <file>');
     for (const r of runs) console.log(`${r.runId}  ${r.startedAt}  ${r.dataset}  arms: ${r.arms.join(', ')}${r.tampered ? '  (FAILED INTEGRITY CHECK)' : ''}`);
     return 0;
+  }
+  if (sub === 'semantic') {
+    // Evaluator-only (contract-driven verification, C-03): compare a FROZEN run's detect findings with references that carry a semantic
+    // description, under recorded adjudications. Never changes the run or its localized score.
+    const id = String(args._[2] ?? '');
+    if (!id || !args.flags.references) { console.error('usage: eval semantic <runId> --references <file> [--adjudications <file>] [--json]'); return 4; }
+    const a = loadRun(root, id);
+    if (a.missing) { console.error(`No run ${id}. List runs with: eval list`); return 4; }
+    if (a.tampered) { console.error(`Run ${id} failed its integrity check and is not used.`); return 1; }
+    let references; let adjudications = [];
+    try { references = JSON.parse(external_node_fs_.readFileSync(external_node_path_.resolve(String(args.flags.references)), 'utf8')).references; } catch (e) { console.error(`cannot read the references: ${e.message}`); return 4; }
+    if (args.flags.adjudications) { try { adjudications = JSON.parse(external_node_fs_.readFileSync(external_node_path_.resolve(String(args.flags.adjudications)), 'utf8')).adjudications || []; } catch (e) { console.error(`cannot read the adjudications: ${e.message}`); return 4; } }
+    const out = [];
+    for (const att of a.doc.attempts.filter((x) => x.task === 'detect' && x.status === 'completed')) {
+      const refs = (references || []).filter((r) => r.entryId === att.entryId);
+      if (!refs.length) continue;
+      const findings = (att.output?.findings || []).map((f, i) => ({ id: `${att.armId}/${att.repeat}/${att.entryId}/${i}`, file: f.file, line: f.line, cwe: f.cwe }));
+      out.push({ armId: att.armId, repeat: att.repeat, entryId: att.entryId, view: semanticView({ references: refs, findings, adjudications }) });
+    }
+    if (args.flags.json) { console.log(JSON.stringify({ runId: id, evaluatorOnly: true, attempts: out }, null, 2)); return 0; }
+    console.log(`Semantic view of ${id} (evaluator-only; the localized score is unchanged and remains the headline)`);
+    for (const o of out) console.log(`  ${o.armId} r${o.repeat} ${o.entryId}: ${o.view.references.map((r) => `${r.referenceId}=${r.outcome}`).join(', ')}${o.view.unlabelled.length ? `; ${o.view.unlabelled.length} unlabelled finding(s) need review` : ''}`);
+    return 0;
+  }
+  if (sub === 'replay') {
+    // C-AC05: `eval replay <run-id> --dataset <file> --arms <file>`; exit 0 reproduced, 1 diverged, 3 model arms only (limited), 4 refused
+    const id = String(args._[2] ?? '');
+    if (!id || !args.flags.dataset || !args.flags.arms) { console.error('usage: eval replay <run-id> --dataset <file> --arms <file> [--json]'); return 4; }
+    const fr = loadRun(root, id);
+    if (fr.missing) { console.error(`No run ${id}. List runs with: eval list`); return 4; }
+    if (fr.tampered) { console.error(`Run ${id} failed its integrity check and is not used.`); return 1; }
+    const ds = loadDatasetFile(external_node_path_.resolve(String(args.flags.dataset)));
+    if (!ds.ok) { console.error(`dataset: ${(ds.errors || [ds.reason]).join('; ')}`); return 4; }
+    const ar = readArms(external_node_path_.resolve(String(args.flags.arms)));
+    if (!ar.ok) { console.error(`arms: ${ar.errors.join('; ')}`); return 4; }
+    const plan = replayPlan(fr.doc, { dataset: ds, arms: ar.arms });
+    if (!plan.ok) { console.error(`Not replayable as frozen:\n  ${plan.reasons.join('\n  ')}`); return 4; }
+    const res = await runEval({ dataset: ds, arms: ar.arms, ...plan.config, scanRoot: root });
+    if (!res.ok) { console.error(res.errors.join('\n')); return 4; }
+    const saved = saveRun(root, res.run);
+    const cmp = compareReplay(fr.doc, res.run);
+    if (args.flags.json) console.log(JSON.stringify({ ...cmp, stored: saved.ok }, null, 2));
+    else {
+      console.log(`Replay of ${id} as ${res.run.runId}: ${cmp.status}`);
+      for (const a of cmp.arms) console.log(`  ${a.armId} (${a.kind}): ${a.status}${a.differing.length ? `; ${a.differing.length} defect(s) differ` : ''}${a.why ? `; ${a.why.join('; ')}` : ''}`);
+      for (const e of cmp.environmentDifferences) console.log(`  environment ${e.field}: ${e.frozen} -> ${e.replay}`);
+      if (cmp.note) console.log(`  ${cmp.note}`);
+    }
+    return cmp.status === 'diverged' ? 1 : cmp.status === 'limited' ? 3 : 0;
+  }
+  if (sub === 'gate') {
+    // C-AC06: `eval gate <current> --baseline <run> --policy <file>`; exit 0 pass, 1 fail, 3 unmeasured, 4 usage
+    const id = String(args._[2] ?? ''); const bid = args.flags.baseline ? String(args.flags.baseline) : ''; const pfile = args.flags.policy ? external_node_path_.resolve(String(args.flags.policy)) : '';
+    if (!id || !bid || !pfile) { console.error('usage: eval gate <run-id> --baseline <run-id> --policy <protected-defect-policy.json> [--json]'); return 4; }
+    const cur = loadRun(root, id); const bas = loadRun(root, bid);
+    for (const [label, r] of [[id, cur], [bid, bas]]) {
+      if (r.missing) { console.error(`No run ${label}. List runs with: eval list`); return 4; }
+      if (r.tampered) { console.error(`Run ${label} failed its integrity check and is not used.`); return 1; }
+    }
+    let policy;
+    try { policy = JSON.parse(await external_node_fs_.promises.readFile(pfile, 'utf8')); } catch (e) { console.error(`cannot read the policy: ${String(e.message).split('\n')[0]}`); return 4; }
+    let reviewers = [];
+    try { const rp = JSON.parse(await external_node_fs_.promises.readFile((0,state_dir.statePath)(root, 'reviewer-policy.json'), 'utf8')); reviewers = Array.isArray(rp.reviewers) ? rp.reviewers.filter((x) => typeof x === 'string') : []; } catch { reviewers = []; }
+    const g = protectedDefectGate({ baseline: bas.doc, current: cur.doc, policy, reviewers });
+    if (args.flags.json) console.log(JSON.stringify(g, null, 2));
+    else {
+      console.log(`Protected defects ${bid} -> ${id}: ${g.status.toUpperCase()}${g.reason ? ` (${g.reason})` : ''}`);
+      for (const l of g.lost || []) console.log(`  ${l.excused ? 'excused' : 'LOST   '} ${l.armId} ${l.entryId} ${l.baseline} -> ${l.current ?? 'absent'} (${l.why})`);
+      for (const r of g.exceptions?.rejected || []) console.log(`  exception rejected: ${r.armId} ${r.entryId}: ${r.why}`);
+      for (const a of g.aggregate || []) console.log(`  aggregate ${a.armId}: stable recall ${a.baselineStableRecall} -> ${a.currentStableRecall}${a.improved ? ' (improved; does not excuse a loss)' : ''}`);
+    }
+    return g.status === 'pass' ? 0 : g.status === 'unmeasured' ? 3 : 1;
   }
   if (sub === 'report' || sub === 'compare') {
     const id = String(args._[2] ?? '');

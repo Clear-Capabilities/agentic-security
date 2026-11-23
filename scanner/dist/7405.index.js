@@ -276,7 +276,7 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony import */ var _runScan_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(45950);
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(31174);
 /* harmony import */ var _ir_index_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(98297);
-/* harmony import */ var _discovery_index_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(47764);
+/* harmony import */ var _discovery_index_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(69619);
 /* harmony import */ var _build_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(70123);
 /* harmony import */ var _config_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(33238);
 /* harmony import */ var _queue_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(63457);
@@ -368,7 +368,7 @@ async function runDciSystem(dir, sink, reader, { packIds, withCompiler }) {
   if (!built.ok) return { flagged: false, calls: 0, promptChars: 0, detail: { buildFailed: built.reason }, prompts: [] };
   const packs = packIds.map(_prompts_packs_js__WEBPACK_IMPORTED_MODULE_10__/* .packById */ .Oy).filter(Boolean);
   const model = (0,_review_js__WEBPACK_IMPORTED_MODULE_11__/* .describeModel */ .Vy)();
-  const { jobs } = (0,_queue_js__WEBPACK_IMPORTED_MODULE_9__/* .planJobs */ .KR)({ bundles: built.bundles, packs, model });
+  const { jobs } = (0,_queue_js__WEBPACK_IMPORTED_MODULE_9__/* .planJobs */ .KR)({ bundles: built.bundles, packs, model, fileContents: built.fileContents || {} });
   const byEp = new Map(built.bundles.map(b => [b.entrypoint.id, b]));
   const packMap = new Map(packs.map(p => [p.id, p]));
   const loadJob = (job) => {
