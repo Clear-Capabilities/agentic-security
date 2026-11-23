@@ -14,6 +14,7 @@ import { summarizeRun, renderReport, REPORT_FORMATS, PRIMARY } from './report.js
 import { saveRun, loadRun, listRuns, saveScoreboard, loadScoreboard } from './store.js';
 import { scoreboardFromRun, mergeScoreboard } from './scoreboard.js';
 import { routeTask, explainRoute, ROUTER_TASKS, ROUTER_POLICIES } from '../../routing/policy-router.js';
+import { semanticView } from './semantic.js';
 
 const MAX_ARMS_BYTES = 1024 * 1024;
 
@@ -75,6 +76,29 @@ export async function cmdEval(args, root) {
     if (args.flags.json) { console.log(JSON.stringify(runs, null, 2)); return 0; }
     if (!runs.length) console.log('No eval runs yet. Start one with: eval run --dataset <file> --arms <file>');
     for (const r of runs) console.log(`${r.runId}  ${r.startedAt}  ${r.dataset}  arms: ${r.arms.join(', ')}${r.tampered ? '  (FAILED INTEGRITY CHECK)' : ''}`);
+    return 0;
+  }
+  if (sub === 'semantic') {
+    // Evaluator-only (contract-driven verification, C-03): compare a FROZEN run's detect findings with references that carry a semantic
+    // description, under recorded adjudications. Never changes the run or its localized score.
+    const id = String(args._[2] ?? '');
+    if (!id || !args.flags.references) { console.error('usage: eval semantic <runId> --references <file> [--adjudications <file>] [--json]'); return 4; }
+    const a = loadRun(root, id);
+    if (a.missing) { console.error(`No run ${id}. List runs with: eval list`); return 4; }
+    if (a.tampered) { console.error(`Run ${id} failed its integrity check and is not used.`); return 1; }
+    let references; let adjudications = [];
+    try { references = JSON.parse(fs.readFileSync(path.resolve(String(args.flags.references)), 'utf8')).references; } catch (e) { console.error(`cannot read the references: ${e.message}`); return 4; }
+    if (args.flags.adjudications) { try { adjudications = JSON.parse(fs.readFileSync(path.resolve(String(args.flags.adjudications)), 'utf8')).adjudications || []; } catch (e) { console.error(`cannot read the adjudications: ${e.message}`); return 4; } }
+    const out = [];
+    for (const att of a.doc.attempts.filter((x) => x.task === 'detect' && x.status === 'completed')) {
+      const refs = (references || []).filter((r) => r.entryId === att.entryId);
+      if (!refs.length) continue;
+      const findings = (att.output?.findings || []).map((f, i) => ({ id: `${att.armId}/${att.repeat}/${att.entryId}/${i}`, file: f.file, line: f.line, cwe: f.cwe }));
+      out.push({ armId: att.armId, repeat: att.repeat, entryId: att.entryId, view: semanticView({ references: refs, findings, adjudications }) });
+    }
+    if (args.flags.json) { console.log(JSON.stringify({ runId: id, evaluatorOnly: true, attempts: out }, null, 2)); return 0; }
+    console.log(`Semantic view of ${id} (evaluator-only; the localized score is unchanged and remains the headline)`);
+    for (const o of out) console.log(`  ${o.armId} r${o.repeat} ${o.entryId}: ${o.view.references.map((r) => `${r.referenceId}=${r.outcome}`).join(', ')}${o.view.unlabelled.length ? `; ${o.view.unlabelled.length} unlabelled finding(s) need review` : ''}`);
     return 0;
   }
   if (sub === 'report' || sub === 'compare') {

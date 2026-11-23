@@ -33,6 +33,8 @@ export function scoreboardFromRun(run, armDefs = []) {
         medianLatencyMs: median(calls.map((a) => a.usage?.latencyMs)),
         failures: calls.filter((a) => a.status !== 'completed').length, calls: calls.length,
         evidence: { runId: run.runId, runDigest: run.digest, measuredAt: run.finishedAt },
+        // which population the quality was measured on: the router refuses to route on a synthetic one (contract-driven verification)
+        population: run.measurement?.population ?? 'unlabelled',
       });
     }
   }

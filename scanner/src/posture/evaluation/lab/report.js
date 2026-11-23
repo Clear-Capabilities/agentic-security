@@ -92,6 +92,10 @@ export function summarizeRun(run, { budgetUsd = 10 } = {}) {
     schema: REPORT_SCHEMA, version: 1, runId: run.runId, runDigest: run.digest, providerVariance,
     header: { scannerCommit: run.scanner?.commit ?? null, scannerVersion: run.scanner?.version ?? null, datasetId: run.dataset.id, datasetVersion: run.dataset.version, datasetHash: run.dataset.hash, split: run.dataset.split, models: run.arms.filter((a) => a.model).map((a) => `${a.model.provider}/${a.model.id}${a.model.local ? ' (local)' : ''}`), config: run.config, machine: run.machine, startedAt: run.startedAt, finishedAt: run.finishedAt },
     leakageAudit: run.leakageAudit, complete: run.complete, incompleteReasons: run.incompleteReasons, arms,
+    // contract-driven verification (C-02, C-05, C-07): stability, the paired same-population comparison, and the population label
+    measurement: run.measurement ?? { population: 'unlabelled', note: 'a run recorded before the population label existed' },
+    stability: run.stability ? { policy: run.stability.policy, arms: run.stability.arms.map(({ perDefect, ...rest }) => ({ ...rest, perDefect: perDefect.map((d) => ({ entryId: d.entryId, scheduled: d.scheduled, completed: d.completed, detected: d.detected, frequency: d.frequency, low: d.interval.low, high: d.interval.high, stable: d.stable })) })), stageAttrition: run.stability.stageAttrition } : null,
+    paired: run.paired ?? [],
     notes: arms.some((a) => Object.values(a.primary).some((s) => s && !s.representative)) ? ['At least one figure rests on fewer than three runs and is marked not representative.'] : [],
   };
 }
@@ -114,6 +118,7 @@ export function toMarkdown(rep) {
     `* Machine: ${h.machine.platform}/${h.machine.arch}, ${h.machine.cpus} cpus, ${h.machine.memoryGb} GB, node ${h.machine.node}`,
     `* Run: ${h.startedAt} to ${h.finishedAt}`,
     `* Leakage audit: ${rep.leakageAudit.status} (${rep.leakageAudit.usable}/${rep.leakageAudit.entries} entries usable; comments ${rep.leakageAudit.stripComments ? 'stripped' : 'kept'})`,
+    `* Population: ${rep.measurement?.population ?? 'unlabelled'}${rep.measurement?.note ? ` (${rep.measurement.note})` : ''}`,
     ...(rep.complete ? [] : [`* **INCOMPLETE**: ${rep.incompleteReasons.join('; ')}`]), ''];
   for (const task of Object.keys(METRICS)) {
     const present = rep.arms.filter((a) => a.tasks[task]);
@@ -121,6 +126,31 @@ export function toMarkdown(rep) {
     const cols = METRICS[task].map(([n]) => n);
     L.push(`## ${task}`, '', `| arm | runs | ${cols.join(' | ')} |`, `|---|---|${cols.map(() => '---').join('|')}|`);
     for (const a of present) L.push(`| ${a.id} | ${a.runs} | ${cols.map((c) => fmt(a.tasks[task][c])).join(' | ')} |`);
+    L.push('');
+  }
+  if (rep.stability?.arms?.length) {
+    L.push('## Stability (per defect, over scheduled repetitions)', '', `Stable means detected in at least the preregistered share (${Math.round(rep.stability.policy.threshold * 100)}%) of the SCHEDULED repetitions; a failed, blocked, timed-out or cancelled repetition counts as a non-detection. Intervals are Wilson 95% over the defects.`, '',
+      '| arm | scheduled repeats | needed for stable | union recall | stable recall | completed / scheduled attempts | claim |', '|---|---|---|---|---|---|---|');
+    for (const a of rep.stability.arms) {
+      const iv = (x, i) => (x == null ? 'n/a' : `${pct(x)} [${i?.low == null ? '?' : pct(i.low)}, ${i?.high == null ? '?' : pct(i.high)}]`);
+      L.push(`| ${a.armId} | ${a.scheduledRepeats} | ${a.detectionsNeededForStable} | ${iv(a.unionRecall, a.unionInterval)} | ${iv(a.stableRecall, a.stableInterval)} | ${a.completion.completed}/${a.completion.scheduledAttempts} | ${a.claim} |`);
+    }
+    L.push('');
+    for (const a of rep.stability.arms.filter((x) => x.kind === 'model')) {
+      L.push(`### ${a.armId}: detections per defect`, '', '| defect | detected / scheduled | completed | stable |', '|---|---|---|---|');
+      for (const d of a.perDefect) L.push(`| ${d.entryId} | ${d.detected}/${d.scheduled} | ${d.completed} | ${d.stable ? 'yes' : 'no'} |`);
+      L.push('');
+    }
+    const att = Object.entries(rep.stability.stageAttrition || {});
+    if (att.length) {
+      L.push('### Stage attrition (as the arms recorded it)', '', '| arm | stage | entered | decisions |', '|---|---|---|---|');
+      for (const [armId, s] of att) for (const [stage, v] of Object.entries(s.stages)) L.push(`| ${armId} | ${stage} | ${v.entered} | ${Object.entries(v.decisions).map(([d, c]) => `${d} ${c}`).join(', ')} |`);
+      L.push('');
+    }
+  }
+  if (rep.paired?.length) {
+    L.push('## Paired comparison (same entries, per repeat)', '', 'A win is a positive the model arm detected and the deterministic baseline did not; a loss is the reverse.', '', '| baseline | arm | positives | repeats | wins | losses | ties |', '|---|---|---|---|---|---|---|');
+    for (const p of rep.paired) L.push(`| ${p.baselineArmId} | ${p.armId} | ${p.positives} | ${p.repeats}${p.representative ? '' : ' (not representative)'} | ${p.perRepeat.map((r) => r.wins).join('/')} | ${p.perRepeat.map((r) => r.losses).join('/')} | ${p.perRepeat.map((r) => r.ties).join('/')} |`);
     L.push('');
   }
   L.push('## Cost, speed and reliability', '', '| arm | spend per run | median latency | p95 latency | timeouts | failures | unknown-cost attempts |', '|---|---|---|---|---|---|---|');

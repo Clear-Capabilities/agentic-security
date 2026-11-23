@@ -1074,3 +1074,17 @@ CLI entry points for capabilities that were library-only: `dataflow view` (typed
 - The seed `calibration-seed.json` is small (n < 30 for several families). Don't treat it as a held-out set — that's `holdout-eval.js`'s job, against an externally-supplied JSONL.
 - `learning.js` (active-learning loop) is **opt-in** behind `AGENTIC_SECURITY_LEARN=1` and has a quorum gate. Do not lower the quorum default without thinking about what a malicious-PR-author could suppress.
 - `why-fired.js` is the provenance surface customers screenshot. If you change its shape, downstream reports break — bump a version string and migrate consumers.
+
+## Eval Lab: stability, attrition, the semantic view and the population label (contract-driven verification, 0.222.0)
+
+`evaluation/lab/stability.js` adds to every detect run a per-defect history over the SCHEDULED repetitions (`run.stability`): detection
+frequency with a Wilson interval, union and stable recall (stable is at least the preregistered share, 7 of 10 by default, of scheduled
+repetitions), completion by status, and the stage attrition the arms recorded. A timed-out, blocked, budget-skipped or never-started
+repetition is a non-detection in every end-to-end figure; the completed-only view is labelled `validRunOnly`. A cancelled run now
+records its unstarted attempts (`status: 'cancelled'`), detect findings are no longer cut at 200 silently, and the hunt arm's counters and
+contract attrition reach the run record. `run.measurement.population` is `synthetic` for a directory dataset and `real-code` for git
+pairs; the router (`routing/policy-router.js`) refuses to route on a synthetic score. `evaluation/lab/semantic.js` (`eval semantic
+<runId> --references f [--adjudications f]`) is the evaluator-only secondary view: a semantic match needs a source anchor and an
+independent human adjudication, a model proposal is `ambiguous`, a reference counts once, and the localized score is untouched. The hunt
+arm accepts `adapter.contract` (validated) and then hunts in contract-aware mode against its own staged workspace's in-memory context.
+`test/eval-lab/arm-hunt.test.js` now runs in `test:posture` (it was in no scope).

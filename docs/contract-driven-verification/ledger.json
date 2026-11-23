@@ -135,65 +135,90 @@
    "id": "B-04",
    "title": "Stage attrition and corrective feedback",
    "phase": 1,
-   "implementation": "in-progress",
+   "implementation": "implemented-not-executed",
    "evidence": "synthetic",
    "code": [
-    "scanner/src/discovery/index.js"
+    "scanner/src/discovery/index.js",
+    "scanner/src/posture/evaluation/lab/stability.js",
+    "scanner/src/posture/evaluation/lab/arm-hunt.js"
    ],
    "tests": [
-    "scanner/test/contracts-driven/contract-hunt.test.js"
+    "scanner/test/contracts-driven/contract-hunt.test.js",
+    "scanner/test/contracts-driven/evaluation-stability.test.js"
    ],
-   "notes": "per-candidate history and attrition in the hunt report; memory learns only grounded refutations; not yet consumed by the evaluation lab (Phase 2)"
+   "notes": "per-candidate history in the hunt; the hunt arm carries contract attrition into the lab run; stageAttrition summed per arm"
   },
   {
    "id": "C-01",
    "title": "Eval Lab frozen full run",
    "phase": 2,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/posture/evaluation/lab/run.js",
+    "scanner/src/posture/evaluation/lab/arms.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/evaluation-stability.test.js"
+   ],
+   "notes": "run config pins matcherVersion, stability policy, prompt versions; scanner records commit and dirty; frozen protocol binding of lab runs not yet enforced"
   },
   {
    "id": "C-02",
    "title": "Per-vulnerability stability",
    "phase": 2,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/posture/evaluation/lab/stability.js",
+    "scanner/src/posture/evaluation/lab/run.js",
+    "scanner/src/posture/evaluation/lab/report.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/evaluation-stability.test.js"
+   ],
+   "notes": "detection frequency, union and stable recall with Wilson intervals, completion by status over scheduled repetitions, valid-run diagnostic; cancelled attempts recorded"
   },
   {
    "id": "C-03",
    "title": "Localized scoring kept; semantic secondary view",
    "phase": 2,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/posture/evaluation/lab/semantic.js",
+    "scanner/src/posture/evaluation/lab/cli.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/evaluation-stability.test.js"
+   ],
+   "notes": "evaluator-only semantic view (eval semantic); localized score unchanged; model proposals are ambiguous; duplicates count once"
   },
   {
    "id": "C-04",
    "title": "Real-code population and honest release gates",
    "phase": 2,
-   "implementation": "not-started",
-   "evidence": "none",
+   "implementation": "blocked",
+   "evidence": "unmeasured",
    "code": [],
    "tests": [],
-   "notes": ""
+   "notes": "machinery exists (importer, gates); no independently adjudicated real-code pilot with semantic references; insufficient-population"
   },
   {
    "id": "C-05",
    "title": "Paired workflow arms and economics",
    "phase": 2,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "in-progress",
+   "evidence": "unmeasured",
+   "code": [
+    "scanner/src/posture/evaluation/lab/arm-hunt.js",
+    "scanner/src/posture/routing/policy-router.js",
+    "scanner/src/posture/evaluation/lab/report.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/evaluation-stability.test.js"
+   ],
+   "notes": "contract arm (hunt adapter with adapter.contract); paired comparison rendered; router refuses synthetic scores; no local model run performed, so the four-arm comparison is unmeasured"
   },
   {
    "id": "D-01",
@@ -473,42 +498,42 @@
   },
   {
    "id": "C-AC01",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/evaluation-stability.test.js",
+   "observed": "1/10 not stable, 7/10 and 10/10 stable with distinct intervals",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "C-AC02",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/evaluation-stability.test.js",
+   "observed": "timeout, blocked and never-started repetitions are scheduled non-detections; valid-run view labelled",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "C-AC03",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/evaluation-stability.test.js",
+   "observed": "arm requests carry workspace and task only; hunt arm has no memory and builds context from its own workspace",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "C-AC04",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/evaluation-stability.test.js",
+   "observed": "semantic view needs anchor plus independent adjudication; localized recall unchanged; duplicates once",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "C-AC05",
    "status": "not-run",
    "code": [],
    "test": null,
-   "observed": null,
+   "observed": "frozen run replay not exercised; model and provider versions recorded where declared",
    "artifact": null
   },
   {
@@ -516,23 +541,23 @@
    "status": "not-run",
    "code": [],
    "test": null,
-   "observed": null,
+   "observed": "the registered no-regression gate exists in evaluation/gates.js; not wired to lab runs",
    "artifact": null
   },
   {
    "id": "C-AC07",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/evaluation-stability.test.js",
+   "observed": "run.measurement.population synthetic/real-code in JSON and Markdown; router refuses synthetic",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "C-AC08",
    "status": "not-run",
    "code": [],
    "test": null,
-   "observed": null,
+   "observed": "requires a local model; the hunt arm calls the product hunt path, but no real-model run was made",
    "artifact": null
   },
   {
@@ -770,13 +795,17 @@
  ],
  "phase": {
   "0": "done",
-  "1": "done on the synthetic slice: contracts validate/inspect/draft, hunt --contract, scripts/contract-slice-example.mjs (exit 0 on this host); effectiveness unmeasured"
+  "1": "done on the synthetic slice: contracts validate/inspect/draft, hunt --contract, scripts/contract-slice-example.mjs (exit 0 on this host); effectiveness unmeasured",
+  "2": "implemented on synthetic data: stability, attrition, semantic view, contract arm, synthetic guard; real-model and real-population evaluation unmeasured (no local model run, no adjudicated pilot)"
  },
  "defectsFixed": [
   "ir/parser-js.js: assignment-side calls were left out of fn.calls (cross-file call graph and DCI reachability never followed const r = helper(x))",
   "context-intelligence/graph-schema.js: two anonymous functions on one line collided in the symbol graph; the build was refused",
   "context-intelligence/{reachability,invariants}.js: an operation inside the middleware chain counted as the first sensitive operation at the chain position",
   "discovery/index.js: coverage.citationsDiscarded always 0; --no-memory cleared scanRoot (egress/redaction policy read from the wrong project)",
-  "posture/invariants/lifecycle.js: verifyLedger did not re-check a recorded reviewer against the current policy (now does when a policy is supplied)"
+  "posture/invariants/lifecycle.js: verifyLedger did not re-check a recorded reviewer against the current policy (now does when a policy is supplied)",
+  "posture/evaluation/lab/run.js: detect findings silently capped at 200 and hunt counters dropped; cancelled jobs had no attempt record",
+  "test/eval-lab/arm-hunt.test.js was in no test scope; now in test:posture",
+  "posture/routing/policy-router.js: routed on lab scores from synthetic datasets; now refused"
  ]
 }

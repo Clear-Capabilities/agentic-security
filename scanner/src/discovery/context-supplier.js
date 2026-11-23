@@ -20,19 +20,36 @@ import { sha256, sliceLines } from '../context-intelligence/canonical.js';
 const CONTEXT_STATES = Object.freeze(['complete', 'partial', 'unavailable', 'stale']); // the values `state` takes below
 
 /** Build a supplier over a scanned root. `fileContents` is the hunt's own snapshot (repository-relative paths). Never throws. */
-export function makeContextSupplier({ scanRoot, fileContents = {} } = {}) {
+export function makeContextSupplier({ scanRoot, fileContents = {}, built = null } = {}) {
   const unavailable = (reason) => ({ available: false, reason, forArea: () => ({ packages: [], omitted: 0, state: 'unavailable', reason }), forCandidate: () => ({ state: 'unavailable', reason, segments: [], entrypoints: [], controls: [] }), verifyCitation: () => 'context-unavailable', summary: () => ({ state: 'unavailable', reason, entrypoints: 0 }) });
-  if (!scanRoot) return unavailable('no scan root: the context store is per project');
-  const idx = readStoreJson(scanRoot, 'index.json');
-  if (!idx.ok) return unavailable(`no context build for this root (${idx.code}): run \`context build\` first`);
-  const index = idx.value;
-  const bundles = [];
-  for (const e of index.entrypoints || []) {
-    if (!e.contextHash) continue;
-    const m = readManifest(scanRoot, e.contextHash);
-    if (!m.ok) { bundles.push({ entry: e, manifest: null, problem: `manifest-${m.code}` }); continue; }
-    bundles.push({ entry: e, manifest: m.value, problem: null });
+  // An in-memory build (the evaluation lab's staged workspace) is read directly; a scanned root is read from its store, re-verified.
+  let index; const bundles = []; const memText = new Map();
+  if (built && built.ok !== false && Array.isArray(built.bundles)) {
+    index = { graph: { hash: built.graph?.hash ?? null }, repository: built.repository ?? null, configHash: null, entrypoints: [] };
+    for (const b of built.bundles) {
+      if (!b.manifest) continue;
+      const entry = { entrypointId: b.entrypoint.id, label: b.entrypoint.label, contextHash: b.manifest.contextHash };
+      index.entrypoints.push(entry);
+      bundles.push({ entry, manifest: b.manifest, problem: null });
+      for (const p of b.pack?.packages || []) memText.set(`${b.manifest.contextHash}#${p.index}`, p.text);
+    }
+  } else {
+    if (!scanRoot) return unavailable('no scan root: the context store is per project');
+    const idx = readStoreJson(scanRoot, 'index.json');
+    if (!idx.ok) return unavailable(`no context build for this root (${idx.code}): run \`context build\` first`);
+    index = idx.value;
+    for (const e of index.entrypoints || []) {
+      if (!e.contextHash) continue;
+      const m = readManifest(scanRoot, e.contextHash);
+      if (!m.ok) { bundles.push({ entry: e, manifest: null, problem: `manifest-${m.code}` }); continue; }
+      bundles.push({ entry: e, manifest: m.value, problem: null });
+    }
   }
+  const packageText = (manifest, index2) => {
+    const k = `${manifest.contextHash}#${index2}`;
+    if (memText.has(k)) { const text = memText.get(k); const pk = manifest.context.packages.find((p) => p.index === index2); return pk && sha256(text) === pk.sha256 ? { ok: true, text } : { ok: false, code: 'hash-mismatch' }; }
+    return readPackageText(scanRoot, manifest, index2);
+  };
   if (!bundles.length) return unavailable('the context build has no bundles');
 
   const segmentsOf = (manifest) => manifest.context.packages.flatMap((p) => p.segments.map((s) => ({ ...s, packageIndex: p.index })));
@@ -51,7 +68,7 @@ export function makeContextSupplier({ scanRoot, fileContents = {} } = {}) {
       const segs = segmentsOf(b.manifest);
       if (!segs.some((s) => want.has(s.file))) continue;
       for (const pk of b.manifest.context.packages) {
-        const t = readPackageText(scanRoot, b.manifest, pk.index);
+        const t = packageText(b.manifest, pk.index);
         if (!t.ok) { chosen.push({ entrypoint: b.entry.label, contextHash: b.manifest.contextHash, index: pk.index, text: null, problem: t.code }); continue; }
         chosen.push({ entrypoint: b.entry.label, contextHash: b.manifest.contextHash, index: pk.index, text: t.text, chars: t.text.length, integrity: b.manifest.context.integrity, controls: b.manifest.controls || [], protection: b.manifest.protection || {}, stale: segsStale(segs) });
       }
