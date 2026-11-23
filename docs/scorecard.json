@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.222.0",
-    "bundleSha256": "844b4aabe01035d9d165e79b0bbd1ed6a741059cf64a38ecd89214ac07ead782",
-    "commit": "828ceb3a006661a60e49245f1bb369e21e585532",
+    "engineVersion": "0.223.0",
+    "bundleSha256": "0c87ff7c8edee30c4e50029827e8190d0a0eb880b03ec6d3f6dc4a6d440223e3",
+    "commit": "f4567356f70c4b452d189d4f29ff44ce897f5ad3",
     "worktreeClean": true,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-11-23T03:23:27.051Z",
+    "generatedAt": "2026-11-23T16:08:02.136Z",
     "corpusVersion": "8a119507d34359a473e7e754956dd5829d098e98fb690c7485939729025c29e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -1011,7 +1011,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 343,
+    "n": 334,
     "d": 572
   },
   "taintRecall": {
@@ -2265,9 +2265,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.222.0",
-    "commit": "828ceb3a006661a60e49245f1bb369e21e585532",
-    "bundleSha256": "844b4aabe01035d9d165e79b0bbd1ed6a741059cf64a38ecd89214ac07ead782",
+    "engineVersion": "0.223.0",
+    "commit": "f4567356f70c4b452d189d4f29ff44ce897f5ad3",
+    "bundleSha256": "0c87ff7c8edee30c4e50029827e8190d0a0eb880b03ec6d3f6dc4a6d440223e3",
     "cleanMeasurement": true,
     "currentEngineRealcodeVerdict": "unmeasured",
     "currentEngineRealcodeReason": "no release-tier real-code verdict for this engine",
