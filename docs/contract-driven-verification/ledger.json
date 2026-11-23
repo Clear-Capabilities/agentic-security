@@ -588,18 +588,18 @@
   },
   {
    "id": "C-AC05",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": "frozen run replay not exercised; model and provider versions recorded where declared",
+   "test": "scanner/test/contracts-driven/eval-replay.test.js",
+   "observed": "`eval replay` re-runs a stored run with its frozen configuration: the scanner arm reproduced exactly (same detections and scores); a scripted, sampled model arm is reported limited with its reasons (no immutable model version, uncontrolled sampling) and agreement shown as description only; a changed dataset or arm configuration is refused before running (exit 4)",
    "artifact": null
   },
   {
    "id": "C-AC06",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": "the registered no-regression gate exists in evaluation/gates.js; not wired to lab runs",
+   "test": "scanner/test/contracts-driven/protected-defects.test.js",
+   "observed": "`eval gate` fails a run that loses a baseline-stable defect although its stable recall rose from 2/4 to 3/4; only an exception adjudicated by a listed reviewer, bound to the dataset hash and unexpired, for exactly that arm and defect, excuses it; a policy registered after the run started fails; different populations are unmeasured (exit 3)",
    "artifact": null
   },
   {
@@ -652,10 +652,10 @@
   },
   {
    "id": "D-AC05",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": "context job cache keys do not yet include the contract digest",
+   "test": "scanner/test/contracts-driven/dependency-key.test.js",
+   "observed": "a dependency key over the registration file, middleware, control and boundary files, the contract reference and the declared environment is recorded per bundle; a middleware edit that leaves every packed span intact marks the hunt's context stale with the reason, and every review job of a dependent bundle gets a new key (a cache miss) on a dependency, contract or environment change",
    "artifact": null
   },
   {
@@ -684,10 +684,10 @@
   },
   {
    "id": "E-AC03",
-   "status": "implemented-not-executed",
+   "status": "verified-synthetic",
    "code": [],
-   "test": "scanner/test/invariants/scenario-shrinking.test.js",
-   "observed": "existing shrinking preserves the failing assertion; not re-run against fault scenarios",
+   "test": "scanner/test/contracts-driven/fault-shrink.test.js",
+   "observed": "four duplicate deliveries of the planted double-credit step shrink to two through the trust boundary; both fresh replays of the minimized case fail the original authoritative assertion (judged by the shrinker's own judge), the shrink record verifies, and plan digest, scenario ids, shrink record and replay are joined; the idempotent twin is not reproduced",
    "artifact": null
   },
   {
@@ -708,10 +708,10 @@
   },
   {
    "id": "E-AC06",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": "fast and extended profiles not separated",
+   "test": "scanner/test/contracts-driven/fault-profiles.test.js",
+   "observed": "fast (6 plans, 2 runs each, 90 s, 1 process, 256 KiB) and extended (48, 4, 15 min, 1, 4 MiB) profiles; plan, wall-time and byte caps are held and every truncation is listed with its cap; a cap can be lowered for a run, never raised; the fast profile ran for real through the trust boundary within its caps",
    "artifact": null
   },
   {
@@ -748,10 +748,10 @@
   },
   {
    "id": "F-AC05",
-   "status": "implemented-not-executed",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": "runRegressionArtifact exists; a fresh-process replay of the slice artifact was not run in this work",
+   "test": "scanner/test/contracts-driven/regression-fresh-process.test.js",
+   "observed": "the slice writes the regression artifact and the shipped `invariants regress` command replays it in a fresh process given only PATH, HOME and the feature switches: four legs settled as recorded (exit 0); a copy whose patch was edited after verification exits 1",
    "artifact": null
   },
   {
@@ -844,10 +844,10 @@
   },
   {
    "id": "H-AC05",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": "optional bounded model checking not done",
+   "test": "scanner/test/contracts-driven/approval-model-check.test.js",
+   "observed": "bounded check of contract approval (scripts/model-check/approval.mjs): 28 reachable abstract states, 728 transitions and 1,326 unmerged traces to depth 3 replayed through the real approval and ledger code with no counterexample; four broken implementations (any human approves, expiry ignored, no reviewer re-check, revoke as no-op) each yield one; the result carries bounds, assumptions, file hashes and the reproducing command",
    "artifact": null
   }
  ],

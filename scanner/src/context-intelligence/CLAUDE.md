@@ -36,3 +36,12 @@ Model calls go through `discovery/llm-invoke.js` and the egress policy. Confirma
 - An operation inside the middleware chain (a session lookup the authentication guard performs, reached through it now that
   assignment-side calls are followed) carries the chain's position (-1) and does not count as the first sensitive operation: it is the
   control's own work, not something the control must precede. `reachability.js` and `invariants.js` both apply the rule.
+
+## Dependency keys (contract-driven verification, D-AC05)
+
+`dependency-key.js` digests what a bundle depends on outside its packed text: the route's registration file and middleware list, the
+files of the controls and boundaries the reachability pass recorded, the contract reference and the declared environment. The build
+records it per entry point in `index.json` (`dependencies`); the hunt's context supplier re-hashes those files from its own snapshot and
+marks the bundle `stale` (reason names `file:<path>`, `middleware`, `contract` or `environment`) when they differ; `planJobs` folds the
+key into every review job key, so a change misses the cached review instead of reusing it. A file the snapshot lacks hashes to `null`,
+so a deletion is a change. `contextHash` itself is unchanged (stored bundles stay addressable).

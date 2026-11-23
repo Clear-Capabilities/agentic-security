@@ -308,7 +308,7 @@ async function cmdReview(root, args, format) {
   if (!r.ok) { out(format, `context review: build failed (${r.built.reason})`, { ok: false, reason: r.built.reason }); return r.built.reason === 'too-many-files' ? 2 : 1; }
   const { built } = r;
   const model = describeModel({ allowRemote: truthy(flag(args, 'allow-remote')) || r.config.review.allowRemote === true });
-  const { jobs, droppedByJobLimit } = planJobs({ bundles: built.bundles, packs, model, maxJobs: Math.min(HARD_LIMITS.maxJobs, num(flag(args, 'max-jobs')) || HARD_LIMITS.maxJobs) });
+  const { jobs, droppedByJobLimit } = planJobs({ bundles: built.bundles, packs, model, fileContents: built.fileContents || {}, maxJobs: Math.min(HARD_LIMITS.maxJobs, num(flag(args, 'max-jobs')) || HARD_LIMITS.maxJobs) });
   const loadJob = loadJobFrom(built, packs);
   const ctxBase = { root: built.root, fileContents: built.fileContents, model };
 

@@ -21,27 +21,27 @@ Generated from `ledger.json`. `verified-synthetic` means a test executed the beh
 | C-AC02 | verified-synthetic | `scanner/test/contracts-driven/evaluation-stability.test.js` | timeout, blocked and never-started repetitions are scheduled non-detections; valid-run view labelled |
 | C-AC03 | verified-synthetic | `scanner/test/contracts-driven/evaluation-stability.test.js` | arm requests carry workspace and task only; hunt arm has no memory and builds context from its own workspace |
 | C-AC04 | verified-synthetic | `scanner/test/contracts-driven/evaluation-stability.test.js` | semantic view needs anchor plus independent adjudication; localized recall unchanged; duplicates once |
-| C-AC05 | not-run |  | frozen run replay not exercised; model and provider versions recorded where declared |
-| C-AC06 | not-run |  | the registered no-regression gate exists in evaluation/gates.js; not wired to lab runs |
+| C-AC05 | verified-synthetic | `scanner/test/contracts-driven/eval-replay.test.js` | `eval replay` re-runs a stored run with its frozen configuration: the scanner arm reproduced exactly (same detections and scores); a scripted, sampled model arm is reported limited with its reasons (no immutable model version, uncontrolled sampling) and agreement shown as description only; a changed dataset or arm configuration is refused before running (exit 4) |
+| C-AC06 | verified-synthetic | `scanner/test/contracts-driven/protected-defects.test.js` | `eval gate` fails a run that loses a baseline-stable defect although its stable recall rose from 2/4 to 3/4; only an exception adjudicated by a listed reviewer, bound to the dataset hash and unexpired, for exactly that arm and defect, excuses it; a policy registered after the run started fails; different populations are unmeasured (exit 3) |
 | C-AC07 | verified-synthetic | `scanner/test/contracts-driven/evaluation-stability.test.js` | run.measurement.population synthetic/real-code in JSON and Markdown; router refuses synthetic |
 | C-AC08 | not-run |  | requires a local model; the hunt arm calls the product hunt path, but no real-model run was made |
 | D-AC01 | verified-synthetic | `scanner/test/contracts-driven/service-scope.test.js` | three temp git repositories resolve at their pinned commits |
 | D-AC02 | verified-synthetic | `scanner/test/contracts-driven/service-scope.test.js` | spoofable-forwarded-identity (api) and tenant-from-message-unverified (worker) candidates; untraced use unresolved |
 | D-AC03 | verified-synthetic | `scanner/test/contracts-driven/refutation-evidence.test.js` | a blocker grounds only on a recorded control of the claimed kind on the reaching entry point |
 | D-AC04 | verified-synthetic | `scanner/test/contracts-driven/service-scope.test.js` | access-denied (never located), repository-unavailable, revision-unknown, version-mismatch |
-| D-AC05 | not-run |  | context job cache keys do not yet include the contract digest |
+| D-AC05 | verified-synthetic | `scanner/test/contracts-driven/dependency-key.test.js` | a dependency key over the registration file, middleware, control and boundary files, the contract reference and the declared environment is recorded per bundle; a middleware edit that leaves every packed span intact marks the hunt's context stale with the reason, and every review job of a dependent bundle gets a new key (a cache miss) on a dependency, contract or environment change |
 | D-AC06 | verified-synthetic | `scanner/test/contracts-driven/service-scope.test.js` | any unresolved repository makes the scope partial |
 | E-AC01 | verified-synthetic | `scanner/test/contracts-driven/fault-plans.test.js` | duplicate delivery reproduces the double credit in two fresh boundary runs (confirmed, confirmed); the idempotent twin refuted twice |
 | E-AC02 | verified-synthetic | `scanner/test/contracts-driven/fault-plans.test.js` | reorder versus duplicate delivery: diffFaultArtifacts names plan.kind and schedule |
-| E-AC03 | implemented-not-executed | `scanner/test/invariants/scenario-shrinking.test.js` | existing shrinking preserves the failing assertion; not re-run against fault scenarios |
+| E-AC03 | verified-synthetic | `scanner/test/contracts-driven/fault-shrink.test.js` | four duplicate deliveries of the planted double-credit step shrink to two through the trust boundary; both fresh replays of the minimized case fail the original authoritative assertion (judged by the shrinker's own judge), the shrink record verifies, and plan digest, scenario ids, shrink record and replay are joined; the idempotent twin is not reproduced |
 | E-AC04 | verified-synthetic | `scanner/test/contracts-driven/fault-plans.test.js` | unsupported faults refused with reasons; nondeterministic replays are reported by the oracle |
 | E-AC05 | verified-synthetic | `scanner/test/contracts-driven/harness-faults.test.js` | interrupted write leaves the prior ledger; duplicate transition refused; corrupt file is corrupt |
-| E-AC06 | not-run |  | fast and extended profiles not separated |
+| E-AC06 | verified-synthetic | `scanner/test/contracts-driven/fault-profiles.test.js` | fast (6 plans, 2 runs each, 90 s, 1 process, 256 KiB) and extended (48, 4, 15 min, 1, 4 MiB) profiles; plan, wall-time and byte caps are held and every truncation is listed with its cap; a cap can be lowered for a run, never raised; the fast profile ran for real through the trust boundary within its caps |
 | F-AC01 | blocked |  | no real framework or database on this host |
 | F-AC02 | verified-synthetic | `scanner/test/contracts-driven/contract-hunt.test.js` | deny-everyone patch: not-verified-fix (authorized-workflow-broken), slice script and mutation population |
 | F-AC03 | verified-synthetic | `scanner/test/contracts-driven/application-profiles.test.js` | missing framework, database, runtime or fetch authorisation are typed blockers; available host still unsupported without a confined runner |
 | F-AC04 | blocked |  | no Linux execution of the oracle path |
-| F-AC05 | implemented-not-executed |  | runRegressionArtifact exists; a fresh-process replay of the slice artifact was not run in this work |
+| F-AC05 | verified-synthetic | `scanner/test/contracts-driven/regression-fresh-process.test.js` | the slice writes the regression artifact and the shipped `invariants regress` command replays it in a fresh process given only PATH, HOME and the feature switches: four legs settled as recorded (exit 0); a copy whose patch was edited after verification exits 1 |
 | F-AC06 | verified-synthetic | `scanner/test/contracts-driven/application-profiles.test.js` | Linux unverified; win32 unsupported |
 | G-AC01 | verified-synthetic | `scanner/test/contracts-driven/verifier-and-feedback.test.js` | DELETE /invoices/:id observed, unmodeled -> discrepancy and proposal |
 | G-AC02 | verified-synthetic | `scanner/test/contracts-driven/verifier-and-feedback.test.js` | modeled routes with no traffic are not-observed-in-window with the limitation |
@@ -53,7 +53,7 @@ Generated from `ledger.json`. `verified-synthetic` means a test executed the beh
 | H-AC02 | verified-synthetic | `scanner/test/contracts-driven/verifier-and-feedback.test.js` | authorization-after-write: killed by the business-state oracle, survived under the status-only judge |
 | H-AC03 | verified-synthetic | `scanner/test/contracts-driven/verifier-and-feedback.test.js` | a patch writing __oracle_harness.mjs is refused |
 | H-AC04 | verified-synthetic | `scanner/test/contracts-driven/verifier-and-feedback.test.js` | killed, survived, equivalent kept distinct; unsupported when the boundary cannot run |
-| H-AC05 | not-run |  | optional bounded model checking not done |
+| H-AC05 | verified-synthetic | `scanner/test/contracts-driven/approval-model-check.test.js` | bounded check of contract approval (scripts/model-check/approval.mjs): 28 reachable abstract states, 728 transitions and 1,326 unmerged traces to depth 3 replayed through the real approval and ledger code with no counterexample; four broken implementations (any human approves, expiry ignored, no reviewer re-check, revoke as no-op) each yield one; the result carries bounds, assumptions, file hashes and the reproducing command |
 
 ## Requirements
 

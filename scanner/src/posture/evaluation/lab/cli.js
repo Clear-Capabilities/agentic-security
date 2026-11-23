@@ -15,6 +15,9 @@ import { saveRun, loadRun, listRuns, saveScoreboard, loadScoreboard } from './st
 import { scoreboardFromRun, mergeScoreboard } from './scoreboard.js';
 import { routeTask, explainRoute, ROUTER_TASKS, ROUTER_POLICIES } from '../../routing/policy-router.js';
 import { semanticView } from './semantic.js';
+import { protectedDefectGate } from './protected.js';
+import { replayPlan, compareReplay } from './replay.js';
+import { statePath } from '../../state-dir.js';
 
 const MAX_ARMS_BYTES = 1024 * 1024;
 
@@ -32,7 +35,7 @@ function readArms(file) {
   return errors.length ? { ok: false, errors } : { ok: true, arms };
 }
 
-const usageRun = () => { console.error('usage: eval run --dataset <file> --arms <file> [--tasks detect,falsify,exploit,patch] [--repeats N] [--concurrency N] [--timeout S] [--budget USD] [--allow-external]\n       eval report <run-id> [--format md|json|csv|html|chart] [--out <file>]\n       eval compare <run-id> [<other-run-id>]\n       eval list'); return 4; };
+const usageRun = () => { console.error('usage: eval run --dataset <file> --arms <file> [--tasks detect,falsify,exploit,patch] [--repeats N] [--concurrency N] [--timeout S] [--budget USD] [--allow-external]\n       eval report <run-id> [--format md|json|csv|html|chart] [--out <file>]\n       eval compare <run-id> [<other-run-id>]\n       eval semantic <run-id> --references <file> [--adjudications <file>]\n       eval gate <run-id> --baseline <run-id> --policy <file>\n       eval replay <run-id> --dataset <file> --arms <file>\n       eval list'); return 4; };
 
 async function doRun(args, root, { updateScoreboard }) {
   const f = args.flags;
@@ -100,6 +103,55 @@ export async function cmdEval(args, root) {
     console.log(`Semantic view of ${id} (evaluator-only; the localized score is unchanged and remains the headline)`);
     for (const o of out) console.log(`  ${o.armId} r${o.repeat} ${o.entryId}: ${o.view.references.map((r) => `${r.referenceId}=${r.outcome}`).join(', ')}${o.view.unlabelled.length ? `; ${o.view.unlabelled.length} unlabelled finding(s) need review` : ''}`);
     return 0;
+  }
+  if (sub === 'replay') {
+    // C-AC05: `eval replay <run-id> --dataset <file> --arms <file>`; exit 0 reproduced, 1 diverged, 3 model arms only (limited), 4 refused
+    const id = String(args._[2] ?? '');
+    if (!id || !args.flags.dataset || !args.flags.arms) { console.error('usage: eval replay <run-id> --dataset <file> --arms <file> [--json]'); return 4; }
+    const fr = loadRun(root, id);
+    if (fr.missing) { console.error(`No run ${id}. List runs with: eval list`); return 4; }
+    if (fr.tampered) { console.error(`Run ${id} failed its integrity check and is not used.`); return 1; }
+    const ds = loadDatasetFile(path.resolve(String(args.flags.dataset)));
+    if (!ds.ok) { console.error(`dataset: ${(ds.errors || [ds.reason]).join('; ')}`); return 4; }
+    const ar = readArms(path.resolve(String(args.flags.arms)));
+    if (!ar.ok) { console.error(`arms: ${ar.errors.join('; ')}`); return 4; }
+    const plan = replayPlan(fr.doc, { dataset: ds, arms: ar.arms });
+    if (!plan.ok) { console.error(`Not replayable as frozen:\n  ${plan.reasons.join('\n  ')}`); return 4; }
+    const res = await runEval({ dataset: ds, arms: ar.arms, ...plan.config, scanRoot: root });
+    if (!res.ok) { console.error(res.errors.join('\n')); return 4; }
+    const saved = saveRun(root, res.run);
+    const cmp = compareReplay(fr.doc, res.run);
+    if (args.flags.json) console.log(JSON.stringify({ ...cmp, stored: saved.ok }, null, 2));
+    else {
+      console.log(`Replay of ${id} as ${res.run.runId}: ${cmp.status}`);
+      for (const a of cmp.arms) console.log(`  ${a.armId} (${a.kind}): ${a.status}${a.differing.length ? `; ${a.differing.length} defect(s) differ` : ''}${a.why ? `; ${a.why.join('; ')}` : ''}`);
+      for (const e of cmp.environmentDifferences) console.log(`  environment ${e.field}: ${e.frozen} -> ${e.replay}`);
+      if (cmp.note) console.log(`  ${cmp.note}`);
+    }
+    return cmp.status === 'diverged' ? 1 : cmp.status === 'limited' ? 3 : 0;
+  }
+  if (sub === 'gate') {
+    // C-AC06: `eval gate <current> --baseline <run> --policy <file>`; exit 0 pass, 1 fail, 3 unmeasured, 4 usage
+    const id = String(args._[2] ?? ''); const bid = args.flags.baseline ? String(args.flags.baseline) : ''; const pfile = args.flags.policy ? path.resolve(String(args.flags.policy)) : '';
+    if (!id || !bid || !pfile) { console.error('usage: eval gate <run-id> --baseline <run-id> --policy <protected-defect-policy.json> [--json]'); return 4; }
+    const cur = loadRun(root, id); const bas = loadRun(root, bid);
+    for (const [label, r] of [[id, cur], [bid, bas]]) {
+      if (r.missing) { console.error(`No run ${label}. List runs with: eval list`); return 4; }
+      if (r.tampered) { console.error(`Run ${label} failed its integrity check and is not used.`); return 1; }
+    }
+    let policy;
+    try { policy = JSON.parse(await fs.promises.readFile(pfile, 'utf8')); } catch (e) { console.error(`cannot read the policy: ${String(e.message).split('\n')[0]}`); return 4; }
+    let reviewers = [];
+    try { const rp = JSON.parse(await fs.promises.readFile(statePath(root, 'reviewer-policy.json'), 'utf8')); reviewers = Array.isArray(rp.reviewers) ? rp.reviewers.filter((x) => typeof x === 'string') : []; } catch { reviewers = []; }
+    const g = protectedDefectGate({ baseline: bas.doc, current: cur.doc, policy, reviewers });
+    if (args.flags.json) console.log(JSON.stringify(g, null, 2));
+    else {
+      console.log(`Protected defects ${bid} -> ${id}: ${g.status.toUpperCase()}${g.reason ? ` (${g.reason})` : ''}`);
+      for (const l of g.lost || []) console.log(`  ${l.excused ? 'excused' : 'LOST   '} ${l.armId} ${l.entryId} ${l.baseline} -> ${l.current ?? 'absent'} (${l.why})`);
+      for (const r of g.exceptions?.rejected || []) console.log(`  exception rejected: ${r.armId} ${r.entryId}: ${r.why}`);
+      for (const a of g.aggregate || []) console.log(`  aggregate ${a.armId}: stable recall ${a.baselineStableRecall} -> ${a.currentStableRecall}${a.improved ? ' (improved; does not excuse a loss)' : ''}`);
+    }
+    return g.status === 'pass' ? 0 : g.status === 'unmeasured' ? 3 : 1;
   }
   if (sub === 'report' || sub === 'compare') {
     const id = String(args._[2] ?? '');

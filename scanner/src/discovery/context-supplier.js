@@ -16,6 +16,7 @@
 import { readStoreJson, readManifest, readPackageText } from '../context-intelligence/store.js';
 import { resolveCitation } from '../context-intelligence/review.js';
 import { sha256, sliceLines } from '../context-intelligence/canonical.js';
+import { dependencyKeyOf, dependencyChanges } from '../context-intelligence/dependency-key.js';
 
 const CONTEXT_STATES = Object.freeze(['complete', 'partial', 'unavailable', 'stale']); // the values `state` takes below
 
@@ -42,7 +43,14 @@ export function makeContextSupplier({ scanRoot, fileContents = {}, built = null 
       if (!e.contextHash) continue;
       const m = readManifest(scanRoot, e.contextHash);
       if (!m.ok) { bundles.push({ entry: e, manifest: null, problem: `manifest-${m.code}` }); continue; }
-      bundles.push({ entry: e, manifest: m.value, problem: null });
+      // D-AC05: the route registration, middleware, control and boundary files the build recorded, re-hashed from this snapshot.
+      // A difference makes the whole bundle stale even when every packed segment still matches its source.
+      let dependencyStale = null;
+      if (e.dependencies?.key && Object.keys(fileContents).length) {
+        const now = dependencyKeyOf({ manifest: m.value, fileContents });
+        if (now.key !== e.dependencies.key) dependencyStale = dependencyChanges(e.dependencies, now);
+      }
+      bundles.push({ entry: e, manifest: m.value, problem: null, dependencyStale });
     }
   }
   const packageText = (manifest, index2) => {
@@ -70,7 +78,7 @@ export function makeContextSupplier({ scanRoot, fileContents = {}, built = null 
       for (const pk of b.manifest.context.packages) {
         const t = packageText(b.manifest, pk.index);
         if (!t.ok) { chosen.push({ entrypoint: b.entry.label, contextHash: b.manifest.contextHash, index: pk.index, text: null, problem: t.code }); continue; }
-        chosen.push({ entrypoint: b.entry.label, contextHash: b.manifest.contextHash, index: pk.index, text: t.text, chars: t.text.length, integrity: b.manifest.context.integrity, controls: b.manifest.controls || [], protection: b.manifest.protection || {}, stale: segsStale(segs) });
+        chosen.push({ entrypoint: b.entry.label, contextHash: b.manifest.contextHash, index: pk.index, text: t.text, chars: t.text.length, integrity: b.manifest.context.integrity, controls: b.manifest.controls || [], protection: b.manifest.protection || {}, stale: segsStale(segs) || !!b.dependencyStale, ...(b.dependencyStale ? { dependencyChanged: b.dependencyStale } : {}) });
       }
     }
     // Smallest first, so many small bundles beat one large one under a budget; the omitted count is reported, never hidden.
@@ -94,7 +102,7 @@ export function makeContextSupplier({ scanRoot, fileContents = {}, built = null 
       if (!b.manifest) continue;
       const segs = segmentsOf(b.manifest).filter((s) => s.file === file && line >= s.startLine && line <= s.endLine);
       if (!segs.length) continue;
-      hits.push({ entrypoint: b.entry.label, entrypointId: b.entry.entrypointId, contextHash: b.manifest.contextHash, integrity: b.manifest.context.integrity, segments: segs.map((s) => ({ ...s, staleness: staleness(s) })), controls: (b.manifest.controls || []).map((c) => ({ kind: c.kind, file: c.file, line: c.line, evidence: c.evidence, basis: c.basis, symbolId: c.symbolId })), protection: b.manifest.protection || {} });
+      hits.push({ entrypoint: b.entry.label, entrypointId: b.entry.entrypointId, contextHash: b.manifest.contextHash, integrity: b.manifest.context.integrity, dependencyChanged: b.dependencyStale, segments: segs.map((s) => ({ ...s, staleness: b.dependencyStale ? 'stale' : staleness(s) })), controls: (b.manifest.controls || []).map((c) => ({ kind: c.kind, file: c.file, line: c.line, evidence: c.evidence, basis: c.basis, symbolId: c.symbolId })), protection: b.manifest.protection || {} });
     }
     if (!hits.length) return { state: 'unavailable', reason: 'no bundle contains the cited line', segments: [], entrypoints: [], controls: [] };
     const anyStale = hits.some((h) => h.segments.some((s) => s.staleness === 'stale'));
@@ -102,7 +110,7 @@ export function makeContextSupplier({ scanRoot, fileContents = {}, built = null 
     const span = typeof text === 'string' ? { startLine: Math.max(1, line - 12), endLine: Math.min(text.split('\n').length, line + 12) } : null;
     const state = anyStale ? 'stale' : hits.every((h) => h.integrity === 'complete') ? 'complete' : 'partial';
     return {
-      state, reason: anyStale ? 'a segment no longer matches the source it was built from' : null,
+      state, reason: anyStale ? (hits.some((h) => h.dependencyChanged) ? `the bundle's dependencies changed since the build (${[...new Set(hits.flatMap((h) => h.dependencyChanged || []))].join(', ')})` : 'a segment no longer matches the source it was built from') : null,
       segments: hits.flatMap((h) => h.segments),
       entrypoints: hits.map((h) => ({ label: h.entrypoint, entrypointId: h.entrypointId, contextHash: h.contextHash, integrity: h.integrity, protection: h.protection })),
       controls: dedupe(hits.flatMap((h) => h.controls)),

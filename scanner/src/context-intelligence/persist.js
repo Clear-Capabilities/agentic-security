@@ -4,6 +4,7 @@
 import { writeBundle, writeStoreJson } from './store.js';
 import { reverseDependencies } from './diff.js';
 import { hashOf } from './canonical.js';
+import { dependencyKeyOf } from './dependency-key.js';
 
 export const INDEX_SCHEMA = 'context-index/1';
 
@@ -29,6 +30,8 @@ export function persistBuild(root, built, config) {
         contextHash: b && b.manifest ? b.manifest.contextHash : null,
         integrity: b && b.manifest ? b.manifest.context.integrity : null,
         resolutionReasons: e.resolutionReasons,
+        // D-AC05: the inputs outside the packed text, so a reader can tell the bundle went stale without a rebuild
+        dependencies: b && b.manifest ? (({ key, files, middleware }) => ({ key, files, middleware }))(dependencyKeyOf({ manifest: b.manifest, fileContents: built.fileContents || {} })) : null,
       };
     }),
   };

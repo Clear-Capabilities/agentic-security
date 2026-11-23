@@ -66,3 +66,17 @@ repair verification (`verified-fix`, artifact carrying the contract ref) and a p
 `scanner/src/contracts/` (guide in its `CLAUDE.md`), `scanner/src/discovery/context-supplier.js`, the contract-mode paths in
 `scanner/src/discovery/{index,lenses,hunter,disprove}.js`, the `contract` field of `scanner/src/posture/invariants/repair.js`, and the
 `service-contract` subject in `scanner/src/posture/invariants/lifecycle.js`. Tests: `scanner/test/contracts-driven/`.
+
+## Added after the first consolidation
+
+| Command or module | What it does | Criterion |
+|---|---|---|
+| `eval gate <run> --baseline <run> --policy <file>` (`lab/protected.js`) | Fails a run that loses a defect the baseline detected stably, whatever the aggregate does, unless a listed reviewer adjudicated an exception for exactly that arm and defect, bound to the dataset and unexpired. A policy registered after the run started is refused. Exit 0 pass, 1 fail, 3 unmeasured | C-AC06 |
+| `eval replay <run> --dataset <file> --arms <file>` (`lab/replay.js`) | Re-runs a stored run with its frozen configuration. Deterministic arms must reproduce exactly; model arms are `limited` with the reasons; a changed dataset or arm is refused before running | C-AC05 |
+| `context-intelligence/dependency-key.js` | Middleware, control and boundary files, contract and environment changes make context stale and miss cached reviews | D-AC05 |
+| `runFaultProfile` (`invariants/fault-plans.js`) | `fast` and `extended` profiles with caps on plans, runs per plan, wall time, processes and stored bytes; every truncation listed; caps can be lowered per run, never raised | E-AC06 |
+| `shrinkFaultScenario` (`invariants/fault-plans.js`) | Shrinks a faulted scenario with the existing shrinker and joins plan digest, scenario ids, shrink record and a fresh fault replay that must fail the same assertion | E-AC03 |
+| Slice stage "regression replay in a fresh process" | `invariants regress` replays the slice's regression artifact in a new process with only PATH, HOME and the feature switches; a tampered copy is refused | F-AC05 |
+| `scripts/model-check/approval.mjs` (`npm run model-check:approval`) | Bounded state-machine check of contract approval against the real approval and ledger code; four broken implementations are each caught. Bounds, assumptions, file hashes and the command are in the result | H-AC05 (optional) |
+
+Still open: C-AC08 (needs a local model), F-AC01 (a real framework and database), F-AC04 (Linux).

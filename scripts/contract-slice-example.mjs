@@ -116,6 +116,28 @@ if (!boundaryRefused) {
   const valid = rep.artifact ? validateRegressionArtifact(rep.artifact) : { ok: false };
   stage('repair verification', rep.status === 'verified-fix' && valid.ok && rep.artifact.contract?.ref === contractRef(contract) ? 'ok' : 'failed', { status: rep.status, blockers: rep.blockers, artifact: rep.artifact ? { id: rep.artifact.id, contract: rep.artifact.contract, legs: rep.artifact.legs.map((l) => l.role) } : null, note: `${rep.status}; artifact ${rep.artifact ? rep.artifact.id + ' contract ' + rep.artifact.contract.ref : 'none'}` });
   expect(rep.status === 'verified-fix' && valid.ok);
+  // 7b. F-AC05: the artifact alone, replayed by the shipped CLI in a fresh process that inherits nothing from this run but PATH,
+  // HOME and the operator's feature switches. A tampered copy must be refused.
+  {
+    const { spawnSync } = await import('node:child_process');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'slice-regress-'));
+    try {
+      const file = path.join(dir, 'regression.json');
+      fs.writeFileSync(file, JSON.stringify(rep.artifact));
+      const env = { PATH: process.env.PATH, HOME: process.env.HOME, AGENTIC_SECURITY_ASSURANCE_VERIFICATION_ORACLES: '1', AGENTIC_SECURITY_ASSURANCE_INVARIANT_SCENARIOS: '1', AGENTIC_SECURITY_ASSURANCE_PATCH_NEGATIVE_VERIFICATION: '1', AGENTIC_SECURITY_ASSURANCE_INVARIANT_REPAIR: '1' };
+      const cli = (f) => spawnSync(process.execPath, [path.join(SCANNER, 'bin', 'agentic-security.js'), 'invariants', 'regress', f, '--json'], { cwd: dir, env, encoding: 'utf8', timeout: 300_000 });
+      const fresh = cli(file);
+      let parsed = null; try { parsed = JSON.parse(fresh.stdout); } catch { parsed = null; }
+      const tampered = JSON.parse(JSON.stringify(rep.artifact));
+      tampered.patch.files['service.mjs'] = `${tampered.patch.files['service.mjs']}\n// edited after verification\n`;
+      const tfile = path.join(dir, 'tampered.json');
+      fs.writeFileSync(tfile, JSON.stringify(tampered));
+      const bad = cli(tfile);
+      const ok = fresh.status === 0 && parsed?.status === 'passed' && bad.status !== 0;
+      stage('regression replay in a fresh process', ok ? 'ok' : (fresh.status === 3 ? 'unsupported' : 'failed'), { exit: fresh.status, replayStatus: parsed?.status ?? null, legs: parsed?.legs?.map((l) => `${l.role}:${l.matched ? 'ok' : 'FAIL'}`), tamperedExit: bad.status, env: Object.keys(env) });
+      if (fresh.status !== 3) expect(ok);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
   const denyAll = { files: { 'service.mjs': patch.files['service.mjs'].replace('export function setInvoiceMemo(db, principal, key, payload) {', 'export function setInvoiceMemo(db, principal, key, payload) {\n  return { status: 403 };') } };
   const rep2 = await verifyInvariantRepair({ invariant: inv, ledger: invLedger, scenario, fixture, patch: denyAll, commit }, { config: aconfig });
   stage('repair that blocks everyone', rep2.status === 'not-verified-fix' && rep2.blockers.some((b) => b.code === 'authorized-workflow-broken') ? 'ok' : 'failed', { status: rep2.status, blockers: rep2.blockers.map((b) => b.code), note: `${rep2.status} (${rep2.blockers.map((b) => b.code).join(', ')})` });
