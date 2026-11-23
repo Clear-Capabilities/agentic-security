@@ -44,6 +44,11 @@ import { transformSync as babelTransformSync } from '@babel/core';
 import presetReact from '@babel/preset-react';
 import presetTypescript from '@babel/preset-typescript';
 
+// The CFG node that carries a declaration's or an assignment's right-hand side, keyed by its AST node, so the call-site summary can
+// name it as the site of a call that is that right-hand side. A side table, not a property on the function record: the IR is
+// cached and fingerprinted, and a per-process node id on the record would break both.
+const assignSiteOf = new WeakMap();
+
 let _nodeIdSeq = 0;
 function nextNodeId() { return 'n' + (++_nodeIdSeq); }
 /**
@@ -948,6 +953,7 @@ export function parseJsFile(file, code) {
             // the declared (`const s: Svc = ...`) or constructed (`const s = new Svc()`) class, for receiver typing
             const dt = (path.node.id && path.node.id.type === 'Identifier' ? tsTypeName(path.node.id.typeAnnotation) : null) || ctorClassName(path.node.init);
             addNode(fn, { id: nodeId, kind: 'assign', target: id, source: initExpr, line, succ: [], pred: [], ...(dt ? { declaredType: dt } : {}) });
+            assignSiteOf.set(path.node, nodeId);
             recordWrite(fn, id, initExpr, nodeId);
             return;
           }
@@ -994,6 +1000,7 @@ export function parseJsFile(file, code) {
           const nodeId = nextNodeId();
           const line = path.node.loc?.start?.line || 0;
           addNode(fn, { id: nodeId, kind: 'assign', target: id, source: rhsExpr, line, succ: [], pred: [] });
+          assignSiteOf.set(path.node, nodeId);
           if (typeof id === 'string') recordWrite(fn, id, rhsExpr, nodeId);
         },
 
@@ -1002,8 +1009,20 @@ export function parseJsFile(file, code) {
           // Skip if this call is itself the RHS of an assignment we just emitted
           // (the assignment node already references it via its source.kind=='call').
           const parent = path.parent;
-          if (parent && (parent.type === 'VariableDeclarator' || parent.type === 'AssignmentExpression')) return;
           const calleeExpr = exprOf(path.node.callee);
+          if (parent && (parent.type === 'VariableDeclarator' || parent.type === 'AssignmentExpression')) {
+            // The assignment's own CFG node carries this call as its `source`, so no second node is added. The call-site SUMMARY
+            // (`fn.calls`) must still list it: the cross-file call graph (ir/callgraph.js) and the context-intelligence symbol graph
+            // read `fn.calls` to decide which functions a function reaches, and before this branch recorded anything, every
+            // `const r = helper(x)` was a call nobody could follow: a route handler that delegates to a service module reached no
+            // sensitive operation at all. The site is the assignment node, so conditionality is judged where the call sits.
+            const asgName = (calleeExpr.kind === 'ident' && calleeExpr.name) ||
+              (calleeExpr.kind === 'member' && calleeExpr.prop && (calleeExpr.object.kind === 'ident' ? `${calleeExpr.object.name}.${calleeExpr.prop}` : calleeExpr.prop)) || null;
+            const asgArgs = (path.node.arguments || []).map(a => exprOf(a));
+            const asgSite = assignSiteOf.get(parent);
+            if (asgSite) fn.calls.push({ site: asgSite, callee: asgName, args: asgArgs, line: path.node.loc?.start?.line || 0 });
+            return;
+          }
           // An inline arrow/function-expression argument (`arr.map(x => ...)`)
           // becomes {kind:'function-value', qid} instead of exprOf's generic
           // {kind:'unknown'} fallback (exprOf has no case for either node

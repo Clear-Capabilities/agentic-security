@@ -79,7 +79,7 @@ async function runDciSystem(dir, sink, reader, { packIds, withCompiler }) {
   if (!built.ok) return { flagged: false, calls: 0, promptChars: 0, detail: { buildFailed: built.reason }, prompts: [] };
   const packs = packIds.map(packById).filter(Boolean);
   const model = describeModel();
-  const { jobs } = planJobs({ bundles: built.bundles, packs, model });
+  const { jobs } = planJobs({ bundles: built.bundles, packs, model, fileContents: built.fileContents || {} });
   const byEp = new Map(built.bundles.map(b => [b.entrypoint.id, b]));
   const packMap = new Map(packs.map(p => [p.id, p]));
   const loadJob = (job) => {

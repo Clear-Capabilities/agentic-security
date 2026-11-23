@@ -73,6 +73,8 @@ They are not accuracy, and none of them is a claim about real code.
 | `npm run reproduce:mini` | 3 authored files, 5 negative controls | every control behaved; 95% interval on F1 `unmeasured`; real-code gates `insufficient-population` |
 | `npm run reproduce:routing` | 240 generated tasks | verdict `unmeasured`; every control behaved; no advantage claimed (detail in the [routing policy card](routing-policy-card.md)) |
 | `npm run verification:conformance:static` | 10 oracle adapters | all 10 conform to the static contract and pins; execution not requested |
+| `npm run example:contract-slice` (scanner/) | 1 two-tenant synthetic service, scripted model | 8 stages ok on macOS: contract valid, approved by a fixture reviewer, 3 complete bundles, PUT memo violates the tenant rule, candidate qualified, oracle confirms on the vulnerable service and refutes on the patch, repair verified, deny-all patch refused; 4 legs unsupported (runtime and preservation bindings, Linux, real framework and database, model effectiveness) |
+| `npm run test:contracts-driven` (scanner/) | the slice, 3 throwaway git repositories, 10 semantic mutants | mutation population: 7 killed, 2 survived (a status-only judge; a cross-tenant read the write-only contract does not cover), 1 equivalent; no mutant dropped |
 
 Two cautions. First, a synthetic set that includes a case added because an earlier rule failed on it is not blind with respect to the
 rule; the deployment guide says so. Second, the generated routing population is built so that the arithmetic can pass or fail, which

@@ -893,7 +893,12 @@ function buildSemanticGraph(projectIR, meta = {}) {
         if (!kind) return;
         g.allocations.push({ id: `alloc:${h16(['alloc', symId, kind, next(`alloc|${symId}|${kind}`)])}`, symbol: symId, kind, ...loc(file, line), confidence: OBSERVED });
       };
+      const cfgNodes = fn.cfg?.nodes || {};
       for (const c of fn.calls || []) {
+        // A call whose site is an assignment node is the assignment's source; the assignment walk below records it (one call site,
+        // not two, and the same id it had before the front end began listing such calls in `fn.calls`).
+        const siteNode = cfgNodes instanceof Map ? cfgNodes.get(c.site) : cfgNodes[c.site];
+        if (siteNode && siteNode.kind === 'assign') continue;
         const calleeText = c.callee;
         const direct = byFileName.get(`${file}|${calleeText}`) || null;
         const args = (c.args || []).map((a, index) => { walkExprs(a, (x) => { if (x.kind === 'member') field(x, 'read', c.line); alloc(x, c.line); }); return { index, origin: originFor(a, `arg:${calleeText}:${index}`, c.line) }; });

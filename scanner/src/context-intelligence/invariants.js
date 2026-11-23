@@ -132,7 +132,7 @@ function dimensionState(bundle, dim) {
   const prot = bundle.manifest?.protection || {};
   if (dim === 'tenant-scope') {
     const facts = bundle.reach?.facts || [];
-    const sens = facts.filter((f) => f.category === 'sensitive');
+    const sens = facts.filter((f) => f.category === 'sensitive' && f.effLine >= 0); // operations inside the middleware chain are the control's own work
     if (!sens.length) return { state: 'none-to-protect', why: 'no sensitive operation was seen' };
     const first = Math.min(...sens.map((f) => f.effLine));
     const ctl = facts.filter((f) => f.category === 'control' && f.kind === 'tenant-scope' && (f.effLine < first || (f.basis === 'query-filter' && f.effLine <= first)));

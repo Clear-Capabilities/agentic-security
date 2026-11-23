@@ -24,6 +24,7 @@ import { stageNeutralized } from './neutralize.js';
 import { validateArm, runArmTask, TASKS } from './arms.js';
 import { resolveInside, normalizeCwe } from './dataset.js';
 import { scoreDetect, scoreFalsify, scoreExploit, scorePatch, scoreEconomics, detectedEntryIds } from './score.js';
+import { stabilityReport, DEFAULT_STABILITY_POLICY } from './stability.js';
 
 export const RUN_SCHEMA = 'agentic-security/eval-lab-run';
 const RUN_VERSION = 1;
@@ -44,7 +45,12 @@ function scannerIdentity() {
     const r = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: path.dirname(new URL(import.meta.url).pathname), encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
     if (r.status === 0) commit = r.stdout.trim() || null;
   } catch { /* not a checkout */ }
-  return { version, commit };
+  let dirty = null;
+  try {
+    const r = spawnSync('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: path.dirname(new URL(import.meta.url).pathname), encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+    if (r.status === 0) dirty = r.stdout.trim().length > 0;
+  } catch { /* not a checkout */ }
+  return { version, commit, dirty };
 }
 
 async function pool(jobs, limit, run, signal) {
@@ -120,7 +126,7 @@ export function pairedComparisons({ armPlans, usable, attempts, mapFile }) {
   return out;
 }
 
-export async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEFAULT_REPEATS, concurrency = 2, timeoutMs = 120_000, budgetUsd = null, scanRoot = process.cwd(), signal, onProgress = () => {}, deps = {} } = {}) {
+export async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEFAULT_REPEATS, concurrency = 2, timeoutMs = 120_000, budgetUsd = null, scanRoot = process.cwd(), signal, onProgress = () => {}, deps = {}, stabilityPolicy = DEFAULT_STABILITY_POLICY } = {}) {
   const now = deps.now ?? Date.now;
   const startedAt = new Date(now()).toISOString();
   const errors = [];
@@ -170,7 +176,14 @@ export async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEF
         if (res.usage?.usd != null) spend.usd += res.usage.usd;
         const out = { ...rec, status: res.status, reason: res.reason ?? null, usage: res.usage };
         if (res.status === 'completed') {
-          if (task === 'detect') out.output = { findings: res.output.findings.slice(0, 200) };
+          if (task === 'detect') {
+            // Every finding is scored. A cap here used to cut at 200 silently, which could turn a true positive into a miss; the
+            // count is now recorded and the cap is generous and visible (`findingsTruncated`).
+            const all = res.output.findings || [];
+            out.output = { findings: all.slice(0, 5000), ...(all.length > 5000 ? { findingsTruncated: all.length - 5000 } : {}) };
+            if (res.output.hunt) out.output.hunt = res.output.hunt;
+            if (res.output.contract) out.output.contract = res.output.contract;
+          }
           if (task === 'falsify') out.output = { verdict: res.output.verdicts?.c1 ?? 'uncertain' };
           if (task === 'exploit') {
             const rp = res.output.reproducer;
@@ -202,6 +215,14 @@ export async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEF
       } finally { give(arm); completedJobs++; onProgress({ done: completedJobs, total: jobs.length }); }
     }, signal);
 
+    // A job that never started (the run was cancelled) is a scheduled attempt with no result, recorded as such so no denominator
+    // can shrink by stopping early (C-AC02).
+    const seen = new Set(attempts.map((a) => `${a.armId}|${a.repeat}|${a.task}|${a.entryId}`));
+    for (const job of jobs) {
+      const k = `${job.arm.id}|${job.repeat}|${job.task}|${job.entry.id}`;
+      if (!seen.has(k)) attempts.push({ armId: job.arm.id, repeat: job.repeat, task: job.task, entryId: job.entry.id, entryKind: job.entry.kind, status: 'cancelled', reason: 'the run was cancelled before this attempt started', usage: { usd: null, latencyMs: 0 } });
+    }
+
     // ---- scoring: per arm, per repeat, per task
     const mapFileFor = (entryId, f) => prep.prepared.get(entryId)?.fileMap[f] ?? f;
     const results = [];
@@ -224,7 +245,10 @@ export async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEF
       }
     }
     const finishedAt = new Date(now()).toISOString();
-    const config = { tasks, repeats, concurrency, timeoutMs, budgetUsd, lineTolerance: 3 };
+    // A frozen configuration (C-01): the matcher is versioned with its tolerance, the stability policy is recorded before scoring, and
+    // each model arm's prompt version is recorded where the arm declares one. A provider that exposes no immutable model version is
+    // disclosed as such (`model.version: null`), never guessed.
+    const config = { tasks, repeats, concurrency, timeoutMs, budgetUsd, lineTolerance: 3, matcherVersion: 'localized-file-cwe-line/1', stabilityPolicy, promptVersions: Object.fromEntries(arms.filter((a) => a.kind === 'model').map((a) => [a.id, a.adapter?.promptVersion ?? (a.adapter?.type === 'hunt' ? `hunt-lenses/${a.adapter.contract ? 'contract' : 'legacy'}` : null)])) };
     const armsRecord = arms.map((a) => ({ id: a.id, kind: a.kind, tasks: a.tasks, model: a.model ? { id: a.model.id, provider: a.model.provider, local: a.model.local, version: a.model.version ?? null } : null, adapter: a.adapter.type, repeats: armPlans.find((p) => p.arm.id === a.id).repeats, configDigest: digestOf({ ...a, adapter: { ...a.adapter } }) }));
     const run = {
       schema: RUN_SCHEMA, version: RUN_VERSION,
@@ -232,7 +256,7 @@ export async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEF
       startedAt, finishedAt, scanner: scannerIdentity(), machine: machineProfile(),
       dataset: { id: manifest.dataset.id, version: manifest.dataset.version, hash: dataset.hash, split: manifest.dataset.split, language: manifest.dataset.language, license: manifest.dataset.license, entries: manifest.entries.length },
       config, arms: armsRecord, leakageAudit: prep.audit, attempts, results,
-      complete: jobs.length === attempts.length && !attempts.some((a) => a.status === 'skipped-budget') && prep.audit.status === 'clean',
+      complete: !attempts.some((a) => a.status === 'skipped-budget' || a.status === 'cancelled') && prep.audit.status === 'clean',
       incompleteReasons: [
         ...(prep.audit.status !== 'clean' ? [`leakage audit: ${prep.audit.status} (${prep.audit.quarantined.length} quarantined, ${prep.audit.unavailable.length} unavailable)`] : []),
         ...(attempts.some((a) => a.status === 'skipped-budget') ? ['budget reached; later attempts were skipped'] : []),
@@ -242,6 +266,17 @@ export async function runEval({ dataset, arms, tasks = ['detect'], repeats = DEF
       // GA-06 §5 (0.195.31): every model arm against every deterministic arm, entry by entry, on the identical usable population,
       // per repeat. A win is an entry the model arm detected and the baseline did not; a loss the reverse; a tie both or neither.
       paired: pairedComparisons({ armPlans, usable, attempts, mapFile: mapFileFor }),
+      // Contract-driven verification (C-02, B-04): per-defect detection history over every SCHEDULED repetition, union and stable
+      // recall with Wilson intervals, completion by status, and the stage attrition the arms recorded. Failed and cancelled
+      // repetitions stay in the denominators; the completed-only view is labelled `validRunOnly`.
+      stability: tasks.includes('detect') ? stabilityReport({ armPlans, usable, attempts, mapFile: mapFileFor, policy: stabilityPolicy }) : null,
+      measurement: (() => {
+        const population = manifest.dataset.source?.kind === 'git-pairs' ? 'real-code' : (manifest.dataset.population ?? 'unlabelled');
+        const note = population === 'real-code' ? 'real code; independence depends on how the labels were made (see the dataset provenance)'
+          : population === 'synthetic' ? 'synthetic machinery result: says nothing about effectiveness on real code'
+          : 'the dataset does not declare its population; treat the figures as describing this dataset only';
+        return { population, split: manifest.dataset.split, note };
+      })(),
     };
     run.digest = digestOf({ ...run, digest: undefined });
     return { ok: true, run };

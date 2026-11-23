@@ -4161,6 +4161,10 @@
     "cli-command:context": {
       "to": "context-intelligence"
     },
+    "cli-command:contracts": {
+      "to": "context-intelligence",
+      "note": "service security contracts (contract-driven verification): validate, inspect, draft; approval stays in the invariant ledger; hunt --contract consumes the context build"
+    },
     "cli-command:cve-watch": {
       "to": "dependency-risk"
     },

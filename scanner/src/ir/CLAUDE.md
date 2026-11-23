@@ -389,3 +389,12 @@ Tests: `test/python-class-taint.test.js`, `test/parser-js-ts-casts.test.js`, `te
 - **Template literals carry their text (`parser-js.js`, 0.220.0).** `\`https://h/${a}/x/${b}\`` lowers to `tpl` parts
   `['https://h/', a, '/x/', b]` (empty chunks left out), so the engine can read what a URL begins with and which keywords a template's
   constant text carries. Before, only the expressions were kept.
+
+## 0.222.0: assignment-side calls are in the call summary
+
+`fn.calls` (the per-function call-site summary that `ir/callgraph.js` and the context-intelligence symbol graph read) left out every
+call that was the right-hand side of a declaration or an assignment: the `CallExpression` visitor returned early because the
+assignment's own CFG node carries the call. The CFG was right; the summary was not, so `const r = helper(x)` was a call nobody could
+follow across functions, and a route handler that delegated to a service module reached no sensitive operation at all. The visitor now
+records the call in the summary with the assignment node as its `site` (a `WeakMap` keyed by the AST node, never a property on the
+cached function record). `dataflow/demand-query.js` had compensated for the omission with its own index; both indexes now agree.

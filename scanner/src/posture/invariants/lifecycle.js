@@ -25,11 +25,18 @@ import { signLastScan } from '../integrity.js';
 import { verifyApprover } from '../../fix/approver-registry.js';
 import { isIssuedReceipt } from '../oracles/oracle.js';
 import { createInvariant, validateInvariant, INVARIANT_CLASSES, BUSINESS_STATE_ORACLE } from './schema.js';
+import { validateContract, contractDigest, CONTRACT_SCHEMA } from '../../contracts/schema.js';
 
 export const LEDGER_SCHEMA = 'agentic-security/invariant-ledger';
 const TRANSITION_SCHEMA = 'agentic-security/invariant-transition';
-export const ACTIONS = Object.freeze(['propose', 'approve', 'reject', 'supersede']);
+export const ACTIONS = Object.freeze(['propose', 'approve', 'reject', 'supersede', 'revoke']);
+// What a transition is about. An executable invariant is the original subject; a service contract (contracts/schema.js) is approved
+// through the same ledger, the same reviewers and the same signature, so there is one approval authority, not two.
+const SUBJECT_KINDS = Object.freeze(['invariant', 'service-contract']);
 const TRANSITION_ID_FIELDS = ['seq', 'invariantId', 'key', 'revision', 'action', 'from', 'to', 'actor', 'reason', 'supersededBy', 'prev'];
+// `subjectKind` and `subjectDigest` are informational: a service contract's digest is already inside its signed `invariantId`
+// (`<schema>#<digest32>`), and the kind follows from that prefix, so neither field enters the id or the signature and every ledger
+// signed before they existed still verifies. `verifyLedger` checks them against the id instead.
 const SIGNED_FIELDS = [...TRANSITION_ID_FIELDS, 'id', 'schema', 'schemaVersion', 'policyId', 'origin', 'authorKind', 'uncertainty', 'sourcesDigest'];
 const MAX_REASON = 400;
 
@@ -39,6 +46,8 @@ const MACHINE = Object.freeze({
   approve: { from: ['proposed'], to: 'approved' },
   reject: { from: ['proposed'], to: 'rejected' },
   supersede: { from: ['proposed', 'approved'], to: 'superseded' },
+  // An approval withdrawn by a reviewer: the contract is no longer current authority and the record stays visible.
+  revoke: { from: ['approved'], to: 'revoked' },
 });
 
 /** The default signer: the per-install HMAC key. A test or an embedding tool may inject another `{ sign, verify }`. */
@@ -63,6 +72,14 @@ function sortKeys(v) {
 }
 
 const err = (code, message) => ({ code, message });
+// A later revision: numbers compare as numbers (executable invariants), semantic versions field by field (service contracts).
+function laterRevision(a, b) {
+  if (typeof a === 'number' && typeof b === 'number') return a > b;
+  const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+  if (pa.length !== 3 || pb.length !== 3 || [...pa, ...pb].some((n) => !Number.isInteger(n))) return false;
+  for (let i = 0; i < 3; i++) { if (pa[i] !== pb[i]) return pa[i] > pb[i]; }
+  return false;
+}
 
 /**
  * Who may approve. A reviewer is a HUMAN named by the local policy's reviewer list or verified by the approver registry. Nothing
@@ -88,7 +105,7 @@ function statesOf(records) {
   const meta = new Map();
   for (const r of records) {
     states.set(r.invariantId, r.to);
-    if (r.action === 'propose') meta.set(r.invariantId, { key: r.key, revision: r.revision });
+    if (r.action === 'propose') meta.set(r.invariantId, { key: r.key, revision: r.revision, subjectKind: r.subjectKind || 'invariant', subjectDigest: r.subjectDigest ?? null });
   }
   return { states, meta };
 }
@@ -113,7 +130,20 @@ export function recordTransition(ledger, req, o = {}) {
 
   const { states, meta } = statesOf(ledger.records);
   let invariantId; let key; let revision;
-  if (req.action === 'propose') {
+  let subjectKind = 'invariant'; let subjectDigest = null;
+  if (req.action === 'propose' && req.contract !== undefined) {
+    // A service contract proposed for approval: validated by its own schema, identified by its content digest, keyed by its id and
+    // versioned by its semantic version, so an approval binds to exactly this content and this version.
+    const v = validateContract(req.contract);
+    if (!v.ok) return fail(...v.errors.map((e) => err('invalid-contract', `${e.path}: ${e.message}`)));
+    const c = req.contract;
+    if (c.review.state !== 'proposed') return fail(err('proposal-must-be-proposed', 'a contract enters the ledger as proposed; approval is a separate recorded transition'));
+    subjectKind = 'service-contract'; subjectDigest = contractDigest(c);
+    invariantId = `${CONTRACT_SCHEMA}#${subjectDigest.slice('sha256:'.length, 'sha256:'.length + 32)}`;
+    if (states.has(invariantId)) return fail(err('already-recorded', `this contract content is already in the ledger`));
+    for (const [id, m] of meta) if (m.key === c.id && m.revision === c.version && id !== invariantId) return fail(err('ambiguous-revision', `'${c.id}' version ${c.version} already names different content in this ledger`));
+    key = c.id; revision = c.version;
+  } else if (req.action === 'propose') {
     const v = validateInvariant(req.invariant);
     if (!v.ok) return fail(...v.errors.map((e) => err('invalid-invariant', `${e.path}: ${e.message}`)));
     const inv = req.invariant;
@@ -124,14 +154,14 @@ export function recordTransition(ledger, req, o = {}) {
   } else {
     invariantId = req.invariantId;
     if (typeof invariantId !== 'string' || !states.has(invariantId)) return fail(err('unknown-invariant', 'the invariant is not in the ledger'));
-    ({ key, revision } = meta.get(invariantId));
+    ({ key, revision, subjectKind = 'invariant', subjectDigest = null } = meta.get(invariantId));
   }
   const from = states.has(invariantId) ? states.get(invariantId) : null;
   const rule = MACHINE[req.action];
   if (!rule.from.includes(from)) return fail(err('illegal-transition', `cannot ${req.action} a contract that is ${from === null ? 'not recorded' : from}`));
 
   let authority = 'proposer';
-  if (req.action === 'approve' || req.action === 'reject' || req.action === 'supersede') {
+  if (req.action === 'approve' || req.action === 'reject' || req.action === 'supersede' || req.action === 'revoke') {
     const a = authorizeReviewer(actor, { policy: o.policy, registry: o.registry });
     if (!a.ok) return fail(err(a.code, a.reason));
     authority = a.authority;
@@ -140,7 +170,7 @@ export function recordTransition(ledger, req, o = {}) {
   if (req.action === 'supersede') {
     supersededBy = req.supersededBy;
     const sm = typeof supersededBy === 'string' ? meta.get(supersededBy) : null;
-    if (!sm || sm.key !== key || !(sm.revision > revision) || !['proposed', 'approved'].includes(states.get(supersededBy))) {
+    if (!sm || sm.key !== key || !laterRevision(sm.revision, revision) || !['proposed', 'approved'].includes(states.get(supersededBy))) {
       return fail(err('bad-supersession', 'a contract is superseded by a later revision of the same key that is itself proposed or approved'));
     }
   }
@@ -149,9 +179,15 @@ export function recordTransition(ledger, req, o = {}) {
   const rec = {
     schema: TRANSITION_SCHEMA, schemaVersion: SCHEMA_VERSION, seq: ledger.records.length + 1, invariantId, key, revision,
     action: req.action, from, to: rule.to, actor, reason, supersededBy, prev,
+    subjectKind, subjectDigest,
     policyId: authority,
   };
-  if (req.action === 'propose') {
+  if (req.action === 'propose' && subjectKind === 'service-contract') {
+    rec.origin = req.contract.review.origin;
+    rec.authorKind = actor.kind;
+    rec.uncertainty = null;
+    rec.sourcesDigest = digestOf([]);
+  } else if (req.action === 'propose') {
     rec.origin = req.invariant.review.origin;
     rec.authorKind = req.invariant.author.kind;
     rec.uncertainty = req.invariant.review.uncertainty ?? null;
@@ -166,7 +202,7 @@ export function recordTransition(ledger, req, o = {}) {
  * Verify a whole ledger: contiguous sequence, unbroken hash chain, every id and signature, every transition legal from the state
  * the earlier records left, and every approval made by a human. Returns the state of each contract that survives verification.
  */
-export function verifyLedger(ledger, { signer = defaultSigner } = {}) {
+export function verifyLedger(ledger, { signer = defaultSigner, policy = null, registry = null } = {}) {
   const errors = [];
   if (!isPlainObject(ledger) || ledger.schema !== LEDGER_SCHEMA || !Array.isArray(ledger.records)) return { ok: false, errors: [err('bad-ledger', 'not an invariant ledger')], states: {} };
   const states = new Map();
@@ -177,11 +213,24 @@ export function verifyLedger(ledger, { signer = defaultSigner } = {}) {
     if (r.seq !== i + 1) errors.push(err('sequence-broken', `${at}: expected seq ${i + 1}, found ${r.seq}`));
     if (r.prev !== prev) errors.push(err('chain-broken', `${at}: prev does not match the preceding record`));
     if (r.id !== semanticId('itrn', r, TRANSITION_ID_FIELDS)) errors.push(err('id-mismatch', `${at}: the record id does not match its content`));
+    if (r.subjectKind !== undefined && r.subjectKind !== null) {
+      if (!SUBJECT_KINDS.includes(r.subjectKind)) errors.push(err('subject-mismatch', `${at}: unknown subjectKind '${String(r.subjectKind).slice(0, 30)}'`));
+      const isContract = String(r.invariantId).startsWith(`${CONTRACT_SCHEMA}#`);
+      if ((r.subjectKind === 'service-contract') !== isContract) errors.push(err('subject-mismatch', `${at}: subjectKind '${String(r.subjectKind)}' does not match the subject id`));
+      if (isContract && (typeof r.subjectDigest !== 'string' || !String(r.invariantId).endsWith(r.subjectDigest.slice('sha256:'.length, 'sha256:'.length + 32)))) errors.push(err('subject-mismatch', `${at}: subjectDigest does not match the subject id`));
+    }
     if (typeof r.signature !== 'string' || !signer.verify(bodyOf(r), r.signature)) errors.push(err('bad-signature', `${at}: the signature does not verify under the install key`));
     const rule = MACHINE[r.action];
     const from = states.has(r.invariantId) ? states.get(r.invariantId) : null;
     if (!rule || r.from !== from || !rule.from.includes(from) || r.to !== rule.to) errors.push(err('illegal-transition', `${at}: ${String(r.action)} from ${String(r.from)} to ${String(r.to)} is not a legal transition here`));
-    if ((r.action === 'approve' || r.action === 'reject' || r.action === 'supersede') && r.actor?.kind !== 'human') errors.push(err('not-a-human-reviewer', `${at}: a ${String(r.actor?.kind)} recorded a reviewer decision`));
+    // When the caller supplies the CURRENT reviewer policy or registry, every recorded reviewer decision is re-checked against it: a
+    // reviewer removed from the policy since, or a record appended by whoever holds the install key under a name the policy never
+    // listed, fails verification instead of standing as approval. Without a policy the signature and the human-kind rule stand alone.
+    if ((r.action === 'approve' || r.action === 'reject' || r.action === 'supersede' || r.action === 'revoke') && (policy || registry)) {
+      const a = authorizeReviewer(r.actor, { policy, registry });
+      if (!a.ok) errors.push(err('reviewer-not-authorized-now', `${at}: ${a.reason}`));
+    }
+    if ((r.action === 'approve' || r.action === 'reject' || r.action === 'supersede' || r.action === 'revoke') && r.actor?.kind !== 'human') errors.push(err('not-a-human-reviewer', `${at}: a ${String(r.actor?.kind)} recorded a reviewer decision`));
     states.set(r.invariantId, r.to);
     prev = r.id;
   });

@@ -2554,6 +2554,49 @@
         "README.md",
         "docs/guides/rule-compiler.md"
       ]
+    },
+    {
+      "id": "CAP-129",
+      "kind": "doc-link",
+      "title": "contracts: service security contracts, contract-aware hunting with evidence-grounded qualification and refutation (opt-in)",
+      "sources": [
+        "docs/contract-driven-verification/README.md",
+        "docs/contract-driven-verification/ACCEPTANCE.md",
+        "docs/contract-driven-verification/GAP-AUDIT.md",
+        "docs/contract-driven-verification/audit/audit-1-context-discovery.md",
+        "docs/contract-driven-verification/audit/audit-2-invariants-oracles-repair.md",
+        "docs/contract-driven-verification/audit/audit-3-evaluation-routing.md",
+        "docs/contract-driven-verification/audit/audit-4-deployment-runtime-registry.md"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "not-applicable",
+        "justification": "the contract-aware hunt and its slice cover JavaScript and Python services; Haskell routes reach it only through the context build, and no Haskell contract fixture or qualification test exists yet."
+      },
+      "nix": {
+        "applicability": "not-applicable",
+        "justification": "a service security contract describes an application's runtime invariants; Nix and NixOS configuration has no request path for a contract-aware hunt to qualify."
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "no NixOS execution leg exists for contract scenarios; the business-state oracle runs a JavaScript application factory in the trust boundary only."
+      },
+      "entryPoints": [
+        "scanner/src/contracts/cli.js"
+      ],
+      "suites": [
+        "language-governance"
+      ],
+      "documents": [
+        "docs/contract-driven-verification/README.md",
+        "docs/contract-driven-verification/ACCEPTANCE.md",
+        "docs/contract-driven-verification/GAP-AUDIT.md",
+        "docs/contract-driven-verification/audit/audit-1-context-discovery.md",
+        "docs/contract-driven-verification/audit/audit-2-invariants-oracles-repair.md",
+        "docs/contract-driven-verification/audit/audit-3-evaluation-routing.md",
+        "docs/contract-driven-verification/audit/audit-4-deployment-runtime-registry.md"
+      ]
     }
   ],
   "docReviews": {

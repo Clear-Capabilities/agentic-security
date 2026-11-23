@@ -15,7 +15,7 @@
 
 **Percent complete:** requirements 1, 3 (the loader and the licence gate), 4, 5, 6, 7 and 8 are implemented and tested, and the
 CLI surface and reports are done. Requirement 2 (integrate the existing SARD evaluation) is NOT done beyond reusing its neutralization
-ideas and the custody audit. No curated real-vulnerability corpus ships. The only built-in model adapter is a local Ollama server (tested against a protocol stand-in, never a real model).
+ideas and the custody audit. No curated real-vulnerability corpus ships. The built-in model adapters are a local Ollama server and the `hunt` arm (both loopback-only, both tested against stand-ins, never a real model).
 
 **Current phase:** G (completion): unit, integration, adversarial and end-to-end tests pass.
 
@@ -47,17 +47,19 @@ ideas and the custody audit. No curated real-vulnerability corpus ships. The onl
   representative). It is mined, not hand-curated, and its spans come from fix diffs.
 * **No curated corpus.** The loader supports commit pairs from a local repository and requires a permissive licence; assembling the
   corpus is data work. The shipped fixtures are small and synthetic, so no quality number in this repository describes any real model.
-* **Only a local Ollama adapter is built in.** Other models attach through a command the operator supplies, which keeps the lab from
+* **Only loopback model adapters are built in (Ollama, and the hunt arm over the same loopback model).** Other models attach through a command the operator supplies, which keeps the lab from
   becoming a second path around the guarded model call. The Ollama adapter (`arm-ollama.js`) is loopback-only, leak-guarded, and tested
   against a stand-in server. The consequence is that costs are whatever the arm reports (labelled `reported` or
   `computed-from-reported-tokens`); a wrapper that under-reports makes a model look cheaper.
-* **The lab cannot see an arm's internal prompts.** The leakage guard covers workspace contents and every request the lab sends.
+* **The lab cannot see a command arm's internal prompts.** The leakage guard covers workspace contents and every request the lab sends; the hunt arm, which builds its prompts in-process, passes every hunter prompt through the same guard.
 * **`threat-model` has no evaluation task**, so the router blocks it instead of recommending a model.
 * **Remediation tests are optional.** A patch whose dataset has no test command is `exploitBlocked` but never "valid", and the
   report says test preservation is unmeasured for it.
 * **Exploit and patch tasks need an execution environment.** Without one, reproducers are reported as not executed (not failed).
-* **"Deterministic + hunt" as a distinct configuration** is not built: the baseline arm is the deterministic scanner, and a model arm
-  stands in for a hunt; the repository's discovery pipeline is not an arm adapter.
+* **"Deterministic + hunt" is built** (since 0.195.31): `lab/arm-hunt.js` runs the deterministic scanner and the repository's own
+  discovery pipeline with a loopback model, no hunt memory across repeats, and every hunter prompt through the leakage guard. Its tests
+  (`test/eval-lab/arm-hunt.test.js`) were in no `test:*` scope until 0.222.0 and now run in `test:posture`. With `adapter.contract` it hunts
+  in contract-aware mode (contract-driven verification); no run against a real local model is recorded.
 * Not folded into `scanHealth`: a benchmark run is not a scan; its incompleteness is in the run record, the report and the exit code.
 
 ## Blockers

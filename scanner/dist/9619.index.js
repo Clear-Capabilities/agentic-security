@@ -1,8 +1,161 @@
-export const id = 7764;
-export const ids = [7764,3499];
+export const id = 9619;
+export const ids = [9619,3499];
 export const modules = {
 
-/***/ 47764:
+/***/ 22289:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   G: () => (/* binding */ makeContextSupplier)
+/* harmony export */ });
+/* harmony import */ var _context_intelligence_store_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(65535);
+/* harmony import */ var _context_intelligence_review_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(37132);
+/* harmony import */ var _context_intelligence_canonical_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(44652);
+/* harmony import */ var _context_intelligence_dependency_key_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(8771);
+// Verified context for the hunt and its challengers (Epic B-01 of the contract-driven verification programme).
+//
+// The context-intelligence store holds, per entry point, a hash-bound bundle: the manifest (`context-manifest/1`) with its controls
+// and protection verdicts, and numbered package texts whose segments carry the span hash of the source they were built from. This
+// module reads that store for one scanned root and answers three questions the discovery pipeline asks:
+//
+//   forArea(files, maxChars)   the package texts whose segments touch these files, for the hunter's prompt, within a budget
+//   forCandidate(file, line)   the segments that contain a cited line, the exact source span, and the entry points that reach it with
+//                              their controls and protection, for a challenger's prompt and for the qualification record
+//   verifyCitation(c)          the context layer's own citation check (`resolveCitation`), so a hunter's or a refuter's citation is
+//                              judged against the bundle it was shown, never against the whole repository
+//
+// A missing or unverifiable store is reported as `available: false` with a reason, and every consumer then records its context as
+// `unavailable`; it is never silently treated as "nothing to see". Package texts are re-checked against their hashes on every read
+// (`readPackageText`), and a span whose source no longer hashes to its segment is `stale`.
+
+
+
+
+
+const CONTEXT_STATES = Object.freeze(['complete', 'partial', 'unavailable', 'stale']); // the values `state` takes below
+
+/** Build a supplier over a scanned root. `fileContents` is the hunt's own snapshot (repository-relative paths). Never throws. */
+function makeContextSupplier({ scanRoot, fileContents = {}, built = null } = {}) {
+  const unavailable = (reason) => ({ available: false, reason, forArea: () => ({ packages: [], omitted: 0, state: 'unavailable', reason }), forCandidate: () => ({ state: 'unavailable', reason, segments: [], entrypoints: [], controls: [] }), verifyCitation: () => 'context-unavailable', summary: () => ({ state: 'unavailable', reason, entrypoints: 0 }) });
+  // An in-memory build (the evaluation lab's staged workspace) is read directly; a scanned root is read from its store, re-verified.
+  let index; const bundles = []; const memText = new Map();
+  if (built && built.ok !== false && Array.isArray(built.bundles)) {
+    index = { graph: { hash: built.graph?.hash ?? null }, repository: built.repository ?? null, configHash: null, entrypoints: [] };
+    for (const b of built.bundles) {
+      if (!b.manifest) continue;
+      const entry = { entrypointId: b.entrypoint.id, label: b.entrypoint.label, contextHash: b.manifest.contextHash };
+      index.entrypoints.push(entry);
+      bundles.push({ entry, manifest: b.manifest, problem: null });
+      for (const p of b.pack?.packages || []) memText.set(`${b.manifest.contextHash}#${p.index}`, p.text);
+    }
+  } else {
+    if (!scanRoot) return unavailable('no scan root: the context store is per project');
+    const idx = (0,_context_intelligence_store_js__WEBPACK_IMPORTED_MODULE_0__/* .readStoreJson */ .WS)(scanRoot, 'index.json');
+    if (!idx.ok) return unavailable(`no context build for this root (${idx.code}): run \`context build\` first`);
+    index = idx.value;
+    for (const e of index.entrypoints || []) {
+      if (!e.contextHash) continue;
+      const m = (0,_context_intelligence_store_js__WEBPACK_IMPORTED_MODULE_0__/* .readManifest */ .WI)(scanRoot, e.contextHash);
+      if (!m.ok) { bundles.push({ entry: e, manifest: null, problem: `manifest-${m.code}` }); continue; }
+      // D-AC05: the route registration, middleware, control and boundary files the build recorded, re-hashed from this snapshot.
+      // A difference makes the whole bundle stale even when every packed segment still matches its source.
+      let dependencyStale = null;
+      if (e.dependencies?.key && Object.keys(fileContents).length) {
+        const now = (0,_context_intelligence_dependency_key_js__WEBPACK_IMPORTED_MODULE_3__/* .dependencyKeyOf */ .gc)({ manifest: m.value, fileContents });
+        if (now.key !== e.dependencies.key) dependencyStale = (0,_context_intelligence_dependency_key_js__WEBPACK_IMPORTED_MODULE_3__/* .dependencyChanges */ .tc)(e.dependencies, now);
+      }
+      bundles.push({ entry: e, manifest: m.value, problem: null, dependencyStale });
+    }
+  }
+  const packageText = (manifest, index2) => {
+    const k = `${manifest.contextHash}#${index2}`;
+    if (memText.has(k)) { const text = memText.get(k); const pk = manifest.context.packages.find((p) => p.index === index2); return pk && (0,_context_intelligence_canonical_js__WEBPACK_IMPORTED_MODULE_2__/* .sha256 */ .sc)(text) === pk.sha256 ? { ok: true, text } : { ok: false, code: 'hash-mismatch' }; }
+    return (0,_context_intelligence_store_js__WEBPACK_IMPORTED_MODULE_0__/* .readPackageText */ .Yt)(scanRoot, manifest, index2);
+  };
+  if (!bundles.length) return unavailable('the context build has no bundles');
+
+  const segmentsOf = (manifest) => manifest.context.packages.flatMap((p) => p.segments.map((s) => ({ ...s, packageIndex: p.index })));
+  const staleness = (seg) => {
+    const text = fileContents[seg.file];
+    if (typeof text !== 'string') return 'file-not-in-snapshot';
+    if (typeof seg.spanHash !== 'string') return null;
+    return (0,_context_intelligence_canonical_js__WEBPACK_IMPORTED_MODULE_2__/* .sha256 */ .sc)((0,_context_intelligence_canonical_js__WEBPACK_IMPORTED_MODULE_2__/* .sliceLines */ .iq)(text, seg.startLine, seg.endLine)) === seg.spanHash ? null : 'stale';
+  };
+
+  function forArea(files, maxChars = 24_000) {
+    const want = new Set(files || []);
+    const chosen = [];
+    for (const b of bundles) {
+      if (!b.manifest) continue;
+      const segs = segmentsOf(b.manifest);
+      if (!segs.some((s) => want.has(s.file))) continue;
+      for (const pk of b.manifest.context.packages) {
+        const t = packageText(b.manifest, pk.index);
+        if (!t.ok) { chosen.push({ entrypoint: b.entry.label, contextHash: b.manifest.contextHash, index: pk.index, text: null, problem: t.code }); continue; }
+        chosen.push({ entrypoint: b.entry.label, contextHash: b.manifest.contextHash, index: pk.index, text: t.text, chars: t.text.length, integrity: b.manifest.context.integrity, controls: b.manifest.controls || [], protection: b.manifest.protection || {}, stale: segsStale(segs) || !!b.dependencyStale, ...(b.dependencyStale ? { dependencyChanged: b.dependencyStale } : {}) });
+      }
+    }
+    // Smallest first, so many small bundles beat one large one under a budget; the omitted count is reported, never hidden.
+    chosen.sort((a, b) => (a.chars || 0) - (b.chars || 0) || (a.contextHash < b.contextHash ? -1 : 1));
+    const packages = []; let used = 0; let omitted = 0;
+    for (const c of chosen) {
+      if (c.text === null) { omitted += 1; continue; }
+      if (used + c.chars > maxChars) { omitted += 1; continue; }
+      packages.push(c); used += c.chars;
+    }
+    const states = packages.map((p) => (p.stale ? 'stale' : p.integrity));
+    const state = !packages.length ? 'unavailable' : states.includes('stale') ? 'stale' : states.every((s) => s === 'complete') && omitted === 0 ? 'complete' : 'partial';
+    if (!CONTEXT_STATES.includes(state)) throw new Error(`unknown context state ${state}`);
+    return { packages, omitted, state, reason: omitted ? `${omitted} package(s) omitted for the budget or unreadable` : null };
+  }
+  const segsStale = (segs) => segs.some((s) => staleness(s) === 'stale');
+
+  function forCandidate(file, line) {
+    const hits = [];
+    for (const b of bundles) {
+      if (!b.manifest) continue;
+      const segs = segmentsOf(b.manifest).filter((s) => s.file === file && line >= s.startLine && line <= s.endLine);
+      if (!segs.length) continue;
+      hits.push({ entrypoint: b.entry.label, entrypointId: b.entry.entrypointId, contextHash: b.manifest.contextHash, integrity: b.manifest.context.integrity, dependencyChanged: b.dependencyStale, segments: segs.map((s) => ({ ...s, staleness: b.dependencyStale ? 'stale' : staleness(s) })), controls: (b.manifest.controls || []).map((c) => ({ kind: c.kind, file: c.file, line: c.line, evidence: c.evidence, basis: c.basis, symbolId: c.symbolId })), protection: b.manifest.protection || {} });
+    }
+    if (!hits.length) return { state: 'unavailable', reason: 'no bundle contains the cited line', segments: [], entrypoints: [], controls: [] };
+    const anyStale = hits.some((h) => h.segments.some((s) => s.staleness === 'stale'));
+    const text = fileContents[file];
+    const span = typeof text === 'string' ? { startLine: Math.max(1, line - 12), endLine: Math.min(text.split('\n').length, line + 12) } : null;
+    const state = anyStale ? 'stale' : hits.every((h) => h.integrity === 'complete') ? 'complete' : 'partial';
+    return {
+      state, reason: anyStale ? (hits.some((h) => h.dependencyChanged) ? `the bundle's dependencies changed since the build (${[...new Set(hits.flatMap((h) => h.dependencyChanged || []))].join(', ')})` : 'a segment no longer matches the source it was built from') : null,
+      segments: hits.flatMap((h) => h.segments),
+      entrypoints: hits.map((h) => ({ label: h.entrypoint, entrypointId: h.entrypointId, contextHash: h.contextHash, integrity: h.integrity, protection: h.protection })),
+      controls: dedupe(hits.flatMap((h) => h.controls)),
+      span: span ? { ...span, text: (0,_context_intelligence_canonical_js__WEBPACK_IMPORTED_MODULE_2__/* .sliceLines */ .iq)(text, span.startLine, span.endLine) } : null,
+    };
+  }
+
+  function verifyCitation(c) {
+    if (!c || typeof c.file !== 'string') return 'range-invalid';
+    const segs = bundles.filter((b) => b.manifest).flatMap((b) => segmentsOf(b.manifest));
+    return (0,_context_intelligence_review_js__WEBPACK_IMPORTED_MODULE_1__/* .resolveCitation */ .yN)({ file: c.file, startLine: c.startLine, endLine: c.endLine ?? c.startLine, claim: c.claim ?? c.explanation ?? '' }, segs, fileContents);
+  }
+
+  return {
+    available: true, reason: null,
+    index: { graphHash: index.graph?.hash ?? null, repository: index.repository ?? null, configHash: index.configHash ?? null, entrypoints: bundles.length },
+    forArea, forCandidate, verifyCitation,
+    summary: () => ({ state: bundles.every((b) => b.manifest && b.manifest.context.integrity === 'complete') ? 'complete' : 'partial', entrypoints: bundles.length, problems: bundles.filter((b) => b.problem).map((b) => b.problem) }),
+  };
+}
+
+function dedupe(controls) {
+  const seen = new Set(); const out = [];
+  for (const c of controls) { const k = `${c.kind}|${c.file}|${c.line}|${c.basis}`; if (seen.has(k)) continue; seen.add(k); out.push(c); }
+  return out;
+}
+
+
+/***/ }),
+
+/***/ 69619:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -377,6 +530,11 @@ function candidatesFromParsed(parsed, focusArea, lens, ctx = {}, stats = null) {
       rationale: typeof c?.rationale === 'string' ? c.rationale : '',
       entryPoint: typeof c?.entryPoint === 'string' ? c.entryPoint : '',
       sink: typeof c?.sink === 'string' ? c.sink : '',
+      // Contract-aware mode (B-02): the model's PROPOSED invariant and attacker assumptions, bounded and shaped here, judged later by
+      // contracts/qualification.js (an invariant id the contract does not declare is a contract gap, never accepted on the model's say).
+      ...(typeof c?.invariantId === 'string' && /^[A-Z][A-Z0-9-]{2,63}$/.test(c.invariantId) ? { invariantId: c.invariantId } : {}),
+      ...(c?.attacker && typeof c.attacker === 'object' ? { attacker: Object.fromEntries(['principal', 'role', 'tenant'].filter((k) => typeof c.attacker[k] === 'string').map((k) => [k, c.attacker[k].slice(0, 80)])) } : {}),
+      ...(Array.isArray(c?.prerequisites) ? { prerequisites: c.prerequisites.filter((x) => typeof x === 'string').slice(0, 8).map((x) => x.slice(0, 200)) } : {}),
     });
   }
   return out;
@@ -457,6 +615,131 @@ async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
 var discovery_confirm = __webpack_require__(64547);
 // EXTERNAL MODULE: ./src/discovery/disprove.js
 var disprove = __webpack_require__(93953);
+// EXTERNAL MODULE: ./src/discovery/context-supplier.js
+var context_supplier = __webpack_require__(22289);
+// EXTERNAL MODULE: ./src/contracts/schema.js
+var schema = __webpack_require__(42207);
+;// CONCATENATED MODULE: ./src/contracts/qualification.js
+// Structured qualification of a hunt candidate against a service contract (Epic B-02, B-04).
+//
+// Qualification answers one question: is there a supported hypothesis worth testing? It does not establish an exploit, and it does
+// not authorise a repair to be called verified. The record is additive on the candidate (`candidate.qualification`) and carries, for
+// a reviewer, the contract and invariant the candidate is about (or `contract-gap`), the attacker assumptions the hunter proposed
+// (marked as proposed), the root cause and entry point, the citations with their validation status against the bundle the model
+// was shown, the controls the context layer observed on the reaching entry points with their evidence and protection state, what
+// is unresolved, and a decision with independent reason codes.
+//
+// Decisions: `qualified` (an invariant is matched, the citation resolves, the context for it is complete), `needs-context` (the
+// context is partial, stale or unavailable, or the citation does not resolve: nobody may call this safe or disqualified),
+// `contract-gap` (a resolving candidate the contract does not cover: kept with its existing evidence, never suppressed),
+// `disqualified` (only `refutation.js` sets this, with an evidence-backed blocker). The decision never comes from a model's confidence.
+
+
+const QUALIFICATION_DECISIONS = Object.freeze(['qualified', 'needs-context', 'contract-gap', 'disqualified']);
+const QUALIFICATION_SCHEMA = 'agentic-security/candidate-qualification';
+
+const ROUTE_RE = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|ANY)\s+(\S+)$/i;
+function routeGlobMatches(glob, label) {
+  const g = ROUTE_RE.exec(glob); const l = ROUTE_RE.exec(label);
+  if (!g || !l) return glob === label;
+  if (g[1].toUpperCase() !== 'ANY' && g[1].toUpperCase() !== l[1].toUpperCase()) return false;
+  const re = new RegExp('^' + g[2].replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '.*').replace(/(?<!\.)\*/g, '[^/]*') + '$');
+  return re.test(l[2]);
+}
+
+/**
+ * Which contract invariant a candidate is about. The hunter may name one (`candidate.invariantId`); it is accepted only when the
+ * contract declares it. Otherwise the entry points that reach the cited line are matched against each invariant's scope routes
+ * and attacker entry points. No match is `contract-gap`.
+ */
+function matchInvariant(candidate, contract, entrypoints = []) {
+  const declared = new Map((contract?.invariants || []).map((i) => [i.id, i]));
+  if (typeof candidate?.invariantId === 'string') {
+    if (declared.has(candidate.invariantId)) return { invariant: declared.get(candidate.invariantId), basis: 'named-by-hunter' };
+    // The hunter claimed a property the contract does not state. Route overlap would not make it a contract invariant: the
+    // candidate is a contract gap, kept with its evidence, and the gap is the reviewer's to close.
+    return { invariant: null, basis: 'named-invariant-not-declared' };
+  }
+  const labels = entrypoints.map((e) => e.label).filter(Boolean);
+  for (const inv of declared.values()) {
+    const routes = [...(inv.scope?.routes || []), ...(inv.attacker?.entryPoints || [])];
+    if (routes.some((r) => labels.some((l) => routeGlobMatches(r, l)))) return { invariant: inv, basis: 'entry-point-in-scope' };
+  }
+  return { invariant: null, basis: 'no-invariant-covers-the-entry-point' };
+}
+
+/**
+ * Build the qualification record for one candidate.
+ * @param {object} candidate   a hunt candidate (file, line, title, rationale, cwe, confirmation?, and optionally the model's
+ *                             proposed `invariantId`, `attacker` {principal, role, tenant}, `prerequisites`, `boundaryCrossing`)
+ * @param {object} o           { contract, supplier (context-supplier), approval (approvalState result) }
+ */
+function qualifyCandidate(candidate, { contract = null, supplier = null, approval = null } = {}) {
+  const ctx = supplier && supplier.available ? supplier.forCandidate(candidate.file, candidate.line) : { state: 'unavailable', reason: supplier?.reason || 'no context supplier', segments: [], entrypoints: [], controls: [] };
+  const citation = { file: candidate.file, startLine: candidate.line, endLine: candidate.line, claim: candidate.title || '' };
+  const citationStatus = supplier && supplier.available ? supplier.verifyCitation({ ...citation, claim: `${candidate.title || ''} ${candidate.rationale || ''}` }) : 'context-unavailable';
+  const match = contract ? matchInvariant(candidate, contract, ctx.entrypoints) : { invariant: null, basis: 'no-contract' };
+  const reasons = [];
+  let decision;
+  if (!contract) { decision = 'contract-gap'; reasons.push('no-contract-supplied'); }
+  else if (!match.invariant) { decision = 'contract-gap'; reasons.push(match.basis); }
+  if (citationStatus !== null && citationStatus !== undefined) reasons.push(`citation:${citationStatus}`);
+  if (ctx.state !== 'complete') reasons.push(`context:${ctx.state}${ctx.reason ? ':' + ctx.reason : ''}`);
+  if (!decision) decision = (citationStatus === null && ctx.state === 'complete') ? 'qualified' : 'needs-context';
+  if (approval && approval.state !== 'approved') reasons.push(`approval:${approval.state}`);
+  const controls = (ctx.controls || []).map((c) => ({ kind: c.kind, file: c.file, line: c.line, evidence: c.evidence, basis: c.basis, authority: 'context-intelligence', effectiveness: effectivenessFor(c, ctx.entrypoints) }));
+  const unresolved = [];
+  for (const e of ctx.entrypoints || []) for (const [dim, p] of Object.entries(e.protection || {})) if (p && ['not_resolved', 'omitted_due_to_budget'].includes(p.state)) unresolved.push({ entrypoint: e.label, dimension: dim, state: p.state, why: p.why });
+  return {
+    schema: QUALIFICATION_SCHEMA,
+    contractRef: contract ? (0,schema/* contractRef */.sB)(contract) : null,
+    invariantId: match.invariant ? match.invariant.id : null,
+    invariantRef: match.invariant ? (0,schema/* invariantRef */.uI)(contract, match.invariant.id) : null,
+    invariantBasis: match.basis,
+    contractGap: !match.invariant,
+    approval: approval ? { state: approval.state, current: approval.current, transitionId: approval.transitionId } : null,
+    entryPoint: candidate.entryPoint || (ctx.entrypoints[0]?.label ?? null),
+    reachingEntryPoints: ctx.entrypoints.map((e) => ({ label: e.label, contextHash: e.contextHash, integrity: e.integrity })),
+    attacker: { principal: candidate.attacker?.principal ?? null, role: candidate.attacker?.role ?? null, tenant: candidate.attacker?.tenant ?? null, source: 'model-proposed', established: false },
+    prerequisites: Array.isArray(candidate.prerequisites) ? candidate.prerequisites.slice(0, 8).map(String) : [],
+    boundaryCrossing: typeof candidate.boundaryCrossing === 'string' ? candidate.boundaryCrossing.slice(0, 200) : null,
+    rootCause: { file: candidate.file, line: candidate.line, sink: candidate.sink || null },
+    citations: [{ ...citation, status: citationStatus === null ? 'resolved' : citationStatus, spanHashes: (ctx.segments || []).map((s) => s.spanHash).filter(Boolean) }],
+    context: { state: ctx.state, reason: ctx.reason ?? null },
+    controls,
+    unresolved,
+    recommendedValidation: match.invariant ? recommendedFor(match.invariant) : ['review: no contract invariant covers this entry point; the candidate keeps its independent deterministic evidence'],
+    decision,
+    reasons,
+  };
+}
+
+function effectivenessFor(control, entrypoints) {
+  // The context layer judges a control per entry point; a control that runs after the sensitive operation is ineffective there.
+  for (const e of entrypoints || []) {
+    const dim = e.protection?.[control.kind === 'tenant-scope' ? 'ownership' : control.kind];
+    if (dim && Array.isArray(dim.evidence) && dim.evidence.some((ev) => ev.file === control.file && ev.line === control.line)) return dim.state === 'present' ? 'effective-on-path' : dim.state === 'evaluated_and_ineffective' ? 'ineffective-after-operation' : 'unresolved';
+  }
+  return 'not-judged';
+}
+
+function recommendedFor(inv) {
+  const out = [];
+  if (Array.isArray(inv.scenarioInvariantRefs) && inv.scenarioInvariantRefs.length) out.push(`scenario: run the executable invariant(s) ${inv.scenarioInvariantRefs.join(', ')} against the fixture`);
+  if (Array.isArray(inv.dciInvariantRefs) && inv.dciInvariantRefs.length) out.push(`static: the context-intelligence rule(s) ${inv.dciInvariantRefs.join(', ')} on the reaching entry points`);
+  for (const ev of inv.requiredEvidence || []) out.push(`evidence: ${ev}`);
+  return out;
+}
+
+/** Summarise qualification decisions for a report. */
+function qualificationSummary(candidates) {
+  const by = Object.fromEntries(QUALIFICATION_DECISIONS.map((d) => [d, 0]));
+  for (const c of candidates || []) if (c?.qualification?.decision) by[c.qualification.decision] = (by[c.qualification.decision] || 0) + 1;
+  return by;
+}
+
+
+
 // EXTERNAL MODULE: ./src/discovery/judge.js
 var judge = __webpack_require__(79704);
 // EXTERNAL MODULE: ./src/posture/state-dir.js
@@ -881,6 +1164,10 @@ var config = __webpack_require__(90385);
 
 
 
+
+
+
+
 // Bridge a candidate to the deterministic layer. A taint finding at or within
 // two lines of the candidate corroborates it; a modelled sink on the line
 // without a full path is weaker corroboration ("sink-adjacent").
@@ -1021,6 +1308,13 @@ function makeBudget(opts = {}, now = Date.now) {
   };
 }
 
+/** Stage attrition: how many candidates reached each stage and how each stage decided, from the per-candidate histories. */
+function attritionOf(history) {
+  const stages = {};
+  for (const h of history.values()) for (const e of h) { const s = (stages[e.stage] ||= { entered: 0, decisions: {} }); s.entered += 1; s.decisions[e.decision] = (s.decisions[e.decision] || 0) + 1; }
+  return stages;
+}
+
 async function runDiscovery(ctx = {}, opts = {}) {
   // Call-graph areas (every language the IR covers, Haskell included) plus Nix configuration areas, which have no call
   // graph. Together they respect the same ceiling.
@@ -1037,7 +1331,17 @@ async function runDiscovery(ctx = {}, opts = {}) {
   const budget = makeBudget(opts);
   // PRD C4 — what previous runs already judged. scanRoot absent => no memory,
   // which is the correct default for a library call with nowhere to persist.
-  let memory = opts.scanRoot ? loadMemory(opts.scanRoot) : null;
+  // `opts.memory === false` turns the cross-run memory off without unsetting `scanRoot`: the root also names the project whose
+  // egress policy and redaction configuration apply, and `--no-memory` used to clear it (so a hunt run from another directory read
+  // the wrong project's policy).
+  let memory = opts.scanRoot && opts.memory !== false ? loadMemory(opts.scanRoot) : null;
+  // Contract-aware mode (contract-driven verification, Epics A and B): the contract, its approval state and the verified context
+  // supplier are threaded to the hunter, the panel and the qualification of every candidate. Off unless the caller asks.
+  const contractMode = opts.contractMode && typeof opts.contractMode === 'object' ? opts.contractMode : null;
+  const supplier = contractMode ? (contractMode.supplier || (0,context_supplier/* makeContextSupplier */.G)({ scanRoot: opts.scanRoot, fileContents: ctx.fileContents || {} })) : null;
+  const contractView = contractMode?.contract ? { ref: (0,schema/* contractRef */.sB)(contractMode.contract), summary: contractMode.contract.summary, invariants: (contractMode.contract.invariants || []).map((i) => ({ id: i.id, statement: i.statement, entryPoints: i.attacker?.entryPoints || [] })) } : null;
+  const history = new Map(); // candidate id -> [{ stage, decision, reason }] (B-04: where a candidate was lost, replayable)
+  const note = (c, stage, decision, reason = null) => { if (!c?.id) return; if (!history.has(c.id)) history.set(c.id, []); history.get(c.id).push({ stage, decision, ...(reason ? { reason } : {}) }); };
   // `--forget-refuted`: a model, a ruleset or the code changed, so what an earlier run refuted is worth examining again.
   if (memory && opts.forgetRefuted) memory = forgetRefuted(memory);
   // Every LLM call in this pipeline is counted against the budget. An injected callback is wrapped here; with none injected, each
@@ -1065,6 +1369,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
   }
 
   const runs = [];
+  let citationsDiscardedTotal = 0;
   let candidates = [];
   // areasHunted: areas where AT LEAST ONE lens run completed without degrading.
   const hunted = new Set();
@@ -1076,8 +1381,13 @@ async function runDiscovery(ctx = {}, opts = {}) {
   for (const area of areas) {
     let areaDegradedCount = 0;
     for (const lens of lenses) {
-      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot }, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot });
+      const verifiedContext = supplier ? { ...supplier.forArea(area.files, opts.contextChars || 24_000), contract: contractView } : null;
+      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot, ...(verifiedContext ? { verifiedContext } : {}) }, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot });
+      // `citationsDiscarded` was summed from these entries below but never copied into them, so the coverage figure was always 0.
+      // The run entry keeps its frozen shape (docs/reference/agentic-discovery-contract.md); the discard count is summed on the side.
       runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
+      citationsDiscardedTotal += run.citationsDiscarded || 0;
+      for (const c of run.candidates) note(c, 'hunted', 'proposed', `${area.label} × ${lens.key}`);
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
       if (run.discarded > 0) reasons.push(`${area.label} × ${lens.key}: ${run.discarded} proposed candidate(s) had no usable file and line and were discarded`);
       if (run.degraded) areaDegradedCount += 1;
@@ -1109,6 +1419,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
     candidatesCapped = candidates.length - maxCandidates;
     // Deterministic: candidates arrive in a stable (area, lens) order, so the
     // cap keeps the same prefix on every run over the same inputs.
+    for (const c of candidates.slice(maxCandidates)) note(c, 'cap', 'not-examined', `candidate cap ${maxCandidates}`);
     candidates = candidates.slice(0, maxCandidates);
     reasons.push(`candidate cap: ${candidatesCapped} candidate(s) were NOT confirmed or refuted ` +
       `(cap ${maxCandidates}); they are neither findings nor cleared — they were not examined`);
@@ -1132,12 +1443,22 @@ async function runDiscovery(ctx = {}, opts = {}) {
       'every candidate is reported unconfirmed and severity is not evidence-derived');
   }
   let confirmed = await (0,discovery_confirm/* confirmAll */.iX)(candidates, { taintProbe });
+  for (const c of confirmed) note(c, 'confirm', c.confirmation?.tier || 'unconfirmed');
+  // B-02: every candidate gets its qualification record in contract mode; `contract-gap` candidates keep every piece of evidence.
+  if (contractMode) {
+    for (const c of confirmed) {
+      c.qualification = qualifyCandidate(c, { contract: contractMode.contract || null, supplier, approval: contractMode.approval || null });
+      note(c, 'qualify', c.qualification.decision, c.qualification.reasons.join('; ') || null);
+    }
+  }
   // PRD C4 — drop what a previous run already refuted, BEFORE spending the panel's three calls per candidate on it again. Only
   // refutals suppress: a candidate previously judged fresh is re-reported, because it was never fixed, which is the same
   // asymmetry judge.js applies to tp/fp triage. A taint-confirmed candidate is never skipped on memory alone (GA-06 §4): the
   // engine's evidence is current, the remembered refutation was a model's opinion about an earlier, uncorroborated candidate.
   if (memory) {
     const before = confirmed.length;
+    const skipped = confirmed.filter(c => !(c?.confirmation?.tier === 'taint-confirmed' || !previouslyRefuted(memory, c)));
+    for (const c of skipped) note(c, 'memory', 'skipped', 'refuted by an earlier run');
     confirmed = confirmed.filter(c => c?.confirmation?.tier === 'taint-confirmed' || !previouslyRefuted(memory, c));
     rememberedRefutals = before - confirmed.length;
     if (rememberedRefutals > 0) {
@@ -1145,8 +1466,13 @@ async function runDiscovery(ctx = {}, opts = {}) {
         '(clear with --forget-refuted if a model, ruleset or the code has changed since)');
     }
   }
-  const { survivors, refuted } = await (0,disprove/* disprovePanel */.Jx)(confirmed, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot });
+  const { survivors, refuted } = await (0,disprove/* disprovePanel */.Jx)(confirmed, { llmInvoke, wrapInvoke, scanRoot: opts.scanRoot, ...(supplier ? { contextSupplier: supplier } : {}) });
+  for (const c of refuted) { note(c, 'panel', 'disqualified', (0,disprove/* refutationBasis */.aN)(c)); if (c.qualification) c.qualification = { ...c.qualification, decision: 'disqualified', reasons: [...c.qualification.reasons, `blocker:${(0,disprove/* refutationBasis */.aN)(c)}`] }; }
+  for (const c of survivors) note(c, 'panel', c.refutation?.contested ? 'contested' : c.refutation?.undecided ? 'unvetted' : 'survived', (0,disprove/* refutationBasis */.aN)(c));
   const { fresh, duplicates, suppressed } = (0,judge/* judgeCandidates */.m)(survivors, ctx.priorScan, ctx.triageFeedback);
+  // judge.js reshapes a candidate into a finding whose id is `discovery-<lens>-<candidate id>`; the history stays keyed by the candidate.
+  const cid = (f) => ({ id: typeof f?.discovery?.candidateId === 'string' ? f.discovery.candidateId : String(f?.id || '').slice(-12) });
+  for (const c of fresh) note(cid(c), 'judge', 'fresh'); for (const c of duplicates) note(cid(c), 'judge', 'duplicate'); for (const c of suppressed) note(cid(c), 'judge', 'suppressed', 'triage');
 
   // A spent budget is a coverage gap, stated once at the top level rather than
   // left to be inferred from N identical per-run degradation reasons.
@@ -1182,8 +1508,11 @@ async function runDiscovery(ctx = {}, opts = {}) {
   // rather than a repeat. Persistence failure is non-fatal: the report is still
   // valid, it just will not inform the next run.
   if (memory && opts.scanRoot) {
+    // B-04: memory learns only from a refutation that evidence grounded. A model-only removal (the legacy panel, or a vote whose
+    // blocker no deterministic mechanism supports) is not remembered as refuted, so the next run examines the candidate again.
+    const remembered = contractMode ? refuted.filter((c) => c?.refutation?.grounded === true) : refuted;
     saveMemory(opts.scanRoot, rememberRun(memory, {
-      fresh, refutedCandidates: refuted,
+      fresh, refutedCandidates: remembered,
       areas: areas.map(a => ({ id: a.id, label: a.label, files: a.files.length, hunted: hunted.has(a.id) })),
     }));
   }
@@ -1241,6 +1570,13 @@ async function runDiscovery(ctx = {}, opts = {}) {
     // would misrepresent it as one. Unlike `fresh`/`duplicates`/`suppressed`,
     // do not iterate this array as if it were finding-shaped.
     refutedCandidates: refuted,
+    // Contract-aware mode (contract-driven verification): the contract identity every candidate was judged against, every candidate
+    // with the stage history that explains where it went (B-04), and the attrition tally. Absent when the mode is off.
+    ...(contractMode ? {
+      contract: { ref: contractView?.ref ?? null, approval: contractMode.approval ? { state: contractMode.approval.state, current: contractMode.approval.current, transitionId: contractMode.approval.transitionId } : null, context: supplier ? supplier.summary() : { state: 'unavailable', reason: 'no supplier' }, qualification: qualificationSummary([...survivors, ...refuted]) },
+      candidatesAll: [...survivors, ...refuted].map((c) => ({ id: c.id, file: c.file, line: c.line, title: c.title, cwe: c.cwe, confirmation: c.confirmation?.tier ?? null, qualification: c.qualification ?? null, refutation: c.refutation ? { refuted: c.refutation.refuted, contested: c.refutation.contested ?? false, grounded: c.refutation.grounded ?? false, undecided: c.refutation.undecided, objections: c.refutation.objections ?? [] } : null, history: history.get(c.id) || [] })),
+      attrition: attritionOf(history),
+    } : {}),
     coverage: {
       areasPlanned: areas.length,
       // At least one lens run completed for the area. Does NOT mean every
@@ -1261,7 +1597,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
       contestedConfirmed: survivors.filter(c => c?.refutation?.overridden === true).length,
       // Candidates the hunter discarded because their citation did not resolve (a file outside the focus area or the scanned
       // tree, a line beyond the file's end); counted, never silently dropped.
-      citationsDiscarded: runs.reduce((n, r) => n + (r.citationsDiscarded || 0), 0),
+      citationsDiscarded: citationsDiscardedTotal,
       // PRD Phase 0 / C3 — what the run cost and whether the budget stopped it.
       // `budgetExhausted` true means the report is INCOMPLETE by construction:
       // work remained and was not done. Reading it as a clean result is the
@@ -1389,13 +1725,16 @@ function lineBoundedPrefix(lines, chars) {
 function buildHunterPromptWithMap(focusArea, lens, ctx = {}) {
   const maxChars = Number.isInteger(ctx.maxChars) && ctx.maxChars > 0 ? ctx.maxChars : DEFAULT_MAX_CHARS;
   const contents = ctx.fileContents || {};
+  // Contract-aware mode: a share of the budget (a third) goes to the verified context packages; the source files take the rest.
+  const verified = ctx.verifiedContext && Array.isArray(ctx.verifiedContext.packages) ? ctx.verifiedContext : null;
+  const verifiedChars = verified ? verified.packages.reduce((n, p) => n + (p.text ? p.text.length : 0), 0) : 0;
   const files = (focusArea?.files || []).filter(f => typeof contents[f] === 'string');
   // Everything that leaves the machine is redacted first (secrets, PII/PHI/PCI-shaped fields, operator-declared
   // customer data, and whole proprietary paths), by the same choke point the validator and the proposers use.
   const redacted = new Map(files.map((f) => [f, (0,_egress_redact_js__WEBPACK_IMPORTED_MODULE_0__/* .redactPayload */ .cy)({ text: contents[f], filePath: f, scanRoot: ctx.scanRoot || null }).text]));
   // A numbered line costs its text plus the prefix; budget the numbered size so the prompt stays within maxChars.
   const sizeOf = (t) => t.length + t.split('\n').length * 8;
-  const allot = allotBudget(new Map(files.map((f) => [f, sizeOf(redacted.get(f))])), maxChars);
+  const allot = allotBudget(new Map(files.map((f) => [f, sizeOf(redacted.get(f))])), verified ? Math.max(Math.floor(maxChars / 2), maxChars - verifiedChars) : maxChars);
   const shown = {};
   const blocks = [];
   let omitted = 0;
@@ -1448,13 +1787,35 @@ function buildHunterPromptWithMap(focusArea, lens, ctx = {}) {
     `- In "code", copy that line's code exactly as shown, without the number. A candidate whose code does not match the cited line is discarded.`,
     `- In "cwe", give the single most specific CWE identifier the cited operation supports, or omit it if you are unsure. Never list alternatives.`,
     ``,
-    `Return JSON: {"candidates":[{"title","file","line","code","cwe","rationale","entryPoint","sink"}]}`,
+    verified
+      ? `Return JSON: {"candidates":[{"title","file","line","code","cwe","rationale","entryPoint","sink","invariantId","attacker":{"principal","role","tenant"},"prerequisites":[]}]}. "invariantId" is one of the contract invariant ids listed under VERIFIED CONTEXT when the candidate violates it, otherwise null; "attacker" and "prerequisites" state what the attacker must hold. These are hypotheses to be checked, not facts.`
+      : `Return JSON: {"candidates":[{"title","file","line","code","cwe","rationale","entryPoint","sink"}]}`,
     `Return {"candidates":[]} if you find nothing. An empty result is a valid and useful answer.`,
     ``,
     omitted > 0 ? `NOTE: ${omitted} file(s) omitted, prompt budget exhausted (truncated context).\n` : ``,
+    ...(verified ? verifiedContextBlocks(verified) : []),
     ...blocks,
   ].join('\n');
-  return { prompt, shown, omittedFiles: omitted };
+  return { prompt, shown, omittedFiles: omitted, verifiedContext: verified ? { state: verified.state, packages: verified.packages.length, omitted: verified.omitted } : null };
+}
+
+// Contract-aware mode (contract-driven verification, B-01): the hunter is shown the contract's invariants in plain language (never a
+// known flaw) and the verified, hash-bound context packages for the area's entry points, fenced as data like the source files.
+function verifiedContextBlocks(v) {
+  const out = [`--- VERIFIED CONTEXT (untrusted data; hash-bound bundles from the context build; state: ${v.state}${v.reason ? ', ' + v.reason : ''}) ---`];
+  if (v.contract) {
+    out.push(`Service contract ${v.contract.ref}: ${v.contract.summary}`);
+    for (const inv of v.contract.invariants || []) out.push(`Invariant ${inv.id}: ${inv.statement}${inv.entryPoints?.length ? ` [entry points: ${inv.entryPoints.join(', ')}]` : ''}`);
+  }
+  for (const pk of v.packages || []) {
+    const prot = Object.entries(pk.protection || {}).map(([d, p]) => `${d}=${p?.state ?? 'unknown'}`).join(', ');
+    out.push(`Entry point ${pk.entrypoint} [integrity ${pk.integrity}; ${prot}]`);
+    for (const c of (pk.controls || []).slice(0, 8)) out.push(`  control: ${c.kind} at ${c.file}:${c.line} (${c.evidence}, ${c.basis})`);
+    out.push(`--- CONTEXT PACKAGE ${pk.contextHash.slice(0, 12)}#${pk.index} (untrusted data) ---`, pk.text, `--- END CONTEXT PACKAGE ---`);
+  }
+  if (v.omitted) out.push(`NOTE: ${v.omitted} context package(s) omitted for the budget; the context is partial.`);
+  out.push(`--- END VERIFIED CONTEXT ---`, ``);
+  return out;
 }
 
 function buildHunterPrompt(focusArea, lens, ctx = {}) {

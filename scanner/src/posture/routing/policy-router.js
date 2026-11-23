@@ -48,6 +48,9 @@ export function routeTask({ task, policy = 'balanced', scoreboard, tolerance = D
   for (const e of pool) {
     const why = [];
     if (e.quality.mean == null) why.push('no measured quality');
+    // A synthetic population measures the machinery, not the model: its scores never route a real task. An entry recorded before the
+    // label existed is `unlabelled` and keeps the earlier behaviour.
+    if (e.population === 'synthetic') why.push('measured only on a synthetic population; synthetic scores never route a task');
     if ((e.quality.n ?? 0) < minRuns) why.push(`only ${e.quality.n ?? 0} measured run(s); ${minRuns} are required`);
     if (policy === 'local-only' && e.local !== true) why.push('not a local model');
     if (e.local !== true && policy !== 'local-only') {

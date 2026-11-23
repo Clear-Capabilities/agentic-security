@@ -1,0 +1,8 @@
+{
+  "schema": "agentic-security/dci-invariants",
+  "schemaVersion": "1.0.0",
+  "invariants": [
+    { "id": "INVOICES-TENANT-SCOPE", "title": "Every invoice route is scoped to the principal's tenant", "rule": "requires", "appliesTo": { "routes": ["/invoices/**", "/invoices"], "methods": ["GET", "PUT", "POST"] }, "requires": ["authentication", "tenant-scope"], "severity": "high" },
+    { "id": "INVOICES-AUTHN", "title": "Every invoice route requires an authenticated principal", "rule": "requires", "appliesTo": { "routes": ["/invoices/**", "/invoices"], "methods": ["ANY"] }, "requires": ["authentication"], "severity": "high" }
+  ]
+}

@@ -69,6 +69,8 @@ The role pages above are the front door. These lists go further into the guides,
 - [Local AI with Ollama](guides/ollama.md): the fix/validate/hunt stages, running on your own machine
 - [Deterministic Context Intelligence](guides/context-intelligence.md): per-entry-point, hash-bound context bundles and focused, citation-checked reviews (`context` command; opt-in)
   - [Architecture](architecture/context-intelligence.md) and [integration audit](architecture/DCI_INTEGRATION_AUDIT.md)
+- [Contract-driven verification](contract-driven-verification/README.md): service security contracts, evidence-grounded hunt qualification and refutation, stability evaluation, fault plans and verifier mutations (synthetic evidence only; real profiles blocked)
+  - [Acceptance matrix](contract-driven-verification/ACCEPTANCE.md), [gap audit](contract-driven-verification/GAP-AUDIT.md) and the subsystem audit notes: [context and discovery](contract-driven-verification/audit/audit-1-context-discovery.md), [invariants, oracles and repair](contract-driven-verification/audit/audit-2-invariants-oracles-repair.md), [evaluation and routing](contract-driven-verification/audit/audit-3-evaluation-routing.md), [deployment and runtime](contract-driven-verification/audit/audit-4-deployment-runtime-registry.md)
 - [Haskell](guides/haskell.md): default scan, Cabal/Stack inputs, sources and sinks, web routes, dependencies, verified fixes, limits
 - [Nix and NixOS](guides/nix-nixos.md): flakes and configurations: static, declared, effective, evaluated and runtime scope; hardening, store secrets, closures
 - [Installing on NixOS](guides/nixos-install.md): running the scanner itself on a NixOS host; what has not been verified

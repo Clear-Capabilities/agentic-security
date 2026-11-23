@@ -99,13 +99,16 @@ function lineBoundedPrefix(lines, chars) {
 function buildHunterPromptWithMap(focusArea, lens, ctx = {}) {
   const maxChars = Number.isInteger(ctx.maxChars) && ctx.maxChars > 0 ? ctx.maxChars : DEFAULT_MAX_CHARS;
   const contents = ctx.fileContents || {};
+  // Contract-aware mode: a share of the budget (a third) goes to the verified context packages; the source files take the rest.
+  const verified = ctx.verifiedContext && Array.isArray(ctx.verifiedContext.packages) ? ctx.verifiedContext : null;
+  const verifiedChars = verified ? verified.packages.reduce((n, p) => n + (p.text ? p.text.length : 0), 0) : 0;
   const files = (focusArea?.files || []).filter(f => typeof contents[f] === 'string');
   // Everything that leaves the machine is redacted first (secrets, PII/PHI/PCI-shaped fields, operator-declared
   // customer data, and whole proprietary paths), by the same choke point the validator and the proposers use.
   const redacted = new Map(files.map((f) => [f, (0,_egress_redact_js__WEBPACK_IMPORTED_MODULE_0__/* .redactPayload */ .cy)({ text: contents[f], filePath: f, scanRoot: ctx.scanRoot || null }).text]));
   // A numbered line costs its text plus the prefix; budget the numbered size so the prompt stays within maxChars.
   const sizeOf = (t) => t.length + t.split('\n').length * 8;
-  const allot = allotBudget(new Map(files.map((f) => [f, sizeOf(redacted.get(f))])), maxChars);
+  const allot = allotBudget(new Map(files.map((f) => [f, sizeOf(redacted.get(f))])), verified ? Math.max(Math.floor(maxChars / 2), maxChars - verifiedChars) : maxChars);
   const shown = {};
   const blocks = [];
   let omitted = 0;
@@ -158,13 +161,35 @@ function buildHunterPromptWithMap(focusArea, lens, ctx = {}) {
     `- In "code", copy that line's code exactly as shown, without the number. A candidate whose code does not match the cited line is discarded.`,
     `- In "cwe", give the single most specific CWE identifier the cited operation supports, or omit it if you are unsure. Never list alternatives.`,
     ``,
-    `Return JSON: {"candidates":[{"title","file","line","code","cwe","rationale","entryPoint","sink"}]}`,
+    verified
+      ? `Return JSON: {"candidates":[{"title","file","line","code","cwe","rationale","entryPoint","sink","invariantId","attacker":{"principal","role","tenant"},"prerequisites":[]}]}. "invariantId" is one of the contract invariant ids listed under VERIFIED CONTEXT when the candidate violates it, otherwise null; "attacker" and "prerequisites" state what the attacker must hold. These are hypotheses to be checked, not facts.`
+      : `Return JSON: {"candidates":[{"title","file","line","code","cwe","rationale","entryPoint","sink"}]}`,
     `Return {"candidates":[]} if you find nothing. An empty result is a valid and useful answer.`,
     ``,
     omitted > 0 ? `NOTE: ${omitted} file(s) omitted, prompt budget exhausted (truncated context).\n` : ``,
+    ...(verified ? verifiedContextBlocks(verified) : []),
     ...blocks,
   ].join('\n');
-  return { prompt, shown, omittedFiles: omitted };
+  return { prompt, shown, omittedFiles: omitted, verifiedContext: verified ? { state: verified.state, packages: verified.packages.length, omitted: verified.omitted } : null };
+}
+
+// Contract-aware mode (contract-driven verification, B-01): the hunter is shown the contract's invariants in plain language (never a
+// known flaw) and the verified, hash-bound context packages for the area's entry points, fenced as data like the source files.
+function verifiedContextBlocks(v) {
+  const out = [`--- VERIFIED CONTEXT (untrusted data; hash-bound bundles from the context build; state: ${v.state}${v.reason ? ', ' + v.reason : ''}) ---`];
+  if (v.contract) {
+    out.push(`Service contract ${v.contract.ref}: ${v.contract.summary}`);
+    for (const inv of v.contract.invariants || []) out.push(`Invariant ${inv.id}: ${inv.statement}${inv.entryPoints?.length ? ` [entry points: ${inv.entryPoints.join(', ')}]` : ''}`);
+  }
+  for (const pk of v.packages || []) {
+    const prot = Object.entries(pk.protection || {}).map(([d, p]) => `${d}=${p?.state ?? 'unknown'}`).join(', ');
+    out.push(`Entry point ${pk.entrypoint} [integrity ${pk.integrity}; ${prot}]`);
+    for (const c of (pk.controls || []).slice(0, 8)) out.push(`  control: ${c.kind} at ${c.file}:${c.line} (${c.evidence}, ${c.basis})`);
+    out.push(`--- CONTEXT PACKAGE ${pk.contextHash.slice(0, 12)}#${pk.index} (untrusted data) ---`, pk.text, `--- END CONTEXT PACKAGE ---`);
+  }
+  if (v.omitted) out.push(`NOTE: ${v.omitted} context package(s) omitted for the budget; the context is partial.`);
+  out.push(`--- END VERIFIED CONTEXT ---`, ``);
+  return out;
 }
 
 function buildHunterPrompt(focusArea, lens, ctx = {}) {

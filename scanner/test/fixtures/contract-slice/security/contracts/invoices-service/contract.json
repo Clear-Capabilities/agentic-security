@@ -1,0 +1,127 @@
+{
+  "schema": "agentic-security/service-contract",
+  "schemaVersion": "1.0.0",
+  "id": "invoices-service",
+  "version": "1.0.0",
+  "owner": "invoices-security-owner",
+  "summary": "Tenant-scoped invoice reading and revision for two tenants",
+  "reviewPriority": "high",
+  "reviewedAt": "2026-11-22",
+  "expiry": {
+    "reviewEveryDays": 180
+  },
+  "scope": {
+    "environment": "disposable-fixture",
+    "repositories": [
+      {
+        "id": "invoices-api",
+        "revision": "4d6dd97da754b3a2e1f0c9b8a7d6e5f4c3b2a1908f7e6d5c4b3a29180f7e6d5c"
+      }
+    ],
+    "services": [
+      {
+        "id": "invoices",
+        "repository": "invoices-api"
+      }
+    ]
+  },
+  "invariants": [
+    {
+      "id": "TENANT-ISOLATION-001",
+      "statement": "A principal of one tenant cannot read or modify another tenant's invoice.",
+      "attacker": {
+        "principal": "tenant-member",
+        "assumptions": [
+          "holds a valid session for tenant acme",
+          "knows or guesses another tenant's invoice id"
+        ],
+        "entryPoints": [
+          "GET /invoices/:id",
+          "PUT /invoices/:id/memo"
+        ]
+      },
+      "scope": {
+        "routes": [
+          "GET /invoices/:id",
+          "PUT /invoices/:id/memo"
+        ],
+        "services": [
+          "invoices"
+        ]
+      },
+      "boundaries": [
+        "tenant"
+      ],
+      "dciInvariantRefs": [
+        "INVOICES-TENANT-SCOPE"
+      ],
+      "scenarioInvariantRefs": [
+        "invoices-tenant-isolation@1"
+      ],
+      "requiredEvidence": [
+        "authorized-control",
+        "cross-tenant-attempt",
+        "durable-effect"
+      ],
+      "controlRefs": [
+        "session-auth"
+      ]
+    },
+    {
+      "id": "AUTHN-REQUIRED-001",
+      "statement": "Every invoice route requires an authenticated principal.",
+      "attacker": {
+        "principal": "anonymous",
+        "assumptions": [
+          "no session"
+        ],
+        "entryPoints": [
+          "GET /invoices/:id",
+          "PUT /invoices/:id/memo",
+          "POST /invoices"
+        ]
+      },
+      "boundaries": [
+        "identity"
+      ],
+      "dciInvariantRefs": [
+        "INVOICES-AUTHN"
+      ],
+      "requiredEvidence": [
+        "forbidden-request"
+      ],
+      "controlRefs": [
+        "session-auth"
+      ]
+    }
+  ],
+  "controls": [
+    {
+      "id": "session-auth",
+      "kind": "authentication",
+      "statement": "The session middleware rejects a request without a valid session before any handler runs.",
+      "source": "declared",
+      "provenance": {
+        "repository": "invoices-api",
+        "file": "app.js",
+        "symbol": "requireSession"
+      },
+      "scope": {
+        "environment": "disposable-fixture",
+        "routes": [
+          "GET /invoices/:id",
+          "PUT /invoices/:id/memo",
+          "POST /invoices"
+        ]
+      }
+    }
+  ],
+  "review": {
+    "state": "proposed",
+    "origin": "authored"
+  },
+  "threatPack": {
+    "path": "threat-pack.md",
+    "digest": "sha256:b58797ca34675a2977c9d61e90343a22ae83ab5fa8396f86e3f46c664222ac81"
+  }
+}

@@ -235,7 +235,7 @@ export async function verifyInvariantRepair(req, o = {}) {
     return done({ ...common, status: 'not-verified-fix', preservation, blockers, repairRecords, verificationRecord: downgraded });
   }
 
-  const artifact = buildRegressionArtifact({
+  const artifact = buildRegressionArtifact({ contract: req?.contract ?? null,
     invariant: inv, approval, scenario, fixtureFiles, patchFiles, commit: req.commit, budgets, workflowInputs: wf.inputs, extraLegs: ctx.legs, pn, shrinkRecordId: req.shrinkRecordId ?? null, repairRecords: pn.repairRecords,
   });
   if (!artifact.ok) {
@@ -248,7 +248,7 @@ export async function verifyInvariantRepair(req, o = {}) {
 
 function leg(role, manifest, patched, expected) { return { role, patched, expected, manifest }; }
 
-function buildRegressionArtifact({ invariant, approval, scenario, fixtureFiles, patchFiles, commit, budgets, workflowInputs: wfi, extraLegs, pn, shrinkRecordId, repairRecords }) {
+function buildRegressionArtifact({ invariant, approval, scenario, fixtureFiles, patchFiles, commit, budgets, workflowInputs: wfi, extraLegs, pn, shrinkRecordId, repairRecords , contract = null}) {
   const secrets = [...findSecrets(fixtureFiles).map((s) => ({ ...s, where: `fixture:${s.where}` })), ...findSecrets(patchFiles).map((s) => ({ ...s, where: `patch:${s.where}` }))];
   if (secrets.length) return { ok: false, reason: 'the fixture or the patch holds secret-looking content; a self-contained artifact would embed it', errors: secrets };
   const mk = (spec) => createReplayManifest({ hypothesisId: scenario.id, commit, fixtureFiles, patchFiles: spec.patched ? patchFiles : null, oracleId: 'business-state', entry: scenario.entry, inputs: spec.inputs, budgets, expected: { outcome: spec.expected } });
@@ -272,6 +272,9 @@ function buildRegressionArtifact({ invariant, approval, scenario, fixtureFiles, 
     invariant: { id: invariant.id, key: invariant.key, revision: invariant.revision, class: invariant.class, document: copy(invariant), approval },
     scenario: { id: scenario.id, digest: digestOf(scenario), document: copy(scenario), shrinkRecordId },
     legs,
+    // Contract-driven verification (A-03, F-04): the service contract and invariant this repair was verified for, carried unchanged
+    // from the hunt and the qualification decision. Null when the repair was requested outside a contract.
+    contract: contract && typeof contract === 'object' ? { ref: String(contract.ref ?? ''), invariantId: contract.invariantId ?? null, approvalTransitionId: contract.approvalTransitionId ?? null } : null,
     repair: { diffDigest: pn.patchDigest, ledger: copy(repairRecords) },
     scope: 'the declared exploit scenario, the declared authorized workflows and the bounded scenarios of the other approved contracts, on one disposable fixture; the patch is not shown correct anywhere else',
   };

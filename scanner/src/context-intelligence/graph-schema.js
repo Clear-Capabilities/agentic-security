@@ -98,7 +98,10 @@ export function buildSymbolGraph({ fileContents, functions, edges }) {
     const base = anon ? `${fn.file}::<anon>@${fn.line}` : `${fn.file}::${fn.name}`;
     const k = ordinal.get(base) || 0;
     ordinal.set(base, k + 1);
-    const id = !anon && k === 0 ? base : (anon ? base : `${base}#${k + 1}`);
+    // The first declaration keeps the bare id; a same-named sibling, or a SECOND anonymous function on the same line
+    // (`xs.map(x => ys.map(y => ...))`), gets an ordinal. Before the ordinal applied to anonymous functions too, two arrows on one
+    // line produced two symbols with one id and `validateGraph` refused the whole build as `duplicate-symbol-id`.
+    const id = k === 0 ? base : `${base}#${k + 1}`;
     idByQid.set(fn.qid, id);
     const span = spanFor(fn.file, lines(fn.file), fn.line, cfgMaxLine(fn));
     const text = sliceLines(fileContents[fn.file], span.startLine, span.endLine);

@@ -193,6 +193,14 @@ Commands:
                                write one inspectable, hash-bound context bundle each, and optionally run
                                focused single-call model reviews over them. 'context build' makes no model
                                call and no network call. Run 'agentic-security context' for the full usage.
+  contracts <validate|inspect|draft> ...
+                               Service security contracts (contract-driven verification, opt-in, additive):
+                               'validate <contract.json>' checks the schema and the threat pack; 'inspect'
+                               shows approval (re-verified against the ledger), bindings and gaps, and the
+                               context build's coverage with --ledger/--root; 'draft --root <dir>' writes a
+                               PROPOSED contract from the context build with no model call. Nothing here
+                               approves anything. 'hunt --contract <file> [--ledger <file>]' hunts in
+                               contract-aware mode. Exit: 0 ok, 1 invalid or failed, 2 usage.
   explore [path] [--port <n>] [--keep-open]
                                Start a local, read-only server over an
                                already-scanned lineage graph (run
@@ -2786,6 +2794,18 @@ async function cmdHunt(args) {
   const lenses = args.flags.lens ? String(args.flags.lens).split(',').map(s => s.trim()).filter(Boolean) : undefined;
   const intFlag = (name) => (args.flags[name] ? parseInt(args.flags[name], 10) : undefined);
   const numFlag = (name) => (args.flags[name] ? Number(args.flags[name]) : undefined);
+  // Contract-aware mode (contract-driven verification): `--contract <contract.json>` selects the service contract, `--ledger <file>` its
+  // approval ledger. Opting in enables no paid call, no live access and no new execution authority: it adds the verified context
+  // bundles of this root (from `context build`) to the hunter and the panel, and the qualification of every candidate. Nothing in the
+  // default hunt changes without the flag.
+  let contractMode;
+  if (args.flags.contract) {
+    const { loadContractForHunt } = await import('../src/contracts/cli.js');
+    const loaded = await loadContractForHunt({ contractPath: path.resolve(String(args.flags.contract)), ledgerPath: args.flags.ledger ? path.resolve(String(args.flags.ledger)) : null, scanRoot, now: new Date().toISOString().slice(0, 10) });
+    if (!loaded.ok) { console.error(`agentic-security: ${loaded.reason}`); for (const e of loaded.errors || []) console.error(`  ${e}`); return 2; }
+    contractMode = loaded.contractMode;
+    if (loaded.warnings.length) for (const w of loaded.warnings) console.error(`agentic-security: ${w}`);
+  }
   const report = await runDiscovery(
     { perFileIR: perFile, callGraph, fileContents, priorScan, triageFeedback },
     {
@@ -2797,9 +2817,12 @@ async function cmdHunt(args) {
       maxWallMs: intFlag('max-wall-ms'),
       maxCandidates: intFlag('max-candidates'),
       maxCostUsd: numFlag('max-cost-usd'),
-      // PRD C4 — persist and consult cross-run memory.
-      scanRoot: args.flags['no-memory'] ? undefined : scanRoot,
+      // PRD C4 — persist and consult cross-run memory. `--no-memory` turns the memory off and keeps the root: the root also names the
+      // project whose egress policy and redaction configuration apply (clearing it read another project's policy).
+      scanRoot,
+      memory: args.flags['no-memory'] ? false : undefined,
       forgetRefuted: !!args.flags['forget-refuted'],
+      ...(contractMode ? { contractMode } : {}),
       // PRD C2 — a comma-separated endpoint list turns on consensus.
       endpoints: args.flags.endpoints,
       costPerCallUsd: numFlag('cost-per-call-usd'),
@@ -2809,6 +2832,14 @@ async function cmdHunt(args) {
   const c = report.coverage;
   console.log('');
   console.log(`Discovery — ${rels.length} file(s), ${c.areasPlanned} focus area(s), ${c.lensesPerArea} lens(es) each`);
+  if (report.contract) {
+    const q = report.contract.qualification || {};
+    console.log(`  contract: ${report.contract.ref}   approval: ${report.contract.approval ? report.contract.approval.state + (report.contract.approval.current ? '' : ' (not current authority)') : 'no ledger given'}   context: ${report.contract.context.state}${report.contract.context.reason ? ' (' + report.contract.context.reason + ')' : ''}`);
+    console.log(`  qualification: ${q.qualified || 0} qualified, ${q['needs-context'] || 0} need context, ${q['contract-gap'] || 0} contract gap(s), ${q.disqualified || 0} disqualified (evidence-grounded)`);
+    const contested = (report.candidatesAll || []).filter((x) => x.refutation?.contested).length;
+    if (contested) console.log(`  contested: ${contested} candidate(s) a model majority opposed without a grounded blocker; kept with the objections`);
+    if (report.contract.context.state !== 'complete') console.log('  NOTE: the context is not complete; nothing here is a clean pass, and every needs-context candidate is unresolved, not safe.');
+  }
   console.log(`  areas hunted: ${c.areasHunted}/${c.areasPlanned} (fully: ${c.areasFullyHunted})   degraded runs: ${c.degradedRuns}/${report.runs.length}`);
   console.log(`  budget: ${c.llmCalls}/${c.maxLlmCalls} LLM calls${c.budgetExhausted ? '  ← EXHAUSTED, run is incomplete' : ''}` +
     `${c.candidatesCapped ? `   ${c.candidatesCapped} candidate(s) capped` : ''}` +
@@ -8066,6 +8097,7 @@ async function main() {
       case 'calibration-report': process.exit(await cmdCalibrationReport(args));
       case 'hunt':     process.exit(await cmdHunt(args));
       case 'context':  process.exit(await (await import('../src/context-intelligence/cli.js')).cmdContext(args));
+      case 'contracts': process.exit(await (await import('../src/contracts/cli.js')).cmdContracts(args));
       case 'compliance': process.exit(await cmdCompliance(args));
       case 'attest':   process.exit(await cmdAttest(args));
       case 'verify-attestation': process.exit(await cmdVerifyAttestation(args));

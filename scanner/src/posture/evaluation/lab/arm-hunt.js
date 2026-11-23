@@ -23,6 +23,15 @@ import { callOllamaChat } from '../../../llm-validator/ollama-provider.js';
 import { scrubEnv } from '../../../sandbox/trust-domains.js';
 import { LAYER_ENV } from '../scan-child.js';
 import { defaultScanFn } from '../runner.js';
+import { buildContext } from '../../../context-intelligence/build.js';
+import { normalizeConfig } from '../../../context-intelligence/config.js';
+import { makeContextSupplier } from '../../../discovery/context-supplier.js';
+
+// The verified context for a staged workspace, built in memory from that workspace alone: no store, no state written, no model.
+async function workspaceSupplier(workspaceDir, fileContents) {
+  const built = await buildContext(workspaceDir, { config: normalizeConfig({}).config });
+  return makeContextSupplier({ fileContents, built: built.ok ? built : null });
+}
 
 const DEFAULT_OLLAMA_HOST = 'http://127.0.0.1:11434';
 const HUNT_DEFAULTS = Object.freeze({ maxLlmCalls: 40, maxCandidates: 20, maxAreas: 8, maxFiles: 2000 });
@@ -65,6 +74,7 @@ export async function runHuntArm({ arm, task, request, workspaceDir, terms = [],
     if (r.result?.usage) { usage.inputTokens += r.result.usage.inputTokens || 0; usage.outputTokens += r.result.usage.outputTokens || 0; }
     return r.result.text;
   };
+  const contractSupplier = arm.adapter.contract ? await workspaceSupplier(workspaceDir, snap.fileContents) : null;
   const res = await withStateWritesDisabled(() => runDiscovery(
     { perFileIR: ir.perFile, callGraph: ir.callGraph, fileContents: snap.fileContents, priorScan: { findings: deterministic } },
     {
@@ -74,10 +84,14 @@ export async function runHuntArm({ arm, task, request, workspaceDir, terms = [],
       maxLlmCalls: arm.adapter.maxLlmCalls ?? HUNT_DEFAULTS.maxLlmCalls,
       maxCandidates: arm.adapter.maxCandidates ?? HUNT_DEFAULTS.maxCandidates,
       maxWallMs: timeoutMs,
-      // no scanRoot: no hunt memory, so a repeat never inherits an earlier repeat's refutations
+      // no scanRoot: no hunt memory, so a repeat never inherits an earlier repeat's refutations. In contract mode the context supplier
+      // is built from the staged workspace's own context build (in memory, deterministic, no model, no state written), and the
+      // contract is the arm's, the same document for every repetition.
+      ...(contractSupplier ? { contractMode: { contract: arm.adapter.contract, approval: null, supplier: contractSupplier } } : {}),
     },
   ));
   const cov = res.coverage || {};
+  const contract = res.contract ? { ref: res.contract.ref, context: res.contract.context?.state ?? null, qualification: res.contract.qualification, attrition: res.attrition || {} } : null;
   const reported = usage.inputTokens || usage.outputTokens ? usage : undefined;
   if (blockedPrompts > 0) return { status: 'blocked', reason: `leakage guard: ${blockedPrompts} hunter prompt(s) contained a protected term; nothing from this attempt is scored`, reported };
   if (signal?.aborted) return { status: 'error', reason: 'cancelled', reported };
@@ -96,6 +110,7 @@ export async function runHuntArm({ arm, task, request, workspaceDir, terms = [],
         areasPlanned: cov.areasPlanned ?? 0, areasHunted: cov.areasHunted ?? 0, degradedRuns: cov.degradedRuns ?? 0,
         llmCalls: calls, reasons: (cov.reasons || []).slice(0, 10),
       },
+      ...(contract ? { contract } : {}),
     },
     reported,
   };

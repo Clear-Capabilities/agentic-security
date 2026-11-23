@@ -20,6 +20,7 @@ import { hashOf, canonicalJson, sha256 } from './canonical.js';
 import { packRef, REVIEW_SCHEMA_VERSION } from './prompts/packs.js';
 import { runReviewOnce, verifyReview } from './review.js';
 import { readStoreJson, writeStoreJson, writeStoreFile } from './store.js';
+import { dependencyKeyOf } from './dependency-key.js';
 
 export const TERMINAL_STATES = Object.freeze(['succeeded', 'partial', 'failed', 'timed_out', 'skipped_by_policy', 'cancelled']);
 export const QUEUE_SCHEMA_VERSION = 'review-queue/1';
@@ -35,7 +36,7 @@ export function resourceKeyOf(pathTemplate) {
   return null;
 }
 
-export function jobKeyOf({ entrypointIds, contextHashes, packageIndex, pack, model }) {
+export function jobKeyOf({ entrypointIds, contextHashes, packageIndex, pack, model, dependencyKeys = null }) {
   return hashOf({
     schema: REVIEW_SCHEMA_VERSION,
     entrypoints: entrypointIds,
@@ -44,6 +45,9 @@ export function jobKeyOf({ entrypointIds, contextHashes, packageIndex, pack, mod
     pack: packRef(pack),
     model: { provider: model.provider || null, model: model.model || null },
     settings: {},
+    // D-AC05: what the bundle depends on outside its packed text (route registration and middleware, control and boundary files,
+    // the contract and the declared environment). Present on every planned job, so a change there misses the cached review.
+    ...(dependencyKeys ? { dependencies: dependencyKeys } : {}),
   });
 }
 
@@ -51,8 +55,9 @@ export function jobKeyOf({ entrypointIds, contextHashes, packageIndex, pack, mod
  * Plan jobs. `bundles` are build results (`{entrypoint, manifest}`). Excluded entry points get no job; they are counted
  * by the caller from the entry-point dispositions.
  */
-export function planJobs({ bundles, packs, model, maxJobs = HARD_LIMITS.maxJobs }) {
+export function planJobs({ bundles, packs, model, maxJobs = HARD_LIMITS.maxJobs, fileContents = {}, contractRef = null, environment = null }) {
   const live = bundles.filter(b => b.manifest);
+  const depKey = new Map(live.map(b => [b.entrypoint.id, dependencyKeyOf({ manifest: b.manifest, fileContents, contractRef, environment }).key]));
   const jobs = [];
   for (const pack of packs) {
     if (pack.multiBundle) {
@@ -69,7 +74,7 @@ export function planJobs({ bundles, packs, model, maxJobs = HARD_LIMITS.maxJobs 
         const sorted = members.sort((a, b) => (a.entrypoint.id < b.entrypoint.id ? -1 : 1));
         const used = sorted.slice(0, MAX_GROUP);
         jobs.push({
-          key: jobKeyOf({ entrypointIds: used.map(m => m.entrypoint.id), contextHashes: used.map(m => m.manifest.contextHash), packageIndex: 1, pack, model }),
+          key: jobKeyOf({ entrypointIds: used.map(m => m.entrypoint.id), contextHashes: used.map(m => m.manifest.contextHash), packageIndex: 1, pack, model, dependencyKeys: used.map(m => depKey.get(m.entrypoint.id)) }),
           packId: pack.id, packRef: packRef(pack), label: `${pack.id}: ${k} (${used.length} routes)`, entrypointIds: used.map(m => m.entrypoint.id),
           contextHashes: used.map(m => m.manifest.contextHash), packageIndexes: used.map(() => 1), groupTruncated: sorted.length > used.length ? sorted.length - used.length : 0,
         });
@@ -78,7 +83,7 @@ export function planJobs({ bundles, packs, model, maxJobs = HARD_LIMITS.maxJobs 
       for (const b of live) {
         for (const pk of b.manifest.context.packages.length ? b.manifest.context.packages : [{ index: 1 }]) {
           jobs.push({
-            key: jobKeyOf({ entrypointIds: [b.entrypoint.id], contextHashes: [b.manifest.contextHash], packageIndex: pk.index, pack, model }),
+            key: jobKeyOf({ entrypointIds: [b.entrypoint.id], contextHashes: [b.manifest.contextHash], packageIndex: pk.index, pack, model, dependencyKeys: [depKey.get(b.entrypoint.id)] }),
             packId: pack.id, packRef: packRef(pack), label: `${pack.id}: ${b.entrypoint.label}${b.manifest.context.packages.length > 1 ? ` [package ${pk.index}/${pk.total}]` : ''}`,
             entrypointIds: [b.entrypoint.id], contextHashes: [b.manifest.contextHash], packageIndexes: [pk.index], groupTruncated: 0,
           });

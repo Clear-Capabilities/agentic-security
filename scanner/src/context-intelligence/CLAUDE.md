@@ -27,3 +27,21 @@ Model calls go through `discovery/llm-invoke.js` and the egress policy. Confirma
 ## Router mounts and stale citations (GA-03.2, 0.195.26)
 
 `entrypoints.js` composes router mounts: `router.get('/:id')` with `app.use('/api', auth, router)` is the entry point `/api/:id` (`pathTemplate`), with `registeredPath` keeping `/:id` and `mount` recording the chain (root first) and the number of alternatives. A mount is found in the same file, through the import map (`import users from './users.js'`, `const users = require('./users')`) or an inline `require('./users')`, when the target module's `module.exports` / `export default` receiver registers routes or mounts; mounts compose through intermediate routers (depth 4, at most 8 paths); a router mounted at several prefixes is one entry point per prefix; the mount statement's other identifier arguments are inherited middleware scoped to that mount (`viaMount: true`), per chain. A dynamic prefix (`app.use(prefixFor(), router)`) mounts nothing and the route keeps `router-mount-not-resolved`. `review.js`'s `resolveCitation` refuses `stale-context` when the cited lines sit in a segment whose current text no longer hashes to the segment's `spanHash`. Tests: `test/context-intelligence/route-mounts.test.js`.
+
+## 0.222.0: two robustness fixes from the contract-driven slice
+
+- A second anonymous function on one line (`xs.map((x) => ys.map((y) => ...))`) produced two symbols with one id and `validateGraph`
+  refused the whole build as `duplicate-symbol-id`. The ordinal that same-named declarations already carried now applies to anonymous
+  functions too (`a.js::<anon>@1`, `a.js::<anon>@1#2`); the first keeps the bare id, so existing ids are unchanged.
+- An operation inside the middleware chain (a session lookup the authentication guard performs, reached through it now that
+  assignment-side calls are followed) carries the chain's position (-1) and does not count as the first sensitive operation: it is the
+  control's own work, not something the control must precede. `reachability.js` and `invariants.js` both apply the rule.
+
+## Dependency keys (contract-driven verification, D-AC05)
+
+`dependency-key.js` digests what a bundle depends on outside its packed text: the route's registration file and middleware list, the
+files of the controls and boundaries the reachability pass recorded, the contract reference and the declared environment. The build
+records it per entry point in `index.json` (`dependencies`); the hunt's context supplier re-hashes those files from its own snapshot and
+marks the bundle `stale` (reason names `file:<path>`, `middleware`, `contract` or `environment`) when they differ; `planJobs` folds the
+key into every review job key, so a change misses the cached review instead of reusing it. A file the snapshot lacks hashes to `null`,
+so a deletion is a change. `contextHash` itself is unchanged (stored bundles stay addressable).

@@ -24,6 +24,7 @@ import { LAYER_ENV } from '../scan-child.js';
 import { runOllamaArm } from './arm-ollama.js';
 import { runHuntArm } from './arm-hunt.js';
 import { isLoopbackUrl } from '../../../llm-validator/local-endpoint.js';
+import { validateContract } from '../../../contracts/schema.js';
 
 export const TASKS = Object.freeze(['detect', 'falsify', 'exploit', 'patch']);
 const ARM_KINDS = Object.freeze(['deterministic', 'model']);
@@ -65,7 +66,11 @@ export function validateArm(a) {
     for (const k of ['maxLlmCalls', 'maxCandidates', 'maxAreas', 'maxFiles']) if (ad[k] !== undefined && !(Number.isInteger(ad[k]) && ad[k] >= 1 && ad[k] <= 100_000)) bad(`adapter.${k} must be a positive integer`);
     if (ad.lenses !== undefined && !(Array.isArray(ad.lenses) && ad.lenses.length && ad.lenses.every((l) => typeof l === 'string' && /^[a-z-]+$/.test(l)))) bad('adapter.lenses must be a non-empty list of lens keys');
     if (ad.timeoutMs !== undefined && !(Number.isInteger(ad.timeoutMs) && ad.timeoutMs >= 1000 && ad.timeoutMs <= 3_600_000)) bad('adapter.timeoutMs must be between 1000 and 3600000');
+    // Contract-aware hunting (contract-driven verification): the contract every repetition hunts against. It must validate; it
+    // states intended behaviour, and the lab's leakage guard checks every prompt the hunt builds from it.
+    if (ad.type === 'hunt' && ad.contract !== undefined) { const cv = validateContract(ad.contract); if (!cv.ok) bad(`adapter.contract does not validate: ${cv.errors.slice(0, 3).map((e) => `${e.path}: ${e.message}`).join('; ')}`); }
   } else bad('adapter.type must be builtin-scanner, command, ollama or hunt');
+  if (ad && ad.promptVersion !== undefined && !(typeof ad.promptVersion === 'string' && /^[\w.@/-]{1,80}$/.test(ad.promptVersion))) bad('adapter.promptVersion must be a short identifier');
   if (a.kind === 'model') {
     const m = a.model;
     if (!m || typeof m.id !== 'string' || !m.id || typeof m.provider !== 'string' || !m.provider) bad('a model arm needs model.id and model.provider');
