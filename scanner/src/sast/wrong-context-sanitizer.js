@@ -172,3 +172,67 @@ export function scanWrongContextSanitizer(fp, raw) {
   }
   return findings;
 }
+
+// URL scheme DENYLIST (CWE-79). The complement of the rule above: no encoder, a check that looks like URL validation and is not.
+//
+//   if (/^\s*(javascript|vbscript|data):/i.test(href)) return text;
+//   out += '<a href="' + escapeHtml(href) + '">';
+//
+// A regular expression that names the dangerous schemes is bypassed by every scheme it does not name and by the characters browsers
+// drop or tolerate before and inside a scheme: ASCII control characters (`java\x01script:`), which `\s` does not cover, newlines and
+// tabs inside the scheme name, HTML entities in an attribute (`&#106;avascript:`). The accepted fix is the other polarity, an
+// allow-list of the schemes the attribute may carry (`https?`, `mailto`, `tel`, relative), after stripping control characters, or
+// the URL parser's `protocol`. The rule needs two things in one file: a regex whose alternation names `javascript` as a scheme
+// (the hallmark of a denylist; an allow-list names `https?` and never `javascript`), used as a test, and, within the next forty
+// lines, the value reaching a URL attribute (`href=`/`src=` in markup, `.href =`, `.src =`, `setAttribute('href'|'src'`, `href:`).
+// Silent when the file also carries an allow-list check or a scheme-aware sanitizer (`isValidAttribute`, `sanitizeUrl`, `new URL`
+// with `protocol`), because the denylist is then not the only defence. Reported at the test, where the fix replaces it.
+// JavaScript and TypeScript, Python, PHP and Ruby (the regex is read from the literal, whichever delimiter the language uses).
+//
+// Found by reading one development-split advisory of the independent population (0.222.0), a Markdown renderer's link and image
+// hooks; measured on the development split's trees before release (the commit that added it has the numbers).
+const SCHEME_DENYLIST_RE = /(?:^|[\/'"\(\s])(?:\\A|\^)?(?:\\s[*+]?)?\s*\(?(?:\?:)?(?:[a-z-]+\|)*javascript(?:\|[a-z-]+)*\)?\s*\\?:/i;
+const SCHEME_TEST_RE = /\.(?:test|match|exec|search)\s*\(|\bre\.(?:match|search|fullmatch)\s*\(|\bpreg_match\s*\(|=~|\bmatch\?\s*\(/;
+const URL_ATTRIBUTE_RE = /\b(?:href|src)\s*=|\.(?:href|src)\s*=[^=]|setAttribute\s*\(\s*['"](?:href|src)['"]|\b(?:href|src)\s*:\s*[^:]/i;
+const SCHEME_ALLOWLIST_RE = /\(\?:?\s*(?:f|ht)tps?\??\s*\||\^\s*\(?\s*https?\??\s*[|):]|\bisValidAttribute\s*\(|\bsanitizeUrl\b|\bsanitize_url\b|\bisSafeUrl\b|\bis_safe_url\b|\bprotocol\s*(?:===?|!==?|in\b|==)|\bALLOWED_(?:URL_)?(?:SCHEMES|PROTOCOLS)\b|\ballowed_schemes\b|\bSAFE_(?:URL_)?(?:SCHEMES|PROTOCOLS)\b/;
+
+function isTextLang(fp) { return isJsLike(fp) || isPhp(fp) || /\.(?:py|rb)$/i.test(fp); }
+
+export function scanUrlSchemeDenylist(fp, raw) {
+  if (!raw || raw.length > 500_000) return [];
+  if (!isTextLang(fp)) return [];
+  if (!/javascript/i.test(raw) || !/\b(?:href|src)\b/i.test(raw)) return [];
+  const code = blankComments(raw);
+  if (SCHEME_ALLOWLIST_RE.test(code)) return [];
+  const lines = code.split('\n');
+  const findings = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/javascript/i.test(line) || !SCHEME_DENYLIST_RE.test(line)) continue;
+    // The regex must be USED as a test on this line or the next two (a pattern bound to a name and tested later is matched by the
+    // test line carrying the name; keep to the literal's own vicinity for precision).
+    const testArea = lines.slice(i, i + 3).join('\n');
+    if (!SCHEME_TEST_RE.test(testArea)) continue;
+    const after = lines.slice(i + 1, i + 41).join('\n');
+    if (!URL_ATTRIBUTE_RE.test(after)) continue;
+    findings.push({
+      id: `url-scheme-denylist:${fp}:${i + 1}`,
+      severity: 'medium',
+      file: fp,
+      line: i + 1,
+      vuln: 'URL scheme denylist (bypassable check before a URL attribute)',
+      cwe: 'CWE-79',
+      family: 'xss',
+      parser: 'SAST',
+      description:
+        'A regular expression that names dangerous URL schemes (javascript:, vbscript:, data:) is the check before the value reaches an ' +
+        'href or src attribute. A denylist is bypassed by every scheme it does not name and by the control characters, tabs and newlines ' +
+        'browsers drop or tolerate inside a scheme, which `\\s` does not cover.',
+      remediation:
+        'Strip ASCII control characters, then allow only the schemes the attribute may carry (https?, mailto, tel, or a relative URL), ' +
+        'or parse with the URL API and compare `protocol`; a denylist of schemes is never complete.',
+    });
+  }
+  return findings;
+}
+

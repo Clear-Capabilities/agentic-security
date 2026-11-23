@@ -67,7 +67,7 @@ export const ANALYZER_NAMES = Object.freeze([
   'scanSensitiveDataLogging', 'scanSiblingGuard', 'scanSolidity', 'scanSpringbootHardening',
   'scanStoredPromptInjection', 'scanStoredTaint', 'scanStructuralVulns', 'scanSwift', 'scanTOCTOU',
   'scanTerraform', 'scanTodosNearSecurity', 'scanWeakPasswordHash', 'scanWeakRandomness',
-  'scanWeb3Advanced', 'scanWebhook', 'scanWrongContextSanitizer', 'scanXPathInjection', 'scanXXE',
+  'scanWeb3Advanced', 'scanWebhook', 'scanWrongContextSanitizer', 'scanUrlSchemeDenylist', 'scanXPathInjection', 'scanXXE',
   'scanXssReflectedMultilang', 'scanZipSlip',
   'scanLiteralEscaping', 'scanFrontmatterEngine', 'scanGitOptionInjection', 'scanRubyKernelOpen', 'scanWeakLocalPathGuard',
   'scanPhpStreamRedirect',

@@ -1129,6 +1129,17 @@ def run():
 `, { cwe: /CWE-78/, file: 'a.py' }),
   det('fp-js-redis-eval', 'adversarial', false, 'a Redis client\'s eval runs a Lua script on the server, not JavaScript', `app.get('/a', async (req, res) => { res.json(await redis.eval(req.query.s, { keys: [] })); });`, { cwe: /CWE-95/ }),
   det('js-global-eval', 'adversarial', true, 'the bare global eval of the same value is code injection', `app.get('/a', (req, res) => { res.json(eval(req.query.s)); });`, { cwe: /CWE-95/ }),
+  det('js-url-scheme-denylist', 'adversarial', true, 'a regex naming the dangerous schemes is the only check before the value becomes an href: bypassed by every scheme it does not name and by control characters', `function link(token) {
+  const href = (token.href || '').trim();
+  if (/^\\s*(javascript|vbscript|data):/i.test(href)) return escapeHtml(token.text);
+  return '<a href="' + escapeHtml(href) + '">' + escapeHtml(token.text) + '</a>';
+}`, { cwe: /CWE-79/ }),
+  det('fp-js-url-scheme-allowlist', 'adversarial', false, 'the same hook allowing only https, mailto and tel after stripping control characters is the fix', `function link(token) {
+  const href = String(token.href || '').trim().replace(/[\\x00-\\x1f\\x7f]/g, '');
+  const scheme = href.match(/^([A-Za-z][A-Za-z0-9+.-]*):/);
+  if (scheme && !/^(https?|mailto|tel)$/i.test(scheme[1])) return escapeHtml(token.text);
+  return '<a href="' + escapeHtml(href) + '">' + escapeHtml(token.text) + '</a>';
+}`, { cwe: /CWE-79/ }),
   det('js-readfilesync-concat', 'baseline', true, 'fs.readFileSync with a request value concatenated into the path is path traversal (a known gap until the framework models closed it)', `const fs = require('fs');
 app.get('/f', (req, res) => { res.send(fs.readFileSync('/srv/data/' + req.query.name)); });`, { cwe: /CWE-22/ }),
   det('java-spring-jdbctemplate', 'baseline', true, 'JdbcTemplate.queryForList with a concatenated @RequestParam is SQL injection (a known gap until the framework models closed it)', `@RestController public class C { @Autowired JdbcTemplate jdbc;
