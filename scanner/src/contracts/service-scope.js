@@ -36,14 +36,16 @@ function headOf(root) {
  * @param {string[]} o.authorized  repository ids the operator allows this run to read
  * @param {function} [o.readHead]  test seam: root -> commit or null
  */
-export function resolveServiceScope({ contract, rootMap = {}, authorized = [], readHead = headOf } = {}) {
+export async function resolveServiceScope({ contract, rootMap = {}, authorized = [], readHead = headOf } = {}) {
   const allow = new Set(authorized);
   const repositories = [];
   for (const repo of contract?.scope?.repositories || []) {
     const base = { id: repo.id, revision: repo.revision, root: null, observedRevision: null };
     if (!allow.has(repo.id)) { repositories.push({ ...base, state: 'access-denied', reason: 'the operator did not authorise this repository for the run; it was not read' }); continue; }
     const root = typeof rootMap[repo.id] === 'string' ? path.resolve(rootMap[repo.id]) : null;
-    if (!root || !fs.existsSync(root) || !fs.statSync(root).isDirectory()) { repositories.push({ ...base, state: 'repository-unavailable', reason: root ? 'the supplied root does not exist' : 'no local root was supplied for this repository' }); continue; }
+    let isDir = false;
+    if (root) { try { isDir = (await fs.promises.stat(root)).isDirectory(); } catch { isDir = false; } }
+    if (!root || !isDir) { repositories.push({ ...base, state: 'repository-unavailable', reason: root ? 'the supplied root does not exist' : 'no local root was supplied for this repository' }); continue; }
     const head = readHead(root);
     if (!head) { repositories.push({ ...base, root, state: 'revision-unknown', reason: 'the root is not a git checkout, so its revision cannot be established' }); continue; }
     if (head !== repo.revision) { repositories.push({ ...base, root, observedRevision: head, state: 'version-mismatch', reason: `the checkout is at ${head.slice(0, 12)}, the contract pins ${repo.revision.slice(0, 12)}` }); continue; }
@@ -119,19 +121,24 @@ export function identityPropagation(components) {
   return { transitions, candidates, unresolved, limits: { filesRead, maxFiles: MAX_FILES, truncated } };
 }
 
-/** Read a resolved repository's sources for the propagation analysis (bounded; links and large files are skipped). */
-export function readComponentSources(root, { maxFiles = MAX_FILES } = {}) {
+/** Read a resolved repository's sources for the propagation analysis (bounded; links are skipped and large files are dropped after reading). */
+export async function readComponentSources(root, { maxFiles = MAX_FILES } = {}) {
   const files = {}; let n = 0;
-  const walk = (dir, rel) => {
-    for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+  const walk = async (dir, rel) => {
+    let entries = [];
+    try { entries = await fs.promises.readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const d of entries) {
       if (n >= maxFiles) return;
-      if (d.name.startsWith('.') || d.name === 'node_modules') continue;
+      if (d.name.startsWith('.') || d.name === 'node_modules' || d.isSymbolicLink()) continue;
       const p = path.join(dir, d.name); const r = rel ? `${rel}/${d.name}` : d.name;
-      if (d.isSymbolicLink()) continue;
-      if (d.isDirectory()) walk(p, r);
-      else if (/\.(?:m?js|cjs|ts|py)$/i.test(d.name) && fs.statSync(p).size <= MAX_BYTES) { files[r] = fs.readFileSync(p, 'utf8'); n += 1; }
+      if (d.isDirectory()) await walk(p, r);
+      else if (d.isFile() && /\.(?:m?js|cjs|ts|py)$/i.test(d.name)) {
+        let text = null;
+        try { text = await fs.promises.readFile(p, 'utf8'); } catch { text = null; }
+        if (text !== null && text.length <= MAX_BYTES) { files[r] = text; n += 1; }
+      }
     }
   };
-  walk(root, '');
+  await walk(root, '');
   return files;
 }

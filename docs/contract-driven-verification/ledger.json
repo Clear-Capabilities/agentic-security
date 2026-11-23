@@ -857,7 +857,8 @@
   "2": "implemented on synthetic data: stability, attrition, semantic view, contract arm, synthetic guard; real-model and real-population evaluation unmeasured (no local model run, no adjudicated pilot)",
   "3": "service scope and identity propagation implemented; real profiles blocked on this host (typed blockers); Linux unverified",
   "4": "fault plans on the harness, harness faults, semantic mutation population implemented; execution results recorded after the oracle run",
-  "5": "runtime discrepancy, proposal, regression record and shadow comparison implemented"
+  "5": "runtime discrepancy, proposal, regression record and shadow comparison implemented",
+  "6": "gates on the final tree: mutation 503/503, CVE replay 229/229, layer recall equal, self-scan no drift, doc drift and GA ledger consistent, slice exit 0; full suite recorded in finalChecks"
  },
  "defectsFixed": [
   "ir/parser-js.js: assignment-side calls were left out of fn.calls (cross-file call graph and DCI reachability never followed const r = helper(x))",
@@ -868,5 +869,14 @@
   "posture/evaluation/lab/run.js: detect findings silently capped at 200 and hunt counters dropped; cancelled jobs had no attempt record",
   "test/eval-lab/arm-hunt.test.js was in no test scope; now in test:posture",
   "posture/routing/policy-router.js: routed on lab scores from synthetic datasets; now refused"
- ]
+ ],
+ "finalChecks": {
+  "mutation": "503/503",
+  "cveReplay": "229/229 no drift",
+  "layerRecall": "equal to baseline",
+  "selfScan": "no drift",
+  "docDrift": "consistent",
+  "slice": "8 stages ok, 4 legs unsupported",
+  "fullSuite": "see the last commit message"
+ }
 }

@@ -16,11 +16,14 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { verifyInvariant } from '../invariants/run.js';
 import { verifyInvariantRepair } from '../invariants/repair.js';
 import { generateScenarios } from '../invariants/scenarios.js';
 import { classifyViolation, verifyLedger } from '../invariants/lifecycle.js';
+
+const execFileAsync = promisify(execFile);
 
 const MUTANT_OUTCOMES = Object.freeze(['killed', 'survived', 'equivalent', 'unsupported', 'invalid', 'unresolved']);
 const MUTATION_POPULATION_VERSION = 'slice-semantic-mutants/1';
@@ -61,16 +64,17 @@ for (const step of sc.attack) {
 process.stdout.write(JSON.stringify({ statuses }));
 `;
 
-function statusOnlyJudge(serviceText, scenario) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'weak-judge-'));
+async function statusOnlyJudge(serviceText, scenario) {
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'weak-judge-'));
   try {
-    fs.writeFileSync(path.join(dir, 'service.mjs'), serviceText);
-    fs.writeFileSync(path.join(dir, 'judge.mjs'), STATUS_JUDGE);
-    const r = spawnSync(process.execPath, [path.join(dir, 'judge.mjs'), path.join(dir, 'service.mjs'), JSON.stringify(scenario.inputs)], { encoding: 'utf8', timeout: 20_000, env: { PATH: process.env.PATH } });
-    if (r.status !== 0) return { ok: false, reason: (r.stderr || '').slice(0, 200) };
-    const { statuses } = JSON.parse(r.stdout);
+    await fs.promises.writeFile(path.join(dir, 'service.mjs'), serviceText);
+    await fs.promises.writeFile(path.join(dir, 'judge.mjs'), STATUS_JUDGE);
+    let stdout;
+    try { ({ stdout } = await execFileAsync(process.execPath, [path.join(dir, 'judge.mjs'), path.join(dir, 'service.mjs'), JSON.stringify(scenario.inputs)], { encoding: 'utf8', timeout: 20_000, env: { PATH: process.env.PATH } })); }
+    catch (e) { return { ok: false, reason: String(e?.stderr || e?.message || e).slice(0, 200) }; }
+    const { statuses } = JSON.parse(stdout);
     return { ok: true, violated: statuses.some((s) => s !== null && s >= 200 && s < 300), statuses };
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { await fs.promises.rm(dir, { recursive: true, force: true }); }
 }
 
 const settledOutcome = (res) => {
@@ -109,7 +113,7 @@ export async function runMutationPopulation({ invariant, ledger, fixtureText, pa
   // ---- verifier mutants (meta-test only)
   const auth = APPLICATION_MUTANTS.find((m) => m.id === 'authorization-after-write');
   if (scenario) {
-    const weak = statusOnlyJudge(auth.edit(patchedText), scenario);
+    const weak = await statusOnlyJudge(auth.edit(patchedText), scenario);
     results.push(weak.ok
       ? { id: 'status-only-judge', population: 'verifier', expect: 'survived', outcome: weak.violated ? 'killed' : 'survived', reason: weak.violated ? 'the status-only judge noticed' : `the status-only judge saw statuses ${weak.statuses.join(', ')} and called it safe, while the durable effect happened (the real oracle kills this mutant)`, justification: 'a verifier that reads the response status cannot see a forbidden effect behind a denial' }
       : { id: 'status-only-judge', population: 'verifier', expect: 'survived', outcome: 'unsupported', reason: weak.reason });

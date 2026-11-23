@@ -27,20 +27,20 @@ function repos() {
 }
 const contractFor = (heads, over = {}) => ({ scope: { environment: 'isolated-test', repositories: ['gateway', 'api', 'worker'].map((id) => ({ id, revision: over[id] ?? heads[id] })) } });
 
-test('D-AC01/D-AC06: three repositories at their pinned commits resolve; the scope is complete and each carries its exact revision', () => {
+test('D-AC01/D-AC06: three repositories at their pinned commits resolve; the scope is complete and each carries its exact revision', async () => {
   const { base, heads } = repos();
   try {
-    const s = resolveServiceScope({ contract: contractFor(heads), rootMap: { gateway: path.join(base, 'gateway'), api: path.join(base, 'api'), worker: path.join(base, 'worker') }, authorized: ['gateway', 'api', 'worker'] });
+    const s = await resolveServiceScope({ contract: contractFor(heads), rootMap: { gateway: path.join(base, 'gateway'), api: path.join(base, 'api'), worker: path.join(base, 'worker') }, authorized: ['gateway', 'api', 'worker'] });
     assert.equal(s.state, 'complete'); assert.equal(s.complete, true);
     assert.deepEqual(s.repositories.map((r) => [r.id, r.state, r.observedRevision === heads[r.id]]), [['gateway', 'resolved', true], ['api', 'resolved', true], ['worker', 'resolved', true]]);
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 
-test('D-AC04/D-AC06: unauthorised, missing, non-git and wrong-revision repositories are distinct visible gaps and the scope is partial', () => {
+test('D-AC04/D-AC06: unauthorised, missing, non-git and wrong-revision repositories are distinct visible gaps and the scope is partial', async () => {
   const { base, heads } = repos();
   try {
     const plain = path.join(base, 'plain'); fs.mkdirSync(plain);
-    const s = resolveServiceScope({
+    const s = await resolveServiceScope({
       contract: { scope: { environment: 'isolated-test', repositories: [
         { id: 'gateway', revision: heads.gateway }, { id: 'api', revision: 'a'.repeat(40) }, { id: 'worker', revision: heads.worker }, { id: 'billing', revision: 'b'.repeat(40) }, { id: 'ledger', revision: 'c'.repeat(40) },
       ] } },
@@ -54,8 +54,8 @@ test('D-AC04/D-AC06: unauthorised, missing, non-git and wrong-revision repositor
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 
-test('D-AC02: the API trusting the forwarded tenant header and the worker taking the tenant from the message are supported candidates; the gateway\'s verified claim is established', () => {
-  const comps = ['gateway', 'api', 'worker'].map((r) => ({ repository: r, files: readComponentSources(path.join(FX, r)) }));
+test('D-AC02: the API trusting the forwarded tenant header and the worker taking the tenant from the message are supported candidates; the gateway\'s verified claim is established', async () => {
+  const comps = await Promise.all(['gateway', 'api', 'worker'].map(async (r) => ({ repository: r, files: await readComponentSources(path.join(FX, r)) })));
   const out = identityPropagation(comps);
   assert.deepEqual(out.transitions.map((t) => [t.component, t.kind, t.established]), [['gateway', 'signed-claim', true], ['gateway', 'forwards-header', true], ['api', 'caller-supplied-header', false], ['worker', 'message-field', false]]);
   assert.deepEqual(out.candidates.map((c) => [c.component, c.kind]), [['api', 'spoofable-forwarded-identity'], ['worker', 'tenant-from-message-unverified']]);

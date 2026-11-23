@@ -90,6 +90,16 @@ Generated from `ledger.json`. `verified-synthetic` means a test executed the beh
 | H-02 Independent oracle boundaries | verified-synthetic | synthetic | a patch writing into the oracle namespace is refused |
 | H-03 Selective model checking (optional) | not-started | none |  |
 
+## Gates on the final tree
+
+- mutation: 503/503
+- cveReplay: 229/229 no drift
+- layerRecall: equal to baseline
+- selfScan: no drift
+- docDrift: consistent
+- slice: 8 stages ok, 4 legs unsupported
+- fullSuite: see the last commit message
+
 ## Defects found and fixed while implementing
 
 - ir/parser-js.js: assignment-side calls were left out of fn.calls (cross-file call graph and DCI reachability never followed const r = helper(x))

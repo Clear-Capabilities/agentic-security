@@ -27,13 +27,16 @@ export const PROFILES = Object.freeze({
   'fastapi-postgres': Object.freeze({ id: 'fastapi-postgres', runtime: 'python', framework: { kind: 'python-module', name: 'fastapi', server: 'uvicorn' }, database: { kind: 'postgres', binaries: ['postgres', 'initdb', 'pg_ctl'], image: 'postgres' }, migrations: 'sql', note: 'FastAPI under uvicorn serving the application, PostgreSQL holding the durable state' }),
 });
 
-const which = (bin) => {
+const which = async (bin) => {
   // PATH lookup without a shell: each directory on PATH is checked for an executable of that name.
   if (!/^[\w.+-]{1,64}$/.test(bin)) return null;
   for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
     if (!dir) continue;
     const f = path.join(dir, bin);
-    try { fs.accessSync(f, fs.constants.X_OK); if (fs.statSync(f).isFile()) return f; } catch { /* not here */ }
+    // one stat, executable bits read from it; nothing is opened or run afterwards, so there is no check-then-use window
+    let st = null;
+    try { st = await fs.promises.stat(f); } catch { st = null; }
+    if (st && st.isFile() && (st.mode & 0o111) !== 0) return f;
   }
   return null;
 };
@@ -46,18 +49,18 @@ const pythonModule = (name) => { try { const r = spawnSync('python3', ['-I', '-c
  * @param {object} [o] { appRoot (where the application's own dependencies live), fetchPolicy (operator's: null means no fetching),
  *                      platform, probes: { which, nodeModule, pythonModule } (test seams) }
  */
-export function probeProfile(id, { appRoot = process.cwd(), fetchPolicy = null, platform = process.platform, probes = {} } = {}) {
+export async function probeProfile(id, { appRoot = process.cwd(), fetchPolicy = null, platform = process.platform, probes = {} } = {}) {
   const p = PROFILES[id];
   if (!p) return { profile: id, status: 'unknown-profile', blockers: [{ code: 'framework-unavailable', message: `no profile ${id}` }] };
   const w = probes.which || which; const nm = probes.nodeModule || nodeModuleFrom(appRoot); const pm = probes.pythonModule || pythonModule;
   const blockers = [];
-  if (!w(p.runtime === 'node' ? 'node' : 'python3')) blockers.push({ code: 'runtime-unavailable', message: `${p.runtime} is not on PATH` });
+  if (!(await w(p.runtime === 'node' ? 'node' : 'python3'))) blockers.push({ code: 'runtime-unavailable', message: `${p.runtime} is not on PATH` });
   const fw = p.framework.kind === 'node-module' ? nm(p.framework.name) : pm(p.framework.name);
   if (!fw) blockers.push({ code: 'framework-unavailable', message: `${p.framework.name} is not installed where the application's dependencies live; it is not installed for you` });
-  if (p.framework.server && !w(p.framework.server)) blockers.push({ code: 'framework-unavailable', message: `${p.framework.server} is not on PATH` });
-  const localDb = p.database.binaries.every((b) => w(b));
+  if (p.framework.server && !(await w(p.framework.server))) blockers.push({ code: 'framework-unavailable', message: `${p.framework.server} is not on PATH` });
+  const localDb = (await Promise.all(p.database.binaries.map((b) => w(b)))).every(Boolean);
   if (!localDb) {
-    const docker = w('docker');
+    const docker = await w('docker');
     if (!docker) blockers.push({ code: 'database-unavailable', message: 'no PostgreSQL server binaries and no container runtime' });
     else if (!fetchPolicy || fetchPolicy.allowImages !== true) blockers.push({ code: 'dependency-fetch-not-authorized', message: 'PostgreSQL would have to come from a container image, and the operator configured no fetch policy that allows pulling it' });
     else {
@@ -74,15 +77,15 @@ export function probeProfile(id, { appRoot = process.cwd(), fetchPolicy = null, 
  * The pinned environment manifest a profile run binds into its evidence: what would make two runs comparable. A field this host cannot
  * establish is null with a reason, never guessed.
  */
-export function environmentManifest(id, { appRoot, lockfile = null, migrations = [], seed = null, imageDigest = null, runtimeVersion = process.version } = {}) {
-  const read = (f) => { try { return fs.readFileSync(f); } catch { return null; } };
-  const lock = lockfile ? read(path.resolve(appRoot || '.', lockfile)) : null;
+export async function environmentManifest(id, { appRoot, lockfile = null, migrations = [], seed = null, imageDigest = null, runtimeVersion = process.version } = {}) {
+  const read = async (f) => { try { return await fs.promises.readFile(f); } catch { return null; } };
+  const lock = lockfile ? await read(path.resolve(appRoot || '.', lockfile)) : null;
   const m = {
     profile: id, runtimeVersion,
     lockfile: lockfile ? { path: lockfile, digest: lock ? digestOf(lock.toString('utf8')) : null, reason: lock ? null : 'unreadable' } : { path: null, digest: null, reason: 'no lockfile named' },
     imageDigest: imageDigest ?? null, imageReason: imageDigest ? null : 'no image used or no digest pinned',
-    migrations: migrations.map((f) => ({ path: f, digest: (() => { const b = read(path.resolve(appRoot || '.', f)); return b ? digestOf(b.toString('utf8')) : null; })() })),
-    seed: seed ? { path: seed, digest: (() => { const b = read(path.resolve(appRoot || '.', seed)); return b ? digestOf(b.toString('utf8')) : null; })() } : null,
+    migrations: await Promise.all(migrations.map(async (f) => { const b = await read(path.resolve(appRoot || '.', f)); return { path: f, digest: b ? digestOf(b.toString('utf8')) : null }; })),
+    seed: seed ? await (async () => { const b = await read(path.resolve(appRoot || '.', seed)); return { path: seed, digest: b ? digestOf(b.toString('utf8')) : null }; })() : null,
   };
   return { ...m, digest: digestOf(m) };
 }
@@ -91,8 +94,8 @@ export function environmentManifest(id, { appRoot, lockfile = null, migrations =
  * Run a profile leg. On this build every profile run ends at the probe when a blocker exists; when the probe passes the legs still
  * return `unsupported` because the confined runner for a real database is not implemented: this function never falls back to the host.
  */
-export function runProfileLeg(id, o = {}) {
-  const probe = probeProfile(id, o);
+export async function runProfileLeg(id, o = {}) {
+  const probe = await probeProfile(id, o);
   if (probe.status !== 'available') return { status: 'unsupported', reason: 'setup-blocked', probe };
   return { status: 'unsupported', reason: 'confined-runner-not-implemented', probe, note: 'the host can provide the profile, but no confined runner for a real framework and database exists in this build; running it on the host is refused' };
 }
