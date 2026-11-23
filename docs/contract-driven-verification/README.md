@@ -18,6 +18,22 @@ and refutation of candidates, the executable scenario, the repair verification a
   profile for the oracle (the fixture is plain Node over an in-memory store), and the Linux trust boundary for the business-state
   oracle (not advertised; the slice executes where the host boundary runs and says `unsupported` elsewhere).
 
+## Phases 2 to 5 (implemented on synthetic data)
+
+- **Evaluation:** per-defect stability over scheduled repetitions with failed and cancelled trials kept in the denominators, stage
+  attrition, the evaluator-only `eval semantic` view, the contract arm (`adapter.contract` on the hunt arm), a population label on every
+  run, and a router that refuses synthetic scores. No real model has been run through it: the four-arm comparison is unmeasured.
+- **Service scope:** `contracts/service-scope.js` resolves the contract's repositories from an operator root map at exact revisions,
+  with distinct gaps, and reads identity propagation between components (spoofable forwarded headers, tenants taken from messages).
+- **Real profiles:** Express and FastAPI with PostgreSQL are declared with one lifecycle and typed setup blockers. On this host both are
+  `setup-blocked` (framework not installed, no PostgreSQL, image pulls not authorised); no confined runner for a real database exists.
+- **Faults and verifier strength:** fault plans on the business-state harness (duplicate delivery, explicit reorder, revocation between
+  steps), harness fault tests for the ledger, and a semantic mutation population over the slice.
+- **Runtime feedback:** imported traces become discrepancies, proposed contract revisions and gated regression records; an isolated
+  shadow comparison fails a patch that breaks the authorized workflow.
+
+The acceptance matrix with every criterion's status is `ACCEPTANCE.md`.
+
 ## Commands
 
 ```
