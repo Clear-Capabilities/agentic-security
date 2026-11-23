@@ -98,7 +98,7 @@ Generated from `ledger.json`. `verified-synthetic` means a test executed the beh
 - selfScan: no drift
 - docDrift: consistent
 - slice: 8 stages ok, 4 legs unsupported
-- fullSuite: see the last commit message
+- fullSuite: 13,745 of 13,783 passed, 0 failed, 38 skipped (b6d00eba, macOS)
 
 ## Defects found and fixed while implementing
 
