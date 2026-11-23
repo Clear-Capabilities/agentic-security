@@ -179,7 +179,7 @@ import { scanLDAPInjection } from './sast/ldap-injection.js';
 import { scanXPathInjection } from './sast/xpath-injection.js';
 import { scanSSTI } from './sast/ssti.js';
 import { scanOpenRedirect, scanWeakLocalPathGuard } from './sast/open-redirect.js';
-import { scanWrongContextSanitizer, scanSanitizerContextMismatch } from './sast/wrong-context-sanitizer.js';
+import { scanWrongContextSanitizer, scanSanitizerContextMismatch, scanUrlSchemeDenylist } from './sast/wrong-context-sanitizer.js';
 import { scanFrontendHygiene } from './sast/frontend-hygiene.js';
 import { scanCsvInjection } from './sast/csv-injection.js';
 import { scanCryptoSpecialist } from './sast/crypto-specialist.js';
@@ -9043,6 +9043,7 @@ async function queryRegistries(components){
       _aF.push(...(runDetector(_detectorErrors,p,'scanSSTI',()=>scanSSTI(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanOpenRedirect',()=>scanOpenRedirect(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanWeakLocalPathGuard',()=>scanWeakLocalPathGuard(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanWrongContextSanitizer',()=>scanWrongContextSanitizer(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanUrlSchemeDenylist',()=>scanUrlSchemeDenylist(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanSanitizerContextMismatch',()=>scanSanitizerContextMismatch(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanFrontendHygiene',()=>scanFrontendHygiene(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanCsvInjection',()=>scanCsvInjection(p,cc))||[]));
