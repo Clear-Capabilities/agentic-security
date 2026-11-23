@@ -260,8 +260,13 @@ node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs hunt --root .
 | `--max-candidates <n>` | Cap candidates entering confirmation and refutation (default 50). Each costs three more calls. |
 | `--max-wall-ms <n>` | Wall-clock ceiling for the run (default 15 min). |
 | `--max-cost-usd <n>` `--cost-per-call-usd <n>` | Dollar ceiling, converted to a call ceiling. Both are required — a dollar figure alone cannot be converted honestly. |
+| `--no-memory` | Do not read or write the cross-run memory (the scanned root's egress and redaction policy still apply). |
+| `--forget-refuted` | Clear remembered refutations before the run (a model, ruleset or the code changed). |
+| `--endpoints a,b` | A comma-separated endpoint list turns on consensus across models. |
+| `--no-variants` | Do not generate adversarial variants. |
+| `--contract <contract.json>` `--ledger <file>` | Contract-aware mode: the hunter and the refutation panel see the verified context bundles of `context build`, every candidate is qualified against the contract, and only an evidence-grounded blocker removes a candidate. Opt-in; no paid call, live access or execution authority is added. |
 
-**Requires `AGENTIC_SECURITY_LLM_ENDPOINT`.** Without it every hunter run
+**Requires a configured model**: `AGENTIC_SECURITY_LLM_ENDPOINT`, the `ollama` preset, or a consensus endpoint list. Without one every hunter run
 degrades and the command says so in as many words — it never reports a clean
 result it did not earn. It is **advisory and never gates**: it always exits 0
 except on a scope error, and its output does not enter `last-scan.json`.

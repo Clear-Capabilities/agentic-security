@@ -224,51 +224,71 @@
    "id": "D-01",
    "title": "Explicit boundary federation reused",
    "phase": 3,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/contracts/service-scope.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/service-scope.test.js"
+   ],
+   "notes": "operator root map and authorised list; exact-revision check per repository; gap codes shared with the deployment boundary graph; no fetch, no credentials; resolveCrossRepoBoundaries (deployment exports) still has no CLI caller"
   },
   {
    "id": "D-02",
    "title": "Identity and authorization propagation",
    "phase": 3,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/contracts/service-scope.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/service-scope.test.js"
+   ],
+   "notes": "signed claim, forwarded header, caller-supplied header and message-field transitions; spoofable forwarded identity and tenant-from-message candidates; untraced uses unresolved; line-level static pattern, not a dataflow proof"
   },
   {
    "id": "D-03",
    "title": "Contradictions and controls",
    "phase": 3,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "in-progress",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/discovery/disprove.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/refutation-evidence.test.js"
+   ],
+   "notes": "a control only grounds a blocker when the context layer recorded it present on the reaching entry point; environment-scoped control matching across repositories not implemented"
   },
   {
    "id": "E-01",
    "title": "Supported determinism boundary",
    "phase": 4,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "verified-synthetic",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/posture/invariants/fault-plans.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/fault-plans.test.js"
+   ],
+   "notes": "determinism boundary stated: seed, order, explicit group schedule, repeated delivery, durable store; virtual time not instrumented (unsupported)"
   },
   {
    "id": "E-02",
    "title": "Security fault plans",
    "phase": 4,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "verified-synthetic",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/posture/invariants/fault-plans.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/fault-plans.test.js"
+   ],
+   "notes": "duplicate delivery, reorder, revocation-between (needs the app's revoking step); dependency timeout/failure, process interruption, disk failure unsupported with reasons"
   },
   {
    "id": "E-03",
@@ -278,17 +298,21 @@
    "evidence": "none",
    "code": [],
    "tests": [],
-   "notes": ""
+   "notes": "no independent reference model in this work; the business-state assertions are the existing transition rules"
   },
   {
    "id": "E-04",
    "title": "Fault testing applied to the harness",
    "phase": 4,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/contracts/approval.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/harness-faults.test.js"
+   ],
+   "notes": "atomic ledger persistence, interrupted write, corrupt file, duplicate transition"
   },
   {
    "id": "F-01",
@@ -304,81 +328,115 @@
    "id": "F-02",
    "title": "Representative application profiles",
    "phase": 3,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "blocked",
+   "evidence": "unmeasured",
+   "code": [
+    "scanner/src/posture/oracles/profiles.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/application-profiles.test.js"
+   ],
+   "notes": "profile lifecycle declared for express-postgres and fastapi-postgres; this host: express not installed, fastapi not importable, no PostgreSQL binaries, container images not allowed without an operator fetch policy; no confined runner for a real database exists, so legs are unsupported"
   },
   {
    "id": "F-03",
    "title": "Linux oracle backend verified before advertised",
    "phase": 3,
    "implementation": "blocked",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "evidence": "unmeasured",
+   "code": [
+    "scanner/src/posture/oracles/profiles.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/application-profiles.test.js"
+   ],
+   "notes": "Linux stays unverified for the oracle path; no Linux host or hosted job executed the confinement controls for it in this work"
   },
   {
    "id": "F-04",
    "title": "Durable regression artifact",
    "phase": 3,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/posture/invariants/repair.js",
+    "scanner/src/posture/oracles/profiles.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/contract-hunt.test.js"
+   ],
+   "notes": "regression artifact carries contract ref and invariant id; environment manifest helper pins lockfile, migrations, image digest or says why not"
   },
   {
    "id": "G-01",
    "title": "Telemetry import reused",
    "phase": 5,
    "implementation": "implemented-not-executed",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/contracts/runtime-feedback.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/verifier-and-feedback.test.js"
+   ],
+   "notes": "reuses importTraceLines sanitization; build binding matched/mismatched/unknown supplied by the operator"
   },
   {
    "id": "G-02",
    "title": "Observation-to-regression workflow",
    "phase": 5,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "implemented-not-executed",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/contracts/runtime-feedback.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/verifier-and-feedback.test.js"
+   ],
+   "notes": "discrepancy -> proposed contract revision -> regression record gated on approval and replay; sealed-ineligible"
   },
   {
    "id": "G-03",
    "title": "Isolated shadow patch comparison",
    "phase": 5,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "verified-synthetic",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/contracts/runtime-feedback.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/verifier-and-feedback.test.js"
+   ],
+   "notes": "baseline and patched replayed in separate boundary runs; versioned thresholds; latency objectives not measured"
   },
   {
    "id": "H-01",
    "title": "Semantic mutations of the application",
    "phase": 4,
-   "implementation": "not-started",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "verified-synthetic",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/posture/evaluation/semantic-mutations.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/verifier-and-feedback.test.js"
+   ],
+   "notes": "six application and four verifier mutants on the slice; mechanical justifications, no independent review recorded"
   },
   {
    "id": "H-02",
    "title": "Independent oracle boundaries",
    "phase": 4,
-   "implementation": "implemented-not-executed",
-   "evidence": "none",
-   "code": [],
-   "tests": [],
-   "notes": ""
+   "implementation": "verified-synthetic",
+   "evidence": "synthetic",
+   "code": [
+    "scanner/src/posture/invariants/repair.js",
+    "scanner/src/posture/evaluation/semantic-mutations.js"
+   ],
+   "tests": [
+    "scanner/test/contracts-driven/verifier-and-feedback.test.js"
+   ],
+   "notes": "a patch writing into the oracle namespace is refused"
   },
   {
    "id": "H-03",
@@ -562,241 +620,244 @@
   },
   {
    "id": "D-AC01",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/service-scope.test.js",
+   "observed": "three temp git repositories resolve at their pinned commits",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "D-AC02",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/service-scope.test.js",
+   "observed": "spoofable-forwarded-identity (api) and tenant-from-message-unverified (worker) candidates; untraced use unresolved",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "D-AC03",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/refutation-evidence.test.js",
+   "observed": "a blocker grounds only on a recorded control of the claimed kind on the reaching entry point",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "D-AC04",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/service-scope.test.js",
+   "observed": "access-denied (never located), repository-unavailable, revision-unknown, version-mismatch",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "D-AC05",
    "status": "not-run",
    "code": [],
    "test": null,
-   "observed": null,
+   "observed": "context job cache keys do not yet include the contract digest",
    "artifact": null
   },
   {
    "id": "D-AC06",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/service-scope.test.js",
+   "observed": "any unresolved repository makes the scope partial",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "E-AC01",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/fault-plans.test.js",
+   "observed": "duplicate delivery reproduces the double credit in two fresh boundary runs (confirmed, confirmed); the idempotent twin refuted twice",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "E-AC02",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/fault-plans.test.js",
+   "observed": "reorder versus duplicate delivery: diffFaultArtifacts names plan.kind and schedule",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "E-AC03",
-   "status": "not-run",
+   "status": "implemented-not-executed",
    "code": [],
-   "test": null,
-   "observed": null,
+   "test": "scanner/test/invariants/scenario-shrinking.test.js",
+   "observed": "existing shrinking preserves the failing assertion; not re-run against fault scenarios",
    "artifact": null
   },
   {
    "id": "E-AC04",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/fault-plans.test.js",
+   "observed": "unsupported faults refused with reasons; nondeterministic replays are reported by the oracle",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "E-AC05",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/harness-faults.test.js",
+   "observed": "interrupted write leaves the prior ledger; duplicate transition refused; corrupt file is corrupt",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "E-AC06",
    "status": "not-run",
    "code": [],
    "test": null,
-   "observed": null,
+   "observed": "fast and extended profiles not separated",
    "artifact": null
   },
   {
    "id": "F-AC01",
-   "status": "not-run",
+   "status": "blocked",
    "code": [],
    "test": null,
-   "observed": null,
+   "observed": "no real framework or database on this host",
    "artifact": null
   },
   {
    "id": "F-AC02",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/contract-hunt.test.js",
+   "observed": "deny-everyone patch: not-verified-fix (authorized-workflow-broken), slice script and mutation population",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "F-AC03",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/application-profiles.test.js",
+   "observed": "missing framework, database, runtime or fetch authorisation are typed blockers; available host still unsupported without a confined runner",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "F-AC04",
-   "status": "not-run",
+   "status": "blocked",
    "code": [],
    "test": null,
-   "observed": null,
+   "observed": "no Linux execution of the oracle path",
    "artifact": null
   },
   {
    "id": "F-AC05",
-   "status": "not-run",
+   "status": "implemented-not-executed",
    "code": [],
    "test": null,
-   "observed": null,
+   "observed": "runRegressionArtifact exists; a fresh-process replay of the slice artifact was not run in this work",
    "artifact": null
   },
   {
    "id": "F-AC06",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/application-profiles.test.js",
+   "observed": "Linux unverified; win32 unsupported",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "G-AC01",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/verifier-and-feedback.test.js",
+   "observed": "DELETE /invoices/:id observed, unmodeled -> discrepancy and proposal",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "G-AC02",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/verifier-and-feedback.test.js",
+   "observed": "modeled routes with no traffic are not-observed-in-window with the limitation",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "G-AC03",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/verifier-and-feedback.test.js",
+   "observed": "other environment rejected; unknown and mismatched builds and stale windows are limitations",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "G-AC04",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/verifier-and-feedback.test.js",
+   "observed": "baseline and patch replayed in separate boundary runs with their own stores",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "G-AC05",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/verifier-and-feedback.test.js",
+   "observed": "a deny-all patch fails with authorized-workflow-regression; both reports kept",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "G-AC06",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/verifier-and-feedback.test.js",
+   "observed": "proposal is proposed; regression record sealed-ineligible",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "H-AC01",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/verifier-and-feedback.test.js",
+   "observed": "10 scheduled mutants, all classified; none dropped",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "H-AC02",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/verifier-and-feedback.test.js",
+   "observed": "authorization-after-write: killed by the business-state oracle, survived under the status-only judge",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "H-AC03",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/verifier-and-feedback.test.js",
+   "observed": "a patch writing __oracle_harness.mjs is refused",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "H-AC04",
-   "status": "not-run",
+   "status": "verified-synthetic",
    "code": [],
-   "test": null,
-   "observed": null,
-   "artifact": null
+   "test": "scanner/test/contracts-driven/verifier-and-feedback.test.js",
+   "observed": "killed, survived, equivalent kept distinct; unsupported when the boundary cannot run",
+   "artifact": "npm run test:contracts-driven"
   },
   {
    "id": "H-AC05",
    "status": "not-run",
    "code": [],
    "test": null,
-   "observed": null,
+   "observed": "optional bounded model checking not done",
    "artifact": null
   }
  ],
  "phase": {
   "0": "done",
   "1": "done on the synthetic slice: contracts validate/inspect/draft, hunt --contract, scripts/contract-slice-example.mjs (exit 0 on this host); effectiveness unmeasured",
-  "2": "implemented on synthetic data: stability, attrition, semantic view, contract arm, synthetic guard; real-model and real-population evaluation unmeasured (no local model run, no adjudicated pilot)"
+  "2": "implemented on synthetic data: stability, attrition, semantic view, contract arm, synthetic guard; real-model and real-population evaluation unmeasured (no local model run, no adjudicated pilot)",
+  "3": "service scope and identity propagation implemented; real profiles blocked on this host (typed blockers); Linux unverified",
+  "4": "fault plans on the harness, harness faults, semantic mutation population implemented; execution results recorded after the oracle run",
+  "5": "runtime discrepancy, proposal, regression record and shadow comparison implemented"
  },
  "defectsFixed": [
   "ir/parser-js.js: assignment-side calls were left out of fn.calls (cross-file call graph and DCI reachability never followed const r = helper(x))",

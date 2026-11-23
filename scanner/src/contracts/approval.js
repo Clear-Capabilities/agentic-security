@@ -8,6 +8,8 @@
 // revoked approval stays in the ledger as `revoked`.
 //
 // `now` is always supplied by the caller: this module never reads the clock, so a state is reproducible from its inputs.
+import * as fsp from 'node:fs/promises';
+import * as pathMod from 'node:path';
 import { recordTransition, verifyLedger, emptyLedger, LEDGER_SCHEMA } from '../posture/invariants/lifecycle.js';
 import { contractDigest, contractRef, validateContract, CONTRACT_SCHEMA } from './schema.js';
 
@@ -69,3 +71,28 @@ export function revokeContract(ledger, contract, { actor, reason, policy, regist
 }
 
 export { LEDGER_SCHEMA };
+
+// ---- ledger persistence (E-04: the harness under interruption) -----------------------------------------------------------------
+// The ledger is plain data the caller persists. These two helpers make that persistence recoverable: a write goes to a sibling temp file
+// and is renamed into place (an interrupted write leaves the previous ledger intact and the temp file behind, which a read ignores), a
+// link is refused, and a read that does not parse is `corrupt`, never an empty ledger: a corrupted checkpoint can never come back as
+// "no approvals yet, start over" and never as approval.
+
+export async function writeLedgerFile(file, ledger) {
+  const target = pathMod.resolve(file);
+  try { const st = await fsp.lstat(target); if (st.isSymbolicLink()) return { ok: false, reason: 'the ledger path is a link; refused' }; } catch { /* new file */ }
+  const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
+  await fsp.writeFile(tmp, JSON.stringify(ledger, null, 1) + '\n', { flag: 'wx' });
+  await fsp.rename(tmp, target);
+  return { ok: true, file: target };
+}
+
+export async function readLedgerFile(file) {
+  let text;
+  try { text = await fsp.readFile(pathMod.resolve(file), 'utf8'); } catch (e) { return { ok: false, state: 'missing', reason: e.code || 'unreadable' }; }
+  try {
+    const ledger = JSON.parse(text);
+    if (!ledger || ledger.schema !== LEDGER_SCHEMA || !Array.isArray(ledger.records)) return { ok: false, state: 'corrupt', reason: 'not an approval ledger' };
+    return { ok: true, ledger };
+  } catch { return { ok: false, state: 'corrupt', reason: 'the ledger does not parse; it is not treated as empty' }; }
+}
